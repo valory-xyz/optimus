@@ -1,0 +1,171 @@
+name: superagent_abci
+author: valory
+version: 0.1.0
+type: skill
+description: The scaffold skill is a scaffold for your own skill implementation.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeidgztnu7xdnhlefjdv3oyufgevhegapthz2xapdphkfaejbvevti4
+  behaviours.py: bafybeibf6xjvwxw24cgbvckqhafw6nzbxksx3runongrjtdwqoahafha5u
+  composition.py: bafybeifjrnoz2rypuublwzlmayexnpsdux62q6ivololspie4h77rfdyna
+  dialogues.py: bafybeigt3xl52z5ftxjoobzqlyqtoreftmndonbkpjgj2wjug4klyhyeby
+  fsm_specification.yaml: bafybeianj5ih7awdhsuwuolmfsmqfallyzsuygqmxkbpuv4bqxfaul6cxm
+  handlers.py: bafybeiaaqhk7hhrjd3ciumel7u3fmhhfzedwzl6uccoty6qz63ukw3bdp4
+  models.py: bafybeibg76ku3dvfkctr6gxuu2kpf75dlr7lmwi3gukg2wlsileie2gxli
+fingerprint_ignore_patterns: []
+connections: []
+contracts: []
+protocols: []
+skills:
+- valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
+- valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
+- valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
+- valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
+- valory/liquidity_trader_abci:0.1.0:bafybeifszhci3nmkj3nnuqnnfkfoxfypuzypakof4itfan2wxvtb5mehru
+- valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
+behaviours:
+  main:
+    args: {}
+    class_name: SuperAgentConsensusBehaviour
+handlers:
+  abci:
+    args: {}
+    class_name: ABCIHandler
+  contract_api:
+    args: {}
+    class_name: ContractApiHandler
+  http:
+    args: {}
+    class_name: HttpHandler
+  ipfs:
+    args: {}
+    class_name: IpfsHandler
+  ledger_api:
+    args: {}
+    class_name: LedgerApiHandler
+  signing:
+    args: {}
+    class_name: SigningHandler
+  tendermint:
+    args: {}
+    class_name: TendermintHandler
+models:
+  abci_dialogues:
+    args: {}
+    class_name: AbciDialogues
+  benchmark_tool:
+    args:
+      log_dir: /logs
+    class_name: BenchmarkTool
+  contract_api_dialogues:
+    args: {}
+    class_name: ContractApiDialogues
+  http_dialogues:
+    args: {}
+    class_name: HttpDialogues
+  ipfs_dialogues:
+    args: {}
+    class_name: IpfsDialogues
+  ledger_api_dialogues:
+    args: {}
+    class_name: LedgerApiDialogues
+  params:
+    args:
+      cleanup_history_depth: 1
+      cleanup_history_depth_current: null
+      drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
+      genesis_config:
+        genesis_time: '2022-09-26T00:00:00.000000000Z'
+        chain_id: chain-c4daS1
+        consensus_params:
+          block:
+            max_bytes: '22020096'
+            max_gas: '-1'
+            time_iota_ms: '1000'
+          evidence:
+            max_age_num_blocks: '100000'
+            max_age_duration: '172800000000000'
+            max_bytes: '1048576'
+          validator:
+            pub_key_types:
+            - ed25519
+          version: {}
+        voting_power: '10'
+      keeper_timeout: 30.0
+      max_attempts: 10
+      max_healthcheck: 120
+      termination_sleep: 900
+      termination_from_block: 0
+      init_fallback_gas: 0
+      keeper_allowed_retries: 3
+      reset_pause_duration: 10
+      on_chain_service_id: null
+      request_retry_delay: 1.0
+      request_timeout: 10.0
+      reset_tendermint_after: 2
+      retry_attempts: 400
+      retry_timeout: 3
+      round_timeout_seconds: 30.0
+      service_id: superagent
+      service_registry_address: null
+      setup:
+        all_participants: []
+        consensus_threshold: null
+        safe_contract_address: '0x0000000000000000000000000000000000000000'
+      share_tm_config_on_startup: false
+      sleep_time: 1
+      tendermint_check_sleep_delay: 3
+      tendermint_com_url: http://localhost:8080
+      tendermint_max_retries: 5
+      tendermint_p2p_url: localhost:26656
+      tendermint_url: http://localhost:26657
+      use_termination: false
+      validate_timeout: 1205
+      finalize_timeout: 60.0
+      history_check_timeout: 1205
+      use_slashing: false
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
+      default_chain_id: ethereum
+      multisend_batch_size: 50
+      multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
+      tx_timeout: 10.0
+      ipfs_address: https://gateway.autonolas.tech/ipfs/
+      service_endpoint_base: https://superagent.staging.autonolas.tech/
+      assets:
+      - - '0x8a649274E4d777FFC6851F13d23A86BBFA2f2Fbf'
+        - ethereum
+      - - '0x658843BB859B7b85cEAb5cF77167e3F0a78dFE7f'
+        - optimism
+      ethereum_safe_contract_address: '0x0000000000000000000000000000000000000000'
+      optimism_safe_contract_address: '0x0000000000000000000000000000000000000000'
+    class_name: Params
+  randomness_api:
+    args:
+      api_id: cloudflare
+      headers: {}
+      method: GET
+      parameters: {}
+      response_key: null
+      response_type: dict
+      retries: 5
+      url: https://drand.cloudflare.com/public/latest
+    class_name: RandomnessApi
+  requests:
+    args: {}
+    class_name: Requests
+  signing_dialogues:
+    args: {}
+    class_name: SigningDialogues
+  state:
+    args: {}
+    class_name: SharedState
+  tendermint_dialogues:
+    args: {}
+    class_name: TendermintDialogues
+dependencies: {}
+is_abstract: false
+customs: []

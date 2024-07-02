@@ -7,7 +7,9 @@ alphabet_in:
 - ROUND_TIMEOUT
 - SWAP
 - WAIT
-default_start_state: GetPositionsRound
+default_start_state: 
+- GetPositionsRound
+- DecisionMakingRound
 final_states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
@@ -15,6 +17,7 @@ final_states:
 label: LiquidityTraderAbciApp
 start_states:
 - GetPositionsRound
+- DecisionMakingRound
 states:
 - ClaimOPRound
 - DecisionMakingRound

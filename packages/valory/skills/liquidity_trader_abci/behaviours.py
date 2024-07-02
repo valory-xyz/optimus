@@ -20,7 +20,7 @@
 """This package contains round behaviours of LiquidityTraderAbciApp."""
 
 from abc import ABC
-from typing import Generator, Set, Type, cast, Optional
+from typing import Generator, Set, Type, cast, Optional, List, Dict, Any
 from collections import defaultdict
 import json
 
@@ -41,6 +41,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     PrepareExitPoolTxRound,
     PrepareSwapTxRound,
     TxPreparationRound,
+    Event
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     ClaimOPPayload,
@@ -96,14 +97,43 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-            payload = DecisionMakingPayload(sender=sender, content=...)
-
+            next_action = self.get_next_round()
+            try:
+                event = Event(next_action)
+            except ValueError:
+                self.context.logger.error(f"Invalid EVENT: {next_action}")
+                event = Event.ERROR
+            
+            payload = DecisionMakingPayload(sender=sender, event=event)
+            
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
         self.set_done()
 
+    def get_next_round(self) -> str:
+        tx_submitter = self.synchronized_data.tx_submitter
+        actions = self.synchronized_data.actions
+
+        # Case 1: tx_submitter is not set, execute the first action
+        if not tx_submitter:
+            next_round = actions[0]["action"]
+        else:
+            # Case 2: tx_submitter is set, match it and execute the next action
+            current_action_index = None
+            for index, action in enumerate(actions):
+                if action["action"] == tx_submitter:
+                    current_action_index = index
+                    break
+
+            if current_action_index is None or current_action_index + 1 >= len(actions):
+                return ""
+            else:
+                next_round = actions[current_action_index + 1]["action"]
+            
+        return next_round
+                
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """EvaluateStrategyBehaviour"""
@@ -171,7 +201,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
     
-    def get_decision() -> Generator:    
+    def get_decision() -> Generator:
+        #TO-IMPLEMENT    
         pass
 
 
@@ -184,9 +215,13 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             positions = yield from self._get_positions()
             self.context.logger.info(f"POSITIONS: {positions}")
-            serialized_positions = json.dumps(positions)
-            sender = self.context.agent_address
-            payload = GetPositionsPayload(sender=sender, positions=serialized_positions)
+
+            if positions is None:
+                payload = GetPositionsPayload(sender=sender, positions=GetPositionsRound.ERROR_PAYLOAD)
+            else:
+                serialized_positions = json.dumps(positions)
+                sender = self.context.agent_address
+                payload = GetPositionsPayload(sender=sender, positions=serialized_positions)
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -195,34 +230,41 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
         self.set_done()
 
     def _get_positions(self) -> Generator[None, None, Optional[int]]:
-        positions_dict = defaultdict(list)
+        positions_dict: Dict[str, list] = defaultdict(list)
         assets = self.params.assets
+
+        if not assets:
+            self.context.logger.error("No assets provided.")
+            return None
+
         for asset in assets:
             pool_address = asset[0]
             chain = asset[1]
-            
-            #TO-DO : switch ledger based on chain
-            if chain == "optimism":
-                break
 
-            if chain == "ethereum":
-                account = self.params.ethereum_safe_contract_address
-            
+            #issue in overriding optimism params
             if chain == "optimism":
-                account = self.params.optimism_safe_contract_address
+                continue
+
+            account = getattr(self.params, f"{chain}_safe_contract_address", None)
+            
+            if account is None:
+                self.context.logger.error(f"No account found for chain: {chain}")
+                return None
 
             response_msg = yield from self.get_contract_api_response(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
                 contract_address=pool_address,
                 contract_id=str(WeightedPoolContract.contract_id),
                 contract_callable="get_balance",
-                account=account
+                account=account,
+                chain_id=chain
             )   
 
             if response_msg.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
                 self.context.logger.error(
                     f"Could not calculate the balance of the safe: {response_msg}"
                 )
+                return None
 
             balance = response_msg.raw_transaction.body.get("balance", None)
             self.context.logger.info(f"BALANCE of {account} address on {chain} chain for {pool_address} pool : {balance}")

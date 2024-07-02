@@ -4,10 +4,9 @@ version: 0.1.0
 description: An optimism liquidity trader service.
 aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
-fingerprint:
-  README.md: bafybeid42pdrf6qrohedylj4ijrss236ai6geqgf3he44huowiuf7pl464
+fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimism_agent:0.1.0:bafybeidxafvt34hbdzlty25vlsv5swj2vemndbkglcmpzplu74mzhbrovi
+agent: valory/optimism_agent:0.1.0:bafybeicu3gna7nfnu6go4jl24aavg3kahrsddvtplfuov6h5hlgn2ou6tm
 number_of_agents: 4
 deployment:
   agent:

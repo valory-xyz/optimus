@@ -203,6 +203,7 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
     collection_key = get_name(SynchronizedData.participant_to_positions_round)
     selection_key = (get_name(SynchronizedData.positions))
 
+    ERROR_PAYLOAD = "error"
 
 class PrepareExitPoolTxRound(AbstractRound):
     """PrepareExitPoolTxRound"""

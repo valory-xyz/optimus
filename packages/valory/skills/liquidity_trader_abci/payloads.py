@@ -34,9 +34,7 @@ class ClaimOPPayload(BaseTxPayload):
 @dataclass(frozen=True)
 class DecisionMakingPayload(BaseTxPayload):
     """Represent a transaction payload for the DecisionMakingRound."""
-
-    # TODO: define your attributes
-
+    decision: str
 
 @dataclass(frozen=True)
 class EvaluateStrategyPayload(BaseTxPayload):

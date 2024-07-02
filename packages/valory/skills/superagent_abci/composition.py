@@ -40,13 +40,13 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     LiquidityTraderAbci.FinishedDecisionMakingRound: ResetAndPauseAbci.ResetAndPauseRound,
     LiquidityTraderAbci.FinishedEvaluateStrategyRound: ResetAndPauseAbci.ResetAndPauseRound,
     LiquidityTraderAbci.FinishedTxPreparationRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
-    TxSettlementAbci.FinishedTransactionSubmissionRound: ResetAndPauseAbci.ResetAndPauseRound,
+    TxSettlementAbci.FinishedTransactionSubmissionRound: LiquidityTraderAbci.DecisionMakingRound,
     TxSettlementAbci.FailedRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
     ResetAndPauseAbci.FinishedResetAndPauseRound: LiquidityTraderAbci.GetPositionsRound,
     ResetAndPauseAbci.FinishedResetAndPauseErrorRound: RegistrationAbci.RegistrationRound,
 }
 
-termination_config = BackgroundAppConfig(
+termination_config = BackgroundAppConfig( 
     round_cls=BackgroundRound,
     start_event=Event.TERMINATE,
     abci_app=TerminationAbciApp,

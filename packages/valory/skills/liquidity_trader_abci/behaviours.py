@@ -54,8 +54,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
 
-from packages.valory.contracts.weighted_pool.contract import WeightedPoolContract
-
+from packages.valory.contracts.balancer_weighted_pool.contract import WeightedPoolContract
+from packages.valory.contracts.velodrome_pool.contract import PoolContract
 class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
@@ -142,55 +142,55 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def async_act(self) -> Generator:
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            # decision = yield from self.get_decision()
-            actions = [
-                        {
-                            "action": "exit_pool",
-                            "chain": "ethereum",
-                            "pool_address": "0x00...",
-                            "assets": [
-                                {"asset": "ETH", "amount": 10},
-                                {"asset": "DAI", "amount": 200}
-                            ],
-                            "additional_params": {},
-                        },
-                        {
-                            "action": "bridge_and_swap",
-                            "source": {
-                                "chain": "ethereum",
-                                "token": "DAI"
-                            },
-                            "destination": {
-                                "chain": "optimism",
-                                "token": "USDC"
-                            },
-                            "amount": 300,
-                            "additional_params": {},
-                        },
-                        {
-                            "action": "bridge_and_swap",
-                            "source": {
-                                "chain": "ethereum",
-                                "token": "USDC"
-                            },
-                            "destination": {
-                                "chain": "optimism",
-                                "token": "USDC"
-                            },
-                            "amount": 300,
-                            "additional_params": {},
-                        },
-                        {
-                            "action": "enter_pool",
-                            "chain": "optimism",
-                            "pool_address": "0x00...",
-                            "assets": [
-                                {"asset": "ETH", "amount": 20},
-                                {"asset": "DAI", "amount": 100}
-                            ],
-                            "additional_params": {},
-                        }
-                    ]
+            # apr_data = yield from self.get_apr_for_pools()
+            # actions = [
+            #             {
+            #                 "action": "exit_pool",
+            #                 "chain": "ethereum",
+            #                 "pool_address": "0x00...",
+            #                 "assets": [
+            #                     {"asset": "ETH", "amount": 10},
+            #                     {"asset": "DAI", "amount": 200}
+            #                 ],
+            #                 "additional_params": {},
+            #             },
+            #             {
+            #                 "action": "bridge_and_swap",
+            #                 "source": {
+            #                     "chain": "ethereum",
+            #                     "token": "DAI"
+            #                 },
+            #                 "destination": {
+            #                     "chain": "optimism",
+            #                     "token": "USDC"
+            #                 },
+            #                 "amount": 300,
+            #                 "additional_params": {},
+            #             },
+            #             {
+            #                 "action": "bridge_and_swap",
+            #                 "source": {
+            #                     "chain": "ethereum",
+            #                     "token": "USDC"
+            #                 },
+            #                 "destination": {
+            #                     "chain": "optimism",
+            #                     "token": "USDC"
+            #                 },
+            #                 "amount": 300,
+            #                 "additional_params": {},
+            #             },
+            #             {
+            #                 "action": "enter_pool",
+            #                 "chain": "optimism",
+            #                 "pool_address": "0x00...",
+            #                 "assets": [
+            #                     {"asset": "ETH", "amount": 20},
+            #                     {"asset": "DAI", "amount": 100}
+            #                 ],
+            #                 "additional_params": {},
+            #             }
+            #         ]
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
             payload = EvaluateStrategyPayload(sender=sender, actions=serialized_actions)
@@ -200,11 +200,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
-    
-    def get_decision() -> Generator:
-        #TO-IMPLEMENT    
-        pass
-
 
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     """GetPositionsBehaviour"""
@@ -215,12 +210,12 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             positions = yield from self._get_positions()
             self.context.logger.info(f"POSITIONS: {positions}")
+            sender = self.context.agent_address
 
             if positions is None:
                 payload = GetPositionsPayload(sender=sender, positions=GetPositionsRound.ERROR_PAYLOAD)
             else:
                 serialized_positions = json.dumps(positions)
-                sender = self.context.agent_address
                 payload = GetPositionsPayload(sender=sender, positions=serialized_positions)
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
@@ -229,49 +224,73 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def _get_positions(self) -> Generator[None, None, Optional[int]]:
+    def _get_positions(self) -> Generator[None, None, Optional[List[Dict[str,str]]]]:
         positions_dict: Dict[str, list] = defaultdict(list)
-        assets = self.params.assets
 
-        if not assets:
+        if not self.params.assets:
             self.context.logger.error("No assets provided.")
             return None
+        
+        assets = json.loads(json.loads(self.params.assets)) 
 
-        for asset in assets:
-            pool_address = asset[0]
-            chain = asset[1]
+        for dex_type, asset_list in assets.items():
+            for asset in asset_list:
+                chain = asset[0]
+                pool_address = asset[1]
+                account = self._get_safe_contract_address(chain)
 
-            #issue in overriding optimism params
-            if chain == "optimism":
-                continue
+                if account is None:
+                    self.context.logger.error(f"No account found for chain: {chain}")
+                    return None
 
-            account = getattr(self.params, f"{chain}_safe_contract_address", None)
-            
-            if account is None:
-                self.context.logger.error(f"No account found for chain: {chain}")
-                return None
+                if dex_type == "balancer":
+                    contract_callable = "get_balance"
+                    contract_id = str(WeightedPoolContract.contract_id)
+                elif dex_type == "velodrome":
+                    contract_callable = "get_balance"
+                    contract_id = str(PoolContract.contract_id)
+                else:
+                    self.context.logger.error(f"{dex_type} not supported")
+                    return None
+                
+                #OPTIMISM NOT SUPPORTED YET
+                if chain == "optimism":
+                    chain = "bnb"
 
-            response_msg = yield from self.get_contract_api_response(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
-                contract_address=pool_address,
-                contract_id=str(WeightedPoolContract.contract_id),
-                contract_callable="get_balance",
-                account=account,
-                chain_id=chain
-            )   
-
-            if response_msg.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
-                self.context.logger.error(
-                    f"Could not calculate the balance of the safe: {response_msg}"
+                response_msg = yield from self.get_contract_api_response(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+                    contract_address=pool_address,
+                    contract_id=contract_id,
+                    contract_callable=contract_callable,
+                    account=account,
+                    chain_id=chain
                 )
-                return None
 
-            balance = response_msg.raw_transaction.body.get("balance", None)
-            self.context.logger.info(f"BALANCE of {account} address on {chain} chain for {pool_address} pool : {balance}")
-            positions_dict[chain].append({"pool_address": pool_address, "balance": balance})
+                if response_msg.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
+                    self.context.logger.error(
+                        f"Could not calculate the balance of the safe: {response_msg}"
+                    )
+                    return None
+
+                balance = response_msg.raw_transaction.body.get("balance", None)
+
+                #OPTIMISM NOT SUPPORTED YET
+                if chain == "bnb":
+                    chain = "optimism"
+                self.context.logger.info(f"Balance of account {account} on {chain} chain for pool address {pool_address} in {dex_type} DEX: {balance}")
+                positions_dict[chain].append({"pool_address": pool_address, "dex_type": dex_type,"balance": balance})
 
         positions = [{"chain": chain, "assets": assets} for chain, assets in positions_dict.items()]
         return positions
+    
+    def _get_safe_contract_address(self, chain:str) -> str:
+        safe_contract_addresses_mapping = self.params.safe_contract_addresses
+
+        for (chain_id,safe_contract_address) in safe_contract_addresses_mapping:
+            if chain_id == chain:
+                return safe_contract_address
+            
+        return None
 
 
 class PrepareExitPoolTxBehaviour(LiquidityTraderBaseBehaviour):

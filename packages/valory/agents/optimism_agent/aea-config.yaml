@@ -19,7 +19,8 @@ contracts:
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeib6podeifufgmawvicm3xyz3uaplbcrsptjzz4unpseh7qtcpar74
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicbxmbzt757lbmyh6762lrkcrp3oeum6dk3z7pvosixasifsk6xlm
-- valory/weighted_pool:0.1.0:bafybeihtxp2jo5psy26gsvjuver25k6ed6uqb2knvf72xt4cog6j3mofl4
+- valory/balancer_weighted_pool:0.1.0:bafybeieosfo3ztw5n5yu4ermd5phzqvqqan4b7hukxpdlz347mo672rrsi
+- valory/velodrome_pool:0.1.0:bafybeihkaalm22foxyvyn62ksnqv5qfk4bqyvr2usysbd7vep5nphcw2rm
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -32,8 +33,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihat4giyc4bz6zopvahcj4iw53356pbtwfn7p4d5yflwly2qhahum
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
-- valory/liquidity_trader_abci:0.1.0:bafybeihcz4wtmcodv6so7nh6bdjaoekhydxzckddd4vz5fbrcz7eksngmy
-- valory/superagent_abci:0.1.0:bafybeiaqyiwmypnmquo5c7pk35mwkeam7awpikyikitvgsabponxc44ude
+- valory/liquidity_trader_abci:0.1.0:bafybeicghdjp3bbe66dlkmstdazt4mbxbojqk3vujbbolkpbvhewwwyf5i
+- valory/superagent_abci:0.1.0:bafybeihvfxynsd2howiiv5n3qkui7nwr2x2nncxkbyuktyejdq3vznf43e
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
@@ -89,9 +90,14 @@ config:
       chain_id: ${int:1}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
-    gnosis:
-      address: ${str:http://localhost:8545}
-      chain_id: ${int:1337}
+    arbitrum:
+      address: ${str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
+      chain_id: ${int:42161}
+      poa_chain: ${bool:false}
+      default_gas_price_strategy: ${str:eip1559}
+    bnb:
+      address: ${str:https://virtual.optimism.rpc.tenderly.co/3baf4a62-2fa9-448a-91a6-5f6ab95c76be}
+      chain_id: ${int:10}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
 ---
@@ -186,6 +192,6 @@ models:
       ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
       default_chain_id: ${str:ethereum}
       termination_from_block: ${int:34088325}
-      assets: ${list:[["0x3de27EFa2F1AA663Ae5D458857e731c129069F29","ethereum"],["0x0244B0025264dC5f5c113d472D579C9c994A59CE","optimism"]]}
-      ethereum_safe_contract_address: ${str:0x82a05d94630479e409ee235E8A8C5B65c7f7560e}
-      optimism_safe_contract_address: ${str:0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D}
+      assets: ${str:"{\"balancer\":[[\"ethereum\",\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"],[\"arbitrum\",\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]],\"velodrome\":[[\"optimism\",\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\"]]}"}
+      safe_contract_addresses: ${list:[["ethereum","0x82a05d94630479e409ee235E8A8C5B65c7f7560e"],["arbitrum","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"],["optimism","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"]]}
+      pool_data_api_url: ${str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}

@@ -299,7 +299,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     """LiquidityTraderAbciApp"""
 
     initial_round_cls: AppState = GetPositionsRound
-    initial_states: Set[AppState] = {GetPositionsRound}
+    initial_states: Set[AppState] = {GetPositionsRound, DecisionMakingRound}
     transition_function: AbciAppTransitionFunction = {
         ClaimOPRound: {
             Event.DONE: TxPreparationRound,
@@ -350,6 +350,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
         GetPositionsRound: set(),
+        DecisionMakingRound: set()
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedEvaluateStrategyRound: set(),

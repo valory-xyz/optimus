@@ -9,7 +9,6 @@ alphabet_in:
 - WAIT
 default_start_state: 
 - GetPositionsRound
-- DecisionMakingRound
 final_states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound

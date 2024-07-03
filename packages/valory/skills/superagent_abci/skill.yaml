@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
-- valory/liquidity_trader_abci:0.1.0:bafybeihcz4wtmcodv6so7nh6bdjaoekhydxzckddd4vz5fbrcz7eksngmy
+- valory/liquidity_trader_abci:0.1.0:bafybeie2ogbqqygcmle3lsjyysnjek7kn5i2c7g7dai3d3dbbheltdo7zi
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 behaviours:
   main:
@@ -135,13 +135,15 @@ models:
       tx_timeout: 10.0
       ipfs_address: https://gateway.autonolas.tech/ipfs/
       service_endpoint_base: https://superagent.staging.autonolas.tech/
-      assets:
-      - - '0x8a649274E4d777FFC6851F13d23A86BBFA2f2Fbf'
-        - ethereum
-      - - '0x658843BB859B7b85cEAb5cF77167e3F0a78dFE7f'
-        - optimism
-      ethereum_safe_contract_address: '0x0000000000000000000000000000000000000000'
-      optimism_safe_contract_address: '0x0000000000000000000000000000000000000000'
+      assets: '{"balancer":[["ethereum","0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],["arbitrum","0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]],"velodrome":[["optimism","0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]]}'
+      safe_contract_addresses:
+      - - ethereum
+        - '0x0000000000000000000000000000000000000000'
+      - - arbitrum
+        - '0x0000000000000000000000000000000000000000'
+      - - optimism
+        - '0x0000000000000000000000000000000000000000'
+      pool_data_api_url: https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1
     class_name: Params
   randomness_api:
     args:

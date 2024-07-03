@@ -1,0 +1,21 @@
+name: balancer_weighted_pool
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the balancer WeightedPool interface.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeieabdck6osm6aeqonyflzx3oc2ytv6rdykjlltxkawcd5jwwm23uq
+  build/WeightedPool.json: bafybeicqma7gs5obx7oesmgqeqldos3oaz624d2llf6sft6tslvacn2tny
+  contract.py: bafybeifpgvlmdltgvicn5o2fraixyiqmv4d34bc44yn7ipd4d3vmjx4myq
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: WeightedPoolContract
+contract_interface_paths:
+  ethereum: build/WeightedPool.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.50.0
+  web3:
+    version: <7,>=6.0.0

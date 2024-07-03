@@ -7,17 +7,18 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidr5qbxjjypypjuuljiybl66kcxyglu2l7p4iswnifrbgsboeajne
-  behaviours.py: bafybeibd6n7dsa3jzs4fujzfbgsqyr3lds25cifd7gw6luwchbqt7tashq
+  behaviours.py: bafybeibqcfye3blxazupnnefplo53b336imjawo2pnfbtova23g3dkzw5m
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeicg4cfv23x7n5y7auqzsptolkypggy4eckcxlld6hy4s3veolehnu
+  fsm_specification.yaml: bafybeidmmdcqgnvfve2nbykult42gax2zkf3ec5lg5k3ufhmo5v2wtso6e
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeicmctoudpurctl5lbvm7iqok5cxxpfhcckw6nlivj3dtfzd6pa23y
+  models.py: bafybeibaeiemuli3zqtoh4ircv7hcrsygpunoejfr7mlmig6uewnwtrvlm
   payloads.py: bafybeia75saz5h4tkf5z4qrtwkmiou7lcbn3cwv5qshvkhf5cbzi73pkou
-  rounds.py: bafybeihjryp4aykr4aliftkejn5opuhv52n6hjodhnjeta72lst7ll5n3i
+  rounds.py: bafybeigh46g2upl4s33ggfbcm5mgafipzmtx7ksxhrta4vxqagzn527tj4
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/weighted_pool:0.1.0:bafybeihtxp2jo5psy26gsvjuver25k6ed6uqb2knvf72xt4cog6j3mofl4
+- valory/balancer_weighted_pool:0.1.0:bafybeieosfo3ztw5n5yu4ermd5phzqvqqan4b7hukxpdlz347mo672rrsi
+- valory/velodrome_pool:0.1.0:bafybeihkaalm22foxyvyn62ksnqv5qfk4bqyvr2usysbd7vep5nphcw2rm
 protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 skills:
@@ -129,13 +130,15 @@ models:
       validate_timeout: 1205
       multisend_batch_size: 50
       multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
-      assets:
-      - - '0x8a649274E4d777FFC6851F13d23A86BBFA2f2Fbf'
-        - ethereum
-      - - '0x658843BB859B7b85cEAb5cF77167e3F0a78dFE7f'
-        - optimism
-      ethereum_safe_contract_address: '0x0000000000000000000000000000000000000000'
-      optimism_safe_contract_address: '0x0000000000000000000000000000000000000000'
+      assets: '{"balancer":[["ethereum","0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],["arbitrum","0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]],"velodrome":[["optimism","0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]]}'
+      safe_contract_addresses:
+      - - ethereum
+        - '0x0000000000000000000000000000000000000000'
+      - - arbitrum
+        - '0x0000000000000000000000000000000000000000'
+      - - optimism
+        - '0x0000000000000000000000000000000000000000'
+      pool_data_api_url: https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1
     class_name: Params
   requests:
     args: {}

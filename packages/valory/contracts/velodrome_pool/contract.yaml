@@ -1,0 +1,21 @@
+name: velodrome_pool
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the velodrome Pool interface.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeifnvp3xuflqufyhqifuwye4p4qq5req6n5kyy5p3mj6kpp7bvmw3a
+  build/Pool.json: bafybeidz66bxstthucunnt2mofg7phy2sfv233r6zy3unmvkqdppmcjjhi
+  contract.py: bafybeieahj477innh4vj7fk7a7hp4detgmfsssjuoqy3zv5bdvza5t34rq
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: PoolContract
+contract_interface_paths:
+  ethereum: build/Pool.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.50.0
+  web3:
+    version: <7,>=6.0.0

@@ -13,7 +13,10 @@ Pipfile.lock
     
 packages/valory/agents/*
 packages/valory/connections/*
-packages/valory/contracts/*
+packages/valory/contracts/gnosis_safe
+packages/valory/contracts/gnosis_safe_proxy_factory
+packages/valory/contracts/multisend
+packages/valory/contracts/service_registry
 packages/valory/services/*
 packages/valory/protocols/*
 packages/valory/skills/*

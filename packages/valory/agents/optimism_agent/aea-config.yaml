@@ -33,8 +33,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihat4giyc4bz6zopvahcj4iw53356pbtwfn7p4d5yflwly2qhahum
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
-- valory/liquidity_trader_abci:0.1.0:bafybeicghdjp3bbe66dlkmstdazt4mbxbojqk3vujbbolkpbvhewwwyf5i
-- valory/superagent_abci:0.1.0:bafybeihvfxynsd2howiiv5n3qkui7nwr2x2nncxkbyuktyejdq3vznf43e
+- valory/liquidity_trader_abci:0.1.0:bafybeicv5jnhu3i32znyhs2t7fmj7vf33s5mp2ybrhwbbnspkifd2zdou4
+- valory/superagent_abci:0.1.0:bafybeibjvguaav5msoefzxiejv25pj5w6qk7hpxpwssvs7ggtecle4ntxq
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
@@ -192,6 +192,6 @@ models:
       ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
       default_chain_id: ${str:ethereum}
       termination_from_block: ${int:34088325}
-      assets: ${str:"{\"balancer\":[[\"ethereum\",\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"],[\"arbitrum\",\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]],\"velodrome\":[[\"optimism\",\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\"]]}"}
+      assets: ${str:"{\"balancer\":[[\"ethereum\",\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\",\"1\"],[\"arbitrum\",\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\",\"42161\"]],\"velodrome\":[[\"optimism\",\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\",\"10\"]]}"}
       safe_contract_addresses: ${list:[["ethereum","0x82a05d94630479e409ee235E8A8C5B65c7f7560e"],["arbitrum","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"],["optimism","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"]]}
-      pool_data_api_url: ${str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
+      pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}

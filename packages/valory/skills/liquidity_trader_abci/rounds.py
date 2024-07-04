@@ -109,12 +109,21 @@ class SynchronizedData(BaseSynchronizedData):
     
     @property
     def actions(self) -> Optional[List[Dict[str, any]]]:
-        """Get the positions"""
+        """Get the actions"""
         serialized = self.db.get("actions", "[]")
         if serialized is None:
             serialized = "[]"
         actions = json.loads(serialized)
         return actions
+    
+    @property
+    def transaction_history(self) -> Optional[List[Dict[str,any]]]:
+        """Get the transactions"""
+        serialized = self.db.get("transactions", "[]")
+        if serialized is None:
+            serialized = "[]"
+        transactions = json.loads(serialized)
+        return transactions
 
 class ClaimOPRound(AbstractRound):
     """ClaimOPRound"""
@@ -190,8 +199,6 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
             return synced_data, Event.WAIT
 
         return synced_data, event
-
-
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""

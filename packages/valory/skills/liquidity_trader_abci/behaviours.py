@@ -139,10 +139,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """EvaluateStrategyBehaviour"""
 
     matching_round: Type[AbstractRound] = EvaluateStrategyRound
-
+    highest_apr_pool = None
     def async_act(self) -> Generator:
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            # apr_data = yield from self.get_apr_for_pools()
+            yield from self.get_highest_apr_pool()
+            invest_in_pool = yield from self.get_decision()
+            if not invest_in_pool:
+                actions = []
+            else:
+                actions = yield from self.get_order_of_transactions()
             # actions = [
             #             {
             #                 "action": "exit_pool",
@@ -200,7 +205,182 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
+    
+    def get_highest_apr_pool(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        pool_data = yield from self._get_all_pool_data()
 
+        if not pool_data:
+            self.context.logger.error("No pool data retrieved.")
+            return None
+
+        highest_apr = -float('inf')
+
+        for dex_type, chains in pool_data.items():
+            for chain, campaigns in chains.items():
+                for campaign in campaigns:
+                    apr = campaign.get('apr', 0)
+                    self.context.logger.info(f"{apr} APR")
+                    if apr is None:
+                        apr = 0
+                    if apr > highest_apr:
+                        highest_apr = apr
+                        self.highest_apr_pool = {
+                            "dex_type": dex_type,
+                            "chain": chain,
+                            "pool": campaign
+                        }
+
+        if self.highest_apr_pool:
+            self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")
+        else:
+            self.context.logger.warning("No pools with APR found.")
+
+    def _get_all_pool_data(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        assets = json.loads(json.loads(self.params.assets)) 
+        filtered_campaigns: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
+
+        for dex_type, asset_list in assets.items():
+            for asset in asset_list:
+                chain = asset[0]
+                chain_id = asset[2]
+
+                api_url = self.params.pool_data_api_url.format(chain_id=chain_id, type=1)
+                self.context.logger.info(f"{api_url}")
+
+                response = yield from self.get_http_response(
+                    method="GET",
+                    url=api_url,
+                    headers={"accept": "application/json"},
+                )
+
+                if response.status_code != 200:
+                    self.context.logger.error(
+                        f"Could not retrieve data from url {api_url}. "
+                        f"Received status code {response.status_code}."
+                    )
+                    return None
+
+                try:
+                    data = json.loads(response.body)
+                except (ValueError, TypeError) as e:
+                    self.context.logger.error(
+                        f"Could not parse response from api, "
+                        f"the following error was encountered {type(e).__name__}: {e}"
+                    )
+                    return None
+
+                campaigns = data[chain_id]
+
+                for token, campaign_list in campaigns.items():
+                    for campaign_id, campaign in campaign_list.items():
+                        # For testing remove the condition
+                        # if campaign["type"] == dex_type:
+                        filtered_campaigns[dex_type][chain].append(campaign)
+                        self.context.logger.info(f"Added campaign for {chain} on {dex_type}: {campaign}")
+
+        self.context.logger.info(f"Filtered campaigns: {filtered_campaigns}")
+        return filtered_campaigns
+
+    def get_decision(self) -> Generator[None, None, Optional[bool]]:
+        
+        #Step 1: Check highest APR exceeds threshold
+        exceeds_apr_threshold = self.highest_apr_pool["campaign"]["apr"] > self.params.exceeds_apr_threshold
+        if not exceeds_apr_threshold:
+            return False
+
+        #Step 2: Check is APR of current invested pools less than highest_apr_pool
+        is_apr_higher = yield from self._check_is_apr_higher()
+        if not is_apr_higher:
+            return False
+        
+        #Step 3: Check round interval
+        is_round_threshold_exceeded = self._check_round_threshold_exceeded()
+        if not is_round_threshold_exceeded:
+            return False
+        
+        #Step 4: Also consider the swap rates
+        #To-IMPLEMENT
+
+        return True
+    
+    def _check_is_apr_higher(self) -> Generator:
+        pass
+        #TO-IMPLEMENT
+
+    def _check_round_threshold_exceeded(self) -> bool:
+        transacation_history = self.synchronized_data.transaction_history
+
+        if not transacation_history:
+            return True
+        
+        latest_transaction = transacation_history[-1]
+        return latest_transaction["round"] + self.params.round_threshold >= self.round_sequence
+    
+    def get_order_of_transactions(self) -> Generator:
+
+        #Step 1- check if any liquidity exists, otherwise check for funds in safe
+        #Step 2- decide which pool to exit
+        exit_pool = yield from self._get_exit_pool()
+
+        swap_info = yield from self._get_bridge_and_swap_info()
+
+        enter_pool = yield from self._get_enter_pool()
+        
+    def _get_exit_pool(self) -> Generator:
+        #check apr for all the existing pools
+        #get pool with lowest apr
+        #also get tokens in the pool
+        # pool = {
+        # "chain": "",
+        # "chain_id": "",
+        # "pool_address": "",
+        # "token0": "",
+        # "token1": "",
+        # "balance": "",
+        # }
+        pass
+
+    def _get_bridge_and_swap_info(self, exit_pool: Dict[str,Any]) -> Generator[None,None,Optional[List[Dict[str, Any]]]]:
+        destination_pool = self.highest_apr_pool["pool"]
+        destination_chain = self.highest_apr_pool["chain"]
+        current_chain = exit_pool["chain_id"]
+        actions = []
+
+        if exit_pool["token0"] != destination_pool["token0"] and exit_pool["token0"] != destination_pool["token1"]:
+            # Prepare bridge_and_swap action
+            action = {
+                "action": "bridge_and_swap",
+                "source": {
+                    "chain": current_chain,
+                    "token": exit_pool["token0"]
+                },
+                "destination": {
+                    "chain": destination_chain,
+                    "token": destination_pool["token1"] if exit_pool["token1"] == destination_pool["token0"] else destination_pool["token0"]
+                },
+                "additional_params": {},
+            }
+            actions.append(action)
+
+        if exit_pool["token1"] != destination_pool["token0"] and exit_pool["token1"] != destination_pool["token1"]:
+            # Prepare bridge_and_swap action
+            action = {
+                "action": "bridge_and_swap",
+                "source": {
+                    "chain": current_chain,
+                    "token": exit_pool["token1"]
+                },
+                "destination": {
+                    "chain": destination_chain,
+                    "token": destination_pool["token1"]
+                },
+                "additional_params": {},
+            }
+            actions.append(action)
+
+        return actions
+                    
+    
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     """GetPositionsBehaviour"""
 
@@ -364,3 +544,5 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         PrepareSwapTxBehaviour,
         TxPreparationBehaviour
     ]
+
+    

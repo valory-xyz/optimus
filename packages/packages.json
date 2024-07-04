@@ -1,11 +1,11 @@
 {
     "dev": {
-        "contract/valory/balancer_weighted_pool/0.1.0": "bafybeieosfo3ztw5n5yu4ermd5phzqvqqan4b7hukxpdlz347mo672rrsi",
-        "contract/valory/velodrome_pool/0.1.0": "bafybeihkaalm22foxyvyn62ksnqv5qfk4bqyvr2usysbd7vep5nphcw2rm",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeicv5jnhu3i32znyhs2t7fmj7vf33s5mp2ybrhwbbnspkifd2zdou4",
-        "skill/valory/superagent_abci/0.1.0": "bafybeibjvguaav5msoefzxiejv25pj5w6qk7hpxpwssvs7ggtecle4ntxq",
-        "agent/valory/optimism_agent/0.1.0": "bafybeieiqkxw2ebv5cria3rbq7dbijwol43hixfb53mkd6dmzlwiowhsyy",
-        "service/valory/optimism_service/0.1.0": "bafybeicue56hghzw5v3a7r5zuddgs6apqdfvn4j3m34bdsp72monemxcdm"
+        "contract/valory/balancer_weighted_pool/0.1.0": "bafybeihbrhns552da65acfrcvugelunjlymegea22z7rdrrhaj5zfxi2pa",
+        "contract/valory/velodrome_pool/0.1.0": "bafybeifgbxffsvk5cwwwnvdzy2bo2jlif2xijclr7x63jh7zk3inloytqq",
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeifhu6jkp3w6gta3yajtfmung4f43522mr6rbswjsnehjhfz3urzbi",
+        "skill/valory/superagent_abci/0.1.0": "bafybeidadwoeopsvvbtu27lafwsrg7vb4tqqf3zgojwyzszoflgjziwc4q",
+        "agent/valory/optimism_agent/0.1.0": "bafybeib42mqt5o7ysnctrmzpvw5cimch2sqo7vtuhkrkxkawekmtssqn6q",
+        "service/valory/optimism_service/0.1.0": "bafybeihvf43co6rvs7pagxoprrdzvyo367lg2nz2dsc5x4qljl5zlwplqy"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",
@@ -20,6 +20,7 @@
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeib6podeifufgmawvicm3xyz3uaplbcrsptjzz4unpseh7qtcpar74",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
         "contract/valory/gnosis_safe/0.1.0": "bafybeibq77mgzhyb23blf2eqmia3kc6io5karedfzhntvpcebeqdzrgyqa",
+        "contract/valory/erc20/0.1.0": "bafybeia7a7mfjeok4ywpmejz74msofagagcentsudqxfojadmxlur5qolu",
         "connection/valory/abci/0.1.0": "bafybeiclexb6cnsog5yjz2qtvqyfnf7x5m7tpp56hblhk3pbocbvgjzhze",
         "connection/valory/http_client/0.23.0": "bafybeih5vzo22p2umhqo52nzluaanxx7kejvvpcpdsrdymckkyvmsim6gm",
         "connection/valory/ipfs/0.1.0": "bafybeihndk6hohj3yncgrye5pw7b7w2kztj3avby5u5mfk2fpjh7hqphii",

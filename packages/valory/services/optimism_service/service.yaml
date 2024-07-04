@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimism_agent:0.1.0:bafybeieiqkxw2ebv5cria3rbq7dbijwol43hixfb53mkd6dmzlwiowhsyy
+agent: valory/optimism_agent:0.1.0:bafybeib42mqt5o7ysnctrmzpvw5cimch2sqo7vtuhkrkxkawekmtssqn6q
 number_of_agents: 4
 deployment:
   agent:
@@ -89,7 +89,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        assets: ${ASSETS:str:"{\"balancer\":[[\"ethereum\",\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"],[\"arbitrum\",\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]],\"velodrome\":[[\"optimism\",\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\"]]}"}
+        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:"{\"balancer\":{\"ethereum\":[\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"]},\"arbitrum\":[\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]}},\"velodrome\":{\"optimism\":[\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\",\"10\"]}}"}
+        allowed_assets: ${ALLOWED_ASSETS:str:"{\"ethereum\":{\"eth\":\"0x0000000000000000000000000000000000000000\",\"weth\":\"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\",\"usdc\":\"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"},\"optimism\":{\"usdc\":\"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85\",\"dai\":\"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1\"}}"}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:list:[["ethereum","0x82a05d94630479e409ee235E8A8C5B65c7f7560e"],["arbitrum","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"],["optimism","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"]]}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
 1:
@@ -135,7 +136,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        assets: ${ASSETS:str:"{\"balancer\":[[\"ethereum\",\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"],[\"arbitrum\",\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]],\"velodrome\":[[\"optimism\",\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\"]]}"}
+        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:"{\"balancer\":{\"ethereum\":[\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"]},\"arbitrum\":[\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]}},\"velodrome\":{\"optimism\":[\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\",\"10\"]}}"}
+        allowed_assets: ${ALLOWED_ASSETS:str:"{\"ethereum\":{\"eth\":\"0x0000000000000000000000000000000000000000\",\"weth\":\"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\",\"usdc\":\"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"},\"optimism\":{\"usdc\":\"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85\",\"dai\":\"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1\"}}"}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:list:[["ethereum","0x82a05d94630479e409ee235E8A8C5B65c7f7560e"],["arbitrum","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"],["optimism","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"]]}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
 2:
@@ -181,7 +183,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        assets: ${ASSETS:str:"{\"balancer\":[[\"ethereum\",\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"],[\"arbitrum\",\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]],\"velodrome\":[[\"optimism\",\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\"]]}"}
+        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:"{\"balancer\":{\"ethereum\":[\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"]},\"arbitrum\":[\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]}},\"velodrome\":{\"optimism\":[\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\",\"10\"]}}"}
+        allowed_assets: ${ALLOWED_ASSETS:str:"{\"ethereum\":{\"eth\":\"0x0000000000000000000000000000000000000000\",\"weth\":\"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\",\"usdc\":\"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"},\"optimism\":{\"usdc\":\"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85\",\"dai\":\"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1\"}}"}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:list:[["ethereum","0x82a05d94630479e409ee235E8A8C5B65c7f7560e"],["arbitrum","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"],["optimism","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"]]}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
 3:
@@ -227,7 +230,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        assets: ${ASSETS:str:"{\"balancer\":[[\"ethereum\",\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"],[\"arbitrum\",\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]],\"velodrome\":[[\"optimism\",\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\"]]}"}
+        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:"{\"balancer\":{\"ethereum\":[\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"]},\"arbitrum\":[\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]}},\"velodrome\":{\"optimism\":[\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\",\"10\"]}}"}
+        allowed_assets: ${ALLOWED_ASSETS:str:"{\"ethereum\":{\"eth\":\"0x0000000000000000000000000000000000000000\",\"weth\":\"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\",\"usdc\":\"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"},\"optimism\":{\"usdc\":\"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85\",\"dai\":\"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1\"}}"}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:list:[["ethereum","0x82a05d94630479e409ee235E8A8C5B65c7f7560e"],["arbitrum","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"],["optimism","0xBd748eeb04623605BC1566b3F7F7f3e904f9Fe6D"]]}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
 ---

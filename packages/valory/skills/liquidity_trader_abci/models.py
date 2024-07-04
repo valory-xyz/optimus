@@ -45,7 +45,8 @@ class Params(BaseParams):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
 
-        self.assets = self._ensure("assets", kwargs, str)
+        self.allowed_lp_pool_addresses = self._ensure("allowed_lp_pool_addresses", kwargs, str)
+        self.allowed_assets = self._ensure("allowed_assets", str)
         self.safe_contract_addresses = self._ensure("safe_contract_addresses", kwargs, list)
         self.pool_data_api_url = self._ensure("pool_data_api_url", kwargs, str)
         super().__init__(*args, **kwargs)

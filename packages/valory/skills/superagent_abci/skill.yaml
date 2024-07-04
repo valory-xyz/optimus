@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
-- valory/liquidity_trader_abci:0.1.0:bafybeicv5jnhu3i32znyhs2t7fmj7vf33s5mp2ybrhwbbnspkifd2zdou4
+- valory/liquidity_trader_abci:0.1.0:bafybeifhu6jkp3w6gta3yajtfmung4f43522mr6rbswjsnehjhfz3urzbi
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 behaviours:
   main:
@@ -135,7 +135,8 @@ models:
       tx_timeout: 10.0
       ipfs_address: https://gateway.autonolas.tech/ipfs/
       service_endpoint_base: https://superagent.staging.autonolas.tech/
-      assets: '{"balancer":[["ethereum","0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],["arbitrum","0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]],"velodrome":[["optimism","0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]]}'
+      allowed_lp_pool_addresses: '{\"balancer\":{\"ethereum\":[\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"]},\"arbitrum\":[\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]}},\"velodrome\":{\"optimism\":[\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\",\"10\"]}}'
+      allowed_assets: '{\"ethereum\":{\"eth\":\"0x0000000000000000000000000000000000000000\",\"weth\":\"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\",\"usdc\":\"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"},\"optimism\":{\"usdc\":\"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85\",\"dai\":\"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1\"}}'
       safe_contract_addresses:
       - - ethereum
         - '0x0000000000000000000000000000000000000000'

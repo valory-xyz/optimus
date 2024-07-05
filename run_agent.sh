@@ -12,6 +12,7 @@ autonomy packages lock
 
 # Fetch the agent
 autonomy fetch --local --agent valory/optimism_agent
+python scripts/aea-config-replace.py
 
 # Copy and add the keys and issue certificates
 cd optimism_agent

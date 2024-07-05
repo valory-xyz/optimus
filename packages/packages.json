@@ -1,12 +1,12 @@
 {
     "dev": {
-        "contract/valory/balancer_weighted_pool/0.1.0": "bafybeieosfo3ztw5n5yu4ermd5phzqvqqan4b7hukxpdlz347mo672rrsi",
-        "contract/valory/velodrome_pool/0.1.0": "bafybeihkaalm22foxyvyn62ksnqv5qfk4bqyvr2usysbd7vep5nphcw2rm",
+        "contract/valory/balancer_weighted_pool/0.1.0": "bafybeiho7pgc257p54ndgcao5icq7dhv4i6sfciw4zhhth4fhl7hjc6v74",
+        "contract/valory/velodrome_pool/0.1.0": "bafybeicdezbk26h5cvpmzkduwhdjbxmi2gort4v22bypeph5yfflgc7apa",
         "contract/valory/erc20/0.1.0": "bafybeigvftdxjgnlsoemst5d57cor36idywk7bwcfj2bjqijxdxo3xpurq",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeieuoxoysgw4xx2the5c4p6mq6vakykny63sbrwpe3nnczfmc75rey",
-        "skill/valory/superagent_abci/0.1.0": "bafybeigklrlgno4twkh3r3rk2vxl62557znfmp4f3uqc7hdyuq4wp7siqq",
-        "agent/valory/optimism_agent/0.1.0": "bafybeig2zpjdti7fpej33qf5upnfgabggl5czsrrbnuyfogbgppqyzfmhi",
-        "service/valory/optimism_service/0.1.0": "bafybeifyrl4p3qfk7m3b67nlzb23j3kflqs7blmzemgka2cu5c2etky32i"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeigy7wcaufwg5tyfxj2rfwk4v4vyvexnsiuj3ytg7zjie6tunj5slm",
+        "skill/valory/superagent_abci/0.1.0": "bafybeidfbfta223eagvgno3dejvs3xhfbvhg3ou7l3u47fpcp6nrzb7asy",
+        "agent/valory/optimism_agent/0.1.0": "bafybeidgt5647d4kaq7aovazijdgjskaqz2wq3ihwx2t2d7kj346sewmly",
+        "service/valory/optimism_service/0.1.0": "bafybeidxzwruwu5g7kmtmyxmhyxghddsdee3oqymd72avhum7tai5almyi"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

@@ -6,9 +6,9 @@ description: The contract package for the velodrome Pool interface.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeifnvp3xuflqufyhqifuwye4p4qq5req6n5kyy5p3mj6kpp7bvmw3a
-  build/Pool.json: bafybeidz66bxstthucunnt2mofg7phy2sfv233r6zy3unmvkqdppmcjjhi
-  contract.py: bafybeieahj477innh4vj7fk7a7hp4detgmfsssjuoqy3zv5bdvza5t34rq
+  __init__.py: bafybeiejyhihxl7gavda55xvz6hcuhf4ssa3kzk3at4yuk4ppmuzyd6nka
+  build/Pool.json: bafybeidgimpxtkds5kaha5mvojvr7e5pjefyvw362teh65vn44qqvfcvza
+  contract.py: bafybeihtrxormmdzlkelmt7xd4h6tmzmxn4dxojhrsp6j5c4doh7malydm
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: PoolContract

@@ -24,6 +24,7 @@ from typing import Optional
 
 from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 
+
 @dataclass(frozen=True)
 class ClaimOPPayload(BaseTxPayload):
     """Represent a transaction payload for the ClaimOPRound."""
@@ -34,17 +35,21 @@ class ClaimOPPayload(BaseTxPayload):
 @dataclass(frozen=True)
 class DecisionMakingPayload(BaseTxPayload):
     """Represent a transaction payload for the DecisionMakingRound."""
+
     decision: str
+
 
 @dataclass(frozen=True)
 class EvaluateStrategyPayload(BaseTxPayload):
     """Represent a transaction payload for the EvaluateStrategyRound."""
+
     actions: Optional[str]
 
 
 @dataclass(frozen=True)
 class GetPositionsPayload(BaseTxPayload):
     """Represent a transaction payload for the GetPositionsRound."""
+
     positions: Optional[str]
 
 
@@ -67,4 +72,3 @@ class TxPreparationPayload(BaseTxPayload):
     """Represent a transaction payload for the TxPreparationRound."""
 
     # TODO: define your attributes
-

@@ -6,13 +6,13 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeidgztnu7xdnhlefjdv3oyufgevhegapthz2xapdphkfaejbvevti4
-  behaviours.py: bafybeibf6xjvwxw24cgbvckqhafw6nzbxksx3runongrjtdwqoahafha5u
-  composition.py: bafybeibipv6ely6zw6todtjndlpt2sqw7zj4gnsz2h2kmjjy3o6ffiwhtm
+  __init__.py: bafybeigbobqmqww7yld4kunet47kf2kib3kgfzwufqcdkleptdvtsudxtu
+  behaviours.py: bafybeiej6brcarvk26vmrce2omgytonyvytnj6pezvylm3gy24ceui6eqq
+  composition.py: bafybeifqegvv2i6bxgfhvjxlm6lh2cxcug4hf27hufbant7xymndtwdd7q
   dialogues.py: bafybeigt3xl52z5ftxjoobzqlyqtoreftmndonbkpjgj2wjug4klyhyeby
   fsm_specification.yaml: bafybeianj5ih7awdhsuwuolmfsmqfallyzsuygqmxkbpuv4bqxfaul6cxm
   handlers.py: bafybeiaaqhk7hhrjd3ciumel7u3fmhhfzedwzl6uccoty6qz63ukw3bdp4
-  models.py: bafybeibg76ku3dvfkctr6gxuu2kpf75dlr7lmwi3gukg2wlsileie2gxli
+  models.py: bafybeihusfahwsotlkyjfle4nalqyhcyyi2z6zqegfuypyoqk23r6buyvu
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
-- valory/liquidity_trader_abci:0.1.0:bafybeieuoxoysgw4xx2the5c4p6mq6vakykny63sbrwpe3nnczfmc75rey
+- valory/liquidity_trader_abci:0.1.0:bafybeibs3dsmaymqzclsn2kaszgugbfyh44pxdyf7us3fypqsjgvw22cpm
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 behaviours:
   main:
@@ -135,15 +135,9 @@ models:
       tx_timeout: 10.0
       ipfs_address: https://gateway.autonolas.tech/ipfs/
       service_endpoint_base: https://superagent.staging.autonolas.tech/
-      allowed_lp_pool_addresses: '{\"balancer\":{\"ethereum\":[\"0x3de27EFa2F1AA663Ae5D458857e731c129069F29\"],\"arbitrum\":[\"0x32dF62dc3aEd2cD6224193052Ce665DC18165841\"]},\"velodrome\":{\"optimism\":[\"0xF4F2657AE744354bAcA871E56775e5083F7276Ab\",\"10\"]}}'
-      allowed_assets: '{\"ethereum\":{\"eth\":\"0x0000000000000000000000000000000000000000\",\"weth\":\"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\",\"usdc\":\"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"},\"optimism\":{\"usdc\":\"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85\",\"dai\":\"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1\"}}'
-      safe_contract_addresses:
-      - - ethereum
-        - '0x0000000000000000000000000000000000000000'
-      - - arbitrum
-        - '0x0000000000000000000000000000000000000000'
-      - - optimism
-        - '0x0000000000000000000000000000000000000000'
+      allowed_lp_pool_addresses: '{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}'
+      allowed_assets: '{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}'
+      safe_contract_addresses: '{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}'
       pool_data_api_url: https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1
     class_name: Params
   randomness_api:

@@ -168,7 +168,7 @@ models:
       service_id: superagent
       service_registry_address: ${str:null}
       setup:
-        all_participants: ${list:["0x615d3278680337e2D39C3bc5042D959C7938B917"]}
+        all_participants: ${list:["0x1aCD50F973177f4D320913a9Cc494A9c66922fdF"]}
         consensus_threshold: ${int:null}
         safe_contract_address: ${str:0x0000000000000000000000000000000000000000}
       share_tm_config_on_startup: ${bool:false}
@@ -196,3 +196,8 @@ models:
       allowed_assets: ${str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
       pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}
+      allowed_chains: ${str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
+      gas_reserve: ${str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
+      round_threshold: ${int:5}
+      apr_threshold: ${int:5}
+      min_balance_multiplier: ${int:5}

@@ -136,6 +136,11 @@ models:
       allowed_assets: '{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}'
       safe_contract_addresses: '{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}'
       pool_data_api_url: https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1
+      allowed_chains: '{"ethereum":1,"optimism":10,"arbitrum":42161}'
+      gas_reserve: '{"ethereum":1,"optimism":10,"arbitrum":42161}'
+      round_threshold: 5
+      apr_threshold: 5
+      min_balance_multiplier: 5
     class_name: Params
   requests:
     args: {}

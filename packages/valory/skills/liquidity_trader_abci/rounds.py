@@ -19,9 +19,9 @@
 
 """This package contains the rounds of LiquidityTraderAbciApp."""
 
+import json
 from enum import Enum
 from typing import Dict, FrozenSet, List, Optional, Set, Tuple, cast
-import json 
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp,
@@ -29,14 +29,13 @@ from packages.valory.skills.abstract_round_abci.base import (
     AbstractRound,
     AppState,
     BaseSynchronizedData,
-    CollectionRound,
     CollectSameUntilThresholdRound,
+    CollectionRound,
     DegenerateRound,
     DeserializedCollection,
     EventToTimeout,
     get_name,
 )
-
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     ClaimOPPayload,
     DecisionMakingPayload,
@@ -81,7 +80,7 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def participant_to_tx_round(self) -> DeserializedCollection:
         """Get the participants to the tx round."""
-        return self._get_deserialized("participant_to_tx_round")    
+        return self._get_deserialized("participant_to_tx_round")
 
     @property
     def tx_submitter(self) -> str:
@@ -91,8 +90,8 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def participant_to_positions_round(self) -> DeserializedCollection:
         """Get the participants to the positions round."""
-        return self._get_deserialized("participant_to_positions_round")    
-    
+        return self._get_deserialized("participant_to_positions_round")
+
     @property
     def positions(self) -> Optional[List[Dict[str, any]]]:
         """Get the positions."""
@@ -101,12 +100,12 @@ class SynchronizedData(BaseSynchronizedData):
             serialized = "[]"
         positions = json.loads(serialized)
         return positions
-    
+
     @property
     def participant_to_actions_round(self) -> DeserializedCollection:
         """Get the participants to actions rounds"""
         return self._get_deserialized("participant_to_actions_round")
-    
+
     @property
     def actions(self) -> Optional[List[Dict[str, any]]]:
         """Get the actions"""
@@ -115,15 +114,16 @@ class SynchronizedData(BaseSynchronizedData):
             serialized = "[]"
         actions = json.loads(serialized)
         return actions
-    
+
     @property
-    def transaction_history(self) -> Optional[List[Dict[str,any]]]:
+    def transaction_history(self) -> Optional[List[Dict[str, any]]]:
         """Get the transactions"""
         serialized = self.db.get("transactions", "[]")
         if serialized is None:
             serialized = "[]"
         transactions = json.loads(serialized)
         return transactions
+
 
 class ClaimOPRound(AbstractRound):
     """ClaimOPRound"""
@@ -182,7 +182,7 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
 
     payload_class = EvaluateStrategyPayload
     synchronized_data_class = SynchronizedData
-    selection_key = (get_name(SynchronizedData.actions))
+    selection_key = get_name(SynchronizedData.actions)
     done_event = Event.DONE
     collection_key = get_name(SynchronizedData.participant_to_actions_round)
     selection_key = get_name(SynchronizedData.actions)
@@ -200,6 +200,7 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
 
         return synced_data, event
 
+
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""
 
@@ -208,9 +209,10 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_positions_round)
-    selection_key = (get_name(SynchronizedData.positions))
+    selection_key = get_name(SynchronizedData.positions)
 
     ERROR_PAYLOAD = "error"
+
 
 class PrepareExitPoolTxRound(AbstractRound):
     """PrepareExitPoolTxRound"""
@@ -311,18 +313,18 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         ClaimOPRound: {
             Event.DONE: TxPreparationRound,
             Event.NO_MAJORITY: ClaimOPRound,
-            Event.ROUND_TIMEOUT: ClaimOPRound
+            Event.ROUND_TIMEOUT: ClaimOPRound,
         },
         GetPositionsRound: {
             Event.DONE: EvaluateStrategyRound,
             Event.NO_MAJORITY: GetPositionsRound,
-            Event.ROUND_TIMEOUT: GetPositionsRound
+            Event.ROUND_TIMEOUT: GetPositionsRound,
         },
         EvaluateStrategyRound: {
             Event.DONE: DecisionMakingRound,
             Event.NO_MAJORITY: EvaluateStrategyRound,
             Event.ROUND_TIMEOUT: EvaluateStrategyRound,
-            Event.WAIT: FinishedEvaluateStrategyRound
+            Event.WAIT: FinishedEvaluateStrategyRound,
         },
         DecisionMakingRound: {
             Event.DONE: FinishedDecisionMakingRound,
@@ -331,36 +333,40 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ROUND_TIMEOUT: DecisionMakingRound,
             Event.EXIT: PrepareExitPoolTxRound,
             Event.SWAP: PrepareSwapTxRound,
-            Event.CLAIM: ClaimOPRound
+            Event.CLAIM: ClaimOPRound,
         },
         PrepareExitPoolTxRound: {
             Event.DONE: TxPreparationRound,
             Event.NO_MAJORITY: PrepareExitPoolTxRound,
-            Event.ROUND_TIMEOUT: PrepareExitPoolTxRound
+            Event.ROUND_TIMEOUT: PrepareExitPoolTxRound,
         },
         PrepareSwapTxRound: {
             Event.DONE: TxPreparationRound,
             Event.NO_MAJORITY: PrepareSwapTxRound,
-            Event.ROUND_TIMEOUT: PrepareSwapTxRound
+            Event.ROUND_TIMEOUT: PrepareSwapTxRound,
         },
         TxPreparationRound: {
             Event.DONE: FinishedTxPreparationRound,
             Event.NO_MAJORITY: TxPreparationRound,
-            Event.ROUND_TIMEOUT: TxPreparationRound
+            Event.ROUND_TIMEOUT: TxPreparationRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
-        FinishedDecisionMakingRound: {}
+        FinishedDecisionMakingRound: {},
     }
-    final_states: Set[AppState] = {FinishedEvaluateStrategyRound, FinishedDecisionMakingRound, FinishedTxPreparationRound}
+    final_states: Set[AppState] = {
+        FinishedEvaluateStrategyRound,
+        FinishedDecisionMakingRound,
+        FinishedTxPreparationRound,
+    }
     event_to_timeout: EventToTimeout = {}
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
         GetPositionsRound: set(),
-        DecisionMakingRound: set()
+        DecisionMakingRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedEvaluateStrategyRound: set(),
-    	FinishedDecisionMakingRound: set(),
-    	FinishedTxPreparationRound: {get_name(SynchronizedData.most_voted_tx_hash)},
+        FinishedDecisionMakingRound: set(),
+        FinishedTxPreparationRound: {get_name(SynchronizedData.most_voted_tx_hash)},
     }

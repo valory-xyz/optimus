@@ -151,54 +151,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 actions = []
             else:
                 actions = yield from self.get_order_of_transactions()
-            # actions = [
-            #             {
-            #                 "action": "exit_pool",
-            #                 "chain": "ethereum",
-            #                 "pool_address": "0x00...",
-            #                 "assets": [
-            #                     {"asset": "ETH", "amount": 10},
-            #                     {"asset": "DAI", "amount": 200}
-            #                 ],
-            #                 "additional_params": {},
-            #             },
-            #             {
-            #                 "action": "bridge_and_swap",
-            #                 "source": {
-            #                     "chain": "ethereum",
-            #                     "token": "DAI"
-            #                 },
-            #                 "destination": {
-            #                     "chain": "optimism",
-            #                     "token": "USDC"
-            #                 },
-            #                 "amount": 300,
-            #                 "additional_params": {},
-            #             },
-            #             {
-            #                 "action": "bridge_and_swap",
-            #                 "source": {
-            #                     "chain": "ethereum",
-            #                     "token": "USDC"
-            #                 },
-            #                 "destination": {
-            #                     "chain": "optimism",
-            #                     "token": "USDC"
-            #                 },
-            #                 "amount": 300,
-            #                 "additional_params": {},
-            #             },
-            #             {
-            #                 "action": "enter_pool",
-            #                 "chain": "optimism",
-            #                 "pool_address": "0x00...",
-            #                 "assets": [
-            #                     {"asset": "ETH", "amount": 20},
-            #                     {"asset": "DAI", "amount": 100}
-            #                 ],
-            #                 "additional_params": {},
-            #             }
-            #         ]
+
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
             payload = EvaluateStrategyPayload(sender=sender, actions=serialized_actions)
@@ -227,10 +180,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         apr = 0
                     if apr > highest_apr:
                         highest_apr = apr
+                        try:
+                            pool_tokens = list(campaign["typeInfo"]["poolTokens"].keys())
+                        except:
+                            self.context.logger.error(f"No underlying token addresses present in the pool {campaign}")
+                            continue
                         self.highest_apr_pool = {
                             "dex_type": dex_type,
                             "chain": chain,
-                            "pool": campaign
+                            "apr": apr,
+                            "token0": pool_tokens[0],
+                            "token1": pool_tokens[1]
                         }
 
         if self.highest_apr_pool:
@@ -264,25 +224,31 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             try:
                 data = json.loads(response.body)
+                self.context.logger.info(f"Pool Info retrieved from API {data}")
             except (ValueError, TypeError) as e:
                 self.context.logger.error(
                     f"Could not parse response from api, "
                     f"the following error was encountered {type(e).__name__}: {e}"
                 )
                 return None
-
-            campaigns = data[chain_id]
+            
+            try:
+                campaigns = data[str(chain_id)]
+            except:
+                self.context.logger.error(
+                    f"No info available for chainId {chain_id} in response {data}")
+                continue
 
             for token, campaign_list in campaigns.items():
                 for campaign_id, campaign in campaign_list.items():
-                    # For testing remove the condition
                     dex_type = campaign["type"]
+                    # For testing remove the condition since balancer and velodrome are not present in pool data for now
                     if dex_type in allowed_dexs:
-                        if campaign["token0"] in allowed_assets[chain] and campaign["token1"] in allowed_assets[chain]:
+                        # if campaign["token0"] in allowed_assets[chain] and campaign["token1"] in allowed_assets[chain]:
                             # pool_address = yield from self._get_pool_address(dex_type, chain, campaign["token0"], campaign["token1"])
                             # if pool_address in allowed_lp_pools[dex_type][chain]:
-                            filtered_pools[dex_type][chain].append(campaign)
-                            self.context.logger.info(f"Added campaign for {chain} on {dex_type}: {campaign}")
+                        filtered_pools[dex_type][chain].append(campaign)
+                        self.context.logger.info(f"Added campaign for {chain} on {dex_type}: {campaign}")
 
         self.context.logger.info(f"Filtered pools: {filtered_pools}")
         return filtered_pools
@@ -290,29 +256,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def get_decision(self) -> Generator[None, None, Optional[bool]]:
         # Step 1: Check highest APR exceeds threshold
         exceeds_apr_threshold = (
-            self.highest_apr_pool["campaign"]["apr"] > self.params.apr_threshold
+            self.highest_apr_pool["apr"] > self.params.apr_threshold
         )
         if not exceeds_apr_threshold:
+            self.context.logger.info(f"apr of pool {self.highest_apr_pool["apr"]} does not exceed apr_threshold {self.params.apr_threshold}")
             return False
 
-        # Step 2: Check is APR of current invested pools less than highest_apr_pool
-        is_apr_higher = yield from self._check_is_apr_higher()
-        if not is_apr_higher:
-            return False
-
-        # Step 3: Check round interval
+        # Step 2: Check round interval
         is_round_threshold_exceeded = self._check_round_threshold_exceeded()
         if not is_round_threshold_exceeded:
             return False
 
-        # Step 4: Also consider the swap rates
-        # To-IMPLEMENT
-
         return True
-
-    def _check_is_apr_higher(self) -> Generator:
-        pass
-        # TO-IMPLEMENT
 
     def _check_round_threshold_exceeded(self) -> bool:
         transacation_history = self.synchronized_data.transaction_history
@@ -482,7 +437,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
         allowed_assets = self.params.allowed_assets
 
         for chain, assets in allowed_assets.items():
-            account = (json.loads(json.loads(self.params.safe_contract_addresses)))[chain]
+            account = self.params.safe_contract_addresses[chain]
             if chain == "optimism":
                 chain = "bnb"
             for asset_name, asset_address in assets.items():
@@ -571,7 +526,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                         )
                         return None
 
-                    if dex_type == "balancer":
+                    if dex_type == "balancerPool":
                         contract_callable = "get_balance"
                         contract_id = str(WeightedPoolContract.contract_id)
                     elif dex_type == "velodrome":

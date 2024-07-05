@@ -51,7 +51,7 @@ class Params(BaseParams):
             self._ensure("allowed_lp_pool_addresses", kwargs, str)
         )
         self.allowed_assets = json.loads(self._ensure("allowed_assets", kwargs, str))
-        self.safe_contract_addresses_mapping = json.loads(
+        self.safe_contract_addresses = json.loads(
             self._ensure("safe_contract_addresses", kwargs, str)
         )
         self.pool_data_api_url = self._ensure("pool_data_api_url", kwargs, str)

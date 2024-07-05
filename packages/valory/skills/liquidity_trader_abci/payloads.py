@@ -51,6 +51,7 @@ class GetPositionsPayload(BaseTxPayload):
     """Represent a transaction payload for the GetPositionsRound."""
 
     positions: Optional[str]
+    current_pool: Optional[str]
 
 
 @dataclass(frozen=True)

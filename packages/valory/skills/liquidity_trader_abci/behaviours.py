@@ -239,7 +239,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning("No pools with APR found.")
 
     def _get_all_pool_data(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        assets = json.loads(json.loads(self.params.assets))
+        assets = self.params.allowed_assets
         filtered_campaigns: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(
             lambda: defaultdict(list)
         )
@@ -453,7 +453,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("No assets provided.")
             return None
 
-        allowed_assets = json.loads(json.loads(self.params.allowed_assets))
+        allowed_assets = self.params.allowed_assets
 
         for chain, assets in allowed_assets.items():
             account = self._get_safe_contract_address(chain)
@@ -533,9 +533,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("No LP Pool addresses provided.")
             return None
 
-        lp_pool_addresses = json.loads(
-            json.loads(self.params.allowed_lp_pool_addresses)
-        )
+        lp_pool_addresses = self.params.allowed_lp_pool_addresses
 
         for dex_type, lp_pools in lp_pool_addresses.items():
             for chain, pools in lp_pools.items():
@@ -599,14 +597,12 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
         return pool_balances_dict
 
-    def _get_safe_contract_address(self, chain: str) -> str:
-        safe_contract_addresses_mapping = self.params.safe_contract_addresses
-
-        for chain_id, safe_contract_address in safe_contract_addresses_mapping:
-            if chain_id == chain:
-                return safe_contract_address
-
-        return None
+    def _get_safe_contract_address(self, chain: str) -> Optional[str]:
+        return (
+            None
+            if chain not in self.params.safe_contract_addresses_mapping
+            else self.params.safe_contract_addresses_mapping[chain]
+        )
 
 
 class PrepareExitPoolTxBehaviour(LiquidityTraderBaseBehaviour):

@@ -7,11 +7,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeiery2wvo3dx4ywpyaah44i35ntgcvpttik53wglxujqtofq4qipfy
+  behaviours.py: bafybeiden6gcm7kq2wipfbcv4b4bp6ocz2o6ikdd2s45mtsfrxf33prrua
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeidmmdcqgnvfve2nbykult42gax2zkf3ec5lg5k3ufhmo5v2wtso6e
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeigo7mptqmrfpfm57hh3y74pzp4qwxgil7wscvs7f4ziixgo7ynamu
+  models.py: bafybeiaxy3a4wyy6ck3sfeq377j4xy2qoy3pzi6y4hqeegpxjuzzw3rgve
   payloads.py: bafybeicy33nym7jvb2tfpazlpsptzvnym6ac462azshkz3gy4xwdoot3fa
   rounds.py: bafybeihv6irjmxg62lt4hr4enlrnxo5lq5p72ywgvjpoba6lbzywtk6fnu
 fingerprint_ignore_patterns: []
@@ -132,15 +132,9 @@ models:
       validate_timeout: 1205
       multisend_batch_size: 50
       multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
-      allowed_lp_pool_addresses: '{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab","10"]}}'
+      allowed_lp_pool_addresses: '{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}'
       allowed_assets: '{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}'
-      safe_contract_addresses:
-      - - ethereum
-        - '0x0000000000000000000000000000000000000000'
-      - - arbitrum
-        - '0x0000000000000000000000000000000000000000'
-      - - optimism
-        - '0x0000000000000000000000000000000000000000'
+      safe_contract_addresses: '{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}'
       pool_data_api_url: https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1
     class_name: Params
   requests:

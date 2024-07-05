@@ -57,6 +57,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     TxPreparationRound,
 )
 
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
 
 class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
@@ -408,7 +410,6 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     """GetPositionsBehaviour"""
 
     matching_round: Type[AbstractRound] = GetPositionsRound
-    zero_address = "0x0000000000000000000000000000000000000000"
     current_pool = None
 
     def async_act(self) -> Generator:
@@ -467,7 +468,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             if chain == "optimism":
                 chain = "bnb"
             for asset_name, asset_address in assets.items():
-                if asset_address == self.zero_address:
+                if asset_address == ZERO_ADDRESS:
                     ledger_api_response = yield from self.get_ledger_api_response(
                         performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
                         ledger_callable="get_balance",

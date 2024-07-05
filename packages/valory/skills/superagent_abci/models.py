@@ -26,13 +26,17 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.tests.data.dummy_abci.models import (
     RandomnessApi as BaseRandomnessApi,
 )
-from packages.valory.skills.liquidity_trader_abci.models import Params as LiquidityTraderParams
-from packages.valory.skills.liquidity_trader_abci.models import SharedState as BaseSharedState
-from packages.valory.skills.liquidity_trader_abci.rounds import Event as LiquidityTraderEvent
-from packages.valory.skills.superagent_abci.composition import (
-    SuperAgentAbciApp,
+from packages.valory.skills.liquidity_trader_abci.models import (
+    Params as LiquidityTraderParams,
+)
+from packages.valory.skills.liquidity_trader_abci.models import (
+    SharedState as BaseSharedState,
+)
+from packages.valory.skills.liquidity_trader_abci.rounds import (
+    Event as LiquidityTraderEvent,
 )
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
+from packages.valory.skills.superagent_abci.composition import SuperAgentAbciApp
 from packages.valory.skills.termination_abci.models import TerminationParams
 
 
@@ -58,9 +62,9 @@ class SharedState(BaseSharedState):
             ResetPauseEvent.ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
-        SuperAgentAbciApp.event_to_timeout[
-            ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT
-        ] = (self.context.params.reset_pause_duration + MARGIN)
+        SuperAgentAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT] = (
+            self.context.params.reset_pause_duration + MARGIN
+        )
 
         SuperAgentAbciApp.event_to_timeout[LiquidityTraderEvent.ROUND_TIMEOUT] = (
             self.context.params.round_timeout_seconds * MULTIPLIER

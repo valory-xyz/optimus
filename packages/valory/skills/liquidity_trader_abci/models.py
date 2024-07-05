@@ -19,6 +19,7 @@
 
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
 
+import json
 from typing import Any
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
@@ -46,10 +47,10 @@ class Params(BaseParams):
     """Parameters"""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.allowed_lp_pool_addresses = self._ensure(
-            "allowed_lp_pool_addresses", kwargs, str
+        self.allowed_lp_pool_addresses = json.loads(
+            self._ensure("allowed_lp_pool_addresses", kwargs, str)
         )
-        self.allowed_assets = self._ensure("allowed_assets", kwargs, str)
+        self.allowed_assets = json.loads(self._ensure("allowed_assets", kwargs, str))
         self.safe_contract_addresses = self._ensure(
             "safe_contract_addresses", kwargs, list
         )

@@ -45,6 +45,11 @@ def main() -> None:
                 "address"
             ] = f"${{str:{os.getenv('GNOSIS_LEDGER_RPC')}}}"
 
+        # Params
+        config[5]["models"]["params"]["args"]["setup"][
+            "all_participants"
+        ] = f"${{bool:{os.getenv('ALL_PARTICIPANTS')}}}"
+
     with open(Path("optimism_agent", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)
 

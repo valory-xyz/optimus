@@ -528,13 +528,13 @@ unicode-backport = ["unicodedata2"]
 
 [[package]]
 name = "click"
-version = "8.1.7"
+version = "8.0.2"
 description = "Composable command line interface toolkit"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.6"
 files = [
-    {file = "click-8.1.7-py3-none-any.whl", hash = "sha256:ae74fb96c20a0277a1d615f1e4d73c8414f5a98db8b799a7931d1582f3390c28"},
-    {file = "click-8.1.7.tar.gz", hash = "sha256:ca9853ad459e787e2192211578cc907e7594e294c7ccc834310722b41b9ca6de"},
+    {file = "click-8.0.2-py3-none-any.whl", hash = "sha256:3fab8aeb8f15f5452ae7511ad448977b3417325bceddd53df87e0bb81f3a8cf8"},
+    {file = "click-8.0.2.tar.gz", hash = "sha256:7027bc7bbafaab8b2c2816861d8eb372429ee3c02e193fc2f93d6c4ab9de49c5"},
 ]
 
 [package.dependencies]
@@ -1783,23 +1783,23 @@ nicer-shell = ["ipython"]
 
 [[package]]
 name = "open-aea"
-version = "1.52.0"
+version = "1.50.0"
 description = "Open Autonomous Economic Agent framework (without vendor lock-in)"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "open_aea-1.52.0-py3-none-any.whl", hash = "sha256:7622a2d8448e51910b84f958befa31aeb81675ce6e5b27e6e8667bcc9fea74ca"},
-    {file = "open_aea-1.52.0-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:4351a1356653b402fec9ad4c9dbffd9396653596812647116edcc78d6c8e7d60"},
-    {file = "open_aea-1.52.0-py3-none-manylinux1_x86_64.whl", hash = "sha256:c665d05f13ce718a48e57d23a7af9e048efff774623f094901f4c5fc810b20ec"},
-    {file = "open_aea-1.52.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:7d79322e28d5748f573f59ad1bc40647b8a2f3d01c65915dbfdb8c55f134da55"},
-    {file = "open_aea-1.52.0-py3-none-win32.whl", hash = "sha256:5dc833479ac2dec994cec2813796864d0878e84f8d1fce4222d00e7a853a8f2e"},
-    {file = "open_aea-1.52.0-py3-none-win_amd64.whl", hash = "sha256:1f638c8251033a2758377af12087c0ace7eed80a6e1fbcc99ef0fee2bbe6703a"},
-    {file = "open_aea-1.52.0.tar.gz", hash = "sha256:320f5df6176e10362c0ac81bbe65212679f79bbddf5d5d86c04fb8b72d4b4ccb"},
+    {file = "open-aea-1.50.0.tar.gz", hash = "sha256:7354fbdfc3246cce2a69d50b5b3e6441b28cbe3ed689b7186f9afa6d035a153f"},
+    {file = "open_aea-1.50.0-py3-none-any.whl", hash = "sha256:0768e13dc2844e519bb3af93f71795db17724b2ad47f68ce483496757b2be4ba"},
+    {file = "open_aea-1.50.0-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:b6824c9c1290fa2f9fc03f286ca80efd75c3a7e1f0affeb962d9396ef266870a"},
+    {file = "open_aea-1.50.0-py3-none-manylinux1_x86_64.whl", hash = "sha256:59c899b073686cbffc9a1ec7086a7d7869597467e66028a01e9d7f8ac2a69d42"},
+    {file = "open_aea-1.50.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:0284f8fa6bfea5516b880cf89ef03fb671c61773be70dfa1abc4d8063c7726e8"},
+    {file = "open_aea-1.50.0-py3-none-win32.whl", hash = "sha256:57d0e79690e76b774056d64632065de2779d199ae2801132ed89c11f4d797077"},
+    {file = "open_aea-1.50.0-py3-none-win_amd64.whl", hash = "sha256:fc552754e9696e8df35598f5dab2d795119dbc0fc0ecbcec1f9cb75718f1db7e"},
 ]
 
 [package.dependencies]
 base58 = ">=1.0.3,<3.0.0"
-click = {version = ">=8.1.0,<9", optional = true, markers = "extra == \"all\""}
+click = {version = "8.0.2", optional = true, markers = "extra == \"all\""}
 coverage = {version = ">=6.4.4,<8.0.0", optional = true, markers = "extra == \"all\""}
 ecdsa = ">=0.15,<0.17.0"
 jsonschema = ">=4.3.0,<4.4.0"
@@ -1811,24 +1811,24 @@ py-multicodec = ">=0.2.0"
 pymultihash = "0.8.2"
 pytest = {version = ">=7.0.0,<7.3.0", optional = true, markers = "extra == \"all\""}
 python-dotenv = ">=0.14.0,<0.22.0"
-pyyaml = {version = ">=6.0.1,<7", optional = true, markers = "extra == \"all\""}
-requests = ">=2.28.1,<3"
+pyyaml = "6.0.1"
+requests = "2.28.1"
 semver = ">=2.9.1,<3.0.0"
 
 [package.extras]
-all = ["click (>=8.1.0,<9)", "coverage (>=6.4.4,<8.0.0)", "jsonschema (>=4.3.0,<4.4.0)", "packaging (>=23.1,<24.0)", "pytest (>=7.0.0,<7.3.0)", "pyyaml (>=6.0.1,<9)", "semver (>=2.9.1,<3.0.0)"]
-cli = ["click (>=8.1.0,<9)", "coverage (>=6.4.4,<8.0.0)", "jsonschema (>=4.3.0,<4.4.0)", "packaging (>=23.1,<24.0)", "pytest (>=7.0.0,<7.3.0)", "pyyaml (>=6.0.1,<9)", "semver (>=2.9.1,<3.0.0)"]
-test-tools = ["click (>=8.1.0,<9)", "coverage (>=6.4.4,<8.0.0)", "jsonschema (>=4.3.0,<4.4.0)", "packaging (>=23.1,<24.0)", "pytest (>=7.0.0,<7.3.0)", "pyyaml (>=6.0.1,<9)", "semver (>=2.9.1,<3.0.0)"]
+all = ["click (==8.0.2)", "coverage (>=6.4.4,<8.0.0)", "jsonschema (>=4.3.0,<4.4.0)", "packaging (>=23.1,<24.0)", "pytest (>=7.0.0,<7.3.0)", "pyyaml (==6.0.1)", "semver (>=2.9.1,<3.0.0)"]
+cli = ["click (==8.0.2)", "coverage (>=6.4.4,<8.0.0)", "jsonschema (>=4.3.0,<4.4.0)", "packaging (>=23.1,<24.0)", "pytest (>=7.0.0,<7.3.0)", "pyyaml (==6.0.1)", "semver (>=2.9.1,<3.0.0)"]
+test-tools = ["click (==8.0.2)", "coverage (>=6.4.4,<8.0.0)", "jsonschema (>=4.3.0,<4.4.0)", "packaging (>=23.1,<24.0)", "pytest (>=7.0.0,<7.3.0)", "pyyaml (==6.0.1)", "semver (>=2.9.1,<3.0.0)"]
 
 [[package]]
 name = "open-aea-cli-ipfs"
-version = "1.52.0"
+version = "1.50.0"
 description = "CLI extension for open AEA framework wrapping IPFS functionality."
 optional = false
 python-versions = "*"
 files = [
-    {file = "open_aea_cli_ipfs-1.52.0-py3-none-any.whl", hash = "sha256:95b07c664cd735dd7ce2d93157b412f0c457f2613062096dce01fb36732718b0"},
-    {file = "open_aea_cli_ipfs-1.52.0.tar.gz", hash = "sha256:92601f9a889b9aba954ed71a6bf746b3e4c0f1aaa7ce1c2a95239358dc2fd1c2"},
+    {file = "open-aea-cli-ipfs-1.50.0.tar.gz", hash = "sha256:03c43d69a602f2cb82e6408fc145c15a63c3c30187daa0e8ceb70b77bdd48295"},
+    {file = "open_aea_cli_ipfs-1.50.0-py3-none-any.whl", hash = "sha256:30060c6e317838a83b10e0460ab35400b205e827916290964606661bcf250f99"},
 ]
 
 [package.dependencies]
@@ -1838,17 +1838,17 @@ pytest = ">=7.0.0,<7.3.0"
 
 [[package]]
 name = "open-aea-ledger-cosmos"
-version = "1.52.0"
+version = "1.50.0"
 description = "Python package wrapping the public and private key cryptography and ledger api of Cosmos."
 optional = false
 python-versions = "*"
 files = [
-    {file = "open_aea_ledger_cosmos-1.52.0-py3-none-any.whl", hash = "sha256:fb451858a5831d55a9921fd6a0d26bc5bcff6b2853a0b2727a71b88f4b7b36f9"},
-    {file = "open_aea_ledger_cosmos-1.52.0.tar.gz", hash = "sha256:aef54e5ba7bfb3486fee0cd4629db416fe3ea1b9d93e162e80ea5e2e8bb1ffe5"},
+    {file = "open-aea-ledger-cosmos-1.50.0.tar.gz", hash = "sha256:62f55b88947cbd645b2c621f378305f614b13f25b67bc7fe9d6dccba67a28557"},
+    {file = "open_aea_ledger_cosmos-1.50.0-py3-none-any.whl", hash = "sha256:b5c437c2f8d2a64e510dd40c47d7493c0049fa4e9cb9342308baa80cdea3e8c6"},
 ]
 
 [package.dependencies]
-bech32 = ">=1.2.0,<2"
+bech32 = "1.2.0"
 cosmpy = "0.9.2"
 ecdsa = ">=0.15,<0.17.0"
 open-aea = ">=1.0.0,<2.0.0"
@@ -1856,13 +1856,13 @@ pycryptodome = ">=3.10.1,<4.0.0"
 
 [[package]]
 name = "open-aea-ledger-ethereum"
-version = "1.52.0"
+version = "1.50.0"
 description = "Python package wrapping the public and private key cryptography and ledger api of Ethereum."
 optional = false
 python-versions = "*"
 files = [
-    {file = "open_aea_ledger_ethereum-1.52.0-py3-none-any.whl", hash = "sha256:fa18a4d5fb99227f196805713a465714d88cbf7b0c54983ad4f6793bc7516080"},
-    {file = "open_aea_ledger_ethereum-1.52.0.tar.gz", hash = "sha256:e621b76c3a19044469e0f6f8ad9ec6894fb8b6200282649c7afb2e41da59e99d"},
+    {file = "open-aea-ledger-ethereum-1.50.0.tar.gz", hash = "sha256:d6784d604450d0fe9aeb008b2eb12bfc87d630391f8b82b591d67c1781adaaab"},
+    {file = "open_aea_ledger_ethereum-1.50.0-py3-none-any.whl", hash = "sha256:619105843718d0b8270d9039749101eec3aead5c38d7041c541832e3d8e4826c"},
 ]
 
 [package.dependencies]
@@ -1873,26 +1873,26 @@ web3 = ">=6.0.0,<7"
 
 [[package]]
 name = "open-autonomy"
-version = "0.14.12"
+version = "0.14.10"
 description = "A framework for the creation of autonomous agent services."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "open_autonomy-0.14.12-py3-none-any.whl", hash = "sha256:bbd28a4d1e676d2c0dff325337a7b2c0b499e05bedbf49e0673c395906e25078"},
-    {file = "open_autonomy-0.14.12.tar.gz", hash = "sha256:e6d23e1e2ec34d4566b689231435be16496b2ee4a0e54b66d5f78fa14bf8f16b"},
+    {file = "open-autonomy-0.14.10.tar.gz", hash = "sha256:346ecc4f0ccfea4c90e4b26f5e1bb13ab7c98351a57806b5f2430c011c4d8a5a"},
+    {file = "open_autonomy-0.14.10-py3-none-any.whl", hash = "sha256:867d89bd2bb263143783e2f55202e27a0ffdc1e109909c4c64a7a087d5331f7a"},
 ]
 
 [package.dependencies]
 aiohttp = ">=3.8.5,<4.0.0"
-click = ">=8.1.0,<9"
+click = "8.0.2"
 coverage = ">=6.4.4,<8.0.0"
 docker = "6.1.2"
 Flask = ">=2.0.2,<3.0.0"
 gql = "3.5.0"
 hexbytes = "*"
 jsonschema = ">=4.3.0,<4.4.0"
-open-aea = {version = "1.52.0", extras = ["all"]}
-open-aea-cli-ipfs = "1.52.0"
+open-aea = {version = "1.50.0", extras = ["all"]}
+open-aea-cli-ipfs = "1.50.0"
 protobuf = ">=4.21.6,<4.25.0"
 pytest = "7.2.1"
 python-dotenv = ">=0.14.5,<0.22.0"
@@ -1904,8 +1904,8 @@ watchdog = ">=2.1.6"
 werkzeug = "2.0.3"
 
 [package.extras]
-all = ["click (>=8.1.0,<9)", "coverage (>=6.4.4,<8.0.0)", "open-aea-cli-ipfs (==1.52.0)", "pytest (>=7.0.0,<7.3.0)", "python-dotenv (>=0.14.5,<0.22.0)", "texttable (==1.6.7)"]
-cli = ["click (>=8.1.0,<9)", "coverage (>=6.4.4,<8.0.0)", "open-aea-cli-ipfs (==1.52.0)", "pytest (>=7.0.0,<7.3.0)", "python-dotenv (>=0.14.5,<0.22.0)", "texttable (==1.6.7)"]
+all = ["click (==8.0.2)", "coverage (>=6.4.4,<8.0.0)", "open-aea-cli-ipfs (==1.50.0)", "pytest (>=7.0.0,<7.3.0)", "python-dotenv (>=0.14.5,<0.22.0)", "texttable (==1.6.7)"]
+cli = ["click (==8.0.2)", "coverage (>=6.4.4,<8.0.0)", "open-aea-cli-ipfs (==1.50.0)", "pytest (>=7.0.0,<7.3.0)", "python-dotenv (>=0.14.5,<0.22.0)", "texttable (==1.6.7)"]
 
 [[package]]
 name = "openapi-core"
@@ -2329,17 +2329,17 @@ testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.
 
 [[package]]
 name = "pytest-asyncio"
-version = "0.21.2"
+version = "0.20.3"
 description = "Pytest support for asyncio"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "pytest_asyncio-0.21.2-py3-none-any.whl", hash = "sha256:ab664c88bb7998f711d8039cacd4884da6430886ae8bbd4eded552ed2004f16b"},
-    {file = "pytest_asyncio-0.21.2.tar.gz", hash = "sha256:d67738fc232b94b326b9d060750beb16e0074210b98dd8b58a5239fa2a154f45"},
+    {file = "pytest-asyncio-0.20.3.tar.gz", hash = "sha256:83cbf01169ce3e8eb71c6c278ccb0574d1a7a3bb8eaaf5e50e0ad342afb33b36"},
+    {file = "pytest_asyncio-0.20.3-py3-none-any.whl", hash = "sha256:f129998b209d04fcc65c96fc85c11e5316738358909a8399e93be553d7656442"},
 ]
 
 [package.dependencies]
-pytest = ">=7.0.0"
+pytest = ">=6.1.0"
 
 [package.extras]
 docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1.0)"]
@@ -2761,38 +2761,38 @@ files = [
 
 [[package]]
 name = "tomte"
-version = "0.2.17"
+version = "0.2.15"
 description = "A library that wraps many useful tools (linters, analysers, etc) to keep Python code clean, secure, well-documented and optimised."
 optional = false
-python-versions = "<4,>=3.8"
+python-versions = ">=3.8,<4"
 files = [
-    {file = "tomte-0.2.17-py3-none-any.whl", hash = "sha256:477e1e903610b5e2a8cf74a78cf229eacc21aa666e25e7bb872385ef2c013cfe"},
-    {file = "tomte-0.2.17.tar.gz", hash = "sha256:ad583dd39f2c398272f7f196471b2ecc8430eb89e07295ec1e682f64dd782831"},
+    {file = "tomte-0.2.15-py3-none-any.whl", hash = "sha256:c1ec71bdb919290e42671d83098232bf7cf46cddf1a736c5d1c9f12ab1308c34"},
+    {file = "tomte-0.2.15.tar.gz", hash = "sha256:662f3cdd616347969c3fea557c47545b555f5f82798b978e78ade3d23d43c92d"},
 ]
 
 [package.dependencies]
-click = {version = ">=8.1.0,<9", optional = true, markers = "extra == \"black\" or extra == \"cli\" or extra == \"docs\""}
+click = {version = "8.0.2", optional = true, markers = "extra == \"black\" or extra == \"cli\" or extra == \"docs\""}
 pytest = {version = "7.2.1", optional = true, markers = "extra == \"tests\""}
-pytest-asyncio = {version = ">=0.21.0,<0.22.0", optional = true, markers = "extra == \"tests\""}
+pytest-asyncio = {version = "0.20.3", optional = true, markers = "extra == \"tests\""}
 pytest-cov = {version = "4.0.0", optional = true, markers = "extra == \"tests\""}
 pytest-randomly = {version = "3.12.0", optional = true, markers = "extra == \"tests\""}
 pytest-rerunfailures = {version = "11.0", optional = true, markers = "extra == \"tests\""}
-requests = {version = ">=2.28.1,<3", optional = true, markers = "extra == \"cli\""}
+requests = {version = "2.28.1", optional = true, markers = "extra == \"cli\""}
 tox = {version = "3.28.0", optional = true, markers = "extra == \"cli\" or extra == \"tox\""}
 
 [package.extras]
 bandit = ["bandit (==1.7.4)"]
-black = ["black (==23.1.0)", "click (>=8.1.0,<9)"]
-cli = ["click (>=8.1.0,<9)", "requests (>=2.28.1,<3)", "tox (==3.28.0)"]
+black = ["black (==23.1.0)", "click (==8.0.2)"]
+cli = ["click (==8.0.2)", "requests (==2.28.1)", "tox (==3.28.0)"]
 darglint = ["darglint (==1.8.1)"]
-docs = ["Markdown (==3.3.7)", "Pygments (>=2.16,<3.0)", "bs4 (==0.0.1)", "click (>=8.1.0,<9)", "markdown-include (==0.8.0)", "mkdocs (>=1.5.3,<2.0)", "mkdocs-macros-plugin (==0.7.0)", "mkdocs-material (==9.4.10)", "mkdocs-material-extensions (==1.3)", "mkdocs-redirects (==1.2.0)", "pydoc-markdown (==4.8.2)", "pydocstyle (==6.2.3)", "pymdown-extensions (>=10.2,<11.0)"]
+docs = ["Markdown (==3.3.7)", "Pygments (>=2.16,<3.0)", "bs4 (==0.0.1)", "click (==8.0.2)", "markdown-include (==0.8.0)", "mkdocs (>=1.5.3,<2.0)", "mkdocs-macros-plugin (==0.7.0)", "mkdocs-material (==9.4.10)", "mkdocs-material-extensions (==1.3)", "mkdocs-redirects (==1.2.0)", "pydoc-markdown (==4.8.2)", "pydocstyle (==6.2.3)", "pymdown-extensions (>=10.2,<11.0)"]
 flake8 = ["flake8 (==3.9.2)", "flake8-bugbear (==23.1.14)", "flake8-docstrings (==1.6.0)", "flake8-eradicate (==1.4.0)", "flake8-isort (==6.0.0)", "pydocstyle (==6.2.3)"]
 isort = ["isort (==5.11.4)"]
 liccheck = ["liccheck (==0.8.3)"]
 mypy = ["mypy (==0.991)"]
 pylint = ["pylint (==2.13.9)"]
 safety = ["safety (==2.4.0b1)"]
-tests = ["pytest (==7.2.1)", "pytest-asyncio (>=0.21.0,<0.22.0)", "pytest-cov (==4.0.0)", "pytest-randomly (==3.12.0)", "pytest-rerunfailures (==11.0)"]
+tests = ["pytest (==7.2.1)", "pytest-asyncio (==0.20.3)", "pytest-cov (==4.0.0)", "pytest-randomly (==3.12.0)", "pytest-rerunfailures (==11.0)"]
 tox = ["tox (==3.28.0)"]
 vulture = ["vulture (==2.7)"]
 
@@ -3210,4 +3210,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "<4.0,>=3.10"
-content-hash = "20eff3e3150af24d4bc3ce2022ec15c0258cb59d6090a04aee2bb8014ba9c047"
+content-hash = "e4da4f7267295d9988d29870290150ac88dcd18d62b9fec9c7cd54f52a14cc49"

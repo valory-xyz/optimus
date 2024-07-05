@@ -59,7 +59,6 @@ from packages.valory.contracts.velodrome_pool.contract import PoolContract
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 
-from aea.exceptions import AEAEnforceError
 class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
@@ -387,7 +386,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round: Type[AbstractRound] = GetPositionsRound
     zero_address = "0x0000000000000000000000000000000000000000"
-    
+
     def async_act(self) -> Generator:
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             positions = yield from self.get_positions()
@@ -408,6 +407,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_positions(self) -> Generator[None, None, List[Dict[str,Any]]]:
         asset_balances = yield from self._get_asset_balances()
+        #asset_balances = []
         pool_balances = yield from self._get_lp_pool_balances()
 
         all_balances = defaultdict(list)
@@ -420,7 +420,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
         for chain, assets in pool_balances.items():
             all_balances[chain].extend(assets)
 
-        positions = [{"chain": chain, "assets": assets} for chain, assets in positions.items()]
+        positions = [{"chain": chain, "assets": assets} for chain, assets in all_balances.items()]
 
         return positions
     
@@ -437,7 +437,6 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             account = self._get_safe_contract_address(chain)
             if chain == "optimism":
                 chain = "bnb"
-
             for asset_name, asset_address in assets.items():
                 if asset_address == self.zero_address:
                     ledger_api_response = yield from self.get_ledger_api_response(
@@ -473,13 +472,13 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                         balance = None
 
                     else:
-                        balance = response_msg.raw_transaction.body.get("balance", None)
+                        balance = response_msg.raw_transaction.body.get("token", None)
 
                     asset_balances_dict[chain].append({"asset_type": "erc_20","address":asset_address,"balance":balance})
                 
-                self.context.logger.info(f"Balance of account {account} on {chain} chain for token {asset_name}: {balance}")
+                self.context.logger.info(f"Balance of account {account} on {chain} chain for {asset_name}: {balance}")
             
-            return asset_balances_dict
+        return asset_balances_dict
 
     def _get_lp_pool_balances(self) -> Generator[None, None, Optional[Dict[str,Any]]]:
         pool_balances_dict: Dict[str, list] = defaultdict(list)

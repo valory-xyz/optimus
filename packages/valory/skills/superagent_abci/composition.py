@@ -46,7 +46,7 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     ResetAndPauseAbci.FinishedResetAndPauseErrorRound: RegistrationAbci.RegistrationRound,
 }
 
-termination_config = BackgroundAppConfig( 
+termination_config = BackgroundAppConfig(
     round_cls=BackgroundRound,
     start_event=Event.TERMINATE,
     abci_app=TerminationAbciApp,

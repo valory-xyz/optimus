@@ -18,8 +18,8 @@ alphabet_in:
 - ROUND_TIMEOUT
 - SUSPICIOUS_ACTIVITY
 - SWAP
-- WAIT
 - VALIDATE_TIMEOUT
+- WAIT
 default_start_state: RegistrationStartupRound
 final_states: []
 label: SuperAgentAbciApp
@@ -49,12 +49,9 @@ states:
 - TxPreparationRound
 - ValidateTransactionRound
 transition_func:
-    (ClaimOPRound, DONE): TxPreparationRound
-    (ClaimOPRound, NO_MAJORITY): ClaimOPRound
-    (ClaimOPRound, ROUND_TIMEOUT): ClaimOPRound
     (CheckLateTxHashesRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckLateTxHashesRound, CHECK_TIMEOUT): CheckLateTxHashesRound
-    (CheckLateTxHashesRound, DONE): ResetAndPauseRound
+    (CheckLateTxHashesRound, DONE): DecisionMakingRound
     (CheckLateTxHashesRound, NEGATIVE): RandomnessTransactionSubmissionRound
     (CheckLateTxHashesRound, NONE): RandomnessTransactionSubmissionRound
     (CheckLateTxHashesRound, NO_MAJORITY): RandomnessTransactionSubmissionRound
@@ -64,16 +61,19 @@ transition_func:
     (CheckTransactionHistoryRound, NEGATIVE): SelectKeeperTransactionSubmissionBRound
     (CheckTransactionHistoryRound, NONE): RandomnessTransactionSubmissionRound
     (CheckTransactionHistoryRound, NO_MAJORITY): CheckTransactionHistoryRound
+    (ClaimOPRound, DONE): TxPreparationRound
+    (ClaimOPRound, NO_MAJORITY): ClaimOPRound
+    (ClaimOPRound, ROUND_TIMEOUT): ClaimOPRound
     (CollectSignatureRound, DONE): FinalizationRound
     (CollectSignatureRound, NO_MAJORITY): ResetRound
     (CollectSignatureRound, ROUND_TIMEOUT): CollectSignatureRound
-    (DecisionMakingRound, DONE): ResetAndPauseRound
-    (DecisionMakingRound, EXIT): PrepareExitPoolTxRound
-    (DecisionMakingRound, SWAP): PrepareSwapTxRound
     (DecisionMakingRound, CLAIM): ClaimOPRound
+    (DecisionMakingRound, DONE): ResetAndPauseRound
     (DecisionMakingRound, ERROR): ResetAndPauseRound
+    (DecisionMakingRound, EXIT): PrepareExitPoolTxRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
+    (DecisionMakingRound, SWAP): PrepareSwapTxRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound

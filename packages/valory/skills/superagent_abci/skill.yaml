@@ -6,13 +6,13 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigbobqmqww7yld4kunet47kf2kib3kgfzwufqcdkleptdvtsudxtu
-  behaviours.py: bafybeiej6brcarvk26vmrce2omgytonyvytnj6pezvylm3gy24ceui6eqq
+  __init__.py: bafybeibaqlstltmbpvdgnjhuglrostqiooch66lyzb2godq2yi7yf33dm4
+  behaviours.py: bafybeiab5x55m4hj5il22exu3gfjjitfy2gxguc3rwolzp7m7w5zezifya
   composition.py: bafybeifqegvv2i6bxgfhvjxlm6lh2cxcug4hf27hufbant7xymndtwdd7q
   dialogues.py: bafybeigt3xl52z5ftxjoobzqlyqtoreftmndonbkpjgj2wjug4klyhyeby
   fsm_specification.yaml: bafybeianj5ih7awdhsuwuolmfsmqfallyzsuygqmxkbpuv4bqxfaul6cxm
   handlers.py: bafybeiaaqhk7hhrjd3ciumel7u3fmhhfzedwzl6uccoty6qz63ukw3bdp4
-  models.py: bafybeihusfahwsotlkyjfle4nalqyhcyyi2z6zqegfuypyoqk23r6buyvu
+  models.py: bafybeihuf336s4lhm3hnpjcbcq2lk6dwadhqoux7dsedx5z4vk3lsnkf3e
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
-- valory/liquidity_trader_abci:0.1.0:bafybeiek57e4nf2okb7dtvvew4glvunjt4dpd35hx72374x54adekqybji
+- valory/liquidity_trader_abci:0.1.0:bafybeidj6gocaryiz3dsl4e3pttu4oln2ixp56zaju4xcmcrumengxlcmm
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 behaviours:
   main:

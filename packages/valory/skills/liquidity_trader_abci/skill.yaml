@@ -6,20 +6,20 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeifjk4emk5h4xkvnetd5niquxv2oxfdd6bkkulxj7xndztf3ksuomm
+  __init__.py: bafybeic3ntqr7d5i4mefv45gdgrwahg4exa7ne5bhbkpfm53k3p73kzqwi
+  behaviours.py: bafybeih7m43npdikx3h5kiean34hh353ykyd3ukifwdvoa7cnlzpxnoqmy
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeidmmdcqgnvfve2nbykult42gax2zkf3ec5lg5k3ufhmo5v2wtso6e
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeigv6xcph2gserddj6h6gys76ntumoq34j6kdwur6iw356grm4wkku
-  payloads.py: bafybeidncewynl56l33o5veqxbg2atsewgcqhssnizf5bwvprbcbd75c7q
-  rounds.py: bafybeifpa3qg6woccpj2tfs2seq7t27omyqz62wqmvc22alvcjgc745q6q
+  models.py: bafybeia6dalo7l3rclnto62xvwvhejkfxpomyy4o5ikqsdxxjogw2y5p4m
+  payloads.py: bafybeibhfetctixpakknyu7v5ncmzjr3mg2eta4gxec5hv2qgx4x6y7gdy
+  rounds.py: bafybeifkgfklrb5reruljmqmtlikvmu4obgmhwzxfesuoegswpk277s4tm
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/balancer_weighted_pool:0.1.0:bafybeicb7cqy6lw4kf2aruy2epfc4h4eatzerdwqcl5u2nbxfgzctsgkyq
-- valory/balancer_vault:0.1.0:bafybeihhb5uyjk2tb57uo6yvka3popwj5cypiuoygd73s7zlzdux2j6fea
-- valory/velodrome_pool:0.1.0:bafybeihasj7ggv2navr4yzfblwqtfniheh4zd6ylkpwfzfacinxw7w7dlq
+- valory/balancer_weighted_pool:0.1.0:bafybeig5ecdert63v44ab7inefwryggwrb24l5ntjrvtjsmzqovjioqxli
+- valory/balancer_vault:0.1.0:bafybeifc2yb2zizchfhlvqbmxmj6tdfkuauvqgt4bfpfmtvfapqaknpwhm
+- valory/velodrome_pool:0.1.0:bafybeihdli25nczho5tfrgsb6x6q3rixbsmqy2zksno4rl2qj6xt6omz34
 - valory/erc20:0.1.0:bafybeigvftdxjgnlsoemst5d57cor36idywk7bwcfj2bjqijxdxo3xpurq
 protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i

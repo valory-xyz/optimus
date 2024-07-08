@@ -153,7 +153,7 @@
             "tags":[
                
             ],
-            "apr":0,
+            "apr":10,
             "totalSupplyTargetToken":9.131979237851617,
             "tvl":27735.568257363084,
             "type":"balancerPool",

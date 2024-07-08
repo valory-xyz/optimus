@@ -17,50 +17,28 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This class contains a wrapper for Weighted Pool contract interface."""
+"""This class contains a wrapper for vault contract interface."""
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi, LedgerApi
 
-PUBLIC_ID = PublicId.from_str("valory/balancer_weighted_pool:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/balancer_vault:0.1.0")
 
-class WeightedPoolContract(Contract):
+class VaultContract(Contract):
     """The Weighted Stable Pool contract."""
 
     contract_id = PUBLIC_ID
 
     @classmethod
-    def get_balance(
+    def get_pool_tokens(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
-        account: str,
+        pool_id: str,
     ) -> JSONLike:
         """get the balance of the given account."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.functions.balanceOf(account).call()
-        return dict(balance=data)
-    
-    @classmethod
-    def get_pool_id(
-        cls,
-        ledger_api: EthereumApi,
-        contract_address: str,
-    ) -> JSONLike:
-        """get the balance of the given account."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.functions.getPoolId().call()
-        return dict(pool_id=data)
-    
-    @classmethod
-    def get_vault_address(
-        cls,
-        ledger_api: EthereumApi,
-        contract_address: str,
-    ) -> JSONLike:
-        """get the balance of the given account."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.functions.getVault().call()
-        return dict(vault=data)
+        data, _, _ = contract_instance.functions.getPoolTokens(pool_id).call()
+        return dict(tokens=data)

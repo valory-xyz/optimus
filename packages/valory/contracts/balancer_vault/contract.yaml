@@ -1,0 +1,21 @@
+name: balancer_vault
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the balancer Vault interface.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeie2yg7zz3lcxzvq4qsjydvp43epkpqwh72rsab5pthqdadmxewv6q
+  build/Vault.json: bafybeibsy2cxda42brenfs2qvhog7hbs5kokz2tr6daj5d4jcdadonlupy
+  contract.py: bafybeiearvrimm4mmbawiebxlywvq7cjkbdauou4ztw57aucdjylfc7egy
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: VaultContract
+contract_interface_paths:
+  ethereum: build/Vault.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.50.0
+  web3:
+    version: <7,>=6.0.0

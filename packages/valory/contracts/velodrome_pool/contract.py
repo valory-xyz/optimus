@@ -42,3 +42,15 @@ class PoolContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(account).call()
         return dict(balance=balance)
+    
+    @classmethod
+    def get_pool_tokens(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """get the balance of the given account."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        token0 = contract_instance.functions.token0().call()
+        token1 = contract_instance.functions.token1().call()
+        return dict(tokens=[token0,token1])

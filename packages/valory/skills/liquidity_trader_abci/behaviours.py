@@ -488,7 +488,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return tokens
 
     def _get_bridge_and_swap_info(
-        self, tokens: List[str, Any]
+        self, tokens: List[Union[str, Any]]
     ) -> Generator[None, None, Optional[List[Any]]]:
         destination_token_0 = self.highest_apr_pool["token0"]
         destination_token_1 = self.highest_apr_pool["token1"]

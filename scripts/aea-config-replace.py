@@ -31,7 +31,7 @@ def main() -> None:
     """Main"""
     load_dotenv()
 
-    with open(Path("learning_agent", "aea-config.yaml"), "r", encoding="utf-8") as file:
+    with open(Path("optimism_agent", "aea-config.yaml"), "r", encoding="utf-8") as file:
         config = list(yaml.safe_load_all(file))
 
         # Ledger RPCs
@@ -40,15 +40,28 @@ def main() -> None:
                 "address"
             ] = f"${{str:{os.getenv('ETHEREUM_LEDGER_RPC')}}}"
 
-        if os.getenv("GNOSIS_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["gnosis"][
+        if os.getenv("ARBITRUM_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["arbitrum"][
                 "address"
-            ] = f"${{str:{os.getenv('GNOSIS_LEDGER_RPC')}}}"
+            ] = f"${{str:{os.getenv('ARBITRUM_LEDGER_RPC')}}}"
+
+        if os.getenv("BNB_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["bnb"][
+                "address"
+            ] = f"${{str:{os.getenv('BNB_LEDGER_RPC')}}}"
 
         # Params
         config[5]["models"]["params"]["args"]["setup"][
             "all_participants"
-        ] = f"${{bool:{os.getenv('ALL_PARTICIPANTS')}}}"
+        ] = f"${{list:{os.getenv('ALL_PARTICIPANTS')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "safe_contract_addresses"
+        ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "pool_data_api_url"
+        ] = f"${{str:{os.getenv('POOL_DATA_API_URL')}}}"
 
     with open(Path("optimism_agent", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)

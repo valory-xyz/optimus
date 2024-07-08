@@ -59,5 +59,7 @@ class Params(BaseParams):
         self.gas_reserve = json.loads(self._ensure("gas_reserve", kwargs, str))
         self.apr_threshold = self._ensure("apr_threshold", kwargs, int)
         self.round_threshold = self._ensure("round_threshold", kwargs, int)
-        self.min_balance_multiplier = self._ensure("min_balance_multiplier", kwargs, int)
+        self.min_balance_multiplier = self._ensure(
+            "min_balance_multiplier", kwargs, int
+        )
         super().__init__(*args, **kwargs)

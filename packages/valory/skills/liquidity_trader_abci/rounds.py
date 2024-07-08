@@ -133,10 +133,6 @@ class SynchronizedData(BaseSynchronizedData):
         transactions = json.loads(serialized)
         return transactions
 
-    @property
-    def tx_submitter(self) -> Optional[str]:
-        """Get the round that submitted a tx."""
-        return str(self.db.get_strict("tx_submitter"))
 
 class ClaimOPRound(AbstractRound):
     """ClaimOPRound"""

@@ -40,5 +40,6 @@ class VaultContract(Contract):
     ) -> JSONLike:
         """get the balance of the given account."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data, _, _ = contract_instance.functions.getPoolTokens(pool_id).call()
+        pool_id_bytes = bytes.fromhex(pool_id)
+        data, _, _ = contract_instance.functions.getPoolTokens(pool_id_bytes).call()
         return dict(tokens=data)

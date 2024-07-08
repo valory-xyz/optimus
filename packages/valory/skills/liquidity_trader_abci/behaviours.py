@@ -57,6 +57,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     TxPreparationRound,
 )
 
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
 
 class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
@@ -169,28 +171,32 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("No pool data retrieved.")
             return None
 
-        highest_apr = -float('inf')
+        highest_apr = -float("inf")
 
         for dex_type, chains in filtered_pools.items():
             for chain, campaigns in chains.items():
                 for campaign in campaigns:
-                    apr = campaign.get('apr', 0)
+                    apr = campaign.get("apr", 0)
                     self.context.logger.info(f"{apr} APR")
                     if apr is None:
                         apr = 0
                     if apr > highest_apr:
                         highest_apr = apr
                         try:
-                            pool_tokens = list(campaign["typeInfo"]["poolTokens"].keys())
+                            pool_tokens = list(
+                                campaign["typeInfo"]["poolTokens"].keys()
+                            )
                         except:
-                            self.context.logger.error(f"No underlying token addresses present in the pool {campaign}")
+                            self.context.logger.error(
+                                f"No underlying token addresses present in the pool {campaign}"
+                            )
                             continue
                         self.highest_apr_pool = {
                             "dex_type": dex_type,
                             "chain": chain,
                             "apr": apr,
                             "token0": pool_tokens[0],
-                            "token1": pool_tokens[1]
+                            "token1": pool_tokens[1],
                         }
 
         if self.highest_apr_pool:
@@ -203,9 +209,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         allowed_dexs = list(allowed_lp_pools.keys())
         allowed_assets = self.params.allowed_assets
 
-        filtered_pools: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
+        filtered_pools: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
 
-        for chain, chain_id in  self.params.allowed_chains.items():
+        for chain, chain_id in self.params.allowed_chains.items():
             api_url = self.params.pool_data_api_url.format(chain_id=chain_id, type=1)
             self.context.logger.info(f"{api_url}")
 
@@ -231,12 +239,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"the following error was encountered {type(e).__name__}: {e}"
                 )
                 return None
-            
+
             try:
                 campaigns = data[str(chain_id)]
             except:
                 self.context.logger.error(
-                    f"No info available for chainId {chain_id} in response {data}")
+                    f"No info available for chainId {chain_id} in response {data}"
+                )
                 continue
 
             for token, campaign_list in campaigns.items():
@@ -245,21 +254,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     # For testing remove the condition since balancer and velodrome are not present in pool data for now
                     if dex_type in allowed_dexs:
                         # if campaign["token0"] in allowed_assets[chain] and campaign["token1"] in allowed_assets[chain]:
-                            # pool_address = yield from self._get_pool_address(dex_type, chain, campaign["token0"], campaign["token1"])
-                            # if pool_address in allowed_lp_pools[dex_type][chain]:
+                        # pool_address = yield from self._get_pool_address(dex_type, chain, campaign["token0"], campaign["token1"])
+                        # if pool_address in allowed_lp_pools[dex_type][chain]:
                         filtered_pools[dex_type][chain].append(campaign)
-                        self.context.logger.info(f"Added campaign for {chain} on {dex_type}: {campaign}")
+                        self.context.logger.info(
+                            f"Added campaign for {chain} on {dex_type}: {campaign}"
+                        )
 
         self.context.logger.info(f"Filtered pools: {filtered_pools}")
         return filtered_pools
-    
+
     def get_decision(self) -> Generator[None, None, Optional[bool]]:
         # Step 1: Check highest APR exceeds threshold
-        exceeds_apr_threshold = (
-            self.highest_apr_pool["apr"] > self.params.apr_threshold
-        )
+        exceeds_apr_threshold = self.highest_apr_pool["apr"] > self.params.apr_threshold
         if not exceeds_apr_threshold:
-            self.context.logger.info(f"apr of pool {self.highest_apr_pool["apr"]} does not exceed apr_threshold {self.params.apr_threshold}")
+            self.context.logger.info(
+                f"apr of pool {self.highest_apr_pool['apr']} does not exceed apr_threshold {self.params.apr_threshold}"
+            )
             return False
 
         # Step 2: Check round interval
@@ -282,8 +293,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
 
     def get_order_of_transactions(self) -> Generator:
-
-        #Step 1- check if any liquidity exists, otherwise check for funds in safe
+        # Step 1- check if any liquidity exists, otherwise check for funds in safe
         if not self.synchronized_data.current_pool:
             sufficient_funds = self._check_sufficient_funds()
             if not sufficient_funds:
@@ -300,27 +310,37 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         token1 = self.highest_apr_pool["token1"]
         chainId = self.highest_apr_pool["chain"]
         allowed_chains = self.params.allowed_chains
-        chain = next((chain for chain, id in allowed_chains.items() if id == chainId), None)
+        chain = next(
+            (chain for chain, id in allowed_chains.items() if id == chainId), None
+        )
 
         token0_balance = self._get_balance(chain, token0)
         token1_balance = self._get_balance(chain, token1)
 
-        if token0_balance > self.params.min_balance_multiplier * self.params.gas_reserve[chain] and token1_balance > self.params.min_balance_multiplier * self.params.gas_reserve[chain]:
-            self.context.logger.info(f"SUFFICIENT BALANCE :- {token0} balance {token0_balance} and {token1} balance {token1_balance}")
+        if (
+            token0_balance
+            > self.params.min_balance_multiplier * self.params.gas_reserve[chain]
+            and token1_balance
+            > self.params.min_balance_multiplier * self.params.gas_reserve[chain]
+        ):
+            self.context.logger.info(
+                f"SUFFICIENT BALANCE :- {token0} balance {token0_balance} and {token1} balance {token1_balance}"
+            )
             return True
-        
-        self.context.logger.error(f"INSUFFICIENT BALANCE :- {token0} balance {token0_balance} and {token1} balance {token1_balance}")
+
+        self.context.logger.error(
+            f"INSUFFICIENT BALANCE :- {token0} balance {token0_balance} and {token1} balance {token1_balance}"
+        )
         return False
-        
-    def _get_balance(self,chain:str,token:str) -> Optional[int]:
+
+    def _get_balance(self, chain: str, token: str) -> Optional[int]:
         positions = self.synchronized_data.positions
         for position in positions:
-            if position['chain'] == chain:
-                for asset in position['assets']:
-                    if asset['address'] == token:
-                        return asset['balance']
+            if position["chain"] == chain:
+                for asset in position["assets"]:
+                    if asset["address"] == token:
+                        return asset["balance"]
         return 0
-
 
     def _get_exit_pool(self) -> Generator:
         # check apr for all the existing pools
@@ -380,13 +400,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return actions
 
-    def _get_pool_address(self, dex_type: str, chain: str, token0: str, token1: str) -> Generator[None,None,Optional[str]]:
+    def _get_pool_address(
+        self, dex_type: str, chain: str, token0: str, token1: str
+    ) -> Generator[None, None, Optional[str]]:
         pass
+
+
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     """GetPositionsBehaviour"""
 
     matching_round: Type[AbstractRound] = GetPositionsRound
-    zero_address = "0x0000000000000000000000000000000000000000"
     current_pool = None
 
     def async_act(self) -> Generator:
@@ -397,13 +420,17 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
             if positions is None:
                 positions = GetPositionsRound.ERROR_PAYLOAD
-             
+
             if self.current_pool is None:
                 self.current_pool = GetPositionsRound.ERROR_PAYLOAD
 
             serialized_positions = json.dumps(positions)
             serialized_current_pool = json.dumps(self.current_pool)
-            payload = GetPositionsPayload(sender=sender, positions=serialized_positions, current_pool=serialized_current_pool)
+            payload = GetPositionsPayload(
+                sender=sender,
+                positions=serialized_positions,
+                current_pool=serialized_current_pool,
+            )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -411,9 +438,9 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def get_positions(self) -> Generator[None, None, List[Dict[str,Any]]]:
-        asset_balances= yield from self._get_asset_balances()
-        pool_balances= yield from self._get_lp_pool_balances()
+    def get_positions(self) -> Generator[None, None, List[Dict[str, Any]]]:
+        asset_balances = yield from self._get_asset_balances()
+        pool_balances = yield from self._get_lp_pool_balances()
 
         all_balances = defaultdict(list)
         for chain, assets in asset_balances.items():
@@ -441,7 +468,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             if chain == "optimism":
                 chain = "bnb"
             for asset_name, asset_address in assets.items():
-                if asset_address == self.zero_address:
+                if asset_address == ZERO_ADDRESS:
                     ledger_api_response = yield from self.get_ledger_api_response(
                         performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
                         ledger_callable="get_balance",
@@ -563,12 +590,12 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
                     if balance > 0:
                         self.current_pool = {
-                            "chain" : chain,
+                            "chain": chain,
                             "addreess": pool_address,
-                            "dex_type": dex_type
+                            "dex_type": dex_type,
                         }
 
-                    #OPTIMISM NOT SUPPORTED YET
+                    # OPTIMISM NOT SUPPORTED YET
                     if chain == "bnb":
                         chain = "optimism"
 
@@ -584,7 +611,8 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                     )
 
         return pool_balances_dict
-    
+
+
 class PrepareExitPoolTxBehaviour(LiquidityTraderBaseBehaviour):
     """PrepareExitPoolTxBehaviour"""
 

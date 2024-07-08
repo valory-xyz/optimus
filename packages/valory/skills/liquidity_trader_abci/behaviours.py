@@ -64,9 +64,10 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
 class Action(Enum):
-    EXIT_POOL = "exit_pool"
-    ENTER_POOL = "enter_pool"
-    BRIDGE_SWAP = "bridge_and_swap"
+    #Kept the values as Round name, so that in DecisionMaking we can match tx_submitter with action name(which is round name) and decide the next action
+    EXIT_POOL = "PrepareExitPoolTxRound"
+    ENTER_POOL = "PrepareEnterPoolTxRound"
+    BRIDGE_SWAP = "PrepareSwapTxRound"
 
 
 class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
@@ -157,7 +158,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.get_highest_apr_pool()
-            invest_in_pool = yield from self.get_decision()
+            invest_in_pool = self.get_decision()
             if not invest_in_pool:
                 actions = []
             else:
@@ -224,7 +225,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         for chain, chain_id in self.params.allowed_chains.items():
             # api_url = self.params.pool_data_api_url.format(chain_id=chain_id, type=1)
-            api_url = "http://127.0.0.1:5000/merkle"
+            api_url = self.params.pool_data_api_url
             self.context.logger.info(f"{api_url}")
 
             response = yield from self.get_http_response(
@@ -235,7 +236,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if response.status_code != 200:
                 self.context.logger.error(
-                    f"Could not retrieve data from url {api_url}. "
+                    f"Could not retrieve data from url {api_url} "
                     f"Received status code {response.status_code}."
                 )
                 return None
@@ -274,7 +275,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Filtered pools: {filtered_pools}")
         return filtered_pools
 
-    def get_decision(self) -> Generator[None, None, Optional[bool]]:
+    def get_decision(self) -> bool:
         # Step 1: Check highest APR exceeds threshold
         exceeds_apr_threshold = self.highest_apr_pool["apr"] > self.params.apr_threshold
         if not exceeds_apr_threshold:
@@ -308,13 +309,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Step 1- check if any liquidity exists, otherwise check for funds in safe
         actions = []
         tokens = {}
+
         if not self.synchronized_data.current_pool:
             # If there is no current pool, then check for which tokens we have balance
             tokens = self._get_tokens_over_min_balance()
         else:
+            # If there is current pool, then get the lp pool token addresses
             tokens = yield from self._get_exit_pool_tokens()
             action = {
-                "action": Action.EXIT_POOL,
+                "action": Action.EXIT_POOL.value,
                 "chain": self.synchronized_data.current_pool["chain"],
                 "assets": [tokens[0], tokens[1]],
             }
@@ -322,22 +325,31 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not tokens:
             return {}
 
-        bridge_swap_tokens_pairs = yield from self._get_bridge_and_swap_info()
+        # Step 2- build bridge and swap tokens action
+        bridge_swap_tokens_pairs = yield from self._get_bridge_and_swap_info(tokens)
 
-        for token_pair in bridge_swap_tokens_pairs:
-            action = {
-                "action": Action.BRIDGE_SWAP,
-                "source_chain": self.synchronized_data.current_pool["chain"],
-                "destination_chain": self.highest_apr_pool["chain"],
-                "assets": [token_pair[0], token_pair[1]],
-            }
+        if bridge_swap_tokens_pairs:
+            for token_pair in bridge_swap_tokens_pairs:
+                action = {
+                    "action": Action.BRIDGE_SWAP.value,
+                    "source_chain": self.synchronized_data.current_pool["chain"],
+                    "destination_chain": self.highest_apr_pool["chain"],
+                    "assets": [token_pair[0], token_pair[1]],
+                }
+            actions.append(action)
 
+        #Step 3: get the info on which pool to enter
+        action = {
+            "action": Action.ENTER_POOL.value,
+            "chain": self.highest_apr_pool["chain"],
+            "assets": [self.highest_apr_pool["token0"], self.highest_apr_pool["token1"]]
+        }
         actions.append(action)
 
-        # TO-IMPLEMENT
-        enter_pool = yield from self._get_enter_pool()
+        self.context.logger.info(f"Actions {actions}")
+        return actions
 
-    def _get_tokens_over_min_balance(self) -> Optional[List[str]]:
+    def _get_tokens_over_min_balance(self) -> Optional[List[Any]]:
         # check if safe has funds for token0 and token1
         token0 = self.highest_apr_pool["token0"]
         token1 = self.highest_apr_pool["token1"]
@@ -347,6 +359,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         token1_balance = self._get_balance(chain, token1)
 
         tokens = []
+
+        #we need at-most 2 tokens for which we have balance above min_threshold to be able to move forward
         if (
             token0_balance
             > self.params.min_balance_multiplier * self.params.gas_reserve[chain]
@@ -354,7 +368,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"SUFFICIENT BALANCE :- {token0} balance {token0_balance}"
             )
-            tokens.append(token0)
+            tokens.append([chain,token0])
 
         if (
             token1_balance
@@ -363,10 +377,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"SUFFICIENT BALANCE :- {token1} balance {token1_balance}"
             )
-            tokens.append(token1)
+            tokens.append([chain,token1])
 
-        # to-implement
-        # if we do not have funds for token0 and token1, check all the positions to find the tokens we have
+        for position in self.synchronized_data.positions:
+            for asset in position["assets"]:
+                if asset["asset_type"] in ["erc20", "native"]:
+                    min_balance = self.params.min_balance_multiplier * self.params.gas_reserve[position["chain"]]
+                    if asset["balance"] > min_balance:
+                        tokens.append([chain, asset["address"]])
+
+        return tokens
 
     def _get_balance(self, chain: str, token: str) -> Optional[int]:
         positions = self.synchronized_data.positions
@@ -378,10 +398,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         return 0
 
     def _get_exit_pool_tokens(self) -> Generator[None, None, List[str]]:
-        chain = self.synchronized_data.current_pool["chain"]
         dex_type = self.synchronized_data.current_pool["dex_type"]
         pool_address = self.synchronized_data.current_pool["address"]
-
+        chain = self.synchronized_data.current_pool["chain"]
         if dex_type == "balancerPool":
             # Get poolId from balancer weighted pool contract
             pool_id = yield from self._get_pool_id(pool_address)
@@ -395,12 +414,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Get pool tokens from balancer vault contract
             tokens = yield from self._get_balancer_pool_tokens(pool_id, vault_address)
-            return tokens
 
         if dex_type == "velodrome":
             # Get pool tokens from velodrome pool contract
             tokens = yield from self._get_velodrome_pool_tokens()
-            return tokens
+        
+        return [[ chain, tokens[0]], [chain, tokens[1]]]
 
     def _get_pool_id(self, pool_address: str) -> Generator[None, None, str]:
         response_msg = yield from self.get_contract_api_response(
@@ -418,7 +437,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         else:
-            pool_id = response_msg.raw_transaction.body.get("poolId", None)
+            pool_id = response_msg.raw_transaction.body.get("pool_id", None)
+            self.context.logger.info(
+                f"PoolId for balancer pool {pool_address}: {pool_id}"
+            )
             return pool_id
 
     def _get_vault_for_pool(self, pool_address: str) -> Generator[None, None, str]:
@@ -438,6 +460,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         else:
             vault_address = response_msg.raw_transaction.body.get("vault", None)
+            self.context.logger.info(
+                f"Vault contract address for balancer pool {pool_address}: {vault_address}"
+            )
             return vault_address
 
     def _get_balancer_pool_tokens(
@@ -488,48 +513,53 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return tokens
 
     def _get_bridge_and_swap_info(
-        self, tokens: List[Union[str, Any]]
+        self, exisiting_tokens: List[str]
     ) -> Generator[None, None, Optional[List[Any]]]:
         destination_token_0 = self.highest_apr_pool["token0"]
         destination_token_1 = self.highest_apr_pool["token1"]
-        source_token_0 = tokens[0]
-        source_token_1 = tokens[1]
+        source_token_0 = exisiting_tokens[0]
+        source_token_1 = exisiting_tokens[1]
         destination_chain = self.highest_apr_pool["chain"]
-        current_chain = self.synchronized_data.current_pool["chain"]
+        source_token0_chain = exisiting_tokens[0][0]
+        source_token1_chain = exisiting_tokens[1][0]
 
         bridge_swap_tokens_pairs = []
-        if destination_chain == current_chain:
-            # decide if a swap is needed
-            if (
-                source_token_0 != destination_token_0
-                and source_token_0 != destination_token_1
-            ):
-                from_token = source_token_0
-                to_token = (
-                    destination_token_1
-                    if source_token_1 == destination_token_0
-                    else destination_token_0
-                )
-                bridge_swap_tokens_pairs.append([from_token, to_token])
 
-            if (
-                source_token_1 != destination_token_0
-                and source_token_1 != destination_token_1
-            ):
-                from_token = source_token_1
-                to_token = (
-                    destination_token_1
-                    if source_token_0 == destination_token_0
-                    else destination_token_0
-                )
-                bridge_swap_tokens_pairs.append([from_token, to_token])
+        if source_token0_chain == source_token1_chain:
+            if destination_chain == source_token0_chain:
+                # decide if a swap is needed
+                if (
+                    source_token_0 != destination_token_0
+                    and source_token_0 != destination_token_1
+                ):
+                    from_token = source_token_0
+                    to_token = (
+                        destination_token_1
+                        if source_token_1 == destination_token_0
+                        else destination_token_0
+                    )
+                    bridge_swap_tokens_pairs.append([from_token, to_token])
+
+                if (
+                    source_token_1 != destination_token_0
+                    and source_token_1 != destination_token_1
+                ):
+                    from_token = source_token_1
+                    to_token = (
+                        destination_token_1
+                        if source_token_0 == destination_token_0
+                        else destination_token_0
+                    )
+                    bridge_swap_tokens_pairs.append([from_token, to_token])
+            else:
+                # TO-IMPLEMENT
+                # Decide which tokens to swap based and bridge based considering other factors as well (like what will be more profitable)
+                bridge_swap_tokens_pairs.append([source_token_0, destination_token_0])
+                bridge_swap_tokens_pairs.append([source_token_1, destination_token_1])
         else:
-            # TO-IMPLEMENT
-            # Decide which tokens to swap based and bridge based considering other factors as well (like what will be more profitable)
-            bridge_swap_tokens_pairs.append(
-                [source_token_0, destination_token_0],
-                [source_token_1, destination_token_1],
-            )
+            #ASSUMPTION
+            #if we are not in any pool initially, we have funds(i.e. erc20 or native tokens) on the same chain
+            return []
 
         return bridge_swap_tokens_pairs
 
@@ -598,6 +628,9 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
         for chain, assets in allowed_assets.items():
             account = self.params.safe_contract_addresses[chain]
+            if account == ZERO_ADDRESS:
+                self.context.logger.error(f"No safe address set for chain {chain}")
+                continue
             if chain == "optimism":
                 chain = "bnb"
             for asset_name, asset_address in assets.items():
@@ -679,7 +712,9 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             for chain, pools in lp_pools.items():
                 for pool_address in pools:
                     account = self.params.safe_contract_addresses[chain]
-
+                    if account == ZERO_ADDRESS:
+                        self.context.logger.error(f"No safe address set for chain {chain}")
+                        continue
                     if account is None:
                         self.context.logger.error(
                             f"No account found for chain: {chain}"
@@ -728,6 +763,9 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                             "dex_type": dex_type,
                             "balance": balance,
                         }
+                        self.context.logger.info(
+                            f"Current pool : {self.current_pool}"
+                        )
 
                     # OPTIMISM NOT SUPPORTED YET
                     if chain == "bnb":

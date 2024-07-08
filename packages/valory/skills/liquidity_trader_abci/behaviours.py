@@ -64,7 +64,7 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
 class Action(Enum):
-    #Kept the values as Round name, so that in DecisionMaking we can match tx_submitter with action name(which is round name) and decide the next action
+    # Kept the values as Round name, so that in DecisionMaking we can match tx_submitter with action name(which is round name) and decide the next action
     EXIT_POOL = "PrepareExitPoolTxRound"
     ENTER_POOL = "PrepareEnterPoolTxRound"
     BRIDGE_SWAP = "PrepareSwapTxRound"
@@ -338,11 +338,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
             actions.append(action)
 
-        #Step 3: get the info on which pool to enter
+        # Step 3: get the info on which pool to enter
         action = {
             "action": Action.ENTER_POOL.value,
             "chain": self.highest_apr_pool["chain"],
-            "assets": [self.highest_apr_pool["token0"], self.highest_apr_pool["token1"]]
+            "assets": [
+                self.highest_apr_pool["token0"],
+                self.highest_apr_pool["token1"],
+            ],
         }
         actions.append(action)
 
@@ -360,7 +363,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         tokens = []
 
-        #we need at-most 2 tokens for which we have balance above min_threshold to be able to move forward
+        # we need at-most 2 tokens for which we have balance above min_threshold to be able to move forward
         if (
             token0_balance
             > self.params.min_balance_multiplier * self.params.gas_reserve[chain]
@@ -368,7 +371,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"SUFFICIENT BALANCE :- {token0} balance {token0_balance}"
             )
-            tokens.append([chain,token0])
+            tokens.append([chain, token0])
 
         if (
             token1_balance
@@ -377,12 +380,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"SUFFICIENT BALANCE :- {token1} balance {token1_balance}"
             )
-            tokens.append([chain,token1])
+            tokens.append([chain, token1])
 
         for position in self.synchronized_data.positions:
             for asset in position["assets"]:
                 if asset["asset_type"] in ["erc20", "native"]:
-                    min_balance = self.params.min_balance_multiplier * self.params.gas_reserve[position["chain"]]
+                    min_balance = (
+                        self.params.min_balance_multiplier
+                        * self.params.gas_reserve[position["chain"]]
+                    )
                     if asset["balance"] > min_balance:
                         tokens.append([chain, asset["address"]])
 
@@ -418,8 +424,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if dex_type == "velodrome":
             # Get pool tokens from velodrome pool contract
             tokens = yield from self._get_velodrome_pool_tokens()
-        
-        return [[ chain, tokens[0]], [chain, tokens[1]]]
+
+        return [[chain, tokens[0]], [chain, tokens[1]]]
 
     def _get_pool_id(self, pool_address: str) -> Generator[None, None, str]:
         response_msg = yield from self.get_contract_api_response(
@@ -557,8 +563,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 bridge_swap_tokens_pairs.append([source_token_0, destination_token_0])
                 bridge_swap_tokens_pairs.append([source_token_1, destination_token_1])
         else:
-            #ASSUMPTION
-            #if we are not in any pool initially, we have funds(i.e. erc20 or native tokens) on the same chain
+            # ASSUMPTION
+            # if we are not in any pool initially, we have funds(i.e. erc20 or native tokens) on the same chain
             return []
 
         return bridge_swap_tokens_pairs
@@ -713,7 +719,9 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                 for pool_address in pools:
                     account = self.params.safe_contract_addresses[chain]
                     if account == ZERO_ADDRESS:
-                        self.context.logger.error(f"No safe address set for chain {chain}")
+                        self.context.logger.error(
+                            f"No safe address set for chain {chain}"
+                        )
                         continue
                     if account is None:
                         self.context.logger.error(
@@ -763,9 +771,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                             "dex_type": dex_type,
                             "balance": balance,
                         }
-                        self.context.logger.info(
-                            f"Current pool : {self.current_pool}"
-                        )
+                        self.context.logger.info(f"Current pool : {self.current_pool}")
 
                     # OPTIMISM NOT SUPPORTED YET
                     if chain == "bnb":

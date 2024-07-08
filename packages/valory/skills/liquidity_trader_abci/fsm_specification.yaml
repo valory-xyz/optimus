@@ -7,16 +7,15 @@ alphabet_in:
 - ROUND_TIMEOUT
 - SWAP
 - WAIT
-default_start_state: 
-- GetPositionsRound
+default_start_state: GetPositionsRound
 final_states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
 label: LiquidityTraderAbciApp
 start_states:
-- GetPositionsRound
 - DecisionMakingRound
+- GetPositionsRound
 states:
 - ClaimOPRound
 - DecisionMakingRound
@@ -32,20 +31,20 @@ transition_func:
     (ClaimOPRound, DONE): TxPreparationRound
     (ClaimOPRound, NO_MAJORITY): ClaimOPRound
     (ClaimOPRound, ROUND_TIMEOUT): ClaimOPRound
-    (GetPositionsRound, DONE): EvaluateStrategyRound
-    (GetPositionsRound, NO_MAJORITY): GetPositionsRound
-    (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
+    (DecisionMakingRound, CLAIM): ClaimOPRound
+    (DecisionMakingRound, DONE): FinishedDecisionMakingRound
+    (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
+    (DecisionMakingRound, EXIT): PrepareExitPoolTxRound
+    (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
+    (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
+    (DecisionMakingRound, SWAP): PrepareSwapTxRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
     (EvaluateStrategyRound, WAIT): FinishedEvaluateStrategyRound
-    (DecisionMakingRound, DONE): FinishedDecisionMakingRound
-    (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
-    (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
-    (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
-    (DecisionMakingRound, EXIT): PrepareExitPoolTxRound
-    (DecisionMakingRound, SWAP): PrepareSwapTxRound
-    (DecisionMakingRound, CLAIM): ClaimOPRound
+    (GetPositionsRound, DONE): EvaluateStrategyRound
+    (GetPositionsRound, NO_MAJORITY): GetPositionsRound
+    (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
     (PrepareExitPoolTxRound, DONE): TxPreparationRound
     (PrepareExitPoolTxRound, NO_MAJORITY): PrepareExitPoolTxRound
     (PrepareExitPoolTxRound, ROUND_TIMEOUT): PrepareExitPoolTxRound

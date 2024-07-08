@@ -29,7 +29,7 @@ from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 class ClaimOPPayload(BaseTxPayload):
     """Represent a transaction payload for the ClaimOPRound."""
 
-    # TODO: define your attributes
+    content: str
 
 
 @dataclass(frozen=True)
@@ -58,18 +58,18 @@ class GetPositionsPayload(BaseTxPayload):
 class PrepareExitPoolTxPayload(BaseTxPayload):
     """Represent a transaction payload for the PrepareExitPoolTxRound."""
 
-    # TODO: define your attributes
+    content: str
 
 
 @dataclass(frozen=True)
 class PrepareSwapTxPayload(BaseTxPayload):
     """Represent a transaction payload for the PrepareSwapTxRound."""
 
-    # TODO: define your attributes
+    content: str
 
 
 @dataclass(frozen=True)
 class TxPreparationPayload(BaseTxPayload):
     """Represent a transaction payload for the TxPreparationRound."""
 
-    # TODO: define your attributes
+    content: str

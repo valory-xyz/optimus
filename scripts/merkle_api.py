@@ -17,11 +17,11 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
+"""Testing merkle API"""
 
 import json
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 
 
 app = Flask(__name__)
@@ -32,8 +32,8 @@ with open("scripts/api_data.json", "r", encoding="utf-8") as data_file:
 
 @app.route("/merkle", methods=["GET"])
 def merkle():
-    if request.method == "GET":
-        return jsonify(api_data)
+    """Merkle"""
+    return jsonify(api_data)
 
 
 if __name__ == "__main__":

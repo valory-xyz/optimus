@@ -47,6 +47,7 @@ class Params(BaseParams):
     """Parameters"""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Init"""
         self.allowed_lp_pool_addresses = json.loads(
             self._ensure("allowed_lp_pool_addresses", kwargs, str)
         )

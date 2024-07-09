@@ -40,8 +40,6 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 )
 from packages.valory.skills.liquidity_trader_abci.models import Params
 from packages.valory.skills.liquidity_trader_abci.rounds import (
-    ClaimOPPayload,
-    ClaimOPRound,
     DecisionMakingPayload,
     DecisionMakingRound,
     EvaluateStrategyPayload,
@@ -50,10 +48,6 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     GetPositionsPayload,
     GetPositionsRound,
     LiquidityTraderAbciApp,
-    PrepareExitPoolTxPayload,
-    PrepareExitPoolTxRound,
-    PrepareSwapTxPayload,
-    PrepareSwapTxRound,
     SynchronizedData,
     TxPreparationPayload,
     TxPreparationRound,
@@ -84,25 +78,6 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
     def params(self) -> Params:
         """Return the params."""
         return cast(Params, super().params)
-
-
-class ClaimOPBehaviour(LiquidityTraderBaseBehaviour):
-    """ClaimOPBehaviour"""
-
-    matching_round: Type[AbstractRound] = ClaimOPRound
-
-    def async_act(self) -> Generator:
-        """Do the act, supporting asynchronous execution."""
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            sender = self.context.agent_address
-            payload = ClaimOPPayload(sender=sender, content=...)
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
-            yield from self.send_a2a_transaction(payload)
-            yield from self.wait_until_round_end()
-
-        self.set_done()
 
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
@@ -813,44 +788,6 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
         return pool_balances_dict
 
 
-class PrepareExitPoolTxBehaviour(LiquidityTraderBaseBehaviour):
-    """PrepareExitPoolTxBehaviour"""
-
-    matching_round: Type[AbstractRound] = PrepareExitPoolTxRound
-
-    def async_act(self) -> Generator:
-        """Do the act, supporting asynchronous execution."""
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            sender = self.context.agent_address
-            payload = PrepareExitPoolTxPayload(sender=sender, content=...)
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
-            yield from self.send_a2a_transaction(payload)
-            yield from self.wait_until_round_end()
-
-        self.set_done()
-
-
-class PrepareSwapTxBehaviour(LiquidityTraderBaseBehaviour):
-    """PrepareSwapTxBehaviour"""
-
-    matching_round: Type[AbstractRound] = PrepareSwapTxRound
-
-    def async_act(self) -> Generator:
-        """Do the act, supporting asynchronous execution."""
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            sender = self.context.agent_address
-            payload = PrepareSwapTxPayload(sender=sender, content=...)
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
-            yield from self.send_a2a_transaction(payload)
-            yield from self.wait_until_round_end()
-
-        self.set_done()
-
-
 class TxPreparationBehaviour(LiquidityTraderBaseBehaviour):
     """TxPreparationBehaviour"""
 
@@ -876,11 +813,8 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     initial_behaviour_cls = GetPositionsBehaviour
     abci_app_cls = LiquidityTraderAbciApp  # type: ignore
     behaviours: Set[Type[BaseBehaviour]] = [
-        ClaimOPBehaviour,
-        DecisionMakingBehaviour,
-        EvaluateStrategyBehaviour,
         GetPositionsBehaviour,
-        PrepareExitPoolTxBehaviour,
-        PrepareSwapTxBehaviour,
+        EvaluateStrategyBehaviour,
+        DecisionMakingBehaviour,
         TxPreparationBehaviour,
     ]

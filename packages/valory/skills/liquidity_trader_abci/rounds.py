@@ -21,7 +21,7 @@
 
 import json
 from enum import Enum
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple, cast
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp,
@@ -37,12 +37,9 @@ from packages.valory.skills.abstract_round_abci.base import (
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
-    ClaimOPPayload,
     DecisionMakingPayload,
     EvaluateStrategyPayload,
     GetPositionsPayload,
-    PrepareExitPoolTxPayload,
-    PrepareSwapTxPayload,
     TxPreparationPayload,
 )
 
@@ -51,13 +48,11 @@ class Event(Enum):
     """LiquidityTraderAbciApp Events"""
 
     ERROR = "error"
-    SWAP = "swap"
     ROUND_TIMEOUT = "round_timeout"
     NO_MAJORITY = "no_majority"
-    EXIT = "exit"
-    CLAIM = "claim"
     DONE = "done"
     WAIT = "wait"
+    PREPARE_TX = "prepare_tx"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -93,7 +88,7 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_positions_round")
 
     @property
-    def positions(self) -> Optional[List[Dict[str, any]]]:
+    def positions(self) -> Optional[List[Dict[str, Any]]]:
         """Get the positions."""
         serialized = self.db.get("positions", "[]")
         if serialized is None:
@@ -102,7 +97,7 @@ class SynchronizedData(BaseSynchronizedData):
         return positions
 
     @property
-    def current_pool(self) -> Optional[Dict[str, any]]:
+    def current_pool(self) -> Optional[Dict[str, Any]]:
         """Get the current pool"""
         serialized = self.db.get("current_pool", "{}")
         if serialized is None:
@@ -116,7 +111,7 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_actions_round")
 
     @property
-    def actions(self) -> Optional[List[Dict[str, any]]]:
+    def actions(self) -> Optional[List[Dict[str, Any]]]:
         """Get the actions"""
         serialized = self.db.get("actions", "[]")
         if serialized is None:
@@ -125,7 +120,7 @@ class SynchronizedData(BaseSynchronizedData):
         return actions
 
     @property
-    def transaction_history(self) -> Optional[List[Dict[str, any]]]:
+    def transaction_history(self) -> Optional[List[Dict[str, Any]]]:
         """Get the transactions"""
         serialized = self.db.get("transactions", "[]")
         if serialized is None:
@@ -134,56 +129,20 @@ class SynchronizedData(BaseSynchronizedData):
         return transactions
 
 
-class ClaimOPRound(AbstractRound):
-    """ClaimOPRound"""
+class GetPositionsRound(CollectSameUntilThresholdRound):
+    """GetPositionsRound"""
 
-    payload_class = ClaimOPPayload
-    payload_attribute = ""  # TODO: update
+    payload_class = GetPositionsPayload
     synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    no_majority_event = Event.NO_MAJORITY
+    collection_key = get_name(SynchronizedData.participant_to_positions_round)
+    selection_key = (
+        get_name(SynchronizedData.positions),
+        get_name(SynchronizedData.current_pool),
+    )
 
-    # TODO: replace AbstractRound with one of CollectDifferentUntilAllRound,
-    # CollectSameUntilAllRound, CollectSameUntilThresholdRound,
-    # CollectDifferentUntilThresholdRound, OnlyKeeperSendsRound, VotingRound,
-    # from packages/valory/skills/abstract_round_abci/base.py
-    # or implement the methods
-
-    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
-        """Process the end of the block."""
-        raise NotImplementedError
-
-    def check_payload(self, payload: ClaimOPPayload) -> None:
-        """Check payload."""
-        raise NotImplementedError
-
-    def process_payload(self, payload: ClaimOPPayload) -> None:
-        """Process payload."""
-        raise NotImplementedError
-
-
-class DecisionMakingRound(AbstractRound):
-    """DecisionMakingRound"""
-
-    payload_class = DecisionMakingPayload
-    payload_attribute = ""  # TODO: update
-    synchronized_data_class = SynchronizedData
-
-    # TODO: replace AbstractRound with one of CollectDifferentUntilAllRound,
-    # CollectSameUntilAllRound, CollectSameUntilThresholdRound,
-    # CollectDifferentUntilThresholdRound, OnlyKeeperSendsRound, VotingRound,
-    # from packages/valory/skills/abstract_round_abci/base.py
-    # or implement the methods
-
-    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
-        """Process the end of the block."""
-        raise NotImplementedError
-
-    def check_payload(self, payload: DecisionMakingPayload) -> None:
-        """Check payload."""
-        raise NotImplementedError
-
-    def process_payload(self, payload: DecisionMakingPayload) -> None:
-        """Process payload."""
-        raise NotImplementedError
+    ERROR_PAYLOAD = {}
 
 
 class EvaluateStrategyRound(CollectSameUntilThresholdRound):
@@ -210,72 +169,12 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
         return synced_data, event
 
 
-class GetPositionsRound(CollectSameUntilThresholdRound):
-    """GetPositionsRound"""
+class DecisionMakingRound(AbstractRound):
+    """DecisionMakingRound"""
 
-    payload_class = GetPositionsPayload
-    synchronized_data_class = SynchronizedData
-    done_event = Event.DONE
-    no_majority_event = Event.NO_MAJORITY
-    collection_key = get_name(SynchronizedData.participant_to_positions_round)
-    selection_key = (
-        get_name(SynchronizedData.positions),
-        get_name(SynchronizedData.current_pool),
-    )
-
-    ERROR_PAYLOAD = {}
-
-
-class PrepareExitPoolTxRound(AbstractRound):
-    """PrepareExitPoolTxRound"""
-
-    payload_class = PrepareExitPoolTxPayload
+    payload_class = DecisionMakingPayload
     payload_attribute = ""  # TODO: update
     synchronized_data_class = SynchronizedData
-
-    # TODO: replace AbstractRound with one of CollectDifferentUntilAllRound,
-    # CollectSameUntilAllRound, CollectSameUntilThresholdRound,
-    # CollectDifferentUntilThresholdRound, OnlyKeeperSendsRound, VotingRound,
-    # from packages/valory/skills/abstract_round_abci/base.py
-    # or implement the methods
-
-    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
-        """Process the end of the block."""
-        raise NotImplementedError
-
-    def check_payload(self, payload: PrepareExitPoolTxPayload) -> None:
-        """Check payload."""
-        raise NotImplementedError
-
-    def process_payload(self, payload: PrepareExitPoolTxPayload) -> None:
-        """Process payload."""
-        raise NotImplementedError
-
-
-class PrepareSwapTxRound(AbstractRound):
-    """PrepareSwapTxRound"""
-
-    payload_class = PrepareSwapTxPayload
-    payload_attribute = ""  # TODO: update
-    synchronized_data_class = SynchronizedData
-
-    # TODO: replace AbstractRound with one of CollectDifferentUntilAllRound,
-    # CollectSameUntilAllRound, CollectSameUntilThresholdRound,
-    # CollectDifferentUntilThresholdRound, OnlyKeeperSendsRound, VotingRound,
-    # from packages/valory/skills/abstract_round_abci/base.py
-    # or implement the methods
-
-    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
-        """Process the end of the block."""
-        raise NotImplementedError
-
-    def check_payload(self, payload: PrepareSwapTxPayload) -> None:
-        """Check payload."""
-        raise NotImplementedError
-
-    def process_payload(self, payload: PrepareSwapTxPayload) -> None:
-        """Process payload."""
-        raise NotImplementedError
 
 
 class TxPreparationRound(AbstractRound):
@@ -285,31 +184,13 @@ class TxPreparationRound(AbstractRound):
     payload_attribute = ""  # TODO: update
     synchronized_data_class = SynchronizedData
 
-    # TODO: replace AbstractRound with one of CollectDifferentUntilAllRound,
-    # CollectSameUntilAllRound, CollectSameUntilThresholdRound,
-    # CollectDifferentUntilThresholdRound, OnlyKeeperSendsRound, VotingRound,
-    # from packages/valory/skills/abstract_round_abci/base.py
-    # or implement the methods
 
-    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
-        """Process the end of the block."""
-        raise NotImplementedError
-
-    def check_payload(self, payload: TxPreparationPayload) -> None:
-        """Check payload."""
-        raise NotImplementedError
-
-    def process_payload(self, payload: TxPreparationPayload) -> None:
-        """Process payload."""
-        raise NotImplementedError
+class FinishedEvaluateStrategyRound(DegenerateRound):
+    """FinishedEvaluateStrategyRound"""
 
 
 class FinishedDecisionMakingRound(DegenerateRound):
     """FinishedDecisionMakingRound"""
-
-
-class FinishedEvaluateStrategyRound(DegenerateRound):
-    """FinishedEvaluateStrategyRound"""
 
 
 class FinishedTxPreparationRound(DegenerateRound):
@@ -322,11 +203,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     initial_round_cls: AppState = GetPositionsRound
     initial_states: Set[AppState] = {GetPositionsRound, DecisionMakingRound}
     transition_function: AbciAppTransitionFunction = {
-        ClaimOPRound: {
-            Event.DONE: TxPreparationRound,
-            Event.NO_MAJORITY: ClaimOPRound,
-            Event.ROUND_TIMEOUT: ClaimOPRound,
-        },
         GetPositionsRound: {
             Event.DONE: EvaluateStrategyRound,
             Event.NO_MAJORITY: GetPositionsRound,
@@ -343,19 +219,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ERROR: FinishedDecisionMakingRound,
             Event.NO_MAJORITY: DecisionMakingRound,
             Event.ROUND_TIMEOUT: DecisionMakingRound,
-            Event.EXIT: PrepareExitPoolTxRound,
-            Event.SWAP: PrepareSwapTxRound,
-            Event.CLAIM: ClaimOPRound,
-        },
-        PrepareExitPoolTxRound: {
-            Event.DONE: TxPreparationRound,
-            Event.NO_MAJORITY: PrepareExitPoolTxRound,
-            Event.ROUND_TIMEOUT: PrepareExitPoolTxRound,
-        },
-        PrepareSwapTxRound: {
-            Event.DONE: TxPreparationRound,
-            Event.NO_MAJORITY: PrepareSwapTxRound,
-            Event.ROUND_TIMEOUT: PrepareSwapTxRound,
+            Event.PREPARE_TX: TxPreparationRound,
         },
         TxPreparationRound: {
             Event.DONE: FinishedTxPreparationRound,

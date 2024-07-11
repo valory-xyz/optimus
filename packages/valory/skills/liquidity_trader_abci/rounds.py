@@ -26,7 +26,6 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp,
     AbciAppTransitionFunction,
-    AbstractRound,
     AppState,
     BaseSynchronizedData,
     CollectSameUntilThresholdRound,
@@ -40,7 +39,6 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     DecisionMakingPayload,
     EvaluateStrategyPayload,
     GetPositionsPayload,
-    TxPreparationPayload,
 )
 
 
@@ -52,7 +50,7 @@ class Event(Enum):
     NO_MAJORITY = "no_majority"
     DONE = "done"
     WAIT = "wait"
-    PREPARE_TX = "prepare_tx"
+    SETTLE = "settle"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -88,7 +86,7 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_positions_round")
 
     @property
-    def positions(self) -> Optional[List[Dict[str, Any]]]:
+    def positions(self) -> List[Dict[str, Any]]:
         """Get the positions."""
         serialized = self.db.get("positions", "[]")
         if serialized is None:
@@ -97,7 +95,7 @@ class SynchronizedData(BaseSynchronizedData):
         return positions
 
     @property
-    def current_pool(self) -> Optional[Dict[str, Any]]:
+    def current_pool(self) -> Dict[str, Any]:
         """Get the current pool"""
         serialized = self.db.get("current_pool", "{}")
         if serialized is None:
@@ -128,6 +126,11 @@ class SynchronizedData(BaseSynchronizedData):
         transactions = json.loads(serialized)
         return transactions
 
+    @property
+    def most_voted_tx_hash(self) -> Optional[float]:
+        """Get the token most_voted_tx_hash."""
+        return self.db.get("most_voted_tx_hash", None)
+
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""
@@ -155,34 +158,31 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
     collection_key = get_name(SynchronizedData.participant_to_actions_round)
     selection_key = get_name(SynchronizedData.actions)
 
-    def end_block(self) -> Optional[Tuple[SynchronizedData, Enum]]:
-        """Process the end of the block."""
-        res = super().end_block()
-        if res is None:
-            return None
 
-        synced_data, event = cast(Tuple[SynchronizedData, Enum], res)
-
-        if event == Event.DONE and synced_data.actions is None:
-            return synced_data, Event.WAIT
-
-        return synced_data, event
-
-
-class DecisionMakingRound(AbstractRound):
+class DecisionMakingRound(CollectSameUntilThresholdRound):
     """DecisionMakingRound"""
 
     payload_class = DecisionMakingPayload
-    payload_attribute = ""  # TODO: update
     synchronized_data_class = SynchronizedData
 
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
+        """Process the end of the block."""
+        if self.threshold_reached:
+            # We reference all the events here to prevent the check-abciapp-specs tool from complaining
+            payload = json.loads(self.most_voted_payload)
+            event = Event(payload["event"])
+            synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
-class TxPreparationRound(AbstractRound):
-    """TxPreparationRound"""
+            synchronized_data = synchronized_data.update(
+                synchronized_data_class=SynchronizedData, **payload.get("updates", {})
+            )
+            return synchronized_data, event
 
-    payload_class = TxPreparationPayload
-    payload_attribute = ""  # TODO: update
-    synchronized_data_class = SynchronizedData
+        if not self.is_majority_possible(
+            self.collection, self.synchronized_data.nb_participants
+        ):
+            return self.synchronized_data, Event.NO_MAJORITY
+        return None
 
 
 class FinishedEvaluateStrategyRound(DegenerateRound):
@@ -219,12 +219,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ERROR: FinishedDecisionMakingRound,
             Event.NO_MAJORITY: DecisionMakingRound,
             Event.ROUND_TIMEOUT: DecisionMakingRound,
-            Event.PREPARE_TX: TxPreparationRound,
-        },
-        TxPreparationRound: {
-            Event.DONE: FinishedTxPreparationRound,
-            Event.NO_MAJORITY: TxPreparationRound,
-            Event.ROUND_TIMEOUT: TxPreparationRound,
+            Event.SETTLE: FinishedTxPreparationRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},

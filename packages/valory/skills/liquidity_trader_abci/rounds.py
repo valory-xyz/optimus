@@ -126,11 +126,6 @@ class SynchronizedData(BaseSynchronizedData):
         transactions = json.loads(serialized)
         return transactions
 
-    @property
-    def most_voted_tx_hash(self) -> Optional[float]:
-        """Get the token most_voted_tx_hash."""
-        return self.db.get("most_voted_tx_hash", None)
-
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""
@@ -147,6 +142,8 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
 
     ERROR_PAYLOAD = {}
 
+    # Event.ROUND_TIMEOUT
+
 
 class EvaluateStrategyRound(CollectSameUntilThresholdRound):
     """EvaluateStrategyRound"""
@@ -157,6 +154,8 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     collection_key = get_name(SynchronizedData.participant_to_actions_round)
     selection_key = get_name(SynchronizedData.actions)
+
+    # Event.NO_MAJORITY, Event.WAIT, Event.ROUND_TIMEOUT
 
 
 class DecisionMakingRound(CollectSameUntilThresholdRound):
@@ -183,6 +182,8 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
         ):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
+
+        # Event.SETTLE, Event.ERROR, Event.ROUND_TIMEOUT, Event.DONE
 
 
 class FinishedEvaluateStrategyRound(DegenerateRound):

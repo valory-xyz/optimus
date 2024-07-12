@@ -1,11 +1,9 @@
 alphabet_in:
-- CLAIM
 - DONE
 - ERROR
-- EXIT
 - NO_MAJORITY
 - ROUND_TIMEOUT
-- SWAP
+- SETTLE
 - WAIT
 default_start_state: GetPositionsRound
 final_states:
@@ -17,27 +15,18 @@ start_states:
 - DecisionMakingRound
 - GetPositionsRound
 states:
-- ClaimOPRound
 - DecisionMakingRound
 - EvaluateStrategyRound
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
 - GetPositionsRound
-- PrepareExitPoolTxRound
-- PrepareSwapTxRound
-- TxPreparationRound
 transition_func:
-    (ClaimOPRound, DONE): TxPreparationRound
-    (ClaimOPRound, NO_MAJORITY): ClaimOPRound
-    (ClaimOPRound, ROUND_TIMEOUT): ClaimOPRound
-    (DecisionMakingRound, CLAIM): ClaimOPRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
-    (DecisionMakingRound, EXIT): PrepareExitPoolTxRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
-    (DecisionMakingRound, SWAP): PrepareSwapTxRound
+    (DecisionMakingRound, SETTLE): FinishedTxPreparationRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
@@ -45,12 +34,3 @@ transition_func:
     (GetPositionsRound, DONE): EvaluateStrategyRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
-    (PrepareExitPoolTxRound, DONE): TxPreparationRound
-    (PrepareExitPoolTxRound, NO_MAJORITY): PrepareExitPoolTxRound
-    (PrepareExitPoolTxRound, ROUND_TIMEOUT): PrepareExitPoolTxRound
-    (PrepareSwapTxRound, DONE): TxPreparationRound
-    (PrepareSwapTxRound, NO_MAJORITY): PrepareSwapTxRound
-    (PrepareSwapTxRound, ROUND_TIMEOUT): PrepareSwapTxRound
-    (TxPreparationRound, DONE): FinishedTxPreparationRound
-    (TxPreparationRound, NO_MAJORITY): TxPreparationRound
-    (TxPreparationRound, ROUND_TIMEOUT): TxPreparationRound

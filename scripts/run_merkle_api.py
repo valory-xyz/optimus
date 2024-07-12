@@ -20,13 +20,16 @@
 """Testing merkle API"""
 
 import json
+import os
 
 from flask import Flask, jsonify
 
 
 app = Flask(__name__)
 
-with open("scripts/api_data.json", "r", encoding="utf-8") as data_file:
+script_path = os.path.dirname(os.path.realpath(__file__))
+
+with open(f"{script_path}//api_data.json", "r", encoding="utf-8") as data_file:
     api_data = json.load(data_file)
 
 

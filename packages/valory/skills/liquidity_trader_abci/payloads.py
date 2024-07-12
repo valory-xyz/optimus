@@ -26,17 +26,11 @@ from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 
 
 @dataclass(frozen=True)
-class ClaimOPPayload(BaseTxPayload):
-    """Represent a transaction payload for the ClaimOPRound."""
+class GetPositionsPayload(BaseTxPayload):
+    """Represent a transaction payload for the GetPositionsRound."""
 
-    content: str
-
-
-@dataclass(frozen=True)
-class DecisionMakingPayload(BaseTxPayload):
-    """Represent a transaction payload for the DecisionMakingRound."""
-
-    decision: str
+    positions: Optional[str]
+    current_pool: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -47,29 +41,7 @@ class EvaluateStrategyPayload(BaseTxPayload):
 
 
 @dataclass(frozen=True)
-class GetPositionsPayload(BaseTxPayload):
-    """Represent a transaction payload for the GetPositionsRound."""
-
-    positions: Optional[str]
-    current_pool: Optional[str]
-
-
-@dataclass(frozen=True)
-class PrepareExitPoolTxPayload(BaseTxPayload):
-    """Represent a transaction payload for the PrepareExitPoolTxRound."""
-
-    content: str
-
-
-@dataclass(frozen=True)
-class PrepareSwapTxPayload(BaseTxPayload):
-    """Represent a transaction payload for the PrepareSwapTxRound."""
-
-    content: str
-
-
-@dataclass(frozen=True)
-class TxPreparationPayload(BaseTxPayload):
-    """Represent a transaction payload for the TxPreparationRound."""
+class DecisionMakingPayload(BaseTxPayload):
+    """Represent a transaction payload for the DecisionMakingRound."""
 
     content: str

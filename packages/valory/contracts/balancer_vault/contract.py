@@ -43,3 +43,38 @@ class VaultContract(Contract):
         pool_id_bytes = bytes.fromhex(pool_id)
         data, _, _ = contract_instance.functions.getPoolTokens(pool_id_bytes).call()
         return dict(tokens=data)
+
+
+    @classmethod
+    def join_pool(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        pool_id: str,
+        sender: str,
+        recipient: str,
+        assets: list,
+        max_amounts_in: list,
+        user_data: int,
+        from_internal_balance: bool = False,
+
+    ) -> JSONLike:
+        """Prepare a join pool transaction."""
+        request = (
+            assets,
+            max_amounts_in,
+            bytes(user_data),
+            from_internal_balance,
+        )
+
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI(
+            "joinPool",
+            args=(
+                bytes.fromhex(pool_id[2:]),
+                sender,
+                recipient,
+                request
+            )
+        )
+        return {"tx_hash": bytes.fromhex(data[2:])}

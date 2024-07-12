@@ -2,10 +2,8 @@ alphabet_in:
 - CHECK_HISTORY
 - CHECK_LATE_ARRIVING_MESSAGE
 - CHECK_TIMEOUT
-- CLAIM
 - DONE
 - ERROR
-- EXIT
 - FINALIZATION_FAILED
 - FINALIZE_TIMEOUT
 - INCORRECT_SERIALIZATION
@@ -16,8 +14,8 @@ alphabet_in:
 - RESET_AND_PAUSE_TIMEOUT
 - RESET_TIMEOUT
 - ROUND_TIMEOUT
+- SETTLE
 - SUSPICIOUS_ACTIVITY
-- SWAP
 - VALIDATE_TIMEOUT
 - WAIT
 default_start_state: RegistrationStartupRound
@@ -29,14 +27,11 @@ start_states:
 states:
 - CheckLateTxHashesRound
 - CheckTransactionHistoryRound
-- ClaimOPRound
 - CollectSignatureRound
 - DecisionMakingRound
 - EvaluateStrategyRound
 - FinalizationRound
 - GetPositionsRound
-- PrepareExitPoolTxRound
-- PrepareSwapTxRound
 - RandomnessTransactionSubmissionRound
 - RegistrationRound
 - RegistrationStartupRound
@@ -46,7 +41,6 @@ states:
 - SelectKeeperTransactionSubmissionBAfterTimeoutRound
 - SelectKeeperTransactionSubmissionBRound
 - SynchronizeLateMessagesRound
-- TxPreparationRound
 - ValidateTransactionRound
 transition_func:
     (CheckLateTxHashesRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
@@ -61,19 +55,14 @@ transition_func:
     (CheckTransactionHistoryRound, NEGATIVE): SelectKeeperTransactionSubmissionBRound
     (CheckTransactionHistoryRound, NONE): RandomnessTransactionSubmissionRound
     (CheckTransactionHistoryRound, NO_MAJORITY): CheckTransactionHistoryRound
-    (ClaimOPRound, DONE): TxPreparationRound
-    (ClaimOPRound, NO_MAJORITY): ClaimOPRound
-    (ClaimOPRound, ROUND_TIMEOUT): ClaimOPRound
     (CollectSignatureRound, DONE): FinalizationRound
     (CollectSignatureRound, NO_MAJORITY): ResetRound
     (CollectSignatureRound, ROUND_TIMEOUT): CollectSignatureRound
-    (DecisionMakingRound, CLAIM): ClaimOPRound
     (DecisionMakingRound, DONE): ResetAndPauseRound
     (DecisionMakingRound, ERROR): ResetAndPauseRound
-    (DecisionMakingRound, EXIT): PrepareExitPoolTxRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
-    (DecisionMakingRound, SWAP): PrepareSwapTxRound
+    (DecisionMakingRound, SETTLE): RandomnessTransactionSubmissionRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
@@ -87,12 +76,6 @@ transition_func:
     (GetPositionsRound, DONE): EvaluateStrategyRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
-    (PrepareExitPoolTxRound, DONE): TxPreparationRound
-    (PrepareExitPoolTxRound, NO_MAJORITY): PrepareExitPoolTxRound
-    (PrepareExitPoolTxRound, ROUND_TIMEOUT): PrepareExitPoolTxRound
-    (PrepareSwapTxRound, DONE): TxPreparationRound
-    (PrepareSwapTxRound, NO_MAJORITY): PrepareSwapTxRound
-    (PrepareSwapTxRound, ROUND_TIMEOUT): PrepareSwapTxRound
     (RandomnessTransactionSubmissionRound, DONE): SelectKeeperTransactionSubmissionARound
     (RandomnessTransactionSubmissionRound, NO_MAJORITY): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, ROUND_TIMEOUT): RandomnessTransactionSubmissionRound
@@ -123,9 +106,6 @@ transition_func:
     (SynchronizeLateMessagesRound, NONE): SelectKeeperTransactionSubmissionBRound
     (SynchronizeLateMessagesRound, ROUND_TIMEOUT): SynchronizeLateMessagesRound
     (SynchronizeLateMessagesRound, SUSPICIOUS_ACTIVITY): RandomnessTransactionSubmissionRound
-    (TxPreparationRound, DONE): RandomnessTransactionSubmissionRound
-    (TxPreparationRound, NO_MAJORITY): TxPreparationRound
-    (TxPreparationRound, ROUND_TIMEOUT): TxPreparationRound
     (ValidateTransactionRound, DONE): DecisionMakingRound
     (ValidateTransactionRound, NEGATIVE): CheckTransactionHistoryRound
     (ValidateTransactionRound, NONE): SelectKeeperTransactionSubmissionBRound

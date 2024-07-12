@@ -1,184 +1,2065 @@
 {
    "10":{
-      "1_0x4200000000000000000000000000000000000042":{
-         "0x72c21398c9ae5cbe30fd2d4011a3193e9ca2fd93cb27ea23a497d099597d77e0":{
+      "11_0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42":{
+         "0x52b09463713ee460147032b2154e742a8ec3104df4747c2239acfa8c699166bb":{
             "chainId":10,
-            "index":57,
-            "campaignId":"0x72c21398c9ae5cbe30fd2d4011a3193e9ca2fd93cb27ea23a497d099597d77e0",
-            "creator":"0x29DaCdF7cCaDf4eE67c923b4C22255A4B2494eD7",
+            "index":83,
+            "campaignId":"0x52b09463713ee460147032b2154e742a8ec3104df4747c2239acfa8c699166bb",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
             "campaignType":1,
             "campaignSubType":0,
-            "rewardToken":"0x41A65AAE5d1C8437288d5a29B4D049897572758E",
-            "amount":"970000000000000000000",
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"2813000000000000000000",
             "amountDecimal":"0",
-            "startTimestamp":1719860400,
-            "endTimestamp":1720466987,
-            "mainParameter":"0x4200000000000000000000000000000000000042",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x5BB3E58887264B667f915130fD04bbB56116C278",
             "campaignParameters":{
-               "url":"https://merkl.angle.money/",
-               "duration":606587,
+               "url":"https://app.balancer.fi/#/fraxtal/pool/0x33251abecb0364df98a27a8d5d7b5ccddc774c42000000000000000000000008",
+               "duration":1209600,
                "blacklist":[
-                  
+
                ],
                "whitelist":[
-                  "0x81F8aEF2befB9163370bB37e8752346E33C62c5B"
+
                ],
                "forwarders":[
-                  
+                  {
+                     "token":"0x275e8514b83479f526673327B279753aBC666a05",
+                     "sender":"0x275e8514b83479f526673327B279753aBC666a05",
+                     "priority":0,
+                     "forwarderType":0
+                  }
                ],
-               "targetToken":"0x4200000000000000000000000000000000000042",
-               "symbolRewardToken":"aglaMerkl",
-               "symbolTargetToken":"OP",
+               "targetToken":"0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"sFRAX/sDAI/sUSDe",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":1000,
+            "totalSupplyTargetToken":2596148429503164,
+            "tvl":234875.0575590398,
+            "type":"balancerPool",
+            "typeInfo":{
+               "name":"Balancer Test Pool WETH-OLAS",
+               "tokenAddress":"0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42",
+               "poolId":"0x5bb3e58887264b667f915130fd04bbb56116c27800020000000000000000012a",
+               "poolTokens":{
+                  "0x4200000000000000000000000000000000000006":{
+                     "symbol":"wETH",
+                     "decimals":18,
+                     "amountInPool":86682.67229463719,
+                     "price":1.088
+                  },
+                  "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527":{
+                     "symbol":"OLAS",
+                     "decimals":18,
+                     "amountInPool":59246.35140633553,
+                     "price":1.084
+                  }
+               },
+               "totalSupply":2596148429503164,
+               "tvl":234875.0575590398,
+               "priceTargetToken":9.047058130031064e-11,
+               "cardName":"Balancer Test Pool WETH-OLAS"
+            }
+         }
+      },
+      "5_0x2416092f143378750bb29b79ed961ab195cceea5-0x12ee4BE944b993C81b6840e088bA1dCc57F07B1D":{
+         "0xa201a11e5e3d96a8724348ab5a9cb070e1d96f7c81ebada7f5cea0fa83f1c54b":{
+            "chainId":10,
+            "index":89,
+            "campaignId":"0xa201a11e5e3d96a8724348ab5a9cb070e1d96f7c81ebada7f5cea0fa83f1c54b",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":5,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"7500000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x2416092f143378750bb29b79ed961ab195cceea5-0x12ee4BE944b993C81b6840e088bA1dCc57F07B1D",
+            "campaignParameters":{
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+                  "0x12ee4BE944b993C81b6840e088bA1dCc57F07B1D"
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x934e7f714383C25D250C18e947dC8e51917f07CF",
+                     "sender":"0x12ee4BE944b993C81b6840e088bA1dCc57F07B1D",
+                     "priority":0,
+                     "forwarderType":0,
+                     "siloAsset":"0x2416092f143378750bb29b79eD961ab195CcEea5",
+                     "siloAssetSymbol":"ezETH"
+                  }
+               ],
+               "targetToken":"0x2416092f143378750bb29b79eD961ab195CcEea5",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"ezETH",
                "decimalsRewardToken":18,
                "decimalsTargetToken":18
             },
             "computeChainId":10,
             "tags":[
-               "jumper-test"
+               "superfest"
             ],
-            "apr":0,
-            "totalSupplyTargetToken":4294967294.179744,
-            "tvl":5755256174.200857,
-            "type":"unknown",
+            "apr":7.346567099144428,
+            "totalSupplyTargetToken":1431.2266042515514,
+            "tvl":4444860.278961746
+         }
+      },
+      "5_0x484c2d6e3cdd945a8b2df735e079178c1036578c-0x2Dc1292B9b26dBEb6d2b59E708f9356027F4E3Cc":{
+         "0x931b4decee6c1f5594313c8fcdb5a0360625dbe795816cea8a5ff44c84ee41d8":{
+            "chainId":10,
+            "index":90,
+            "campaignId":"0x931b4decee6c1f5594313c8fcdb5a0360625dbe795816cea8a5ff44c84ee41d8",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":5,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x484c2d6e3cdd945a8b2df735e079178c1036578c-0x2Dc1292B9b26dBEb6d2b59E708f9356027F4E3Cc",
+            "campaignParameters":{
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+                  "0x2Dc1292B9b26dBEb6d2b59E708f9356027F4E3Cc"
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x82e2df4b80Af42D4496Ed14CE9e2F4d8CA08Bbd3",
+                     "sender":"0x2Dc1292B9b26dBEb6d2b59E708f9356027F4E3Cc",
+                     "priority":0,
+                     "forwarderType":0,
+                     "siloAsset":"0x484c2D6e3cDd945a8B2DF735e079178C1036578c",
+                     "siloAssetSymbol":"sfrxETH"
+                  }
+               ],
+               "targetToken":"0x484c2D6e3cDd945a8B2DF735e079178C1036578c",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"sfrxETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":10,
+            "tags":[
+               "superfest"
+            ],
+            "apr":2.5658563787759587,
+            "totalSupplyTargetToken":129.7580142218382,
+            "tvl":424217.87589545565
+         }
+      },
+      "5_0x4200000000000000000000000000000000000006-0x12ee4BE944b993C81b6840e088bA1dCc57F07B1D":{
+         "0xd1964b2c9ada53621a39bc68240db2a0eeafea36c4acfc0bff3b2c2fed3dd077":{
+            "chainId":10,
+            "index":91,
+            "campaignId":"0xd1964b2c9ada53621a39bc68240db2a0eeafea36c4acfc0bff3b2c2fed3dd077",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":5,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"2000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x4200000000000000000000000000000000000006-0x12ee4BE944b993C81b6840e088bA1dCc57F07B1D",
+            "campaignParameters":{
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+                  "0x12ee4BE944b993C81b6840e088bA1dCc57F07B1D"
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x9f3f998f52dda45D83234cF3A29995C391dB2b16",
+                     "sender":"0x12ee4BE944b993C81b6840e088bA1dCc57F07B1D",
+                     "priority":0,
+                     "forwarderType":0,
+                     "siloAsset":"0x2416092f143378750bb29b79eD961ab195CcEea5",
+                     "siloAssetSymbol":"ezETH"
+                  }
+               ],
+               "targetToken":"0x4200000000000000000000000000000000000006",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"WETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":10,
+            "tags":[
+               "superfest"
+            ],
+            "apr":2.356725133147863,
+            "totalSupplyTargetToken":1211.163739481449,
+            "tvl":3694897.2200360564
+         }
+      },
+      "5_0x4200000000000000000000000000000000000006-0x2Dc1292B9b26dBEb6d2b59E708f9356027F4E3Cc":{
+         "0x8214de90ae057c69cdeed0329371d078da20b1553228a199041e83026c266b12":{
+            "chainId":10,
+            "index":92,
+            "campaignId":"0x8214de90ae057c69cdeed0329371d078da20b1553228a199041e83026c266b12",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":5,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x4200000000000000000000000000000000000006-0x2Dc1292B9b26dBEb6d2b59E708f9356027F4E3Cc",
+            "campaignParameters":{
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+                  "0x2Dc1292B9b26dBEb6d2b59E708f9356027F4E3Cc"
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x4383Da24d92c42D02DC577EC1144DF4dDF65A99d",
+                     "sender":"0x2Dc1292B9b26dBEb6d2b59E708f9356027F4E3Cc",
+                     "priority":0,
+                     "forwarderType":0,
+                     "siloAsset":"0x484c2D6e3cDd945a8B2DF735e079178C1036578c",
+                     "siloAssetSymbol":"sfrxETH"
+                  }
+               ],
+               "targetToken":"0x4200000000000000000000000000000000000006",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"WETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":10,
+            "tags":[
+               "superfest"
+            ],
+            "apr":4.508476073639799,
+            "totalSupplyTargetToken":316.5570781091972,
+            "tvl":965720.6781877279
+         }
+      },
+      "5_0x4200000000000000000000000000000000000006-0x1eBF59146ccdc4650044fc70CAfac298A6083F5f":{
+         "0x620c4d1d611569a771caa1dd85e0058f659facbf626cd67751b5de4d6355a817":{
+            "chainId":10,
+            "index":93,
+            "campaignId":"0x620c4d1d611569a771caa1dd85e0058f659facbf626cd67751b5de4d6355a817",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":5,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"3250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x4200000000000000000000000000000000000006-0x1eBF59146ccdc4650044fc70CAfac298A6083F5f",
+            "campaignParameters":{
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+                  "0x1eBF59146ccdc4650044fc70CAfac298A6083F5f"
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x633De586a3e4764f63B9ceF97F8c04d3b1d9895e",
+                     "sender":"0x1eBF59146ccdc4650044fc70CAfac298A6083F5f",
+                     "priority":0,
+                     "forwarderType":0,
+                     "siloAsset":"0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb",
+                     "siloAssetSymbol":"wstETH"
+                  }
+               ],
+               "targetToken":"0x4200000000000000000000000000000000000006",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"WETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":10,
+            "tags":[
+               "superfest"
+            ],
+            "apr":3.8910326101339203,
+            "totalSupplyTargetToken":1192.065964407181,
+            "tvl":3636635.6376169864
+         }
+      },
+      "5_0x1f32b1c2345538c0c6f582fcb022739c4a194ebb-0x1eBF59146ccdc4650044fc70CAfac298A6083F5f":{
+         "0xd9d7cacd3c8391f74a299bd0700f165a261bda2830af647933a9a8a86ff32f2e":{
+            "chainId":10,
+            "index":94,
+            "campaignId":"0xd9d7cacd3c8391f74a299bd0700f165a261bda2830af647933a9a8a86ff32f2e",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":5,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"500000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x1f32b1c2345538c0c6f582fcb022739c4a194ebb-0x1eBF59146ccdc4650044fc70CAfac298A6083F5f",
+            "campaignParameters":{
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+                  "0x1eBF59146ccdc4650044fc70CAfac298A6083F5f"
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x63535814e7046680A3A56B1C60F666557AECF1a3",
+                     "sender":"0x1eBF59146ccdc4650044fc70CAfac298A6083F5f",
+                     "priority":0,
+                     "forwarderType":0,
+                     "siloAsset":"0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb",
+                     "siloAssetSymbol":"wstETH"
+                  }
+               ],
+               "targetToken":"0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"wstETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":10,
+            "tags":[
+               "superfest"
+            ],
+            "apr":0.8995358889028947,
+            "totalSupplyTargetToken":673.8177200386563,
+            "tvl":2420097.1996452385
+         }
+      },
+      "1_0x704c4C9F0d29257E5b0E526b20b48EfFC8f758b2":{
+         "0x0d606dc5dba842389320af3e2528a7ddaadca38d22a89f1896bc16e2ea525c5a":{
+            "chainId":10,
+            "index":70,
+            "campaignId":"0x0d606dc5dba842389320af3e2528a7ddaadca38d22a89f1896bc16e2ea525c5a",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"3125000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x704c4C9F0d29257E5b0E526b20b48EfFC8f758b2",
+            "campaignParameters":{
+               "url":"https://app.gearbox.fi/pools/0x42db77b3103c71059f4b997d6441cfb299fd0d94",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x704c4C9F0d29257E5b0E526b20b48EfFC8f758b2",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"farmdWETHV3",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":10,
+            "tags":[
+               "superfest"
+            ],
+            "apr":10.044023218664373,
+            "totalSupplyTargetToken":443.3562942620332,
+            "tvl":1354639.1211472705,
+            "type":"gearbox",
             "typeInfo":{
-               "name":"Optimism",
-               "tokenAddress":"0x4200000000000000000000000000000000000042",
-               "totalSupply":4294967294.179744,
-               "tvl":5755256174.200857,
-               "priceTargetToken":1.34,
-               "cardName":"OP"
+               "name":"Farming of WETH v3",
+               "tokenAddress":"0x704c4C9F0d29257E5b0E526b20b48EfFC8f758b2",
+               "stakingToken":"0x42dB77B3103c71059F4b997d6441cFB299FD0d94",
+               "decimalsStakingToken":18,
+               "underlyingToken":"0x4200000000000000000000000000000000000006",
+               "totalAssets":444.04206285353223,
+               "balanceStakingToken":443.3562942620332,
+               "totalSupplyStakingToken":443.35629426203326,
+               "percentageOfSupplyUnderlyingPoolTokens":0.9999999999999999,
+               "decimalsUnderlyingToken":18,
+               "symbolUnderlyingToken":"WETH",
+               "totalSupply":443.3562942620332,
+               "tvl":1354639.1211472705,
+               "priceTargetToken":3055.4187200659194,
+               "cardName":"Gearbox WETH Deposit"
+            }
+         }
+      }
+   },
+   "252":{
+      "1_0xc50EDc8b12ABa137349eE53CE305142Bee2ab864":{
+         "0xd5158a8a22dfb55d1a2b1e68985c0ee280df7e972c479c068bf495d2a310a242":{
+            "chainId":10,
+            "index":74,
+            "campaignId":"0xd5158a8a22dfb55d1a2b1e68985c0ee280df7e972c479c068bf495d2a310a242",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xc50EDc8b12ABa137349eE53CE305142Bee2ab864",
+            "campaignParameters":{
+               "url":"https://www.ra.exchange/manage/v1/0xc50edc8b12aba137349ee53ce305142bee2ab864",
+               "univ2":{
+                  "fees":0.3,
+                  "name":"Correlated Pair - USDC/FRAX",
+                  "token0":"0xDcc0F2D8F90FDe85b10aC1c8Ab57dc0AE946A543",
+                  "token1":"0xFc00000000000000000000000000000000000001",
+                  "symbolToken0":"USDC",
+                  "symbolToken1":"FRAX"
+               },
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0xc50EDc8b12ABa137349eE53CE305142Bee2ab864",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"cAMM-USDC/FRAX",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":31.17233997454985,
+            "totalSupplyTargetToken":0.03850704965183953,
+            "tvl":174591.0226415175,
+            "type":"uniswapv2",
+            "typeInfo":{
+               "name":"Correlated Pair - USDC/FRAX",
+               "tokenAddress":"0xc50EDc8b12ABa137349eE53CE305142Bee2ab864",
+               "protocol":"Ra",
+               "token0":"0xDcc0F2D8F90FDe85b10aC1c8Ab57dc0AE946A543",
+               "token1":"0xFc00000000000000000000000000000000000001",
+               "symbolToken0":"USDC",
+               "symbolToken1":"FRAX",
+               "decimalsToken0":6,
+               "decimalsToken1":18,
+               "balanceToken0":94132.334318,
+               "balanceToken1":81115.63101699455,
+               "priceTargetToken":4534001.545693,
+               "totalSupply":0.03850704965183953,
+               "tvl":174591.0226415175,
+               "cardName":"Ra USDC/FRAX"
             }
          }
       },
-      "1_0x94b008aA00579c1307B0EF2c499aD98a8ce58e58":{
-         "0xabe0f301b3b3f3a0974350bd68a02ca47a68307e749f39da390f8c301d036539":{
+      "1_0x63Eb7846642630456707C3efBb50A03c79B89D81":{
+         "0x4a430776fa339a1b61bff9489bfaee864625c40aea023dbaa2e4f94b57ef0b52":{
             "chainId":10,
-            "index":58,
-            "campaignId":"0xabe0f301b3b3f3a0974350bd68a02ca47a68307e749f39da390f8c301d036539",
-            "creator":"0x29DaCdF7cCaDf4eE67c923b4C22255A4B2494eD7",
+            "index":77,
+            "campaignId":"0x4a430776fa339a1b61bff9489bfaee864625c40aea023dbaa2e4f94b57ef0b52",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
             "campaignType":1,
             "campaignSubType":0,
-            "rewardToken":"0x41A65AAE5d1C8437288d5a29B4D049897572758E",
-            "amount":"970000000000000000000",
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1500000000000000000000",
             "amountDecimal":"0",
-            "startTimestamp":1719860400,
-            "endTimestamp":1720466987,
-            "mainParameter":"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x63Eb7846642630456707C3efBb50A03c79B89D81",
             "campaignParameters":{
-               "url":"https://merkl.angle.money/",
-               "duration":606587,
+               "url":"https://curve.fi/#/fraxtal/pools/factory-stable-ng-0/deposit",
+               "duration":1209600,
                "blacklist":[
-                  
+
                ],
                "whitelist":[
-                  "0x81F8aEF2befB9163370bB37e8752346E33C62c5B"
+
                ],
                "forwarders":[
-                  
+                  {
+                     "token":"0x98a6C35546be6F7c545c99EfB48F4673eD2c99fc",
+                     "sender":"0x98a6C35546be6F7c545c99EfB48F4673eD2c99fc",
+                     "priority":0,
+                     "forwarderType":0
+                  }
                ],
-               "targetToken":"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
-               "symbolRewardToken":"aglaMerkl",
-               "symbolTargetToken":"USDT",
+               "targetToken":"0x63Eb7846642630456707C3efBb50A03c79B89D81",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"crvUSDFRAX",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":5.139603045079229,
+            "totalSupplyTargetToken":1270269.3148697661,
+            "tvl":1270699.8575299857,
+            "type":"curve",
+            "typeInfo":{
+               "name":"crvUSD/Frax",
+               "tokenAddress":"0x63Eb7846642630456707C3efBb50A03c79B89D81",
+               "lp_price":1.0003389380938197,
+               "poolTokensList":[
+                  "0xB102f7Efa0d5dE071A8D37B3548e1C7CB148Caf3",
+                  "0xFc00000000000000000000000000000000000001"
+               ],
+               "poolTokens":{
+                  "0xB102f7Efa0d5dE071A8D37B3548e1C7CB148Caf3":"crvUSD",
+                  "0xFc00000000000000000000000000000000000001":"FRAX"
+               },
+               "totalSupply":1270269.3148697661,
+               "tvl":1270699.8575299857,
+               "priceTargetToken":1.0003389380938197,
+               "cardName":"Curve crvUSD/FRAX"
+            }
+         }
+      },
+      "1_0xF593aE314749d0c92B450F0a13E7e1791f352bB7":{
+         "0x854932854dda89dac0a146f8d2153622bb8a5e5f9ab0c59585d7e9123c68c4ae":{
+            "chainId":10,
+            "index":78,
+            "campaignId":"0x854932854dda89dac0a146f8d2153622bb8a5e5f9ab0c59585d7e9123c68c4ae",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"3000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xF593aE314749d0c92B450F0a13E7e1791f352bB7",
+            "campaignParameters":{
+               "url":"https://curve.fi/#/fraxtal/pools/factory-tricrypto-0/deposit",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x9ccC509a5b4869bAC6BE86e79Ea00c25942852F4",
+                     "sender":"0x9ccC509a5b4869bAC6BE86e79Ea00c25942852F4",
+                     "priority":0,
+                     "forwarderType":0
+                  }
+               ],
+               "targetToken":"0xF593aE314749d0c92B450F0a13E7e1791f352bB7",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"triCRV",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":75.90543185755078,
+            "totalSupplyTargetToken":6039.08768704906,
+            "tvl":172079.72334309798,
+            "type":"curve",
+            "typeInfo":{
+               "name":"TriCRV",
+               "tokenAddress":"0xF593aE314749d0c92B450F0a13E7e1791f352bB7",
+               "lp_price":28.49432435169409,
+               "poolTokensList":[
+                  "0xB102f7Efa0d5dE071A8D37B3548e1C7CB148Caf3",
+                  "0xFC00000000000000000000000000000000000006",
+                  "0x331B9182088e2A7d6D3Fe4742AbA1fB231aEcc56"
+               ],
+               "poolTokens":{
+                  "0xB102f7Efa0d5dE071A8D37B3548e1C7CB148Caf3":"crvUSD",
+                  "0xFC00000000000000000000000000000000000006":"wfrxETH",
+                  "0x331B9182088e2A7d6D3Fe4742AbA1fB231aEcc56":"CRV"
+               },
+               "totalSupply":6039.08768704906,
+               "tvl":172079.72334309798,
+               "priceTargetToken":28.49432435169409,
+               "cardName":"Curve crvUSD/wfrxETH/CRV"
+            }
+         }
+      },
+      "1_0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569":{
+         "0xabecf7bd0f4c83c3a1d0efce89c513415fad22fefaa2282af90036ca50aac8b7":{
+            "chainId":10,
+            "index":79,
+            "campaignId":"0xabecf7bd0f4c83c3a1d0efce89c513415fad22fefaa2282af90036ca50aac8b7",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"3000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569",
+            "campaignParameters":{
+               "url":"https://curve.fi/#/fraxtal/pools/factory-tricrypto-1/deposit",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x8882eB84d0c4894753C0450f2D514E39883c0C82",
+                     "sender":"0x8882eB84d0c4894753C0450f2D514E39883c0C82",
+                     "priority":0,
+                     "forwarderType":0
+                  }
+               ],
+               "targetToken":"0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"TriFXS",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":40.283631512082486,
+            "totalSupplyTargetToken":5546.793736942308,
+            "tvl":324245.48691366176,
+            "type":"curve",
+            "typeInfo":{
+               "name":"TriFXS",
+               "tokenAddress":"0xa0D3911349e701A1F49C1Ba2dDA34b4ce9636569",
+               "lp_price":58.456380801425546,
+               "poolTokensList":[
+                  "0xFc00000000000000000000000000000000000001",
+                  "0xFC00000000000000000000000000000000000006",
+                  "0xFc00000000000000000000000000000000000002"
+               ],
+               "poolTokens":{
+                  "0xFc00000000000000000000000000000000000001":"FRAX",
+                  "0xFC00000000000000000000000000000000000006":"wfrxETH",
+                  "0xFc00000000000000000000000000000000000002":"FXS"
+               },
+               "totalSupply":5546.793736942308,
+               "tvl":324245.48691366176,
+               "priceTargetToken":58.456380801425546,
+               "cardName":"Curve FRAX/wfrxETH/FXS"
+            }
+         }
+      },
+      "1_0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42":{
+         "0x52b09463713ee460147032b2154e742a8ec3104df4747c2239acfa8c699166bb":{
+            "chainId":10,
+            "index":83,
+            "campaignId":"0x52b09463713ee460147032b2154e742a8ec3104df4747c2239acfa8c699166bb",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"2813000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42",
+            "campaignParameters":{
+               "url":"https://app.balancer.fi/#/fraxtal/pool/0x33251abecb0364df98a27a8d5d7b5ccddc774c42000000000000000000000008",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x275e8514b83479f526673327B279753aBC666a05",
+                     "sender":"0x275e8514b83479f526673327B279753aBC666a05",
+                     "priority":0,
+                     "forwarderType":0
+                  }
+               ],
+               "targetToken":"0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"sFRAX/sDAI/sUSDe",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":52.1451753911755,
+            "totalSupplyTargetToken":2596148429503164,
+            "tvl":234875.0575590398,
+            "type":"balancerPool",
+            "typeInfo":{
+               "name":"Balancer sFRAX/sDAI/sUSDe",
+               "tokenAddress":"0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42",
+               "poolId":"0x33251abecb0364df98a27a8d5d7b5ccddc774c42000000000000000000000008",
+               "poolTokens":{
+                  "0x09eAdcBAa812A4C076c3a6cDe765DC4a22E0d775":{
+                     "symbol":"sDAI",
+                     "decimals":18,
+                     "amountInPool":86682.67229463719,
+                     "price":1.088
+                  },
+                  "0x211Cc4DD073734dA055fbF44a2b4667d5E5fE5d2":{
+                     "symbol":"sUSDe",
+                     "decimals":18,
+                     "amountInPool":59246.35140633553,
+                     "price":1.084
+                  },
+                  "0xfc00000000000000000000000000000000000008":{
+                     "symbol":"sFRAX",
+                     "decimals":18,
+                     "amountInPool":72020.06148868566,
+                     "price":1.06
+                  }
+               },
+               "totalSupply":2596148429503164,
+               "tvl":234875.0575590398,
+               "priceTargetToken":9.047058130031064e-11,
+               "cardName":"Balancer Pool sDAI/sUSDe/sFRAX"
+            }
+         }
+      },
+      "1_0x1570315476480fA80ceC1FFF07A20c1df1aDfD53":{
+         "0x6886df43051a49c37ec3e7768f6ae0cfb86e0e10bf46971c3083458f9ec719f1":{
+            "chainId":10,
+            "index":84,
+            "campaignId":"0x6886df43051a49c37ec3e7768f6ae0cfb86e0e10bf46971c3083458f9ec719f1",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"2813000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x1570315476480fA80ceC1FFF07A20c1df1aDfD53",
+            "campaignParameters":{
+               "url":"https://app.balancer.fi/#/fraxtal/pool/0x1570315476480fa80cec1fff07a20c1df1adfd53000200000000000000000009",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x71c365fB739faFdba44B1564558849216de69958",
+                     "sender":"0x71c365fB739faFdba44B1564558849216de69958",
+                     "priority":0,
+                     "forwarderType":0
+                  }
+               ],
+               "targetToken":"0x1570315476480fA80ceC1FFF07A20c1df1aDfD53",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"sFRAX/sfrxETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":68.69565844923528,
+            "totalSupplyTargetToken":3033.769818815912,
+            "tvl":178287.8474114824,
+            "type":"balancerPool",
+            "typeInfo":{
+               "name":"Balancer sFRAX/sfrxETH",
+               "tokenAddress":"0x1570315476480fA80ceC1FFF07A20c1df1aDfD53",
+               "poolId":"0x1570315476480fa80cec1fff07a20c1df1adfd53000200000000000000000009",
+               "poolTokens":{
+                  "0xFC00000000000000000000000000000000000005":{
+                     "symbol":"sfrxETH",
+                     "decimals":18,
+                     "amountInPool":26.905195967801934,
+                     "price":3269.3
+                  },
+                  "0xfc00000000000000000000000000000000000008":{
+                     "symbol":"sFRAX",
+                     "decimals":18,
+                     "amountInPool":85213.85871127124,
+                     "price":1.06
+                  }
+               },
+               "totalSupply":3033.769818815912,
+               "tvl":178287.8474114824,
+               "priceTargetToken":58.76775696880938,
+               "cardName":"Balancer Pool sfrxETH/sFRAX"
+            }
+         }
+      },
+      "1_0x4F968317721B9c300afBff3FD37365637318271D":{
+         "0xd1c9a0ecd9062ff2227bccea3332d53ee07814e699fb8a5770c31a80c9ace99e":{
+            "chainId":10,
+            "index":66,
+            "campaignId":"0xd1c9a0ecd9062ff2227bccea3332d53ee07814e699fb8a5770c31a80c9ace99e",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"6250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x4F968317721B9c300afBff3FD37365637318271D",
+            "campaignParameters":{
+               "url":"https://app.frax.finance/fraxlend/pair?address=0x4F968317721B9c300afBff3FD37365637318271D",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x4F968317721B9c300afBff3FD37365637318271D",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"fFRAX(sfrxETH)-8",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":31.986841232961492,
+            "totalSupplyTargetToken":833035.1538028484,
+            "tvl":850726.5026028064,
+            "type":"fraxlend",
+            "typeInfo":{
+               "name":"Fraxlend Interest Bearing FRAX (Staked Frax Ether) - 8",
+               "tokenAddress":"0x4F968317721B9c300afBff3FD37365637318271D",
+               "underlyingToken":"0xFc00000000000000000000000000000000000001",
+               "sharePrice":1.027120564155708,
+               "symbolUnderlyingToken":"FRAX",
+               "totalSupply":833035.1538028484,
+               "tvl":850726.5026028064,
+               "priceTargetToken":1.0212372175642241,
+               "cardName":"Supply FRAX on Fraxlend"
+            }
+         }
+      },
+      "1_0xaa08c24A76a1Ad5DE28BC56B23413D13B8Be6Eeb":{
+         "0x030f7d3073b902538bbdd0735b64ee8ae549ac44eac2583b84c6f8f116c2565e":{
+            "chainId":10,
+            "index":72,
+            "campaignId":"0x030f7d3073b902538bbdd0735b64ee8ae549ac44eac2583b84c6f8f116c2565e",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xaa08c24A76a1Ad5DE28BC56B23413D13B8Be6Eeb",
+            "campaignParameters":{
+               "url":"https://www.ra.exchange/manage/v1/0xaa08c24a76a1ad5de28bc56b23413d13b8be6eeb",
+               "univ2":{
+                  "fees":0.3,
+                  "name":"Volatile Pair - FRAX/wfrxETH",
+                  "token0":"0xFc00000000000000000000000000000000000001",
+                  "token1":"0xFC00000000000000000000000000000000000006",
+                  "symbolToken0":"FRAX",
+                  "symbolToken1":"wfrxETH"
+               },
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0xaa08c24A76a1Ad5DE28BC56B23413D13B8Be6Eeb",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"vAMM-FRAX/wfrxETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":70.14646879637637,
+            "totalSupplyTargetToken":672.6835720148788,
+            "tvl":77586.38186170334,
+            "type":"uniswapv2",
+            "typeInfo":{
+               "name":"Volatile Pair - FRAX/wfrxETH",
+               "tokenAddress":"0xaa08c24A76a1Ad5DE28BC56B23413D13B8Be6Eeb",
+               "protocol":"Ra",
+               "token0":"0xFc00000000000000000000000000000000000001",
+               "token1":"0xFC00000000000000000000000000000000000006",
+               "symbolToken0":"FRAX",
+               "symbolToken1":"wfrxETH",
+               "decimalsToken0":18,
+               "decimalsToken1":18,
+               "balanceToken0":39040.645970447156,
+               "balanceToken1":12.638501190318985,
+               "priceTargetToken":115.33860062809329,
+               "totalSupply":672.6835720148788,
+               "tvl":77586.38186170334,
+               "cardName":"Ra FRAX/wfrxETH"
+            }
+         }
+      },
+      "1_0x4f66cBd698F1fe6E2692D1De5d758027a5272787":{
+         "0xc73be2b2a5ea0adc29f4f0fe86e2b1d7e96492c7607b88e06525440e51914509":{
+            "chainId":10,
+            "index":73,
+            "campaignId":"0xc73be2b2a5ea0adc29f4f0fe86e2b1d7e96492c7607b88e06525440e51914509",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x4f66cBd698F1fe6E2692D1De5d758027a5272787",
+            "campaignParameters":{
+               "url":"https://www.ra.exchange/manage/v1/0x4f66cbd698f1fe6e2692d1de5d758027a5272787",
+               "univ2":{
+                  "fees":0.3,
+                  "name":"Volatile Pair - FXS/wfrxETH",
+                  "token0":"0xFc00000000000000000000000000000000000002",
+                  "token1":"0xFC00000000000000000000000000000000000006",
+                  "symbolToken0":"FXS",
+                  "symbolToken1":"wfrxETH"
+               },
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x4f66cBd698F1fe6E2692D1De5d758027a5272787",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"vAMM-FXS/wfrxETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":33.9841757794547,
+            "totalSupplyTargetToken":929.085024847772,
+            "tvl":160145.43797104387,
+            "type":"uniswapv2",
+            "typeInfo":{
+               "name":"Volatile Pair - FXS/wfrxETH",
+               "tokenAddress":"0x4f66cBd698F1fe6E2692D1De5d758027a5272787",
+               "protocol":"Ra",
+               "token0":"0xFc00000000000000000000000000000000000002",
+               "token1":"0xFC00000000000000000000000000000000000006",
+               "symbolToken0":"FXS",
+               "symbolToken1":"wfrxETH",
+               "decimalsToken0":18,
+               "decimalsToken1":18,
+               "balanceToken0":34258.50048784561,
+               "balanceToken1":26.296377850552908,
+               "priceTargetToken":172.3689798974892,
+               "totalSupply":929.085024847772,
+               "tvl":160145.43797104387,
+               "cardName":"Ra FXS/wfrxETH"
+            }
+         }
+      }
+   },
+   "8453":{
+      "1_0xC1E02884AF4A283cA25ab63C45360d220d69DA52":{
+         "0x0ef9132890adb78de51205028c9a30a2e20aab1ad5c086b2773205cd3251ef86":{
+            "chainId":10,
+            "index":64,
+            "campaignId":"0x0ef9132890adb78de51205028c9a30a2e20aab1ad5c086b2773205cd3251ef86",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"3750000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xC1E02884AF4A283cA25ab63C45360d220d69DA52",
+            "campaignParameters":{
+               "url":"https://toros.finance/synthetix-usdc-andromeda-yield",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0xC1E02884AF4A283cA25ab63C45360d220d69DA52",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"sUSDCy",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":8453,
+            "tags":[
+               "superfest"
+            ],
+            "apr":3.541182114283795,
+            "totalSupplyTargetToken":4359509.55063471,
+            "tvl":4638281.644354787,
+            "type":"toros",
+            "typeInfo":{
+               "name":"Synthetix USDC Yield",
+               "tokenAddress":"0xC1E02884AF4A283cA25ab63C45360d220d69DA52",
+               "totalSupply":4359509.55063471,
+               "tvl":4638281.644354787,
+               "symbolUnderlyingToken":"USDC",
+               "priceTargetToken":1.063945746759401,
+               "cardName":"Synthetix USDC Yield (sUSDCy) on Toros"
+            }
+         }
+      },
+      "1_0x8D2e3F1f4b38AA9f1ceD22ac06019c7561B03901":{
+         "0x9338aadb6c9ef7d4f3d3255f379aa92549f851632ad2dd7bb7b6fe26f28cb0fa":{
+            "chainId":10,
+            "index":101,
+            "campaignId":"0x9338aadb6c9ef7d4f3d3255f379aa92549f851632ad2dd7bb7b6fe26f28cb0fa",
+            "creator":"0xd0Db870a674A1B8b82FB18F1C295736B3b965701",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"6500000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720656000,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x8D2e3F1f4b38AA9f1ceD22ac06019c7561B03901",
+            "campaignParameters":{
+               "url":"https://app.aave.com/reserve-overview/?underlyingAsset=0x04c0599ae5a44757c0af6f9ec3b93da8976c150a&marketName=proto_base_v3",
+               "duration":1072800,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x8D2e3F1f4b38AA9f1ceD22ac06019c7561B03901",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"variableDebtBasweETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":8453,
+            "tags":[
+               "superfest"
+            ],
+            "apr":19.149730106070386,
+            "totalSupplyTargetToken":524.4995609503726,
+            "tvl":1676284.8618105622,
+            "type":"aave_borrowing",
+            "typeInfo":{
+               "name":"Aave Base Variable Debt weETH",
+               "tokenAddress":"0x8D2e3F1f4b38AA9f1ceD22ac06019c7561B03901",
+               "underlyingToken":"0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+               "symbolUnderlyingToken":"weETH",
+               "totalSupply":524.4995609503726,
+               "tvl":1676284.8618105622,
+               "priceTargetToken":3195.97,
+               "cardName":"Borrow weETH on Aave"
+            }
+         }
+      },
+      "1_0x7C307e128efA31F540F2E2d976C995E0B65F51F6":{
+         "0xe1eff17a22824aefbbbc72b1a0f7b094d51b369d317946c5bddda78eeaf4b580":{
+            "chainId":10,
+            "index":102,
+            "campaignId":"0xe1eff17a22824aefbbbc72b1a0f7b094d51b369d317946c5bddda78eeaf4b580",
+            "creator":"0xd0Db870a674A1B8b82FB18F1C295736B3b965701",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1750000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720656000,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x7C307e128efA31F540F2E2d976C995E0B65F51F6",
+            "campaignParameters":{
+               "url":"https://app.aave.com/reserve-overview/?underlyingAsset=0x04c0599ae5a44757c0af6f9ec3b93da8976c150a&marketName=proto_base_v3",
+               "duration":1072800,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x7C307e128efA31F540F2E2d976C995E0B65F51F6",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"aBasweETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":8453,
+            "tags":[
+               "superfest"
+            ],
+            "apr":1.2877334409971035,
+            "totalSupplyTargetToken":2099.9381546703694,
+            "tvl":6711339.34418186,
+            "type":"aave_lending",
+            "typeInfo":{
+               "name":"Aave Base weETH",
+               "tokenAddress":"0x7C307e128efA31F540F2E2d976C995E0B65F51F6",
+               "underlyingToken":"0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+               "symbolUnderlyingToken":"weETH",
+               "totalSupply":2099.9381546703694,
+               "tvl":6711339.34418186,
+               "priceTargetToken":3195.97,
+               "cardName":"Supply weETH on Aave"
+            }
+         }
+      },
+      "1_0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22":{
+         "0xb9bf1ace04e702363bd76b5828ca64a00984af9118672be96c1c200943da941f":{
+            "chainId":10,
+            "index":75,
+            "campaignId":"0xb9bf1ace04e702363bd76b5828ca64a00984af9118672be96c1c200943da941f",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"5000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22",
+            "campaignParameters":{
+               "url":"https://moonwell.fi/markets/supply/base/usdc",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"mUSDC",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":8
+            },
+            "computeChainId":8453,
+            "tags":[
+               "superfest"
+            ],
+            "apr":0.33787394890706923,
+            "totalSupplyTargetToken":3124720067.6967297,
+            "tvl":64817071.78325104,
+            "type":"moonwell",
+            "typeInfo":{
+               "name":"Moonwell USDC",
+               "tokenAddress":"0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22",
+               "underlyingToken":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+               "exchangeRate":0.0207490063505914,
+               "symbolUnderlyingToken":"USDC",
+               "decimalsUnderlyingToken":6,
+               "totalSupply":3124720067.6967297,
+               "tvl":64817071.78325104,
+               "priceTargetToken":0.02074332112285134,
+               "cardName":"Supply USDC on Moonwell"
+            }
+         },
+         "0x1ad188dd597199ca8e6d6a01d5af362769f46bb749da5c08d27eaec4397f53b5":{
+            "chainId":10,
+            "index":76,
+            "campaignId":"0x1ad188dd597199ca8e6d6a01d5af362769f46bb749da5c08d27eaec4397f53b5",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"11250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22",
+            "campaignParameters":{
+               "url":"https://moonwell.fi/markets/supply/base/usdc",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"mUSDC",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":8
+            },
+            "computeChainId":8453,
+            "tags":[
+               "superfest"
+            ],
+            "apr":0.7602163850409057,
+            "totalSupplyTargetToken":3124720067.6967297,
+            "tvl":64817071.78325104,
+            "type":"moonwell",
+            "typeInfo":{
+               "name":"Moonwell USDC",
+               "tokenAddress":"0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22",
+               "underlyingToken":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+               "exchangeRate":0.0207490063505914,
+               "symbolUnderlyingToken":"USDC",
+               "decimalsUnderlyingToken":6,
+               "totalSupply":3124720067.6967297,
+               "tvl":64817071.78325104,
+               "priceTargetToken":0.02074332112285134,
+               "cardName":"Supply USDC on Moonwell"
+            }
+         }
+      },
+      "1_0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB":{
+         "0x1304555d07aa4c6c4156c510d9fc63e2035b55f1e609d3adc819e744cf032d5f":{
+            "chainId":10,
+            "index":80,
+            "campaignId":"0x1304555d07aa4c6c4156c510d9fc63e2035b55f1e609d3adc819e744cf032d5f",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"6250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB",
+            "campaignParameters":{
+               "url":"https://app.aave.com/reserve-overview/?underlyingAsset=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&marketName=proto_base_v3",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"aBasUSDC",
                "decimalsRewardToken":18,
                "decimalsTargetToken":6
             },
-            "computeChainId":10,
+            "computeChainId":8453,
             "tags":[
-               "jumper-test"
+               "superfest"
             ],
-            "apr":0,
-            "totalSupplyTargetToken":0.000987261863716686,
-            "tvl":0.000987261863716686,
-            "type":"unknown",
+            "apr":0.8418320805429355,
+            "totalSupplyTargetToken":32527274.071224,
+            "tvl":32518361.598128486,
+            "type":"aave_lending",
             "typeInfo":{
-               "name":"Tether USD",
-               "tokenAddress":"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
-               "totalSupply":0.000987261863716686,
-               "tvl":987261863.716686,
-               "priceTargetToken":1,
-               "cardName":"USDT"
+               "name":"Aave Base USDC",
+               "tokenAddress":"0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB",
+               "underlyingToken":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+               "symbolUnderlyingToken":"USDC",
+               "totalSupply":32527274.071224,
+               "tvl":32518361.598128486,
+               "priceTargetToken":0.999726,
+               "cardName":"Supply USDC on Aave"
             }
          }
       },
-      "1_0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2":{
-         "0x90aa7afdf02ee2243fbbedd7156885eeb328e92b83c1f18a290950c2e44489d4":{
+      "1_0x59dca05b6c26dbd64b5381374aAaC5CD05644C28":{
+         "0xa73531ef8c49370c5920929c75d2597db84289434de4727a7692d1d22c461ec6":{
             "chainId":10,
-            "index":60,
-            "campaignId":"0x90aa7afdf02ee2243fbbedd7156885eeb328e92b83c1f18a290950c2e44489d4",
-            "creator":"0xA9DdD91249DFdd450E81E1c56Ab60E1A62651701",
+            "index":98,
+            "campaignId":"0xa73531ef8c49370c5920929c75d2597db84289434de4727a7692d1d22c461ec6",
+            "creator":"0xd0Db870a674A1B8b82FB18F1C295736B3b965701",
             "campaignType":1,
             "campaignSubType":0,
-            "rewardToken":"0x41A65AAE5d1C8437288d5a29B4D049897572758E",
-            "amount":"970000000000000000000",
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"2500000000000000000000",
             "amountDecimal":"0",
-            "startTimestamp":1720022400,
-            "endTimestamp":1720627200,
-            "mainParameter":"0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2",
+            "startTimestamp":1720540800,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x59dca05b6c26dbd64b5381374aAaC5CD05644C28",
             "campaignParameters":{
-               "url":"https://app.balancer.fi/#/optimism/pool/0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb200020000000000000000008b/add-liquidity",
-               "duration":604800,
+               "url":"https://app.aave.com/reserve-overview/?underlyingAsset=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&marketName=proto_base_v3",
+               "duration":1188000,
                "blacklist":[
-                  
+
                ],
                "whitelist":[
-                  
+
                ],
                "forwarders":[
-                  {
-                     "token":"0xA30992B40a0cb4B2Da081ddBd843f9CcE25c2fe3",
-                     "sender":"0xA30992B40a0cb4B2Da081ddBd843f9CcE25c2fe3",
-                     "priority":0,
-                     "forwarderType":0
-                  },
-                  {
-                     "token":"0x6341B7472152D7b7F9af3158C6A42349a2cA6c72",
-                     "sender":"0x6341B7472152D7b7F9af3158C6A42349a2cA6c72",
-                     "priority":0,
-                     "forwarderType":0
-                  },
-                  {
-                     "token":"0xe110b862E4D076596707892c0C5163BC183eb161",
-                     "sender":"0xC181Edc719480bd089b94647c2Dc504e2700a2B0",
-                     "priority":0,
-                     "forwarderType":0
-                  }
+
                ],
-               "targetToken":"0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2",
-               "symbolRewardToken":"aglaMerkl",
-               "symbolTargetToken":"BPT-WSTETH-WETH",
+               "targetToken":"0x59dca05b6c26dbd64b5381374aAaC5CD05644C28",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"variableDebtBasUSDC",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":6
+            },
+            "computeChainId":8453,
+            "tags":[
+               "superfest"
+            ],
+            "apr":0.4391264887936856,
+            "totalSupplyTargetToken":25396205.607852,
+            "tvl":25389247.04751545,
+            "type":"aave_borrowing",
+            "typeInfo":{
+               "name":"Aave Base Variable Debt USDC",
+               "tokenAddress":"0x59dca05b6c26dbd64b5381374aAaC5CD05644C28",
+               "underlyingToken":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+               "symbolUnderlyingToken":"USDC",
+               "totalSupply":25396205.607852,
+               "tvl":25389247.04751545,
+               "priceTargetToken":0.999726,
+               "cardName":"Borrow USDC on Aave"
+            }
+         }
+      },
+      "1_0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E":{
+         "0xda02c8f9a2ff8b3468f0fc1f80ddbe4ec94c253de79e83cd934e6bb17abee3c8":{
+            "chainId":10,
+            "index":99,
+            "campaignId":"0xda02c8f9a2ff8b3468f0fc1f80ddbe4ec94c253de79e83cd934e6bb17abee3c8",
+            "creator":"0xd0Db870a674A1B8b82FB18F1C295736B3b965701",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"3750000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720540800,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E",
+            "campaignParameters":{
+               "url":"https://app.aave.com/reserve-overview/?underlyingAsset=0x4200000000000000000000000000000000000006&marketName=proto_base_v3",
+               "duration":1188000,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"variableDebtBasWETH",
                "decimalsRewardToken":18,
                "decimalsTargetToken":18
             },
-            "computeChainId":10,
+            "computeChainId":8453,
             "tags":[
-               
+               "superfest"
             ],
-            "apr":10,
-            "totalSupplyTargetToken":9.131979237851617,
-            "tvl":27735.568257363084,
+            "apr":0.4753332941097863,
+            "totalSupplyTargetToken":11470.487863802651,
+            "tvl":35182968.60512732,
+            "type":"aave_borrowing",
+            "typeInfo":{
+               "name":"Aave Base Variable Debt WETH",
+               "tokenAddress":"0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E",
+               "underlyingToken":"0x4200000000000000000000000000000000000006",
+               "symbolUnderlyingToken":"WETH",
+               "totalSupply":11470.487863802651,
+               "tvl":35182968.60512732,
+               "priceTargetToken":3067.26,
+               "cardName":"Borrow WETH on Aave"
+            }
+         }
+      },
+      "2_0xB1419a7f9e8c6e434B1D05377e0Dbc4154E3DE78":{
+         "0x06825ed451840a501d28add385c56c93218ad67ae8d8b720b21db539f110180e":{
+            "chainId":10,
+            "index":65,
+            "campaignId":"0x06825ed451840a501d28add385c56c93218ad67ae8d8b720b21db539f110180e",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":2,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"3750000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xB1419a7f9e8c6e434B1D05377e0Dbc4154E3DE78",
+            "campaignParameters":{
+               "amm":0,
+               "url":"",
+               "token0":"0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+               "token1":"0x4200000000000000000000000000000000000006",
+               "ammAlgo":0,
+               "poolFee":"0.01",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "weightFees":8000,
+               "poolAddress":"0xB1419a7f9e8c6e434B1D05377e0Dbc4154E3DE78",
+               "symbolToken0":"weETH",
+               "symbolToken1":"WETH",
+               "weightToken0":1000,
+               "weightToken1":1000,
+               "boostedReward":0,
+               "boostedAddress":"0x0000000000000000000000000000000000000000",
+               "decimalsToken0":18,
+               "decimalsToken1":18,
+               "symbolRewardToken":"OP",
+               "decimalsRewardToken":18,
+               "isOutOfRangeIncentivized":false
+            },
+            "computeChainId":8453,
+            "tags":[
+               "superfest"
+            ],
+            "amm":0,
+            "ammAlgo":0,
+            "ammAlgoName":"UniswapV3",
+            "ammName":"UniswapV3",
+            "apr":17.795242204980728,
+            "aprs":{
+               "Average APR (rewards / pool TVL)":17.795242204980728,
+               "weETH APR (rewards for weETH / WETH TVL)":4.536579508295413,
+               "WETH APR (rewards for weETH / WETH TVL)":2.9281070818411297
+            },
+            "blacklistedBalance0":0,
+            "blacklistedBalance1":0,
+            "blacklistedLiquidity":0,
+            "forwarders":[
+
+            ],
+            "isBoosted":false,
+            "isLive":true,
+            "isMock":false,
+            "poolBalanceToken0":113.28545608824562,
+            "poolBalanceToken1":182.88068182941458,
+            "poolTotalLiquidity":3266665.9380474985,
+            "symbolToken0":"weETH",
+            "symbolToken1":"WETH",
+            "tick":418,
+            "tvl":922999.5192424406
+         }
+      }
+   },
+   "34443":{
+      "1_0xcF376Bc82686BE7f88fa8936C18C62a2F11c4003":{
+         "0xfd041075801d7dcf4672f22a2c1cc1fe6d6bd32ef4db8392cb3c1358848402e7":{
+            "chainId":10,
+            "index":85,
+            "campaignId":"0xfd041075801d7dcf4672f22a2c1cc1fe6d6bd32ef4db8392cb3c1358848402e7",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"5625000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xcF376Bc82686BE7f88fa8936C18C62a2F11c4003",
+            "campaignParameters":{
+               "url":"https://app.balancer.fi/#/mode/pool/0xcf376bc82686be7f88fa8936c18c62a2f11c4003000200000000000000000009",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+                  {
+                     "token":"0xb2007B8B7E0260042517f635CFd8E6dD2Dd7f007",
+                     "sender":"0xb2007B8B7E0260042517f635CFd8E6dD2Dd7f007",
+                     "priority":0,
+                     "forwarderType":0
+                  }
+               ],
+               "targetToken":"0xcF376Bc82686BE7f88fa8936C18C62a2F11c4003",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"80MODE/20ezETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":281.2432353465742,
+            "totalSupplyTargetToken":509823.5967459554,
+            "tvl":87602.10701473182,
             "type":"balancerPool",
             "typeInfo":{
-               "name":"Shanghai Shakedown",
-               "tokenAddress":"0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2",
-               "poolId":"0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb200020000000000000000008b",
+               "name":"Balancer 80MODE/20ezETH",
+               "tokenAddress":"0xcF376Bc82686BE7f88fa8936C18C62a2F11c4003",
+               "poolId":"0xcf376bc82686be7f88fa8936c18c62a2f11c4003000200000000000000000009",
                "poolTokens":{
-                  "0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb":{
-                     "symbol":"wstETH",
+                  "0x2416092f143378750bb29b79eD961ab195CcEea5":{
+                     "symbol":"ezETH",
                      "decimals":18,
-                     "amountInPool":4.43950175007898,
-                     "price":3470.44
+                     "amountInPool":5.67055170786228,
+                     "price":3108.17
                   },
-                  "0x4200000000000000000000000000000000000006":{
-                     "symbol":"WETH",
+                  "0xDfc7C877a950e49D2610114102175A06C2e3167a":{
+                     "symbol":"MODE",
                      "decimals":18,
-                     "amountInPool":4.1565108843385845,
-                     "price":2966.08
+                     "amountInPool":3712311.316334511,
+                     "price":0.01885
                   }
                },
-               "totalSupply":9.131979237851617,
-               "tvl":27735.568257363084,
-               "priceTargetToken":3037.191339901484,
-               "cardName":"Balancer Pool wstETH/WETH"
+               "totalSupply":509823.5967459554,
+               "tvl":87602.10701473182,
+               "priceTargetToken":0.17182827074672236,
+               "cardName":"Balancer Pool ezETH/MODE"
+            }
+         }
+      },
+      "1_0x71ef7EDa2Be775E5A7aa8afD02C45F059833e9d2":{
+         "0xf683cfcbe67d45db60c7ef7e04ff4b286010a89dd35881a1c4885a6aa6678d67":{
+            "chainId":10,
+            "index":86,
+            "campaignId":"0xf683cfcbe67d45db60c7ef7e04ff4b286010a89dd35881a1c4885a6aa6678d67",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"10000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x71ef7EDa2Be775E5A7aa8afD02C45F059833e9d2",
+            "campaignParameters":{
+               "url":"https://app.ionic.money/market?chain=34443&pool=0",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x71ef7EDa2Be775E5A7aa8afD02C45F059833e9d2",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"ionWETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":4.410662743991978,
+            "totalSupplyTargetToken":16068.186959865789,
+            "tvl":9930480.415820174,
+            "type":"ionic",
+            "typeInfo":{
+               "name":"Ionic Wrapped Ether",
+               "tokenAddress":"0x71ef7EDa2Be775E5A7aa8afD02C45F059833e9d2",
+               "underlyingToken":"0x4200000000000000000000000000000000000006",
+               "exchangeRate":0.20148967295093037,
+               "symbolUnderlyingToken":"WETH",
+               "totalSupply":16068.186959865789,
+               "tvl":9930480.415820176,
+               "priceTargetToken":618.0212142554707,
+               "cardName":"Supply WETH on Ionic"
+            }
+         }
+      },
+      "1_0x959FA710CCBb22c7Ce1e59Da82A247e686629310":{
+         "0xffef5a78aaf7b348b2ec986adfbcc9b9f08bb3f05d2be15c27e9669c9a697e9d":{
+            "chainId":10,
+            "index":87,
+            "campaignId":"0xffef5a78aaf7b348b2ec986adfbcc9b9f08bb3f05d2be15c27e9669c9a697e9d",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x959FA710CCBb22c7Ce1e59Da82A247e686629310",
+            "campaignParameters":{
+               "url":"https://app.ionic.money/market?chain=34443&pool=0",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x959FA710CCBb22c7Ce1e59Da82A247e686629310",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"ionSTONE",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":6.944215034738017,
+            "totalSupplyTargetToken":1249.334873084854,
+            "tvl":788426.0456526249,
+            "type":"ionic",
+            "typeInfo":{
+               "name":"Ionic StakeStone Ether",
+               "tokenAddress":"0x959FA710CCBb22c7Ce1e59Da82A247e686629310",
+               "underlyingToken":"0x80137510979822322193FC997d400D5A6C747bf7",
+               "exchangeRate":0.20173665322950335,
+               "symbolUnderlyingToken":"STONE",
+               "totalSupply":1249.334873084854,
+               "tvl":788426.045652625,
+               "priceTargetToken":631.0766333655969,
+               "cardName":"Supply STONE on Ionic"
+            }
+         }
+      },
+      "1_0x2BE717340023C9e14C1Bb12cb3ecBcfd3c3fB038":{
+         "0x8ff225d49bd26c1f3fb96fe3af9978fb899628242ee32bc02ad34d41b1a496a7":{
+            "chainId":10,
+            "index":88,
+            "campaignId":"0x8ff225d49bd26c1f3fb96fe3af9978fb899628242ee32bc02ad34d41b1a496a7",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"5000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x2BE717340023C9e14C1Bb12cb3ecBcfd3c3fB038",
+            "campaignParameters":{
+               "url":"https://app.ionic.money/market?chain=34443&pool=0",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x2BE717340023C9e14C1Bb12cb3ecBcfd3c3fB038",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"ionUSDC",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":6
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":6.595954780746437,
+            "totalSupplyTargetToken":16257697.032915,
+            "tvl":3320216.8189396937,
+            "type":"ionic",
+            "typeInfo":{
+               "name":"Ionic USD Coin",
+               "tokenAddress":"0x2BE717340023C9e14C1Bb12cb3ecBcfd3c3fB038",
+               "underlyingToken":"0xd988097fb8612cc24eeC14542bC03424c656005f",
+               "exchangeRate":0.20428027419634617,
+               "symbolUnderlyingToken":"USDC",
+               "totalSupply":16257697.032915,
+               "tvl":3320216.818939694,
+               "priceTargetToken":0.20422430140121636,
+               "cardName":"Supply USDC on Ionic"
+            }
+         }
+      },
+      "1_0x59e710215d45F584f44c0FEe83DA6d43D762D857":{
+         "0xf09492c6d3bd475e269e9f90c92d7e11a671a8fc43470b424ccbb0eea67b762e":{
+            "chainId":10,
+            "index":95,
+            "campaignId":"0xf09492c6d3bd475e269e9f90c92d7e11a671a8fc43470b424ccbb0eea67b762e",
+            "creator":"0xbeb15caee71001d82F430E4deda80e16dDf438Db",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"5000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x59e710215d45F584f44c0FEe83DA6d43D762D857",
+            "campaignParameters":{
+               "url":"",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x59e710215d45F584f44c0FEe83DA6d43D762D857",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"ionezETH",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":0.9025048850985944,
+            "totalSupplyTargetToken":39029.88800909829,
+            "tvl":24265796.630682535,
+            "type":"ionic",
+            "typeInfo":{
+               "name":"Ionic Renzo Restaked ETH",
+               "tokenAddress":"0x59e710215d45F584f44c0FEe83DA6d43D762D857",
+               "underlyingToken":"0x2416092f143378750bb29b79eD961ab195CcEea5",
+               "exchangeRate":0.2000287790296659,
+               "symbolUnderlyingToken":"ezETH",
+               "totalSupply":39029.88800909829,
+               "tvl":24265796.63068254,
+               "priceTargetToken":621.7234501166366,
+               "cardName":"Supply ezETH on Ionic"
+            }
+         }
+      },
+      "1_0xd60DD6981Ec336fDa40820f8cA5E99CD17dD25A0":{
+         "0x2a2c0da7689e0245f116115f642c5af1263f6b2385282d17c05c535d12f558a7":{
+            "chainId":10,
+            "index":96,
+            "campaignId":"0x2a2c0da7689e0245f116115f642c5af1263f6b2385282d17c05c535d12f558a7",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"5000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519201,
+            "endTimestamp":1721728801,
+            "mainParameter":"0xd60DD6981Ec336fDa40820f8cA5E99CD17dD25A0",
+            "campaignParameters":{
+               "url":"https://v2.sturdy.finance/aggregators/mode/0xd60DD6981Ec336fDa40820f8cA5E99CD17dD25A0/deposit",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0xd60DD6981Ec336fDa40820f8cA5E99CD17dD25A0",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"Renzo-agg",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":10.481634834737362,
+            "totalSupplyTargetToken":645.5330480660922,
+            "tvl":2089368.7239914946,
+            "type":"sturdy_aggregator",
+            "typeInfo":{
+               "name":"Renzo aggregator",
+               "tokenAddress":"0xd60DD6981Ec336fDa40820f8cA5E99CD17dD25A0",
+               "underlyingToken":"0x4200000000000000000000000000000000000006",
+               "sharePrice":1.0552272977889823,
+               "symbolUnderlyingToken":"WETH",
+               "totalSupply":645.5330480660922,
+               "tvl":2089368.7239914946,
+               "priceTargetToken":3236.656481416234,
+               "cardName":"Supply WETH on Sturdy Renzo aggregator"
+            }
+         }
+      },
+      "1_0x2dE57F6432Ac67A99aF5aB17017005048AE7A24C":{
+         "0xf8bc0ee240bdfc9b37a73f3869dda24d7bf53b5b57660bc38f38370834af3973":{
+            "chainId":10,
+            "index":97,
+            "campaignId":"0xf8bc0ee240bdfc9b37a73f3869dda24d7bf53b5b57660bc38f38370834af3973",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"2250000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519201,
+            "endTimestamp":1721728801,
+            "mainParameter":"0x2dE57F6432Ac67A99aF5aB17017005048AE7A24C",
+            "campaignParameters":{
+               "url":"https://v2.sturdy.finance/aggregators/mode/0x2dE57F6432Ac67A99aF5aB17017005048AE7A24C/deposit",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x2dE57F6432Ac67A99aF5aB17017005048AE7A24C",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"Stone-agg",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":25.710900984711618,
+            "totalSupplyTargetToken":124.96510019195259,
+            "tvl":383300.4532147685,
+            "type":"sturdy_aggregator",
+            "typeInfo":{
+               "name":"Stone aggregator",
+               "tokenAddress":"0x2dE57F6432Ac67A99aF5aB17017005048AE7A24C",
+               "underlyingToken":"0x4200000000000000000000000000000000000006",
+               "sharePrice":1,
+               "symbolUnderlyingToken":"WETH",
+               "totalSupply":124.96510019195259,
+               "tvl":383300.4532147685,
+               "priceTargetToken":3067.26,
+               "cardName":"Supply WETH on Sturdy Stone aggregator"
+            }
+         }
+      },
+      "1_0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD":{
+         "0x96b3ed5d08a5c00646eba8a476958cbd114904fefa7591ccc749e70ca9dd6ada":{
+            "chainId":10,
+            "index":67,
+            "campaignId":"0x96b3ed5d08a5c00646eba8a476958cbd114904fefa7591ccc749e70ca9dd6ada",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"5000000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD",
+            "campaignParameters":{
+               "url":"https://velodrome.finance/deposit?token0=0x4200000000000000000000000000000000000006&token1=0x80137510979822322193FC997d400D5A6C747bf7&type=0&factory=0x31832f2a97Fd20664D76Cc421207669b55CE4BC0",
+               "univ2":{
+                  "fees":0.3,
+                  "name":"StableV2 AMM - WETH/STONE",
+                  "token0":"0x4200000000000000000000000000000000000006",
+                  "token1":"0x80137510979822322193FC997d400D5A6C747bf7",
+                  "symbolToken0":"WETH",
+                  "symbolToken1":"STONE"
+               },
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"sAMMV2-WETH/STONE",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":52.709593184254615,
+            "totalSupplyTargetToken":67.16861811818065,
+            "tvl":415484.1401155408,
+            "type":"velodrome",
+            "typeInfo":{
+               "name":"StableV2 AMM - WETH/STONE",
+               "tokenAddress":"0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD",
+               "token0":"0x4200000000000000000000000000000000000006",
+               "token1":"0x80137510979822322193FC997d400D5A6C747bf7",
+               "symbolToken0":"WETH",
+               "symbolToken1":"STONE",
+               "decimalsToken0":18,
+               "decimalsToken1":18,
+               "balanceToken0":81.89750087554057,
+               "balanceToken1":52.51651468887425,
+               "priceTargetToken":6185.688372872465,
+               "totalSupply":67.16861811818065,
+               "tvl":415484.1401155408,
+               "cardName":"Velodrome WETH/STONE"
+            }
+         }
+      },
+      "1_0x34cf9BF641bd5f34197060A3f3478a1f97f78f0a":{
+         "0x01aef0438f103521d7689f21fc6d93f23001bc2363a44215760ee2943983b454":{
+            "chainId":10,
+            "index":62,
+            "campaignId":"0x01aef0438f103521d7689f21fc6d93f23001bc2363a44215760ee2943983b454",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1875000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0x34cf9BF641bd5f34197060A3f3478a1f97f78f0a",
+            "campaignParameters":{
+               "url":"https://app.splice.fi/#/34443/0x34cf9bf641bd5f34197060a3f3478a1f97f78f0a",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0x34cf9BF641bd5f34197060A3f3478a1f97f78f0a",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"SPLICE-LPT",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":12.87588052536765,
+            "totalSupplyTargetToken":96.45434417754899,
+            "tvl":637820.4569248677,
+            "type":"splice",
+            "typeInfo":{
+               "name":"Splice Market",
+               "tokenAddress":"0x34cf9BF641bd5f34197060A3f3478a1f97f78f0a",
+               "totalSupply":96.45434417754899,
+               "tvl":637820.4569248677,
+               "symbolUnderlyingToken":"ezETH",
+               "priceTargetToken":6612.6669810827325,
+               "cardName":"Supply ezETH on Splice"
+            }
+         }
+      },
+      "1_0xbF14932e1A7962C77D0b31be80075936bE1A43D4":{
+         "0xf2ce18454943942ce4e3e15b69989a547530cf069aeb87cf12fd1b870c9547b8":{
+            "chainId":10,
+            "index":63,
+            "campaignId":"0xf2ce18454943942ce4e3e15b69989a547530cf069aeb87cf12fd1b870c9547b8",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"1875000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xbF14932e1A7962C77D0b31be80075936bE1A43D4",
+            "campaignParameters":{
+               "url":"https://app.splice.fi/#/34443/0xbf14932e1a7962c77d0b31be80075936be1a43d4",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+
+               ],
+               "targetToken":"0xbF14932e1A7962C77D0b31be80075936bE1A43D4",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"SPLICE-LPT",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":34443,
+            "tags":[
+               "superfest"
+            ],
+            "apr":14.078866544768733,
+            "totalSupplyTargetToken":83.32132785962952,
+            "tvl":583321.1057072992,
+            "type":"splice",
+            "typeInfo":{
+               "name":"Splice Market",
+               "tokenAddress":"0xbF14932e1A7962C77D0b31be80075936bE1A43D4",
+               "totalSupply":83.32132785962952,
+               "tvl":583321.1057072992,
+               "symbolUnderlyingToken":"weETH.mode",
+               "priceTargetToken":7000.861852442073,
+               "cardName":"Supply weETH.mode on Splice"
             }
          }
       }

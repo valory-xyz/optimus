@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeifbedkpkjptfhtea6bf6xhchtulkvur7d7tgb35mv3tqbplcixjre
+  behaviours.py: bafybeihpgzuykqa346pstbivyhnkwqg2566zi66kdtqjibrukdg6egbvjy
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeic52qgyee5zw5bvm6ref6qdy24qpybalg6oisntvsjsnpiula3whm
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
@@ -19,7 +19,7 @@ connections: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeibq77mgzhyb23blf2eqmia3kc6io5karedfzhntvpcebeqdzrgyqa
 - valory/balancer_weighted_pool:0.1.0:bafybeihobp4gxm5333g72cr3l4ygrgqlkiph6sd3ntlqdicnck3265ksnm
-- valory/balancer_vault:0.1.0:bafybeibbwvk2g5nhyy7j6ya5ttkbb44odkbejxu6wl6toveolbyzxnwzyi
+- valory/balancer_vault:0.1.0:bafybeigaffithervcszba5ordmouqwmpbjurtav4s4eqo2a742hwpnvlxe
 - valory/velodrome_pool:0.1.0:bafybeihasj7ggv2navr4yzfblwqtfniheh4zd6ylkpwfzfacinxw7w7dlq
 - valory/erc20:0.1.0:bafybeid3de2cimxl4cvie7kzi4jpdudc7yjkyclugtlfsqly4ktp7vcujm
 protocols:

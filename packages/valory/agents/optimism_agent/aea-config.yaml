@@ -34,8 +34,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihat4giyc4bz6zopvahcj4iw53356pbtwfn7p4d5yflwly2qhahum
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
-- valory/liquidity_trader_abci:0.1.0:bafybeih4j27hhcwmjhf5v3wwvax7chu3pop2jg7jiw6z5hyjrspa2mkqr4
-- valory/superagent_abci:0.1.0:bafybeihtynljxnji3vv5xcwsbzmxnkrz4omlwszzipqh43vzrjb6zbpwlq
+- valory/liquidity_trader_abci:0.1.0:bafybeihpnjocd3s3uph7gblap4uu2vjh4pzjynftmnmea7owd35oxfyow4
+- valory/superagent_abci:0.1.0:bafybeiazkfxmcpoccejmx7ewe4lopx243reoqu454plu6jiyzf4glnyeba
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
@@ -193,7 +193,7 @@ models:
       ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
       default_chain_id: ${str:ethereum}
       termination_from_block: ${int:34088325}
-      allowed_lp_pool_addresses: ${str:{"balancerPool":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"],"optimism":["0x5BB3E58887264B667f915130fD04bbB56116C278"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
+      allowed_lp_pool_addresses: ${str:{"balancerPool":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"],"optimism":["0x5BB3E58887264B667f915130fD04bbB56116C278"]},"velodrome":{"optimism":["0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD"]}}}
       allowed_assets: ${str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1","weth":"0x4200000000000000000000000000000000000006","olas":"0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x1aCD50F973177f4D320913a9Cc494A9c66922fdF","arbitrum":"0xbaC3b468F524bF617d870fDF383C402609447276","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
       pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}

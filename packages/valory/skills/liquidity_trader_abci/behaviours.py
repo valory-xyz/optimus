@@ -509,19 +509,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             for campaign_list in campaigns.values():
                 for campaign in campaign_list.values():
-                    dex_type = campaign.get("type", None) 
+                    dex_type = campaign.get("type", None)
                     if dex_type in allowed_dexs:
                         if dex_type == "balancerPool":
                             pool_tokens = list(
                                 campaign["typeInfo"]["poolTokens"].keys()
                             )
                             token0 = pool_tokens[0]
-                            token1 = pool_tokens[1]                      
+                            token1 = pool_tokens[1]
                         if dex_type == "velodrome":
                             token0 = campaign["typeInfo"].get("token0", None)
-                            token1 = campaign["typeInfo"].get("token1", None)        
-                        if token0 in allowed_assets[chain].values() and token1 in allowed_assets[chain].values():  
-                            if campaign.get("mainParameter",None) in allowed_lp_pools[dex_type][chain]:
+                            token1 = campaign["typeInfo"].get("token1", None)
+                        if (
+                            token0 in allowed_assets[chain].values()
+                            and token1 in allowed_assets[chain].values()
+                        ):
+                            if (
+                                campaign.get("mainParameter", None)
+                                in allowed_lp_pools[dex_type][chain]
+                            ):
                                 filtered_pools[dex_type][chain].append(campaign)
                                 self.context.logger.info(
                                     f"Added campaign for {chain} on {dex_type}: {campaign}"
@@ -875,17 +881,24 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         next_action = Action(actions[0]["action"])
 
         if next_action == Action.ENTER_POOL:
-            tx_hash, chain_id = yield from self.get_enter_pool_tx_hash(positions)
+            tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
+                positions
+            )
 
         elif next_action == Action.EXIT_POOL:
-            tx_hash, chain_id = yield from self.get_exit_pool_tx_hash(positions)
+            tx_hash, chain_id, safe_address = yield from self.get_exit_pool_tx_hash(
+                positions
+            )
 
         elif next_action == Action.ENTER_POOL:
-            tx_hash, chain_id = yield from self.get_swap_tx_hash(positions)
+            tx_hash, chain_id, safe_address = yield from self.get_swap_tx_hash(
+                positions
+            )
 
         else:
             tx_hash = None
             chain_id = None
+            safe_address = None
 
         if not tx_hash:
             self.context.logger.error("There was an error preparing the next action")
@@ -894,40 +907,45 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return Event.SETTLE.value, {
             "most_voted_tx_hash": tx_hash,
             "chain_id": chain_id,
+            "safe_contract_address": safe_address,
             "positions": positions,
         }
 
     def get_enter_pool_tx_hash(
         self, positions
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str]]]:
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
         if not self.synchronized_data.actions:
-            return None, None
+            return None, None, None
 
         dex_type = self.synchronized_data.actions[0]["dex_type"]
 
         if dex_type == "balancerPool":
-            tx_hash, chain_id = yield from self.get_enter_pool_balancer_tx_hash(
-                positions
-            )
-            return tx_hash, chain_id
+            (
+                tx_hash,
+                chain_id,
+                safe_address,
+            ) = yield from self.get_enter_pool_balancer_tx_hash(positions)
+            return tx_hash, chain_id, safe_address
 
         if dex_type == "velodrome":
-            tx_hash, chain_id = yield from self.get_enter_pool_velodrome_tx_hash(
-                positions
-            )
-            return tx_hash, chain_id
+            (
+                tx_hash,
+                chain_id,
+                safe_address,
+            ) = yield from self.get_enter_pool_velodrome_tx_hash(positions)
+            return tx_hash, chain_id, safe_address
 
         self.context.logger.error(f"Unknown type of dex: {dex_type}")
-        return None, None
+        return None, None, None
 
     def get_enter_pool_balancer_tx_hash(
         self, positions
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str]]]:
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash for Balancer"""
 
         if not self.synchronized_data.actions:
-            return None, None
+            return None, None, None
 
         action = self.synchronized_data.actions[0]
         chain = action["chain"]
@@ -941,7 +959,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # Get vault contract address from balancer weighted pool contract
         vault_address = yield from self._get_vault_for_pool(pool_address, chain)
         if not vault_address:
-            return None, None
+            return None, None, None
 
         max_amounts_in = [
             self._get_balance(chain, action["assets"][0]),
@@ -974,7 +992,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if not tx_hash:
-            return None, None
+            return None, None, None
 
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -990,7 +1008,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if not safe_tx_hash:
-            return None, None
+            return None, None, None
 
         safe_tx_hash = safe_tx_hash[2:]
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
@@ -1001,23 +1019,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-        return payload_string, chain
+        return payload_string, chain, safe_address
 
     def get_enter_pool_velodrome_tx_hash(
         self, positions
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str]]]:
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash for Balancer"""
         pass
 
     def get_exit_pool_tx_hash(
         self, positions
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str]]]:
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get exit pool tx hash"""
         pass
 
     def get_swap_tx_hash(
         self, positions
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str]]]:
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get swap tx hash"""
         # Call li.fi API
         pass

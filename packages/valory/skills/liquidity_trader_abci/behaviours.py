@@ -967,7 +967,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         ]
 
         # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
-        user_data = 1  # EXACT_TOKENS_IN_FOR_BPT_OUT
+        join_kind = 1  # EXACT_TOKENS_IN_FOR_BPT_OUT
 
         # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
         from_internal_balance = ZERO_ADDRESS in action["assets"]
@@ -986,7 +986,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             recipient=safe_address,
             assets=action["assets"],
             max_amounts_in=max_amounts_in,
-            user_data=user_data,
+            join_kind=join_kind,
             from_internal_balance=from_internal_balance,
             chain_id=chain,
         )

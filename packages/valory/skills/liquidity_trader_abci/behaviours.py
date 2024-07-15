@@ -465,6 +465,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get filtered pools"""
         allowed_lp_pools = self.params.allowed_lp_pool_addresses
         allowed_dexs = list(allowed_lp_pools.keys())
+        allowed_assets = self.params.allowed_assets
 
         filtered_pools: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(
             lambda: defaultdict(list)
@@ -502,22 +503,29 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 campaigns = data[str(chain_id)]
             except Exception:
                 self.context.logger.error(
-                    f"No info available for chainId {chain_id} in response {data}"
+                    f"No info available for chainId {chain_id} in response"
                 )
                 continue
 
             for campaign_list in campaigns.values():
                 for campaign in campaign_list.values():
-                    dex_type = campaign.get("type", None)
-                    # For testing remove the condition since balancer and velodrome are not present in pool data for now
+                    dex_type = campaign.get("type", None) 
                     if dex_type in allowed_dexs:
-                        # if campaign["token0"] in allowed_assets[chain] and campaign["token1"] in allowed_assets[chain]:
-                        # pool_address = yield from self._get_pool_address(dex_type, chain, campaign["token0"], campaign["token1"])
-                        # if pool_address in allowed_lp_pools[dex_type][chain]:
-                        filtered_pools[dex_type][chain].append(campaign)
-                        self.context.logger.info(
-                            f"Added campaign for {chain} on {dex_type}: {campaign}"
-                        )
+                        if dex_type == "balancerPool":
+                            pool_tokens = list(
+                                campaign["typeInfo"]["poolTokens"].keys()
+                            )
+                            token0 = pool_tokens[0]
+                            token1 = pool_tokens[1]                      
+                        if dex_type == "velodrome":
+                            token0 = campaign["typeInfo"].get("token0", None)
+                            token1 = campaign["typeInfo"].get("token1", None)        
+                        if token0 in allowed_assets[chain].values() and token1 in allowed_assets[chain].values():  
+                            if campaign.get("mainParameter",None) in allowed_lp_pools[dex_type][chain]:
+                                filtered_pools[dex_type][chain].append(campaign)
+                                self.context.logger.info(
+                                    f"Added campaign for {chain} on {dex_type}: {campaign}"
+                                )
 
         self.context.logger.info(f"Filtered pools: {filtered_pools}")
         return filtered_pools

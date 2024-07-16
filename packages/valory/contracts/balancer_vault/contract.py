@@ -22,9 +22,12 @@
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
-from aea_ledger_ethereum import EthereumApi, LedgerApi
+from aea_ledger_ethereum import EthereumApi
+from eth_abi import encode
 
 PUBLIC_ID = PublicId.from_str("valory/balancer_vault:0.1.0")
+
+
 
 class VaultContract(Contract):
     """The Weighted Stable Pool contract."""
@@ -55,15 +58,23 @@ class VaultContract(Contract):
         recipient: str,
         assets: list,
         max_amounts_in: list,
-        user_data: int,
+        join_kind: int,
         from_internal_balance: bool = False,
 
     ) -> JSONLike:
         """Prepare a join pool transaction."""
+
+        minimum_BPT = 0
+
+        encoded_user_data = encode(
+            ['uint256', 'uint256[]', 'uint256'],
+            [join_kind, max_amounts_in, minimum_BPT]
+        )
+
         request = (
             assets,
             max_amounts_in,
-            bytes(user_data),
+            encoded_user_data,
             from_internal_balance,
         )
 

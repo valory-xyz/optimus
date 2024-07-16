@@ -20,7 +20,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicbxmbzt757lbmyh6762lrkcrp3oeum6dk3z7pvosixasifsk6xlm
 - valory/balancer_weighted_pool:0.1.0:bafybeihobp4gxm5333g72cr3l4ygrgqlkiph6sd3ntlqdicnck3265ksnm
-- valory/balancer_vault:0.1.0:bafybeibbwvk2g5nhyy7j6ya5ttkbb44odkbejxu6wl6toveolbyzxnwzyi
+- valory/balancer_vault:0.1.0:bafybeigaffithervcszba5ordmouqwmpbjurtav4s4eqo2a742hwpnvlxe
 - valory/velodrome_pool:0.1.0:bafybeihasj7ggv2navr4yzfblwqtfniheh4zd6ylkpwfzfacinxw7w7dlq
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
@@ -34,8 +34,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihat4giyc4bz6zopvahcj4iw53356pbtwfn7p4d5yflwly2qhahum
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
-- valory/liquidity_trader_abci:0.1.0:bafybeif6nzcop6chgaleb6ei5gpudn67nh3iwgxctfvjnwa6iib37cllva
-- valory/superagent_abci:0.1.0:bafybeifqrlxsfzda2jhyw6omby3ozuhrwwdlcsfdcxm7sahtivyyewbfbe
+- valory/liquidity_trader_abci:0.1.0:bafybeiaiu2zaul5wjg7nnbcj5h4mxdx4vpivh2yblb7zitdmwomdgamo3u
+- valory/superagent_abci:0.1.0:bafybeigq5hnsapfbzutwosydxuj3wvnmwqil2clixbftgnw7xsttzj6tam
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44

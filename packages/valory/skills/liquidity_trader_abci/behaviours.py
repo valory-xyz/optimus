@@ -737,6 +737,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=VaultContract.contract_id,
             contract_callable="get_pool_tokens",
             data_key="tokens",
+            pool_id=pool_id,
         )
 
         if not pool_tokens:

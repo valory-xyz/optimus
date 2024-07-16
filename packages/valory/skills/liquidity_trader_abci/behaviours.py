@@ -26,13 +26,21 @@ from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
 from aea.configurations.data_types import PublicId
+from hexbytes import HexBytes
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
 from packages.valory.contracts.erc20.contract import ERC20
-from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
+from packages.valory.contracts.gnosis_safe.contract import (
+    GnosisSafeContract,
+    SafeOperation,
+)
+from packages.valory.contracts.multisend.contract import (
+    MultiSendContract,
+    MultiSendOperation,
+)
 from packages.valory.contracts.velodrome_pool.contract import PoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -278,12 +286,15 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                     )
 
                     if balance is not None and int(balance) > 0:
-                        self.current_pool = {
-                            "chain": chain,
-                            "address": pool_address,
-                            "dex_type": dex_type,
-                            "balance": balance,
-                        }
+                        # self.current_pool = {
+                        #     "chain": chain,
+                        #     "address": pool_address,
+                        #     "dex_type": dex_type,
+                        #     "balance": balance,
+                        # }
+
+                        # Keep current pool empty to test enter pool
+                        self.current_pool = {}
                         self.context.logger.info(
                             f"Current pool updated to: {self.current_pool}"
                         )
@@ -737,6 +748,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=VaultContract.contract_id,
             contract_callable="get_pool_tokens",
             data_key="tokens",
+            pool_id=pool_id,
         )
 
         if not pool_tokens:
@@ -947,6 +959,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not self.synchronized_data.actions:
             return None, None, None
 
+        transactions = {}
         action = self.synchronized_data.actions[0]
         chain = action["chain"]
         if chain == "optimism":
@@ -975,7 +988,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # Get assets balances from positions
         safe_address = self.params.safe_contract_addresses[action["chain"]]
 
-        tx_hash = yield from self.contract_interact(
+        # Build approval transaction for token0 and token1
+        approval_tx_hashes = yield from self.get_approval_tx_hashes(
+            amounts=max_amounts_in, spender=vault_address, chain=chain
+        )
+
+        if not approval_tx_hashes:
+            return None, None, None
+
+        transactions.update(approval_tx_hashes)
+
+        join_pool_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=vault_address,
             contract_public_id=VaultContract.contract_id,
@@ -991,6 +1014,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
 
+        if not join_pool_tx_hash:
+            return None, None, None
+
+        transactions[vault_address] = join_pool_tx_hash
+
+        tx_hash = yield from self.get_multisend_tx(transactions, chain)
         if not tx_hash:
             return None, None, None
 
@@ -1000,11 +1029,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=GnosisSafeContract.contract_id,
             contract_callable="get_raw_safe_transaction_hash",
             data_key="tx_hash",
-            to_address=vault_address,
+            to_address=self.params.multisend_contract_addresses[chain],
             value=ETHER_VALUE,
             data=tx_hash,
             safe_tx_gas=SAFE_TX_GAS,
             chain_id=chain,
+            operation=SafeOperation.DELEGATE_CALL.value,
         )
 
         if not safe_tx_hash:
@@ -1014,7 +1044,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, vault_address, tx_hash
+            safe_tx_hash,
+            ETHER_VALUE,
+            SAFE_TX_GAS,
+            vault_address,
+            tx_hash,
+            SafeOperation.DELEGATE_CALL.value,
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
@@ -1026,6 +1061,54 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash for Balancer"""
         pass
+
+    def get_approval_tx_hashes(
+        self, amounts: List[int], spender: str, chain: str
+    ) -> Generator[None, None, Optional[List[str]]]:
+        """Get approve token tx hashes"""
+
+        action = self.synchronized_data.actions[0]
+        # we create a dict with keys as "target-contract-address" and value as "tx-hash" as we will need it while building multisend tx
+        tx_hashes = {}
+
+        for asset, amount in zip(action["assets"], amounts):
+            tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=asset,
+                contract_public_id=ERC20.contract_id,
+                contract_callable="build_approval_tx",
+                data_key="data",
+                spender=spender,
+                amount=amount,
+                chain_id=chain,
+            )
+            tx_hashes[asset] = tx_hash
+
+        return tx_hashes
+
+    def get_multisend_tx(
+        self, transactions: Dict[str, str], chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Given a list of transactions, bundle them together in a single multisend tx."""
+        multi_send_txs = [
+            self._to_multisend_format(to_address, tx)
+            for to_address, tx in transactions.items()
+        ]
+        tx_hash = ""
+
+        data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.multisend_contract_addresses[chain],
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
+        )
+
+        if data:
+            tx_hash = bytes.fromhex(data[2:])
+
+        return tx_hash
 
     def get_exit_pool_tx_hash(
         self, positions
@@ -1039,6 +1122,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Get swap tx hash"""
         # Call li.fi API
         pass
+
+    def _to_multisend_format(self, to_address: str, single_tx: bytes) -> Dict[str, Any]:
+        """This method puts tx data from a single tx into the multisend format."""
+        multisend_format = {
+            "operation": MultiSendOperation.CALL,
+            "to": to_address,
+            "value": ETHER_VALUE,
+            "data": HexBytes(single_tx),
+        }
+        return multisend_format
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

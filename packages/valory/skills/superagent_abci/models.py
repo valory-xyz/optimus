@@ -38,6 +38,9 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
 from packages.valory.skills.superagent_abci.composition import SuperAgentAbciApp
 from packages.valory.skills.termination_abci.models import TerminationParams
+from packages.valory.skills.transaction_settlement_abci.rounds import (
+    Event as TransactionSettlementEvent,
+)
 
 
 Requests = BaseRequests
@@ -69,6 +72,10 @@ class SharedState(BaseSharedState):
         SuperAgentAbciApp.event_to_timeout[LiquidityTraderEvent.ROUND_TIMEOUT] = (
             self.context.params.round_timeout_seconds * MULTIPLIER
         )
+
+        SuperAgentAbciApp.event_to_timeout[
+            TransactionSettlementEvent.VALIDATE_TIMEOUT
+        ] = self.context.params.round_timeout_seconds
 
 
 class Params(  # pylint: disable=too-many-ancestors

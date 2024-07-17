@@ -173,8 +173,9 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
             # Ensure positions is always serialized
-            if "positions" in payload and not isinstance(str, payload["positions"]):
-                payload["positions"] = json.dumps(payload["positions"], sort_keys=True)
+            positions = payload.get("updates", {}).get("positions", None)
+            if positions and not isinstance(positions, str):
+                payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
 
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData, **payload.get("updates", {})

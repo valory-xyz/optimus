@@ -647,31 +647,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         tokens = []
 
-        min_balance = (
-            self.params.min_balance_multiplier
-            * self.params.gas_reserve[position["chain"]]
-        )
-
-        if token0_balance > min_balance:
+        # we need at-most 2 tokens for which we have balance above min_threshold to be able to move forward
+        if (
+            token0_balance
+            > self.params.min_balance_multiplier * self.params.gas_reserve[chain]
+        ):
             self.context.logger.info(
                 f"SUFFICIENT BALANCE :- {token0} balance {token0_balance}"
             )
             tokens.append([chain, token0])
 
-        if token1_balance > min_balance:
+        if (
+            token1_balance
+            > self.params.min_balance_multiplier * self.params.gas_reserve[chain]
+        ):
             self.context.logger.info(
                 f"SUFFICIENT BALANCE :- {token1} balance {token1_balance}"
             )
             tokens.append([chain, token1])
 
-        # we need at-most 2 tokens for which we have balance above min_threshold to be able to move forward
-        while len(tokens) < 2:
-            for position in self.synchronized_data.positions:
-                for asset in position["assets"]:
-                    if (
-                        asset["asset_type"] in ["erc20", "native"]
-                        and asset["balance"] > min_balance
-                    ):
+        for position in self.synchronized_data.positions:
+            for asset in position["assets"]:
+                if asset["asset_type"] in ["erc20", "native"]:
+                    min_balance = (
+                        self.params.min_balance_multiplier
+                        * self.params.gas_reserve[position["chain"]]
+                    )
+                    if asset["balance"] > min_balance:
                         tokens.append([chain, asset["address"]])
 
         return tokens
@@ -1016,10 +1018,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "operation": MultiSendOperation.CALL,
             "to": vault_address,
             "value": 0,
-            "data": tx_hash["tx_hash"]
+            "data": tx_hash
         })
 
         # Get the transaction from the multisend contract
+
+        multisend_address = self.params.multisend_contract_addresses[chain if chain != "bnb" else "optimism"]
+
         multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
             contract_address=self.synchronized_data.safe_contract_address,
@@ -1030,9 +1035,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain
         )
 
-        import pdb;pdb.set_trace()
-
-        multisend_tx_hash = multisend_tx_hash[2:]
+        self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
 
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -1040,9 +1043,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=GnosisSafeContract.contract_id,
             contract_callable="get_raw_safe_transaction_hash",
             data_key="tx_hash",
-            to_address=vault_address,
+            to_address=multisend_address,
             value=ETHER_VALUE,
-            data=bytes.fromhex(multisend_tx_hash),
+            data=bytes.fromhex(multisend_tx_hash[2:]),
             operation=SafeOperation.DELEGATE_CALL.value,
             safe_tx_gas=SAFE_TX_GAS,
             chain_id=chain,
@@ -1055,7 +1058,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, vault_address, tx_hash
+            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, multisend_address, tx_hash
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")

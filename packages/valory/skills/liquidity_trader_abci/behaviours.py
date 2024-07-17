@@ -379,8 +379,8 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             if self.current_pool is None:
                 self.current_pool = GetPositionsRound.ERROR_PAYLOAD
 
-            serialized_positions = json.dumps(positions)
-            serialized_current_pool = json.dumps(self.current_pool)
+            serialized_positions = json.dumps(positions, sort_keys=True)
+            serialized_current_pool = json.dumps(self.current_pool, sort_keys=True)
             payload = GetPositionsPayload(
                 sender=sender,
                 positions=serialized_positions,

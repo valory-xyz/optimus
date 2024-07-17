@@ -100,8 +100,8 @@ class SynchronizedData(BaseSynchronizedData):
         serialized = self.db.get("current_pool", "{}")
         if serialized is None:
             serialized = "{}"
-        positions = json.loads(serialized)
-        return positions
+        current_pool = json.loads(serialized)
+        return current_pool
 
     @property
     def participant_to_actions_round(self) -> DeserializedCollection:
@@ -176,6 +176,11 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             payload = json.loads(self.most_voted_payload)
             event = Event(payload["event"])
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
+
+            # Ensure positions is always serialized
+            positions = payload.get("updates", {}).get("positions", None)
+            if positions and not isinstance(positions, str):
+                payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
 
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData, **payload.get("updates", {})

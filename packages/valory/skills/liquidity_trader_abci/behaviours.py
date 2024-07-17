@@ -27,12 +27,20 @@ from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
 from aea.configurations.data_types import PublicId
 from hexbytes import HexBytes
+
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
 from packages.valory.contracts.erc20.contract import ERC20
-from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract, SafeOperation
+from packages.valory.contracts.gnosis_safe.contract import (
+    GnosisSafeContract,
+    SafeOperation,
+)
+from packages.valory.contracts.multisend.contract import (
+    MultiSendContract,
+    MultiSendOperation,
+)
 from packages.valory.contracts.velodrome_pool.contract import PoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -55,10 +63,6 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
-)
-from packages.valory.contracts.multisend.contract import (
-    MultiSendContract,
-    MultiSendOperation,
 )
 
 
@@ -977,13 +981,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # Approve asset 0
         approval_tx_hash_0 = yield from self.get_approval_tx_hash(
-            token_address=action["assets"][0], amount=max_amounts_in[0], spender=vault_address, chain=chain
+            token_address=action["assets"][0],
+            amount=max_amounts_in[0],
+            spender=vault_address,
+            chain=chain,
         )
         multi_send_txs.append(approval_tx_hash_0)
 
         # Approve asset 1
         approval_tx_hash_1 = yield from self.get_approval_tx_hash(
-            token_address=action["assets"][0], amount=max_amounts_in[1], spender=vault_address, chain=chain
+            token_address=action["assets"][0],
+            amount=max_amounts_in[1],
+            spender=vault_address,
+            chain=chain,
         )
         multi_send_txs.append(approval_tx_hash_1)
 
@@ -1014,16 +1024,20 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not tx_hash:
             return None, None, None
 
-        multi_send_txs.append({
-            "operation": MultiSendOperation.CALL,
-            "to": vault_address,
-            "value": 0,
-            "data": tx_hash
-        })
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": vault_address,
+                "value": 0,
+                "data": tx_hash,
+            }
+        )
 
         # Get the transaction from the multisend contract
 
-        multisend_address = self.params.multisend_contract_addresses[chain if chain != "bnb" else "optimism"]
+        multisend_address = self.params.multisend_contract_addresses[
+            chain if chain != "bnb" else "optimism"
+        ]
 
         multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -1032,7 +1046,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_callable="get_tx_data",
             data_key="data",
             multi_send_txs=multi_send_txs,
-            chain_id=chain
+            chain_id=chain,
         )
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
@@ -1065,7 +1079,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-
     def get_approval_tx_hash(
         self, token_address, amount: int, spender: str, chain: str
     ) -> Generator[None, None, Dict]:
@@ -1086,9 +1099,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "operation": MultiSendOperation.CALL,
             "to": token_address,
             "value": 0,
-            "data": tx_hash
+            "data": tx_hash,
         }
-
 
     def get_enter_pool_velodrome_tx_hash(
         self, positions

@@ -23,7 +23,7 @@ import json
 from abc import ABC
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, Union, cast
 
 from aea.configurations.data_types import PublicId
 
@@ -288,10 +288,6 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                             f"Current pool updated to: {self.current_pool}"
                         )
 
-                    # OPTIMISM NOT SUPPORTED YET
-                    if chain == "bnb":
-                        chain = "optimism"
-
                     self.context.logger.info(
                         f"Balance of account {account} on {chain} chain for pool address {pool_address} in {dex_type} DEX: {balance}"
                     )
@@ -549,21 +545,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return False
 
-        # Step 2: Check if the highest APR pool is better than the current pool
-        current_pool = self.synchronized_data.current_pool
-        if (
-            current_pool
-            and self.highest_apr_pool
-            and current_pool.get("apr", 0) > self.highest_apr_pool["apr"]
-        ):
-            self.context.logger.info(
-                f"apr of pool {self.highest_apr_pool['apr']} does not exceed current pool apr [{current_pool['apr']}]"
-            )
-            return False
-
         # Step 2: Check round interval
         is_round_threshold_exceeded = self._check_round_threshold_exceeded()
         if not is_round_threshold_exceeded:
+            self.context.logger.info(f"round threshold not exceeded")
             return False
 
         return True
@@ -594,16 +579,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             tokens = self._get_tokens_over_min_balance()
         else:
             # If there is current pool, then get the lp pool token addresses
-            tokens = yield from self._get_exit_pool_tokens()
+            # getPoolTokens is getting reverted
+            # tokens = yield from self._get_exit_pool_tokens()
+            tokens = [
+                "0x4200000000000000000000000000000000000006",
+                "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
+            ]
+            self.context.logger.info(f"{tokens}")
+            if not tokens:
+                return None
+
             action = {
                 "action": Action.EXIT_POOL.value,
-                "dex_type": self.current_pool["dex_type"],
+                "dex_type": self.synchronized_data.current_pool["dex_type"],
                 "chain": self.synchronized_data.current_pool["chain"],
                 "assets": [tokens[0], tokens[1]],
+                "pool_address": self.synchronized_data.current_pool["address"],
             }
-
-        if not tokens:
-            return []
 
         # Step 2- build bridge and swap tokens action
         bridge_swap_tokens_pairs = yield from self._get_bridge_and_swap_info(tokens)
@@ -651,42 +643,41 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         tokens = []
 
-        # we need at-most 2 tokens for which we have balance above min_threshold to be able to move forward
-        if (
-            token0_balance
-            > self.params.min_balance_multiplier * self.params.gas_reserve[chain]
-        ):
+        min_balance = (
+            self.params.min_balance_multiplier
+            * self.params.gas_reserve[position["chain"]]
+        )
+
+        if token0_balance > min_balance:
             self.context.logger.info(
                 f"SUFFICIENT BALANCE :- {token0} balance {token0_balance}"
             )
             tokens.append([chain, token0])
 
-        if (
-            token1_balance
-            > self.params.min_balance_multiplier * self.params.gas_reserve[chain]
-        ):
+        if token1_balance > min_balance:
             self.context.logger.info(
                 f"SUFFICIENT BALANCE :- {token1} balance {token1_balance}"
             )
             tokens.append([chain, token1])
 
-        for position in self.synchronized_data.positions:
-            for asset in position["assets"]:
-                if asset["asset_type"] in ["erc20", "native"]:
-                    min_balance = (
-                        self.params.min_balance_multiplier
-                        * self.params.gas_reserve[position["chain"]]
-                    )
-                    if asset["balance"] > min_balance:
+        # we need at-most 2 tokens for which we have balance above min_threshold to be able to move forward
+        while len(tokens) < 2:
+            for position in self.synchronized_data.positions:
+                for asset in position["assets"]:
+                    if (
+                        asset["asset_type"] in ["erc20", "native"]
+                        and asset["balance"] > min_balance
+                    ):
                         tokens.append([chain, asset["address"]])
 
         return tokens
 
-    def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[str]]]:
+    def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
         dex_type = self.synchronized_data.current_pool["dex_type"]
         pool_address = self.synchronized_data.current_pool["address"]
         chain = self.synchronized_data.current_pool["chain"]
+
         if dex_type == "balancerPool":
             # Get poolId from balancer weighted pool contract
             pool_id = yield from self._get_pool_id(pool_address)
@@ -704,6 +695,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if dex_type == "velodrome":
             # Get pool tokens from velodrome pool contract
             tokens = yield from self._get_velodrome_pool_tokens()
+
+        if not tokens:
+            return None
 
         return [[chain, tokens[0]], [chain, tokens[1]]]
 
@@ -746,7 +740,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        self.context.logger.error(
+        self.context.logger.info(
             f"Tokens for balancer poolId {pool_id} : {pool_tokens}"
         )
         return pool_tokens
@@ -783,9 +777,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         destination_token_0 = self.highest_apr_pool["token0"]
         destination_token_1 = self.highest_apr_pool["token1"]
-        source_token_0 = exisiting_tokens[0]
-        source_token_1 = exisiting_tokens[1]
         destination_chain = self.highest_apr_pool["chain"]
+        source_token_0 = exisiting_tokens[0][1]
+        source_token_1 = exisiting_tokens[1][1]
         source_token0_chain = exisiting_tokens[0][0]
         source_token1_chain = exisiting_tokens[1][0]
 
@@ -878,22 +872,28 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if last_round_id != EvaluateStrategyRound.auto_round_id():
             positions = yield from self.get_positions()
 
-        # Prepare the next action
-        next_action = Action(actions[0]["action"])
+        if self.synchronized_data.last_action_index == len(
+            self.synchronized_data.actions
+        ):
+            return Event.DONE.value, {}
 
+        current_action_index = self.synchronized_data.last_action_index + 1
+
+        # Prepare the next action
+        next_action = Action(actions[current_action_index]["action"])
+        next_action_details = self.synchronized_data.actions[current_action_index]
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
-                positions
+                positions, next_action_details
             )
-
         elif next_action == Action.EXIT_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_exit_pool_tx_hash(
-                positions
+                positions, next_action_details
             )
 
         elif next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_swap_tx_hash(
-                positions
+                positions, next_action_details
             )
 
         else:
@@ -910,23 +910,24 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "chain_id": chain_id,
             "safe_contract_address": safe_address,
             "positions": positions,
+            "last_action_index": current_action_index,
         }
 
     def get_enter_pool_tx_hash(
-        self, positions
+        self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
-        if not self.synchronized_data.actions:
+        if not action:
             return None, None, None
 
-        dex_type = self.synchronized_data.actions[0]["dex_type"]
+        dex_type = action["dex_type"]
 
         if dex_type == "balancerPool":
             (
                 tx_hash,
                 chain_id,
                 safe_address,
-            ) = yield from self.get_enter_pool_balancer_tx_hash(positions)
+            ) = yield from self.get_enter_pool_balancer_tx_hash(positions, action)
             return tx_hash, chain_id, safe_address
 
         if dex_type == "velodrome":
@@ -941,14 +942,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return None, None, None
 
     def get_enter_pool_balancer_tx_hash(
-        self, positions
+        self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash for Balancer"""
 
-        if not self.synchronized_data.actions:
+        if not action:
             return None, None, None
 
-        action = self.synchronized_data.actions[0]
         chain = action["chain"]
         if chain == "optimism":
             chain = "bnb"
@@ -1029,9 +1029,124 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pass
 
     def get_exit_pool_tx_hash(
+        self, positions, action
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Get enter pool tx hash"""
+        if not self.synchronized_data.actions:
+            return None, None, None
+
+        dex_type = action["dex_type"]
+
+        if dex_type == "balancerPool":
+            (
+                tx_hash,
+                chain_id,
+                safe_address,
+            ) = yield from self.get_exit_pool_balancer_tx_hash(positions, action)
+            return tx_hash, chain_id, safe_address
+
+        if dex_type == "velodrome":
+            (
+                tx_hash,
+                chain_id,
+                safe_address,
+            ) = yield from self.get_exit_pool_velodrome_tx_hash(positions, action)
+            return tx_hash, chain_id, safe_address
+
+        self.context.logger.error(f"Unknown type of dex: {dex_type}")
+        return None, None, None
+
+    def get_exit_pool_balancer_tx_hash(
+        self, positions, action
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Get enter pool tx hash for Balancer"""
+
+        if not action:
+            return None, None, None
+
+        chain = action["chain"]
+        if chain == "optimism":
+            chain = "bnb"
+
+        # Hardcoded 50WETH_50OLAS pool
+        pool_address = "0x5BB3E58887264B667f915130fD04bbB56116C278"
+        pool_id = "0x5bb3e58887264b667f915130fd04bbb56116c27800020000000000000000012a"  # getPoolId()
+
+        # Get vault contract address from balancer weighted pool contract
+        vault_address = yield from self._get_vault_for_pool(pool_address, chain)
+        if not vault_address:
+            return None, None, None
+
+        # queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
+        min_amounts_out = [0, 0]
+
+        # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
+        exit_kind = 1  # EXACT_BPT_IN_FOR_TOKENS_OUT
+
+        # fromInternalBalance - True if you receiving tokens as internal token balances. False if receiving as ERC20
+        to_internal_balance = ZERO_ADDRESS in action["assets"]
+
+        # Get assets balances from positions
+        if chain == "bnb":
+            chain = "optimism"
+        safe_address = self.params.safe_contract_addresses[action["chain"]]
+
+        if chain == "bnb":
+            chain = "optimism"
+        # bpt amount to send
+        bpt_amount_in = self._get_balance(chain, action["pool_address"])
+
+        tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=vault_address,
+            contract_public_id=VaultContract.contract_id,
+            contract_callable="exit_pool",
+            data_key="tx_hash",
+            pool_id=pool_id,
+            sender=safe_address,
+            recipient=safe_address,
+            assets=action["assets"],
+            min_amounts_out=min_amounts_out,
+            exit_kind=exit_kind,
+            bpt_amount_in=bpt_amount_in,
+            to_internal_balance=to_internal_balance,
+            chain_id=chain,
+        )
+
+        if not tx_hash:
+            return None, None, None
+
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            to_address=vault_address,
+            value=ETHER_VALUE,
+            data=tx_hash,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain,
+        )
+
+        if not safe_tx_hash:
+            return None, None, None
+
+        safe_tx_hash = safe_tx_hash[2:]
+        self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
+
+        payload_string = hash_payload_to_hex(
+            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, vault_address, tx_hash
+        )
+
+        self.context.logger.info(f"Tx hash payload string is {payload_string}")
+
+        return payload_string, chain, safe_address
+
+    def get_exit_pool_velodrome_tx_hash(
         self, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get exit pool tx hash"""
+        """Get enter pool tx hash for Balancer"""
         pass
 
     def get_swap_tx_hash(

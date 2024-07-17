@@ -55,9 +55,6 @@ class Params(BaseParams):
         self.safe_contract_addresses = json.loads(
             self._ensure("safe_contract_addresses", kwargs, str)
         )
-        self.multisend_contract_addresses = json.loads(
-            self._ensure("multisend_contract_addresses", kwargs, str)
-        )
         self.pool_data_api_url = self._ensure("pool_data_api_url", kwargs, str)
         self.allowed_chains = json.loads(self._ensure("allowed_chains", kwargs, str))
         self.gas_reserve = json.loads(self._ensure("gas_reserve", kwargs, str))

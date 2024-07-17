@@ -138,7 +138,6 @@ models:
       allowed_lp_pool_addresses: '{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}'
       allowed_assets: '{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}'
       safe_contract_addresses: '{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}'
-      multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
       pool_data_api_url: https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1
       allowed_chains: '{"ethereum":1,"optimism":10,"arbitrum":42161}'
       gas_reserve: '{"ethereum":1,"optimism":10,"arbitrum":42161}'

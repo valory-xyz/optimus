@@ -126,6 +126,11 @@ class SynchronizedData(BaseSynchronizedData):
         transactions = json.loads(serialized)
         return transactions
 
+    @property
+    def last_action_index(self) -> Optional[int]:
+        """Get the current action index"""
+        return cast(int, self.db.get("last_action_index", -1))
+
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""

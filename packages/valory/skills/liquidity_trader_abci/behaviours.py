@@ -575,18 +575,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         tokens = {}
 
         if not self.synchronized_data.current_pool:
-            # If there is no current pool, then check for which tokens we have balance 
+            # If there is no current pool, then check for which tokens we have balance
             tokens = self._get_token_addresses_over_min_balance()
             if not tokens:
-                self.context.logger.error("No tokens in safe with over minimum balance to enter a pool")
+                self.context.logger.error(
+                    "No tokens in safe with over minimum balance to enter a pool"
+                )
                 return None
         else:
             # If there is current pool, then get the lp pool token addresses
             # getPoolTokens is getting reverted
             # tokens = yield from self._get_exit_pool_tokens()
             tokens = [
-                {"chain": "bnb","token": "0x4200000000000000000000000000000000000006"},
-                {"chain": "bnb","token": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"},
+                {"chain": "bnb", "token": "0x4200000000000000000000000000000000000006"},
+                {"chain": "bnb", "token": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"},
             ]
             if not tokens:
                 return None
@@ -600,7 +602,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             }
 
         self.context.logger.info(f"TOKEN ADDRESSES: {tokens}")
-        
+
         # Step 2- build bridge and swap tokens action
         # ASSUMPTION : TOKENS ARE AVAILABLE ON OTHER CHAIN AND THE DESTINATION TOKENS ON DIFFERENT CHAIN
         action = {
@@ -608,7 +610,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "source_chain": tokens[0]["chain"],
             "destination_chain": self.highest_apr_pool["chain"],
             "from_token": tokens[0]["token"],
-            "to_token": self.highest_apr_pool["token0"]
+            "to_token": self.highest_apr_pool["token0"],
         }
         actions.append(action)
 
@@ -617,7 +619,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "source_chain": tokens[1]["chain"],
             "destination_chain": self.highest_apr_pool["chain"],
             "from_token": tokens[1]["token"],
-            "to_token": self.highest_apr_pool["token1"]
+            "to_token": self.highest_apr_pool["token1"],
         }
         actions.append(action)
 
@@ -640,7 +642,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get tokens over min balance"""
         tokens = []
 
-        #ASSUMPTION : WE HAVE BALANCE FOR EXACTLY 2 TOKENS
+        # ASSUMPTION : WE HAVE BALANCE FOR EXACTLY 2 TOKENS
         for position in self.synchronized_data.positions:
             for asset in position["assets"]:
                 if asset["asset_type"] in ["erc_20", "native"]:
@@ -649,7 +651,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         * self.params.gas_reserve[position["chain"]]
                     )
                     if asset["balance"] > min_balance:
-                        tokens.append({"chain": position["chain"], "token":asset["address"]})
+                        tokens.append(
+                            {"chain": position["chain"], "token": asset["address"]}
+                        )
 
         return tokens
 
@@ -680,7 +684,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not tokens:
             return None
 
-        return [{"chain": chain, "token": tokens[0]}, {"chain": chain, "token": tokens[1]}]
+        return [
+            {"chain": chain, "token": tokens[0]},
+            {"chain": chain, "token": tokens[1]},
+        ]
 
     def _get_pool_id(self, pool_address: str) -> Generator[None, None, Optional[str]]:
         """Get pool ids"""

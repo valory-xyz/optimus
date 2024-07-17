@@ -52,7 +52,7 @@ class WeightedPoolContract(Contract):
         """get the balance of the given account."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.getPoolId().call()
-        return dict(pool_id=data.hex())
+        return dict(pool_id="0x"+data.hex())
     
     @classmethod
     def get_vault_address(

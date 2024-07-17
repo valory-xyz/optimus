@@ -63,4 +63,7 @@ class Params(BaseParams):
         self.min_balance_multiplier = self._ensure(
             "min_balance_multiplier", kwargs, int
         )
+        self.multisend_contract_addresses = json.loads(
+            self._ensure("multisend_contract_addresses", kwargs, str)
+        )
         super().__init__(*args, **kwargs)

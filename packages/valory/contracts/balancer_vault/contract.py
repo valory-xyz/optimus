@@ -41,10 +41,10 @@ class VaultContract(Contract):
         contract_address: str,
         pool_id: str,
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """get the pool tokens for poolId."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        pool_id_bytes = bytes.fromhex(pool_id)
-        data, _, _ = contract_instance.functions.getPoolTokens(pool_id_bytes).call()
+        pool_id_bytes = bytes.fromhex(pool_id[2:])
+        data = contract_instance.functions.getPoolTokens(pool_id_bytes).call()
         return dict(tokens=data)
 
 
@@ -60,7 +60,6 @@ class VaultContract(Contract):
         max_amounts_in: list,
         join_kind: int,
         from_internal_balance: bool = False,
-
     ) -> JSONLike:
         """Prepare a join pool transaction."""
 
@@ -71,7 +70,7 @@ class VaultContract(Contract):
             [join_kind, max_amounts_in, minimum_BPT]
         )
 
-        request = (
+        join_pool_request = (
             assets,
             max_amounts_in,
             encoded_user_data,
@@ -85,7 +84,47 @@ class VaultContract(Contract):
                 bytes.fromhex(pool_id[2:]),
                 sender,
                 recipient,
-                request
+                join_pool_request
+            )
+        )
+        return {"tx_hash": bytes.fromhex(data[2:])}
+    
+    @classmethod
+    def exit_pool(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        pool_id: str,
+        sender: str,
+        recipient: str,
+        assets: list,
+        min_amounts_out: list,
+        exit_kind: int,
+        bpt_amount_in: int,
+        to_internal_balance: bool = False,
+    ) -> JSONLike:
+        """Prepare a join pool transaction."""
+
+        encoded_user_data = encode(
+            ['uint256', 'uint256'],
+            [exit_kind, bpt_amount_in]
+        )
+
+        exit_pool_request = (
+            assets,
+            min_amounts_out,
+            encoded_user_data,
+            to_internal_balance,
+        )
+
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI(
+            "exitPool",
+            args=(
+                bytes.fromhex(pool_id[2:]),
+                sender,
+                recipient,
+                exit_pool_request
             )
         )
         return {"tx_hash": bytes.fromhex(data[2:])}

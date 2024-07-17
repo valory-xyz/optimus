@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimism_agent:0.1.0:bafybeieigelvjfdwpvot4o2jhak5ew4ypzmkhzuvr4ez5z4wuzmw2u6qqq
+agent: valory/optimism_agent:0.1.0:bafybeihh7tvnrz7aejlg6oyja6lxqlbtn4xbplrtgf2c6ddgwcewsiosse
 number_of_agents: 4
 deployment:
   agent:
@@ -98,6 +98,7 @@ extra:
         round_threshold: ${ROUND_THRESHOLD:int:5}
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
+        multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
 1:
   models:
     benchmark_tool:
@@ -150,6 +151,7 @@ extra:
         round_threshold: ${ROUND_THRESHOLD:int:5}
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
+        multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
 2:
   models:
     benchmark_tool:
@@ -202,6 +204,7 @@ extra:
         round_threshold: ${ROUND_THRESHOLD:int:5}
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
+        multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
 3:
   models:
     benchmark_tool:
@@ -254,6 +257,7 @@ extra:
         round_threshold: ${ROUND_THRESHOLD:int:5}
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
+        multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

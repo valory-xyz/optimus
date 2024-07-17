@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
-- valory/liquidity_trader_abci:0.1.0:bafybeidzacpuazrzonqwxuw56rm3m3qtyekxdt2naf2luiu6z7lvmpc34y
+- valory/liquidity_trader_abci:0.1.0:bafybeifaar45yi4nj6r3hqe7rpxootp6rivxctg3czg7yx5fb7des4amsi
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 behaviours:
   main:
@@ -144,6 +144,7 @@ models:
       round_threshold: 5
       apr_threshold: 5
       min_balance_multiplier: 5
+      multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
     class_name: Params
   randomness_api:
     args:

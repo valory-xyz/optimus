@@ -20,7 +20,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicbxmbzt757lbmyh6762lrkcrp3oeum6dk3z7pvosixasifsk6xlm
 - valory/balancer_weighted_pool:0.1.0:bafybeiaechb4rnbic3wpp7ux42ouyngjihjvqkhdvzcx5wyw6jizw23sge
-- valory/balancer_vault:0.1.0:bafybeict4fxgwcxnzjll4xpdqao2zbo5dxgaipl7hkcynfqja6b7h7dn4q
+- valory/balancer_vault:0.1.0:bafybeibovdqbj2yj5ftwxzuaygtduom42fy52lbsclhnx6jyexy6dghdva
 - valory/velodrome_pool:0.1.0:bafybeihasj7ggv2navr4yzfblwqtfniheh4zd6ylkpwfzfacinxw7w7dlq
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
@@ -34,8 +34,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihat4giyc4bz6zopvahcj4iw53356pbtwfn7p4d5yflwly2qhahum
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
-- valory/liquidity_trader_abci:0.1.0:bafybeidzacpuazrzonqwxuw56rm3m3qtyekxdt2naf2luiu6z7lvmpc34y
-- valory/superagent_abci:0.1.0:bafybeicuixygpuqfpta7f7w5l6lnf3v7elr6q3vg4kpoznzqpdft26rgea
+- valory/liquidity_trader_abci:0.1.0:bafybeifaar45yi4nj6r3hqe7rpxootp6rivxctg3czg7yx5fb7des4amsi
+- valory/superagent_abci:0.1.0:bafybeicuj26orrmrhhy4egr362u4ytssrlprzpd3cj27jaawc5247sdze4
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
@@ -202,3 +202,4 @@ models:
       round_threshold: ${int:5}
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}
+      multisend_contract_addresses: ${str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}

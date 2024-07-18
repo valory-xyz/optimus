@@ -433,54 +433,51 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         highest_apr = -float("inf")
+        self.highest_apr_pool = None
 
         for dex_type, chains in filtered_pools.items():
             for chain, campaigns in chains.items():
                 for campaign in campaigns:
                     apr = campaign.get("apr", 0)
-                    self.context.logger.info(f"{apr} APR")
                     if apr is None:
                         apr = 0
                     if apr > highest_apr:
                         highest_apr = apr
-                        try:
-                            pool_tokens = list(
-                                campaign["typeInfo"]["poolTokens"].keys()
-                            )
-
-                            pool_token_symbols = list(
-                                campaign["typeInfo"]["poolTokens"].values()
-                            )
-                        except Exception:
-                            self.context.logger.error(
-                                f"No underlying token addresses present in the pool {campaign}"
-                            )
-                            continue
-                        self.highest_apr_pool = {
-                            "dex_type": dex_type,
-                            "chain": chain,
-                            "apr": apr,
-                            "token0": pool_tokens[0],
-                            "token0_symbol": pool_token_symbols[0]["symbol"],
-                            "token1": pool_tokens[1],
-                            "token1_symbol": pool_token_symbols[1]["symbol"],
-                            "pool_address": campaign["mainParameter"]
-                        }
+                        self.highest_apr_pool = self._extract_pool_info(dex_type, chain, apr, campaign)
 
         if self.highest_apr_pool:
             self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")
         else:
             self.context.logger.warning("No pools with APR found.")
 
+        return self.highest_apr_pool
+    
+    def _extract_pool_info(self, dex_type, chain, apr, campaign):
+        """Extract pool info from campaign data"""
+        try:
+            pool_tokens = list(campaign["typeInfo"]["poolTokens"].keys())
+            pool_token_symbols = list(campaign["typeInfo"]["poolTokens"].values())
+            return {
+                "dex_type": dex_type,
+                "chain": chain,
+                "apr": apr,
+                "token0": pool_tokens[0],
+                "token0_symbol": pool_token_symbols[0]["symbol"],
+                "token1": pool_tokens[1],
+                "token1_symbol": pool_token_symbols[1]["symbol"],
+                "pool_address": campaign["mainParameter"]
+            }
+        except Exception:
+            self.context.logger.error(f"No underlying token addresses present in the pool {campaign}")
+            return None
+        
     def _get_filtered_pools(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get filtered pools"""
-        allowed_lp_pools = self.params.allowed_lp_pool_addresses
-        allowed_dexs = list(allowed_lp_pools.keys())
-        allowed_assets = self.params.allowed_assets
+        if not self.params.allowed_lp_pool_addresses or not self.params.allowed_assets:
+            self.context.logger.error("No allowed LP pool addresses or assets provided.")
+            return None
 
-        filtered_pools: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
+        filtered_pools = defaultdict(lambda: defaultdict(list))
 
         for chain, chain_id in self.params.allowed_chains.items():
             # api_url = self.params.pool_data_api_url.format(chain_id=chain_id, type=1)  # noqa: E800
@@ -494,10 +491,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if response.status_code != 200:
-                self.context.logger.error(
-                    f"Could not retrieve data from url {api_url} "
-                    f"Received status code {response.status_code}."
-                )
+                self.context.logger.error(f"Could not retrieve data from url {api_url}. Status code {response.status_code}.")
                 return None
 
             try:
@@ -510,42 +504,39 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-            try:
-                campaigns = data[str(chain_id)]
-            except Exception:
-                self.context.logger.error(
-                    f"No info available for chainId {chain_id} in response"
-                )
+            campaigns = data.get(str(chain_id))
+            if not campaigns:
+                self.context.logger.error(f"No info available for chainId {chain_id} in response")
                 continue
 
-            for campaign_list in campaigns.values():
-                for campaign in campaign_list.values():
-                    dex_type = campaign.get("type", None)
-                    if dex_type in allowed_dexs:
-                        if dex_type == "balancerPool":
-                            pool_tokens = list(
-                                campaign["typeInfo"]["poolTokens"].keys()
-                            )
-                            token0 = pool_tokens[0]
-                            token1 = pool_tokens[1]
-                        if dex_type == "velodrome":
-                            token0 = campaign["typeInfo"].get("token0", None)
-                            token1 = campaign["typeInfo"].get("token1", None)
-                        if (
-                            token0 in allowed_assets[chain].values()
-                            and token1 in allowed_assets[chain].values()
-                        ):
-                            if (
-                                campaign.get("mainParameter", None)
-                                in allowed_lp_pools[dex_type][chain]
-                            ):
-                                filtered_pools[dex_type][chain].append(campaign)
-                                self.context.logger.info(
-                                    f"Added campaign for {chain} on {dex_type}: {campaign}"
-                                )
+            self._filter_campaigns(chain, campaigns, filtered_pools)
 
         self.context.logger.info(f"Filtered pools: {filtered_pools}")
         return filtered_pools
+    
+    def _filter_campaigns(self, chain, campaigns, filtered_pools):
+        """Filter campaigns based on allowed assets and LP pools"""
+        allowed_dexs = self.params.allowed_lp_pool_addresses.keys()
+        allowed_assets = self.params.allowed_assets[chain]
+
+        for campaign_list in campaigns.values():
+            for campaign in campaign_list.values():
+                dex_type = campaign.get("type")
+                if dex_type in allowed_dexs:
+                    token0, token1 = self._get_tokens_from_campaign(campaign, dex_type)
+                    if token0 in allowed_assets.values() and token1 in allowed_assets.values():
+                        if campaign.get("mainParameter") in self.params.allowed_lp_pool_addresses[dex_type][chain]:
+                            filtered_pools[dex_type][chain].append(campaign)
+                            self.context.logger.info(f"Added campaign for {chain} on {dex_type}: {campaign}")
+    
+    def _get_tokens_from_campaign(self, campaign, dex_type):
+        """Extract tokens from campaign based on DEX type"""
+        if dex_type == "balancerPool":
+            pool_tokens = list(campaign["typeInfo"]["poolTokens"].keys())
+            return pool_tokens[0], pool_tokens[1]
+        elif dex_type == "velodrome":
+            return campaign["typeInfo"].get("token0"), campaign["typeInfo"].get("token1")
+        return None, None
 
     def get_decision(self) -> bool:
         """Get decision"""

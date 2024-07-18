@@ -18,12 +18,12 @@ connections: []
 contracts: []
 protocols: []
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeigud2sytkb2ca7lwk7qcz2mycdevdh7qy725fxvwioeeqr7xpwq4e
-- valory/registration_abci:0.1.0:bafybeieznuear6lfqu5lzz2ba47nvr7fstyvebam2tngoklzb7itg7xzxe
-- valory/reset_pause_abci:0.1.0:bafybeiadqtlfjx3fjxro4djc2uv2r2mgvzfva2irsdi2oh6lozjlskoolu
-- valory/termination_abci:0.1.0:bafybeig4olfu2nw3tdasxhiiecv2qvs2kj5iuzuy3jecc5puvh5r7gnvqe
-- valory/liquidity_trader_abci:0.1.0:bafybeifhbxomjydp3sp4k5tm56f22omm3qeelcua52oatih4nmenu7rrmy
-- valory/transaction_settlement_abci:0.1.0:bafybeigw5fj54hcqur3kk2z2d3hke56wcdza5i7xbsn3ve55tsqeh6dvye
+- valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
+- valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
+- valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
+- valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
+- valory/liquidity_trader_abci:0.1.0:bafybeiaxdvny4wbpnrqs4mdrkulmtrhpxoqxntnsiet3mw755uuhzseaqa
+- valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 behaviours:
   main:
     args: {}

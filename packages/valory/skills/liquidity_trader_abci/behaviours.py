@@ -24,6 +24,7 @@ from abc import ABC
 from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
 from hexbytes import HexBytes
@@ -179,7 +180,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
             if chain == "optimism":
                 chain = "bnb"
 
-            for asset_name, asset_address in assets.items():
+            for asset_symbol, asset_address in assets.items():
                 # Native balance
                 if asset_address == ZERO_ADDRESS:
                     ledger_api_response = yield from self.get_ledger_api_response(
@@ -205,6 +206,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
 
                     asset_balances_dict[chain].append(
                         {
+                            "asset_symbol": asset_symbol,
                             "asset_type": "native",
                             "address": asset_address,
                             "balance": balance,
@@ -225,6 +227,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
 
                     asset_balances_dict[chain].append(
                         {
+                            "asset_symbol": asset_symbol,
                             "asset_type": "erc_20",
                             "address": asset_address,
                             "balance": balance,
@@ -232,7 +235,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                     )
 
                 self.context.logger.info(
-                    f"Balance of account {account} on {chain} chain for {asset_name}: {balance}"
+                    f"Balance of account {account} on {chain} chain for {asset_symbol}: {balance}"
                 )
 
         return asset_balances_dict
@@ -353,14 +356,21 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         )
         return vault_address
 
-    def _get_balance(self, chain: str, token: str) -> Optional[int]:
+    def _get_balance(self, chain: str, token: str, positions: Optional[List[Dict[str,Any]]]) -> Optional[int]:
         """Get balance"""
-        positions = self.synchronized_data.positions
+        if not positions:
+            positions = self.synchronized_data.positions
+
+        if chain == "optimism":
+            chain = "bnb"
+
+        self.context.logger.info(f"checking the balance of {token} on chain {chain} - {positions}")
+
         for position in positions:
             if position["chain"] == chain:
                 for asset in position["assets"]:
-                    if asset["address"] == token:
-                        return asset["balance"]
+                    if asset["address"] == token:                  
+                        return asset["balance"]                   
         return 0
 
 
@@ -447,6 +457,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             pool_tokens = list(
                                 campaign["typeInfo"]["poolTokens"].keys()
                             )
+
+                            pool_token_symbols = list(campaign["typeInfo"]["poolTokens"].values())
                         except Exception:
                             self.context.logger.error(
                                 f"No underlying token addresses present in the pool {campaign}"
@@ -457,7 +469,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             "chain": chain,
                             "apr": apr,
                             "token0": pool_tokens[0],
+                            "token0_symbol":pool_token_symbols[0]["symbol"],
                             "token1": pool_tokens[1],
+                            "token1_symbol": pool_token_symbols[1]["symbol"]
                         }
 
         if self.highest_apr_pool:
@@ -595,8 +609,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # getPoolTokens is getting reverted
             # tokens = yield from self._get_exit_pool_tokens()
             tokens = [
-                {"chain": "bnb", "token": "0x4200000000000000000000000000000000000006"},
-                {"chain": "bnb", "token": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"},
+                {"chain": "bnb", "token": "0x4200000000000000000000000000000000000006", "token_symbol": "weth"},
+                {"chain": "bnb", "token": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527", "token_symbol": "olas"},
             ]
             if not tokens:
                 return None
@@ -605,7 +619,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "action": Action.EXIT_POOL.value,
                 "dex_type": self.synchronized_data.current_pool["dex_type"],
                 "chain": self.synchronized_data.current_pool["chain"],
-                "assets": [tokens[0][0], tokens[1][0]],
+                "assets": [tokens[0]["token"], tokens[1]["token"]],
                 "pool_address": self.synchronized_data.current_pool["address"],
             }
 
@@ -615,19 +629,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # ASSUMPTION : TOKENS ARE AVAILABLE ON OTHER CHAIN AND THE DESTINATION TOKENS ON DIFFERENT CHAIN
         action = {
             "action": Action.BRIDGE_SWAP.value,
-            "source_chain": tokens[0]["chain"],
-            "destination_chain": self.highest_apr_pool["chain"],
+            "from_chain": tokens[0]["chain"],
+            "to_chain": self.highest_apr_pool["chain"],
             "from_token": tokens[0]["token"],
+            "from_token_symbol": tokens[0]["token_symbol"],
             "to_token": self.highest_apr_pool["token0"],
+            "to_token_symbol": self.highest_apr_pool["token0_symbol"],
         }
         actions.append(action)
 
         action = {
             "action": Action.BRIDGE_SWAP.value,
-            "source_chain": tokens[1]["chain"],
-            "destination_chain": self.highest_apr_pool["chain"],
+            "from_chain": tokens[1]["chain"],
+            "to_chain": self.highest_apr_pool["chain"],
             "from_token": tokens[1]["token"],
+            "from_token_symbol": tokens[1]["token_symbol"],
             "to_token": self.highest_apr_pool["token1"],
+            "to_token_symbol": self.highest_apr_pool["token1_symbol"],
         }
         actions.append(action)
 
@@ -660,7 +678,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     if asset["balance"] > min_balance:
                         tokens.append(
-                            {"chain": position["chain"], "token": asset["address"]}
+                            {"chain": position["chain"] if position["chain"] != "bnb" else "optimism", "token": asset["address"], "token_symbol": asset["asset_symbol"]}
                         )
 
         return tokens
@@ -1161,11 +1179,99 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pass
 
     def get_swap_tx_hash(
-        self, positions
+        self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get swap tx hash"""
-        # Call li.fi API
-        pass
+        
+        tx_request = yield from self.get_quote_for_transfer(positions,action)
+        chain = action["from_chain"]
+        safe_address = self.params.safe_contract_addresses[chain]
+
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            to_address=tx_request["to"],
+            value=ETHER_VALUE,
+            data=bytes.fromhex(tx_request["data"][2:]),
+            operation=SafeOperation.DELEGATE_CALL.value,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain if chain != "optimism" else "bnb",
+        )
+
+        if not safe_tx_hash:
+            return None, None, None
+
+        safe_tx_hash = safe_tx_hash[2:]
+        self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
+
+        payload_string = hash_payload_to_hex(
+            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, tx_request["to"], bytes.fromhex(tx_request["data"][2:])
+        )
+
+        self.context.logger.info(f"Tx hash payload string is {payload_string}")
+
+        return payload_string, chain, safe_address
+
+    def get_quote_for_transfer(
+        self, positions, action
+    ) -> Generator[None, None, Optional[Dict[str,Any]]]:
+        """Get the quote for asset transfer from API"""
+        chain_keys = {"ethereum": "eth", "optimism": "opt", "arbitrum": "arb"}
+
+        base_url = self.params.lifi_request_quote_url
+        from_chain = chain_keys[action["from_chain"]]
+        to_chain = chain_keys[action["to_chain"]]
+        from_token = action["from_token"]
+        to_token = action["to_token"]
+        from_address = self.params.safe_contract_addresses[action["from_chain"]]
+        to_address = self.params.safe_contract_addresses[action["to_chain"]]
+        # amount = self._get_balance(action["from_chain"], action["from_token"], positions)
+        amount = 300000000000000000000
+
+        params = {
+            "fromChain": from_chain,
+            "toChain": to_chain, 
+            "fromToken": from_token,
+            "toToken": to_token,
+            "fromAddress": from_address,
+            "toAddress": to_address,
+            "fromAmount": 300000000000000000000
+        }
+
+        url = f"{base_url}?{urlencode(params)}"
+        self.context.logger.info(f"URL :- {url}")
+
+        response = yield from self.get_http_response(
+                method="GET",
+                url=url,
+                headers={"accept": "application/json"},
+            )
+        
+        if response.status_code != 200:
+                self.context.logger.error(
+                    f"Could not retrieve data from url {self.params.lifi_request_quote_url} "
+                    f"Received status code {response.status_code}."
+                    f"Message {response.body}"
+                )
+                return None
+
+        try:
+            quote = json.loads(response.body)
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from api, "
+                f"the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None
+        
+        transaction_request = quote["transactionRequest"]
+        self.context.logger.info(f"transaction data from api {transaction_request}")
+
+        return transaction_request
+
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

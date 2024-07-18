@@ -71,7 +71,7 @@ logging_config:
 skill_exception_policy: stop_and_exit
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.53.0
+    version: ==1.50.0
 default_connection: null
 ---
 public_id: valory/abci:0.1.0
@@ -203,3 +203,4 @@ models:
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}
       multisend_contract_addresses: ${str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+      lifi_request_quote_url: ${str:https://li.quest/v1/quote}

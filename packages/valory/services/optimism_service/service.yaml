@@ -99,6 +99,7 @@ extra:
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
 1:
   models:
     benchmark_tool:
@@ -152,6 +153,7 @@ extra:
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
 2:
   models:
     benchmark_tool:
@@ -205,6 +207,7 @@ extra:
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
 3:
   models:
     benchmark_tool:
@@ -258,6 +261,7 @@ extra:
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

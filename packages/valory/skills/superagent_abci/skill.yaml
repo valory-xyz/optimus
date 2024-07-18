@@ -145,6 +145,7 @@ models:
       apr_threshold: 5
       min_balance_multiplier: 5
       multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
+      lifi_request_quote_url: https://li.quest/v1/quote
     class_name: Params
   randomness_api:
     args:

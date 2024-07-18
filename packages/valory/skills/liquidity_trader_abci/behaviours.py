@@ -200,14 +200,20 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                 if asset_address == ZERO_ADDRESS:
                     balance = yield from self._get_native_balance(chain, account)
                 else:
-                    balance = yield from self._get_token_balance(chain, account, asset_address)
+                    balance = yield from self._get_token_balance(
+                        chain, account, asset_address
+                    )
 
-                asset_balances_dict[chain].append({
-                    "asset_symbol": asset_symbol,
-                    "asset_type": "native" if asset_address == ZERO_ADDRESS else "erc_20",
-                    "address": asset_address,
-                    "balance": balance,
-                })
+                asset_balances_dict[chain].append(
+                    {
+                        "asset_symbol": asset_symbol,
+                        "asset_type": "native"
+                        if asset_address == ZERO_ADDRESS
+                        else "erc_20",
+                        "address": asset_address,
+                        "balance": balance,
+                    }
+                )
 
                 self.context.logger.info(
                     f"Balance of account {account} on {chain} chain for {asset_symbol}: {balance}"
@@ -215,7 +221,9 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
 
         return asset_balances_dict
 
-    def _get_native_balance(self, chain: str, account: str) -> Generator[None, None, Optional[int]]:
+    def _get_native_balance(
+        self, chain: str, account: str
+    ) -> Generator[None, None, Optional[int]]:
         """Get native balance"""
         ledger_api_response = yield from self.get_ledger_api_response(
             performative=LedgerApiMessage.Performative.GET_STATE,
@@ -226,12 +234,16 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         )
 
         if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
-            self.context.logger.error(f"Could not calculate the balance of the safe: {ledger_api_response}")
+            self.context.logger.error(
+                f"Could not calculate the balance of the safe: {ledger_api_response}"
+            )
             return None
 
         return int(ledger_api_response.state.body["get_balance_result"])
 
-    def _get_token_balance(self, chain: str, account: str, asset_address: str) ->Generator[None, None, Optional[int]]:
+    def _get_token_balance(
+        self, chain: str, account: str, asset_address: str
+    ) -> Generator[None, None, Optional[int]]:
         """Get token balance"""
         balance = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -254,15 +266,19 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         for dex_type, lp_pools in self.params.allowed_lp_pool_addresses.items():
             for chain, pools in lp_pools.items():
                 for pool_address in pools:
-                    account = self.params.safe_contract_addresses.get(chain, ZERO_ADDRESS)
+                    account = self.params.safe_contract_addresses.get(
+                        chain, ZERO_ADDRESS
+                    )
                     if account == ZERO_ADDRESS:
-                        self.context.logger.error(f"No safe address set for chain {chain}")
+                        self.context.logger.error(
+                            f"No safe address set for chain {chain}"
+                        )
                         continue
-                    
+
                     if dex_type == "balancerPool":
                         contract_callable = "get_balance"
                         contract_id = WeightedPoolContract.contract_id
-                    #TO-DO: fix velodrome pool get_balance
+                    # TO-DO: fix velodrome pool get_balance
                     # elif dex_type == "velodrome":
                     #     contract_callable = "get_balance"
                     #     contract_id = PoolContract.contract_id
@@ -290,19 +306,23 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                             "dex_type": dex_type,
                             "balance": balance,
                         }
-                        self.context.logger.info(f"Current pool updated to: {self.current_pool}")
+                        self.context.logger.info(
+                            f"Current pool updated to: {self.current_pool}"
+                        )
 
                     self.context.logger.info(
                         f"Balance of account {account} on {chain} chain for pool address {pool_address} in {dex_type} DEX: {balance}"
                     )
-                    pool_balances_dict[chain].append({
-                        "asset_type": "pool",
-                        "address": pool_address,
-                        "balance": balance,
-                    })
+                    pool_balances_dict[chain].append(
+                        {
+                            "asset_type": "pool",
+                            "address": pool_address,
+                            "balance": balance,
+                        }
+                    )
 
         return pool_balances_dict
-    
+
     def _get_vault_for_pool(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[str]]:
@@ -344,7 +364,9 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                         return asset["balance"]
         return 0
 
-    def _get_pool_id(self, pool_address: str, chain: str) -> Generator[None, None, Optional[str]]:
+    def _get_pool_id(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
         """Get pool ids"""
         pool_id = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -352,7 +374,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
             contract_public_id=WeightedPoolContract.contract_id,
             contract_callable="get_pool_id",
             data_key="pool_id",
-            chain_id=chain if chain != "optimism" else "bnb"
+            chain_id=chain if chain != "optimism" else "bnb",
         )
 
         if not pool_id:
@@ -363,7 +385,8 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
 
         self.context.logger.info(f"PoolId for balancer pool {pool_address}: {pool_id}")
         return pool_id
-    
+
+
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     """GetPositionsBehaviour"""
 
@@ -443,7 +466,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         apr = 0
                     if apr > highest_apr:
                         highest_apr = apr
-                        self.highest_apr_pool = self._extract_pool_info(dex_type, chain, apr, campaign)
+                        self.highest_apr_pool = self._extract_pool_info(
+                            dex_type, chain, apr, campaign
+                        )
 
         if self.highest_apr_pool:
             self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")
@@ -451,7 +476,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning("No pools with APR found.")
 
         return self.highest_apr_pool
-    
+
     def _extract_pool_info(self, dex_type, chain, apr, campaign):
         """Extract pool info from campaign data"""
         try:
@@ -465,16 +490,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "token0_symbol": pool_token_symbols[0]["symbol"],
                 "token1": pool_tokens[1],
                 "token1_symbol": pool_token_symbols[1]["symbol"],
-                "pool_address": campaign["mainParameter"]
+                "pool_address": campaign["mainParameter"],
             }
         except Exception:
-            self.context.logger.error(f"No underlying token addresses present in the pool {campaign}")
+            self.context.logger.error(
+                f"No underlying token addresses present in the pool {campaign}"
+            )
             return None
-        
+
     def _get_filtered_pools(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get filtered pools"""
         if not self.params.allowed_lp_pool_addresses or not self.params.allowed_assets:
-            self.context.logger.error("No allowed LP pool addresses or assets provided.")
+            self.context.logger.error(
+                "No allowed LP pool addresses or assets provided."
+            )
             return None
 
         filtered_pools = defaultdict(lambda: defaultdict(list))
@@ -491,7 +520,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if response.status_code != 200:
-                self.context.logger.error(f"Could not retrieve data from url {api_url}. Status code {response.status_code}.")
+                self.context.logger.error(
+                    f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
+                )
                 return None
 
             try:
@@ -506,14 +537,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             campaigns = data.get(str(chain_id))
             if not campaigns:
-                self.context.logger.error(f"No info available for chainId {chain_id} in response")
+                self.context.logger.error(
+                    f"No info available for chainId {chain_id} in response"
+                )
                 continue
 
             self._filter_campaigns(chain, campaigns, filtered_pools)
 
         self.context.logger.info(f"Filtered pools: {filtered_pools}")
         return filtered_pools
-    
+
     def _filter_campaigns(self, chain, campaigns, filtered_pools):
         """Filter campaigns based on allowed assets and LP pools"""
         allowed_dexs = self.params.allowed_lp_pool_addresses.keys()
@@ -524,18 +557,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 dex_type = campaign.get("type")
                 if dex_type in allowed_dexs:
                     token0, token1 = self._get_tokens_from_campaign(campaign, dex_type)
-                    if token0 in allowed_assets.values() and token1 in allowed_assets.values():
-                        if campaign.get("mainParameter") in self.params.allowed_lp_pool_addresses[dex_type][chain]:
+                    if (
+                        token0 in allowed_assets.values()
+                        and token1 in allowed_assets.values()
+                    ):
+                        if (
+                            campaign.get("mainParameter")
+                            in self.params.allowed_lp_pool_addresses[dex_type][chain]
+                        ):
                             filtered_pools[dex_type][chain].append(campaign)
-                            self.context.logger.info(f"Added campaign for {chain} on {dex_type}: {campaign}")
-    
+                            self.context.logger.info(
+                                f"Added campaign for {chain} on {dex_type}: {campaign}"
+                            )
+
     def _get_tokens_from_campaign(self, campaign, dex_type):
         """Extract tokens from campaign based on DEX type"""
         if dex_type == "balancerPool":
             pool_tokens = list(campaign["typeInfo"]["poolTokens"].keys())
             return pool_tokens[0], pool_tokens[1]
         elif dex_type == "velodrome":
-            return campaign["typeInfo"].get("token0"), campaign["typeInfo"].get("token1")
+            return campaign["typeInfo"].get("token0"), campaign["typeInfo"].get(
+                "token1"
+            )
         return None, None
 
     def get_decision(self) -> bool:
@@ -584,7 +627,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
         else:
             # If there is current pool, then get the lp pool token addresses
+
             # getPoolTokens is getting reverted
+            # TO-DO: Fix getPoolTokens()
             # tokens = yield from self._get_exit_pool_tokens()
             tokens = [
                 {
@@ -614,7 +659,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Actions: {actions}")
         return actions
-    
+
     def _get_tokens_over_min_balance(self) -> Optional[List[Any]]:
         """Get tokens over min balance"""
         tokens = []
@@ -682,7 +727,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "pool_address": self.synchronized_data.current_pool["address"],
         }
 
-    def _build_bridge_swap_actions(self, tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _build_bridge_swap_actions(
+        self, tokens: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
         bridge_swap_actions = []
 
@@ -693,8 +740,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "to_chain": self.highest_apr_pool["chain"],
                 "from_token": token["token"],
                 "from_token_symbol": token["token_symbol"],
-                "to_token": self.highest_apr_pool["token0"] if token == tokens[0] else self.highest_apr_pool["token1"],
-                "to_token_symbol": self.highest_apr_pool["token0_symbol"] if token == tokens[0] else self.highest_apr_pool["token1_symbol"],
+                "to_token": self.highest_apr_pool["token0"]
+                if token == tokens[0]
+                else self.highest_apr_pool["token1"],
+                "to_token_symbol": self.highest_apr_pool["token0_symbol"]
+                if token == tokens[0]
+                else self.highest_apr_pool["token1_symbol"],
             }
             bridge_swap_actions.append(bridge_swap_action)
 
@@ -712,7 +763,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             ],
             "pool_address": self.highest_apr_pool["pool_address"],
         }
-    
+
     def _get_balancer_pool_tokens(
         self, pool_id: str, vault_address: str
     ) -> Generator[None, None, Optional[List[str]]]:
@@ -892,7 +943,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # Hardcoded 50WETH_50OLAS pool
         pool_address = action["pool_address"]
-        pool_id = yield from self._get_pool_id(pool_address, chain) # getPoolId()
+        pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
 
         # Get vault contract address from balancer weighted pool contract
         vault_address = yield from self._get_vault_for_pool(pool_address, chain)

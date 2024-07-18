@@ -2063,5 +2063,77 @@
             }
          }
       }
+   },
+   "42161":{
+      "11_0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42":{
+         "0x52b09463713ee460147032b2154e742a8ec3104df4747c2239acfa8c699166bb":{
+            "chainId":42161,
+            "index":83,
+            "campaignId":"0x52b09463713ee460147032b2154e742a8ec3104df4747c2239acfa8c699166bb",
+            "creator":"0x838171065E1A00664D5a5C2F9C8a15ac1825647C",
+            "campaignType":1,
+            "campaignSubType":0,
+            "rewardToken":"0x4200000000000000000000000000000000000042",
+            "amount":"2813000000000000000000",
+            "amountDecimal":"0",
+            "startTimestamp":1720519200,
+            "endTimestamp":1721728800,
+            "mainParameter":"0xe25EcAdcA47419E9aEE2700CeaB4e7c4b01B94ca",
+            "campaignParameters":{
+               "url":"https://app.balancer.fi/#/fraxtal/pool/0x33251abecb0364df98a27a8d5d7b5ccddc774c42000000000000000000000008",
+               "duration":1209600,
+               "blacklist":[
+
+               ],
+               "whitelist":[
+
+               ],
+               "forwarders":[
+                  {
+                     "token":"0x275e8514b83479f526673327B279753aBC666a05",
+                     "sender":"0x275e8514b83479f526673327B279753aBC666a05",
+                     "priority":0,
+                     "forwarderType":0
+                  }
+               ],
+               "targetToken":"0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42",
+               "symbolRewardToken":"OP",
+               "symbolTargetToken":"sFRAX/sDAI/sUSDe",
+               "decimalsRewardToken":18,
+               "decimalsTargetToken":18
+            },
+            "computeChainId":252,
+            "tags":[
+               "superfest"
+            ],
+            "apr":2000,
+            "totalSupplyTargetToken":2596148429503164,
+            "tvl":234875.0575590398,
+            "type":"balancerPool",
+            "typeInfo":{
+               "name":"Balancer Test Pool WETH-PAL",
+               "tokenAddress":"0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42",
+               "poolId":"0xe25ecadca47419e9aee2700ceab4e7c4b01b94ca0002000000000000000004e4",
+               "poolTokens":{
+                  "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1":{
+                     "symbol":"wETH",
+                     "decimals":18,
+                     "amountInPool":86682.67229463719,
+                     "price":1.088
+                  },
+                  "0xa7997F0eC9fa54E89659229fB26537B6A725b798":{
+                     "symbol":"pal",
+                     "decimals":18,
+                     "amountInPool":59246.35140633553,
+                     "price":1.084
+                  }
+               },
+               "totalSupply":2596148429503164,
+               "tvl":234875.0575590398,
+               "priceTargetToken":9.047058130031064e-11,
+               "cardName":"Balancer Test Pool WETH-PAL"
+            }
+         }
+      }
    }
 }

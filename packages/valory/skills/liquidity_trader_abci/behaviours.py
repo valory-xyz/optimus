@@ -1072,7 +1072,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, multisend_address, tx_hash
+            safe_tx_hash=safe_tx_hash,
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value,
+            to_address=multisend_address,
+            data=bytes.fromhex(multisend_tx_hash[2:]),
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")

@@ -66,5 +66,7 @@ class Params(BaseParams):
         self.multisend_contract_addresses = json.loads(
             self._ensure("multisend_contract_addresses", kwargs, str)
         )
-        self.lifi_request_quote_url = self._ensure("lifi_request_quote_url", kwargs, str)
+        self.lifi_request_quote_url = self._ensure(
+            "lifi_request_quote_url", kwargs, str
+        )
         super().__init__(*args, **kwargs)

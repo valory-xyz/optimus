@@ -88,7 +88,7 @@ class VaultContract(Contract):
             )
         )
         return {"tx_hash": bytes.fromhex(data[2:])}
-    
+
     @classmethod
     def exit_pool(
         cls,

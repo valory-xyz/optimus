@@ -193,12 +193,12 @@ models:
       ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
       default_chain_id: ${str:bnb}
       termination_from_block: ${int:34088325}
-      allowed_lp_pool_addresses: ${str:{"balancerPool":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"],"optimism":["0x5BB3E58887264B667f915130fD04bbB56116C278"]},"velodrome":{"optimism":["0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD"]}}}
-      allowed_assets: ${str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1","weth":"0x4200000000000000000000000000000000000006","olas":"0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"}}}
+      allowed_lp_pool_addresses: ${str:{"balancerPool":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0xe25EcAdcA47419E9aEE2700CeaB4e7c4b01B94ca"],"optimism":["0x5BB3E58887264B667f915130fD04bbB56116C278"]},"velodrome":{"optimism":["0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD"]}}}
+      allowed_assets: ${str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1","weth":"0x4200000000000000000000000000000000000006","olas":"0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"},"arbitrum":{"pal":"0xa7997F0eC9fa54E89659229fB26537B6A725b798","weth":"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x1aCD50F973177f4D320913a9Cc494A9c66922fdF","arbitrum":"0xbaC3b468F524bF617d870fDF383C402609447276","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
       pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}
       allowed_chains: ${str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
-      gas_reserve: ${str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
+      gas_reserve: ${str:{"ethereum":1000,"optimism":1000,"arbitrum":1000,"bnb":1000}}
       round_threshold: ${int:5}
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}

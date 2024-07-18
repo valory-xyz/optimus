@@ -26,7 +26,6 @@ from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
 from aea.configurations.data_types import PublicId
-from hexbytes import HexBytes
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
@@ -556,7 +555,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Step 2: Check round interval
         is_round_threshold_exceeded = self._check_round_threshold_exceeded()
         if not is_round_threshold_exceeded:
-            self.context.logger.info(f"round threshold not exceeded")
+            self.context.logger.info("round threshold not exceeded")
             return False
 
         return True

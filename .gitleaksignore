@@ -144,3 +144,8 @@ c7afdfc0025157acbdc0f6f77e65d940ffba003a:packages/valory/skills/learning_chained
 8ee8e0f4f2d14c89f6996e116b9b6e12b4507989:scripts/api_data.json:generic-api-key:2006
 8ee8e0f4f2d14c89f6996e116b9b6e12b4507989:scripts/api_data.json:generic-api-key:2041
 8ee8e0f4f2d14c89f6996e116b9b6e12b4507989:scripts/api_data.json:generic-api-key:2057
+5b8202dac51f778319fb7eb2e0d5ac24cdba6bc8:packages/valory/skills/liquidity_trader_abci/behaviours.py:generic-api-key:591
+8385e82bdb0345ca5b4c4c948f5f17cf828a4fd5:packages/valory/skills/liquidity_trader_abci/behaviours.py:generic-api-key:589
+8385e82bdb0345ca5b4c4c948f5f17cf828a4fd5:scripts/api_data.json:generic-api-key:2093
+8385e82bdb0345ca5b4c4c948f5f17cf828a4fd5:scripts/api_data.json:generic-api-key:2099
+8385e82bdb0345ca5b4c4c948f5f17cf828a4fd5:scripts/api_data.json:generic-api-key:2115

@@ -540,26 +540,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_decision(self) -> bool:
         """Get decision"""
-        # Step 1: Check highest APR exceeds threshold
-        if self.highest_apr_pool:
-            exceeds_apr_threshold = (
-                self.highest_apr_pool["apr"] > self.params.apr_threshold
+        if not self._is_apr_threshold_exceeded():
+            self.context.logger.info(
+                f"APR of pool {self.highest_apr_pool['apr']} does not exceed APR threshold {self.params.apr_threshold}"
             )
-            if not exceeds_apr_threshold:
-                self.context.logger.info(
-                    f"apr of pool {self.highest_apr_pool['apr']} does not exceed apr_threshold {self.params.apr_threshold}"
-                )
-                return False
+            return False
 
-        # Step 2: Check round interval
-        is_round_threshold_exceeded = self._check_round_threshold_exceeded()
-        if not is_round_threshold_exceeded:
-            self.context.logger.info(f"round threshold not exceeded")
+        if not self._is_round_threshold_exceeded():
+            self.context.logger.info("Round threshold not exceeded")
             return False
 
         return True
 
-    def _check_round_threshold_exceeded(self) -> bool:
+    def _is_apr_threshold_exceeded(self) -> bool:
+        """Check if the highest APR exceeds the threshold"""
+        if not self.highest_apr_pool:
+            return False
+        return self.highest_apr_pool["apr"] > self.params.apr_threshold
+
+    def _is_round_threshold_exceeded(self) -> bool:
         """Check round threshold exceeded"""
         transaction_history = self.synchronized_data.transaction_history
 
@@ -572,17 +571,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             >= self.round_sequence
         )
 
-    def get_order_of_transactions(
-        self,
-    ) -> Optional[List[Dict[str, Any]]]:
-        """Get order of transactions"""
-        # Step 1- check if any liquidity exists, otherwise check for funds in safe
+    def get_order_of_transactions(self) -> Optional[List[Dict[str, Any]]]:
+        """Get the order of transactions to perform based on the current pool status and token balances."""
         actions = []
-        tokens = {}
 
         if not self.synchronized_data.current_pool:
-            # If there is no current pool, then check for which tokens we have balance
-            tokens = self._get_token_addresses_over_min_balance()
+            tokens = self._get_tokens_over_min_balance()
             if not tokens:
                 self.context.logger.error(
                     "No tokens in safe with over minimum balance to enter a pool"
@@ -607,57 +601,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if not tokens:
                 return None
 
-            action = {
-                "action": Action.EXIT_POOL.value,
-                "dex_type": self.synchronized_data.current_pool["dex_type"],
-                "chain": self.synchronized_data.current_pool["chain"],
-                "assets": [tokens[0]["token"], tokens[1]["token"]],
-                "pool_address": self.synchronized_data.current_pool["address"],
-            }
+            exit_pool_action = self._build_exit_pool_action(tokens)
+            actions.append(exit_pool_action)
 
-        self.context.logger.info(f"TOKEN ADDRESSES: {tokens}")
+        self.context.logger.info(f"Token Info: {tokens}")
 
-        # Step 2- build bridge and swap tokens action
-        # ASSUMPTION : TOKENS ARE AVAILABLE ON OTHER CHAIN AND THE DESTINATION TOKENS ON DIFFERENT CHAIN
-        # action = {
-        #     "action": Action.BRIDGE_SWAP.value,
-        #     "from_chain": tokens[0]["chain"],
-        #     "to_chain": self.highest_apr_pool["chain"],
-        #     "from_token": tokens[0]["token"],
-        #     "from_token_symbol": tokens[0]["token_symbol"],
-        #     "to_token": self.highest_apr_pool["token0"],
-        #     "to_token_symbol": self.highest_apr_pool["token0_symbol"],
-        # }
-        # actions.append(action)
+        bridge_swap_actions = self._build_bridge_swap_actions(tokens)
+        actions.extend(bridge_swap_actions)
 
-        # action = {
-        #     "action": Action.BRIDGE_SWAP.value,
-        #     "from_chain": tokens[1]["chain"],
-        #     "to_chain": self.highest_apr_pool["chain"],
-        #     "from_token": tokens[1]["token"],
-        #     "from_token_symbol": tokens[1]["token_symbol"],
-        #     "to_token": self.highest_apr_pool["token1"],
-        #     "to_token_symbol": self.highest_apr_pool["token1_symbol"],
-        # }
-        # actions.append(action)
+        enter_pool_action = self._build_enter_pool_action()
+        actions.append(enter_pool_action)
 
-        # Step 3: get the info on which pool to enter
-        action = {
-            "action": Action.ENTER_POOL.value,
-            "dex_type": self.highest_apr_pool["dex_type"],
-            "chain": self.highest_apr_pool["chain"],
-            "assets": [
-                self.highest_apr_pool["token0"],
-                self.highest_apr_pool["token1"],
-            ],
-            "pool_address": self.highest_apr_pool["pool_address"]
-        }
-        actions.append(action)
-
-        self.context.logger.info(f"Actions {actions}")
+        self.context.logger.info(f"Actions: {actions}")
         return actions
-
-    def _get_token_addresses_over_min_balance(self) -> Optional[List[Any]]:
+    
+    def _get_tokens_over_min_balance(self) -> Optional[List[Any]]:
         """Get tokens over min balance"""
         tokens = []
 
@@ -714,6 +672,47 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             {"chain": chain, "token": tokens[1]},
         ]
 
+    def _build_exit_pool_action(self, tokens: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build action for exiting the current pool."""
+        return {
+            "action": Action.EXIT_POOL.value,
+            "dex_type": self.synchronized_data.current_pool["dex_type"],
+            "chain": self.synchronized_data.current_pool["chain"],
+            "assets": [tokens[0]["token"], tokens[1]["token"]],
+            "pool_address": self.synchronized_data.current_pool["address"],
+        }
+
+    def _build_bridge_swap_actions(self, tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Build bridge and swap actions for the given tokens."""
+        bridge_swap_actions = []
+
+        for token in tokens:
+            bridge_swap_action = {
+                "action": Action.BRIDGE_SWAP.value,
+                "from_chain": token["chain"],
+                "to_chain": self.highest_apr_pool["chain"],
+                "from_token": token["token"],
+                "from_token_symbol": token["token_symbol"],
+                "to_token": self.highest_apr_pool["token0"] if token == tokens[0] else self.highest_apr_pool["token1"],
+                "to_token_symbol": self.highest_apr_pool["token0_symbol"] if token == tokens[0] else self.highest_apr_pool["token1_symbol"],
+            }
+            bridge_swap_actions.append(bridge_swap_action)
+
+        return bridge_swap_actions
+
+    def _build_enter_pool_action(self) -> Dict[str, Any]:
+        """Build action for entering the pool with the highest APR."""
+        return {
+            "action": Action.ENTER_POOL.value,
+            "dex_type": self.highest_apr_pool["dex_type"],
+            "chain": self.highest_apr_pool["chain"],
+            "assets": [
+                self.highest_apr_pool["token0"],
+                self.highest_apr_pool["token1"],
+            ],
+            "pool_address": self.highest_apr_pool["pool_address"],
+        }
+    
     def _get_balancer_pool_tokens(
         self, pool_id: str, vault_address: str
     ) -> Generator[None, None, Optional[List[str]]]:

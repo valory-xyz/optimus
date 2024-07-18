@@ -589,9 +589,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return False
 
-        if not self._is_round_threshold_exceeded():
-            self.context.logger.info("Round threshold not exceeded")
-            return False
+        # if not self._is_round_threshold_exceeded():
+        #     self.context.logger.info("Round threshold not exceeded")
+        #     return False
 
         return True
 
@@ -601,18 +601,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return False
         return self.highest_apr_pool["apr"] > self.params.apr_threshold
 
-    def _is_round_threshold_exceeded(self) -> bool:
-        """Check round threshold exceeded"""
-        transaction_history = self.synchronized_data.transaction_history
-
-        if not transaction_history:
-            return True
-
-        latest_transaction = transaction_history[-1]
-        return (
-            latest_transaction["round"] + self.params.round_threshold
-            >= self.round_sequence
-        )
+    # def _is_round_threshold_exceeded(self) -> bool:
+    #     """Check round threshold exceeded"""
+    # TO-DO: check if current_round_height is correct param to be considered
+    #     last_tx_round_sequence = self.synchronized_data.last_tx_round_sequence
+    #     return (
+    #         last_tx_round_sequence + self.params.round_threshold
+    #         >= self.round_sequence.current_round_height
+    #     )
 
     def get_order_of_transactions(self) -> Optional[List[Dict[str, Any]]]:
         """Get the order of transactions to perform based on the current pool status and token balances."""
@@ -899,6 +895,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "safe_contract_address": safe_address,
             "positions": positions,
             "last_action_index": current_action_index,
+            # "tx_round_sequence": self.round_sequence.current_round_height
         }
 
     def get_enter_pool_tx_hash(

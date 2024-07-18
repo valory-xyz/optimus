@@ -118,13 +118,9 @@ class SynchronizedData(BaseSynchronizedData):
         return actions
 
     @property
-    def transaction_history(self) -> Optional[List[Dict[str, Any]]]:
-        """Get the transactions"""
-        serialized = self.db.get("transactions", "[]")
-        if serialized is None:
-            serialized = "[]"
-        transactions = json.loads(serialized)
-        return transactions
+    def last_tx_round_sequence(self) -> Optional[int]:
+        """Get the last tx round sequence"""
+        return cast(int, self.db.get("last_tx_round_sequence", -1))
 
     @property
     def last_action_index(self) -> Optional[int]:

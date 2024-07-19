@@ -618,8 +618,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # getPoolTokens is getting reverted
             # TO-DO: Fix getPoolTokens()
             # tokens = yield from self._get_exit_pool_tokens()
-            #assumption: only two possible pools
-            if self.synchronized_data.current_pool["address"] == "0x5BB3E58887264B667f915130fD04bbB56116C278":
+            # assumption: only two possible pools
+            if (
+                self.synchronized_data.current_pool["address"]
+                == "0x5BB3E58887264B667f915130fD04bbB56116C278"
+            ):
                 tokens = [
                     {
                         "chain": "optimism",
@@ -632,7 +635,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         "token_symbol": "olas",
                     },
                 ]
-            elif self.synchronized_data.current_pool["address"] == "0xe25EcAdcA47419E9aEE2700CeaB4e7c4b01B94ca":
+            elif (
+                self.synchronized_data.current_pool["address"]
+                == "0xe25EcAdcA47419E9aEE2700CeaB4e7c4b01B94ca"
+            ):
                 tokens = [
                     {
                         "chain": "arbitrum",
@@ -871,7 +877,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         current_action_index = self.synchronized_data.last_action_index + 1
         if current_action_index == len(actions):
             return Event.DONE.value, {}
-        
+
         # Prepare the next action
         next_action = Action(actions[current_action_index]["action"])
         self.context.logger.info(f"ACTION TO BE PERFORMED: {next_action}")
@@ -948,10 +954,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         chain = action["chain"]
 
         pool_address = action["pool_address"]
-        pool_id = yield from self._get_pool_id(pool_address, chain if chain != "optimism" else "bnb")  # getPoolId()
+        pool_id = yield from self._get_pool_id(
+            pool_address, chain if chain != "optimism" else "bnb"
+        )  # getPoolId()
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = yield from self._get_vault_for_pool(pool_address, chain if chain != "optimism" else "bnb")
+        vault_address = yield from self._get_vault_for_pool(
+            pool_address, chain if chain != "optimism" else "bnb"
+        )
         if not vault_address:
             return None, None, None
 
@@ -1135,10 +1145,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         chain = action["chain"]
 
         pool_address = action["pool_address"]
-        pool_id = yield from self._get_pool_id(pool_address, chain if chain != "optimism" else "bnb")  # getPoolId()
+        pool_id = yield from self._get_pool_id(
+            pool_address, chain if chain != "optimism" else "bnb"
+        )  # getPoolId()
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = yield from self._get_vault_for_pool(pool_address, chain if chain != "optimism" else "bnb")
+        vault_address = yield from self._get_vault_for_pool(
+            pool_address, chain if chain != "optimism" else "bnb"
+        )
         if not vault_address:
             return None, None, None
 

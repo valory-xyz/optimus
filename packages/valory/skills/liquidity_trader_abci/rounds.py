@@ -53,6 +53,7 @@ class Event(Enum):
     SETTLE = "settle"
     RETRY = "retry"
 
+
 class SynchronizedData(BaseSynchronizedData):
     """
     Class to represent the synchronized data.
@@ -126,7 +127,7 @@ class SynchronizedData(BaseSynchronizedData):
     def next_action_index(self) -> Optional[int]:
         """Get the next action index"""
         return cast(int, self.db.get("next_action_index", 0))
-    
+
     @property
     def swap_retries(self) -> Optional[int]:
         """Get the current swap retries"""
@@ -136,6 +137,8 @@ class SynchronizedData(BaseSynchronizedData):
     def last_swap_tx(self) -> Optional[str]:
         """Get the last swap tx"""
         return str(self.db.get("last_swap_tx", ""))
+
+
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""
 

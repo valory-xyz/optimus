@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeicksn2dm6c6ccpkt36tfcfaddst2qls7r7buxllvkk4lcqqkockmy
+  behaviours.py: bafybeiadny4r3utx35awakfashykov4il7wt32c4x5mbb7j4xig6a7leky
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeic52qgyee5zw5bvm6ref6qdy24qpybalg6oisntvsjsnpiula3whm
+  fsm_specification.yaml: bafybeie3gpj4k2norcuovvmvrdxyd3gqncylwjbmbtbjxusuvcn4o2euyy
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeihmypz3we5rzfds25snwg72k2g7dnxus3i63vrr5zkf7mmbtbs5te
+  models.py: bafybeigkocn5i5gou2m7wxkotq5exzac65z3ki4msattpcjbrtah5qnp6m
   payloads.py: bafybeibqtvz22qz3i6bx2y4uk3xhxslrm3f4cnjhut6qpk7a6t2jsqgoeq
-  rounds.py: bafybeicdfcosyqlpxukffbwrmexgii5lvukkeqzewe4mltnsa6is6ckqp4
+  rounds.py: bafybeifk7l234uyd6bbajv2cvrefydgjtyjdzwbqwdux3hajokjsekydoq
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -147,6 +147,7 @@ models:
       min_balance_multiplier: 5
       multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
       lifi_request_quote_url: https://li.quest/v1/quote
+      lifi_check_status_url: https://li.quest/v1/status
     class_name: Params
   requests:
     args: {}

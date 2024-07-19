@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimism_agent:0.1.0:bafybeiccsg6xbne2og6pvceplu7cv4u2enjurggfetxyhqxgq6kv5o2cii
+agent: valory/optimism_agent:0.1.0:bafybeiegif2tatj3rk5ihgal5ppz3v75j6t67sarartdqemr73abvz6j5e
 number_of_agents: 4
 deployment:
   agent:
@@ -100,6 +100,7 @@ extra:
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
 1:
   models:
     benchmark_tool:
@@ -154,6 +155,7 @@ extra:
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
 2:
   models:
     benchmark_tool:
@@ -208,6 +210,7 @@ extra:
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
 3:
   models:
     benchmark_tool:
@@ -262,6 +265,7 @@ extra:
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

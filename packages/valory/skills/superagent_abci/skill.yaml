@@ -10,7 +10,7 @@ fingerprint:
   behaviours.py: bafybeiej6brcarvk26vmrce2omgytonyvytnj6pezvylm3gy24ceui6eqq
   composition.py: bafybeifqegvv2i6bxgfhvjxlm6lh2cxcug4hf27hufbant7xymndtwdd7q
   dialogues.py: bafybeigt3xl52z5ftxjoobzqlyqtoreftmndonbkpjgj2wjug4klyhyeby
-  fsm_specification.yaml: bafybeiewpmzxwuk2dkq6tl6g6v5jlehenzukvbowdoj55nwqxmxywhm7se
+  fsm_specification.yaml: bafybeiapyjbffatllyctybec2dj6ezxv7ilkfeioary6cdjgee3grczxhe
   handlers.py: bafybeiaaqhk7hhrjd3ciumel7u3fmhhfzedwzl6uccoty6qz63ukw3bdp4
   models.py: bafybeid3bjccbahalxauqj4d64jijx6wkjh2cm3c27kydxypnlprdwz3em
 fingerprint_ignore_patterns: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeieznuear6lfqu5lzz2ba47nvr7fstyvebam2tngoklzb7itg7xzxe
 - valory/reset_pause_abci:0.1.0:bafybeiadqtlfjx3fjxro4djc2uv2r2mgvzfva2irsdi2oh6lozjlskoolu
 - valory/termination_abci:0.1.0:bafybeig4olfu2nw3tdasxhiiecv2qvs2kj5iuzuy3jecc5puvh5r7gnvqe
-- valory/liquidity_trader_abci:0.1.0:bafybeibm6kl46ve44unbe2tm3wh4y7pvcqxkwl4j7doj5hs2tsdcajegce
+- valory/liquidity_trader_abci:0.1.0:bafybeibvdd3wm4kl3r3tlzm6rlwsevqmhoqn3bq6l4txi5rc2tl4x37ae4
 - valory/transaction_settlement_abci:0.1.0:bafybeigw5fj54hcqur3kk2z2d3hke56wcdza5i7xbsn3ve55tsqeh6dvye
 behaviours:
   main:
@@ -146,6 +146,7 @@ models:
       min_balance_multiplier: 5
       multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
       lifi_request_quote_url: https://li.quest/v1/quote
+      lifi_check_status_url: https://li.quest/v1/status
     class_name: Params
   randomness_api:
     args:

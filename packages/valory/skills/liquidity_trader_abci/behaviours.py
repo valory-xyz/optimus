@@ -592,14 +592,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return False
         return self.highest_apr_pool["apr"] > self.params.apr_threshold
 
-    # def _is_round_threshold_exceeded(self) -> bool:
-    #     """Check round threshold exceeded"""
-    # TO-DO: check if current_round_height is correct param to be considered
-    #     last_tx_round_sequence = self.synchronized_data.last_tx_round_sequence
-    #     return (
-    #         last_tx_round_sequence + self.params.round_threshold
-    #         >= self.round_sequence.current_round_height
-    #     )
+    def _is_round_threshold_exceeded(self) -> bool:
+        """Check round threshold exceeded"""
+
+        last_tx_period_count = self.synchronized_data.last_tx_period_count
+        return (
+            last_tx_period_count + self.params.round_threshold
+            >= self.synchronized_data.period_count
+        )
 
     def get_order_of_transactions(self) -> Optional[List[Dict[str, Any]]]:
         """Get the order of transactions to perform based on the current pool status and token balances."""
@@ -912,7 +912,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "safe_contract_address": safe_address,
             "positions": positions,
             "last_action_index": current_action_index,
-            # "tx_round_sequence": self.round_sequence.current_round_height
+            "last_tx_period_count": self.synchronized_data.period_count
         }
 
     def get_enter_pool_tx_hash(
@@ -964,7 +964,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         if not vault_address:
             return None, None, None
-
+        
         max_amounts_in = [
             self._get_balance(chain, action["assets"][0], positions),
             self._get_balance(chain, action["assets"][1], positions),
@@ -1228,12 +1228,50 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get swap tx hash"""
+        multi_send_txs = []
+        chain = action["from_chain"]
 
-        tx_request = yield from self.get_quote_for_transfer(positions, action)
-        if not tx_request:
+        # Get swap tx
+        tx_info = yield from self.get_swap_tx_info(positions, action)
+
+        if any(info is None for info in tx_info):
             return None, None, None
 
-        chain = action["from_chain"]
+        swap_tx_hash, lifi_contract_address, token_to_swap, amount = tx_info
+        # Approve asset 0
+        approval_tx_hash = yield from self.get_approval_tx_hash(
+            token_address=token_to_swap,
+            amount=amount,
+            spender=lifi_contract_address,
+            chain=chain if chain != "optimism" else "bnb",
+        )
+
+        multi_send_txs.append(approval_tx_hash)
+
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": lifi_contract_address,
+                "value": 0,
+                "data": swap_tx_hash,
+            }
+        )
+
+        # Get the transaction from the multisend contract
+        multisend_address = self.params.multisend_contract_addresses[chain]
+
+        multisend_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
+            chain_id=chain if chain != "optimism" else "bnb",
+        )
+
+        self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
+
         safe_address = self.params.safe_contract_addresses[chain]
 
         safe_tx_hash = yield from self.contract_interact(
@@ -1242,9 +1280,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=GnosisSafeContract.contract_id,
             contract_callable="get_raw_safe_transaction_hash",
             data_key="tx_hash",
-            to_address=tx_request["to"],
+            to_address=multisend_address,
             value=ETHER_VALUE,
-            data=bytes.fromhex(tx_request["data"][2:]),
+            data=bytes.fromhex(multisend_tx_hash[2:]),
+            operation=SafeOperation.DELEGATE_CALL.value,
             safe_tx_gas=SAFE_TX_GAS,
             chain_id=chain if chain != "optimism" else "bnb",
         )
@@ -1256,20 +1295,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
         payload_string = hash_payload_to_hex(
-            safe_tx_hash,
-            ETHER_VALUE,
-            SAFE_TX_GAS,
-            tx_request["to"],
-            bytes.fromhex(tx_request["data"][2:]),
+            safe_tx_hash=safe_tx_hash,
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value,
+            to_address=multisend_address,
+            data=bytes.fromhex(multisend_tx_hash[2:]),
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-        return payload_string, chain, safe_address
+        return payload_string, chain if chain != "optimism" else "bnb", safe_address
 
-    def get_quote_for_transfer(
+    def get_swap_tx_info(
         self, positions, action
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    ) -> Generator[None, None, Tuple[str, str, str, int]]:
         """Get the quote for asset transfer from API"""
         chain_keys = {"ethereum": "eth", "optimism": "opt", "arbitrum": "arb"}
 
@@ -1280,12 +1320,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_token = action["to_token"]
         from_address = self.params.safe_contract_addresses[action["from_chain"]]
         to_address = self.params.safe_contract_addresses[action["to_chain"]]
-        amount = self._get_balance(
-            action["from_chain"], action["from_token"], positions
-        )
+        # amount = self._get_balance(
+        #     action["from_chain"], action["from_token"], positions
+        # )
+        amount = 10000000000000000000
 
         if from_token == to_token:
-            return None
+            return None, None, None
 
         params = {
             "fromChain": from_chain,
@@ -1310,9 +1351,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Could not retrieve data from url {self.params.lifi_request_quote_url} "
                 f"Received status code {response.status_code}."
-                f"Message {response.body}"
+                f"Message {response.body.message}"
             )
-            return None
+            return None, None, None
 
         try:
             quote = json.loads(response.body)
@@ -1323,11 +1364,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        transaction_request = quote["transactionRequest"]
-        self.context.logger.info(f"transaction data from api {transaction_request}")
+        tx_request = quote["transactionRequest"]
+        self.context.logger.info(f"transaction data from api {tx_request}")
 
-        return transaction_request
-
+        if tx_request:
+            return (bytes.fromhex(tx_request["data"][2:]),  tx_request["to"], from_token, amount)
+        
+        return None
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""

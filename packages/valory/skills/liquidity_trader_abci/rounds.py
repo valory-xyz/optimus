@@ -118,9 +118,9 @@ class SynchronizedData(BaseSynchronizedData):
         return actions
 
     @property
-    def last_tx_round_sequence(self) -> Optional[int]:
-        """Get the last tx round sequence"""
-        return cast(int, self.db.get("last_tx_round_sequence", -1))
+    def last_tx_period_count(self) -> Optional[int]:
+        """Get the last tx period count"""
+        return cast(int, self.db.get("last_tx_period_count", 0))
 
     @property
     def last_action_index(self) -> Optional[int]:

@@ -25,6 +25,7 @@ from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from urllib.parse import urlencode
+import time
 
 from aea.configurations.data_types import PublicId
 
@@ -75,13 +76,36 @@ WaitableConditionType = Generator[None, None, Any]
 
 class Action(Enum):
     """Action"""
-
     # Kept the values as Round name, so that in DecisionMaking we can match tx_submitter with action name(which is round name) and decide the next action
     EXIT_POOL = "ExitPool"
     ENTER_POOL = "EnterPool"
     BRIDGE_SWAP = "BridgeAndSwap"
 
+class SwapStatus(Enum):
 
+    DONE = "done"
+    PENDING = "pending"
+    INVALID = "invalid"
+    NOT_FOUND = "not_found"
+    FAILED = "failed"
+
+class SwapPendingSubStatus(Enum):
+
+    WAIT_SOURCE_CONFIRMATIONS = "wait_source_confirmations"
+    WAIT_DESTINATION_TRANSACTION = "wait_destination_transaction"
+
+class SwapDoneSubStaus(Enum):
+
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    REFUNDED = "refunded"
+
+class Decision(Enum):
+
+    CONTINUE = "continue"
+    WAIT = "wait"
+    RETRY = "retry"
+    EXIT = "exit"
 class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
@@ -852,12 +876,22 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""
         actions = self.synchronized_data.actions
-
+        RETRY_ATTEMPTS_FOR_SWAP = 3
+        RETRY_ATTEMPTS_FOR_PENDING = 3
+        
         # If there are no actions, we return
         if not actions:
             self.context.logger.info("No actions to prepare")
             return Event.DONE.value, {}
-
+        
+        #Stop if all the actions have been executed
+        current_action_index = self.synchronized_data.next_action_index
+        if current_action_index >= len(
+            self.synchronized_data.actions
+        ):
+            self.context.logger.info("All actions have been executed")
+            return Event.DONE.value, {}
+        
         positions = self.synchronized_data.positions
 
         # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
@@ -867,21 +901,45 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if last_round_id != EvaluateStrategyRound.auto_round_id():
             positions = yield from self.get_positions()
-
-        if self.synchronized_data.last_action_index == len(
-            self.synchronized_data.actions
-        ):
+        
+        retry_count = self.synchronized_data.swap_retries
+        if retry_count >= RETRY_ATTEMPTS_FOR_SWAP:
+            self.context.logger.error("Retry attempts exceeded for swap tx")
             return Event.DONE.value, {}
+            
+        # check tx status if last action was bridge and swap
+        if self.synchronized_data.actions[self.synchronized_data.next_action_index - 1]["action"] == Action.BRIDGE_SWAP and self.synchronized_data.last_swap_tx != self.synchronized_data.final_tx_hash:
+            decision = yield from self.get_decision_on_swap()
 
-        current_action_index = self.synchronized_data.last_action_index + 1
-        if current_action_index == len(actions):
-            return Event.DONE.value, {}
+            # If tx is pending then we wait for at least 6 seconds for it to get confirmed
+            if decision == Decision.WAIT:
+                pending_retry_count = RETRY_ATTEMPTS_FOR_PENDING
+                while decision == Decision.WAIT and pending_retry_count > 0:
+                    yield from self.sleep(2) # Wait for 2 seconds
+                    decision = yield from self.get_decision_on_swap()  # Check the status again
+                    pending_retry_count -= 1
+                
+                # If still tx is not confirmed we retry
+                if decision == Decision.WAIT:
+                    self.context.logger.warning("There was an error executing the swap. RETRYING")
+                    return Event.RETRY.value, {
+                        "swap_retries": retry_count + 1,
+                        "last_swap_tx": self.synchronized_data.final_tx_hash,
+                        "next_action_index": current_action_index  #If this is retry attempt we execute the same action again
+                    }
+                elif decision == Decision.EXIT:
+                    self.context.logger.error("Swap failed")
+                    return Event.DONE.value, {}
 
+            elif decision == Decision.EXIT:
+                    self.context.logger.error("Swap failed")
+                    return Event.DONE.value, {}
+        
         # Prepare the next action
         next_action = Action(actions[current_action_index]["action"])
         self.context.logger.info(f"ACTION TO BE PERFORMED: {next_action}")
+        
         next_action_details = self.synchronized_data.actions[current_action_index]
-
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
@@ -910,9 +968,66 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "chain_id": chain_id,
             "safe_contract_address": safe_address,
             "positions": positions,
-            "last_action_index": current_action_index,
+            "next_action_index": current_action_index+1,
             "last_tx_period_count": self.synchronized_data.period_count,
         }
+
+    def get_decision_on_swap(self) -> Generator[None, None, str]:
+        try:
+            tx_hash = self.synchronized_data.final_tx_hash
+        except:
+            self.context.logger.error(f"No tx-hash found")
+            return SwapStatus.FAILED
+        
+        status, sub_status = yield from self.get_swap_status(tx_hash)
+        if status is None or sub_status is None:
+            return SwapStatus.FAILED
+        
+        self.context.logger.info(f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}")
+
+        #only continue if tx is fully completed
+        if status == SwapStatus.DONE:
+            if sub_status == SwapDoneSubStaus.COMPLETED:
+                return Decision.CONTINUE
+        #wait if it is pending
+        elif status == SwapStatus.PENDING:
+            if sub_status == SwapPendingSubStatus.WAIT_DESTINATION_TRANSACTION or sub_status == SwapPendingSubStatus.WAIT_SOURCE_CONFIRMATIONS:
+                return Decision.WAIT
+        # We exit if it fails
+        else:
+            return Decision.EXIT
+        
+    def get_swap_status(self, tx_hash: str) -> Generator[None, None, Tuple[str, str]]:
+
+        url = f"{self.synchronized_data.lifi_check_status_url}?txHash={tx_hash}"
+
+        response = yield from self.get_http_response(
+            method="GET",
+            url=url,
+            headers={"accept": "application/json"},
+        )
+        
+        if response.status_code != 200:
+            self.context.logger.error(
+                f"Could not retrieve data from url {url} "
+                f"Received status code {response.status_code}."
+                f"Message {response.body.message}"
+            )
+            return None, None
+
+        try:
+            tx_status = json.loads(response.body)
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from api, "
+                f"the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None, None
+
+        status = tx_status["status"]
+        sub_status = tx_status["substatus"]
+
+        return (status, sub_status)
 
     def get_enter_pool_tx_hash(
         self, positions, action

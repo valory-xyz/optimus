@@ -1055,7 +1055,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             to_address=multisend_address,
             data=bytes.fromhex(multisend_tx_hash[2:]),
         )
-        
+
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
@@ -1218,7 +1218,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         tx_request = yield from self.get_quote_for_transfer(positions, action)
         if not tx_request:
             return None, None, None
-        
+
         chain = action["from_chain"]
         safe_address = self.params.safe_contract_addresses[chain]
 
@@ -1267,11 +1267,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_token = action["to_token"]
         from_address = self.params.safe_contract_addresses[action["from_chain"]]
         to_address = self.params.safe_contract_addresses[action["to_chain"]]
-        amount = self._get_balance(action["from_chain"], action["from_token"], positions)
+        amount = self._get_balance(
+            action["from_chain"], action["from_token"], positions
+        )
 
         if from_token == to_token:
             return None
-        
+
         params = {
             "fromChain": from_chain,
             "toChain": to_chain,

@@ -51,7 +51,7 @@ class Event(Enum):
     DONE = "done"
     WAIT = "wait"
     SETTLE = "settle"
-
+    RETRY = "retry"
 
 class SynchronizedData(BaseSynchronizedData):
     """
@@ -123,11 +123,19 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(int, self.db.get("last_tx_period_count", 0))
 
     @property
-    def last_action_index(self) -> Optional[int]:
-        """Get the current action index"""
-        return cast(int, self.db.get("last_action_index", -1))
+    def next_action_index(self) -> Optional[int]:
+        """Get the next action index"""
+        return cast(int, self.db.get("next_action_index", 0))
+    
+    @property
+    def swap_retries(self) -> Optional[int]:
+        """Get the current swap retries"""
+        return cast(int, self.db.get("swap_retries", 0))
 
-
+    @property
+    def last_swap_tx(self) -> Optional[str]:
+        """Get the last swap tx"""
+        return str(self.db.get("last_swap_tx", ""))
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""
 
@@ -225,6 +233,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONE: FinishedDecisionMakingRound,
             Event.ERROR: FinishedDecisionMakingRound,
             Event.NO_MAJORITY: DecisionMakingRound,
+            Event.RETRY: DecisionMakingRound,
             Event.ROUND_TIMEOUT: DecisionMakingRound,
             Event.SETTLE: FinishedTxPreparationRound,
         },

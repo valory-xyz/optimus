@@ -13,6 +13,7 @@ alphabet_in:
 - NO_MAJORITY
 - RESET_AND_PAUSE_TIMEOUT
 - RESET_TIMEOUT
+- RETRY
 - ROUND_TIMEOUT
 - SETTLE
 - SUSPICIOUS_ACTIVITY
@@ -61,6 +62,7 @@ transition_func:
     (DecisionMakingRound, DONE): ResetAndPauseRound
     (DecisionMakingRound, ERROR): ResetAndPauseRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
+    (DecisionMakingRound, RETRY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
     (DecisionMakingRound, SETTLE): RandomnessTransactionSubmissionRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound

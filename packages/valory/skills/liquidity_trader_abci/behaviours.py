@@ -730,20 +730,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         bridge_swap_actions = []
 
         for token in tokens:
-            bridge_swap_action = {
-                "action": Action.BRIDGE_SWAP.value,
-                "from_chain": token["chain"],
-                "to_chain": self.highest_apr_pool["chain"],
-                "from_token": token["token"],
-                "from_token_symbol": token["token_symbol"],
-                "to_token": self.highest_apr_pool["token0"]
-                if token == tokens[0]
-                else self.highest_apr_pool["token1"],
-                "to_token_symbol": self.highest_apr_pool["token0_symbol"]
-                if token == tokens[0]
-                else self.highest_apr_pool["token1_symbol"],
-            }
-            bridge_swap_actions.append(bridge_swap_action)
+            if token["chain"] != self.highest_apr_pool["chain"]:
+                bridge_swap_action = {
+                    "action": Action.BRIDGE_SWAP.value,
+                    "from_chain": token["chain"],
+                    "to_chain": self.highest_apr_pool["chain"],
+                    "from_token": token["token"],
+                    "from_token_symbol": token["token_symbol"],
+                    "to_token": self.highest_apr_pool["token0"]
+                    if token == tokens[0]
+                    else self.highest_apr_pool["token1"],
+                    "to_token_symbol": self.highest_apr_pool["token0_symbol"]
+                    if token == tokens[0]
+                    else self.highest_apr_pool["token1_symbol"],
+                }
+                bridge_swap_actions.append(bridge_swap_action)
 
         return bridge_swap_actions
 
@@ -965,7 +966,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # Approve asset 1
         approval_tx_hash_1 = yield from self.get_approval_tx_hash(
-            token_address=action["assets"][0],
+            token_address=action["assets"][1],
             amount=max_amounts_in[1],
             spender=vault_address,
             chain=chain,
@@ -1047,9 +1048,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, multisend_address, tx_hash
+            safe_tx_hash=safe_tx_hash,
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value,
+            to_address=multisend_address,
+            data=bytes.fromhex(multisend_tx_hash[2:]),
         )
-
+        
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
@@ -1210,6 +1216,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Get swap tx hash"""
 
         tx_request = yield from self.get_quote_for_transfer(positions, action)
+        if not tx_request:
+            return None, None, None
+        
         chain = action["from_chain"]
         safe_address = self.params.safe_contract_addresses[chain]
 
@@ -1258,9 +1267,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_token = action["to_token"]
         from_address = self.params.safe_contract_addresses[action["from_chain"]]
         to_address = self.params.safe_contract_addresses[action["to_chain"]]
-        # amount = self._get_balance(action["from_chain"], action["from_token"], positions)
-        amount = 300000000000000000000
+        amount = self._get_balance(action["from_chain"], action["from_token"], positions)
 
+        if from_token == to_token:
+            return None
+        
         params = {
             "fromChain": from_chain,
             "toChain": to_chain,
@@ -1268,7 +1279,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "toToken": to_token,
             "fromAddress": from_address,
             "toAddress": to_address,
-            "fromAmount": 300000000000000000000,
+            "fromAmount": amount,
         }
 
         url = f"{base_url}?{urlencode(params)}"

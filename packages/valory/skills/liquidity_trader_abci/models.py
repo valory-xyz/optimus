@@ -69,4 +69,7 @@ class Params(BaseParams):
         self.lifi_request_quote_url = self._ensure(
             "lifi_request_quote_url", kwargs, str
         )
+        self.lifi_check_status_url = self._ensure(
+            "lifi_check_status_url", kwargs, str
+        )
         super().__init__(*args, **kwargs)

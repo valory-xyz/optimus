@@ -912,7 +912,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "safe_contract_address": safe_address,
             "positions": positions,
             "last_action_index": current_action_index,
-            "last_tx_period_count": self.synchronized_data.period_count
+            "last_tx_period_count": self.synchronized_data.period_count,
         }
 
     def get_enter_pool_tx_hash(
@@ -964,7 +964,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         if not vault_address:
             return None, None, None
-        
+
         max_amounts_in = [
             self._get_balance(chain, action["assets"][0], positions),
             self._get_balance(chain, action["assets"][1], positions),
@@ -1368,9 +1368,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"transaction data from api {tx_request}")
 
         if tx_request:
-            return (bytes.fromhex(tx_request["data"][2:]),  tx_request["to"], from_token, amount)
-        
+            return (
+                bytes.fromhex(tx_request["data"][2:]),
+                tx_request["to"],
+                from_token,
+                amount,
+            )
+
         return None
+
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""

@@ -27,7 +27,6 @@ from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
-from hexbytes import HexBytes
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (

@@ -27,8 +27,6 @@ from eth_abi import encode
 
 PUBLIC_ID = PublicId.from_str("valory/balancer_vault:0.1.0")
 
-
-
 class VaultContract(Contract):
     """The Weighted Stable Pool contract."""
 

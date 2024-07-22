@@ -877,7 +877,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""
-        
+
         actions = self.synchronized_data.actions
         # If there are no actions, we return
         if not actions:
@@ -889,7 +889,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
             return Event.DONE.value, {}
-        
+
         positions = self.synchronized_data.positions
 
         # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
@@ -899,7 +899,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if last_round_id != EvaluateStrategyRound.auto_round_id():
             positions = yield from self.get_positions()
-        
+
         retry_attempt = self.synchronized_data.swap_retry_count
         if retry_attempt > self.params.retry_attempts_for_swap:
             self.context.logger.error("Retry attempts exceeded for swap tx")
@@ -908,10 +908,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # check tx status if last action was bridge and swap and the last round was not DecisionMaking
         if (
             current_action_index != 0
-            and 
-            Action(actions[
-                current_action_index - 1
-            ]["action"])
+            and Action(actions[current_action_index - 1]["action"])
             == Action.BRIDGE_SWAP
             and last_round_id != DecisionMakingRound.auto_round_id()
         ):
@@ -922,11 +919,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # If tx is pending then we wait for some time for it to get confirmed
             if decision == Decision.WAIT:
                 self.context.logger.info("Waiting for tx to get executed")
-                pending_retry_count = self.params.waiting_timeout_for_status_check / 2                
+                pending_retry_count = self.params.waiting_timeout_for_status_check / 2
                 while decision == Decision.WAIT and pending_retry_count > 0:
-                    yield from self.sleep(2)  # Wait for 2 seconds between each status check
+                    yield from self.sleep(
+                        2
+                    )  # Wait for 2 seconds between each status check
                     self.context.logger.info("Checking the status of swap tx again")
-                    decision = yield from self.get_decision_on_swap()  # Check the status again
+                    decision = (
+                        yield from self.get_decision_on_swap()
+                    )  # Check the status again
                     self.context.logger.info(f"Action to take {decision}")
                     pending_retry_count -= 1
 
@@ -942,7 +943,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 elif decision == Decision.EXIT:
                     self.context.logger.error("Swap failed")
                     return Event.DONE.value, {}
-    
+
             elif decision == Decision.EXIT:
                 self.context.logger.error("Swap failed")
                 return Event.DONE.value, {}
@@ -982,7 +983,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "positions": positions,
             "next_action_index": current_action_index + 1,
             "last_tx_period_count": self.synchronized_data.period_count,
-            "swap_retry_count": 0
+            "swap_retry_count": 0,
         }
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:
@@ -1018,7 +1019,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_swap_status(self, tx_hash: str) -> Generator[None, None, Tuple[str, str]]:
         """Fetch the status of tx"""
-        
+
         url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
         self.context.logger.info(f"checking status from endpoint {url}")
 
@@ -1470,7 +1471,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "fromAddress": from_address,
             "toAddress": to_address,
             "fromAmount": amount,
-            "slippage": slippage
+            "slippage": slippage,
         }
 
         url = f"{base_url}?{urlencode(params)}"

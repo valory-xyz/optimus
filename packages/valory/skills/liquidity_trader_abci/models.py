@@ -70,6 +70,10 @@ class Params(BaseParams):
             "lifi_request_quote_url", kwargs, str
         )
         self.lifi_check_status_url = self._ensure("lifi_check_status_url", kwargs, str)
-        self.retry_attempts_for_swap = self._ensure("retry_attempts_for_swap", kwargs, int)
-        self.waiting_timeout_for_status_check = self._ensure("waiting_timeout_for_status_check", kwargs, int)
+        self.retry_attempts_for_swap = self._ensure(
+            "retry_attempts_for_swap", kwargs, int
+        )
+        self.waiting_timeout_for_status_check = self._ensure(
+            "waiting_timeout_for_status_check", kwargs, int
+        )
         super().__init__(*args, **kwargs)

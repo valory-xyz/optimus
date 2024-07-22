@@ -132,11 +132,12 @@ class SynchronizedData(BaseSynchronizedData):
     def swap_retry_count(self) -> Optional[int]:
         """Get the current swap retry count"""
         return cast(int, self.db.get("swap_retry_count", 0))
-    
+
     @property
     def final_tx_hash(self) -> str:
         """Get the verified tx hash."""
         return cast(str, self.db.get_strict("final_tx_hash"))
+
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""

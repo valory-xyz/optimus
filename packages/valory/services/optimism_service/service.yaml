@@ -101,6 +101,8 @@ extra:
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
+        retry_attempts_for_swap: ${RETRY_ATTEMPTS_FOR_SWAP:int:1}
+        waiting_timeout_for_status_check: ${WAITING_TIMEOUT_FOR_STATUS_CHECK:int:6}
 1:
   models:
     benchmark_tool:
@@ -156,6 +158,8 @@ extra:
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
+        retry_attempts_for_swap: ${RETRY_ATTEMPTS_FOR_SWAP:int:1}
+        waiting_timeout_for_status_check: ${WAITING_TIMEOUT_FOR_STATUS_CHECK:int:6}
 2:
   models:
     benchmark_tool:
@@ -211,6 +215,8 @@ extra:
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
+        retry_attempts_for_swap: ${RETRY_ATTEMPTS_FOR_SWAP:int:1}
+        waiting_timeout_for_status_check: ${WAITING_TIMEOUT_FOR_STATUS_CHECK:int:6}
 3:
   models:
     benchmark_tool:
@@ -266,6 +272,8 @@ extra:
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
+        retry_attempts_for_swap: ${RETRY_ATTEMPTS_FOR_SWAP:int:1}
+        waiting_timeout_for_status_check: ${WAITING_TIMEOUT_FOR_STATUS_CHECK:int:6}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

@@ -646,23 +646,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # assumption: only two possible pools
             if (
                 self.synchronized_data.current_pool["address"]
-                == "0x5BB3E58887264B667f915130fD04bbB56116C278"
+                == "0x0244B0025264dC5f5c113d472D579C9c994A59CE"
             ):
                 tokens = [
                     {
                         "chain": "optimism",
-                        "token": "0x4200000000000000000000000000000000000006",
-                        "token_symbol": "weth",
+                        "token": "0x4200000000000000000000000000000000000042",
+                        "token_symbol": "op",
                     },
                     {
                         "chain": "optimism",
-                        "token": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
-                        "token_symbol": "olas",
+                        "token": "0xd3594E879B358F430E20F82bea61e83562d49D48",
+                        "token_symbol": "psp",
                     },
                 ]
             elif (
                 self.synchronized_data.current_pool["address"]
-                == "0xe25EcAdcA47419E9aEE2700CeaB4e7c4b01B94ca"
+                == "0x32dF62dc3aEd2cD6224193052Ce665DC18165841"
             ):
                 tokens = [
                     {
@@ -672,8 +672,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     },
                     {
                         "chain": "arbitrum",
-                        "token": "0xa7997F0eC9fa54E89659229fB26537B6A725b798",
-                        "token_symbol": "pal",
+                        "token": "0x3082CC23568eA640225c2467653dB90e9250AaA0",
+                        "token_symbol": "rdnt",
                     },
                 ]
             if not tokens:
@@ -877,10 +877,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""
+        
         actions = self.synchronized_data.actions
-        RETRY_ATTEMPTS_FOR_SWAP = 3
-        RETRY_ATTEMPTS_FOR_PENDING = 3
-
         # If there are no actions, we return
         if not actions:
             self.context.logger.info("No actions to prepare")
@@ -891,7 +889,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
             return Event.DONE.value, {}
-
+        
         positions = self.synchronized_data.positions
 
         # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
@@ -901,47 +899,50 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if last_round_id != EvaluateStrategyRound.auto_round_id():
             positions = yield from self.get_positions()
-
-        retry_count = self.synchronized_data.swap_retries
-        if retry_count >= RETRY_ATTEMPTS_FOR_SWAP:
+        
+        retry_attempt = self.synchronized_data.swap_retry_count
+        if retry_attempt > self.params.retry_attempts_for_swap:
             self.context.logger.error("Retry attempts exceeded for swap tx")
             return Event.DONE.value, {}
 
-        # check tx status if last action was bridge and swap
+        # check tx status if last action was bridge and swap and the last round was not DecisionMaking
         if (
-            self.synchronized_data.actions[
-                self.synchronized_data.next_action_index - 1
-            ]["action"]
+            current_action_index != 0
+            and 
+            Action(actions[
+                current_action_index - 1
+            ]["action"])
             == Action.BRIDGE_SWAP
-            and self.synchronized_data.last_swap_tx
-            != self.synchronized_data.final_tx_hash
+            and last_round_id != DecisionMakingRound.auto_round_id()
         ):
+            self.context.logger.info("Checking the status of swap tx")
             decision = yield from self.get_decision_on_swap()
+            self.context.logger.info(f"Action to take {decision}")
 
-            # If tx is pending then we wait for at least 6 seconds for it to get confirmed
+            # If tx is pending then we wait for some time for it to get confirmed
             if decision == Decision.WAIT:
-                pending_retry_count = RETRY_ATTEMPTS_FOR_PENDING
+                self.context.logger.info("Waiting for tx to get executed")
+                pending_retry_count = self.params.waiting_timeout_for_status_check / 2                
                 while decision == Decision.WAIT and pending_retry_count > 0:
-                    yield from self.sleep(2)  # Wait for 2 seconds
-                    decision = (
-                        yield from self.get_decision_on_swap()
-                    )  # Check the status again
+                    yield from self.sleep(2)  # Wait for 2 seconds between each status check
+                    self.context.logger.info("Checking the status of swap tx again")
+                    decision = yield from self.get_decision_on_swap()  # Check the status again
+                    self.context.logger.info(f"Action to take {decision}")
                     pending_retry_count -= 1
 
                 # If still tx is not confirmed we retry
                 if decision == Decision.WAIT:
                     self.context.logger.warning(
-                        "There was an error executing the swap. RETRYING"
+                        f"There was an error executing the swap. Retry count {retry_attempt+1} for tx_hash {self.synchronized_data.final_tx_hash}"
                     )
                     return Event.RETRY.value, {
-                        "swap_retries": retry_count + 1,
-                        "last_swap_tx": self.synchronized_data.final_tx_hash,
+                        "swap_retry_count": retry_attempt + 1,
                         "next_action_index": current_action_index,  # If this is retry attempt we execute the same action again
                     }
                 elif decision == Decision.EXIT:
                     self.context.logger.error("Swap failed")
                     return Event.DONE.value, {}
-
+    
             elif decision == Decision.EXIT:
                 self.context.logger.error("Swap failed")
                 return Event.DONE.value, {}
@@ -981,18 +982,20 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "positions": positions,
             "next_action_index": current_action_index + 1,
             "last_tx_period_count": self.synchronized_data.period_count,
+            "swap_retry_count": 0
         }
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:
         try:
             tx_hash = self.synchronized_data.final_tx_hash
+            self.context.logger.error(f"final tx hash {tx_hash}")
         except:
-            self.context.logger.error(f"No tx-hash found")
-            return SwapStatus.FAILED
+            self.context.logger.error("No tx-hash found")
+            return Decision.EXIT
 
         status, sub_status = yield from self.get_swap_status(tx_hash)
         if status is None or sub_status is None:
-            return SwapStatus.FAILED
+            return Decision.EXIT
 
         self.context.logger.info(
             f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}"
@@ -1009,12 +1012,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 or sub_status == SwapPendingSubStatus.WAIT_SOURCE_CONFIRMATIONS
             ):
                 return Decision.WAIT
-        # We exit if it fails
+        # exit if it fails
         else:
             return Decision.EXIT
 
     def get_swap_status(self, tx_hash: str) -> Generator[None, None, Tuple[str, str]]:
-        url = f"{self.synchronized_data.lifi_check_status_url}?txHash={tx_hash}"
+        """Fetch the status of tx"""
+        
+        url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
+        self.context.logger.info(f"checking status from endpoint {url}")
 
         response = yield from self.get_http_response(
             method="GET",
@@ -1024,9 +1030,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code != 200:
             self.context.logger.error(
-                f"Could not retrieve data from url {url} "
-                f"Received status code {response.status_code}."
-                f"Message {response.body.message}"
+                f"Received status code {response.status_code} from url {url}."
+                f"Message {response.body}"
             )
             return None, None
 
@@ -1449,10 +1454,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_token = action["to_token"]
         from_address = self.params.safe_contract_addresses[action["from_chain"]]
         to_address = self.params.safe_contract_addresses[action["to_chain"]]
-        # amount = self._get_balance(
-        #     action["from_chain"], action["from_token"], positions
-        # )
-        amount = 10000000000000000000
+        amount = self._get_balance(
+            action["from_chain"], action["from_token"], positions
+        )
+        slippage = 0.08
 
         if from_token == to_token:
             return None, None, None
@@ -1465,6 +1470,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "fromAddress": from_address,
             "toAddress": to_address,
             "fromAmount": amount,
+            "slippage": slippage
         }
 
         url = f"{base_url}?{urlencode(params)}"
@@ -1478,9 +1484,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code != 200:
             self.context.logger.error(
-                f"Could not retrieve data from url {self.params.lifi_request_quote_url} "
-                f"Received status code {response.status_code}."
-                f"Message {response.body.message}"
+                f"Received status code {response.status_code} from url {url}."
+                f"Message {response.body}"
             )
             return None, None, None
 

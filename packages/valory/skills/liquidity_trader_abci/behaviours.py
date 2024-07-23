@@ -82,6 +82,31 @@ class Action(Enum):
     BRIDGE_SWAP = "BridgeAndSwap"
 
 
+class SwapStatus(Enum):
+    DONE = "done"
+    PENDING = "pending"
+    INVALID = "invalid"
+    NOT_FOUND = "not_found"
+    FAILED = "failed"
+
+
+class SwapPendingSubStatus(Enum):
+    WAIT_SOURCE_CONFIRMATIONS = "wait_source_confirmations"
+    WAIT_DESTINATION_TRANSACTION = "wait_destination_transaction"
+
+
+class SwapDoneSubStaus(Enum):
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    REFUNDED = "refunded"
+
+
+class Decision(Enum):
+    CONTINUE = "continue"
+    WAIT = "wait"
+    EXIT = "exit"
+
+
 class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
@@ -298,6 +323,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                             "address": pool_address,
                             "dex_type": dex_type,
                             "balance": balance,
+                            "apr": self.synchronized_data.current_pool_apr,
                         }
                         self.context.logger.info(
                             f"Current pool updated to: {self.current_pool}"
@@ -421,11 +447,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.get_highest_apr_pool()
-            invest_in_pool = self.get_decision()
             actions = []
-            if invest_in_pool:
-                actions = self.get_order_of_transactions()
-                self.context.logger.info(f"Actions: {actions}")
+            if self.highest_apr_pool is not None:
+                invest_in_pool = self.get_decision()
+                if invest_in_pool:
+                    actions = self.get_order_of_transactions()
+                    self.context.logger.info(f"Actions: {actions}")
 
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
@@ -545,20 +572,34 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         for campaign_list in campaigns.values():
             for campaign in campaign_list.values():
                 dex_type = campaign.get("type")
-                if dex_type in allowed_dexs:
-                    token0, token1 = self._get_tokens_from_campaign(campaign, dex_type)
-                    if (
-                        token0 in allowed_assets.values()
-                        and token1 in allowed_assets.values()
-                    ):
-                        if (
-                            campaign.get("mainParameter")
-                            in self.params.allowed_lp_pool_addresses[dex_type][chain]
-                        ):
-                            filtered_pools[dex_type][chain].append(campaign)
-                            self.context.logger.info(
-                                f"Added campaign for {chain} on {dex_type}: {campaign}"
-                            )
+                # The pool apr should be greater than the current pool apr
+                if campaign["apr"] > self.synchronized_data.current_pool.get(
+                    "apr", 0.0
+                ):
+                    if dex_type in allowed_dexs:
+                        token0, token1 = self._get_tokens_from_campaign(
+                            campaign, dex_type
+                        )
+                        campaign_pool_address = campaign.get("mainParameter", "")
+                        current_pool_address = self.synchronized_data.current_pool.get(
+                            "address", ""
+                        )
+                        # The pool should not be the current pool
+                        if campaign_pool_address != current_pool_address:
+                            if (
+                                token0 in allowed_assets.values()
+                                and token1 in allowed_assets.values()
+                            ):
+                                if (
+                                    campaign.get("mainParameter")
+                                    in self.params.allowed_lp_pool_addresses[dex_type][
+                                        chain
+                                    ]
+                                ):
+                                    filtered_pools[dex_type][chain].append(campaign)
+                                    self.context.logger.info(
+                                        f"Added campaign for {chain} on {dex_type}: {campaign}"
+                                    )
 
     def _get_tokens_from_campaign(self, campaign, dex_type):
         """Extract tokens from campaign based on DEX type"""
@@ -620,23 +661,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # assumption: only two possible pools
             if (
                 self.synchronized_data.current_pool["address"]
-                == "0x5BB3E58887264B667f915130fD04bbB56116C278"
+                == "0x0244B0025264dC5f5c113d472D579C9c994A59CE"
             ):
                 tokens = [
                     {
                         "chain": "optimism",
-                        "token": "0x4200000000000000000000000000000000000006",
-                        "token_symbol": "weth",
+                        "token": "0x4200000000000000000000000000000000000042",
+                        "token_symbol": "op",
                     },
                     {
                         "chain": "optimism",
-                        "token": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
-                        "token_symbol": "olas",
+                        "token": "0xd3594E879B358F430E20F82bea61e83562d49D48",
+                        "token_symbol": "psp",
                     },
                 ]
             elif (
                 self.synchronized_data.current_pool["address"]
-                == "0xe25EcAdcA47419E9aEE2700CeaB4e7c4b01B94ca"
+                == "0x32dF62dc3aEd2cD6224193052Ce665DC18165841"
             ):
                 tokens = [
                     {
@@ -646,8 +687,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     },
                     {
                         "chain": "arbitrum",
-                        "token": "0xa7997F0eC9fa54E89659229fB26537B6A725b798",
-                        "token_symbol": "pal",
+                        "token": "0x3082CC23568eA640225c2467653dB90e9250AaA0",
+                        "token_symbol": "rdnt",
                     },
                 ]
             if not tokens:
@@ -770,6 +811,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.highest_apr_pool["token1"],
             ],
             "pool_address": self.highest_apr_pool["pool_address"],
+            "apr": self.highest_apr_pool["apr"],
         }
 
     def _get_balancer_pool_tokens(
@@ -851,41 +893,72 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""
-        actions = self.synchronized_data.actions
 
+        actions = self.synchronized_data.actions
         # If there are no actions, we return
         if not actions:
             self.context.logger.info("No actions to prepare")
             return Event.DONE.value, {}
 
-        positions = self.synchronized_data.positions
+        # Stop if all the actions have been executed
+        current_action_index = self.synchronized_data.next_action_index
+        if current_action_index >= len(self.synchronized_data.actions):
+            self.context.logger.info("All actions have been executed")
+            return Event.DONE.value, {}
 
-        # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
         last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
             -1
         ].round_id
 
+        # check tx status if last action was bridge and swap and the last round was not DecisionMaking
+        if (
+            current_action_index != 0
+            and Action(actions[current_action_index - 1]["action"])
+            == Action.BRIDGE_SWAP
+            and last_round_id != DecisionMakingRound.auto_round_id()
+        ):
+            self.context.logger.info("Checking the status of swap tx")
+            decision = yield from self.get_decision_on_swap()
+            self.context.logger.info(f"Action to take {decision}")
+
+            # If tx is pending then we wait until it gets confirmed or refunded
+            if decision == Decision.WAIT:
+                self.context.logger.info("Waiting for tx to get executed")
+                while decision == Decision.WAIT:
+                    yield from self.sleep(
+                        2
+                    )  # Wait for 2 seconds between each status check
+                    self.context.logger.info("Checking the status of swap tx again")
+                    decision = (
+                        yield from self.get_decision_on_swap()
+                    )  # Check the status again
+                    self.context.logger.info(f"Action to take {decision}")
+
+                if decision == Decision.EXIT:
+                    self.context.logger.error("Swap failed")
+                    return Event.DONE.value, {}
+
+            elif decision == Decision.EXIT:
+                self.context.logger.error("Swap failed")
+                return Event.DONE.value, {}
+
+        positions = self.synchronized_data.positions
+        # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
         if last_round_id != EvaluateStrategyRound.auto_round_id():
             positions = yield from self.get_positions()
-
-        if self.synchronized_data.last_action_index == len(
-            self.synchronized_data.actions
-        ):
-            return Event.DONE.value, {}
-
-        current_action_index = self.synchronized_data.last_action_index + 1
-        if current_action_index == len(actions):
-            return Event.DONE.value, {}
 
         # Prepare the next action
         next_action = Action(actions[current_action_index]["action"])
         self.context.logger.info(f"ACTION TO BE PERFORMED: {next_action}")
         next_action_details = self.synchronized_data.actions[current_action_index]
+        current_pool_apr = None
 
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
             )
+            current_pool_apr = next_action_details["apr"]
+
         elif next_action == Action.EXIT_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_exit_pool_tx_hash(
                 positions, next_action_details
@@ -910,9 +983,80 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "chain_id": chain_id,
             "safe_contract_address": safe_address,
             "positions": positions,
-            "last_action_index": current_action_index,
+            "next_action_index": current_action_index + 1,
             "last_tx_period_count": self.synchronized_data.period_count,
+            **({"current_pool_apr": current_pool_apr} if current_pool_apr else {}),
         }
+
+    def get_decision_on_swap(self) -> Generator[None, None, str]:
+        try:
+            tx_hash = self.synchronized_data.final_tx_hash
+            self.context.logger.error(f"final tx hash {tx_hash}")
+        except:
+            self.context.logger.error("No tx-hash found")
+            return Decision.EXIT
+
+        status, sub_status = yield from self.get_swap_status(tx_hash)
+        if status is None or sub_status is None:
+            return Decision.EXIT
+
+        self.context.logger.info(
+            f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}"
+        )
+
+        if status == SwapStatus.DONE:
+            # only continue if tx is fully completed
+            if (
+                sub_status == SwapDoneSubStaus.COMPLETED
+                or sub_status == SwapDoneSubStaus.PARTIAL
+            ):
+                return Decision.CONTINUE
+            # exit if it is refunded
+            if sub_status == SwapDoneSubStaus.REFUNDED:
+                return Decision.EXIT
+        # wait if it is pending
+        elif status == SwapStatus.PENDING:
+            if (
+                sub_status == SwapPendingSubStatus.WAIT_DESTINATION_TRANSACTION
+                or sub_status == SwapPendingSubStatus.WAIT_SOURCE_CONFIRMATIONS
+            ):
+                return Decision.WAIT
+        # exit if it fails
+        else:
+            return Decision.EXIT
+
+    def get_swap_status(self, tx_hash: str) -> Generator[None, None, Tuple[str, str]]:
+        """Fetch the status of tx"""
+
+        url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
+        self.context.logger.info(f"checking status from endpoint {url}")
+
+        response = yield from self.get_http_response(
+            method="GET",
+            url=url,
+            headers={"accept": "application/json"},
+        )
+
+        if response.status_code != 200:
+            self.context.logger.error(
+                f"Received status code {response.status_code} from url {url}."
+                f"Message {response.body}"
+            )
+            return None, None
+
+        try:
+            tx_status = json.loads(response.body)
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from api, "
+                f"the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None, None
+
+        status = tx_status["status"]
+        sub_status = tx_status["substatus"]
+
+        return (status, sub_status)
 
     def get_enter_pool_tx_hash(
         self, positions, action
@@ -1319,10 +1463,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_token = action["to_token"]
         from_address = self.params.safe_contract_addresses[action["from_chain"]]
         to_address = self.params.safe_contract_addresses[action["to_chain"]]
-        # amount = self._get_balance(
-        #     action["from_chain"], action["from_token"], positions
-        # )
-        amount = 10000000000000000000
+        amount = self._get_balance(
+            action["from_chain"], action["from_token"], positions
+        )
+        slippage = self.params.slippage_for_swap
 
         if from_token == to_token:
             return None, None, None
@@ -1335,6 +1479,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "fromAddress": from_address,
             "toAddress": to_address,
             "fromAmount": amount,
+            "slippage": slippage,
         }
 
         url = f"{base_url}?{urlencode(params)}"
@@ -1348,9 +1493,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code != 200:
             self.context.logger.error(
-                f"Could not retrieve data from url {self.params.lifi_request_quote_url} "
-                f"Received status code {response.status_code}."
-                f"Message {response.body.message}"
+                f"Received status code {response.status_code} from url {url}."
+                f"Message {response.body}"
             )
             return None, None, None
 

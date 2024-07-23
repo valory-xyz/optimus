@@ -63,6 +63,10 @@ def main() -> None:
             "pool_data_api_url"
         ] = f"${{str:{os.getenv('POOL_DATA_API_URL')}}}"
 
+        config[5]["models"]["params"]["args"][
+            "slippage_for_swap"
+        ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
+
     with open(Path("optimism_agent", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)
 

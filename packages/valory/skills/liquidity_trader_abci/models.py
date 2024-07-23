@@ -69,4 +69,6 @@ class Params(BaseParams):
         self.lifi_request_quote_url = self._ensure(
             "lifi_request_quote_url", kwargs, str
         )
+        self.lifi_check_status_url = self._ensure("lifi_check_status_url", kwargs, str)
+        self.slippage_for_swap = self._ensure("slippage_for_swap", kwargs, float)
         super().__init__(*args, **kwargs)

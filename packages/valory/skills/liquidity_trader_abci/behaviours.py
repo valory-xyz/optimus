@@ -81,6 +81,7 @@ class Action(Enum):
     ENTER_POOL = "EnterPool"
     BRIDGE_SWAP = "BridgeAndSwap"
 
+
 class SwapStatus(Enum):
     DONE = "done"
     PENDING = "pending"
@@ -88,14 +89,17 @@ class SwapStatus(Enum):
     NOT_FOUND = "not_found"
     FAILED = "failed"
 
+
 class SwapPendingSubStatus(Enum):
     WAIT_SOURCE_CONFIRMATIONS = "wait_source_confirmations"
     WAIT_DESTINATION_TRANSACTION = "wait_destination_transaction"
+
 
 class SwapDoneSubStaus(Enum):
     COMPLETED = "completed"
     PARTIAL = "partial"
     REFUNDED = "refunded"
+
 
 class Decision(Enum):
     CONTINUE = "continue"
@@ -569,7 +573,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for campaign in campaign_list.values():
                 dex_type = campaign.get("type")
                 # The pool apr should be greater than the current pool apr
-                if campaign["apr"] > self.synchronized_data.current_pool.get("apr", 0.0):
+                if campaign["apr"] > self.synchronized_data.current_pool.get(
+                    "apr", 0.0
+                ):
                     if dex_type in allowed_dexs:
                         token0, token1 = self._get_tokens_from_campaign(
                             campaign, dex_type

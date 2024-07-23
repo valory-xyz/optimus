@@ -81,7 +81,6 @@ class Action(Enum):
     ENTER_POOL = "EnterPool"
     BRIDGE_SWAP = "BridgeAndSwap"
 
-
 class SwapStatus(Enum):
     DONE = "done"
     PENDING = "pending"
@@ -89,22 +88,18 @@ class SwapStatus(Enum):
     NOT_FOUND = "not_found"
     FAILED = "failed"
 
-
 class SwapPendingSubStatus(Enum):
     WAIT_SOURCE_CONFIRMATIONS = "wait_source_confirmations"
     WAIT_DESTINATION_TRANSACTION = "wait_destination_transaction"
-
 
 class SwapDoneSubStaus(Enum):
     COMPLETED = "completed"
     PARTIAL = "partial"
     REFUNDED = "refunded"
 
-
 class Decision(Enum):
     CONTINUE = "continue"
     WAIT = "wait"
-    RETRY = "retry"
     EXIT = "exit"
 
 
@@ -574,7 +569,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for campaign in campaign_list.values():
                 dex_type = campaign.get("type")
                 # The pool apr should be greater than the current pool apr
-                if campaign["apr"] > self.synchronized_data.current_pool.get("apr", 0):
+                if campaign["apr"] > self.synchronized_data.current_pool.get("apr", 0.0):
                     if dex_type in allowed_dexs:
                         token0, token1 = self._get_tokens_from_campaign(
                             campaign, dex_type
@@ -905,20 +900,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("All actions have been executed")
             return Event.DONE.value, {}
 
-        positions = self.synchronized_data.positions
-
-        # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
         last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
             -1
         ].round_id
-
-        if last_round_id != EvaluateStrategyRound.auto_round_id():
-            positions = yield from self.get_positions()
-
-        retry_attempt = self.synchronized_data.swap_retry_count
-        if retry_attempt > self.params.retry_attempts_for_swap:
-            self.context.logger.error("Retry attempts exceeded for swap tx")
-            return Event.DONE.value, {}
 
         # check tx status if last action was bridge and swap and the last round was not DecisionMaking
         if (
@@ -931,11 +915,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             decision = yield from self.get_decision_on_swap()
             self.context.logger.info(f"Action to take {decision}")
 
-            # If tx is pending then we wait for some time for it to get confirmed
+            # If tx is pending then we wait until it gets confirmed or refunded
             if decision == Decision.WAIT:
                 self.context.logger.info("Waiting for tx to get executed")
-                pending_retry_count = self.params.waiting_timeout_for_status_check / 2
-                while decision == Decision.WAIT and pending_retry_count > 0:
+                while decision == Decision.WAIT:
                     yield from self.sleep(
                         2
                     )  # Wait for 2 seconds between each status check
@@ -944,24 +927,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                         yield from self.get_decision_on_swap()
                     )  # Check the status again
                     self.context.logger.info(f"Action to take {decision}")
-                    pending_retry_count -= 1
 
-                # If still tx is not confirmed we retry
-                if decision == Decision.WAIT:
-                    self.context.logger.warning(
-                        f"There was an error executing the swap. Retry count {retry_attempt+1} for tx_hash {self.synchronized_data.final_tx_hash}"
-                    )
-                    return Event.RETRY.value, {
-                        "swap_retry_count": retry_attempt + 1,
-                        "next_action_index": current_action_index,  # If this is retry attempt we execute the same action again
-                    }
-                elif decision == Decision.EXIT:
+                if decision == Decision.EXIT:
                     self.context.logger.error("Swap failed")
                     return Event.DONE.value, {}
 
             elif decision == Decision.EXIT:
                 self.context.logger.error("Swap failed")
                 return Event.DONE.value, {}
+
+        positions = self.synchronized_data.positions
+        # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
+        if last_round_id != EvaluateStrategyRound.auto_round_id():
+            positions = yield from self.get_positions()
 
         # Prepare the next action
         next_action = Action(actions[current_action_index]["action"])
@@ -1001,7 +979,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "positions": positions,
             "next_action_index": current_action_index + 1,
             "last_tx_period_count": self.synchronized_data.period_count,
-            "swap_retry_count": 0,
             **({"current_pool_apr": current_pool_apr} if current_pool_apr else {}),
         }
 
@@ -1021,10 +998,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}"
         )
 
-        # only continue if tx is fully completed
         if status == SwapStatus.DONE:
-            if sub_status == SwapDoneSubStaus.COMPLETED:
+            # only continue if tx is fully completed
+            if (
+                sub_status == SwapDoneSubStaus.COMPLETED
+                or sub_status == SwapDoneSubStaus.PARTIAL
+            ):
                 return Decision.CONTINUE
+            # exit if it is refunded
+            if sub_status == SwapDoneSubStaus.REFUNDED:
+                return Decision.EXIT
         # wait if it is pending
         elif status == SwapStatus.PENDING:
             if (
@@ -1477,7 +1460,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         amount = self._get_balance(
             action["from_chain"], action["from_token"], positions
         )
-        slippage = 0.08
+        slippage = self.params.slippage_for_swap
 
         if from_token == to_token:
             return None, None, None

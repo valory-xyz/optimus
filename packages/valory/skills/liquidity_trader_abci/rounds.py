@@ -141,8 +141,7 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def current_pool_apr(self) -> Optional[int]:
         """Get the current pool apr"""
-        current_pool_apr = self.db.get_strict("current_pool_apr")
-        return int(current_pool_apr) if current_pool_apr is not None else None
+        return cast(int, self.db.get("current_pool_apr", 0))
 
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
@@ -256,7 +255,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound,
     }
     event_to_timeout: EventToTimeout = {}
-    cross_period_persisted_keys: FrozenSet[str] = frozenset()
+    cross_period_persisted_keys: FrozenSet[str] = frozenset(
+        {
+            get_name(SynchronizedData.current_pool_apr),
+        }
+    )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         GetPositionsRound: set(),
         DecisionMakingRound: set(),

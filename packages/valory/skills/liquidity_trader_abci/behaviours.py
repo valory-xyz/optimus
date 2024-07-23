@@ -324,11 +324,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                             "address": pool_address,
                             "dex_type": dex_type,
                             "balance": balance,
-                            "apr": (
-                                list(self.synchronized_data.db._data.values())[-2]
-                            ).get("current_pool_apr", [0])[0]
-                            if self.synchronized_data.period_count >= 1
-                            else 0,
+                            "apr": self.synchronized_data.current_pool_apr,
                         }
                         self.context.logger.info(
                             f"Current pool updated to: {self.current_pool}"

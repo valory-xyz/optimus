@@ -8,20 +8,20 @@ fingerprint:
   __init__.py: bafybeidpghiw2mflx65pxagjjfkco2dfqc3gmfdgxkg5yb4xhk47of22wa
 fingerprint_ignore_patterns: []
 connections:
-- valory/abci:0.1.0:bafybeibe5opulxvsjan6dnjspdxxlusdm3yx67rza5ynhvcip4luzrkop4
+- valory/abci:0.1.0:bafybeidi3jtubhxbstw26wigbrn42art3kinrckx6qdbsinz3noqdinffa
 - valory/http_client:0.23.0:bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
-- valory/ipfs:0.1.0:bafybeigcijdbwgdekow5c2ikeltetoteabfp52ewy3xfkd7ygaqbl7j3ke
-- valory/ledger:0.19.0:bafybeig7woeog4srdby75hpjkmx4rhpkzncbf4h2pm5r6varsp26pf2uhu
+- valory/ipfs:0.1.0:bafybeidliv233a35s3djsmwppm7ci2mfnhdqmfeuabowdfbk3coyzqxynu
+- valory/ledger:0.19.0:bafybeidphjapndobkcgoq7swwroeumkfzpz5ap4xqbdvyg6kgfb655bwtm
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 contracts:
-- valory/gnosis_safe:0.1.0:bafybeiakydsxx4j7oxwyucnzixlrhvfbje5cdjl6naiiun4aommdfr5pkq
-- valory/gnosis_safe_proxy_factory:0.1.0:bafybeih3l5lgrccd45ymd4lfru22ex2wgmjzqne37rja4ehxgzirabm6v4
+- valory/gnosis_safe:0.1.0:bafybeiaqcv6nyeymfpaquarngpyq6ts27jic7hxvc4ufflue3yl5wfqriu
+- valory/gnosis_safe_proxy_factory:0.1.0:bafybeib4zti2oyc2h4edxknkzdzdnmxczembse5r54hlf3cm4comsuvhiu
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/service_registry:0.1.0:bafybeie5fakcu3fnpako5stfzmfz2a65ruodusia3ap6othlmtiug6kfvm
-- valory/balancer_weighted_pool:0.1.0:bafybeifmrnwg2wz7a6kgbzll4lb37itpmsi3rxwdlr54wvp55n7e64ev4q
-- valory/balancer_vault:0.1.0:bafybeid5rm3y4t6svlnrqxsnozcbwymjvjo3bdgvdv5ozxi7vnms6335eq
-- valory/velodrome_pool:0.1.0:bafybeiax7ipsspcz7v6d3ajpzz7y2bgllbynivhfywcnz7udq5z26fsm6a
+- valory/service_registry:0.1.0:bafybeifl2e2ga3nk55fovdt6xk3r4zyzwvn5cttga3d7x6wn56vwsw23qi
+- valory/balancer_weighted_pool:0.1.0:bafybeia3am6zkmr27hi4po62mirdoqwrghfae2qqsmkfsijta4s5zvbrbe
+- valory/balancer_vault:0.1.0:bafybeihyndew7buu3rzuhtsxgog6txzwedyovov3rjtzyuxgd7vvptcb4q
+- valory/velodrome_pool:0.1.0:bafybeibpqhyd6vu6euffg4vbocd42riygz6tfgjmhmtpfp6jnsjy4emrwm
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -32,14 +32,14 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
 - valory/tendermint:0.1.0:bafybeig4mi3vmlv5zpbjbfuzcgida6j5f2nhrpedxicmrrfjweqc5r7cra
 skills:
-- valory/abstract_abci:0.1.0:bafybeidb6mfbe7v4ot2fm4h2h66wjr4sbmxox5vrbkw7pcffihta2afvk4
-- valory/abstract_round_abci:0.1.0:bafybeigud2sytkb2ca7lwk7qcz2mycdevdh7qy725fxvwioeeqr7xpwq4e
-- valory/liquidity_trader_abci:0.1.0:bafybeicqtjgixips3mvniwp624glv6wdlgsvkstzm3dpjeweqzxbvmwzku
-- valory/superagent_abci:0.1.0:bafybeidkr37hv5tsiscfig5j6m2ahxhyde7xj7iq3bubug2dilzxbqj43m
-- valory/registration_abci:0.1.0:bafybeieznuear6lfqu5lzz2ba47nvr7fstyvebam2tngoklzb7itg7xzxe
-- valory/reset_pause_abci:0.1.0:bafybeiadqtlfjx3fjxro4djc2uv2r2mgvzfva2irsdi2oh6lozjlskoolu
-- valory/termination_abci:0.1.0:bafybeig4olfu2nw3tdasxhiiecv2qvs2kj5iuzuy3jecc5puvh5r7gnvqe
-- valory/transaction_settlement_abci:0.1.0:bafybeigw5fj54hcqur3kk2z2d3hke56wcdza5i7xbsn3ve55tsqeh6dvye
+- valory/abstract_abci:0.1.0:bafybeigihbaefe22hhsno6gfpvv5hn46pikg4vdakhrycbvntdpufrd7xq
+- valory/abstract_round_abci:0.1.0:bafybeihkq6n7ug5eyqbf3t6q2mqwryecjkqgjg6375cyvvfdylivo25z5u
+- valory/liquidity_trader_abci:0.1.0:bafybeihs6xrhocu6r7gsww2dbjfmmi65iazasig2jkqg75d5xe5irfz27i
+- valory/superagent_abci:0.1.0:bafybeibk7hldddfatnglrwthastvekexligegti5dpk6kmg67ebjusekeq
+- valory/registration_abci:0.1.0:bafybeib4a3zmsmbebd74whk7sfnbcv7dwglrirmu53afrlo6ar2xi4t54q
+- valory/reset_pause_abci:0.1.0:bafybeief6h4sqqh2ydiri54sc6dqcjmiwdiss5zbphcmpkbv5sblpzwt4i
+- valory/termination_abci:0.1.0:bafybeifs4s5hj5pvzu26ph3noynebzsukmohmijnysxlnompgquacvgz6m
+- valory/transaction_settlement_abci:0.1.0:bafybeigpdrxzui4wgea7nno4n6x3qln3tc4tebheqvfsnnimiavmgzqjaq
 default_ledger: ethereum
 required_ledgers:
 - ethereum

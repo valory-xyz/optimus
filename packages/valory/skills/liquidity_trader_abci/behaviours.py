@@ -324,6 +324,11 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                             "address": pool_address,
                             "dex_type": dex_type,
                             "balance": balance,
+                            "apr": (
+                                list(self.synchronized_data.db._data.values())[-2]
+                            ).get("current_pool_apr", [0])[0]
+                            if self.synchronized_data.period_count >= 1
+                            else 0,
                         }
                         self.context.logger.info(
                             f"Current pool updated to: {self.current_pool}"
@@ -447,11 +452,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.get_highest_apr_pool()
-            invest_in_pool = self.get_decision()
             actions = []
-            if invest_in_pool:
-                actions = self.get_order_of_transactions()
-                self.context.logger.info(f"Actions: {actions}")
+            if self.highest_apr_pool is not None:
+                invest_in_pool = self.get_decision()
+                if invest_in_pool:
+                    actions = self.get_order_of_transactions()
+                    self.context.logger.info(f"Actions: {actions}")
 
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
@@ -571,20 +577,32 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         for campaign_list in campaigns.values():
             for campaign in campaign_list.values():
                 dex_type = campaign.get("type")
-                if dex_type in allowed_dexs:
-                    token0, token1 = self._get_tokens_from_campaign(campaign, dex_type)
-                    if (
-                        token0 in allowed_assets.values()
-                        and token1 in allowed_assets.values()
-                    ):
-                        if (
-                            campaign.get("mainParameter")
-                            in self.params.allowed_lp_pool_addresses[dex_type][chain]
-                        ):
-                            filtered_pools[dex_type][chain].append(campaign)
-                            self.context.logger.info(
-                                f"Added campaign for {chain} on {dex_type}: {campaign}"
-                            )
+                # The pool apr should be greater than the current pool apr
+                if campaign["apr"] > self.synchronized_data.current_pool.get("apr", 0):
+                    if dex_type in allowed_dexs:
+                        token0, token1 = self._get_tokens_from_campaign(
+                            campaign, dex_type
+                        )
+                        campaign_pool_address = campaign.get("mainParameter", "")
+                        current_pool_address = self.synchronized_data.current_pool.get(
+                            "address", ""
+                        )
+                        # The pool should not be the current pool
+                        if campaign_pool_address != current_pool_address:
+                            if (
+                                token0 in allowed_assets.values()
+                                and token1 in allowed_assets.values()
+                            ):
+                                if (
+                                    campaign.get("mainParameter")
+                                    in self.params.allowed_lp_pool_addresses[dex_type][
+                                        chain
+                                    ]
+                                ):
+                                    filtered_pools[dex_type][chain].append(campaign)
+                                    self.context.logger.info(
+                                        f"Added campaign for {chain} on {dex_type}: {campaign}"
+                                    )
 
     def _get_tokens_from_campaign(self, campaign, dex_type):
         """Extract tokens from campaign based on DEX type"""
@@ -796,6 +814,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.highest_apr_pool["token1"],
             ],
             "pool_address": self.highest_apr_pool["pool_address"],
+            "apr": self.highest_apr_pool["apr"],
         }
 
     def _get_balancer_pool_tokens(
@@ -951,12 +970,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # Prepare the next action
         next_action = Action(actions[current_action_index]["action"])
         self.context.logger.info(f"ACTION TO BE PERFORMED: {next_action}")
-
         next_action_details = self.synchronized_data.actions[current_action_index]
+        current_pool_apr = None
+
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
             )
+            current_pool_apr = next_action_details["apr"]
+
         elif next_action == Action.EXIT_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_exit_pool_tx_hash(
                 positions, next_action_details
@@ -984,6 +1006,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "next_action_index": current_action_index + 1,
             "last_tx_period_count": self.synchronized_data.period_count,
             "swap_retry_count": 0,
+            **({"current_pool_apr": current_pool_apr} if current_pool_apr else {}),
         }
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:

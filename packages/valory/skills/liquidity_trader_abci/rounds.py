@@ -138,6 +138,12 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the verified tx hash."""
         return cast(str, self.db.get_strict("final_tx_hash"))
 
+    @property
+    def current_pool_apr(self) -> Optional[int]:
+        """Get the current pool apr"""
+        current_pool_apr = self.db.get_strict("current_pool_apr")
+        return int(current_pool_apr) if current_pool_apr is not None else None
+
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""

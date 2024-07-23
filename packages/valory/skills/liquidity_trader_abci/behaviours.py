@@ -83,6 +83,8 @@ class Action(Enum):
 
 
 class SwapStatus(Enum):
+    """SwapStatus"""
+
     DONE = "done"
     PENDING = "pending"
     INVALID = "invalid"
@@ -91,17 +93,23 @@ class SwapStatus(Enum):
 
 
 class SwapPendingSubStatus(Enum):
+    """SwapPendingSubStatus"""
+
     WAIT_SOURCE_CONFIRMATIONS = "wait_source_confirmations"
     WAIT_DESTINATION_TRANSACTION = "wait_destination_transaction"
 
 
 class SwapDoneSubStaus(Enum):
+    """SwapDoneSubStaus"""
+
     COMPLETED = "completed"
     PARTIAL = "partial"
     REFUNDED = "refunded"
 
 
 class Decision(Enum):
+    """Decision"""
+
     CONTINUE = "continue"
     WAIT = "wait"
     EXIT = "exit"
@@ -300,9 +308,9 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                         contract_callable = "get_balance"
                         contract_id = WeightedPoolContract.contract_id
                     # TO-DO: fix velodrome pool get_balance
-                    # elif dex_type == "velodrome":
-                    #     contract_callable = "get_balance"
-                    #     contract_id = PoolContract.contract_id
+                    # elif dex_type == "velodrome":  # noqa: E800
+                    #     contract_callable = "get_balance"  # noqa: E800
+                    #     contract_id = PoolContract.contract_id  # noqa: E800
                     else:
                         self.context.logger.error(f"{dex_type} not supported")
                         continue
@@ -620,9 +628,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return False
 
-        # if not self._is_round_threshold_exceeded():
-        #     self.context.logger.info("Round threshold not exceeded")
-        #     return False
+        # if not self._is_round_threshold_exceeded():  # noqa: E800
+        #     self.context.logger.info("Round threshold not exceeded")  # noqa: E800
+        #     return False  # noqa: E800
 
         return True
 
@@ -657,7 +665,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # getPoolTokens is getting reverted
             # TO-DO: Fix getPoolTokens()
-            # tokens = yield from self._get_exit_pool_tokens()
+            # tokens = yield from self._get_exit_pool_tokens()  # noqa: E800
             # assumption: only two possible pools
             if (
                 self.synchronized_data.current_pool["address"]
@@ -987,10 +995,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:
+        """Get decision on swap"""
+
         try:
             tx_hash = self.synchronized_data.final_tx_hash
             self.context.logger.error(f"final tx hash {tx_hash}")
-        except:
+        except Exception:
             self.context.logger.error("No tx-hash found")
             return Decision.EXIT
 

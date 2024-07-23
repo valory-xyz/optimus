@@ -148,8 +148,7 @@ models:
       multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
       lifi_request_quote_url: https://li.quest/v1/quote
       lifi_check_status_url: https://li.quest/v1/status
-      retry_attempts_for_swap: 1
-      waiting_timeout_for_status_check: 6
+      slippage_for_swap: 0.08
     class_name: Params
   requests:
     args: {}

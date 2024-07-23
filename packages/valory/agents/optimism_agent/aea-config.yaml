@@ -96,7 +96,7 @@ config:
       chain_id: ${int:42161}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
-    bnb:
+    optimism:
       address: ${str:https://virtual.optimism.rpc.tenderly.co/3baf4a62-2fa9-448a-91a6-5f6ab95c76be}
       chain_id: ${int:10}
       poa_chain: ${bool:false}
@@ -191,14 +191,14 @@ models:
       serious_slash_unit_amount: ${int:8000000000000000}
       multisend_batch_size: ${int:50}
       ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
-      default_chain_id: ${str:bnb}
+      default_chain_id: ${str:optimism}
       termination_from_block: ${int:34088325}
       allowed_lp_pool_addresses: ${str:{"balancerPool":{"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"],"optimism":["0x0244B0025264dC5f5c113d472D579C9c994A59CE"]},"velodrome":{"optimism":["0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD"]}}}
       allowed_assets: ${str:{"optimism":{"psp":"0xd3594E879B358F430E20F82bea61e83562d49D48","op":"0x4200000000000000000000000000000000000042"},"arbitrum":{"weth":"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1","rdnt":"0x3082CC23568eA640225c2467653dB90e9250AaA0"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x1aCD50F973177f4D320913a9Cc494A9c66922fdF","arbitrum":"0xbaC3b468F524bF617d870fDF383C402609447276","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
       pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}
       allowed_chains: ${str:{"optimism":10,"arbitrum":42161}}
-      gas_reserve: ${str:{"optimism":1000,"arbitrum":1000,"bnb":1000}}
+      gas_reserve: ${str:{"optimism":1000,"arbitrum":1000}}
       round_threshold: ${int:0}
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}

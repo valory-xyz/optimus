@@ -123,9 +123,19 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(int, self.db.get("last_tx_period_count", 0))
 
     @property
-    def last_action_index(self) -> Optional[int]:
-        """Get the current action index"""
-        return cast(int, self.db.get("last_action_index", -1))
+    def next_action_index(self) -> Optional[int]:
+        """Get the next action index"""
+        return cast(int, self.db.get("next_action_index", 0))
+
+    @property
+    def final_tx_hash(self) -> str:
+        """Get the verified tx hash."""
+        return cast(str, self.db.get_strict("final_tx_hash"))
+
+    @property
+    def current_pool_apr(self) -> Optional[float]:
+        """Get the current pool apr"""
+        return cast(int, self.db.get("current_pool_apr", 0.0))
 
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
@@ -238,7 +248,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound,
     }
     event_to_timeout: EventToTimeout = {}
-    cross_period_persisted_keys: FrozenSet[str] = frozenset()
+    cross_period_persisted_keys: FrozenSet[str] = frozenset(
+        {
+            get_name(SynchronizedData.current_pool_apr),
+        }
+    )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         GetPositionsRound: set(),
         DecisionMakingRound: set(),

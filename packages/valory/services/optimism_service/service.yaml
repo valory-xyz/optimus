@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimism_agent:0.1.0:bafybeiawrjwwuxaowu2c7rdr2aka3n625dvr5kq6zhlv7hb36pivbgasq4
+agent: valory/optimism_agent:0.1.0:bafybeigmw2yspwnir6a3uzj2j4hvdu3qdymflrm54kkkwwrbvy22sum5em
 number_of_agents: 4
 deployment:
   agent:
@@ -102,6 +102,10 @@ extra:
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
         slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
+        gas_params:
+          gas_price: ${GAS_PARAMS:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
 1:
   models:
     benchmark_tool:
@@ -158,6 +162,10 @@ extra:
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
         slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
+        gas_params:
+          gas_price: ${GAS_PARAMS:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
 2:
   models:
     benchmark_tool:
@@ -214,6 +222,10 @@ extra:
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
         slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
+        gas_params:
+          gas_price: ${GAS_PARAMS:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
 3:
   models:
     benchmark_tool:
@@ -270,6 +282,10 @@ extra:
         lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
         slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
+        gas_params:
+          gas_price: ${GAS_PARAMS:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

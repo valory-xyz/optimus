@@ -83,6 +83,8 @@ class Action(Enum):
 
 
 class SwapStatus(Enum):
+    """SwapStatus"""
+
     DONE = "done"
     PENDING = "pending"
     INVALID = "invalid"
@@ -91,17 +93,23 @@ class SwapStatus(Enum):
 
 
 class SwapPendingSubStatus(Enum):
+    """SwapPendingSubStatus"""
+
     WAIT_SOURCE_CONFIRMATIONS = "wait_source_confirmations"
     WAIT_DESTINATION_TRANSACTION = "wait_destination_transaction"
 
 
 class SwapDoneSubStaus(Enum):
+    """SwapDoneSubStaus"""
+
     COMPLETED = "completed"
     PARTIAL = "partial"
     REFUNDED = "refunded"
 
 
 class Decision(Enum):
+    """Decision"""
+
     CONTINUE = "continue"
     WAIT = "wait"
     EXIT = "exit"
@@ -251,7 +259,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
             ledger_callable="get_balance",
             block_identifier="latest",
             account=account,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
@@ -273,7 +281,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
             contract_callable="check_balance",
             data_key="token",
             account=account,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
         return balance
 
@@ -300,9 +308,9 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                         contract_callable = "get_balance"
                         contract_id = WeightedPoolContract.contract_id
                     # TO-DO: fix velodrome pool get_balance
-                    # elif dex_type == "velodrome":
-                    #     contract_callable = "get_balance"
-                    #     contract_id = PoolContract.contract_id
+                    # elif dex_type == "velodrome":  # noqa: E800
+                    #     contract_callable = "get_balance"  # noqa: E800
+                    #     contract_id = PoolContract.contract_id  # noqa: E800
                     else:
                         self.context.logger.error(f"{dex_type} not supported")
                         continue
@@ -314,7 +322,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                         contract_callable=contract_callable,
                         data_key="balance",
                         account=account,
-                        chain_id=chain if chain != "optimism" else "bnb",
+                        chain_id=chain,
                     )
 
                     if balance is not None and int(balance) > 0:
@@ -390,7 +398,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
             contract_public_id=WeightedPoolContract.contract_id,
             contract_callable="get_pool_id",
             data_key="pool_id",
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         if not pool_id:
@@ -620,9 +628,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return False
 
-        # if not self._is_round_threshold_exceeded():
-        #     self.context.logger.info("Round threshold not exceeded")
-        #     return False
+        # if not self._is_round_threshold_exceeded():  # noqa: E800
+        #     self.context.logger.info("Round threshold not exceeded")  # noqa: E800
+        #     return False  # noqa: E800
 
         return True
 
@@ -657,7 +665,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # getPoolTokens is getting reverted
             # TO-DO: Fix getPoolTokens()
-            # tokens = yield from self._get_exit_pool_tokens()
+            # tokens = yield from self._get_exit_pool_tokens()  # noqa: E800
             # assumption: only two possible pools
             if (
                 self.synchronized_data.current_pool["address"]
@@ -723,9 +731,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     if asset["balance"] > min_balance:
                         tokens.append(
                             {
-                                "chain": position["chain"]
-                                if position["chain"] != "bnb"
-                                else "optimism",
+                                "chain": position["chain"],
                                 "token": asset["address"],
                                 "token_symbol": asset["asset_symbol"],
                             }
@@ -989,10 +995,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:
+        """Get decision on swap"""
+
         try:
             tx_hash = self.synchronized_data.final_tx_hash
             self.context.logger.error(f"final tx hash {tx_hash}")
-        except:
+        except Exception:
             self.context.logger.error("No tx-hash found")
             return Decision.EXIT
 
@@ -1097,14 +1105,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         chain = action["chain"]
 
         pool_address = action["pool_address"]
-        pool_id = yield from self._get_pool_id(
-            pool_address, chain if chain != "optimism" else "bnb"
-        )  # getPoolId()
+        pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = yield from self._get_vault_for_pool(
-            pool_address, chain if chain != "optimism" else "bnb"
-        )
+        vault_address = yield from self._get_vault_for_pool(pool_address, chain)
         if not vault_address:
             return None, None, None
 
@@ -1120,7 +1124,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             token_address=action["assets"][0],
             amount=max_amounts_in[0],
             spender=vault_address,
-            chain=chain if chain != "optimism" else "bnb",
+            chain=chain,
         )
         multi_send_txs.append(approval_tx_hash_0)
 
@@ -1129,7 +1133,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             token_address=action["assets"][1],
             amount=max_amounts_in[1],
             spender=vault_address,
-            chain=chain if chain != "optimism" else "bnb",
+            chain=chain,
         )
         multi_send_txs.append(approval_tx_hash_1)
 
@@ -1154,7 +1158,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             max_amounts_in=max_amounts_in,
             join_kind=join_kind,
             from_internal_balance=from_internal_balance,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         if not tx_hash:
@@ -1171,9 +1175,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # Get the transaction from the multisend contract
 
-        multisend_address = self.params.multisend_contract_addresses[
-            chain if chain != "bnb" else "optimism"
-        ]
+        multisend_address = self.params.multisend_contract_addresses[chain]
 
         multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -1182,7 +1184,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_callable="get_tx_data",
             data_key="data",
             multi_send_txs=multi_send_txs,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
@@ -1198,7 +1200,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             data=bytes.fromhex(multisend_tx_hash[2:]),
             operation=SafeOperation.DELEGATE_CALL.value,
             safe_tx_gas=SAFE_TX_GAS,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         if not safe_tx_hash:
@@ -1218,7 +1220,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-        return payload_string, chain if chain != "optimism" else "bnb", safe_address
+        return payload_string, chain, safe_address
 
     def get_approval_tx_hash(
         self, token_address, amount: int, spender: str, chain: str
@@ -1288,14 +1290,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         chain = action["chain"]
 
         pool_address = action["pool_address"]
-        pool_id = yield from self._get_pool_id(
-            pool_address, chain if chain != "optimism" else "bnb"
-        )  # getPoolId()
+        pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = yield from self._get_vault_for_pool(
-            pool_address, chain if chain != "optimism" else "bnb"
-        )
+        vault_address = yield from self._get_vault_for_pool(pool_address, chain)
         if not vault_address:
             return None, None, None
 
@@ -1328,7 +1326,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             exit_kind=exit_kind,
             bpt_amount_in=bpt_amount_in,
             to_internal_balance=to_internal_balance,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         if not tx_hash:
@@ -1344,7 +1342,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             value=ETHER_VALUE,
             data=tx_hash,
             safe_tx_gas=SAFE_TX_GAS,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         if not safe_tx_hash:
@@ -1359,7 +1357,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-        return payload_string, chain if chain != "optimism" else "bnb", safe_address
+        return payload_string, chain, safe_address
 
     def get_exit_pool_velodrome_tx_hash(
         self, positions
@@ -1386,7 +1384,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             token_address=token_to_swap,
             amount=amount,
             spender=lifi_contract_address,
-            chain=chain if chain != "optimism" else "bnb",
+            chain=chain,
         )
 
         multi_send_txs.append(approval_tx_hash)
@@ -1410,7 +1408,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_callable="get_tx_data",
             data_key="data",
             multi_send_txs=multi_send_txs,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
@@ -1428,7 +1426,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             data=bytes.fromhex(multisend_tx_hash[2:]),
             operation=SafeOperation.DELEGATE_CALL.value,
             safe_tx_gas=SAFE_TX_GAS,
-            chain_id=chain if chain != "optimism" else "bnb",
+            chain_id=chain,
         )
 
         if not safe_tx_hash:
@@ -1448,7 +1446,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-        return payload_string, chain if chain != "optimism" else "bnb", safe_address
+        return payload_string, chain, safe_address
 
     def get_swap_tx_info(
         self, positions, action

@@ -148,6 +148,10 @@ models:
       lifi_request_quote_url: https://li.quest/v1/quote
       lifi_check_status_url: https://li.quest/v1/status
       slippage_for_swap: 0.08
+      gas_params:
+        gas_price: null
+        max_fee_per_gas: 50000000
+        max_priority_fee_per_gas: 150000
     class_name: Params
   randomness_api:
     args:

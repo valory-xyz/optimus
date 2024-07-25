@@ -739,7 +739,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     {
                         "chain": highest_apr_chain,
                         "token": token,
-                        "token_symbol": self.highest_apr_pool["token0_symbol"] if token == token0 else self.highest_apr_pool["token1_symbol"],
+                        "token_symbol": self.highest_apr_pool["token0_symbol"]
+                        if token == token0
+                        else self.highest_apr_pool["token1_symbol"],
                     }
                 )
                 if len(tokens) == 2:
@@ -815,12 +817,26 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Build bridge and swap actions for the given tokens."""
         bridge_swap_actions = []
 
-        #if from_token and to_token are same, then we do not build a bridge_swap action
-        if tokens[0]["chain"] == self.highest_apr_pool["chain"] or tokens[1]["chain"] == self.highest_apr_pool["chain"]:
-            if tokens[0]["token"] not in [self.highest_apr_pool["token0"], self.highest_apr_pool["token1"]]:
-                #for example :- from_tokens = [usdc, xdai], to_tokens = [xdai, weth], then the pair to be created is [usdc, weth]
-                to_token = self.highest_apr_pool["token1"] if tokens[1]["token"] == self.highest_apr_pool["token0"] else self.highest_apr_pool["token0"]
-                to_token_symbol = self.highest_apr_pool["token0_symbol"] if to_token == self.highest_apr_pool["token0"] else self.highest_apr_pool["token1_symbol"]
+        # if from_token and to_token are same, then we do not build a bridge_swap action
+        if (
+            tokens[0]["chain"] == self.highest_apr_pool["chain"]
+            or tokens[1]["chain"] == self.highest_apr_pool["chain"]
+        ):
+            if tokens[0]["token"] not in [
+                self.highest_apr_pool["token0"],
+                self.highest_apr_pool["token1"],
+            ]:
+                # for example :- from_tokens = [usdc, xdai], to_tokens = [xdai, weth], then the pair to be created is [usdc, weth]
+                to_token = (
+                    self.highest_apr_pool["token1"]
+                    if tokens[1]["token"] == self.highest_apr_pool["token0"]
+                    else self.highest_apr_pool["token0"]
+                )
+                to_token_symbol = (
+                    self.highest_apr_pool["token0_symbol"]
+                    if to_token == self.highest_apr_pool["token0"]
+                    else self.highest_apr_pool["token1_symbol"]
+                )
 
                 bridge_swap_action = {
                     "action": Action.BRIDGE_SWAP.value,
@@ -829,13 +845,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "from_token": tokens[0]["token"],
                     "from_token_symbol": token[0]["token_symbol"],
                     "to_token": to_token,
-                    "to_token_symbol": to_token_symbol
+                    "to_token_symbol": to_token_symbol,
                 }
                 bridge_swap_actions.append(bridge_swap_action)
 
-            if tokens[1]["token"] not in [self.highest_apr_pool["token0"], self.highest_apr_pool["token1"]]:
-                to_token = self.highest_apr_pool["token0"] if tokens[0]["token"] == self.highest_apr_pool["token1"] else self.highest_apr_pool["token1"]
-                to_token_symbol = self.highest_apr_pool["token0_symbol"] if to_token == self.highest_apr_pool["token0"] else self.highest_apr_pool["token1_symbol"]
+            if tokens[1]["token"] not in [
+                self.highest_apr_pool["token0"],
+                self.highest_apr_pool["token1"],
+            ]:
+                to_token = (
+                    self.highest_apr_pool["token0"]
+                    if tokens[0]["token"] == self.highest_apr_pool["token1"]
+                    else self.highest_apr_pool["token1"]
+                )
+                to_token_symbol = (
+                    self.highest_apr_pool["token0_symbol"]
+                    if to_token == self.highest_apr_pool["token0"]
+                    else self.highest_apr_pool["token1_symbol"]
+                )
 
                 bridge_swap_action = {
                     "action": Action.BRIDGE_SWAP.value,

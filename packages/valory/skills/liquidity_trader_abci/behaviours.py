@@ -85,26 +85,26 @@ class Action(Enum):
 class SwapStatus(Enum):
     """SwapStatus"""
 
-    DONE = "done"
-    PENDING = "pending"
-    INVALID = "invalid"
-    NOT_FOUND = "not_found"
-    FAILED = "failed"
+    DONE = "DONE"
+    PENDING = "PENDING"
+    INVALID = "INVALID"
+    NOT_FOUND = "NOT_FOUND"
+    FAILED = "FAILED"
 
 
 class SwapPendingSubStatus(Enum):
     """SwapPendingSubStatus"""
 
-    WAIT_SOURCE_CONFIRMATIONS = "wait_source_confirmations"
-    WAIT_DESTINATION_TRANSACTION = "wait_destination_transaction"
+    WAIT_SOURCE_CONFIRMATIONS = "WAIT_SOURCE_CONFIRMATIONS"
+    WAIT_DESTINATION_TRANSACTION = "WAIT_DESTINATION_TRANSACTION"
 
 
 class SwapDoneSubStaus(Enum):
     """SwapDoneSubStaus"""
 
-    COMPLETED = "completed"
-    PARTIAL = "partial"
-    REFUNDED = "refunded"
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    REFUNDED = "REFUNDED"
 
 
 class Decision(Enum):
@@ -375,7 +375,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         return vault_address
 
     def _get_balance(
-        self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]]
+        self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
     ) -> Optional[int]:
         """Get balance"""
         if not positions:
@@ -720,24 +720,52 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get tokens over min balance"""
         tokens = []
 
-        # ASSUMPTION : WE HAVE BALANCE FOR EXACTLY 2 TOKENS
-        for position in self.synchronized_data.positions:
-            for asset in position["assets"]:
-                if asset["asset_type"] in ["erc_20", "native"]:
-                    min_balance = (
-                        self.params.min_balance_multiplier
-                        * self.params.gas_reserve[position["chain"]]
-                    )
-                    if asset["balance"] > min_balance:
-                        tokens.append(
-                            {
-                                "chain": position["chain"],
-                                "token": asset["address"],
-                                "token_symbol": asset["asset_symbol"],
-                            }
-                        )
+        # ASSUMPTION : WE HAVE FUNDS FOR ATLEAST 2 TOKENS
+        """Get tokens over min balance"""
+        tokens = []
+        highest_apr_chain = self.highest_apr_pool["chain"]
+        token0 = self.highest_apr_pool["token0"]
+        token1 = self.highest_apr_pool["token1"]
 
-        return tokens
+        # Check balances for token0 and token1 on the highest_apr_pool chain
+        for token in [token0, token1]:
+            balance = self._get_balance(highest_apr_chain, token)
+            min_balance = (
+                self.params.min_balance_multiplier
+                * self.params.gas_reserve[highest_apr_chain]
+            )
+            if balance > min_balance:
+                tokens.append(
+                    {
+                        "chain": highest_apr_chain,
+                        "token": token,
+                        "token_symbol": self.highest_apr_pool["token0_symbol"] if token == token0 else self.highest_apr_pool["token1_symbol"],
+                    }
+                )
+                if len(tokens) == 2:
+                    return tokens
+
+        # If we still need more tokens, check all positions
+        if len(tokens) < 2:
+            for position in self.synchronized_data.positions:
+                for asset in position["assets"]:
+                    if asset["asset_type"] in ["erc_20", "native"]:
+                        min_balance = (
+                            self.params.min_balance_multiplier
+                            * self.params.gas_reserve[position["chain"]]
+                        )
+                        if asset["balance"] > min_balance:
+                            tokens.append(
+                                {
+                                    "chain": position["chain"],
+                                    "token": asset["address"],
+                                    "token_symbol": asset["asset_symbol"],
+                                }
+                            )
+                            if len(tokens) == 2:
+                                return tokens
+
+        return tokens if tokens else None
 
     def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
@@ -787,8 +815,40 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Build bridge and swap actions for the given tokens."""
         bridge_swap_actions = []
 
-        for token in tokens:
-            if token["chain"] != self.highest_apr_pool["chain"]:
+        #if from_token and to_token are same, then we do not build a bridge_swap action
+        if tokens[0]["chain"] == self.highest_apr_pool["chain"] or tokens[1]["chain"] == self.highest_apr_pool["chain"]:
+            if tokens[0]["token"] not in [self.highest_apr_pool["token0"], self.highest_apr_pool["token1"]]:
+                #for example :- from_tokens = [usdc, xdai], to_tokens = [xdai, weth], then the pair to be created is [usdc, weth]
+                to_token = self.highest_apr_pool["token1"] if tokens[1]["token"] == self.highest_apr_pool["token0"] else self.highest_apr_pool["token0"]
+                to_token_symbol = self.highest_apr_pool["token0_symbol"] if to_token == self.highest_apr_pool["token0"] else self.highest_apr_pool["token1_symbol"]
+
+                bridge_swap_action = {
+                    "action": Action.BRIDGE_SWAP.value,
+                    "from_chain": tokens[0]["chain"],
+                    "to_chain": self.highest_apr_pool["chain"],
+                    "from_token": tokens[0]["token"],
+                    "from_token_symbol": token[0]["token_symbol"],
+                    "to_token": to_token,
+                    "to_token_symbol": to_token_symbol
+                }
+                bridge_swap_actions.append(bridge_swap_action)
+
+            if tokens[1]["token"] not in [self.highest_apr_pool["token0"], self.highest_apr_pool["token1"]]:
+                to_token = self.highest_apr_pool["token0"] if tokens[0]["token"] == self.highest_apr_pool["token1"] else self.highest_apr_pool["token1"]
+                to_token_symbol = self.highest_apr_pool["token0_symbol"] if to_token == self.highest_apr_pool["token0"] else self.highest_apr_pool["token1_symbol"]
+
+                bridge_swap_action = {
+                    "action": Action.BRIDGE_SWAP.value,
+                    "from_chain": tokens[1]["chain"],
+                    "to_chain": self.highest_apr_pool["chain"],
+                    "from_token": tokens[1]["token"],
+                    "from_token_symbol": tokens[1]["token_symbol"],
+                    "to_token": to_token,
+                    "to_token_symbol": to_token_symbol,
+                }
+                bridge_swap_actions.append(bridge_swap_action)
+        else:
+            for token in tokens:
                 bridge_swap_action = {
                     "action": Action.BRIDGE_SWAP.value,
                     "from_chain": token["chain"],
@@ -928,9 +988,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"Action to take {decision}")
 
             # If tx is pending then we wait until it gets confirmed or refunded
-            if decision == Decision.WAIT:
+            if decision == Decision.WAIT.value:
                 self.context.logger.info("Waiting for tx to get executed")
-                while decision == Decision.WAIT:
+                while decision == Decision.WAIT.value:
                     yield from self.sleep(
                         2
                     )  # Wait for 2 seconds between each status check
@@ -940,11 +1000,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     )  # Check the status again
                     self.context.logger.info(f"Action to take {decision}")
 
-                if decision == Decision.EXIT:
+                if decision == Decision.EXIT.value:
                     self.context.logger.error("Swap failed")
                     return Event.DONE.value, {}
 
-            elif decision == Decision.EXIT:
+            elif decision == Decision.EXIT.value:
                 self.context.logger.error("Swap failed")
                 return Event.DONE.value, {}
 
@@ -1012,21 +1072,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}"
         )
 
-        if status == SwapStatus.DONE:
+        if status == SwapStatus.DONE.value:
             # only continue if tx is fully completed
             if (
-                sub_status == SwapDoneSubStaus.COMPLETED
-                or sub_status == SwapDoneSubStaus.PARTIAL
+                sub_status == SwapDoneSubStaus.COMPLETED.value
+                or sub_status == SwapDoneSubStaus.PARTIAL.value
             ):
                 return Decision.CONTINUE
             # exit if it is refunded
-            if sub_status == SwapDoneSubStaus.REFUNDED:
+            if sub_status == SwapDoneSubStaus.REFUNDED.value:
                 return Decision.EXIT
         # wait if it is pending
-        elif status == SwapStatus.PENDING:
+        elif status == SwapStatus.PENDING.value:
             if (
-                sub_status == SwapPendingSubStatus.WAIT_DESTINATION_TRANSACTION
-                or sub_status == SwapPendingSubStatus.WAIT_SOURCE_CONFIRMATIONS
+                sub_status == SwapPendingSubStatus.WAIT_DESTINATION_TRANSACTION.value
+                or sub_status == SwapPendingSubStatus.WAIT_SOURCE_CONFIRMATIONS.value
             ):
                 return Decision.WAIT
         # exit if it fails

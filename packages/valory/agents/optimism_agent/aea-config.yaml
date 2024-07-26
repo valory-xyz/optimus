@@ -91,9 +91,9 @@ config:
       chain_id: ${int:1}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
-    arbitrum:
+    bnb:
       address: ${str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
-      chain_id: ${int:42161}
+      chain_id: ${int:56}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     optimism:
@@ -193,16 +193,16 @@ models:
       ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
       default_chain_id: ${str:optimism}
       termination_from_block: ${int:34088325}
-      allowed_lp_pool_addresses: ${str:{"balancerPool":{"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"],"optimism":["0x0244B0025264dC5f5c113d472D579C9c994A59CE"]},"velodrome":{"optimism":["0x5613B76Ed4CF65D771bAa5E68ceA787a8FF43cAD"]}}}
-      allowed_assets: ${str:{"optimism":{"psp":"0xd3594E879B358F430E20F82bea61e83562d49D48","op":"0x4200000000000000000000000000000000000042"},"arbitrum":{"weth":"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1","rdnt":"0x3082CC23568eA640225c2467653dB90e9250AaA0"}}}
-      safe_contract_addresses: ${str:{"ethereum":"0x1aCD50F973177f4D320913a9Cc494A9c66922fdF","arbitrum":"0xbaC3b468F524bF617d870fDF383C402609447276","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
+      allowed_dexs: ${list:["balancerPool"]}
+      initial_assets: ${str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
+      safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
       pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}
-      allowed_chains: ${str:{"optimism":10,"arbitrum":42161}}
-      gas_reserve: ${str:{"optimism":1000,"arbitrum":1000}}
+      allowed_chains: ${str:{"optimism":10,"ethereum":1,"base":8453}}
+      gas_reserve: ${str:{"optimism":1000,"ethereum":1000,"base":1000}}
       round_threshold: ${int:0}
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}
-      multisend_contract_addresses: ${str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+      multisend_contract_addresses: ${str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"}}
       lifi_request_quote_url: ${str:https://li.quest/v1/quote}
       lifi_check_status_url: ${str:https://li.quest/v1/status}
       slippage_for_swap: ${float:0.08}

@@ -89,8 +89,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
-        allowed_assets: ${ALLOWED_ASSETS:str:"{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}"}
+        allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -149,8 +149,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
-        allowed_assets: ${ALLOWED_ASSETS:str:"{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}"}
+        allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -209,8 +209,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
-        allowed_assets: ${ALLOWED_ASSETS:str:"{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}"}
+        allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -269,8 +269,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
-        allowed_assets: ${ALLOWED_ASSETS:str:"{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}"}
+        allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -296,11 +296,11 @@ config:
       chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
       poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
-    arbitrum:
-      address: ${ARBITRUM_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
-      chain_id: ${ARBITRUM_LEDGER_CHAIN_ID:int:42161}
-      poa_chain: ${ARBITRUM_LEDGER_IS_POA_CHAIN:bool:false}
-      default_gas_price_strategy: ${ARBITRUM_LEDGER_PRICING:str:eip1559}
+    bnb:
+      address: ${BNB_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
+      chain_id: ${BNB_LEDGER_CHAIN_ID:int:42161}
+      poa_chain: ${BNB_LEDGER_IS_POA_CHAIN:bool:false}
+      default_gas_price_strategy: ${BNB_LEDGER_PRICING:str:eip1559}
     optimism:
       address: ${OPTIMISM_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
       chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:42161}

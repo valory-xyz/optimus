@@ -51,6 +51,7 @@ class Event(Enum):
     DONE = "done"
     WAIT = "wait"
     SETTLE = "settle"
+    UPDATE = "update"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -98,8 +99,8 @@ class SynchronizedData(BaseSynchronizedData):
     def current_pool(self) -> Dict[str, Any]:
         """Get the current pool"""
         serialized = self.db.get("current_pool", "{}")
-        if serialized is None:
-            serialized = "{}"
+        if isinstance(serialized, dict):
+            return serialized
         current_pool = json.loads(serialized)
         return current_pool
 
@@ -133,9 +134,13 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(str, self.db.get_strict("final_tx_hash"))
 
     @property
-    def current_pool_apr(self) -> Optional[float]:
-        """Get the current pool apr"""
-        return cast(int, self.db.get("current_pool_apr", 0.0))
+    def current_assets(self) -> Dict[str, Any]:
+        """Get the current assets"""
+        serialized = self.db.get("current_assets", "{}")
+        if isinstance(serialized, dict):
+            return serialized
+        current_assets = json.loads(serialized)
+        return current_assets
 
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
@@ -146,10 +151,7 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_positions_round)
-    selection_key = (
-        get_name(SynchronizedData.positions),
-        get_name(SynchronizedData.current_pool),
-    )
+    selection_key = get_name(SynchronizedData.positions)
 
     ERROR_PAYLOAD = {}
 
@@ -187,6 +189,20 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             positions = payload.get("updates", {}).get("positions", None)
             if positions and not isinstance(positions, str):
                 payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
+
+            # Ensure current pool is always serialized
+            current_pool = payload.get("updates", {}).get("current_pool", None)
+            if positions and not isinstance(current_pool, str):
+                payload["updates"]["current_pool"] = json.dumps(
+                    current_pool, sort_keys=True
+                )
+
+            # Ensure current_assets is always serialized
+            current_assets = payload.get("updates", {}).get("current_assets", None)
+            if current_assets and not isinstance(current_assets, str):
+                payload["updates"]["current_assets"] = json.dumps(
+                    current_assets, sort_keys=True
+                )
 
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData, **payload.get("updates", {})
@@ -237,6 +253,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: DecisionMakingRound,
             Event.ROUND_TIMEOUT: DecisionMakingRound,
             Event.SETTLE: FinishedTxPreparationRound,
+            Event.UPDATE: DecisionMakingRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
@@ -250,7 +267,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     event_to_timeout: EventToTimeout = {}
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         {
-            get_name(SynchronizedData.current_pool_apr),
+            get_name(SynchronizedData.current_assets),
+            get_name(SynchronizedData.current_pool),
         }
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {

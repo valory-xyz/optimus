@@ -279,38 +279,6 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         )
         return balance
 
-    def _get_lp_pool_balance(
-        self, chain: str, dex_type: str, pool_address: str
-    ) -> Generator[None, None, Optional[int]]:
-        """Get LP pool balances"""
-        account = self.params.safe_contract_addresses.get(chain, ZERO_ADDRESS)
-        if account == ZERO_ADDRESS:
-            self.context.logger.error(f"No safe address set for chain {chain}")
-            return None
-
-        if dex_type == "balancerPool":
-            contract_callable = "get_balance"
-            contract_id = WeightedPoolContract.contract_id
-        else:
-            self.context.logger.error(f"{dex_type} not supported")
-            return None
-
-        balance = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=contract_id,
-            contract_callable=contract_callable,
-            data_key="balance",
-            account=account,
-            chain_id=chain if chain != "base" else "bnb",
-        )
-
-        self.context.logger.info(
-            f"Balance of account {account} on {chain} chain for pool address {pool_address} in {dex_type} DEX: {balance}"
-        )
-
-        return balance if balance is not None else 0
-
     def _get_vault_for_pool(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[str]]:
@@ -1034,6 +1002,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # add asset if it doesn't exist
             if not current_assets["chain"].get(action["to_token_symbol"], ""):
                 current_assets["chain"][action["to_token_symbol"]] = action["to_token"]
+            if not current_assets["chain"].get(action["from_token_symbol"], ""):
+                current_assets["chain"][action["from_token_symbol"]] = action[
+                    "from_token"
+                ]
 
             update_assets = True
 
@@ -1167,23 +1139,25 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         multi_send_txs = []
 
-        # Approve asset 0
-        approval_tx_hash_0 = yield from self.get_approval_tx_hash(
-            token_address=action["assets"][0],
-            amount=max_amounts_in[0],
-            spender=vault_address,
-            chain=chain,
-        )
-        multi_send_txs.append(approval_tx_hash_0)
+        if not action["assets"][0] == ZERO_ADDRESS:
+            # Approve asset 0
+            approval_tx_hash_0 = yield from self.get_approval_tx_hash(
+                token_address=action["assets"][0],
+                amount=max_amounts_in[0],
+                spender=vault_address,
+                chain=chain,
+            )
+            multi_send_txs.append(approval_tx_hash_0)
 
-        # Approve asset 1
-        approval_tx_hash_1 = yield from self.get_approval_tx_hash(
-            token_address=action["assets"][1],
-            amount=max_amounts_in[1],
-            spender=vault_address,
-            chain=chain,
-        )
-        multi_send_txs.append(approval_tx_hash_1)
+        if not action["assets"][1] == ZERO_ADDRESS:
+            # Approve asset 1
+            approval_tx_hash_1 = yield from self.get_approval_tx_hash(
+                token_address=action["assets"][1],
+                amount=max_amounts_in[1],
+                spender=vault_address,
+                chain=chain,
+            )
+            multi_send_txs.append(approval_tx_hash_1)
 
         # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
         join_kind = 1  # EXACT_TOKENS_IN_FOR_BPT_OUT
@@ -1358,9 +1332,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         safe_address = self.params.safe_contract_addresses[action["chain"]]
 
         # bpt amount to send
-        bpt_amount_in = yield self._get_lp_pool_balance(
-            chain, action["dex_type"], action["pool_address"]
+        bpt_amount_in = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=str(WeightedPoolContract.contract_id),
+            contract_callable="get_balance",
+            data_key="balance",
+            account=safe_address,
+            chain_id=chain if chain != "base" else "bnb",
         )
+
+        if bpt_amount_in is None:
+            return None, None, None
 
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1429,15 +1412,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None
 
         swap_tx_hash, lifi_contract_address, token_to_swap, amount = tx_info
-        # Approve asset 0
-        approval_tx_hash = yield from self.get_approval_tx_hash(
-            token_address=token_to_swap,
-            amount=amount,
-            spender=lifi_contract_address,
-            chain=chain,
-        )
 
-        multi_send_txs.append(approval_tx_hash)
+        if not token_to_swap == ZERO_ADDRESS:
+            # Approve asset
+            approval_tx_hash = yield from self.get_approval_tx_hash(
+                token_address=token_to_swap,
+                amount=amount,
+                spender=lifi_contract_address,
+                chain=chain,
+            )
+
+            multi_send_txs.append(approval_tx_hash)
 
         multi_send_txs.append(
             {

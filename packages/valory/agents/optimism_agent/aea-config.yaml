@@ -34,8 +34,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeigihbaefe22hhsno6gfpvv5hn46pikg4vdakhrycbvntdpufrd7xq
 - valory/abstract_round_abci:0.1.0:bafybeihkq6n7ug5eyqbf3t6q2mqwryecjkqgjg6375cyvvfdylivo25z5u
-- valory/liquidity_trader_abci:0.1.0:bafybeihrjt6e3yrdftjfcahwqlfmalwo2wrgwgh6jkz5dvwvdon2zpzl3u
-- valory/superagent_abci:0.1.0:bafybeigfiggmxx7c67ap53xjrmczjbejizq3xauxznwneu7wlbngrkdy24
+- valory/liquidity_trader_abci:0.1.0:bafybeihsmbkb6bw5aj2vnzdy4sf5mzaqwwn4btnx3q7wpi36dg7btwtuna
+- valory/superagent_abci:0.1.0:bafybeigmih3x7vrlv7j4xti3s7ffzlqgpobuirlzufiuz5njvuu2fm3ep4
 - valory/registration_abci:0.1.0:bafybeib4a3zmsmbebd74whk7sfnbcv7dwglrirmu53afrlo6ar2xi4t54q
 - valory/reset_pause_abci:0.1.0:bafybeief6h4sqqh2ydiri54sc6dqcjmiwdiss5zbphcmpkbv5sblpzwt4i
 - valory/termination_abci:0.1.0:bafybeifs4s5hj5pvzu26ph3noynebzsukmohmijnysxlnompgquacvgz6m
@@ -194,11 +194,11 @@ models:
       default_chain_id: ${str:optimism}
       termination_from_block: ${int:34088325}
       allowed_dexs: ${list:["balancerPool"]}
-      initial_assets: ${str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
-      safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
+      initial_assets: ${str:{"optimism":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"}}}
+      safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
       pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}
-      allowed_chains: ${str:{"optimism":10,"ethereum":1,"base":8453}}
-      gas_reserve: ${str:{"optimism":1000,"ethereum":1000,"base":1000}}
+      allowed_chains: ${str:{"optimism":10,"base":8453}}
+      gas_reserve: ${str:{"optimism":1000,"base":1000}}
       round_threshold: ${int:0}
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}
@@ -208,5 +208,5 @@ models:
       slippage_for_swap: ${float:0.08}
       gas_params:
         gas_price: ${int:null}
-        max_fee_per_gas: ${int:500000000}
+        max_fee_per_gas: ${int:5000000000}
         max_priority_fee_per_gas: ${int:150000}

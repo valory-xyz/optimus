@@ -41,7 +41,7 @@
             "tags":[
                "superfest"
             ],
-            "apr":100,
+            "apr":2000,
             "totalSupplyTargetToken":2596148429503164,
             "tvl":234875.0575590398,
             "type":"balancerPool",
@@ -1024,7 +1024,7 @@
             "amountDecimal":"0",
             "startTimestamp":1720519200,
             "endTimestamp":1721728800,
-            "mainParameter":"0x52e281318Fed4eFFfb8E46c0847a8f9B71a461A8",
+            "mainParameter":"0x17e7d59bB209a3215Ccc25FFfEf7161498B7C10d",
             "campaignParameters":{
                "url":"https://app.balancer.fi/#/fraxtal/pool/0x33251abecb0364df98a27a8d5d7b5ccddc774c42000000000000000000000008",
                "duration":1209600,
@@ -1052,26 +1052,26 @@
             "tags":[
                "superfest"
             ],
-            "apr":200,
+            "apr":4000,
             "totalSupplyTargetToken":2596148429503164,
             "tvl":234875.0575590398,
             "type":"balancerPool",
             "typeInfo":{
-               "name":"Balancer Test Pool TBTC-WETH",
-               "tokenAddress":"0x52e281318Fed4eFFfb8E46c0847a8f9B71a461A8",
+               "name":"Balancer Test Pool GOLD-WETH",
+               "tokenAddress":"0x17e7d59bB209a3215Ccc25FFfEf7161498B7C10d",
                "poolId":"0x11f0b5cca01b0f0a9fe6265ad6e8ee3419c684400002000000000000000000d4",
                "poolTokens":{
-                  "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b":{
-                     "symbol":"tbtc",
-                     "decimals":18,
-                     "amountInPool":86682.67229463719,
-                     "price":1.088
-                  },
                   "0x4200000000000000000000000000000000000006":{
                      "symbol":"weth",
                      "decimals":18,
                      "amountInPool":59246.35140633553,
                      "price":1.084
+                  },
+                  "0xbefd5c25a59ef2c1316c5a4944931171f30cd3e4":{
+                     "symbol":"gold",
+                     "decimals":18,
+                     "amountInPool":86682.67229463719,
+                     "price":1.088
                   }
                },
                "totalSupply":2596148429503164,

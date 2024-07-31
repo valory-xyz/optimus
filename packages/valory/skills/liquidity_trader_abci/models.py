@@ -69,4 +69,5 @@ class Params(BaseParams):
         self.lifi_check_status_url = self._ensure("lifi_check_status_url", kwargs, str)
         self.slippage_for_swap = self._ensure("slippage_for_swap", kwargs, float)
         self.allowed_dexs: List[str] = self._ensure("allowed_dexs", kwargs, List[str])
+        self.manual_gas_limit: int = self._ensure("manual_gas_limit", kwargs, int)
         super().__init__(*args, **kwargs)

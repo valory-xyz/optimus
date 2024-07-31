@@ -92,8 +92,8 @@ config:
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     bnb:
-      address: ${str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
-      chain_id: ${int:56}
+      address: ${str:https://virtual.base.rpc.tenderly.co/5d9c013b-879b-4f20-a6cc-e95dee0d109f}
+      chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     optimism:
@@ -202,7 +202,7 @@ models:
       round_threshold: ${int:0}
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}
-      multisend_contract_addresses: ${str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"}}
+      multisend_contract_addresses: ${str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}}
       lifi_request_quote_url: ${str:https://li.quest/v1/quote}
       lifi_check_status_url: ${str:https://li.quest/v1/status}
       slippage_for_swap: ${float:0.08}
@@ -210,3 +210,4 @@ models:
         gas_price: ${int:null}
         max_fee_per_gas: ${int:5000000000}
         max_priority_fee_per_gas: ${int:150000}
+      manual_gas_limit: 500000

@@ -106,6 +106,7 @@ extra:
           gas_price: ${GAS_PARAMS:int:null}
           max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
           max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:500000}
 1:
   models:
     benchmark_tool:
@@ -166,6 +167,7 @@ extra:
           gas_price: ${GAS_PARAMS:int:null}
           max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
           max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:500000}
 2:
   models:
     benchmark_tool:
@@ -226,6 +228,7 @@ extra:
           gas_price: ${GAS_PARAMS:int:null}
           max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
           max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:500000}
 3:
   models:
     benchmark_tool:
@@ -286,6 +289,7 @@ extra:
           gas_price: ${GAS_PARAMS:int:null}
           max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
           max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:500000}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

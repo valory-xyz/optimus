@@ -1324,7 +1324,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-        return payload_string, chain, safe_address
+        return payload_string, chain if chain != "base" else "bnb", safe_address
 
     def get_approval_tx_hash(
         self, token_address, amount: int, spender: str, chain: str
@@ -1472,7 +1472,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-        return payload_string, chain, safe_address
+        return payload_string, chain if chain != "base" else "bnb", safe_address
 
     def get_exit_pool_velodrome_tx_hash(
         self, positions
@@ -1564,7 +1564,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-        return payload_string, chain, safe_address
+        return payload_string, chain if chain != "base" else "bnb", safe_address
 
     def get_swap_tx_info(
         self, positions, action

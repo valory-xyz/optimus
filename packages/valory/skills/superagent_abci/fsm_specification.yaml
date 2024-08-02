@@ -17,7 +17,6 @@ alphabet_in:
 - SETTLE
 - SUSPICIOUS_ACTIVITY
 - VALIDATE_TIMEOUT
-- UPDATE
 - WAIT
 default_start_state: RegistrationStartupRound
 final_states: []
@@ -64,7 +63,6 @@ transition_func:
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
     (DecisionMakingRound, SETTLE): RandomnessTransactionSubmissionRound
-    (DecisionMakingRound, UPDATE): DecisionMakingRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound

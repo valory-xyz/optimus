@@ -394,7 +394,6 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
 
     def store_assets(self) -> None:
         """Store the list of assets as JSON."""
-        # import pdb;pdb.set_trace()
         self._store_data(self.assets, "assets", self.assets_filepath)
 
     def read_assets(self) -> None:
@@ -419,10 +418,6 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            self.read_assets()
-            self.context.logger.info(f"{self.assets}")
-            self.read_current_pool()
-
             if not self.assets:
                 self.assets = self.params.initial_assets
                 self.store_assets()
@@ -640,7 +635,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
         else:
             # If there is current pool, then get the lp pool token addresses
-
             tokens = yield from self._get_exit_pool_tokens()  # noqa: E800
             if not tokens:
                 return None
@@ -689,26 +683,29 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 if len(tokens) == 2:
                     return tokens
+                
+        seen_tokens = set((token["chain"], token["token"]) for token in tokens)
 
         # If we still need more tokens, check all positions
         if len(tokens) < 2:
             for position in self.synchronized_data.positions:
                 for asset in position["assets"]:
-                    if asset["asset_type"] in ["erc_20", "native"]:
-                        min_balance = (
-                            self.params.min_balance_multiplier
-                            * self.params.gas_reserve[position["chain"]]
-                        )
-                        if asset["balance"] > min_balance:
-                            tokens.append(
-                                {
-                                    "chain": position["chain"],
-                                    "token": asset["address"],
-                                    "token_symbol": asset["asset_symbol"],
-                                }
+                    if not (position["chain"],asset["address"]) in seen_tokens:
+                        if asset["asset_type"] in ["erc_20", "native"]:
+                            min_balance = (
+                                self.params.min_balance_multiplier
+                                * self.params.gas_reserve[position["chain"]]
                             )
-                            if len(tokens) == 2:
-                                return tokens
+                            if asset["balance"] > min_balance:
+                                tokens.append(
+                                    {
+                                        "chain": position["chain"],
+                                        "token": asset["address"],
+                                        "token_symbol": asset["asset_symbol"],
+                                    }
+                                )
+                                if len(tokens) == 2:
+                                    return tokens
 
         return None
 

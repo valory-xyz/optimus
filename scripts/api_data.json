@@ -13,7 +13,7 @@
             "amountDecimal":"0",
             "startTimestamp":1720519200,
             "endTimestamp":1721728800,
-            "mainParameter":"0x0244B0025264dC5f5c113d472D579C9c994A59CE",
+            "mainParameter":"0xc38C2fC871188935B9C615e73B17f2e7e463C8b1",
             "campaignParameters":{
                "url":"https://app.balancer.fi/#/fraxtal/pool/0x33251abecb0364df98a27a8d5d7b5ccddc774c42000000000000000000000008",
                "duration":1209600,
@@ -41,23 +41,23 @@
             "tags":[
                "superfest"
             ],
-            "apr":2000,
+            "apr":7000,
             "totalSupplyTargetToken":2596148429503164,
             "tvl":234875.0575590398,
             "type":"balancerPool",
             "typeInfo":{
                "name":"Balancer Test Pool OP-PSP",
-               "tokenAddress":"0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42",
+               "tokenAddress":"0xc38C2fC871188935B9C615e73B17f2e7e463C8b1",
                "poolId":"0x11f0b5cca01b0f0a9fe6265ad6e8ee3419c684400002000000000000000000d4",
                "poolTokens":{
-                  "0x4200000000000000000000000000000000000042":{
-                     "symbol":"op",
+                  "0x4200000000000000000000000000000000000006":{
+                     "symbol":"weth",
                      "decimals":18,
                      "amountInPool":86682.67229463719,
                      "price":1.088
                   },
-                  "0xd3594E879B358F430E20F82bea61e83562d49D48":{
-                     "symbol":"psp",
+                  "0xFE8B128bA8C78aabC59d4c64cEE7fF28e9379921":{
+                     "symbol":"bal",
                      "decimals":18,
                      "amountInPool":59246.35140633553,
                      "price":1.084
@@ -1052,7 +1052,7 @@
             "tags":[
                "superfest"
             ],
-            "apr":6000,
+            "apr":8000,
             "totalSupplyTargetToken":2596148429503164,
             "tvl":234875.0575590398,
             "type":"balancerPool",

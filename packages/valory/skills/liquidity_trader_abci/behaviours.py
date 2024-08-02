@@ -979,9 +979,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if decision == Decision.WAIT:
                 self.context.logger.info("Waiting for tx to get executed")
                 while decision == Decision.WAIT:
+                    # Wait for 5 seconds between each status check
                     yield from self.sleep(
-                        2
-                    )  # Wait for 2 seconds between each status check
+                        5
+                    )
                     self.context.logger.info("Checking the status of swap tx again")
                     decision = (
                         yield from self.get_decision_on_swap()

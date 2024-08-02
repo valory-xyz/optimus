@@ -136,7 +136,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         self.current_pool: Dict[str, Any] = {}
         self.current_pool_filepath: str = os.path.join(parent_dir, POOL_FILENAME)
 
-        #Read the assets and current pool
+        # Read the assets and current pool
         self.read_current_pool()
         self.read_assets()
 
@@ -362,7 +362,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         if data is None:
             self.context.logger.warning(f"No {attribute} to store.")
             return
-        
+
         try:
             with open(filepath, WRITE_MODE) as file:
                 try:
@@ -498,7 +498,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _extract_pool_info(self, dex_type, chain, apr, campaign):
         """Extract pool info from campaign data"""
-        #TO-DO: Add support for pools with more than two tokens.
+        # TO-DO: Add support for pools with more than two tokens.
         try:
             pool_tokens = list(campaign["typeInfo"]["poolTokens"].keys())
             pool_token_symbols = list(campaign["typeInfo"]["poolTokens"].values())
@@ -599,8 +599,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"APR of pool {self.highest_apr_pool['apr']} does not exceed APR threshold {self.params.apr_threshold}"
             )
             return False
-        
-        #TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
+
+        # TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
         # if not self._is_round_threshold_exceeded():  # noqa: E800
         #     self.context.logger.info("Round threshold not exceeded")  # noqa: E800
         #     return False  # noqa: E800
@@ -684,14 +684,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 if len(tokens) == 2:
                     return tokens
-                
+
         seen_tokens = set((token["chain"], token["token"]) for token in tokens)
 
         # If we still need more tokens, check all positions
         if len(tokens) < 2:
             for position in self.synchronized_data.positions:
                 for asset in position["assets"]:
-                    if not (position["chain"],asset["address"]) in seen_tokens:
+                    if not (position["chain"], asset["address"]) in seen_tokens:
                         if asset["asset_type"] in ["erc_20", "native"]:
                             min_balance = (
                                 self.params.min_balance_multiplier
@@ -766,7 +766,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
-        #TO-DO: Add logic to handle swaps when there is a balance for only one token.
+        # TO-DO: Add logic to handle swaps when there is a balance for only one token.
         bridge_swap_actions = []
 
         # if from_token and to_token are same, then we do not build a bridge_swap action
@@ -982,9 +982,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info("Waiting for tx to get executed")
                 while decision == Decision.WAIT:
                     # Wait for 5 seconds between each status check
-                    yield from self.sleep(
-                        5
-                    )
+                    yield from self.sleep(5)
                     self.context.logger.info("Checking the status of swap tx again")
                     decision = (
                         yield from self.get_decision_on_swap()
@@ -1026,7 +1024,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.assets = current_assets
                 self.store_assets()
-                self.context.logger.info(f"Bridge and swap was sucessful! Updating list of assets to {self.assets}")
+                self.context.logger.info(
+                    f"Bridge and swap was sucessful! Updating list of assets to {self.assets}"
+                )
 
         # If last action was Enter Pool and it was successful we update the current pool
         if (
@@ -1044,9 +1044,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             }
             self.current_pool = current_pool
             self.store_current_pool()
-            self.context.logger.info(f"Enter pool was successful! Updating current pool to {current_pool}")
-        
-        #If last action was Exit Pool and it was successful we remove the current pool
+            self.context.logger.info(
+                f"Enter pool was successful! Updating current pool to {current_pool}"
+            )
+
+        # If last action was Exit Pool and it was successful we remove the current pool
         if (
             last_executed_action_index is not None
             and Action(actions[last_executed_action_index]["action"])
@@ -1056,7 +1058,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.current_pool = current_pool
             self.store_current_pool()
             self.context.logger.info("Exit was successful! Removing current pool")
-            
+
         # if all actions have been executed we exit DecisionMaking
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
@@ -1102,14 +1104,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "chain_id": chain_id,
             "safe_contract_address": safe_address,
             "positions": positions,
-            #TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
+            # TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
             # "last_tx_period_count": self.synchronized_data.period_count,
             "last_executed_action_index": current_action_index,
         }
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:
         """Get decision on swap"""
-        #TO-DO: Add logic to handle other statuses as well. Specifically:
+        # TO-DO: Add logic to handle other statuses as well. Specifically:
         # If a transaction fails, wait for it to be refunded.
         # If the transaction is still not confirmed and the round times out, implement logic to continue checking the status.
 
@@ -1420,7 +1422,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not vault_address:
             return None, None, None
 
-        #TO-DO: queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
+        # TO-DO: queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
         min_amounts_out = [0, 0]
 
         # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
@@ -1599,12 +1601,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         from_address = self.params.safe_contract_addresses[action["from_chain"]]
         to_address = self.params.safe_contract_addresses[action["to_chain"]]
 
-        #TO-DO: Add logic to check if the amount is greater than the minimum required amount for a swap. Currently, we haven't set any such limit.
+        # TO-DO: Add logic to check if the amount is greater than the minimum required amount for a swap. Currently, we haven't set any such limit.
         amount = self._get_balance(
             action["from_chain"], action["from_token"], positions
         )
 
-        #TO-DO: add logic to dynamically adjust the value of slippage
+        # TO-DO: add logic to dynamically adjust the value of slippage
         slippage = self.params.slippage_for_swap
 
         params = {
@@ -1620,8 +1622,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         url = f"{base_url}?{urlencode(params)}"
         self.context.logger.info(f"URL :- {url}")
-        
-        #TO-DO: Add logic to handle scenarios when a route is not available for a swap.
+
+        # TO-DO: Add logic to handle scenarios when a route is not available for a swap.
         response = yield from self.get_http_response(
             method="GET",
             url=url,

@@ -171,7 +171,6 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             if positions and not isinstance(positions, str):
                 payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
 
-
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData, **payload.get("updates", {})
             )

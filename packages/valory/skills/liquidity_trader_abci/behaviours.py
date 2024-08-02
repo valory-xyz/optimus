@@ -136,6 +136,10 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         self.current_pool: Dict[str, Any] = {}
         self.current_pool_filepath: str = os.path.join(parent_dir, POOL_FILENAME)
 
+        #Read the assets and current pool
+        self.read_current_pool()
+        self.read_assets()
+
     @property
     def synchronized_data(self) -> SynchronizedData:
         """Return the synchronized data."""
@@ -358,8 +362,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         if data is None:
             self.context.logger.warning(f"No {attribute} to store.")
             return
-
-        serialized = json.dumps(data)
+        
         try:
             with open(filepath, WRITE_MODE) as file:
                 try:
@@ -377,7 +380,8 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         try:
             with open(filepath, READ_MODE) as file:
                 try:
-                    setattr(self, attribute, json.load(file))
+                    data = json.load(file)
+                    setattr(self, attribute, data)
                     return
                 except (json.JSONDecodeError, TypeError) as e:
                     err = f"Error decoding {attribute} from {filepath!r}: {str(e)}"
@@ -399,11 +403,11 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
 
     def store_current_pool(self) -> None:
         """Store the current pool as JSON."""
-        self._store_data(self.current_pool, "current pool", self.current_pool_filepath)
+        self._store_data(self.current_pool, "current_pool", self.current_pool_filepath)
 
     def read_current_pool(self) -> None:
         """Read the current pool as JSON."""
-        self.current_pool = self._read_data("current pool", self.current_pool_filepath)
+        self._read_data("current_pool", self.current_pool_filepath)
 
 
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):

@@ -1042,8 +1042,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             }
             self.current_pool = current_pool
             self.store_current_pool()
-            self.context.logger.info(f"Updating current pool to {current_pool}")
-
+            self.context.logger.info(f"Enter pool was successful! Updating current pool to {current_pool}")
+        
+        #If last action was Exit Pool and it was successful we remove the current pool
+        if (
+            last_executed_action_index is not None
+            and Action(actions[last_executed_action_index]["action"])
+            == Action.EXIT_POOL
+        ):
+            current_pool = {}
+            self.current_pool = current_pool
+            self.store_current_pool()
+            self.context.logger.info("Exit was successful! Removing current pool")
+            
         # if all actions have been executed we exit DecisionMaking
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")

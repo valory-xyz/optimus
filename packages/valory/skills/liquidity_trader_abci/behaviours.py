@@ -498,6 +498,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _extract_pool_info(self, dex_type, chain, apr, campaign):
         """Extract pool info from campaign data"""
+        #TO-DO: Add support for pools with more than two tokens.
         try:
             pool_tokens = list(campaign["typeInfo"]["poolTokens"].keys())
             pool_token_symbols = list(campaign["typeInfo"]["poolTokens"].values())
@@ -598,7 +599,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"APR of pool {self.highest_apr_pool['apr']} does not exceed APR threshold {self.params.apr_threshold}"
             )
             return False
-
+        
+        #TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
         # if not self._is_round_threshold_exceeded():  # noqa: E800
         #     self.context.logger.info("Round threshold not exceeded")  # noqa: E800
         #     return False  # noqa: E800
@@ -611,14 +613,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return False
         return self.highest_apr_pool["apr"] > self.params.apr_threshold
 
-    def _is_round_threshold_exceeded(self) -> bool:
-        """Check round threshold exceeded"""
-
-        last_tx_period_count = self.synchronized_data.last_tx_period_count
-        return (
-            last_tx_period_count + self.params.round_threshold
-            >= self.synchronized_data.period_count
-        )
+    # def _is_round_threshold_exceeded(self) -> bool:
+    #     """Check round threshold exceeded"""
+    #     last_tx_period_count = self.synchronized_data.last_tx_period_count
+    #     return (
+    #         last_tx_period_count + self.params.round_threshold
+    #         >= self.synchronized_data.period_count
+    #     )
 
     def get_order_of_transactions(
         self,
@@ -765,6 +766,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
+        #TO-DO: Add logic to handle swaps when there is a balance for only one token.
         bridge_swap_actions = []
 
         # if from_token and to_token are same, then we do not build a bridge_swap action
@@ -1024,7 +1026,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.assets = current_assets
                 self.store_assets()
-                self.context.logger.info(f"Updating list of assets to {self.assets}")
+                self.context.logger.info(f"Bridge and swap was sucessful! Updating list of assets to {self.assets}")
 
         # If last action was Enter Pool and it was successful we update the current pool
         if (
@@ -1100,12 +1102,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "chain_id": chain_id,
             "safe_contract_address": safe_address,
             "positions": positions,
-            "last_tx_period_count": self.synchronized_data.period_count,
+            #TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
+            # "last_tx_period_count": self.synchronized_data.period_count,
             "last_executed_action_index": current_action_index,
         }
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:
         """Get decision on swap"""
+        #TO-DO: Add logic to handle other statuses as well. Specifically:
+        # If a transaction fails, wait for it to be refunded.
+        # If the transaction is still not confirmed and the round times out, implement logic to continue checking the status.
 
         try:
             tx_hash = self.synchronized_data.final_tx_hash
@@ -1414,7 +1420,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not vault_address:
             return None, None, None
 
-        # queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
+        #TO-DO: queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
         min_amounts_out = [0, 0]
 
         # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
@@ -1592,10 +1598,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_token = action["to_token"]
         from_address = self.params.safe_contract_addresses[action["from_chain"]]
         to_address = self.params.safe_contract_addresses[action["to_chain"]]
+
+        #TO-DO: Add logic to check if the amount is greater than the minimum required amount for a swap. Currently, we haven't set any such limit.
         amount = self._get_balance(
             action["from_chain"], action["from_token"], positions
         )
 
+        #TO-DO: add logic to dynamically adjust the value of slippage
         slippage = self.params.slippage_for_swap
 
         params = {
@@ -1611,7 +1620,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         url = f"{base_url}?{urlencode(params)}"
         self.context.logger.info(f"URL :- {url}")
-
+        
+        #TO-DO: Add logic to handle scenarios when a route is not available for a swap.
         response = yield from self.get_http_response(
             method="GET",
             url=url,

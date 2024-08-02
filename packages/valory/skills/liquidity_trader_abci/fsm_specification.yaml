@@ -5,7 +5,6 @@ alphabet_in:
 - ROUND_TIMEOUT
 - SETTLE
 - WAIT
-- UPDATE
 default_start_state: GetPositionsRound
 final_states:
 - FinishedDecisionMakingRound
@@ -28,7 +27,6 @@ transition_func:
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
     (DecisionMakingRound, SETTLE): FinishedTxPreparationRound
-    (DecisionMakingRound, UPDATE): DecisionMakingRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound

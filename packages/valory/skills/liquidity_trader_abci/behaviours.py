@@ -24,7 +24,6 @@ import os.path
 from abc import ABC
 from collections import defaultdict
 from enum import Enum
-from json import JSONDecodeError
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from urllib.parse import urlencode
 
@@ -52,6 +51,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.models import Params
+from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
+    BalancerPoolBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     DecisionMakingPayload,
     DecisionMakingRound,
@@ -135,7 +137,8 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         self.assets_filepath = os.path.join(parent_dir, ASSETS_FILENAME)
         self.current_pool: Dict[str, Any] = {}
         self.current_pool_filepath: str = os.path.join(parent_dir, POOL_FILENAME)
-
+        self.pools: Dict[str, Any] = {}
+        self.pools["balancerPool"] = BalancerPoolBehaviour(**kwargs)
         # Read the assets and current pool
         self.read_current_pool()
         self.read_assets()
@@ -297,30 +300,6 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         )
         return balance
 
-    def _get_vault_for_pool(
-        self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Get vault for pool"""
-        vault_address = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=WeightedPoolContract.contract_id,
-            contract_callable="get_vault_address",
-            data_key="vault",
-            chain_id=chain if chain != "base" else "bnb",
-        )
-
-        if not vault_address:
-            self.context.logger.error(
-                f"Could not fetch the vault address for pool {pool_address}"
-            )
-            return None
-
-        self.context.logger.info(
-            f"Vault contract address for balancer pool {pool_address}: {vault_address}"
-        )
-        return vault_address
-
     def _get_balance(
         self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
     ) -> Optional[int]:
@@ -334,28 +313,6 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
                     if asset["address"] == token:
                         return asset["balance"]
         return 0
-
-    def _get_pool_id(
-        self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Get pool ids"""
-        pool_id = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=WeightedPoolContract.contract_id,
-            contract_callable="get_pool_id",
-            data_key="pool_id",
-            chain_id=chain if chain != "base" else "bnb",
-        )
-
-        if not pool_id:
-            self.context.logger.error(
-                f"Could not fetch the pool id for pool {pool_address}"
-            )
-            return None
-
-        self.context.logger.info(f"PoolId for balancer pool {pool_address}: {pool_id}")
-        return pool_id
 
     def _store_data(self, data: Any, attribute: str, filepath: str) -> None:
         """Generic method to store data as JSON."""
@@ -716,25 +673,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = self.current_pool["address"]
         chain = self.current_pool["chain"]
 
+        pool = self.pools.get("balancerPool", None)
+        if pool is None:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
+            return None
+
         if dex_type == "balancerPool":
             # Get poolId from balancer weighted pool contract
-            pool_id = yield from self._get_pool_id(pool_address, chain)
-            if not pool_id:
+            pool_id = yield from pool._get_pool_id(pool_address, chain)
+            if pool_id is None:
                 return None
 
             # Get vault contract address from balancer weighted pool contract
-            vault_address = yield from self._get_vault_for_pool(pool_address, chain)
-            if not vault_address:
+            vault_address = yield from pool._get_vault_for_pool(pool_address, chain)
+            if vault_address is None:
                 return None
 
             # Get pool tokens from balancer vault contract
-            tokens = yield from self._get_balancer_pool_tokens(
-                pool_id, vault_address, chain
-            )
-
-        if dex_type == "velodrome":
-            # Get pool tokens from velodrome pool contract
-            tokens = yield from self._get_velodrome_pool_tokens()
+            tokens = yield from pool._get_tokens(pool_id, vault_address, chain)
 
         if not tokens:
             return None
@@ -858,31 +814,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "pool_address": self.highest_apr_pool["pool_address"],
             "apr": self.highest_apr_pool["apr"],
         }
-
-    def _get_balancer_pool_tokens(
-        self, pool_id: str, vault_address: str, chain: str
-    ) -> Generator[None, None, Optional[List[str]]]:
-        """Get balancer pool tokens"""
-        pool_tokens = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=vault_address,
-            contract_public_id=VaultContract.contract_id,
-            contract_callable="get_pool_tokens",
-            data_key="tokens",
-            pool_id=pool_id,
-            chain_id=chain if chain != "base" else "bnb",
-        )
-
-        if not pool_tokens:
-            self.context.logger.error(
-                f"Could not fetch tokens for balancer pool id {pool_id}"
-            )
-            return None
-
-        self.context.logger.info(
-            f"Tokens for balancer poolId {pool_id} : {pool_tokens}"
-        )
-        return pool_tokens
 
     def _get_velodrome_pool_tokens(
         self, pool_address: str
@@ -1188,65 +1119,38 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
-        if not action:
-            return None, None, None
-
         dex_type = action["dex_type"]
+        pool = self.pools.get(dex_type, None)
 
-        if dex_type == "balancerPool":
-            (
-                tx_hash,
-                chain_id,
-                safe_address,
-            ) = yield from self.get_enter_pool_balancer_tx_hash(positions, action)
-            return tx_hash, chain_id, safe_address
-
-        if dex_type == "velodrome":
-            (
-                tx_hash,
-                chain_id,
-                safe_address,
-            ) = yield from self.get_enter_pool_velodrome_tx_hash(positions)
-            return tx_hash, chain_id, safe_address
-
-        self.context.logger.error(f"Unknown type of dex: {dex_type}")
-        return None, None, None
-
-    def get_enter_pool_balancer_tx_hash(
-        self, positions, action
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash for Balancer"""
-
-        if not action:
+        if pool is None:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
         chain = action["chain"]
 
         pool_address = action["pool_address"]
-        pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
-
-        # Get vault contract address from balancer weighted pool contract
-        vault_address = yield from self._get_vault_for_pool(pool_address, chain)
-        if not vault_address:
-            return None, None, None
-
-        max_amounts_in = [
-            self._get_balance(chain, action["assets"][0], positions),
-            self._get_balance(chain, action["assets"][1], positions),
-        ]
-
-        if any(amount == 0 for amount in max_amounts_in):
-            self.context.logger.error("Insufficient balance for entering pool")
-            return None, None, None
 
         multi_send_txs = []
+
+        safe_address = self.params.safe_contract_addresses[action["chain"]]
+
+        tx_hash = yield from pool.enter(
+            pool_address=pool_address,
+            safe_address=safe_address,
+            assets=action["assets"],
+            chain=chain if chain != "base" else "bnb",
+            positions=positions,
+        )
+
+        if not tx_hash:
+            return None, None, None
 
         if not action["assets"][0] == ZERO_ADDRESS:
             # Approve asset 0
             approval_tx_hash_0 = yield from self.get_approval_tx_hash(
                 token_address=action["assets"][0],
-                amount=max_amounts_in[0],
-                spender=vault_address,
+                amount=self.pool.max_amounts_in[0],
+                spender=self.pool.vault_address,
                 chain=chain if chain != "base" else "bnb",
             )
             multi_send_txs.append(approval_tx_hash_0)
@@ -1255,43 +1159,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # Approve asset 1
             approval_tx_hash_1 = yield from self.get_approval_tx_hash(
                 token_address=action["assets"][1],
-                amount=max_amounts_in[1],
-                spender=vault_address,
+                amount=self.pool.max_amounts_in[1],
+                spender=self.pool.vault_address,
                 chain=chain if chain != "base" else "bnb",
             )
             multi_send_txs.append(approval_tx_hash_1)
 
-        # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
-        join_kind = 1  # EXACT_TOKENS_IN_FOR_BPT_OUT
-
-        # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
-        from_internal_balance = ZERO_ADDRESS in action["assets"]
-
-        safe_address = self.params.safe_contract_addresses[action["chain"]]
-
-        tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=vault_address,
-            contract_public_id=VaultContract.contract_id,
-            contract_callable="join_pool",
-            data_key="tx_hash",
-            pool_id=pool_id,
-            sender=safe_address,
-            recipient=safe_address,
-            assets=action["assets"],
-            max_amounts_in=max_amounts_in,
-            join_kind=join_kind,
-            from_internal_balance=from_internal_balance,
-            chain_id=chain if chain != "base" else "bnb",
-        )
-
-        if not tx_hash:
-            return None, None, None
-
         multi_send_txs.append(
             {
                 "operation": MultiSendOperation.CALL,
-                "to": vault_address,
+                "to": self.pool.vault_address,
                 "value": 0,
                 "data": tx_hash,
             }
@@ -1370,52 +1247,20 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "data": tx_hash,
         }
 
-    def get_enter_pool_velodrome_tx_hash(
-        self, positions
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash for Balancer"""
-        pass
-
     def get_exit_pool_tx_hash(
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash"""
-        if not self.synchronized_data.actions:
-            return None, None, None
-
-        dex_type = action["dex_type"]
-
-        if dex_type == "balancerPool":
-            (
-                tx_hash,
-                chain_id,
-                safe_address,
-            ) = yield from self.get_exit_pool_balancer_tx_hash(positions, action)
-            return tx_hash, chain_id, safe_address
-
-        if dex_type == "velodrome":
-            (
-                tx_hash,
-                chain_id,
-                safe_address,
-            ) = yield from self.get_exit_pool_velodrome_tx_hash(positions, action)
-            return tx_hash, chain_id, safe_address
-
-        self.context.logger.error(f"Unknown type of dex: {dex_type}")
-        return None, None, None
-
-    def get_exit_pool_balancer_tx_hash(
-        self, positions, action
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash for Balancer"""
+        dex_type = action["dex_type"]
+        pool = self.pools.get(dex_type, None)
 
-        if not action:
+        if pool is None:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
         chain = action["chain"]
 
         pool_address = action["pool_address"]
-        pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
 
         # Get vault contract address from balancer weighted pool contract
         vault_address = yield from self._get_vault_for_pool(pool_address, chain)
@@ -1427,9 +1272,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
         exit_kind = 1  # EXACT_BPT_IN_FOR_TOKENS_OUT
-
-        # fromInternalBalance - True if you receiving tokens as internal token balances. False if receiving as ERC20
-        to_internal_balance = ZERO_ADDRESS in action["assets"]
 
         # Get assets balances from positions
         safe_address = self.params.safe_contract_addresses[action["chain"]]
@@ -1448,21 +1290,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if bpt_amount_in is None:
             return None, None, None
 
-        tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=vault_address,
-            contract_public_id=VaultContract.contract_id,
-            contract_callable="exit_pool",
-            data_key="tx_hash",
-            pool_id=pool_id,
-            sender=safe_address,
-            recipient=safe_address,
+        tx_hash = yield from pool.exit(
+            vault_address=vault_address,
+            safe_address=safe_address,
             assets=action["assets"],
             min_amounts_out=min_amounts_out,
             exit_kind=exit_kind,
             bpt_amount_in=bpt_amount_in,
-            to_internal_balance=to_internal_balance,
-            chain_id=chain if chain != "base" else "bnb",
+            chain=chain if chain != "base" else "bnb",
         )
 
         if not tx_hash:

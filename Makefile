@@ -85,6 +85,7 @@ all-linters:
 	tox -e check-doc-hashes
 	tox -e bandit
 	tox -e safety
+	tox -e liccheck
 	tox -e check-packages
 	tox -e check-abciapp-specs
 	tox -e check-hash

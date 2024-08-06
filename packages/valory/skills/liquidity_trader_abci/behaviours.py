@@ -1180,7 +1180,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None
 
         status = tx_status.get("status", "")
-        sub_status = tx_status("substatus", "")
+        sub_status = tx_status.get("substatus", "")
 
         if not status and sub_status:
             self.context.logger.error("No status or sub_status found in response")
@@ -1212,7 +1212,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         ]
         if any(amount == 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error("Insufficient balance for entering pool")
-            return None, []
+            return None, None, None
 
         tx_hash = yield from pool.enter(
             self,

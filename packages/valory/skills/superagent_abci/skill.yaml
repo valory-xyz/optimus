@@ -154,6 +154,8 @@ models:
         max_fee_per_gas: 50000000
         max_priority_fee_per_gas: 150000
       manual_gas_limit: 500000
+      balancer_vault_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
+      chain_to_chain_key_mapping: '{"optimism":"opt","base":"bas"}'
     class_name: Params
   randomness_api:
     args:

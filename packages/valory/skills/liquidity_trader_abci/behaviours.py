@@ -125,7 +125,7 @@ READ_MODE = "r"
 WRITE_MODE = "w"
 
 
-class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
+class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -138,7 +138,7 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
         self.current_pool: Dict[str, Any] = {}
         self.current_pool_filepath: str = os.path.join(parent_dir, POOL_FILENAME)
         self.pools: Dict[str, Any] = {}
-        self.pools["balancerPool"] = BalancerPoolBehaviour(**kwargs)
+        self.pools["balancerPool"] = BalancerPoolBehaviour
         # Read the assets and current pool
         self.read_current_pool()
         self.read_assets()
@@ -1119,63 +1119,84 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
-        dex_type = action["dex_type"]
+        dex_type = action.get("dex_type", "")
+        chain = action.get("chain", "")
+        assets = action.get("assets", [])
+        pool_address = action.get("pool_address", "")
+        safe_address = self.params.safe_contract_addresses.get(
+            action.get("chain", ""), ""
+        )
+
         pool = self.pools.get(dex_type, None)
 
         if pool is None:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        chain = action["chain"]
-
-        pool_address = action["pool_address"]
-
-        multi_send_txs = []
-
-        safe_address = self.params.safe_contract_addresses[action["chain"]]
+        # Fetch the amount of tokens to send
+        max_amounts_in = [
+            self._get_balance(chain, assets[0], positions),
+            self._get_balance(chain, assets[1], positions),
+        ]
+        if any(amount == 0 or amount is None for amount in max_amounts_in):
+            self.context.logger.error("Insufficient balance for entering pool")
+            return None, []
 
         tx_hash = yield from pool.enter(
+            self,
             pool_address=pool_address,
             safe_address=safe_address,
-            assets=action["assets"],
-            chain=chain if chain != "base" else "bnb",
-            positions=positions,
+            assets=assets,
+            chain=chain,
+            max_amounts_in=max_amounts_in,
         )
-
-        if not tx_hash:
+        if not tx_hash or not max_amounts_in:
             return None, None, None
 
+        vault_address = self.params.balancer_vault_addresses.get(chain, "")
+        if not vault_address:
+            self.context.logger.error(f"No vault address found for chain {chain}")
+
+        multi_send_txs = []
         if not action["assets"][0] == ZERO_ADDRESS:
             # Approve asset 0
-            approval_tx_hash_0 = yield from self.get_approval_tx_hash(
+            token0_approval_tx_payload = yield from self.get_approval_tx_hash(
                 token_address=action["assets"][0],
-                amount=self.pool.max_amounts_in[0],
-                spender=self.pool.vault_address,
+                amount=max_amounts_in[0],
+                spender=vault_address,
                 chain=chain if chain != "base" else "bnb",
             )
-            multi_send_txs.append(approval_tx_hash_0)
+
+            if not token0_approval_tx_payload:
+                self.context.logger.error("Error preparing approval tx payload")
+                return None, None, None
+
+            multi_send_txs.append(token0_approval_tx_payload)
 
         if not action["assets"][1] == ZERO_ADDRESS:
             # Approve asset 1
-            approval_tx_hash_1 = yield from self.get_approval_tx_hash(
+            token1_approval_tx_payload = yield from self.get_approval_tx_hash(
                 token_address=action["assets"][1],
-                amount=self.pool.max_amounts_in[1],
-                spender=self.pool.vault_address,
+                amount=max_amounts_in[1],
+                spender=vault_address,
                 chain=chain if chain != "base" else "bnb",
             )
-            multi_send_txs.append(approval_tx_hash_1)
+            if not token1_approval_tx_payload:
+                self.context.logger.error("Error preparing approval tx payload")
+                return None, None, None
+
+            multi_send_txs.append(token1_approval_tx_payload)
 
         multi_send_txs.append(
             {
                 "operation": MultiSendOperation.CALL,
-                "to": self.pool.vault_address,
+                "to": vault_address,
                 "value": 0,
                 "data": tx_hash,
             }
         )
 
         # Get the transaction from the multisend contract
-
         multisend_address = self.params.multisend_contract_addresses[chain]
 
         multisend_tx_hash = yield from self.contract_interact(
@@ -1248,60 +1269,39 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def get_exit_pool_tx_hash(
-        self, positions, action
+        self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash for Balancer"""
-        dex_type = action["dex_type"]
-        pool = self.pools.get(dex_type, None)
+        dex_type = action.get("dex_type", "")
+        chain = action.get("chain", "")
+        assets = action.get("assets", [])
+        pool_address = action.get("pool_address", "")
+        safe_address = self.params.safe_contract_addresses.get(
+            action.get("chain", ""), ""
+        )
 
+        pool = self.pools.get(dex_type, None)
         if pool is None:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        chain = action["chain"]
-
-        pool_address = action["pool_address"]
-
-        # Get vault contract address from balancer weighted pool contract
-        vault_address = yield from self._get_vault_for_pool(pool_address, chain)
-        if not vault_address:
-            return None, None, None
-
-        # TO-DO: queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
-        min_amounts_out = [0, 0]
-
-        # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
-        exit_kind = 1  # EXACT_BPT_IN_FOR_TOKENS_OUT
-
         # Get assets balances from positions
         safe_address = self.params.safe_contract_addresses[action["chain"]]
 
-        # bpt amount to send
-        bpt_amount_in = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=str(WeightedPoolContract.contract_id),
-            contract_callable="get_balance",
-            data_key="balance",
-            account=safe_address,
-            chain_id=chain if chain != "base" else "bnb",
-        )
-
-        if bpt_amount_in is None:
-            return None, None, None
-
         tx_hash = yield from pool.exit(
-            vault_address=vault_address,
+            self,
             safe_address=safe_address,
-            assets=action["assets"],
-            min_amounts_out=min_amounts_out,
-            exit_kind=exit_kind,
-            bpt_amount_in=bpt_amount_in,
-            chain=chain if chain != "base" else "bnb",
+            assets=assets,
+            pool_address=pool_address,
+            chain=chain,
         )
 
         if not tx_hash:
             return None, None, None
+
+        vault_address = self.params.balancer_vault_addresses.get(chain, "")
+        if not vault_address:
+            self.context.logger.error(f"No vault address found for chain {chain}")
 
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -1424,22 +1424,40 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_swap_tx_info(
         self, positions, action
-    ) -> Generator[None, None, Tuple[str, str, str, int]]:
+    ) -> Generator[None, None, Optional[Tuple[str, str, str, int]]]:
         """Get the quote for asset transfer from API"""
-        chain_keys = {"ethereum": "eth", "optimism": "opt", "base": "bas"}
+        chain_keys = self.params.chain_to_chain_key_mapping
 
-        base_url = self.params.lifi_request_quote_url
-        from_chain = chain_keys[action["from_chain"]]
-        to_chain = chain_keys[action["to_chain"]]
-        from_token = action["from_token"]
-        to_token = action["to_token"]
-        from_address = self.params.safe_contract_addresses[action["from_chain"]]
-        to_address = self.params.safe_contract_addresses[action["to_chain"]]
+        from_chain = chain_keys.get(action.get("from_chain", ""), "")
+        to_chain = chain_keys.get(action.get("to_chain", ""), "")
+        from_token = action.get("from_token", "")
+        to_token = action.get("to_token", "")
+
+        from_address = self.params.safe_contract_addresses.get(
+            action.get("from_chain", ""), ""
+        )
+        if not from_address:
+            self.context.logger.error(
+                f"Could not find safe address for chain {from_chain}"
+            )
+            return None, None, None, None
+
+        to_address = self.params.safe_contract_addresses.get(
+            action.get("to_chain", ""), ""
+        )
+        if not to_address:
+            self.context.logger.error(
+                f"Could not find safe address for chain {to_chain}"
+            )
+            return None, None, None, None
 
         # TO-DO: Add logic to check if the amount is greater than the minimum required amount for a swap. Currently, we haven't set any such limit.
         amount = self._get_balance(
-            action["from_chain"], action["from_token"], positions
+            action.get("from_chain", ""), action.get("from_token", ""), positions
         )
+        if not amount or amount == 0:
+            self.context.logger.error("Insufficient amount to swap")
+            return None, None, None, None
 
         # TO-DO: add logic to dynamically adjust the value of slippage
         slippage = self.params.slippage_for_swap
@@ -1455,6 +1473,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "slippage": slippage,
         }
 
+        base_url = self.params.lifi_request_quote_url
         url = f"{base_url}?{urlencode(params)}"
         self.context.logger.info(f"URL :- {url}")
 
@@ -1470,7 +1489,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Received status code {response.status_code} from url {url}."
                 f"Message {response.body}"
             )
-            return None, None, None
+            return None, None, None, None
 
         try:
             quote = json.loads(response.body)
@@ -1479,20 +1498,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Could not parse response from api, "
                 f"the following error was encountered {type(e).__name__}: {e}"
             )
-            return None
+            return None, None, None, None
 
-        tx_request = quote["transactionRequest"]
+        tx_request = quote.get("transactionRequest", "")
         self.context.logger.info(f"transaction data from api {tx_request}")
 
-        if tx_request:
-            return (
-                bytes.fromhex(tx_request["data"][2:]),
-                tx_request["to"],
-                from_token,
-                amount,
-            )
+        data = tx_request.get("data", "")
+        if not tx_request or not data:
+            self.context.logger.error(f"No tx data found in response {quote}")
+            return None, None, None, None
 
-        return None
+        return bytes.fromhex(data[2:]), tx_request["to"], from_token, amount
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

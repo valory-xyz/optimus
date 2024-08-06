@@ -68,7 +68,6 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         return tx_hash
 
     def exit(self, **kwargs: Any) -> Generator[None, None, Optional[str]]:
-
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
         assets = kwargs.get("assets")

@@ -38,7 +38,6 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
-from packages.valory.contracts.velodrome_pool.contract import PoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -553,7 +552,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         current_pool_address = self.current_pool.get("address", "")
                         if not campaign_pool_address:
                             self.context.logger.warning(
-                                f"No pool address found for campaign"
+                                "No pool address found for campaign"
                             )
                             continue
                         # The pool should not be the current pool
@@ -587,14 +586,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return False
 
-    # def _is_round_threshold_exceeded(self) -> bool:
-    #     """Check round threshold exceeded"""
-    #     last_tx_period_count = self.synchronized_data.last_tx_period_count
-    #     return (
-    #         last_tx_period_count + self.params.round_threshold
-    #         >= self.synchronized_data.period_count
-    #     )
-
     def get_order_of_transactions(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
@@ -616,7 +607,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             exit_pool_action = self._build_exit_pool_action(tokens)
             if not exit_pool_action:
-                self.context.logger.error(f"Error building exit pool action")
+                self.context.logger.error("Error building exit pool action")
                 return None
 
             actions.append(exit_pool_action)
@@ -627,7 +618,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         enter_pool_action = self._build_enter_pool_action()
         if not enter_pool_action:
-            self.context.logger.error(f"Error building enter pool action")
+            self.context.logger.error("Error building enter pool action")
             return None
         actions.append(enter_pool_action)
 
@@ -1103,7 +1094,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "safe_contract_address": safe_address,
             "positions": positions,
             # TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
-            # "last_tx_period_count": self.synchronized_data.period_count,
             "last_executed_action_index": current_action_index,
         }
 
@@ -1426,7 +1416,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             or not token_to_swap
             or not amount
         ):
-            self.context.logger.error(f"Error fetching the swap related info")
+            self.context.logger.error("Error fetching the swap related info")
             return None, None, None
 
         if not token_to_swap == ZERO_ADDRESS:

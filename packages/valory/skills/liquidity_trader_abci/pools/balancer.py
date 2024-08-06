@@ -1,5 +1,26 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2024 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+"""This package contains the implemenatation of the BalancerPoolBehaviour class."""
+
 from abc import ABC
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
@@ -13,6 +34,8 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
 class BalancerPoolBehaviour(PoolBehaviour, ABC):
+    """BalancerPoolBehaviour"""
+
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the balancer pool behaviour."""
         super().__init__(**kwargs)
@@ -68,6 +91,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         return tx_hash
 
     def exit(self, **kwargs: Any) -> Generator[None, None, Optional[str]]:
+        """Exit pool"""
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
         assets = kwargs.get("assets")

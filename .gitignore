@@ -9,6 +9,8 @@ htmlcov
 packages/open_aea
 optimism_agent
 optimism_service
+assets.json
+current_pool.json
 Pipfile.lock
     
 packages/valory/agents/*

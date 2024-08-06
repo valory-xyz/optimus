@@ -62,7 +62,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             max_amounts_in=max_amounts_in,
             join_kind=self.join_kind,
             from_internal_balance=from_internal_balance,
-            chain_id=chain if chain != "base" else "bnb",
+            chain_id=chain,
         )
 
         return tx_hash
@@ -101,7 +101,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             contract_callable="get_balance",
             data_key="balance",
             account=safe_address,
-            chain_id=chain if chain != "base" else "bnb",
+            chain_id=chain,
         )
         if bpt_amount_in is None:
             self.context.logger.error(
@@ -126,7 +126,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             exit_kind=self.exit_kind,
             bpt_amount_in=bpt_amount_in,
             to_internal_balance=to_internal_balance,
-            chain_id=chain if chain != "base" else "bnb",
+            chain_id=chain,
         )
 
         return tx_hash
@@ -153,7 +153,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             contract_callable="get_pool_tokens",
             data_key="tokens",
             pool_id=pool_id,
-            chain_id=chain if chain != "base" else "bnb",
+            chain_id=chain,
         )
 
         if not pool_tokens:
@@ -178,7 +178,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             contract_public_id=WeightedPoolContract.contract_id,
             contract_callable="get_pool_id",
             data_key="pool_id",
-            chain_id=chain if chain != "base" else "bnb",
+            chain_id=chain,
         )
 
         if not pool_id:

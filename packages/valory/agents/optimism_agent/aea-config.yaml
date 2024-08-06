@@ -91,7 +91,7 @@ config:
       chain_id: ${int:1}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
-    bnb:
+    base:
       address: ${str:https://virtual.base.rpc.tenderly.co/5d9c013b-879b-4f20-a6cc-e95dee0d109f}
       chain_id: ${int:8453}
       poa_chain: ${bool:false}

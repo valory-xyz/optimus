@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimism_agent:0.1.0:bafybeiep5lfmu5a7wyzk32hl4acx2uvou44jqqbrmn2ulyvglheq5rcngq
+agent: valory/optimism_agent:0.1.0:bafybeifhy4xhix6bivle3kvm2osueun45jco27ol73clw2ofgwcimrdd2i
 number_of_agents: 4
 deployment:
   agent:
@@ -308,11 +308,11 @@ config:
       chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
       poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
-    bnb:
-      address: ${BNB_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
-      chain_id: ${BNB_LEDGER_CHAIN_ID:int:42161}
-      poa_chain: ${BNB_LEDGER_IS_POA_CHAIN:bool:false}
-      default_gas_price_strategy: ${BNB_LEDGER_PRICING:str:eip1559}
+    base:
+      address: ${BASE_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
+      chain_id: ${BASE_LEDGER_CHAIN_ID:int:42161}
+      poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:false}
+      default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
     optimism:
       address: ${OPTIMISM_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
       chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:42161}

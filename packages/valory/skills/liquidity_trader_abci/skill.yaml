@@ -22,7 +22,6 @@ contracts:
 - valory/gnosis_safe:0.1.0:bafybeiho6sbfts3zk3mftrngw37d5qnlvkqtnttt3fzexmcwkeevhu4wwi
 - valory/balancer_weighted_pool:0.1.0:bafybeia7l2tiw5mmjlj4bsycp2rcyaul7fnjmot4xb4f5ndaslt6m35pja
 - valory/balancer_vault:0.1.0:bafybeieinccohiknxbnvp4qbqpgm7tz6czdty6gjkupyectfhyfkiixa3u
-- valory/velodrome_pool:0.1.0:bafybeidp7kgkqsjy5yigutnhguzw7gb5ti62g42zaezamrgeo6dwbakiqe
 - valory/erc20:0.1.0:bafybeiel24epwfr5nsk5xt2dfdimrzhrqchjxdeeh6wpm6nz35w6po6osa
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 protocols:

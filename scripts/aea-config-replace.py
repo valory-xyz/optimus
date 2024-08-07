@@ -40,10 +40,10 @@ def main() -> None:
                 "address"
             ] = f"${{str:{os.getenv('ETHEREUM_LEDGER_RPC')}}}"
 
-        if os.getenv("BNB_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["bnb"][
+        if os.getenv("BASE_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["base"][
                 "address"
-            ] = f"${{str:{os.getenv('BNB_LEDGER_RPC')}}}"
+            ] = f"${{str:{os.getenv('BASE_LEDGER_RPC')}}}"
 
         if os.getenv("OPTIMISM_LEDGER_RPC"):
             config[2]["config"]["ledger_apis"]["optimism"][

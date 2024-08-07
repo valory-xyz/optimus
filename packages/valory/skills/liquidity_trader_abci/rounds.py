@@ -108,11 +108,6 @@ class SynchronizedData(BaseSynchronizedData):
         actions = json.loads(serialized)
         return actions
 
-    # @property
-    # def last_tx_period_count(self) -> Optional[int]:
-    #     """Get the last tx period count"""
-    #     return cast(int, self.db.get("last_tx_period_count", 0))
-
     @property
     def last_executed_action_index(self) -> Optional[int]:
         """Get the last executed action index"""

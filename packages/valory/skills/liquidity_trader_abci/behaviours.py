@@ -314,6 +314,8 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                 for asset in position["assets"]:
                     if asset["address"] == token:
                         return asset["balance"]
+                    
+        self.context.logger.warning(f"Could not fetch balance for token {token} on chain {chain}")
         return None
 
     def _store_data(self, data: Any, attribute: str, filepath: str) -> None:
@@ -612,7 +614,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if not self.current_pool:
             tokens = self._get_tokens_over_min_balance()
-            if not tokens:
+            if not tokens or len(tokens) < 2:
                 self.context.logger.error(
                     "Minimun 2 tokens required in safe with over minimum balance to enter a pool"
                 )
@@ -666,17 +668,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        # minimum balance threshold based on the current chain
-        min_balance_threshold = (
-            self.params.min_balance_multiplier
-            * self.params.gas_reserve.get(highest_apr_chain, 0)
-        )
+        # TO-DO: set the value for gas_reserve for each chain
+        # min_balance_threshold = (
+        #     self.params.min_balance_multiplier
+        #     * self.params.gas_reserve.get(highest_apr_chain, 0)
+        # )
+        min_balance_threshold = 0
 
         # Check balances for token0 and token1 on the highest APR pool chain
         for token, symbol in [(token0, token0_symbol), (token1, token1_symbol)]:
             balance = self._get_balance(highest_apr_chain, token)
-
-            if balance > min_balance_threshold:
+            if balance and balance > min_balance_threshold:
                 tokens.append(
                     {"chain": highest_apr_chain, "token": token, "token_symbol": symbol}
                 )

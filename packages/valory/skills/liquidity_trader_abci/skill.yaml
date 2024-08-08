@@ -7,23 +7,26 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeia2uolkabkqfx22o362jzvcjyckpuge3vgkke3acpqbrs65sedd2u
+  behaviours.py: bafybeicesvyake5hfou4x7mufz4qp4xlhfkxvtbhbcz6wfuindbcudqkri
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeic52qgyee5zw5bvm6ref6qdy24qpybalg6oisntvsjsnpiula3whm
+  fsm_specification.yaml: bafybeigpdpq7jenqykgelyqp2ac7vtnev5dcdxceui4gt7skanfaagtvai
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeidzast2cwbwquqst7rn5aqifgfifbjzyt7tjzlagreyw4y27y74we
+  models.py: bafybeicpkcrdhknolqm5ke3ddxblbrchzjl25tfm2adxx3z4wvxqhpxoce
   payloads.py: bafybeidycfzwr6kmlroo6hoodhig7k2zfe6xothchmebro4jnlyf6x22oy
-  pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
-  pools/balancer.py: bafybeia47sltt4v5gmcq5lncgca3vhkokr42yrshhkafyas2o6pbnm6gym
-  rounds.py: bafybeiawes2yvphi6ilrh4dt6ywmyvwitmusgsr6xxkmitp3gwnhghs4iu
+  pool_behaviour.py: bafybeiabwfwxrmrjfjqelzlu42i5caw32a4vd4myifdkdtwp4xllxcd4om
+  pools/balancer.py: bafybeifdmnoalssam35imywgi663vavweqogwr4ejclxc5ohxsdvjn32vm
+  pools/uniswap.py: bafybeibxcxc6x7oqsgex2cig56hsls5zfkt2xp5gy6flvmwmcqi5lqiane
+  rounds.py: bafybeihemb3nmfcyn7kokibqvtnyogvsratbjysmkdklawhibvra5lewvu
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiho6sbfts3zk3mftrngw37d5qnlvkqtnttt3fzexmcwkeevhu4wwi
-- valory/balancer_weighted_pool:0.1.0:bafybeia7l2tiw5mmjlj4bsycp2rcyaul7fnjmot4xb4f5ndaslt6m35pja
-- valory/balancer_vault:0.1.0:bafybeieinccohiknxbnvp4qbqpgm7tz6czdty6gjkupyectfhyfkiixa3u
+- valory/balancer_weighted_pool:0.1.0:bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq
+- valory/balancer_vault:0.1.0:bafybeigqub47nqivocvmoumuh246r6bzh4qdqpd2ihciyzeq32euaifi7u
 - valory/erc20:0.1.0:bafybeiel24epwfr5nsk5xt2dfdimrzhrqchjxdeeh6wpm6nz35w6po6osa
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeibiu7ry2fweezlaqylhacsjlmiyk4ndvyckxuaof6rpxskjqcmhvi
+- valory/uniswap_v3_pool:0.1.0:bafybeih3b43atd4wxxuwq32qbfmp3m5ryf75cshdwaene7gi4dmgzmq2u4
 protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni

@@ -73,7 +73,7 @@ class Params(BaseParams):
         self.balancer_vault_contract_addresses = json.loads(
             self._ensure("balancer_vault_contract_addresses", kwargs, str)
         )
-        self.uniswap_position_manager_contract_addresses= json.loads(
+        self.uniswap_position_manager_contract_addresses = json.loads(
             self._ensure("uniswap_position_manager_contract_addresses", kwargs, str)
         )
         self.chain_to_chain_key_mapping = json.loads(

@@ -68,8 +68,8 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
         if pool_id is None:
             return None, None
-        
-        #TO-DO: calculate minimum_bpt
+
+        # TO-DO: calculate minimum_bpt
         minimum_bpt = 0
 
         # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.

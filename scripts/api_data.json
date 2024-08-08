@@ -1,5 +1,75 @@
 {
    "10":{
+      "2_0xa5B6d588CEb3aA1BF543d095038479188f884690": {
+         "0xf2823df68aa52019bd4f8f49c453ae06aae6e4e4067fbd48ac4d36b9d82f47c6": {
+             "chainId": 10,
+             "index": 214,
+             "campaignId": "0xf2823df68aa52019bd4f8f49c453ae06aae6e4e4067fbd48ac4d36b9d82f47c6",
+             "creator": "0xd0Db870a674A1B8b82FB18F1C295736B3b965701",
+             "campaignType": 2,
+             "campaignSubType": 0,
+             "rewardToken": "0x4200000000000000000000000000000000000042",
+             "amount": "3333000000000000000000",
+             "amountDecimal": "0",
+             "startTimestamp": 1722938400,
+             "endTimestamp": 1724148000,
+             "mainParameter": "0xa5B6d588CEb3aA1BF543d095038479188f884690",
+             "campaignParameters": {
+                 "amm": 0,
+                 "url": "https://app.uniswap.org/explore/pools/optimism/0xa5B6d588CEb3aA1BF543d095038479188f884690",
+                 "token0": "0x68f180fcCe6836688e9084f035309E29Bf0A2095",
+                 "token1": "0x93919784C523f39CACaa98Ee0a9d96c3F32b593e",
+                 "ammAlgo": 0,
+                 "poolFee": "0.05",
+                 "duration": 1209600,
+                 "blacklist": [],
+                 "whitelist": [],
+                 "forwarders": [],
+                 "weightFees": 4000,
+                 "poolAddress": "0xa5B6d588CEb3aA1BF543d095038479188f884690",
+                 "symbolToken0": "WBTC",
+                 "symbolToken1": "uniBTC",
+                 "weightToken0": 3000,
+                 "weightToken1": 3000,
+                 "boostedReward": 0,
+                 "boostedAddress": "0x0000000000000000000000000000000000000000",
+                 "decimalsToken0": 8,
+                 "decimalsToken1": 8,
+                 "symbolRewardToken": "OP",
+                 "decimalsRewardToken": 18,
+                 "isOutOfRangeIncentivized": false
+             },
+             "computeChainId": 10,
+             "tags": [
+                 "superfest"
+             ],
+             "amm": 0,
+             "ammAlgo": 0,
+             "ammAlgoName": "UniswapV3",
+             "ammName": "UniswapV3",
+             "apr": 13600.42045899915938,
+             "aprs": {
+                 "Average APR (rewards / pool TVL)": 36.42045899915938,
+                 "APR for holding WBTC in pool": 24.72861453480399,
+                 "APR for holding  uniBTC in pool": 19.575345118132486
+             },
+             "blacklistedBalance0": 0,
+             "blacklistedBalance1": 0,
+             "blacklistedLiquidity": 0,
+             "forwarders": [],
+             "isBoosted": false,
+             "isLive": true,
+             "isMock": false,
+             "poolBalanceToken0": 2.34632525,
+             "poolBalanceToken1": 2.97755141,
+             "poolTotalLiquidity": 5.36188156553e-7,
+             "symbolToken0": "WBTC",
+             "symbolToken1": "uniBTC",
+             "tick": -5,
+             "priceRewardToken": 1.28,
+             "tvl": 305396.9512881171
+         }
+     },
       "11_0x33251abeCb0364Df98a27A8D5d7b5CCddc774c42":{
          "0x52b09463713ee460147032b2154e742a8ec3104df4747c2239acfa8c699166bb":{
             "chainId":10,

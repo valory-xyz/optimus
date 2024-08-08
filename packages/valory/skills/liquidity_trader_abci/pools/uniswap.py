@@ -19,17 +19,17 @@
 
 """This package contains the implemenatation of the BalancerPoolBehaviour class."""
 
-from abc import ABC
-from typing import Any, Dict, Generator, List, Optional, cast, Tuple
 import sys
+from abc import ABC
+from typing import Any, Dict, Generator, List, Optional, Tuple, cast
 
-from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import UniswapV3NonfungiblePositionManagerContract
+from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
+    UniswapV3NonfungiblePositionManagerContract,
+)
 from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
-from packages.valory.skills.liquidity_trader_abci.models import (
-    SharedState
-)
 
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -37,8 +37,22 @@ MIN_TICK = -887272
 MAX_TICK = 887272
 INT_MAX = sys.maxsize
 
+
 class MintParams:
-    def __init__(self, token0, token1, fee, tickLower, tickUpper, amount0Desired, amount1Desired, amount0Min, amount1Min, recipient, deadline):
+    def __init__(
+        self,
+        token0,
+        token1,
+        fee,
+        tickLower,
+        tickUpper,
+        amount0Desired,
+        amount1Desired,
+        amount0Min,
+        amount1Min,
+        recipient,
+        deadline,
+    ):
         self.token0 = token0
         self.token1 = token1
         self.fee = fee
@@ -50,7 +64,8 @@ class MintParams:
         self.amount1Min = amount1Min
         self.recipient = recipient
         self.deadline = deadline
-        
+
+
 class UniswapPoolBehaviour(PoolBehaviour, ABC):
     """BalancerPoolBehaviour"""
 
@@ -62,7 +77,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
         self.join_kind: int = 1  # EXACT_TOKENS_IN_FOR_BPT_OUT
 
-    def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str,str]]]:
+    def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Add liquidity in a uniswap pool."""
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
@@ -75,30 +90,36 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
                 "Missing required parameters for entering the pool"
             )
             return None, None
-               
-        position_manager_address = self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
         if not position_manager_address:
-            self.context.logger.error(f"No position_manager contract address found for chain {chain}")
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
             return None, None
-        self.context.logger.info(f"position_manager_address: {position_manager_address}")
-        
-        #Fetch fee from uniswap v3 pool
+        self.context.logger.info(
+            f"position_manager_address: {position_manager_address}"
+        )
+
+        # Fetch fee from uniswap v3 pool
         pool_fee = yield from self._get_pool_fee(pool_address, chain)
         if pool_fee is None:
             return None, None
         self.context.logger.info(f"pool_fee: {pool_fee}")
-        
-        #TO-DO: specify a more concentrated position
+
+        # TO-DO: specify a more concentrated position
         tick_lower = MIN_TICK
         tick_upper = MAX_TICK
         self.context.logger.info(f"tick_lower: {tick_lower}")
         self.context.logger.info(f"tick_upper: {tick_upper}")
 
-        #TO-DO: add slippage protection
+        # TO-DO: add slippage protection
         amount0_min = 0
         amount1_min = 0
-        
-        #deadline is set to be 20 minutes from current time
+
+        # deadline is set to be 20 minutes from current time
         last_update_time = cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
@@ -111,16 +132,16 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
             contract_callable="add_liquidity",
             data_key="tx_hash",
-            token0= assets[0],
-            token1= assets[1],
-            fee= pool_fee,
-            tick_lower= tick_lower,
-            tick_upper= tick_upper,
-            amount0_desired= max_amounts_in[0],
-            amount1_desired= max_amounts_in[1],
-            amount0_min= amount0_min,
-            amount1_min= amount1_min,
-            recipient= safe_address,
+            token0=assets[0],
+            token1=assets[1],
+            fee=pool_fee,
+            tick_lower=tick_lower,
+            tick_upper=tick_upper,
+            amount0_desired=max_amounts_in[0],
+            amount1_desired=max_amounts_in[1],
+            amount0_min=amount0_min,
+            amount1_min=amount1_min,
+            recipient=safe_address,
             deadline=deadline,
             chain_id=chain,
         )
@@ -138,13 +159,15 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             )
             return None
 
-        #burn the NFT
+        # burn the NFT
         burn_tokens_tx_hash = yield from self.burn_position(token_id, chain)
 
-        #collect the tokens
-        collect_tokens_tx_hash = yield from self.collect_tokens(token_id, safe_address, chain)
+        # collect the tokens
+        collect_tokens_tx_hash = yield from self.collect_tokens(
+            token_id, safe_address, chain
+        )
 
-        #prepare multisend
+        # prepare multisend
 
     def _get_tokens(
         self, pool_address: str, chain: str
@@ -169,8 +192,10 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             f"Tokens for uniswap pool {pool_address} : {pool_tokens}"
         )
         return pool_tokens
-    
-    def _get_pool_fee(self, pool_address: str, chain: str) -> Generator[None, None, Optional[int]]:
+
+    def _get_pool_fee(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[int]]:
         """Get uniswap pool fee"""
         pool_fee = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -187,25 +212,31 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             )
             return None
 
-        self.context.logger.info(
-            f"Fee for uniswap pool {pool_address} : {pool_fee}"
-        )
+        self.context.logger.info(f"Fee for uniswap pool {pool_address} : {pool_fee}")
         return pool_fee
-    
-    def burn_position(self, token_id: int, chain: str) -> Generator[None, None, Optional[str]]:
+
+    def burn_position(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
         """Burn position"""
         pass
 
-    def collect_tokens(self, token_id: int, safe_address: str, chain: str) -> Generator[None, None, Optional[str]]:
+    def collect_tokens(
+        self, token_id: int, safe_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
         """Collect tokens"""
-        position_manager_address = self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
         if not position_manager_address:
-            self.context.logger.error(f"No position_manager contract address found for chain {chain}")
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
             return None
-        
-        #set amount0_max and amount1_max to int.max to collect all fees
+
+        # set amount0_max and amount1_max to int.max to collect all fees
         amount_max = INT_MAX
-        
+
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
@@ -213,9 +244,9 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             contract_callable="collect_tokens",
             data_key="tx_hash",
             token_id=token_id,
-            recipient= safe_address,
-            amount0_max= amount_max,
-            amount1_max= amount_max,
+            recipient=safe_address,
+            amount0_max=amount_max,
+            amount1_max=amount_max,
             chain_id=chain,
         )
 

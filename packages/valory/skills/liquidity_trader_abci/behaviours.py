@@ -74,9 +74,11 @@ ETHER_VALUE = 0
 
 WaitableConditionType = Generator[None, None, Any]
 
+
 class DexTypes(Enum):
     BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
+
 
 class Action(Enum):
     """Action"""
@@ -314,8 +316,10 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                 for asset in position["assets"]:
                     if asset["address"] == token:
                         return asset["balance"]
-                    
-        self.context.logger.warning(f"Could not fetch balance for token {token} on chain {chain}")
+
+        self.context.logger.warning(
+            f"Could not fetch balance for token {token} on chain {chain}"
+        )
         return None
 
     def _store_data(self, data: Any, attribute: str, filepath: str) -> None:
@@ -468,14 +472,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if dex_type == DexTypes.BALANCER.value:
             type_info = campaign.get("typeInfo", {})
-            pool_tokens = type_info.get("poolTokens", {})    
+            pool_tokens = type_info.get("poolTokens", {})
             if not pool_tokens:
                 self.context.logger.error(
                     f"No pool tokens info present in campaign {campaign}"
                 )
-                return None           
+                return None
             pool_token_addresses = list(pool_tokens.keys())
-            pool_token_symbols = [token.get("symbol", "Unknown") for token in pool_tokens.values()]
+            pool_token_symbols = [
+                token.get("symbol", "Unknown") for token in pool_tokens.values()
+            ]
 
         if dex_type == DexTypes.UNISWAP_V3.value:
             pool_info = campaign.get("campaignParameters", {})
@@ -486,7 +492,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             pool_token_addresses.extend([token0, token1])
             pool_token_symbols.extend([token0_symbol, token1_symbol])
 
-        if not pool_token_addresses or not pool_token_symbols or len(pool_token_addresses) < 2 or len(pool_token_symbols) < 2:
+        if (
+            not pool_token_addresses
+            or not pool_token_symbols
+            or len(pool_token_addresses) < 2
+            or len(pool_token_symbols) < 2
+        ):
             self.context.logger.error(
                 f"Incomplete data for pool addresses or pool symbols: {pool_token_addresses} {pool_token_symbols}"
             )
@@ -557,7 +568,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         for campaign_list in campaigns.values():
             for campaign in campaign_list.values():
-                dex_type = campaign.get("type", "") if campaign.get("type", "") else campaign.get("ammName", "")
+                dex_type = (
+                    campaign.get("type", "")
+                    if campaign.get("type", "")
+                    else campaign.get("ammName", "")
+                )
                 if not dex_type:
                     self.context.logger.warning("Dex type not specified in campaign")
                     continue
@@ -1043,7 +1058,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             and Action(actions[last_executed_action_index].get("action", ""))
             == Action.ENTER_POOL
         ):
-            action = actions[last_executed_action_index]                
+            action = actions[last_executed_action_index]
             current_pool = {
                 "chain": action["chain"],
                 "address": action["pool_address"],
@@ -1051,9 +1066,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "assets": action["assets"],
                 "apr": action["apr"],
             }
-            if action.get("dex_type","") == DexTypes.UNISWAP_V3.value:
+            if action.get("dex_type", "") == DexTypes.UNISWAP_V3.value:
                 self.context.logger.info(f"{self.synchronized_data}")
-                #TO-DO: Fetch token_id from transaction receipt
+                # TO-DO: Fetch token_id from transaction receipt
                 current_pool["token_id"] = 1
             self.current_pool = current_pool
             self.store_current_pool()

@@ -1,13 +1,15 @@
 {
     "dev": {
-        "contract/valory/balancer_weighted_pool/0.1.0": "bafybeia7l2tiw5mmjlj4bsycp2rcyaul7fnjmot4xb4f5ndaslt6m35pja",
-        "contract/valory/balancer_vault/0.1.0": "bafybeieinccohiknxbnvp4qbqpgm7tz6czdty6gjkupyectfhyfkiixa3u",
+        "contract/valory/balancer_weighted_pool/0.1.0": "bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq",
+        "contract/valory/balancer_vault/0.1.0": "bafybeigqub47nqivocvmoumuh246r6bzh4qdqpd2ihciyzeq32euaifi7u",
         "contract/valory/velodrome_pool/0.1.0": "bafybeidp7kgkqsjy5yigutnhguzw7gb5ti62g42zaezamrgeo6dwbakiqe",
         "contract/valory/erc20/0.1.0": "bafybeiel24epwfr5nsk5xt2dfdimrzhrqchjxdeeh6wpm6nz35w6po6osa",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeicfvtg7ip7tf5dpk43zbotbuqvyuizckegnulwcfuvzy5rd7mow34",
-        "skill/valory/superagent_abci/0.1.0": "bafybeiaey53gy3humaeemnbnb4w5wcaymuanyetrgv2bxmsx7c3rrbwddi",
-        "agent/valory/optimism_agent/0.1.0": "bafybeifhy4xhix6bivle3kvm2osueun45jco27ol73clw2ofgwcimrdd2i",
-        "service/valory/optimism_service/0.1.0": "bafybeibry3raysilahso65tobvzbeuxel7jahhsbe4lcz2whgrrydy2kyi"
+        "contract/valory/uniswap_v3_non_fungible_position_manager/0.1.0": "bafybeibiu7ry2fweezlaqylhacsjlmiyk4ndvyckxuaof6rpxskjqcmhvi",
+        "contract/valory/uniswap_v3_pool/0.1.0": "bafybeih3b43atd4wxxuwq32qbfmp3m5ryf75cshdwaene7gi4dmgzmq2u4",
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeih35rjvuefbrxukzydfxrvnxydny5fv33qm5al4rr2vv4prqt6vrq",
+        "skill/valory/superagent_abci/0.1.0": "bafybeicxchfy7qvr2wgk7cgz2krg4rmzsuqp27nfwllq54bcvpsab7gfqu",
+        "agent/valory/optimism_agent/0.1.0": "bafybeifrcuc54s6f5m24eoj6ckoklnebhhedeuw6eo25zroxivuenkvt3m",
+        "service/valory/optimism_service/0.1.0": "bafybeiaru2r6svpaaahwcia6m3qxycts46ycbp62sxek6wwuq36jfqrsg4"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

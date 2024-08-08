@@ -1,0 +1,21 @@
+name: uniswap_v3_pool
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the Uniswap V3 Pool interface.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeicea4t7ghcifni7ofn4x2en5etymgynzgfefu4yhawsfivr2q53ri
+  build/UniswapV3Pool.json: bafybeifr6yextwnnmyk7h4j3nlfu5ujj243enppkvv4irouy2snc2qqpri
+  contract.py: bafybeiblcstcghm2aymuoz7gdbkss35iamp5onxdikjtchuqxpps6dwr34
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: UniswapV3PoolContract
+contract_interface_paths:
+  ethereum: build/UniswapV3Pool.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.55.0
+  web3:
+    version: <7,>=6.0.0

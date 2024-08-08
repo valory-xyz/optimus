@@ -57,15 +57,14 @@ class VaultContract(Contract):
         assets: list,
         max_amounts_in: list,
         join_kind: int,
+        minimum_bpt: int,
         from_internal_balance: bool = False,
     ) -> JSONLike:
         """Prepare a join pool transaction."""
 
-        minimum_BPT = 0
-
         encoded_user_data = encode(
             ['uint256', 'uint256[]', 'uint256'],
-            [join_kind, max_amounts_in, minimum_BPT]
+            [join_kind, max_amounts_in, minimum_bpt]
         )
 
         join_pool_request = (
@@ -101,7 +100,7 @@ class VaultContract(Contract):
         bpt_amount_in: int,
         to_internal_balance: bool = False,
     ) -> JSONLike:
-        """Prepare a join pool transaction."""
+        """Prepare a exit pool transaction."""
 
         encoded_user_data = encode(
             ['uint256', 'uint256'],

@@ -49,6 +49,9 @@ from packages.valory.skills.liquidity_trader_abci.models import Params
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
     BalancerPoolBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
+    UniswapPoolBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     DecisionMakingPayload,
     DecisionMakingRound,
@@ -71,6 +74,9 @@ ETHER_VALUE = 0
 
 WaitableConditionType = Generator[None, None, Any]
 
+class DexTypes(Enum):
+    BALANCER = "balancerPool"
+    UNISWAP_V3 = "UniswapV3"
 
 class Action(Enum):
     """Action"""
@@ -120,7 +126,7 @@ READ_MODE = "r"
 WRITE_MODE = "w"
 
 
-class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, ABC):
+class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -133,7 +139,8 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, ABC):
         self.current_pool: Dict[str, Any] = {}
         self.current_pool_filepath: str = os.path.join(parent_dir, POOL_FILENAME)
         self.pools: Dict[str, Any] = {}
-        self.pools["balancerPool"] = BalancerPoolBehaviour
+        self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
+        self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour
         # Read the assets and current pool
         self.read_current_pool()
         self.read_assets()
@@ -454,21 +461,32 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Extract pool info from campaign data"""
         # TO-DO: Add support for pools with more than two tokens.
 
-        type_info = campaign.get("typeInfo", {})
-        pool_tokens = type_info.get("poolTokens", {})
+        pool_token_addresses = []
+        pool_token_symbols = []
 
-        if not pool_tokens:
+        if dex_type == DexTypes.BALANCER.value:
+            type_info = campaign.get("typeInfo", {})
+            pool_tokens = type_info.get("poolTokens", {})    
+            if not pool_tokens:
+                self.context.logger.error(
+                    f"No pool tokens info present in campaign {campaign}"
+                )
+                return None           
+            pool_token_addresses = list(pool_tokens.keys())
+            pool_token_symbols = [token.get("symbol", "Unknown") for token in pool_tokens.values()]
+
+        if dex_type == DexTypes.UNISWAP_V3.value:
+            pool_info = campaign.get("campaignParameters", {})
+            token0 = pool_info.get("token0", "")
+            token1 = pool_info.get("token1", "")
+            token0_symbol = pool_info.get("symbolToken0", "")
+            token1_symbol = pool_info.get("symbolToken1", "")
+            pool_token_addresses.extend([token0, token1])
+            pool_token_symbols.extend([token0_symbol, token1_symbol])
+
+        if not pool_token_addresses or not pool_token_symbols or len(pool_token_addresses) < 2 or len(pool_token_symbols) < 2:
             self.context.logger.error(
-                f"No pool tokens info present in campaign {campaign}"
-            )
-            return None
-
-        pool_token_addresses = list(pool_tokens.keys())
-        pool_token_symbols = list(pool_tokens.values())
-
-        if len(pool_token_addresses) < 2 or len(pool_token_symbols) < 2:
-            self.context.logger.error(
-                f"Less than two tokens in poolTokens for campaign {campaign}"
+                f"Incomplete data for pool addresses or pool symbols: {pool_token_addresses} {pool_token_symbols}"
             )
             return None
 
@@ -482,9 +500,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "chain": chain,
             "apr": apr,
             "token0": pool_token_addresses[0],
-            "token0_symbol": pool_token_symbols[0].get("symbol", "Unknown"),
+            "token0_symbol": pool_token_symbols[0],
             "token1": pool_token_addresses[1],
-            "token1_symbol": pool_token_symbols[1].get("symbol", "Unknown"),
+            "token1_symbol": pool_token_symbols[1],
             "pool_address": pool_address,
         }
 
@@ -537,7 +555,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         for campaign_list in campaigns.values():
             for campaign in campaign_list.values():
-                dex_type = campaign.get("type", "")
+                dex_type = campaign.get("type", "") if campaign.get("type", "") else campaign.get("ammName", "")
                 if not dex_type:
                     self.context.logger.warning("Dex type not specified in campaign")
                     continue
@@ -1023,7 +1041,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             and Action(actions[last_executed_action_index].get("action", ""))
             == Action.ENTER_POOL
         ):
-            action = actions[last_executed_action_index]
+            action = actions[last_executed_action_index]                
             current_pool = {
                 "chain": action["chain"],
                 "address": action["pool_address"],
@@ -1031,6 +1049,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "assets": action["assets"],
                 "apr": action["apr"],
             }
+            if action.get("dex_type","") == DexTypes.UNISWAP_V3.value:
+                self.context.logger.info(f"{self.synchronized_data}")
+                #TO-DO: Fetch token_id from transaction receipt
+                current_pool["token_id"] = 1
             self.current_pool = current_pool
             self.store_current_pool()
             self.context.logger.info(
@@ -1204,7 +1226,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("Insufficient balance for entering pool")
             return None, None, None
 
-        tx_hash = yield from pool.enter(
+        tx_hash, contract_address = yield from pool.enter(
             self,
             pool_address=pool_address,
             safe_address=safe_address,
@@ -1212,12 +1234,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             chain=chain,
             max_amounts_in=max_amounts_in,
         )
-        if not tx_hash or not max_amounts_in:
+        if not tx_hash or not contract_address:
             return None, None, None
-
-        vault_address = self.params.balancer_vault_addresses.get(chain, "")
-        if not vault_address:
-            self.context.logger.error(f"No vault address found for chain {chain}")
 
         multi_send_txs = []
         if not action["assets"][0] == ZERO_ADDRESS:
@@ -1225,7 +1243,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             token0_approval_tx_payload = yield from self.get_approval_tx_hash(
                 token_address=action["assets"][0],
                 amount=max_amounts_in[0],
-                spender=vault_address,
+                spender=contract_address,
                 chain=chain,
             )
 
@@ -1240,7 +1258,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             token1_approval_tx_payload = yield from self.get_approval_tx_hash(
                 token_address=action["assets"][1],
                 amount=max_amounts_in[1],
-                spender=vault_address,
+                spender=contract_address,
                 chain=chain,
             )
             if not token1_approval_tx_payload:
@@ -1252,7 +1270,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         multi_send_txs.append(
             {
                 "operation": MultiSendOperation.CALL,
-                "to": vault_address,
+                "to": contract_address,
                 "value": 0,
                 "data": tx_hash,
             }
@@ -1364,7 +1382,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not tx_hash:
             return None, None, None
 
-        vault_address = self.params.balancer_vault_addresses.get(chain, "")
+        vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
 

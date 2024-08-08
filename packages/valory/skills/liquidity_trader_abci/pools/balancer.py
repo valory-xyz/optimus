@@ -20,7 +20,7 @@
 """This package contains the implemenatation of the BalancerPoolBehaviour class."""
 
 from abc import ABC
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
@@ -44,7 +44,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
         self.join_kind: int = 1  # EXACT_TOKENS_IN_FOR_BPT_OUT
 
-    def enter(self, **kwargs: Any) -> Generator[None, None, Optional[str]]:
+    def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Enter a Balancer pool."""
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
@@ -56,18 +56,21 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 "Missing required parameters for entering the pool"
             )
-            return None
+            return None, None
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = self.params.balancer_vault_addresses.get(chain, "")
+        vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
-            return None
+            return None, None
 
         # Fetch the pool id
         pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
         if pool_id is None:
-            return None
+            return None, None
+        
+        #TO-DO: calculate minimum_bpt
+        minimum_bpt = 0
 
         # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
         from_internal_balance = ZERO_ADDRESS in assets
@@ -84,11 +87,12 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             assets=assets,
             max_amounts_in=max_amounts_in,
             join_kind=self.join_kind,
+            minimum_bpt=minimum_bpt,
             from_internal_balance=from_internal_balance,
             chain_id=chain,
         )
 
-        return tx_hash
+        return tx_hash, vault_address
 
     def exit(self, **kwargs: Any) -> Generator[None, None, Optional[str]]:
         """Exit pool"""
@@ -104,7 +108,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             return None
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = self.params.balancer_vault_addresses.get(chain, "")
+        vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
             return None
@@ -160,7 +164,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Get balancer pool tokens"""
         # Get vault contract address from balancer weighted pool contract
-        vault_address = self.params.balancer_vault_addresses.get(chain, "")
+        vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
             return []

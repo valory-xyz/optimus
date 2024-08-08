@@ -193,7 +193,7 @@ models:
       ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
       default_chain_id: ${str:optimism}
       termination_from_block: ${int:34088325}
-      allowed_dexs: ${list:["balancerPool"]}
+      allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
       initial_assets: ${str:{"optimism":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
       pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}
@@ -211,5 +211,6 @@ models:
         max_fee_per_gas: ${int:5000000000}
         max_priority_fee_per_gas: ${int:150000}
       manual_gas_limit: 1000000
-      balancer_vault_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
+      balancer_vault_contract_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
+      uniswap_position_manager_contract_addresses: ${str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
       chain_to_chain_key_mapping: ${str:{"optimism":"opt","base":"bas"}}

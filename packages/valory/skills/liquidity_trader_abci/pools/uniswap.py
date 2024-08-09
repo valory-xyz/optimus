@@ -99,21 +99,16 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
                 f"No position_manager contract address found for chain {chain}"
             )
             return None, None
-        self.context.logger.info(
-            f"position_manager_address: {position_manager_address}"
-        )
 
         # Fetch fee from uniswap v3 pool
         pool_fee = yield from self._get_pool_fee(pool_address, chain)
         if pool_fee is None:
             return None, None
-        self.context.logger.info(f"pool_fee: {pool_fee}")
 
         # TO-DO: specify a more concentrated position
-        tick_lower = MIN_TICK
-        tick_upper = MAX_TICK
-        self.context.logger.info(f"tick_lower: {tick_lower}")
-        self.context.logger.info(f"tick_upper: {tick_upper}")
+        tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper(pool_address, chain)
+        if not tick_lower or not tick_upper:
+            return None, None
 
         # TO-DO: add slippage protection
         amount0_min = 0
@@ -124,7 +119,6 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
         deadline = int(last_update_time) + (20 * 60)
-        self.context.logger.info(f"deadline: {deadline}")
 
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -169,6 +163,43 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         # prepare multisend
 
+    def burn_position(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Burn position"""
+        pass
+
+    def collect_tokens(
+        self, token_id: int, safe_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Collect tokens"""
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
+            return None
+
+        # set amount0_max and amount1_max to int.max to collect all fees
+        amount_max = INT_MAX
+
+        tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="collect_tokens",
+            data_key="tx_hash",
+            token_id=token_id,
+            recipient=safe_address,
+            amount0_max=amount_max,
+            amount1_max=amount_max,
+            chain_id=chain,
+        )
+
+        return tx_hash
+    
     def _get_tokens(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[List[str]]]:
@@ -214,40 +245,48 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         self.context.logger.info(f"Fee for uniswap pool {pool_address} : {pool_fee}")
         return pool_fee
-
-    def burn_position(
-        self, token_id: int, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Burn position"""
-        pass
-
-    def collect_tokens(
-        self, token_id: int, safe_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Collect tokens"""
-        position_manager_address = (
-            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
-        )
-        if not position_manager_address:
-            self.context.logger.error(
-                f"No position_manager contract address found for chain {chain}"
-            )
-            return None
-
-        # set amount0_max and amount1_max to int.max to collect all fees
-        amount_max = INT_MAX
-
-        tx_hash = yield from self.contract_interact(
+    
+    def _get_tick_spacing(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get uniswap pool fee"""
+        tick_spacing = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=position_manager_address,
-            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
-            contract_callable="collect_tokens",
-            data_key="tx_hash",
-            token_id=token_id,
-            recipient=safe_address,
-            amount0_max=amount_max,
-            amount1_max=amount_max,
+            contract_address=pool_address,
+            contract_public_id=UniswapV3PoolContract.contract_id,
+            contract_callable="get_tick_spacing",
+            data_key="data",
             chain_id=chain,
         )
 
-        return tx_hash
+        if tick_spacing is None:
+            self.context.logger.error(
+                f"Could not fetch tick spacing for uniswap pool {pool_address}"
+            )
+            return None
+
+        self.context.logger.info(f"Tick spacing for uniswap pool {pool_address} : {tick_spacing}")
+        return tick_spacing
+    
+    def _calculate_tick_lower_and_upper(self, pool_address: str, chain: str) -> Generator[None, None, Optional[Tuple[int,int]]]:
+        self.context.logger.info(f"inside function {pool_address} {chain}")
+        # Fetch tick spacing from uniswap v3 pool
+        tick_spacing = yield from self._get_tick_spacing(pool_address, chain)
+        if tick_spacing is None:
+            return None, None
+        # Adjust MIN_TICK to the nearest higher multiple of tick_spacing
+        adjusted_tick_lower = abs(MIN_TICK) // tick_spacing * tick_spacing
+        if  adjusted_tick_lower > abs(MIN_TICK):
+            adjusted_tick_lower = adjusted_tick_lower - tick_spacing
+        adjusted_tick_lower = -adjusted_tick_lower
+        
+        # Adjust MAX_TICK to the nearest lower multiple of tick_spacing
+        adjusted_tick_upper = MAX_TICK // tick_spacing * tick_spacing
+        if  adjusted_tick_upper > MAX_TICK:
+            adjusted_tick_upper = adjusted_tick_upper - tick_spacing
+      
+        self.context.logger.info(f"TICK LOWER: {adjusted_tick_lower} TICK UPPER: {adjusted_tick_upper}")
+        return adjusted_tick_lower, adjusted_tick_upper
+
+    
+

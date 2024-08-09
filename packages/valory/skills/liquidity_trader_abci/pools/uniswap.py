@@ -106,7 +106,9 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             return None, None
 
         # TO-DO: specify a more concentrated position
-        tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper(pool_address, chain)
+        tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper(
+            pool_address, chain
+        )
         if not tick_lower or not tick_upper:
             return None, None
 
@@ -199,7 +201,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         )
 
         return tx_hash
-    
+
     def _get_tokens(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[List[str]]]:
@@ -245,7 +247,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         self.context.logger.info(f"Fee for uniswap pool {pool_address} : {pool_fee}")
         return pool_fee
-    
+
     def _get_tick_spacing(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[int]]:
@@ -265,10 +267,14 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             )
             return None
 
-        self.context.logger.info(f"Tick spacing for uniswap pool {pool_address} : {tick_spacing}")
+        self.context.logger.info(
+            f"Tick spacing for uniswap pool {pool_address} : {tick_spacing}"
+        )
         return tick_spacing
-    
-    def _calculate_tick_lower_and_upper(self, pool_address: str, chain: str) -> Generator[None, None, Optional[Tuple[int,int]]]:
+
+    def _calculate_tick_lower_and_upper(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[Tuple[int, int]]]:
         self.context.logger.info(f"inside function {pool_address} {chain}")
         # Fetch tick spacing from uniswap v3 pool
         tick_spacing = yield from self._get_tick_spacing(pool_address, chain)
@@ -276,17 +282,16 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             return None, None
         # Adjust MIN_TICK to the nearest higher multiple of tick_spacing
         adjusted_tick_lower = abs(MIN_TICK) // tick_spacing * tick_spacing
-        if  adjusted_tick_lower > abs(MIN_TICK):
+        if adjusted_tick_lower > abs(MIN_TICK):
             adjusted_tick_lower = adjusted_tick_lower - tick_spacing
         adjusted_tick_lower = -adjusted_tick_lower
-        
+
         # Adjust MAX_TICK to the nearest lower multiple of tick_spacing
         adjusted_tick_upper = MAX_TICK // tick_spacing * tick_spacing
-        if  adjusted_tick_upper > MAX_TICK:
+        if adjusted_tick_upper > MAX_TICK:
             adjusted_tick_upper = adjusted_tick_upper - tick_spacing
-      
-        self.context.logger.info(f"TICK LOWER: {adjusted_tick_lower} TICK UPPER: {adjusted_tick_upper}")
+
+        self.context.logger.info(
+            f"TICK LOWER: {adjusted_tick_lower} TICK UPPER: {adjusted_tick_upper}"
+        )
         return adjusted_tick_lower, adjusted_tick_upper
-
-    
-

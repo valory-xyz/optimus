@@ -2,7 +2,6 @@
     "dev": {
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq",
         "contract/valory/balancer_vault/0.1.0": "bafybeigqub47nqivocvmoumuh246r6bzh4qdqpd2ihciyzeq32euaifi7u",
-        "contract/valory/velodrome_pool/0.1.0": "bafybeidp7kgkqsjy5yigutnhguzw7gb5ti62g42zaezamrgeo6dwbakiqe",
         "contract/valory/erc20/0.1.0": "bafybeiel24epwfr5nsk5xt2dfdimrzhrqchjxdeeh6wpm6nz35w6po6osa",
         "contract/valory/uniswap_v3_non_fungible_position_manager/0.1.0": "bafybeibiu7ry2fweezlaqylhacsjlmiyk4ndvyckxuaof6rpxskjqcmhvi",
         "contract/valory/uniswap_v3_pool/0.1.0": "bafybeih3b43atd4wxxuwq32qbfmp3m5ryf75cshdwaene7gi4dmgzmq2u4",

@@ -26,10 +26,10 @@ from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from urllib.parse import urlencode
-from eth_utils import keccak, to_hex
-from eth_abi import decode
 
 from aea.configurations.data_types import PublicId
+from eth_abi import decode
+from eth_utils import keccak, to_hex
 
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
@@ -1069,7 +1069,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "apr": action["apr"],
             }
             if action.get("dex_type", "") == DexTypes.UNISWAP_V3.value:
-                token_id = yield from self._get_token_id_from_receipt(self.synchronized_data.final_tx_hash, action["chain"])    
+                token_id = yield from self._get_token_id_from_receipt(
+                    self.synchronized_data.final_tx_hash, action["chain"]
+                )
                 current_pool["token_id"] = token_id
             self.current_pool = current_pool
             self.store_current_pool()
@@ -1615,14 +1617,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None, None
 
         return bytes.fromhex(data[2:]), tx_request["to"], from_token, amount
-    
-    def _get_token_id_from_receipt(self, tx_hash: str, chain: str) -> Generator[None, None, Optional[int]]:
 
+    def _get_token_id_from_receipt(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, Optional[int]]:
         response = yield from self.get_transaction_receipt(
-                        tx_hash,
-                        chain_id=chain,
-                    )
-        
+            tx_hash,
+            chain_id=chain,
+        )
+
         # Define the event signature and calculate its hash
         event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
         event_signature_hash = keccak(text=event_signature)
@@ -1632,7 +1635,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         logs = response.get("logs", [])
 
         # Find the log that matches the IncreaseLiquidity event
-        log = next((log for log in logs if log.get("topics", [])[0][2:] == event_signature_hex), None)
+        log = next(
+            (
+                log
+                for log in logs
+                if log.get("topics", [])[0][2:] == event_signature_hex
+            ),
+            None,
+        )
 
         if log is None:
             self.context.logger.error("No logs found for IncreaseLiquidity event")
@@ -1643,7 +1653,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             token_id_topic = log.get("topics", [])[1]
             # Convert hex to bytes and decode
             token_id_bytes = bytes.fromhex(token_id_topic[2:])
-            token_id = decode(['uint256'], token_id_bytes)[0]
+            token_id = decode(["uint256"], token_id_bytes)[0]
 
             self.context.logger.info(f"tokenId returned from mint function: {token_id}")
             return token_id

@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicea4t7ghcifni7ofn4x2en5etymgynzgfefu4yhawsfivr2q53ri
   build/UniswapV3Pool.json: bafybeifr6yextwnnmyk7h4j3nlfu5ujj243enppkvv4irouy2snc2qqpri
-  contract.py: bafybeiblcstcghm2aymuoz7gdbkss35iamp5onxdikjtchuqxpps6dwr34
+  contract.py: bafybeig6dvbuoac6kvxbj2ehejfgta3mesakvo2ilxbyovnefhdnauyxki
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: UniswapV3PoolContract

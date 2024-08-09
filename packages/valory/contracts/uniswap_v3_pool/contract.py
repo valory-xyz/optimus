@@ -37,7 +37,7 @@ class UniswapV3PoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """get the pool tokens."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()
@@ -49,7 +49,18 @@ class UniswapV3PoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """get the fee."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         fee = contract_instance.functions.fee().call()
         return dict(data=fee)
+    
+    @classmethod
+    def get_tick_spacing(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """get the tick spacing."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        tick_spacing = contract_instance.functions.tickSpacing().call()
+        return dict(data=tick_spacing)

@@ -22,8 +22,13 @@
 import sys
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Tuple, cast
+
 from web3 import Web3
 
+from packages.valory.contracts.multisend.contract import (
+    MultiSendContract,
+    MultiSendOperation,
+)
 from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
     UniswapV3NonfungiblePositionManagerContract,
 )
@@ -31,10 +36,7 @@ from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolCont
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
-from packages.valory.contracts.multisend.contract import (
-    MultiSendOperation,
-    MultiSendContract
-)
+
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 MIN_TICK = -887272
@@ -143,7 +145,9 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         )
         return tx_hash, position_manager_address
 
-    def exit(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str,str,bool]]]:
+    def exit(
+        self, **kwargs: Any
+    ) -> Generator[None, None, Optional[Tuple[str, str, bool]]]:
         """Remove liquidity in a uniswap pool."""
         token_id = kwargs.get("token_id")
         safe_address = kwargs.get("safe_address")
@@ -154,7 +158,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
                 f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
             )
             return None, None, None
-        
+
         position_manager_address = (
             self.params.uniswap_position_manager_contract_addresses.get(chain, "")
         )
@@ -166,12 +170,12 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        #decrease liquidity
-        #TO-DO: Calculate min amounts accouting for slippage
+        # decrease liquidity
+        # TO-DO: Calculate min amounts accouting for slippage
         amount0_min = 0
         amount1_min = 0
 
-        #fetch liquidity from contract
+        # fetch liquidity from contract
         liquidity = yield from self.get_liquidity_for_token(token_id, chain)
         if not liquidity:
             return None, None, None
@@ -182,7 +186,9 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         ).round_sequence.last_round_transition_timestamp.timestamp()
         deadline = int(last_update_time) + (20 * 60)
 
-        decrease_liquidity_tx_hash = yield from self.decrease_liquidity(token_id, liquidity, amount0_min, amount1_min, deadline, chain)
+        decrease_liquidity_tx_hash = yield from self.decrease_liquidity(
+            token_id, liquidity, amount0_min, amount1_min, deadline, chain
+        )
         if not decrease_liquidity_tx_hash:
             return None, None, None
         multi_send_txs.append(
@@ -193,13 +199,17 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
                 "data": decrease_liquidity_tx_hash,
             }
         )
-        
+
         # collect the tokens
         # Note: We initially set `amount_max` to the maximum value of uint256 since the collect function sends the lesser of `amount_max` or `tokensOwed`.
         # However, that value was too large, so we adjusted it to 2**100 - 1 wei.
-        amount_max = Web3.to_wei(2**100 - 1, 'wei')
+        amount_max = Web3.to_wei(2**100 - 1, "wei")
         collect_tokens_tx_hash = yield from self.collect_tokens(
-            token_id=token_id, recipient=safe_address, amount0_max=amount_max, amount1_max=amount_max, chain=chain
+            token_id=token_id,
+            recipient=safe_address,
+            amount0_max=amount_max,
+            amount1_max=amount_max,
+            chain=chain,
         )
         if not collect_tokens_tx_hash:
             return None, None, None
@@ -215,9 +225,11 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         # prepare multisend
         multisend_address = self.params.multisend_contract_addresses[chain]
         if not multisend_address:
-            self.context.logger.error(f"Could not find multisend address for chain {chain}")
+            self.context.logger.error(
+                f"Could not find multisend address for chain {chain}"
+            )
             return None, None, None
-        
+
         multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
             contract_address=multisend_address,
@@ -229,7 +241,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         )
         if not multisend_tx_hash:
             return None, None, None
-        
+
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
@@ -259,7 +271,12 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         return tx_hash
 
     def collect_tokens(
-        self, token_id: int, recipient: str, amount0_max: int, amount1_max: int, chain: str
+        self,
+        token_id: int,
+        recipient: str,
+        amount0_max: int,
+        amount1_max: int,
+        chain: str,
     ) -> Generator[None, None, Optional[str]]:
         """Collect tokens"""
         position_manager_address = (
@@ -285,11 +302,16 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         )
 
         return tx_hash
-    
+
     def decrease_liquidity(
-        self, token_id: int, liquidity: int, amount0_min: int, amount1_min: int, deadline: int, chain: str
+        self,
+        token_id: int,
+        liquidity: int,
+        amount0_min: int,
+        amount1_min: int,
+        deadline: int,
+        chain: str,
     ) -> Generator[None, None, Optional[str]]:
-        
         position_manager_address = (
             self.params.uniswap_position_manager_contract_addresses.get(chain, "")
         )
@@ -298,7 +320,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
                 f"No position_manager contract address found for chain {chain}"
             )
             return None
-        
+
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
@@ -314,11 +336,10 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         )
 
         return tx_hash
-    
+
     def get_liquidity_for_token(
         self, token_id: int, chain: str
     ) -> Generator[None, None, Optional[str]]:
-        
         position_manager_address = (
             self.params.uniswap_position_manager_contract_addresses.get(chain, "")
         )
@@ -327,7 +348,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
                 f"No position_manager contract address found for chain {chain}"
             )
             return None
-        
+
         position = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
@@ -340,8 +361,8 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         if position is None:
             return None
-        
-        #liquidity is returned at the 7th index from contract
+
+        # liquidity is returned at the 7th index from contract
         liquidity = position[7]
         return liquidity
 
@@ -366,13 +387,8 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             )
             return None
 
-        tokens = {
-            "token0" : pool_tokens[0],
-            "token1" : pool_tokens[1]
-        }
-        self.context.logger.info(
-            f"Tokens for uniswap pool {pool_address} : {tokens}"
-        )
+        tokens = {"token0": pool_tokens[0], "token1": pool_tokens[1]}
+        self.context.logger.info(f"Tokens for uniswap pool {pool_address} : {tokens}")
         return tokens
 
     def _get_pool_fee(
@@ -444,5 +460,3 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             f"TICK LOWER: {adjusted_tick_lower} TICK UPPER: {adjusted_tick_upper}"
         )
         return adjusted_tick_lower, adjusted_tick_upper
-
-        

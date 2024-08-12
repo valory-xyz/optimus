@@ -94,7 +94,9 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
         return tx_hash, vault_address
 
-    def exit(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str,str,bool]]]:
+    def exit(
+        self, **kwargs: Any
+    ) -> Generator[None, None, Optional[Tuple[str, str, bool]]]:
         """Exit pool"""
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
@@ -191,11 +193,8 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
                 f"Could not fetch tokens for balancer pool id {pool_id}"
             )
             return None
-        
-        tokens = {
-            "token0" : pool_tokens[0][0],
-            "token1" : pool_tokens[0][1]
-        }
+
+        tokens = {"token0": pool_tokens[0][0], "token1": pool_tokens[0][1]}
         self.context.logger.info(
             f"Tokens for balancer poolId {pool_id} : {pool_tokens}"
         )

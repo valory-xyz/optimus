@@ -744,36 +744,31 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = self.current_pool.get("address")
         chain = self.current_pool.get("chain")
 
-        pool = self.pools.get("balancerPool", None)
+        pool = self.pools.get(dex_type, None)
         if pool is None:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None
 
-        if dex_type == "balancerPool":
-            # Get tokens from balancer weighted pool contract
-            tokens = yield from pool._get_tokens(self, pool_address, chain)
-            if not tokens:
-                return None
-
-        # Assuming tokens list contains tuples with token addresses
-        if len(tokens) < 2:
-            self.context.logger.error("Not enough tokens found in the pool.")
+        # Get tokens from balancer weighted pool contract
+        tokens = yield from pool._get_tokens(self, pool_address, chain)
+        if not tokens or not tokens.get("token0", "") or not tokens.get("token1", ""):
+            self.context.logger.error(f"Missing information in tokens: {tokens}")
             return None
 
         return [
             {
                 "chain": chain,
-                "token": tokens[0][0],
-                "token_symbol": self._get_asset_symbol(chain, tokens[0][0]),
+                "token": tokens["token0"],
+                "token_symbol": self._get_asset_symbol(chain, tokens["token0"]),
             },
             {
                 "chain": chain,
-                "token": tokens[0][1],
-                "token_symbol": self._get_asset_symbol(chain, tokens[0][1]),
+                "token": tokens["token0"],
+                "token_symbol": self._get_asset_symbol(chain, tokens["token0"]),
             },
         ]
 
-    def _build_exit_pool_action(self, tokens: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_exit_pool_action(self, tokens: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Build action for exiting the current pool."""
         if not self.current_pool:
             self.context.logger.error("No pool present")
@@ -782,14 +777,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if len(tokens) < 2:
             self.context.logger.error("Insufficient tokens provided for exit action.")
             return None
-
-        return {
+        
+        exit_pool_action = {
             "action": Action.EXIT_POOL.value,
             "dex_type": self.current_pool.get("dex_type"),
             "chain": self.current_pool.get("chain"),
             "assets": [tokens[0].get("token"), tokens[1].get("token")],
             "pool_address": self.current_pool.get("address"),
         }
+
+        if exit_pool_action["dex_type"] == DexTypes.UNISWAP_V3.value:
+            exit_pool_action["token_id"] = self.current_pool.get("token_id", "")
+
+        return exit_pool_action
 
     def _build_bridge_swap_actions(
         self, tokens: List[Dict[str, Any]]
@@ -1390,21 +1390,33 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # Get assets balances from positions
         safe_address = self.params.safe_contract_addresses[action["chain"]]
+        exit_pool_kwargs = {}
 
-        tx_hash = yield from pool.exit(
-            self,
-            safe_address=safe_address,
-            assets=assets,
-            pool_address=pool_address,
-            chain=chain,
-        )
+        if dex_type == DexTypes.BALANCER.value: 
+            exit_pool_kwargs.update({
+                "safe_address":safe_address,
+                "assets":assets,
+                "pool_address":pool_address,
+                "chain":chain
+            })
+        
+        if dex_type == DexTypes.UNISWAP_V3.value: 
+            exit_pool_kwargs.update({
+                "token_id":action.get("token_id", ""),
+                "safe_address":safe_address,
+                "chain":chain
+            })
 
-        if not tx_hash:
+        if not exit_pool_kwargs:
+            self.context.logger.error("Could not find kwargs for exit pool")
             return None, None, None
-
-        vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
-        if not vault_address:
-            self.context.logger.error(f"No vault address found for chain {chain}")
+        
+        tx_hash, contract_address, is_multisend = yield from pool.exit(
+            self,
+            **exit_pool_kwargs
+        )      
+        if not tx_hash or not contract_address:
+            return None, None, None
 
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -1412,9 +1424,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=GnosisSafeContract.contract_id,
             contract_callable="get_raw_safe_transaction_hash",
             data_key="tx_hash",
-            to_address=vault_address,
+            to_address=contract_address,
             value=ETHER_VALUE,
             data=tx_hash,
+            operation=SafeOperation.DELEGATE_CALL.value if is_multisend else SafeOperation.CALL.value,
             safe_tx_gas=SAFE_TX_GAS,
             chain_id=chain,
         )
@@ -1426,7 +1439,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, vault_address, tx_hash
+            safe_tx_hash=safe_tx_hash,
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value if is_multisend else SafeOperation.CALL.value,
+            to_address=contract_address,
+            data=tx_hash,
+            gas_limit=self.params.manual_gas_limit,
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")

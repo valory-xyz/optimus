@@ -54,7 +54,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
         if not all([pool_address, safe_address, assets, chain, max_amounts_in]):
             self.context.logger.error(
-                "Missing required parameters for entering the pool"
+                f"Missing required parameters for entering the pool. Here are the kwargs: {kwargs}"
             )
             return None, None
 
@@ -94,7 +94,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
         return tx_hash, vault_address
 
-    def exit(self, **kwargs: Any) -> Generator[None, None, Optional[str]]:
+    def exit(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str,str,bool]]]:
         """Exit pool"""
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
@@ -103,20 +103,20 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
         if not all([pool_address, safe_address, assets, chain]):
             self.context.logger.error(
-                "Missing required parameters for exiting the pool"
+                f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
             )
-            return None
+            return None, None, None
 
         # Get vault contract address from balancer weighted pool contract
         vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
-            return None
+            return None, None, None
 
         # Fetch the pool id
         pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
         if pool_id is None:
-            return None
+            return None, None, None
 
         # TO-DO: queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
         min_amounts_out = [0, 0]
@@ -135,7 +135,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error fetching BPT Amount for safe {safe_address} for pool {pool_address}"
             )
-            return None
+            return None, None, None
 
         # toInternalBalance - True if receiving internal token balances. False if receiving ERC20.
         to_internal_balance = ZERO_ADDRESS in assets
@@ -157,12 +157,14 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
 
-        return tx_hash
+        return tx_hash, vault_address, False
 
     def _get_tokens(
         self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get balancer pool tokens"""
+        """Return a dict of tokens {"token0": 0x00, "token1": 0x00}"""
+
         # Get vault contract address from balancer weighted pool contract
         vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
         if not vault_address:
@@ -189,11 +191,15 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
                 f"Could not fetch tokens for balancer pool id {pool_id}"
             )
             return None
-
+        
+        tokens = {
+            "token0" : pool_tokens[0][0],
+            "token1" : pool_tokens[0][1]
+        }
         self.context.logger.info(
             f"Tokens for balancer poolId {pool_id} : {pool_tokens}"
         )
-        return pool_tokens
+        return tokens
 
     def _get_pool_id(
         self, pool_address: str, chain: str

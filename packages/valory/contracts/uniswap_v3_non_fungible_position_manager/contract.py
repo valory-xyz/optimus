@@ -31,7 +31,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
     contract_id = PUBLIC_ID
     
     @classmethod
-    def add_liquidity(
+    def mint(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
@@ -71,7 +71,35 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         return dict(tx_hash=tx_hash)
     
     @classmethod
-    def burn_position(
+    def decrease_liquidity(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+        liquidity: int,
+        amount0_min: int,
+        amount1_min: int,
+        deadline: int,
+    ) -> JSONLike:
+        """Prepare decrease liquidity transaction"""
+        decrease_liquidity_params = (
+            token_id,
+            liquidity,
+            amount0_min,
+            amount1_min,
+            deadline
+        )
+
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        tx_hash = contract_instance.encodeABI(
+            "decreaseLiquidity",
+            args=(decrease_liquidity_params,)
+        )
+
+        return dict(tx_hash=tx_hash)
+    
+    @classmethod
+    def burn_token(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
@@ -81,7 +109,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tx_hash = contract_instance.encodeABI(
             "burn",
-            args=(token_id)
+            args=(token_id,)
         )
         return dict(tx_hash=tx_hash)
     
@@ -102,11 +130,11 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
             amount0_max,
             amount1_max
         )
-
+        
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tx_hash = contract_instance.encodeABI(
             "collect",
-            args=(collect_params)
+            args=(collect_params,)
         )
 
         return dict(tx_hash=tx_hash)
@@ -122,3 +150,15 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()
         return dict(tokens=[token0,token1])
+
+    @classmethod
+    def get_position(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """get the position info"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        position = contract_instance.functions.positions(token_id).call()
+        return dict(data=position)

@@ -22,6 +22,7 @@
 import sys
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Tuple, cast
+from web3 import Web3
 
 from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
     UniswapV3NonfungiblePositionManagerContract,
@@ -30,7 +31,10 @@ from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolCont
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
-
+from packages.valory.contracts.multisend.contract import (
+    MultiSendOperation,
+    MultiSendContract
+)
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 MIN_TICK = -887272
@@ -72,10 +76,6 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the balancer pool behaviour."""
         super().__init__(**kwargs)
-        # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
-        self.exit_kind: int = 1  # EXACT_BPT_IN_FOR_TOKENS_OUT
-        # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
-        self.join_kind: int = 1  # EXACT_TOKENS_IN_FOR_BPT_OUT
 
     def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Add liquidity in a uniswap pool."""
@@ -87,7 +87,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         if not all([pool_address, safe_address, assets, chain, max_amounts_in]):
             self.context.logger.error(
-                "Missing required parameters for entering the pool"
+                f"Missing required parameters for entering the pool. Here are the kwargs: {kwargs}"
             )
             return None, None
 
@@ -126,7 +126,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
-            contract_callable="add_liquidity",
+            contract_callable="mint",
             data_key="tx_hash",
             token0=assets[0],
             token1=assets[1],
@@ -143,7 +143,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         )
         return tx_hash, position_manager_address
 
-    def exit(self, **kwargs: Any) -> Generator[None, None, Optional[str]]:
+    def exit(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str,str,bool]]]:
         """Remove liquidity in a uniswap pool."""
         token_id = kwargs.get("token_id")
         safe_address = kwargs.get("safe_address")
@@ -151,28 +151,115 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         if not all([token_id, safe_address, chain]):
             self.context.logger.error(
-                "Missing required parameters for entering the pool"
+                f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
             )
-            return None
+            return None, None, None
+        
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
+            return None, None, None
 
-        # burn the NFT
-        burn_tokens_tx_hash = yield from self.burn_position(token_id, chain)
+        multi_send_txs = []
 
+        #decrease liquidity
+        #TO-DO: Calculate min amounts accouting for slippage
+        amount0_min = 0
+        amount1_min = 0
+
+        #fetch liquidity from contract
+        liquidity = yield from self.get_liquidity_for_token(token_id, chain)
+        if not liquidity:
+            return None, None, None
+
+        # deadline is set to be 20 minutes from current time
+        last_update_time = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
+        deadline = int(last_update_time) + (20 * 60)
+
+        decrease_liquidity_tx_hash = yield from self.decrease_liquidity(token_id, liquidity, amount0_min, amount1_min, deadline, chain)
+        if not decrease_liquidity_tx_hash:
+            return None, None, None
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": position_manager_address,
+                "value": 0,
+                "data": decrease_liquidity_tx_hash,
+            }
+        )
+        
         # collect the tokens
+        # Note: We initially set `amount_max` to the maximum value of uint256 since the collect function sends the lesser of `amount_max` or `tokensOwed`.
+        # However, that value was too large, so we adjusted it to 2**100 - 1 wei.
+        amount_max = Web3.to_wei(2**100 - 1, 'wei')
         collect_tokens_tx_hash = yield from self.collect_tokens(
-            token_id, safe_address, chain
+            token_id=token_id, recipient=safe_address, amount0_max=amount_max, amount1_max=amount_max, chain=chain
+        )
+        if not collect_tokens_tx_hash:
+            return None, None, None
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": position_manager_address,
+                "value": 0,
+                "data": collect_tokens_tx_hash,
+            }
         )
 
         # prepare multisend
+        multisend_address = self.params.multisend_contract_addresses[chain]
+        if not multisend_address:
+            self.context.logger.error(f"Could not find multisend address for chain {chain}")
+            return None, None, None
+        
+        multisend_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
+            chain_id=chain,
+        )
+        if not multisend_tx_hash:
+            return None, None, None
+        
+        self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
+        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
-    def burn_position(
+    def burn_token(
         self, token_id: int, chain: str
     ) -> Generator[None, None, Optional[str]]:
         """Burn position"""
-        pass
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
+            return None
+
+        tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="burn_token",
+            data_key="tx_hash",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        return tx_hash
 
     def collect_tokens(
-        self, token_id: int, safe_address: str, chain: str
+        self, token_id: int, recipient: str, amount0_max: int, amount1_max: int, chain: str
     ) -> Generator[None, None, Optional[str]]:
         """Collect tokens"""
         position_manager_address = (
@@ -184,9 +271,6 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             )
             return None
 
-        # set amount0_max and amount1_max to int.max to collect all fees
-        amount_max = INT_MAX
-
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
@@ -194,18 +278,79 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             contract_callable="collect_tokens",
             data_key="tx_hash",
             token_id=token_id,
-            recipient=safe_address,
-            amount0_max=amount_max,
-            amount1_max=amount_max,
+            recipient=recipient,
+            amount0_max=amount0_max,
+            amount1_max=amount1_max,
             chain_id=chain,
         )
 
         return tx_hash
+    
+    def decrease_liquidity(
+        self, token_id: int, liquidity: int, amount0_min: int, amount1_min: int, deadline: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
+            return None
+        
+        tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="decrease_liquidity",
+            data_key="tx_hash",
+            token_id=token_id,
+            liquidity=liquidity,
+            amount0_min=amount0_min,
+            amount1_min=amount1_min,
+            deadline=deadline,
+            chain_id=chain,
+        )
+
+        return tx_hash
+    
+    def get_liquidity_for_token(
+        self, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position_manager contract address found for chain {chain}"
+            )
+            return None
+        
+        position = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="get_position",
+            data_key="data",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if position is None:
+            return None
+        
+        #liquidity is returned at the 7th index from contract
+        liquidity = position[7]
+        return liquidity
 
     def _get_tokens(
         self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[List[str]]]:
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get uniswap pool tokens"""
+        """Return a dict of tokens {"token0": 0x00, "token1": 0x00}"""
+
         pool_tokens = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
@@ -219,12 +364,16 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Could not fetch tokens for uniswap pool {pool_address}"
             )
-            return []
+            return None
 
+        tokens = {
+            "token0" : pool_tokens[0],
+            "token1" : pool_tokens[1]
+        }
         self.context.logger.info(
-            f"Tokens for uniswap pool {pool_address} : {pool_tokens}"
+            f"Tokens for uniswap pool {pool_address} : {tokens}"
         )
-        return pool_tokens
+        return tokens
 
     def _get_pool_fee(
         self, pool_address: str, chain: str
@@ -295,3 +444,5 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             f"TICK LOWER: {adjusted_tick_lower} TICK UPPER: {adjusted_tick_upper}"
         )
         return adjusted_tick_lower, adjusted_tick_upper
+
+        

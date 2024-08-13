@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihu2bcgjk2tqjiq2zhk3uogtfszqn4osvdt7ho3fubdpdj4jgdfjm
 - valory/abstract_round_abci:0.1.0:bafybeibovsktd3uxur45nrcomq5shcn46cgxd5idmhxbmjhg32c5abyqim
-- valory/liquidity_trader_abci:0.1.0:bafybeihccpghvntc7iptningddcsslaanabu6eii274kynsermsmroqu3q
-- valory/superagent_abci:0.1.0:bafybeia2m2jycesyuxsaz4lsgij3sfhqxh2k2pqwflwq5ainr5mj3rdl2a
+- valory/liquidity_trader_abci:0.1.0:bafybeifcfkyim63m72nwbr5b3nqcotimfqaa7m3jmpwe5bfssj5jpvzlrm
+- valory/superagent_abci:0.1.0:bafybeigrltgb2oceoxpqdq6lnjmhsib6uvp45tcykatnrh2wttb3fq5ht4
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
@@ -195,11 +195,11 @@ models:
       default_chain_id: ${str:optimism}
       termination_from_block: ${int:34088325}
       allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
-      initial_assets: ${str:{"optimism":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"}}}
+      initial_assets: ${str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
       pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}
-      allowed_chains: ${str:{"optimism":10,"base":8453}}
-      gas_reserve: ${str:{"optimism":1000,"base":1000}}
+      allowed_chains: ${str:{"ethereum":1,"optimism":10,"base":8453}}
+      gas_reserve: ${str:{"ethereum":1000,"optimism":1000,"base":1000}}
       round_threshold: ${int:0}
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}
@@ -214,4 +214,4 @@ models:
       manual_gas_limit: 1000000
       balancer_vault_contract_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
       uniswap_position_manager_contract_addresses: ${str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
-      chain_to_chain_key_mapping: ${str:{"optimism":"opt","base":"bas"}}
+      chain_to_chain_key_mapping: ${str:{"ethereum":"eth","optimism":"opt","base":"bas"}}

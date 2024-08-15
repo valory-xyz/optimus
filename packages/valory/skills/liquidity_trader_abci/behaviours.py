@@ -36,6 +36,7 @@ from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
+from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
@@ -1460,62 +1461,90 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Get swap tx hash"""
         multi_send_txs = []
         chain = action["from_chain"]
+        blacklisted_bridges = []
+        blacklisted_exchanges = []
+        multisend_tx_hash = None
+        safe_address = self.params.safe_contract_addresses[chain]
 
+        while True:
         # Get swap tx
-        (
-            swap_tx_hash,
-            lifi_contract_address,
-            token_to_swap,
-            amount,
-        ) = yield from self.get_swap_tx_info(positions, action)
+            (
+                swap_tx_hash,
+                lifi_contract_address,
+                token_to_swap,
+                amount,
+                tool_name,
+            ) = yield from self.get_swap_tx_info(positions, action, blacklisted_bridges, blacklisted_exchanges)
 
-        if (
-            not swap_tx_hash
-            or not lifi_contract_address
-            or not token_to_swap
-            or not amount
-        ):
-            self.context.logger.error("Error fetching the swap related info")
-            return None, None, None
-
-        if not token_to_swap == ZERO_ADDRESS:
-            approval_tx_payload = yield from self.get_approval_tx_hash(
-                token_address=token_to_swap,
-                amount=amount,
-                spender=lifi_contract_address,
-                chain=chain,
-            )
-            if not approval_tx_payload:
-                self.context.logger.error("Error preparing approval tx payload")
+            if (
+                not swap_tx_hash
+                or not lifi_contract_address
+                or not token_to_swap
+                or not amount
+            ):
+                self.context.logger.error("Error fetching the swap related info")
                 return None, None, None
 
-            multi_send_txs.append(approval_tx_payload)
+            if not token_to_swap == ZERO_ADDRESS:
+                approval_tx_payload = yield from self.get_approval_tx_hash(
+                    token_address=token_to_swap,
+                    amount=amount,
+                    spender=lifi_contract_address,
+                    chain=chain,
+                )
+                if not approval_tx_payload:
+                    self.context.logger.error("Error preparing approval tx payload")
+                    return None, None, None
 
-        multi_send_txs.append(
-            {
-                "operation": MultiSendOperation.CALL,
-                "to": lifi_contract_address,
-                "value": 0 if token_to_swap != ZERO_ADDRESS else amount,
-                "data": swap_tx_hash,
-            }
-        )
+                multi_send_txs.append(approval_tx_payload)
 
-        # Get the transaction from the multisend contract
-        multisend_address = self.params.multisend_contract_addresses[chain]
+            multi_send_txs.append(
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": lifi_contract_address,
+                    "value": 0 if token_to_swap != ZERO_ADDRESS else amount,
+                    "data": swap_tx_hash,
+                }
+            )
 
-        multisend_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
-            contract_address=multisend_address,
-            contract_public_id=MultiSendContract.contract_id,
-            contract_callable="get_tx_data",
-            data_key="data",
-            multi_send_txs=multi_send_txs,
-            chain_id=chain,
-        )
+            # Get the transaction from the multisend contract
+            multisend_address = self.params.multisend_contract_addresses[chain]
 
-        self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
+            multisend_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+                contract_address=multisend_address,
+                contract_public_id=MultiSendContract.contract_id,
+                contract_callable="get_tx_data",
+                data_key="data",
+                multi_send_txs=multi_send_txs,
+                chain_id=chain,
+            )
 
-        safe_address = self.params.safe_contract_addresses[chain]
+            self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
+
+            simulation_ok = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_MESSAGE,
+                contract_address=safe_address,
+                contract_public_id=VaultContract.contract_id,
+                contract_callable="simulate_tx",
+                sender_address=self.context.agent_address,
+                data=bytes.fromhex(multisend_tx_hash[2:]),
+                data_key="data",
+                chain_id=chain
+            )
+
+            self.context.logger.info(f"simulation {simulation_ok}")
+            if simulation_ok:
+                break  # Exit loop if simulation is successful
+
+            if action["from_chain"] == action["to_chain"]:
+                # It's an exchange, add to deny_exchanges list
+                self.context.logger.info(f"Simulation Failed! Blacklisting {tool_name} exchange")
+                blacklisted_exchanges.append(tool_name)
+            else:
+                # It's a bridge, add to blacklisted_bridges list
+                self.context.logger.info(f"Simulation Failed! Blacklisting {tool_name} bridge")
+                blacklisted_bridges.append(tool_name)
 
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -1552,8 +1581,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_swap_tx_info(
-        self, positions, action
-    ) -> Generator[None, None, Optional[Tuple[str, str, str, int]]]:
+        self, positions, action, blacklisted_bridges, blacklisted_exchanges
+    ) -> Generator[None, None, Optional[Tuple[str, str, str, int, str]]]:
         """Get the quote for asset transfer from API"""
         chain_keys = self.params.chain_to_chain_key_mapping
 
@@ -1570,7 +1599,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Could not find safe address for chain {from_chain}"
             )
-            return None, None, None, None
+            return None, None, None, None, None
 
         to_address = self.params.safe_contract_addresses.get(
             action.get("to_chain", ""), ""
@@ -1579,7 +1608,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Could not find safe address for chain {to_chain}"
             )
-            return None, None, None, None
+            return None, None, None, None, None
 
         # TO-DO: Add logic to check if the amount is greater than the minimum required amount for a swap. Currently, we haven't set any such limit.
         amount = self._get_balance(
@@ -1587,7 +1616,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         if not amount or amount == 0:
             self.context.logger.error("Insufficient amount to swap")
-            return None, None, None, None
+            return None, None, None, None, None
 
         # TO-DO: add logic to dynamically adjust the value of slippage
         slippage = self.params.slippage_for_swap
@@ -1602,6 +1631,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "fromAmount": amount,
             "slippage": slippage,
         }
+
+                
+        if blacklisted_bridges:
+            params["denyBridges"] = ",".join(blacklisted_bridges)
+
+        if blacklisted_exchanges:
+            params["denyExchanges"] = ",".join(blacklisted_exchanges)
 
         base_url = self.params.lifi_request_quote_url
         url = f"{base_url}?{urlencode(params)}"
@@ -1619,7 +1655,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Received status code {response.status_code} from url {url}."
                 f"Message {response.body}"
             )
-            return None, None, None, None
+            return None, None, None, None, None
 
         try:
             quote = json.loads(response.body)
@@ -1628,17 +1664,20 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Could not parse response from api, "
                 f"the following error was encountered {type(e).__name__}: {e}"
             )
-            return None, None, None, None
+            return None, None, None, None, None
 
-        tx_request = quote.get("transactionRequest", "")
+        tool = quote.get("tool", "")
+        self.context.logger.info(f"Tool(Bridge/Exchange) being used: {tool}")
+
+        tx_request = quote.get("transactionRequest", {})
         self.context.logger.info(f"transaction data from api {tx_request}")
 
         data = tx_request.get("data", "")
         if not tx_request or not data:
             self.context.logger.error(f"No tx data found in response {quote}")
-            return None, None, None, None
+            return None, None, None, None, None
 
-        return bytes.fromhex(data[2:]), tx_request["to"], from_token, amount
+        return bytes.fromhex(data[2:]), tx_request["to"], from_token, amount, tool
 
     def _get_token_id_from_receipt(
         self, tx_hash: str, chain: str

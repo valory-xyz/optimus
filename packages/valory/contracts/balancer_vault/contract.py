@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This class contains a wrapper for vault contract interface."""
-
+import logging
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
@@ -26,7 +26,9 @@ from aea_ledger_ethereum import EthereumApi
 from eth_abi import encode
 
 PUBLIC_ID = PublicId.from_str("valory/balancer_vault:0.1.0")
-
+_logger = logging.getLogger(
+    f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
+)
 class VaultContract(Contract):
     """The Weighted Stable Pool contract."""
 
@@ -125,3 +127,27 @@ class VaultContract(Contract):
             )
         )
         return {"tx_hash": bytes.fromhex(data[2:])}
+    
+    @classmethod
+    def simulate_tx(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        sender_address: str,
+        data: str,
+    ) -> JSONLike:
+        """Simulate the transaction."""
+        try:
+            ledger_api.api.eth.call(
+                {
+                    "from": ledger_api.api.to_checksum_address(sender_address),
+                    "to": ledger_api.api.to_checksum_address(contract_address),
+                    "data": data,
+                }
+            )
+            simulation_ok = True
+        except Exception as e:
+            _logger.info(f"Simulation failed: {str(e)}")
+            simulation_ok = False
+
+        return dict(data=simulation_ok)

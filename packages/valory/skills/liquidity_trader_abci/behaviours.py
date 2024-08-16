@@ -49,12 +49,10 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.models import Params
-from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
-    BalancerPoolBehaviour,
-)
-from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
-    UniswapPoolBehaviour,
-)
+from packages.valory.skills.liquidity_trader_abci.pools.balancer import BalancerPoolBehaviour
+from packages.valory.skills.liquidity_trader_abci.pools.uniswap import UniswapPoolBehaviour
+
+from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import SimpleStrategyBehaviour
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     DecisionMakingPayload,
     DecisionMakingRound,
@@ -131,7 +129,7 @@ READ_MODE = "r"
 WRITE_MODE = "w"
 
 
-class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, ABC):
+class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, SimpleStrategyBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -146,6 +144,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.pools: Dict[str, Any] = {}
         self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour
+        self.strategy = SimpleStrategyBehaviour
         # Read the assets and current pool
         self.read_current_pool()
         self.read_assets()
@@ -416,7 +415,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.get_highest_apr_pool()
             actions = []
             if self.highest_apr_pool is not None:
-                invest_in_pool = self.get_decision()
+                invest_in_pool = self.strategy.get_decision(self, pool_apr=self.highest_apr_pool.get("apr"))
                 if invest_in_pool:
                     actions = yield from self.get_order_of_transactions()
                     self.context.logger.info(f"Actions: {actions}")

@@ -465,58 +465,60 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Optional[Dict[str, Any]]:
         """Extract pool info from campaign data"""
         # TO-DO: Add support for pools with more than two tokens.
-
-        pool_token_addresses = []
-        pool_token_symbols = []
-
-        if dex_type == DexTypes.BALANCER.value:
-            type_info = campaign.get("typeInfo", {})
-            pool_tokens = type_info.get("poolTokens", {})
-            if not pool_tokens:
-                self.context.logger.error(
-                    f"No pool tokens info present in campaign {campaign}"
-                )
-                return None
-            pool_token_addresses = list(pool_tokens.keys())
-            pool_token_symbols = [
-                token.get("symbol", "Unknown") for token in pool_tokens.values()
-            ]
-
-        if dex_type == DexTypes.UNISWAP_V3.value:
-            pool_info = campaign.get("campaignParameters", {})
-            token0 = pool_info.get("token0", "")
-            token1 = pool_info.get("token1", "")
-            token0_symbol = pool_info.get("symbolToken0", "")
-            token1_symbol = pool_info.get("symbolToken1", "")
-            pool_token_addresses.extend([token0, token1])
-            pool_token_symbols.extend([token0_symbol, token1_symbol])
-
-        if (
-            not pool_token_addresses
-            or not pool_token_symbols
-            or len(pool_token_addresses) < 2
-            or len(pool_token_symbols) < 2
-        ):
-            self.context.logger.error(
-                f"Incomplete data for pool addresses or pool symbols: {pool_token_addresses} {pool_token_symbols}"
-            )
-            return None
-
+        pool_token_dict = {}
         pool_address = campaign.get("mainParameter")
         if not pool_address:
             self.context.logger.error(f"Missing pool address in campaign {campaign}")
             return None
 
-        return {
+        if dex_type == DexTypes.BALANCER.value:
+            type_info = campaign.get("typeInfo", {})
+            pool_tokens = type_info.get("poolTokens", {})
+            # Extracting token0 and token1 with their symbols and addresses
+            pool_token_items = list(pool_tokens.items())
+            if len(pool_token_items) < 2 or any(token.get("symbol") is None or address is None for address, token in pool_token_items):
+                self.context.logger.error(
+                    f"Invalid pool tokens found in campaign {pool_token_items}"
+                )
+                return None
+
+            pool_token_dict = {
+                "token0": pool_token_items[0][0],
+                "token1": pool_token_items[1][0],
+                "token0_symbol": pool_token_items[0][1].get("symbol"),
+                "token1_symbol": pool_token_items[1][1].get("symbol"),
+            }
+
+        if dex_type == DexTypes.UNISWAP_V3.value:
+            pool_info = campaign.get("campaignParameters", {})
+            if not pool_info:
+                self.context.logger.error(
+                    f"No pool tokens info present in campaign {campaign}"
+                )
+                return None
+            # Construct the dict for Uniswap V3 tokens with their symbols and addresses
+            pool_token_dict = {
+                "token0": pool_info.get("token0"),
+                "token1": pool_info.get("token1"),
+                "token0_symbol": pool_info.get("symbolToken0"),
+                "token1_symbol": pool_info.get("symbolToken1"),
+                "pool_fee": pool_info.get("poolFee")
+            }
+        
+        if any(v is None for v in pool_token_dict.values()):
+            self.context.logger.error(
+                f"Invalid pool tokens found in campaign {pool_token_dict}"
+            )
+            return None
+
+        pool_data =  {
             "dex_type": dex_type,
             "chain": chain,
             "apr": apr,
-            "token0": pool_token_addresses[0],
-            "token0_symbol": pool_token_symbols[0],
-            "token1": pool_token_addresses[1],
-            "token1_symbol": pool_token_symbols[1],
             "pool_address": pool_address,
         }
+        pool_data.update(pool_token_dict)
+        return pool_data
 
     def _get_filtered_pools(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get filtered pools"""
@@ -1217,16 +1219,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
-        dex_type = action.get("dex_type", "")
-        chain = action.get("chain", "")
-        assets = action.get("assets", [])
-        pool_address = action.get("pool_address", "")
-        safe_address = self.params.safe_contract_addresses.get(
-            action.get("chain", ""), ""
-        )
+        dex_type = action.get("dex_type")
+        chain = action.get("chain")
+        assets = action.get("assets", {})
+        if not assets or len(assets) < 2:
+            self.context.logger.error(f"2 assets required, provided: {assets}")
+            return None, None, None
+        pool_address = action.get("pool_address")
+        pool_fee = action.get("pool_fee")
+        safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
 
-        pool = self.pools.get(dex_type, None)
-        if pool is None:
+        pool = self.pools.get(dex_type)
+        if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
@@ -1246,16 +1250,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             assets=assets,
             chain=chain,
             max_amounts_in=max_amounts_in,
+            pool_fee = pool_fee
         )
         if not tx_hash or not contract_address:
             return None, None, None
 
         multi_send_txs = []
         value = 0
-        if not action["assets"][0] == ZERO_ADDRESS:
+        if not assets[0] == ZERO_ADDRESS:
             # Approve asset 0
             token0_approval_tx_payload = yield from self.get_approval_tx_hash(
-                token_address=action["assets"][0],
+                token_address=assets[0],
                 amount=max_amounts_in[0],
                 spender=contract_address,
                 chain=chain,
@@ -1269,10 +1274,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         else:
             value =  max_amounts_in[0]
 
-        if not action["assets"][1] == ZERO_ADDRESS:
+        if not assets[1] == ZERO_ADDRESS:
             # Approve asset 1
             token1_approval_tx_payload = yield from self.get_approval_tx_hash(
-                token_address=action["assets"][1],
+                token_address=assets[1],
                 amount=max_amounts_in[1],
                 spender=contract_address,
                 chain=chain,

@@ -86,6 +86,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         assets = kwargs.get("assets")
         chain = kwargs.get("chain")
         max_amounts_in = kwargs.get("max_amounts_in")
+        pool_fee = kwargs.get("pool_fee")
 
         if not all([pool_address, safe_address, assets, chain, max_amounts_in]):
             self.context.logger.error(
@@ -102,10 +103,11 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # Fetch fee from uniswap v3 pool
-        pool_fee = yield from self._get_pool_fee(pool_address, chain)
-        if pool_fee is None:
-            return None, None
+        # Fetch fee from uniswap v3 pool if pool fee is not provided
+        if not pool_fee:
+            pool_fee = yield from self._get_pool_fee(pool_address, chain)
+            if not pool_fee:
+                return None, None
 
         # TO-DO: specify a more concentrated position
         tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper(

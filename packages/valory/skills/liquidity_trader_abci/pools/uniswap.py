@@ -363,7 +363,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
 
-        if position is None:
+        if not position:
             return None
 
         # liquidity is returned at the 7th index from contract
@@ -408,7 +408,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
 
-        if pool_fee is None:
+        if not pool_fee:
             self.context.logger.error(
                 f"Could not fetch pool fee for uniswap pool {pool_address}"
             )
@@ -430,7 +430,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
 
-        if tick_spacing is None:
+        if not tick_spacing:
             self.context.logger.error(
                 f"Could not fetch tick spacing for uniswap pool {pool_address}"
             )
@@ -447,7 +447,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(f"inside function {pool_address} {chain}")
         # Fetch tick spacing from uniswap v3 pool
         tick_spacing = yield from self._get_tick_spacing(pool_address, chain)
-        if tick_spacing is None:
+        if not tick_spacing:
             return None, None
         # Adjust MIN_TICK to the nearest higher multiple of tick_spacing
         adjusted_tick_lower = abs(MIN_TICK) // tick_spacing * tick_spacing

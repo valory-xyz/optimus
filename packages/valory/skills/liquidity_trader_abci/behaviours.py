@@ -241,8 +241,8 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         asset_balances_dict: Dict[str, list] = defaultdict(list)
 
         for chain, assets in self.assets.items():
-            account = self.params.safe_contract_addresses.get(chain, ZERO_ADDRESS)
-            if account == ZERO_ADDRESS:
+            account = self.params.safe_contract_addresses.get(chain)
+            if not account:
                 self.context.logger.error(f"No safe address set for chain {chain}")
                 continue
 
@@ -314,10 +314,10 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
             positions = self.synchronized_data.positions
 
         for position in positions:
-            if position["chain"] == chain:
-                for asset in position["assets"]:
-                    if asset["address"] == token:
-                        return asset["balance"]
+            if position.get("chain") == chain:
+                for asset in position.get("assets", {}):
+                    if asset.get("address") == token:
+                        return asset.get("balance")
 
         return None
 
@@ -430,7 +430,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def get_highest_apr_pool(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def get_highest_apr_pool(self) -> Generator[None, None, None]:
         """Get highest APR pool"""
         filtered_pools = yield from self._get_filtered_pools()
 
@@ -457,8 +457,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")
         else:
             self.context.logger.warning("No pools with APR found.")
-
-        return self.highest_apr_pool
 
     def _extract_pool_info(
         self, dex_type, chain, apr, campaign
@@ -570,57 +568,32 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         for campaign_list in campaigns.values():
             for campaign in campaign_list.values():
                 dex_type = (
-                    campaign.get("type", "")
-                    if campaign.get("type", "")
-                    else campaign.get("ammName", "")
+                    campaign.get("type")
+                    if campaign.get("type")
+                    else campaign.get("ammName")
                 )
                 if not dex_type:
                     self.context.logger.warning("Dex type not specified in campaign")
                     continue
-                campaign_apr = campaign.get("apr",None)
-                if campaign_apr is None:
+
+                campaign_apr = campaign.get("apr")
+                if not campaign_apr:
                     self.context.logger.warning("APR not specified for campaign")
                     continue
+
                 # The pool apr should be greater than the current pool apr
                 if dex_type in allowed_dexs:
                     if campaign_apr > self.current_pool.get("apr", 0.0):
-                        campaign_pool_address = campaign.get("mainParameter", "")
-                        current_pool_address = self.current_pool.get("address", "")
+                        campaign_pool_address = campaign.get("mainParameter")
                         if not campaign_pool_address:
                             self.context.logger.warning(
                                 "No pool address found for campaign"
                             )
                             continue
+                        current_pool_address = self.current_pool.get("address")
                         # The pool should not be the current pool
                         if campaign_pool_address != current_pool_address:
                             filtered_pools[dex_type][chain].append(campaign)
-
-    def get_decision(self) -> bool:
-        """Get decision"""
-        if not self._is_apr_threshold_exceeded():
-            return False
-
-        # TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
-        # if not self._is_round_threshold_exceeded():  # noqa: E800
-        #     self.context.logger.info("Round threshold not exceeded")  # noqa: E800
-        #     return False  # noqa: E800
-
-        return True
-
-    def _is_apr_threshold_exceeded(self) -> bool:
-        """Check if the highest APR exceeds the threshold"""
-        if not self.highest_apr_pool:
-            self.context.logger.info("No highest APR pool found.")
-            return False
-
-        highest_apr = self.highest_apr_pool.get("apr", 0)
-        if highest_apr > self.params.apr_threshold:
-            return True
-        else:
-            self.context.logger.info(
-                f"APR of selected pool {highest_apr} does not exceed APR threshold ({self.params.apr_threshold})."
-            )
-            return False
 
     def get_order_of_transactions(
         self,
@@ -632,14 +605,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             tokens = self._get_tokens_over_min_balance()
             if not tokens or len(tokens) < 2:
                 self.context.logger.error(
-                    "Minimun 2 tokens required in safe with over minimum balance to enter a pool"
+                    f"Minimun 2 tokens required in safe with over minimum balance to enter a pool, provided: {tokens}"
                 )
                 return None
         else:
             # If there is current pool, then get the lp pool token addresses
             tokens = yield from self._get_exit_pool_tokens()  # noqa: E800
-            if not tokens:
-                return None
+            if not tokens or len(tokens) < 2:
+                self.context.logger.error(
+                    f"2 tokens required to exit pool, provided: {tokens}"
+                )
 
             exit_pool_action = self._build_exit_pool_action(tokens)
             if not exit_pool_action:
@@ -665,11 +640,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # ASSUMPTION : WE HAVE FUNDS FOR ATLEAST 2 TOKENS
         """Get tokens over min balance"""
         tokens = []
-        highest_apr_chain = self.highest_apr_pool.get("chain", "")
-        token0 = self.highest_apr_pool.get("token0", "")
-        token1 = self.highest_apr_pool.get("token1", "")
-        token0_symbol = self.highest_apr_pool.get("token0", "")
-        token1_symbol = self.highest_apr_pool.get("token1", "")
+        highest_apr_chain = self.highest_apr_pool.get("chain")
+        token0 = self.highest_apr_pool.get("token0")
+        token1 = self.highest_apr_pool.get("token1")
+        token0_symbol = self.highest_apr_pool.get("token0")
+        token1_symbol = self.highest_apr_pool.get("token1")
 
         # Ensure we have valid data before proceeding
         if (
@@ -703,18 +678,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if len(tokens) == 2:
             return tokens
 
-        seen_tokens = set((token["chain"], token["token"]) for token in tokens)
+        seen_tokens = set((token.get("chain"), token.get("token")) for token in tokens)
 
         # If we still need more tokens, check all positions
         if len(tokens) < 2:
             for position in self.synchronized_data.positions:
-                chain = position.get("chain", "")
-                for asset in position.get("assets", []):
-                    asset_address = asset.get("address", "")
+                chain = position.get("chain")
+                for asset in position.get("assets", {}):
+                    asset_address = asset.get("address")
                     if not chain or not asset_address:
                         continue
                     if (chain, asset_address) not in seen_tokens:
-                        if asset.get("asset_type", "") in ["erc_20", "native"]:
+                        if asset.get("asset_type") in ["erc_20", "native"]:
                             min_balance = (
                                 self.params.min_balance_multiplier
                                 * self.params.gas_reserve.get(chain, 0)
@@ -722,9 +697,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             if asset.get("balance", 0) > min_balance:
                                 tokens.append(
                                     {
-                                        "chain": position["chain"],
-                                        "token": asset["address"],
-                                        "token_symbol": asset["asset_symbol"],
+                                        "chain": position.get("chain"),
+                                        "token": asset.get("address"),
+                                        "token_symbol": asset.get("asset_symbol"),
                                     }
                                 )
                                 if len(tokens) == 2:
@@ -743,27 +718,27 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = self.current_pool.get("address")
         chain = self.current_pool.get("chain")
 
-        pool = self.pools.get(dex_type, None)
-        if pool is None:
+        pool = self.pools.get(dex_type)
+        if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None
 
         # Get tokens from balancer weighted pool contract
         tokens = yield from pool._get_tokens(self, pool_address, chain)
-        if not tokens or not tokens.get("token0", "") or not tokens.get("token1", ""):
+        if not tokens or any(v is None for v in tokens.items()):
             self.context.logger.error(f"Missing information in tokens: {tokens}")
             return None
 
         return [
             {
                 "chain": chain,
-                "token": tokens["token0"],
-                "token_symbol": self._get_asset_symbol(chain, tokens["token0"]),
+                "token": tokens.get("token0"),
+                "token_symbol": self._get_asset_symbol(chain, tokens.get("token0")),
             },
             {
                 "chain": chain,
-                "token": tokens["token1"],
-                "token_symbol": self._get_asset_symbol(chain, tokens["token1"]),
+                "token": tokens.get("token1"),
+                "token_symbol": self._get_asset_symbol(chain, tokens.get("token1")),
             },
         ]
 
@@ -803,11 +778,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         bridge_swap_actions = []
 
         # Get the highest APR pool's tokens
-        dest_token0_address = self.highest_apr_pool.get("token0", "")
-        dest_token1_address = self.highest_apr_pool.get("token1", "")
-        dest_token0_symbol = self.highest_apr_pool.get("token0_symbol", "")
-        dest_token1_symbol = self.highest_apr_pool.get("token1_symbol", "")
-        dest_chain = self.highest_apr_pool.get("chain", "")
+        dest_token0_address = self.highest_apr_pool.get("token0")
+        dest_token1_address = self.highest_apr_pool.get("token1")
+        dest_token0_symbol = self.highest_apr_pool.get("token0_symbol")
+        dest_token1_symbol = self.highest_apr_pool.get("token1_symbol")
+        dest_chain = self.highest_apr_pool.get("chain")
 
         if (
             not dest_token0_address
@@ -819,14 +794,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Incomplete data in highest APR pool {self.highest_apr_pool}"
             )
-            return []
+            return None
 
-        source_token0_chain = tokens[0].get("chain", "")
-        source_token0_address = tokens[0].get("token", "")
-        source_token0_symbol = tokens[0].get("token_symbol", "")
-        source_token1_chain = tokens[1].get("chain", "")
-        source_token1_address = tokens[1].get("token", "")
-        source_token1_symbol = tokens[1].get("token_symbol", "")
+        source_token0_chain = tokens[0].get("chain")
+        source_token0_address = tokens[0].get("token")
+        source_token0_symbol = tokens[0].get("token_symbol")
+        source_token1_chain = tokens[1].get("chain")
+        source_token1_address = tokens[1].get("token")
+        source_token1_symbol = tokens[1].get("token_symbol")
 
         if (
             not source_token0_chain
@@ -837,7 +812,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             or not source_token1_symbol
         ):
             self.context.logger.error(f"Incomplete data in tokens {tokens}")
-            return []
+            return None
 
         # If either of the token to swap and destination token match, we need to check which token don't match and build the bridge swap action based on this assessment.
         if source_token0_chain == dest_chain or source_token1_chain == dest_chain:
@@ -920,23 +895,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return {
             "action": Action.ENTER_POOL.value,
-            "dex_type": self.highest_apr_pool.get("dex_type", ""),
-            "chain": self.highest_apr_pool.get("chain", ""),
+            "dex_type": self.highest_apr_pool.get("dex_type"),
+            "chain": self.highest_apr_pool.get("chain"),
             "assets": [
-                self.highest_apr_pool.get("token0", ""),
-                self.highest_apr_pool.get("token1", ""),
+                self.highest_apr_pool.get("token0"),
+                self.highest_apr_pool.get("token1"),
             ],
-            "pool_address": self.highest_apr_pool.get("pool_address", ""),
-            "apr": self.highest_apr_pool.get("apr", 0),
+            "pool_address": self.highest_apr_pool.get("pool_address"),
+            "apr": self.highest_apr_pool.get("apr"),
         }
 
     def _get_asset_symbol(self, chain: str, address: str) -> Optional[str]:
         positions = self.synchronized_data.positions
         for position in positions:
-            if position.get("chain", "") == chain:
-                for asset in position["assets"]:
-                    if asset.get("address", "") == address:
-                        return asset.get("asset_symbol", "")
+            if position.get("chain") == chain:
+                for asset in position.get("assets", {}):
+                    if asset.get("address") == address:
+                        return asset.get("asset_symbol")
 
         return None
 
@@ -987,7 +962,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if (
             last_round_id != DecisionMakingRound.auto_round_id()
             and last_round_id != EvaluateStrategyRound.auto_round_id()
-            and Action(actions[last_executed_action_index].get("action", ""))
+            and Action(actions[last_executed_action_index].get("action"))
             == Action.BRIDGE_SWAP
         ):
             self.context.logger.info("Checking the status of swap tx")
@@ -1019,30 +994,26 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 if not current_assets:
                     current_assets = self.params.initial_assets
 
-                to_chain = action.get("to_chain", "")
+                to_chain = action.get("to_chain")
                 if to_chain not in current_assets:
                     current_assets[to_chain] = {}
 
                 # Add the 'to_token' if the 'to_token_symbol' key doesn't exist
-                to_token_symbol = action.get("to_token_symbol", "")
+                to_token_symbol = action.get("to_token_symbol")
                 if to_token_symbol and to_token_symbol not in current_assets[to_chain]:
-                    current_assets[to_chain][to_token_symbol] = action.get(
-                        "to_token", ""
-                    )
+                    current_assets[to_chain][to_token_symbol] = action.get("to_token")
 
-                from_chain = action.get("from_chain", "")
+                from_chain = action.get("from_chain")
                 if from_chain not in current_assets:
                     current_assets[from_chain] = {}
 
                 # Add the 'from_token' if the 'from_token_symbol' key doesn't exist
-                from_token_symbol = action.get("from_token_symbol", "")
+                from_token_symbol = action.get("from_token_symbol")
                 if (
                     from_token_symbol
                     and from_token_symbol not in current_assets[from_chain]
                 ):
-                    current_assets[from_chain][from_token_symbol] = action.get(
-                        "from_token", ""
-                    )
+                    current_assets[from_chain][from_token_symbol] = action.get("from_token")
 
                 self.assets = current_assets
                 self.store_assets()
@@ -1053,7 +1024,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # If last action was Enter Pool and it was successful we update the current pool
         if (
             last_executed_action_index is not None
-            and Action(actions[last_executed_action_index].get("action", ""))
+            and Action(actions[last_executed_action_index].get("action"))
             == Action.ENTER_POOL
         ):
             action = actions[last_executed_action_index]
@@ -1099,7 +1070,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             positions = yield from self.get_positions()
 
         # Prepare the next action
-        next_action = Action(actions[current_action_index]["action"])
+        next_action = Action(actions[current_action_index].get("action"))
         self.context.logger.info(f"ACTION TO BE PERFORMED: {next_action}")
         next_action_details = self.synchronized_data.actions[current_action_index]
 
@@ -1208,8 +1179,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None, None
 
-        status = tx_status.get("status", "")
-        sub_status = tx_status.get("substatus", "")
+        status = tx_status.get("status")
+        sub_status = tx_status.get("substatus")
 
         if not status and sub_status:
             self.context.logger.error("No status or sub_status found in response")

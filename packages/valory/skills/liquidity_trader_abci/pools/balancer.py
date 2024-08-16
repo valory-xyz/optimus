@@ -59,14 +59,14 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             return None, None
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
+        vault_address = self.params.balancer_vault_contract_addresses.get(chain)
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
             return None, None
 
         # Fetch the pool id
         pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
-        if pool_id is None:
+        if not pool_id:
             return None, None
 
         # TO-DO: calculate minimum_bpt
@@ -110,14 +110,14 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             return None, None, None
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
+        vault_address = self.params.balancer_vault_contract_addresses.get(chain)
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
             return None, None, None
 
         # Fetch the pool id
         pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
-        if pool_id is None:
+        if not pool_id:
             return None, None, None
 
         # TO-DO: queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
@@ -168,15 +168,15 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         """Return a dict of tokens {"token0": 0x00, "token1": 0x00}"""
 
         # Get vault contract address from balancer weighted pool contract
-        vault_address = self.params.balancer_vault_contract_addresses.get(chain, "")
+        vault_address = self.params.balancer_vault_contract_addresses.get(chain)
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
-            return []
+            return None
 
         # Fetch the pool id
         pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
-        if pool_id is None:
-            return []
+        if not pool_id:
+            return None
 
         pool_tokens = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,

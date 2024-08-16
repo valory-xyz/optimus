@@ -24,6 +24,7 @@ from typing import Any, Dict, Generator
 
 from packages.valory.skills.abstract_round_abci.behaviours import BaseBehaviour
 
+
 class StrategyBehaviour(BaseBehaviour, ABC):
     """StrategyBehaviour"""
 

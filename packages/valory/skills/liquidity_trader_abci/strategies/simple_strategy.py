@@ -3,11 +3,12 @@
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
-from packages.valory.skills.liquidity_trader_abci.strategy_behaviour import StrategyBehaviour
+from packages.valory.skills.liquidity_trader_abci.strategy_behaviour import (
+    StrategyBehaviour,
+)
 
 
 class SimpleStrategyBehaviour(StrategyBehaviour, ABC):
-    
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the simple strategy behaviour."""
         super().__init__(**kwargs)
@@ -19,7 +20,7 @@ class SimpleStrategyBehaviour(StrategyBehaviour, ABC):
         if not pool_apr:
             self.context.logger.error("Pool APR cannot be None")
             return False
-        
+
         if not self._is_apr_threshold_exceeded(pool_apr):
             return False
 

@@ -31,12 +31,12 @@ from aea.configurations.data_types import PublicId
 from eth_abi import decode
 from eth_utils import keccak, to_hex
 
+from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
-from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
@@ -49,10 +49,12 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.models import Params
-from packages.valory.skills.liquidity_trader_abci.pools.balancer import BalancerPoolBehaviour
-from packages.valory.skills.liquidity_trader_abci.pools.uniswap import UniswapPoolBehaviour
-
-from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import SimpleStrategyBehaviour
+from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
+    BalancerPoolBehaviour,
+)
+from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
+    UniswapPoolBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     DecisionMakingPayload,
     DecisionMakingRound,
@@ -63,6 +65,9 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     GetPositionsRound,
     LiquidityTraderAbciApp,
     SynchronizedData,
+)
+from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import (
+    SimpleStrategyBehaviour,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -129,7 +134,9 @@ READ_MODE = "r"
 WRITE_MODE = "w"
 
 
-class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, SimpleStrategyBehaviour, ABC):
+class LiquidityTraderBaseBehaviour(
+    BalancerPoolBehaviour, UniswapPoolBehaviour, SimpleStrategyBehaviour, ABC
+):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -415,7 +422,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.get_highest_apr_pool()
             actions = []
             if self.highest_apr_pool is not None:
-                invest_in_pool = self.strategy.get_decision(self, pool_apr=self.highest_apr_pool.get("apr"))
+                invest_in_pool = self.strategy.get_decision(
+                    self, pool_apr=self.highest_apr_pool.get("apr")
+                )
                 if invest_in_pool:
                     actions = yield from self.get_order_of_transactions()
                     self.context.logger.info(f"Actions: {actions}")
@@ -474,7 +483,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             pool_tokens = type_info.get("poolTokens", {})
             # Extracting token0 and token1 with their symbols and addresses
             pool_token_items = list(pool_tokens.items())
-            if len(pool_token_items) < 2 or any(token.get("symbol") is None or address is None for address, token in pool_token_items):
+            if len(pool_token_items) < 2 or any(
+                token.get("symbol") is None or address is None
+                for address, token in pool_token_items
+            ):
                 self.context.logger.error(
                     f"Invalid pool tokens found in campaign {pool_token_items}"
                 )
@@ -500,16 +512,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "token1": pool_info.get("token1"),
                 "token0_symbol": pool_info.get("symbolToken0"),
                 "token1_symbol": pool_info.get("symbolToken1"),
-                "pool_fee": pool_info.get("poolFee")
+                "pool_fee": pool_info.get("poolFee"),
             }
-        
+
         if any(v is None for v in pool_token_dict.values()):
             self.context.logger.error(
                 f"Invalid pool tokens found in campaign {pool_token_dict}"
             )
             return None
 
-        pool_data =  {
+        pool_data = {
             "dex_type": dex_type,
             "chain": chain,
             "apr": apr,
@@ -742,16 +754,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             },
         ]
 
-    def _build_exit_pool_action(self, tokens: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _build_exit_pool_action(
+        self, tokens: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
         """Build action for exiting the current pool."""
         if not self.current_pool:
             self.context.logger.error("No pool present")
             return None
 
         if len(tokens) < 2:
-            self.context.logger.error(f"Insufficient tokens provided for exit action. Required atleast 2, provided: {tokens}")
+            self.context.logger.error(
+                f"Insufficient tokens provided for exit action. Required atleast 2, provided: {tokens}"
+            )
             return None
-        
+
         exit_pool_action = {
             "action": Action.EXIT_POOL.value,
             "dex_type": self.current_pool.get("dex_type"),
@@ -1013,7 +1029,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     from_token_symbol
                     and from_token_symbol not in current_assets[from_chain]
                 ):
-                    current_assets[from_chain][from_token_symbol] = action.get("from_token")
+                    current_assets[from_chain][from_token_symbol] = action.get(
+                        "from_token"
+                    )
 
                 self.assets = current_assets
                 self.store_assets()
@@ -1223,7 +1241,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             assets=assets,
             chain=chain,
             max_amounts_in=max_amounts_in,
-            pool_fee = pool_fee
+            pool_fee=pool_fee,
         )
         if not tx_hash or not contract_address:
             return None, None, None
@@ -1245,7 +1263,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             multi_send_txs.append(token0_approval_tx_payload)
         else:
-            value =  max_amounts_in[0]
+            value = max_amounts_in[0]
 
         if not assets[1] == ZERO_ADDRESS:
             # Approve asset 1
@@ -1369,30 +1387,33 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         exit_pool_kwargs = {}
 
-        if dex_type == DexTypes.BALANCER.value: 
-            exit_pool_kwargs.update({
-                "safe_address":safe_address,
-                "assets":assets,
-                "pool_address":pool_address,
-                "chain":chain
-            })
-        
-        if dex_type == DexTypes.UNISWAP_V3.value: 
-            exit_pool_kwargs.update({
-                "token_id":token_id,
-                "safe_address":safe_address,
-                "chain":chain,
-                "liquidity": liquidity
-            })
+        if dex_type == DexTypes.BALANCER.value:
+            exit_pool_kwargs.update(
+                {
+                    "safe_address": safe_address,
+                    "assets": assets,
+                    "pool_address": pool_address,
+                    "chain": chain,
+                }
+            )
+
+        if dex_type == DexTypes.UNISWAP_V3.value:
+            exit_pool_kwargs.update(
+                {
+                    "token_id": token_id,
+                    "safe_address": safe_address,
+                    "chain": chain,
+                    "liquidity": liquidity,
+                }
+            )
 
         if not exit_pool_kwargs:
             self.context.logger.error("Could not find kwargs for exit pool")
             return None, None, None
-        
+
         tx_hash, contract_address, is_multisend = yield from pool.exit(
-            self,
-            **exit_pool_kwargs
-        )      
+            self, **exit_pool_kwargs
+        )
         if not tx_hash or not contract_address:
             return None, None, None
 
@@ -1446,14 +1467,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         safe_address = self.params.safe_contract_addresses[chain]
 
         while True:
-        # Get swap tx
+            # Get swap tx
             (
                 swap_tx_hash,
                 lifi_contract_address,
                 token_to_swap,
                 amount,
                 tool_name,
-            ) = yield from self.get_swap_tx_info(positions, action, blacklisted_bridges, blacklisted_exchanges)
+            ) = yield from self.get_swap_tx_info(
+                positions, action, blacklisted_bridges, blacklisted_exchanges
+            )
 
             if (
                 not swap_tx_hash
@@ -1464,7 +1487,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             ):
                 self.context.logger.error("Error fetching the swap related info")
                 return None, None, None
-            
+
             if not token_to_swap == ZERO_ADDRESS:
                 approval_tx_payload = yield from self.get_approval_tx_hash(
                     token_address=token_to_swap,
@@ -1542,19 +1565,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 sender_address=safe_address,
                 data=bytes.fromhex(multisend_tx_hash[2:]),
                 data_key="data",
-                chain_id=chain
+                chain_id=chain,
             )
-            
+
             if simulation_ok:
                 break  # Exit loop if simulation is successful
 
             if action.get("from_chain") == action.get("to_chain"):
                 # It's an exchange, add to deny_exchanges list
-                self.context.logger.info(f"Simulation Failed! Blacklisting {tool_name} exchange")
+                self.context.logger.info(
+                    f"Simulation Failed! Blacklisting {tool_name} exchange"
+                )
                 blacklisted_exchanges.append(tool_name)
             else:
                 # It's a bridge, add to blacklisted_bridges list
-                self.context.logger.info(f"Simulation Failed! Blacklisting {tool_name} bridge")
+                self.context.logger.info(
+                    f"Simulation Failed! Blacklisting {tool_name} bridge"
+                )
                 blacklisted_bridges.append(tool_name)
 
         return payload_string, chain, safe_address
@@ -1607,7 +1634,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "slippage": slippage,
         }
 
-                
         if blacklisted_bridges:
             params["denyBridges"] = ",".join(blacklisted_bridges)
 
@@ -1662,7 +1688,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         if not response:
-            self.context.logger.error(f"Error fetching tx receipt! Response: {response}")
+            self.context.logger.error(
+                f"Error fetching tx receipt! Response: {response}"
+            )
             return None, None
 
         # Define the event signature and calculate its hash
@@ -1703,16 +1731,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if not data_hex:
                 self.context.logger.error(f"Data field is empty in log {log}")
                 return None, None
-            
+
             data_bytes = bytes.fromhex(data_hex[2:])
             decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
             liquidity = decoded_data[0]
 
             self.context.logger.info(f"tokenId returned from mint function: {token_id}")
-            self.context.logger.info(f"liquditiy returned from mint function: {liquidity}")
+            self.context.logger.info(
+                f"liquditiy returned from mint function: {liquidity}"
+            )
 
             return token_id, liquidity
-        
+
         except Exception as e:
             self.context.logger.error(f"Error decoding token ID: {e}")
             return None, None

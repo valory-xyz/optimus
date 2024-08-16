@@ -1468,7 +1468,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get swap tx hash"""
         multi_send_txs = []
-        chain = action["from_chain"]
+        chain = action.get("from_chain")
         blacklisted_bridges = []
         blacklisted_exchanges = []
         multisend_tx_hash = None
@@ -1489,10 +1489,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 or not lifi_contract_address
                 or not token_to_swap
                 or not amount
+                or not tool_name
             ):
                 self.context.logger.error("Error fetching the swap related info")
                 return None, None, None
-
+            
             if not token_to_swap == ZERO_ADDRESS:
                 approval_tx_payload = yield from self.get_approval_tx_hash(
                     token_address=token_to_swap,
@@ -1530,22 +1531,53 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
 
+            safe_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+                contract_address=safe_address,
+                contract_public_id=GnosisSafeContract.contract_id,
+                contract_callable="get_raw_safe_transaction_hash",
+                data_key="tx_hash",
+                to_address=multisend_address,
+                value=ETHER_VALUE,
+                data=bytes.fromhex(multisend_tx_hash[2:]),
+                operation=SafeOperation.DELEGATE_CALL.value,
+                safe_tx_gas=SAFE_TX_GAS,
+                chain_id=chain,
+            )
+
+            if not safe_tx_hash:
+                return None, None, None
+
+            safe_tx_hash = safe_tx_hash[2:]
+            self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
+
+            payload_string = hash_payload_to_hex(
+                safe_tx_hash=safe_tx_hash,
+                ether_value=ETHER_VALUE,
+                safe_tx_gas=SAFE_TX_GAS,
+                operation=SafeOperation.DELEGATE_CALL.value,
+                to_address=multisend_address,
+                data=bytes.fromhex(multisend_tx_hash[2:]),
+                gas_limit=self.params.manual_gas_limit,
+            )
+
+            self.context.logger.info(f"Tx hash payload string is {payload_string}")
+
             simulation_ok = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_MESSAGE,
-                contract_address=safe_address,
+                contract_address=multisend_address,
                 contract_public_id=VaultContract.contract_id,
                 contract_callable="simulate_tx",
-                sender_address=self.context.agent_address,
+                sender_address=safe_address,
                 data=bytes.fromhex(multisend_tx_hash[2:]),
                 data_key="data",
                 chain_id=chain
             )
-
-            self.context.logger.info(f"simulation {simulation_ok}")
+            
             if simulation_ok:
                 break  # Exit loop if simulation is successful
 
-            if action["from_chain"] == action["to_chain"]:
+            if action.get("from_chain") == action.get("to_chain"):
                 # It's an exchange, add to deny_exchanges list
                 self.context.logger.info(f"Simulation Failed! Blacklisting {tool_name} exchange")
                 blacklisted_exchanges.append(tool_name)
@@ -1553,38 +1585,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 # It's a bridge, add to blacklisted_bridges list
                 self.context.logger.info(f"Simulation Failed! Blacklisting {tool_name} bridge")
                 blacklisted_bridges.append(tool_name)
-
-        safe_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
-            contract_address=safe_address,
-            contract_public_id=GnosisSafeContract.contract_id,
-            contract_callable="get_raw_safe_transaction_hash",
-            data_key="tx_hash",
-            to_address=multisend_address,
-            value=ETHER_VALUE,
-            data=bytes.fromhex(multisend_tx_hash[2:]),
-            operation=SafeOperation.DELEGATE_CALL.value,
-            safe_tx_gas=SAFE_TX_GAS,
-            chain_id=chain,
-        )
-
-        if not safe_tx_hash:
-            return None, None, None
-
-        safe_tx_hash = safe_tx_hash[2:]
-        self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
-
-        payload_string = hash_payload_to_hex(
-            safe_tx_hash=safe_tx_hash,
-            ether_value=ETHER_VALUE,
-            safe_tx_gas=SAFE_TX_GAS,
-            operation=SafeOperation.DELEGATE_CALL.value,
-            to_address=multisend_address,
-            data=bytes.fromhex(multisend_tx_hash[2:]),
-            gas_limit=self.params.manual_gas_limit,
-        )
-
-        self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
 
@@ -1594,14 +1594,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Get the quote for asset transfer from API"""
         chain_keys = self.params.chain_to_chain_key_mapping
 
-        from_chain = chain_keys.get(action.get("from_chain", ""), "")
-        to_chain = chain_keys.get(action.get("to_chain", ""), "")
-        from_token = action.get("from_token", "")
-        to_token = action.get("to_token", "")
+        from_chain = chain_keys.get(action.get("from_chain"))
+        to_chain = chain_keys.get(action.get("to_chain"))
+        from_token = action.get("from_token")
+        to_token = action.get("to_token")
 
-        from_address = self.params.safe_contract_addresses.get(
-            action.get("from_chain", ""), ""
-        )
+        from_address = self.params.safe_contract_addresses.get(action.get("from_chain"))
 
         if not from_address:
             self.context.logger.error(
@@ -1609,9 +1607,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None, None, None, None, None
 
-        to_address = self.params.safe_contract_addresses.get(
-            action.get("to_chain", ""), ""
-        )
+        to_address = self.params.safe_contract_addresses.get(action.get("to_chain"))
         if not to_address:
             self.context.logger.error(
                 f"Could not find safe address for chain {to_chain}"
@@ -1620,7 +1616,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # TO-DO: Add logic to check if the amount is greater than the minimum required amount for a swap. Currently, we haven't set any such limit.
         amount = self._get_balance(
-            action.get("from_chain", ""), action.get("from_token", ""), positions
+            action.get("from_chain"), action.get("from_token"), positions
         )
         if not amount or amount == 0:
             self.context.logger.error("Insufficient amount to swap")
@@ -1674,18 +1670,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None, None, None, None, None
 
-        tool = quote.get("tool", "")
+        tool = quote.get("tool")
         self.context.logger.info(f"Tool(Bridge/Exchange) being used: {tool}")
 
         tx_request = quote.get("transactionRequest", {})
         self.context.logger.info(f"transaction data from api {tx_request}")
 
-        data = tx_request.get("data", "")
-        if not tx_request or not data:
-            self.context.logger.error(f"No tx data found in response {quote}")
+        data = tx_request.get("data")
+        if not tx_request or not data or not tool:
+            self.context.logger.error(f"Missing data in quote: {quote}")
             return None, None, None, None, None
 
-        return bytes.fromhex(data[2:]), tx_request["to"], from_token, amount, tool
+        return bytes.fromhex(data[2:]), tx_request.get("to"), from_token, amount, tool
 
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str

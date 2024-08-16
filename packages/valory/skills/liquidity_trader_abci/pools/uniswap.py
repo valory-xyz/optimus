@@ -154,6 +154,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         token_id = kwargs.get("token_id")
         safe_address = kwargs.get("safe_address")
         chain = kwargs.get("chain")
+        liquidity = kwargs.get("liquidity")
 
         if not all([token_id, safe_address, chain]):
             self.context.logger.error(
@@ -178,9 +179,10 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         amount1_min = 0
 
         # fetch liquidity from contract
-        liquidity = yield from self.get_liquidity_for_token(token_id, chain)
         if not liquidity:
-            return None, None, None
+            liquidity = yield from self.get_liquidity_for_token(token_id, chain)
+            if not liquidity:
+                return None, None, None
 
         # deadline is set to be 20 minutes from current time
         last_update_time = cast(

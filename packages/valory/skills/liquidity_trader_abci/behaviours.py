@@ -774,7 +774,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         if len(tokens) < 2:
-            self.context.logger.error("Insufficient tokens provided for exit action.")
+            self.context.logger.error(f"Insufficient tokens provided for exit action. Required atleast 2, provided: {tokens}")
             return None
         
         exit_pool_action = {
@@ -786,7 +786,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
 
         if exit_pool_action["dex_type"] == DexTypes.UNISWAP_V3.value:
-            exit_pool_action["token_id"] = self.current_pool.get("token_id", "")
+            exit_pool_action["token_id"] = self.current_pool.get("token_id")
+            exit_pool_action["liquidity"] = self.current_pool.get("liquidity")
 
         return exit_pool_action
 
@@ -1063,11 +1064,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "assets": action["assets"],
                 "apr": action["apr"],
             }
-            if action.get("dex_type", "") == DexTypes.UNISWAP_V3.value:
-                token_id = yield from self._get_token_id_from_receipt(
-                    self.synchronized_data.final_tx_hash, action["chain"]
+            if action.get("dex_type") == DexTypes.UNISWAP_V3.value:
+                token_id, liquidity = yield from self._get_data_from_mint_tx_receipt(
+                    self.synchronized_data.final_tx_hash, action.get("chain")
                 )
                 current_pool["token_id"] = token_id
+                current_pool["liquidity"] = liquidity
             self.current_pool = current_pool
             self.store_current_pool()
             self.context.logger.info(
@@ -1378,21 +1380,22 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash for Balancer"""
-        dex_type = action.get("dex_type", "")
-        chain = action.get("chain", "")
-        assets = action.get("assets", [])
-        pool_address = action.get("pool_address", "")
-        safe_address = self.params.safe_contract_addresses.get(
-            action.get("chain", ""), ""
-        )
+        dex_type = action.get("dex_type")
+        chain = action.get("chain")
+        assets = action.get("assets", {})
+        if not assets or len(assets) < 2:
+            self.context.logger.error(f"2 assets required, provided: {assets}")
+            return None, None, None
+        pool_address = action.get("pool_address")
+        token_id = action.get("token_id")
+        liquidity = action.get("liquidity")
+        safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
 
-        pool = self.pools.get(dex_type, None)
-        if pool is None:
+        pool = self.pools.get(dex_type)
+        if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        # Get assets balances from positions
-        safe_address = self.params.safe_contract_addresses[action["chain"]]
         exit_pool_kwargs = {}
 
         if dex_type == DexTypes.BALANCER.value: 
@@ -1405,9 +1408,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         
         if dex_type == DexTypes.UNISWAP_V3.value: 
             exit_pool_kwargs.update({
-                "token_id":action.get("token_id", ""),
+                "token_id":token_id,
                 "safe_address":safe_address,
-                "chain":chain
+                "chain":chain,
+                "liquidity": liquidity
             })
 
         if not exit_pool_kwargs:
@@ -1683,13 +1687,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return bytes.fromhex(data[2:]), tx_request["to"], from_token, amount, tool
 
-    def _get_token_id_from_receipt(
+    def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str
-    ) -> Generator[None, None, Optional[int]]:
+    ) -> Generator[None, None, Optional[Tuple[int, int]]]:
         response = yield from self.get_transaction_receipt(
             tx_hash,
             chain_id=chain,
         )
+        if not response:
+            self.context.logger.error(f"Error fetching tx receipt! Response: {response}")
+            return None, None
 
         # Define the event signature and calculate its hash
         event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
@@ -1709,22 +1716,39 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             None,
         )
 
-        if log is None:
+        if not log:
             self.context.logger.error("No logs found for IncreaseLiquidity event")
-            return None
+            return None, None
 
         # Decode indexed parameter (tokenId)
         try:
+            # Decode indexed parameter (tokenId)
             token_id_topic = log.get("topics", [])[1]
+            if not token_id_topic:
+                self.context.logger.error(f"Token ID topic is missing from log {log}")
+                return None, None
             # Convert hex to bytes and decode
             token_id_bytes = bytes.fromhex(token_id_topic[2:])
             token_id = decode(["uint256"], token_id_bytes)[0]
 
+            # Decode non-indexed parameters (liquidity, amount0, amount1) from the data field
+            data_hex = log.get("data")
+            if not data_hex:
+                self.context.logger.error(f"Data field is empty in log {log}")
+                return None, None
+            
+            data_bytes = bytes.fromhex(data_hex[2:])
+            decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
+            liquidity = decoded_data[0]
+
             self.context.logger.info(f"tokenId returned from mint function: {token_id}")
-            return token_id
+            self.context.logger.info(f"liquditiy returned from mint function: {liquidity}")
+
+            return token_id, liquidity
+        
         except Exception as e:
             self.context.logger.error(f"Error decoding token ID: {e}")
-            return None
+            return None, None
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

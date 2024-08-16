@@ -20,7 +20,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeieqgcuxmz4uxvlyb62mfsf33qy4xwa5lrij4vvcmrtcsfkng43oyq
 - valory/balancer_weighted_pool:0.1.0:bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq
-- valory/balancer_vault:0.1.0:bafybeigqub47nqivocvmoumuh246r6bzh4qdqpd2ihciyzeq32euaifi7u
+- valory/balancer_vault:0.1.0:bafybeifnnitq3463wj3rv3gmh3ff55lcnntwzvks4dgmy3kfowzvd3lski
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeihm37pvmmppu5254ho5hyd6jwygisc63mubqpqkp6fyss2mszfknu
 - valory/uniswap_v3_pool:0.1.0:bafybeidr7slxgoq4hfppjw757d7tsmmljeajdck4fuan4nimlpvcva27jy
 protocols:
@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihu2bcgjk2tqjiq2zhk3uogtfszqn4osvdt7ho3fubdpdj4jgdfjm
 - valory/abstract_round_abci:0.1.0:bafybeibovsktd3uxur45nrcomq5shcn46cgxd5idmhxbmjhg32c5abyqim
-- valory/liquidity_trader_abci:0.1.0:bafybeifcfkyim63m72nwbr5b3nqcotimfqaa7m3jmpwe5bfssj5jpvzlrm
-- valory/superagent_abci:0.1.0:bafybeigrltgb2oceoxpqdq6lnjmhsib6uvp45tcykatnrh2wttb3fq5ht4
+- valory/liquidity_trader_abci:0.1.0:bafybeievku2srq7cco773mgqbbkrhonui3q3njjtrztnzd2edm7zny7y3e
+- valory/superagent_abci:0.1.0:bafybeiee5qjh7jysx265makmcwufthlwyx6si5xsfckta42wqx6ouhplna
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
@@ -211,7 +211,7 @@ models:
         gas_price: ${int:null}
         max_fee_per_gas: ${int:5000000000}
         max_priority_fee_per_gas: ${int:150000}
-      manual_gas_limit: 1000000
+      manual_gas_limit: 950000
       balancer_vault_contract_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
       uniswap_position_manager_contract_addresses: ${str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
       chain_to_chain_key_mapping: ${str:{"ethereum":"eth","optimism":"opt","base":"bas"}}

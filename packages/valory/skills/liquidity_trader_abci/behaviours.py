@@ -29,7 +29,7 @@ from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
 from eth_abi import decode
-from eth_utils import keccak, to_hex
+from eth_utils import keccak, to_hex, to_bytes
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.erc20.contract import ERC20
@@ -72,7 +72,6 @@ from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy imp
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
-
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 SAFE_TX_GAS = 0
@@ -167,7 +166,7 @@ class LiquidityTraderBaseBehaviour(
         return cast(Params, super().params)
 
     def default_error(
-        self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage
+            self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage
     ) -> None:
         """Return a default contract interaction error message."""
         self.context.logger.error(
@@ -176,7 +175,7 @@ class LiquidityTraderBaseBehaviour(
         )
 
     def contract_interaction_error(
-        self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage
+            self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage
     ) -> None:
         """Return a contract interaction error message."""
         # contracts can only return one message, i.e., multiple levels cannot exist.
@@ -190,13 +189,13 @@ class LiquidityTraderBaseBehaviour(
         self.default_error(contract_id, contract_callable, response_msg)
 
     def contract_interact(
-        self,
-        performative: ContractApiMessage.Performative,
-        contract_address: str,
-        contract_public_id: PublicId,
-        contract_callable: str,
-        data_key: str,
-        **kwargs: Any,
+            self,
+            performative: ContractApiMessage.Performative,
+            contract_address: str,
+            contract_public_id: PublicId,
+            contract_callable: str,
+            data_key: str,
+            **kwargs: Any,
     ) -> WaitableConditionType:
         """Interact with a contract."""
         contract_id = str(contract_public_id)
@@ -279,7 +278,7 @@ class LiquidityTraderBaseBehaviour(
         return asset_balances_dict
 
     def _get_native_balance(
-        self, chain: str, account: str
+            self, chain: str, account: str
     ) -> Generator[None, None, Optional[int]]:
         """Get native balance"""
         ledger_api_response = yield from self.get_ledger_api_response(
@@ -299,7 +298,7 @@ class LiquidityTraderBaseBehaviour(
         return int(ledger_api_response.state.body["get_balance_result"])
 
     def _get_token_balance(
-        self, chain: str, account: str, asset_address: str
+            self, chain: str, account: str, asset_address: str
     ) -> Generator[None, None, Optional[int]]:
         """Get token balance"""
         balance = yield from self.contract_interact(
@@ -314,7 +313,7 @@ class LiquidityTraderBaseBehaviour(
         return balance
 
     def _get_balance(
-        self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
+            self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
     ) -> Optional[int]:
         """Get balance"""
         if not positions:
@@ -468,7 +467,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning("No pools with APR found.")
 
     def _extract_pool_info(
-        self, dex_type, chain, apr, campaign
+            self, dex_type, chain, apr, campaign
     ) -> Optional[Dict[str, Any]]:
         """Extract pool info from campaign data"""
         # TO-DO: Add support for pools with more than two tokens.
@@ -484,8 +483,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Extracting token0 and token1 with their symbols and addresses
             pool_token_items = list(pool_tokens.items())
             if len(pool_token_items) < 2 or any(
-                token.get("symbol") is None or address is None
-                for address, token in pool_token_items
+                    token.get("symbol") is None or address is None
+                    for address, token in pool_token_items
             ):
                 self.context.logger.error(
                     f"Invalid pool tokens found in campaign {pool_token_items}"
@@ -608,7 +607,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             filtered_pools[dex_type][chain].append(campaign)
 
     def get_order_of_transactions(
-        self,
+            self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Get the order of transactions to perform based on the current pool status and token balances."""
         actions = []
@@ -660,11 +659,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Ensure we have valid data before proceeding
         if (
-            not highest_apr_chain
-            or not token0
-            or not token1
-            or not token0_symbol
-            or not token1_symbol
+                not highest_apr_chain
+                or not token0
+                or not token1
+                or not token0_symbol
+                or not token1_symbol
         ):
             self.context.logger.error(
                 f"Missing data in highest_apr_pool {self.highest_apr_pool}"
@@ -703,8 +702,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     if (chain, asset_address) not in seen_tokens:
                         if asset.get("asset_type") in ["erc_20", "native"]:
                             min_balance = (
-                                self.params.min_balance_multiplier
-                                * self.params.gas_reserve.get(chain, 0)
+                                    self.params.min_balance_multiplier
+                                    * self.params.gas_reserve.get(chain, 0)
                             )
                             if asset.get("balance", 0) > min_balance:
                                 tokens.append(
@@ -755,7 +754,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         ]
 
     def _build_exit_pool_action(
-        self, tokens: List[Dict[str, Any]]
+            self, tokens: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
         """Build action for exiting the current pool."""
         if not self.current_pool:
@@ -783,7 +782,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         return exit_pool_action
 
     def _build_bridge_swap_actions(
-        self, tokens: List[Dict[str, Any]]
+            self, tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
         # TO-DO: Add logic to handle swaps when there is a balance for only one token.
@@ -801,11 +800,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         dest_chain = self.highest_apr_pool.get("chain")
 
         if (
-            not dest_token0_address
-            or not dest_token1_address
-            or not dest_token0_symbol
-            or not dest_token1_symbol
-            or not dest_chain
+                not dest_token0_address
+                or not dest_token1_address
+                or not dest_token0_symbol
+                or not dest_token1_symbol
+                or not dest_chain
         ):
             self.context.logger.error(
                 f"Incomplete data in highest APR pool {self.highest_apr_pool}"
@@ -820,12 +819,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         source_token1_symbol = tokens[1].get("token_symbol")
 
         if (
-            not source_token0_chain
-            or not source_token0_address
-            or not source_token0_symbol
-            or not source_token1_chain
-            or not source_token1_address
-            or not source_token1_symbol
+                not source_token0_chain
+                or not source_token0_address
+                or not source_token0_symbol
+                or not source_token1_chain
+                or not source_token1_address
+                or not source_token1_symbol
         ):
             self.context.logger.error(f"Incomplete data in tokens {tokens}")
             return None
@@ -976,10 +975,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # check tx status if last action was bridge and swap and the last round was not DecisionMaking or EvaluateStrategy
         if (
-            last_round_id != DecisionMakingRound.auto_round_id()
-            and last_round_id != EvaluateStrategyRound.auto_round_id()
-            and Action(actions[last_executed_action_index].get("action"))
-            == Action.BRIDGE_SWAP
+                last_round_id != DecisionMakingRound.auto_round_id()
+                and last_round_id != EvaluateStrategyRound.auto_round_id()
+                and Action(actions[last_executed_action_index].get("action"))
+                == Action.BRIDGE_SWAP
         ):
             self.context.logger.info("Checking the status of swap tx")
             decision = yield from self.get_decision_on_swap()
@@ -1026,8 +1025,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 # Add the 'from_token' if the 'from_token_symbol' key doesn't exist
                 from_token_symbol = action.get("from_token_symbol")
                 if (
-                    from_token_symbol
-                    and from_token_symbol not in current_assets[from_chain]
+                        from_token_symbol
+                        and from_token_symbol not in current_assets[from_chain]
                 ):
                     current_assets[from_chain][from_token_symbol] = action.get(
                         "from_token"
@@ -1041,9 +1040,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # If last action was Enter Pool and it was successful we update the current pool
         if (
-            last_executed_action_index is not None
-            and Action(actions[last_executed_action_index].get("action"))
-            == Action.ENTER_POOL
+                last_executed_action_index is not None
+                and Action(actions[last_executed_action_index].get("action"))
+                == Action.ENTER_POOL
         ):
             action = actions[last_executed_action_index]
             current_pool = {
@@ -1067,9 +1066,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # If last action was Exit Pool and it was successful we remove the current pool
         if (
-            last_executed_action_index is not None
-            and Action(actions[last_executed_action_index]["action"])
-            == Action.EXIT_POOL
+                last_executed_action_index is not None
+                and Action(actions[last_executed_action_index]["action"])
+                == Action.EXIT_POOL
         ):
             current_pool = {}
             self.current_pool = current_pool
@@ -1149,8 +1148,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if status == SwapStatus.DONE.value:
             # only continue if tx is fully completed
             if (
-                sub_status == SwapDoneSubStaus.COMPLETED.value
-                or sub_status == SwapDoneSubStaus.PARTIAL.value
+                    sub_status == SwapDoneSubStaus.COMPLETED.value
+                    or sub_status == SwapDoneSubStaus.PARTIAL.value
             ):
                 return Decision.CONTINUE
             # exit if it is refunded
@@ -1159,8 +1158,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # wait if it is pending
         elif status == SwapStatus.PENDING.value:
             if (
-                sub_status == SwapPendingSubStatus.WAIT_DESTINATION_TRANSACTION.value
-                or sub_status == SwapPendingSubStatus.WAIT_SOURCE_CONFIRMATIONS.value
+                    sub_status == SwapPendingSubStatus.WAIT_DESTINATION_TRANSACTION.value
+                    or sub_status == SwapPendingSubStatus.WAIT_SOURCE_CONFIRMATIONS.value
             ):
                 return Decision.WAIT
         # exit if it fails
@@ -1168,7 +1167,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Decision.EXIT
 
     def get_swap_status(
-        self, tx_hash: str
+            self, tx_hash: str
     ) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Fetch the status of tx"""
 
@@ -1207,7 +1206,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return status, sub_status
 
     def get_enter_pool_tx_hash(
-        self, positions, action
+            self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
         dex_type = action.get("dex_type")
@@ -1340,7 +1339,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_approval_tx_hash(
-        self, token_address, amount: int, spender: str, chain: str
+            self, token_address, amount: int, spender: str, chain: str
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get approve token tx hashes"""
 
@@ -1365,8 +1364,70 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "data": tx_hash,
         }
 
+    def _simulate_tx(
+            self,
+            ether_value: int,
+            safe_tx_gas: int,
+            operation: Any,
+            to_address: str,
+            data: bytes,
+            chain: str,
+            **kwargs: Any,
+    ) -> Generator[None, None, bool]:
+        """Simulate a tx"""
+
+        def get_signature(owner: str) -> bytes:
+            signatures = b''
+            # Convert address to bytes and ensure it is 32 bytes long (left-padded with zeros)
+            r_bytes = to_bytes(hexstr=owner[2:].rjust(64, '0'))
+
+            # `s` as 32 zero bytes
+            s_bytes = b'\x00' * 32
+
+            # `v` as a single byte
+            v_bytes = to_bytes(1)
+
+            # Concatenate r, s, and v to form the packed signature
+            packed_signature = r_bytes + s_bytes + v_bytes
+            signatures += packed_signature
+
+            return signatures
+
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        agent_address = self.context.agent_address
+        safe_tx = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_id=str(GnosisSafeContract.contract_id),
+            contract_callable="get_raw_safe_transaction",
+            sender_address=agent_address,
+            owners=tuple(agent_address),
+            to_address=to_address,
+            value=ether_value,
+            data=data,
+            safe_tx_gas=safe_tx_gas,
+            signatures_by_owner={
+                agent_address: get_signature(agent_address)
+            },
+            operation=operation,
+            chain_id=chain,
+        )
+
+        tx_data = safe_tx.raw_transaction.body["data"]
+        simulation_ok = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_MESSAGE,
+            contract_address=to_address,
+            contract_public_id=VaultContract.contract_id,
+            contract_callable="simulate_tx",
+            sender_address=agent_address,
+            data=tx_data,
+            data_key="data",
+            chain_id=chain,
+        )
+        return simulation_ok
+
     def get_exit_pool_tx_hash(
-        self, action
+            self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash for Balancer"""
         dex_type = action.get("dex_type")
@@ -1456,7 +1517,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_swap_tx_hash(
-        self, positions, action
+            self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get swap tx hash"""
         multi_send_txs = []
@@ -1479,11 +1540,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if (
-                not swap_tx_hash
-                or not lifi_contract_address
-                or not token_to_swap
-                or not amount
-                or not tool_name
+                    not swap_tx_hash
+                    or not lifi_contract_address
+                    or not token_to_swap
+                    or not amount
+                    or not tool_name
             ):
                 self.context.logger.error("Error fetching the swap related info")
                 return None, None, None
@@ -1545,7 +1606,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             safe_tx_hash = safe_tx_hash[2:]
             self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
-            payload_string = hash_payload_to_hex(
+            tx_params = dict(
                 safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
                 safe_tx_gas=SAFE_TX_GAS,
@@ -1554,22 +1615,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 data=bytes.fromhex(multisend_tx_hash[2:]),
                 gas_limit=self.params.manual_gas_limit,
             )
+            payload_string = hash_payload_to_hex(**tx_params)
 
             self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
-            simulation_ok = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_MESSAGE,
-                contract_address=multisend_address,
-                contract_public_id=VaultContract.contract_id,
-                contract_callable="simulate_tx",
-                sender_address=safe_address,
-                data=bytes.fromhex(multisend_tx_hash[2:]),
-                data_key="data",
-                chain_id=chain,
-            )
-
-            if simulation_ok:
-                break  # Exit loop if simulation is successful
+            is_ok = yield from self._simulate_tx(**tx_params)
+            if not is_ok:
+                self.context.logger.error("Simulation failed")
+                break
 
             if action.get("from_chain") == action.get("to_chain"):
                 # It's an exchange, add to deny_exchanges list
@@ -1587,7 +1640,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_swap_tx_info(
-        self, positions, action, blacklisted_bridges, blacklisted_exchanges
+            self, positions, action, blacklisted_bridges, blacklisted_exchanges
     ) -> Generator[None, None, Optional[Tuple[str, str, str, int, str]]]:
         """Get the quote for asset transfer from API"""
         chain_keys = self.params.chain_to_chain_key_mapping
@@ -1681,7 +1734,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return bytes.fromhex(data[2:]), tx_request.get("to"), from_token, amount, tool
 
     def _get_data_from_mint_tx_receipt(
-        self, tx_hash: str, chain: str
+            self, tx_hash: str, chain: str
     ) -> Generator[None, None, Optional[Tuple[int, int]]]:
         response = yield from self.get_transaction_receipt(
             tx_hash,

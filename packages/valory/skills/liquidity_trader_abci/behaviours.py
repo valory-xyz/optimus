@@ -1421,6 +1421,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_callable="simulate_tx",
             sender_address=agent_address,
             data=tx_data,
+            gas_limit=self.params.manual_gas_limit,
             data_key="data",
             chain_id=chain,
         )

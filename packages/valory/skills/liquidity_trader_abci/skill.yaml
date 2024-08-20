@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeihc3pmjqwxmaes777hw7ihbxa6blbcuaababyb3egbvs5ddkkium4
+  behaviours.py: bafybeifrgos74uska75yrxwxadsblkxvrzjz6qive75x44ospf5kwbqeva
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeigpdpq7jenqykgelyqp2ac7vtnev5dcdxceui4gt7skanfaagtvai
+  fsm_specification.yaml: bafybeic52qgyee5zw5bvm6ref6qdy24qpybalg6oisntvsjsnpiula3whm
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
   models.py: bafybeicpkcrdhknolqm5ke3ddxblbrchzjl25tfm2adxx3z4wvxqhpxoce
-  payloads.py: bafybeidycfzwr6kmlroo6hoodhig7k2zfe6xothchmebro4jnlyf6x22oy
+  payloads.py: bafybeig3ery6aqgiqvhgcp2mvmoilxzyrjdrgmu7gl3t47ltezimr6fmam
   pool_behaviour.py: bafybeiabwfwxrmrjfjqelzlu42i5caw32a4vd4myifdkdtwp4xllxcd4om
   pools/balancer.py: bafybeicthwnly6sv7zfqtljreeyp7ynmpyhcm7kkot4axj6xqbohaehmiy
   pools/uniswap.py: bafybeiamd5m5vtsp2pyt6tgftdabmwt6ydfn5rnxkwgfvkmibyeuo3wnza
@@ -23,8 +23,8 @@ fingerprint_ignore_patterns: []
 connections: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiho6sbfts3zk3mftrngw37d5qnlvkqtnttt3fzexmcwkeevhu4wwi
-- valory/balancer_weighted_pool:0.1.0:bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq
-- valory/balancer_vault:0.1.0:bafybeifnnitq3463wj3rv3gmh3ff55lcnntwzvks4dgmy3kfowzvd3lski
+- valory/balancer_weighted_pool:0.1.0:bafybeicuze5u7535zhbty7keqyuhm7txfp2krp7cn37buqsy2e42s5qbyy
+- valory/balancer_vault:0.1.0:bafybeictha4qwxopkikvgi3dafjalwqravi4xkbazl6dq42kehwq6rebbm
 - valory/erc20:0.1.0:bafybeiel24epwfr5nsk5xt2dfdimrzhrqchjxdeeh6wpm6nz35w6po6osa
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeihm37pvmmppu5254ho5hyd6jwygisc63mubqpqkp6fyss2mszfknu

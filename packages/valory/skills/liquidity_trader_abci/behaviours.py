@@ -1401,7 +1401,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_id=str(GnosisSafeContract.contract_id),
             contract_callable="get_raw_safe_transaction",
             sender_address=agent_address,
-            owners=tuple(agent_address),
+            owners=(agent_address,),
             to_address=to_address,
             value=ether_value,
             data=data,

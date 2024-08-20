@@ -1376,7 +1376,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, bool]:
         """Simulate a tx"""
 
-        def get_signature(owner: str) -> bytes:
+        def get_signature(owner: str) -> str:
             signatures = b''
             # Convert address to bytes and ensure it is 32 bytes long (left-padded with zeros)
             r_bytes = to_bytes(hexstr=owner[2:].rjust(64, '0'))
@@ -1391,7 +1391,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             packed_signature = r_bytes + s_bytes + v_bytes
             signatures += packed_signature
 
-            return signatures
+            return signatures.hex()
 
         safe_address = self.params.safe_contract_addresses.get(chain)
         agent_address = self.context.agent_address

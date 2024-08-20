@@ -1376,7 +1376,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, bool]:
         """Simulate a tx"""
 
-        def get_signature(owner: str) -> bytes:
+        def get_signature(owner: str) -> str:
             signatures = b''
             # Convert address to bytes and ensure it is 32 bytes long (left-padded with zeros)
             r_bytes = to_bytes(hexstr=owner[2:].rjust(64, '0'))
@@ -1391,7 +1391,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             packed_signature = r_bytes + s_bytes + v_bytes
             signatures += packed_signature
 
-            return signatures
+            return signatures.hex()
 
         safe_address = self.params.safe_contract_addresses.get(chain)
         agent_address = self.context.agent_address
@@ -1586,42 +1586,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
 
-            safe_tx_hash = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
-                contract_address=safe_address,
-                contract_public_id=GnosisSafeContract.contract_id,
-                contract_callable="get_raw_safe_transaction_hash",
-                data_key="tx_hash",
-                to_address=multisend_address,
-                value=ETHER_VALUE,
-                data=bytes.fromhex(multisend_tx_hash[2:]),
-                operation=SafeOperation.DELEGATE_CALL.value,
-                safe_tx_gas=SAFE_TX_GAS,
-                chain_id=chain,
-            )
-
-            if not safe_tx_hash:
-                return None, None, None
-
-            safe_tx_hash = safe_tx_hash[2:]
-            self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
-
             tx_params = dict(
-                safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
                 safe_tx_gas=SAFE_TX_GAS,
                 operation=SafeOperation.DELEGATE_CALL.value,
                 to_address=multisend_address,
                 data=bytes.fromhex(multisend_tx_hash[2:]),
-                gas_limit=self.params.manual_gas_limit,
+                chain=chain
             )
-            payload_string = hash_payload_to_hex(**tx_params)
-
-            self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
             is_ok = yield from self._simulate_tx(**tx_params)
-            if not is_ok:
-                self.context.logger.error("Simulation failed")
+            if is_ok:
+                self.context.logger.error("Simulation successful")
                 break
 
             if action.get("from_chain") == action.get("to_chain"):
@@ -1636,6 +1612,32 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     f"Simulation Failed! Blacklisting {tool_name} bridge"
                 )
                 blacklisted_bridges.append(tool_name)
+
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            to_address=multisend_address,
+            value=ETHER_VALUE,
+            data=bytes.fromhex(multisend_tx_hash[2:]),
+            operation=SafeOperation.DELEGATE_CALL.value,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain,
+        )
+
+        if not safe_tx_hash:
+            return None, None, None
+
+        safe_tx_hash = safe_tx_hash[2:]
+        self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
+
+        tx_params.pop("chain")
+        tx_params["safe_tx_hash"] = safe_tx_hash
+        tx_params["gas_limit"] = self.params.manual_gas_limit
+        payload_string = hash_payload_to_hex(**tx_params)
+        self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
 

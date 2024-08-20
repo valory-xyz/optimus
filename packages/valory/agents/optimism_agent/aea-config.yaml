@@ -19,8 +19,8 @@ contracts:
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeihi4cvrnf5ne7t5cxcwix3dbtfjucfjux6zn4wouebjx3ldmrmnpm
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeieqgcuxmz4uxvlyb62mfsf33qy4xwa5lrij4vvcmrtcsfkng43oyq
-- valory/balancer_weighted_pool:0.1.0:bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq
-- valory/balancer_vault:0.1.0:bafybeifnnitq3463wj3rv3gmh3ff55lcnntwzvks4dgmy3kfowzvd3lski
+- valory/balancer_weighted_pool:0.1.0:bafybeicuze5u7535zhbty7keqyuhm7txfp2krp7cn37buqsy2e42s5qbyy
+- valory/balancer_vault:0.1.0:bafybeictha4qwxopkikvgi3dafjalwqravi4xkbazl6dq42kehwq6rebbm
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeihm37pvmmppu5254ho5hyd6jwygisc63mubqpqkp6fyss2mszfknu
 - valory/uniswap_v3_pool:0.1.0:bafybeidr7slxgoq4hfppjw757d7tsmmljeajdck4fuan4nimlpvcva27jy
 protocols:
@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihu2bcgjk2tqjiq2zhk3uogtfszqn4osvdt7ho3fubdpdj4jgdfjm
 - valory/abstract_round_abci:0.1.0:bafybeibovsktd3uxur45nrcomq5shcn46cgxd5idmhxbmjhg32c5abyqim
-- valory/liquidity_trader_abci:0.1.0:bafybeievku2srq7cco773mgqbbkrhonui3q3njjtrztnzd2edm7zny7y3e
-- valory/superagent_abci:0.1.0:bafybeiee5qjh7jysx265makmcwufthlwyx6si5xsfckta42wqx6ouhplna
+- valory/liquidity_trader_abci:0.1.0:bafybeiak3pqg26sxv52wo5zgo2h6qezm7pwze445o6u34jftbnu7ddqzbu
+- valory/superagent_abci:0.1.0:bafybeifq7vlbldunbdeeinqmzup73h2c7t4aqgxqlds6df773dpc3hxg5i
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om

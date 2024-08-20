@@ -135,6 +135,7 @@ class VaultContract(Contract):
         contract_address: str,
         sender_address: str,
         data: str,
+        gas_limit: int
     ) -> JSONLike:
         """Simulate the transaction."""
         try:
@@ -143,6 +144,7 @@ class VaultContract(Contract):
                     "from": ledger_api.api.to_checksum_address(sender_address),
                     "to": ledger_api.api.to_checksum_address(contract_address),
                     "data": data,
+                    "gas": gas_limit
                 }
             )
             simulation_ok = True

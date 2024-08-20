@@ -1415,8 +1415,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         tx_data = safe_tx.raw_transaction.body["data"]
         simulation_ok = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_MESSAGE,
-            contract_address=to_address,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=safe_address,
             contract_public_id=VaultContract.contract_id,
             contract_callable="simulate_tx",
             sender_address=agent_address,

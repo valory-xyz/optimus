@@ -7,11 +7,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeifrgos74uska75yrxwxadsblkxvrzjz6qive75x44ospf5kwbqeva
+  behaviours.py: bafybeiajv7twbiviytts6gd2at2e5pw3ibd3b7op6rnel56pd4uayjp5xq
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeic52qgyee5zw5bvm6ref6qdy24qpybalg6oisntvsjsnpiula3whm
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeicpkcrdhknolqm5ke3ddxblbrchzjl25tfm2adxx3z4wvxqhpxoce
+  models.py: bafybeibzm4bnyyhwp3etes326cwte6fpxpnoon2i7p6xkrgfzwkwrcanwu
   payloads.py: bafybeig3ery6aqgiqvhgcp2mvmoilxzyrjdrgmu7gl3t47ltezimr6fmam
   pool_behaviour.py: bafybeiabwfwxrmrjfjqelzlu42i5caw32a4vd4myifdkdtwp4xllxcd4om
   pools/balancer.py: bafybeicthwnly6sv7zfqtljreeyp7ynmpyhcm7kkot4axj6xqbohaehmiy
@@ -160,6 +160,8 @@ models:
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
       uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
       chain_to_chain_key_mapping: '{"optimism":"opt","base":"bas"}'
+      waiting_period_for_retry: 5
+      max_num_of_retries: 5
     class_name: Params
   requests:
     args: {}

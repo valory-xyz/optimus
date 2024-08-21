@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
-- valory/liquidity_trader_abci:0.1.0:bafybeiak3pqg26sxv52wo5zgo2h6qezm7pwze445o6u34jftbnu7ddqzbu
+- valory/liquidity_trader_abci:0.1.0:bafybeigstrlqki2oxaxgtfdulbhnp66ow2ll75vfaz74rskvycpe2eoxem
 - valory/transaction_settlement_abci:0.1.0:bafybeihq2yenstblmaadzcjousowj5kfn5l7ns5pxweq2gcrsczfyq5wzm
 behaviours:
   main:
@@ -157,6 +157,8 @@ models:
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
       uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
       chain_to_chain_key_mapping: '{"optimism":"opt","base":"bas"}'
+      waiting_period_for_retry: 5
+      max_num_of_retries: 5
     class_name: Params
   randomness_api:
     args:

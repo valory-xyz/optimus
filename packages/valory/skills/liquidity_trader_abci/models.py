@@ -79,4 +79,5 @@ class Params(BaseParams):
         self.chain_to_chain_key_mapping = json.loads(
             self._ensure("chain_to_chain_key_mapping", kwargs, str)
         )
+        self.max_num_of_retries = self._ensure("max_num_of_retries", kwargs, int)
         super().__init__(*args, **kwargs)

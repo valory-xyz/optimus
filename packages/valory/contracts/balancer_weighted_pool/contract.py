@@ -49,7 +49,7 @@ class WeightedPoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """get pool id"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.getPoolId().call()
         return dict(pool_id="0x"+data.hex())
@@ -60,7 +60,7 @@ class WeightedPoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """get vault address"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.getVault().call()
         return dict(vault=data)

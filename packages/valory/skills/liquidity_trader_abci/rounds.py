@@ -95,15 +95,6 @@ class SynchronizedData(BaseSynchronizedData):
         return positions
 
     @property
-    def current_pool(self) -> Dict[str, Any]:
-        """Get the current pool"""
-        serialized = self.db.get("current_pool", "{}")
-        if serialized is None:
-            serialized = "{}"
-        current_pool = json.loads(serialized)
-        return current_pool
-
-    @property
     def participant_to_actions_round(self) -> DeserializedCollection:
         """Get the participants to actions rounds"""
         return self._get_deserialized("participant_to_actions_round")
@@ -118,18 +109,14 @@ class SynchronizedData(BaseSynchronizedData):
         return actions
 
     @property
-    def transaction_history(self) -> Optional[List[Dict[str, Any]]]:
-        """Get the transactions"""
-        serialized = self.db.get("transactions", "[]")
-        if serialized is None:
-            serialized = "[]"
-        transactions = json.loads(serialized)
-        return transactions
+    def last_executed_action_index(self) -> Optional[int]:
+        """Get the last executed action index"""
+        return cast(int, self.db.get("last_executed_action_index", None))
 
     @property
-    def last_action_index(self) -> Optional[int]:
-        """Get the current action index"""
-        return cast(int, self.db.get("last_action_index", -1))
+    def final_tx_hash(self) -> str:
+        """Get the verified tx hash."""
+        return cast(str, self.db.get_strict("final_tx_hash"))
 
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
@@ -140,10 +127,7 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_positions_round)
-    selection_key = (
-        get_name(SynchronizedData.positions),
-        get_name(SynchronizedData.current_pool),
-    )
+    selection_key = get_name(SynchronizedData.positions)
 
     ERROR_PAYLOAD = {}
 

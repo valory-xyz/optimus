@@ -22,26 +22,14 @@
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
-from aea_ledger_ethereum import EthereumApi, LedgerApi
+from aea_ledger_ethereum import EthereumApi
 
-PUBLIC_ID = PublicId.from_str("valory/velodrome_pool:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/uniswap_v3_pool:0.1.0")
 
-class PoolContract(Contract):
-    """The Pool contract."""
+class UniswapV3PoolContract(Contract):
+    """The Uniswap V3 Pool contract."""
 
     contract_id = PUBLIC_ID
-
-    @classmethod
-    def get_balance(
-        cls,
-        ledger_api: EthereumApi,
-        contract_address: str,
-        account: str,
-    ) -> JSONLike:
-        """get the balance of the given account."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        balance = contract_instance.functions.balanceOf(account).call()
-        return dict(balance=balance)
     
     @classmethod
     def get_pool_tokens(
@@ -49,8 +37,30 @@ class PoolContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """get the pool tokens."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()
         return dict(tokens=[token0,token1])
+    
+    @classmethod
+    def get_pool_fee(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """get the fee."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        fee = contract_instance.functions.fee().call()
+        return dict(data=fee)
+    
+    @classmethod
+    def get_tick_spacing(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """get the tick spacing."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        tick_spacing = contract_instance.functions.tickSpacing().call()
+        return dict(data=tick_spacing)

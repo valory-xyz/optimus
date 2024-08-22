@@ -49,7 +49,7 @@ BenchmarkTool = BaseBenchmarkTool
 RandomnessApi = BaseRandomnessApi
 
 MARGIN = 5
-MULTIPLIER = 10
+MULTIPLIER = 40
 
 
 class SharedState(BaseSharedState):
@@ -75,7 +75,7 @@ class SharedState(BaseSharedState):
 
         SuperAgentAbciApp.event_to_timeout[
             TransactionSettlementEvent.VALIDATE_TIMEOUT
-        ] = self.context.params.round_timeout_seconds
+        ] = self.context.params.validate_timeout
 
 
 class Params(  # pylint: disable=too-many-ancestors

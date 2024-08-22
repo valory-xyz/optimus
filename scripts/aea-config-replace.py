@@ -40,15 +40,15 @@ def main() -> None:
                 "address"
             ] = f"${{str:{os.getenv('ETHEREUM_LEDGER_RPC')}}}"
 
-        if os.getenv("ARBITRUM_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["arbitrum"][
+        if os.getenv("BASE_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["base"][
                 "address"
-            ] = f"${{str:{os.getenv('ARBITRUM_LEDGER_RPC')}}}"
+            ] = f"${{str:{os.getenv('BASE_LEDGER_RPC')}}}"
 
-        if os.getenv("BNB_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["bnb"][
+        if os.getenv("OPTIMISM_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["optimism"][
                 "address"
-            ] = f"${{str:{os.getenv('BNB_LEDGER_RPC')}}}"
+            ] = f"${{str:{os.getenv('OPTIMISM_LEDGER_RPC')}}}"
 
         # Params
         config[5]["models"]["params"]["args"]["setup"][
@@ -62,6 +62,10 @@ def main() -> None:
         config[5]["models"]["params"]["args"][
             "pool_data_api_url"
         ] = f"${{str:{os.getenv('POOL_DATA_API_URL')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "slippage_for_swap"
+        ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
 
     with open(Path("optimism_agent", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)

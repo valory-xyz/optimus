@@ -17,30 +17,26 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the transaction payloads of the LiquidityTraderAbciApp."""
+"""This package contains the implemenatation of the StrategyBehaviour interface."""
 
-from dataclasses import dataclass
-from typing import Optional
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Generator
 
-from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
-
-
-@dataclass(frozen=True)
-class GetPositionsPayload(BaseTxPayload):
-    """Represent a transaction payload for the GetPositionsRound."""
-
-    positions: Optional[str]
+from packages.valory.skills.abstract_round_abci.behaviours import BaseBehaviour
 
 
-@dataclass(frozen=True)
-class EvaluateStrategyPayload(BaseTxPayload):
-    """Represent a transaction payload for the EvaluateStrategyRound."""
+class StrategyBehaviour(BaseBehaviour, ABC):
+    """StrategyBehaviour"""
 
-    actions: Optional[str]
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize `StrategyBehaviour`."""
+        super().__init__(**kwargs)
 
+    @abstractmethod
+    def get_decision(self) -> Dict[str, str]:
+        """Get the decision on whether to enter a pool or not"""
+        pass
 
-@dataclass(frozen=True)
-class DecisionMakingPayload(BaseTxPayload):
-    """Represent a transaction payload for the DecisionMakingRound."""
-
-    content: str
+    def async_act(self) -> Generator[Any, None, None]:
+        """Async act"""
+        pass

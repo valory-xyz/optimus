@@ -80,7 +80,9 @@ class Params(BaseParams):
             self._ensure("chain_to_chain_key_mapping", kwargs, str)
         )
         self.max_num_of_retries = self._ensure("max_num_of_retries", kwargs, int)
-        self.reward_claiming_time_period = self._ensure("reward_claiming_time_period", kwargs, int)
+        self.reward_claiming_time_period = self._ensure(
+            "reward_claiming_time_period", kwargs, int
+        )
         self.merkl_distributor_contract_addresses = json.loads(
             self._ensure("merkl_distributor_contract_addresses", kwargs, str)
         )

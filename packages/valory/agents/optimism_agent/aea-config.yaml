@@ -217,3 +217,5 @@ models:
       chain_to_chain_key_mapping: ${str:{"ethereum":"eth","optimism":"opt","base":"bas"}}
       waiting_period_for_retry: ${int:5}
       max_num_of_retries: ${int:5}
+      reward_claiming_time_period: ${int:28800}
+      merkl_distributor_contract_addresses: ${str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}

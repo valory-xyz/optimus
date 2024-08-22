@@ -104,22 +104,6 @@ class SwapStatus(Enum):
     NOT_FOUND = "NOT_FOUND"
     FAILED = "FAILED"
 
-
-class SwapPendingSubStatus(Enum):
-    """SwapPendingSubStatus"""
-
-    WAIT_SOURCE_CONFIRMATIONS = "WAIT_SOURCE_CONFIRMATIONS"
-    WAIT_DESTINATION_TRANSACTION = "WAIT_DESTINATION_TRANSACTION"
-
-
-class SwapDoneSubStaus(Enum):
-    """SwapDoneSubStaus"""
-
-    COMPLETED = "COMPLETED"
-    PARTIAL = "PARTIAL"
-    REFUNDED = "REFUNDED"
-
-
 class Decision(Enum):
     """Decision"""
 
@@ -1148,20 +1132,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if status == SwapStatus.DONE.value:
             # only continue if tx is fully completed
-            if (
-                sub_status == SwapDoneSubStaus.COMPLETED.value
-                or sub_status == SwapDoneSubStaus.PARTIAL.value
-            ):
-                return Decision.CONTINUE
-            # exit if it is refunded
-            if sub_status == SwapDoneSubStaus.REFUNDED.value:
-                return Decision.EXIT
+            return Decision.CONTINUE
         # wait if it is pending
         elif status == SwapStatus.PENDING.value:
-            if (
-                sub_status == SwapPendingSubStatus.WAIT_DESTINATION_TRANSACTION.value
-                or sub_status == SwapPendingSubStatus.WAIT_SOURCE_CONFIRMATIONS.value
-            ):
                 return Decision.WAIT
         # exit if it fails
         else:

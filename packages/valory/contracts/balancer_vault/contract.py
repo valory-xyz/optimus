@@ -30,7 +30,7 @@ _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
 )
 class VaultContract(Contract):
-    """The Weighted Stable Pool contract."""
+    """The Vault contract."""
 
     contract_id = PUBLIC_ID
 

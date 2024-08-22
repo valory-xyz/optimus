@@ -1402,7 +1402,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def get_exit_pool_tx_hash(
         self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash for Balancer"""
+        """Get exit pool tx hash"""
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = action.get("assets", {})

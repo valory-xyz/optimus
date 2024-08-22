@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimism_agent:0.1.0:bafybeihsh3drm73kezdbgwavr74cpxc2hougbpvjw223oxvp3r2dce2c6m
+agent: valory/optimism_agent:0.1.0:bafybeig26ka4zyklp6ovkt3asvkdldxvpcvlofvxu7mqunybx3drndxlde
 number_of_agents: 4
 deployment:
   agent:
@@ -89,8 +89,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
-        allowed_assets: ${ALLOWED_ASSETS:str:"{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}"}
+        allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -99,6 +99,19 @@ extra:
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
+        slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
+        gas_params:
+          gas_price: ${GAS_PARAMS:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:500000}
+        balancer_vault_contract_addresses: ${BALANCER_VAULT_CONTRACT_ADDRESSES:str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
+        uniswap_position_manager_contract_addresses: ${UNISWAP_POSITION_MANAGER_CONTRACT_ADDRESSES:str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
+        chain_to_chain_key_mapping: ${CHAIN_TO_CHAIN_KEY_MAPPING:str:{"optimism":"opt","base":"bas"}}
+        waiting_period_for_retry: ${WAITING_PERIOD_FOR_RETRY:int:5}
+        max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
 1:
   models:
     benchmark_tool:
@@ -142,8 +155,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
-        allowed_assets: ${ALLOWED_ASSETS:str:"{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}"}
+        allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -152,6 +165,19 @@ extra:
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
+        slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
+        gas_params:
+          gas_price: ${GAS_PARAMS:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:500000}
+        balancer_vault_contract_addresses: ${BALANCER_VAULT_CONTRACT_ADDRESSES:str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
+        uniswap_position_manager_contract_addresses: ${UNISWAP_POSITION_MANAGER_CONTRACT_ADDRESSES:str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
+        chain_to_chain_key_mapping: ${CHAIN_TO_CHAIN_KEY_MAPPING:str:{"optimism":"opt","base":"bas"}}
+        waiting_period_for_retry: ${WAITING_PERIOD_FOR_RETRY:int:5}
+        max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
 2:
   models:
     benchmark_tool:
@@ -195,8 +221,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
-        allowed_assets: ${ALLOWED_ASSETS:str:"{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}"}
+        allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -205,6 +231,19 @@ extra:
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
+        slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
+        gas_params:
+          gas_price: ${GAS_PARAMS:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:500000}
+        balancer_vault_contract_addresses: ${BALANCER_VAULT_CONTRACT_ADDRESSES:str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
+        uniswap_position_manager_contract_addresses: ${UNISWAP_POSITION_MANAGER_CONTRACT_ADDRESSES:str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
+        chain_to_chain_key_mapping: ${CHAIN_TO_CHAIN_KEY_MAPPING:str:{"optimism":"opt","base":"bas"}}
+        waiting_period_for_retry: ${WAITING_PERIOD_FOR_RETRY:int:5}
+        max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
 3:
   models:
     benchmark_tool:
@@ -248,8 +287,8 @@ extra:
         ipfs_address: ${IPFS_ADDRESS:str:https://gateway.autonolas.tech/ipfs/}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
-        allowed_lp_pool_addresses: ${ALLOWED_LP_POOL_ADDRESSES:str:{"balancer":{"ethereum":["0x3de27EFa2F1AA663Ae5D458857e731c129069F29"],"arbitrum":["0x32dF62dc3aEd2cD6224193052Ce665DC18165841"]},"velodrome":{"optimism":["0xF4F2657AE744354bAcA871E56775e5083F7276Ab"]}}}
-        allowed_assets: ${ALLOWED_ASSETS:str:"{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","weth":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"optimism":{"usdc":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85","dai":"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"}}"}
+        allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -258,6 +297,19 @@ extra:
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
+        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
+        slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
+        gas_params:
+          gas_price: ${GAS_PARAMS:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:50000000}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:150000}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:500000}
+        balancer_vault_contract_addresses: ${BALANCER_VAULT_CONTRACT_ADDRESSES:str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
+        uniswap_position_manager_contract_addresses: ${UNISWAP_POSITION_MANAGER_CONTRACT_ADDRESSES:str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
+        chain_to_chain_key_mapping: ${CHAIN_TO_CHAIN_KEY_MAPPING:str:{"optimism":"opt","base":"bas"}}
+        waiting_period_for_retry: ${WAITING_PERIOD_FOR_RETRY:int:5}
+        max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
@@ -268,16 +320,16 @@ config:
       chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
       poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
-    arbitrum:
-      address: ${ARBITRUM_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
-      chain_id: ${ARBITRUM_LEDGER_CHAIN_ID:int:42161}
-      poa_chain: ${ARBITRUM_LEDGER_IS_POA_CHAIN:bool:false}
-      default_gas_price_strategy: ${ARBITRUM_LEDGER_PRICING:str:eip1559}
-    bnb:
-      address: ${BNB_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
-      chain_id: ${BNB_LEDGER_CHAIN_ID:int:42161}
-      poa_chain: ${BNB_LEDGER_IS_POA_CHAIN:bool:false}
-      default_gas_price_strategy: ${BNB_LEDGER_PRICING:str:eip1559}
+    base:
+      address: ${BASE_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
+      chain_id: ${BASE_LEDGER_CHAIN_ID:int:42161}
+      poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:false}
+      default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
+    optimism:
+      address: ${OPTIMISM_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
+      chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:42161}
+      poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
+      default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

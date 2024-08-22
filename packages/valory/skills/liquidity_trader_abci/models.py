@@ -20,7 +20,7 @@
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
 
 import json
-from typing import Any
+from typing import Any, List
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
@@ -48,10 +48,7 @@ class Params(BaseParams):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Init"""
-        self.allowed_lp_pool_addresses = json.loads(
-            self._ensure("allowed_lp_pool_addresses", kwargs, str)
-        )
-        self.allowed_assets = json.loads(self._ensure("allowed_assets", kwargs, str))
+        self.initial_assets = json.loads(self._ensure("initial_assets", kwargs, str))
         self.safe_contract_addresses = json.loads(
             self._ensure("safe_contract_addresses", kwargs, str)
         )
@@ -66,4 +63,21 @@ class Params(BaseParams):
         self.multisend_contract_addresses = json.loads(
             self._ensure("multisend_contract_addresses", kwargs, str)
         )
+        self.lifi_request_quote_url = self._ensure(
+            "lifi_request_quote_url", kwargs, str
+        )
+        self.lifi_check_status_url = self._ensure("lifi_check_status_url", kwargs, str)
+        self.slippage_for_swap = self._ensure("slippage_for_swap", kwargs, float)
+        self.allowed_dexs: List[str] = self._ensure("allowed_dexs", kwargs, List[str])
+        self.manual_gas_limit: int = self._ensure("manual_gas_limit", kwargs, int)
+        self.balancer_vault_contract_addresses = json.loads(
+            self._ensure("balancer_vault_contract_addresses", kwargs, str)
+        )
+        self.uniswap_position_manager_contract_addresses = json.loads(
+            self._ensure("uniswap_position_manager_contract_addresses", kwargs, str)
+        )
+        self.chain_to_chain_key_mapping = json.loads(
+            self._ensure("chain_to_chain_key_mapping", kwargs, str)
+        )
+        self.max_num_of_retries = self._ensure("max_num_of_retries", kwargs, int)
         super().__init__(*args, **kwargs)

@@ -20,17 +20,18 @@
 """This package contains round behaviours of LiquidityTraderAbciApp."""
 
 import json
+import os.path
 from abc import ABC
 from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
+from eth_abi import decode
+from eth_utils import keccak, to_bytes, to_hex
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
-from packages.valory.contracts.balancer_weighted_pool.contract import (
-    WeightedPoolContract,
-)
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -40,7 +41,6 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
-from packages.valory.contracts.velodrome_pool.contract import PoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -49,6 +49,12 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.models import Params
+from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
+    BalancerPoolBehaviour,
+)
+from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
+    UniswapPoolBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     DecisionMakingPayload,
     DecisionMakingRound,
@@ -59,6 +65,9 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     GetPositionsRound,
     LiquidityTraderAbciApp,
     SynchronizedData,
+)
+from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import (
+    SimpleStrategyBehaviour,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -72,6 +81,11 @@ ETHER_VALUE = 0
 WaitableConditionType = Generator[None, None, Any]
 
 
+class DexTypes(Enum):
+    BALANCER = "balancerPool"
+    UNISWAP_V3 = "UniswapV3"
+
+
 class Action(Enum):
     """Action"""
 
@@ -81,8 +95,50 @@ class Action(Enum):
     BRIDGE_SWAP = "BridgeAndSwap"
 
 
-class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
+class SwapStatus(Enum):
+    """SwapStatus"""
+
+    DONE = "DONE"
+    PENDING = "PENDING"
+    INVALID = "INVALID"
+    NOT_FOUND = "NOT_FOUND"
+    FAILED = "FAILED"
+
+class Decision(Enum):
+    """Decision"""
+
+    CONTINUE = "continue"
+    WAIT = "wait"
+    EXIT = "exit"
+
+
+ASSETS_FILENAME = "assets.json"
+POOL_FILENAME = "current_pool.json"
+READ_MODE = "r"
+WRITE_MODE = "w"
+
+
+class LiquidityTraderBaseBehaviour(
+    BalancerPoolBehaviour, UniswapPoolBehaviour, SimpleStrategyBehaviour, ABC
+):
     """Base behaviour for the liquidity_trader_abci skill."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize `LiquidityTraderBaseBehaviour`."""
+        super().__init__(**kwargs)
+        parent_dir = os.path.dirname(self.context.data_dir)
+        self.assets: Dict[str, Any] = {}
+        # TO-DO: this will not work if we run it as a service
+        self.assets_filepath = os.path.join(parent_dir, ASSETS_FILENAME)
+        self.current_pool: Dict[str, Any] = {}
+        self.current_pool_filepath: str = os.path.join(parent_dir, POOL_FILENAME)
+        self.pools: Dict[str, Any] = {}
+        self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
+        self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour
+        self.strategy = SimpleStrategyBehaviour
+        # Read the assets and current pool
+        self.read_current_pool()
+        self.read_assets()
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -157,169 +213,12 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
 
         return data
 
-    def _get_asset_balances(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Get asset balances"""
-        asset_balances_dict: Dict[str, list] = defaultdict(list)
-
-        if not self.params.allowed_assets:
-            self.context.logger.error("No assets provided.")
-            return None
-
-        allowed_assets = self.params.allowed_assets
-
-        for chain, assets in allowed_assets.items():
-            account = self.params.safe_contract_addresses[chain]
-
-            if account == ZERO_ADDRESS:
-                self.context.logger.error(f"No safe address set for chain {chain}")
-                continue
-
-            # Temp hack: for now we use bnb in the place of optimism
-            if chain == "optimism":
-                chain = "bnb"
-
-            for asset_name, asset_address in assets.items():
-                # Native balance
-                if asset_address == ZERO_ADDRESS:
-                    ledger_api_response = yield from self.get_ledger_api_response(
-                        performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
-                        ledger_callable="get_balance",
-                        block_identifier="latest",
-                        account=account,
-                        chain_id=chain,
-                    )
-
-                    if (
-                        ledger_api_response.performative
-                        != LedgerApiMessage.Performative.STATE
-                    ):
-                        self.context.logger.error(
-                            f"Could not calculate the balance of the safe: {ledger_api_response}"
-                        )
-                        balance = None
-                    else:
-                        balance = int(
-                            ledger_api_response.state.body["get_balance_result"]
-                        )
-
-                    asset_balances_dict[chain].append(
-                        {
-                            "asset_type": "native",
-                            "address": asset_address,
-                            "balance": balance,
-                        }
-                    )
-
-                # Token balance
-                else:
-                    balance = yield from self.contract_interact(
-                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                        contract_address=asset_address,
-                        contract_public_id=ERC20.contract_id,
-                        contract_callable="check_balance",
-                        data_key="token",
-                        account=account,
-                        chain_id=chain,
-                    )
-
-                    asset_balances_dict[chain].append(
-                        {
-                            "asset_type": "erc_20",
-                            "address": asset_address,
-                            "balance": balance,
-                        }
-                    )
-
-                self.context.logger.info(
-                    f"Balance of account {account} on {chain} chain for {asset_name}: {balance}"
-                )
-
-        return asset_balances_dict
-
-    def _get_lp_pool_balances(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Get LP pool balances"""
-        pool_balances_dict: Dict[str, list] = defaultdict(list)
-        if not self.params.allowed_lp_pool_addresses:
-            self.context.logger.error("No LP Pool addresses provided.")
-            return None
-
-        lp_pool_addresses = self.params.allowed_lp_pool_addresses
-
-        for dex_type, lp_pools in lp_pool_addresses.items():
-            for chain, pools in lp_pools.items():
-                for pool_address in pools:
-                    account = self.params.safe_contract_addresses[chain]
-                    if account == ZERO_ADDRESS:
-                        self.context.logger.error(
-                            f"No safe address set for chain {chain}"
-                        )
-                        continue
-                    if account is None:
-                        self.context.logger.error(
-                            f"No account found for chain: {chain}"
-                        )
-                        return None
-
-                    if dex_type == "balancerPool":
-                        contract_callable = "get_balance"
-                        contract_id = WeightedPoolContract.contract_id
-                    elif dex_type == "velodrome":
-                        contract_callable = "get_balance"
-                        contract_id = PoolContract.contract_id
-                    else:
-                        self.context.logger.error(f"{dex_type} not supported")
-                        return None
-
-                    # OPTIMISM NOT SUPPORTED YET
-                    if chain == "optimism":
-                        chain = "bnb"
-
-                    balance = yield from self.contract_interact(
-                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                        contract_address=pool_address,
-                        contract_public_id=contract_id,
-                        contract_callable=contract_callable,
-                        data_key="balance",
-                        account=account,
-                        chain_id=chain,
-                    )
-
-                    if balance is not None and int(balance) > 0:
-                        self.current_pool = {
-                            "chain": chain,
-                            "address": pool_address,
-                            "dex_type": dex_type,
-                            "balance": balance,
-                        }
-                        self.context.logger.info(
-                            f"Current pool updated to: {self.current_pool}"
-                        )
-
-                    self.context.logger.info(
-                        f"Balance of account {account} on {chain} chain for pool address {pool_address} in {dex_type} DEX: {balance}"
-                    )
-                    pool_balances_dict[chain].append(
-                        {
-                            "asset_type": "pool",
-                            "address": pool_address,
-                            "balance": balance,
-                        }
-                    )
-
-        return pool_balances_dict
-
     def get_positions(self) -> Generator[None, None, List[Dict[str, Any]]]:
         """Get positions"""
         asset_balances = yield from self._get_asset_balances()
-        pool_balances = yield from self._get_lp_pool_balances()
-
         all_balances = defaultdict(list)
         if asset_balances:
             for chain, assets in asset_balances.items():
-                all_balances[chain].extend(assets)
-
-        if pool_balances:
-            for chain, assets in pool_balances.items():
                 all_balances[chain].extend(assets)
 
         positions = [
@@ -328,39 +227,141 @@ class LiquidityTraderBaseBehaviour(BaseBehaviour, ABC):
 
         return positions
 
-    def _get_vault_for_pool(
-        self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Get vault for pool"""
-        vault_address = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=WeightedPoolContract.contract_id,
-            contract_callable="get_vault_address",
-            data_key="vault",
+    def _get_asset_balances(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get asset balances"""
+        asset_balances_dict: Dict[str, list] = defaultdict(list)
+
+        for chain, assets in self.assets.items():
+            account = self.params.safe_contract_addresses.get(chain)
+            if not account:
+                self.context.logger.error(f"No safe address set for chain {chain}")
+                continue
+
+            for asset_symbol, asset_address in assets.items():
+                if asset_address == ZERO_ADDRESS:
+                    balance = yield from self._get_native_balance(chain, account)
+                else:
+                    balance = yield from self._get_token_balance(
+                        chain, account, asset_address
+                    )
+
+                asset_balances_dict[chain].append(
+                    {
+                        "asset_symbol": asset_symbol,
+                        "asset_type": "native"
+                        if asset_address == ZERO_ADDRESS
+                        else "erc_20",
+                        "address": asset_address,
+                        "balance": balance,
+                    }
+                )
+
+                self.context.logger.info(
+                    f"Balance of account {account} on {chain} chain for {asset_symbol}: {balance}"
+                )
+
+        return asset_balances_dict
+
+    def _get_native_balance(
+        self, chain: str, account: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get native balance"""
+        ledger_api_response = yield from self.get_ledger_api_response(
+            performative=LedgerApiMessage.Performative.GET_STATE,
+            ledger_callable="get_balance",
+            block_identifier="latest",
+            account=account,
             chain_id=chain,
         )
 
-        if not vault_address:
+        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
             self.context.logger.error(
-                f"Could not fetch the vault address for pool {pool_address}"
+                f"Could not calculate the balance of the safe: {ledger_api_response}"
             )
             return None
 
-        self.context.logger.info(
-            f"Vault contract address for balancer pool {pool_address}: {vault_address}"
-        )
-        return vault_address
+        return int(ledger_api_response.state.body["get_balance_result"])
 
-    def _get_balance(self, chain: str, token: str) -> Optional[int]:
+    def _get_token_balance(
+        self, chain: str, account: str, asset_address: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get token balance"""
+        balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=asset_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="check_balance",
+            data_key="token",
+            account=account,
+            chain_id=chain,
+        )
+        return balance
+
+    def _get_balance(
+        self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
+    ) -> Optional[int]:
         """Get balance"""
-        positions = self.synchronized_data.positions
+        if not positions:
+            positions = self.synchronized_data.positions
+
         for position in positions:
-            if position["chain"] == chain:
-                for asset in position["assets"]:
-                    if asset["address"] == token:
-                        return asset["balance"]
-        return 0
+            if position.get("chain") == chain:
+                for asset in position.get("assets", {}):
+                    if asset.get("address") == token:
+                        return asset.get("balance")
+
+        return None
+
+    def _store_data(self, data: Any, attribute: str, filepath: str) -> None:
+        """Generic method to store data as JSON."""
+        if data is None:
+            self.context.logger.warning(f"No {attribute} to store.")
+            return
+
+        try:
+            with open(filepath, WRITE_MODE) as file:
+                try:
+                    json.dump(data, file)
+                    return
+                except (IOError, OSError):
+                    err = f"Error writing to file {filepath!r}!"
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            err = f"Error writing to file {filepath!r}: {str(e)}"
+
+        self.context.logger.error(err)
+
+    def _read_data(self, attribute: str, filepath: str) -> None:
+        """Generic method to read data from a JSON file"""
+        try:
+            with open(filepath, READ_MODE) as file:
+                try:
+                    data = json.load(file)
+                    setattr(self, attribute, data)
+                    return
+                except (json.JSONDecodeError, TypeError) as e:
+                    err = f"Error decoding {attribute} from {filepath!r}: {str(e)}"
+                    setattr(self, attribute, {})
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            err = f"Error reading from file {filepath!r}: {str(e)}"
+            setattr(self, attribute, {})
+
+        self.context.logger.error(err)
+
+    def store_assets(self) -> None:
+        """Store the list of assets as JSON."""
+        self._store_data(self.assets, "assets", self.assets_filepath)
+
+    def read_assets(self) -> None:
+        """Read the list of assets as JSON."""
+        self._read_data("assets", self.assets_filepath)
+
+    def store_current_pool(self) -> None:
+        """Store the current pool as JSON."""
+        self._store_data(self.current_pool, "current_pool", self.current_pool_filepath)
+
+    def read_current_pool(self) -> None:
+        """Read the current pool as JSON."""
+        self._read_data("current_pool", self.current_pool_filepath)
 
 
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
@@ -372,6 +373,10 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            if not self.assets:
+                self.assets = self.params.initial_assets
+                self.store_assets()
+
             positions = yield from self.get_positions()
             self.context.logger.info(f"POSITIONS: {positions}")
             sender = self.context.agent_address
@@ -379,16 +384,8 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             if positions is None:
                 positions = GetPositionsRound.ERROR_PAYLOAD
 
-            if self.current_pool is None:
-                self.current_pool = GetPositionsRound.ERROR_PAYLOAD
-
             serialized_positions = json.dumps(positions, sort_keys=True)
-            serialized_current_pool = json.dumps(self.current_pool, sort_keys=True)
-            payload = GetPositionsPayload(
-                sender=sender,
-                positions=serialized_positions,
-                current_pool=serialized_current_pool,
-            )
+            payload = GetPositionsPayload(sender=sender, positions=serialized_positions)
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -407,11 +404,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.get_highest_apr_pool()
-            invest_in_pool = self.get_decision()
             actions = []
-            if invest_in_pool:
-                actions = self.get_order_of_transactions()
-                self.context.logger.info(f"Actions: {actions}")
+            if self.highest_apr_pool is not None:
+                invest_in_pool = self.strategy.get_decision(
+                    self, pool_apr=self.highest_apr_pool.get("apr")
+                )
+                if invest_in_pool:
+                    actions = yield from self.get_order_of_transactions()
+                    self.context.logger.info(f"Actions: {actions}")
 
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
@@ -423,59 +423,104 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def get_highest_apr_pool(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def get_highest_apr_pool(self) -> Generator[None, None, None]:
         """Get highest APR pool"""
         filtered_pools = yield from self._get_filtered_pools()
 
         if not filtered_pools:
-            self.context.logger.error("No pool data retrieved.")
+            self.context.logger.error("No pool data retrieved")
             return None
 
         highest_apr = -float("inf")
+        self.highest_apr_pool = None
 
         for dex_type, chains in filtered_pools.items():
             for chain, campaigns in chains.items():
                 for campaign in campaigns:
                     apr = campaign.get("apr", 0)
-                    self.context.logger.info(f"{apr} APR")
                     if apr is None:
                         apr = 0
                     if apr > highest_apr:
                         highest_apr = apr
-                        try:
-                            pool_tokens = list(
-                                campaign["typeInfo"]["poolTokens"].keys()
-                            )
-                        except Exception:
-                            self.context.logger.error(
-                                f"No underlying token addresses present in the pool {campaign}"
-                            )
-                            continue
-                        self.highest_apr_pool = {
-                            "dex_type": dex_type,
-                            "chain": chain,
-                            "apr": apr,
-                            "token0": pool_tokens[0],
-                            "token1": pool_tokens[1],
-                        }
+                        self.highest_apr_pool = self._extract_pool_info(
+                            dex_type, chain, apr, campaign
+                        )
 
         if self.highest_apr_pool:
             self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")
         else:
             self.context.logger.warning("No pools with APR found.")
 
+    def _extract_pool_info(
+        self, dex_type, chain, apr, campaign
+    ) -> Optional[Dict[str, Any]]:
+        """Extract pool info from campaign data"""
+        # TO-DO: Add support for pools with more than two tokens.
+        pool_token_dict = {}
+        pool_address = campaign.get("mainParameter")
+        if not pool_address:
+            self.context.logger.error(f"Missing pool address in campaign {campaign}")
+            return None
+
+        if dex_type == DexTypes.BALANCER.value:
+            type_info = campaign.get("typeInfo", {})
+            pool_tokens = type_info.get("poolTokens", {})
+            # Extracting token0 and token1 with their symbols and addresses
+            pool_token_items = list(pool_tokens.items())
+            if len(pool_token_items) < 2 or any(
+                token.get("symbol") is None or address is None
+                for address, token in pool_token_items
+            ):
+                self.context.logger.error(
+                    f"Invalid pool tokens found in campaign {pool_token_items}"
+                )
+                return None
+
+            pool_token_dict = {
+                "token0": pool_token_items[0][0],
+                "token1": pool_token_items[1][0],
+                "token0_symbol": pool_token_items[0][1].get("symbol"),
+                "token1_symbol": pool_token_items[1][1].get("symbol"),
+            }
+
+        if dex_type == DexTypes.UNISWAP_V3.value:
+            pool_info = campaign.get("campaignParameters", {})
+            if not pool_info:
+                self.context.logger.error(
+                    f"No pool tokens info present in campaign {campaign}"
+                )
+                return None
+            # Construct the dict for Uniswap V3 tokens with their symbols and addresses
+            pool_token_dict = {
+                "token0": pool_info.get("token0"),
+                "token1": pool_info.get("token1"),
+                "token0_symbol": pool_info.get("symbolToken0"),
+                "token1_symbol": pool_info.get("symbolToken1"),
+                "pool_fee": pool_info.get("poolFee"),
+            }
+
+        if any(v is None for v in pool_token_dict.values()):
+            self.context.logger.error(
+                f"Invalid pool tokens found in campaign {pool_token_dict}"
+            )
+            return None
+
+        pool_data = {
+            "dex_type": dex_type,
+            "chain": chain,
+            "apr": apr,
+            "pool_address": pool_address,
+        }
+        pool_data.update(pool_token_dict)
+        return pool_data
+
     def _get_filtered_pools(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get filtered pools"""
-        allowed_lp_pools = self.params.allowed_lp_pool_addresses
-        allowed_dexs = list(allowed_lp_pools.keys())
-        allowed_assets = self.params.allowed_assets
 
-        filtered_pools: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
+        filtered_pools = defaultdict(lambda: defaultdict(list))
 
         for chain, chain_id in self.params.allowed_chains.items():
-            # api_url = self.params.pool_data_api_url.format(chain_id=chain_id, type=1)  # noqa: E800
+            # api_url = self.params.pool_data_api_url.format(chain_id=chain_id)  # noqa: E800
             api_url = self.params.pool_data_api_url
             self.context.logger.info(f"{api_url}")
 
@@ -487,8 +532,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if response.status_code != 200:
                 self.context.logger.error(
-                    f"Could not retrieve data from url {api_url} "
-                    f"Received status code {response.status_code}."
+                    f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
                 )
                 return None
 
@@ -502,271 +546,373 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-            try:
-                campaigns = data[str(chain_id)]
-            except Exception:
+            campaigns = data.get(str(chain_id))
+            if not campaigns:
                 self.context.logger.error(
                     f"No info available for chainId {chain_id} in response"
                 )
                 continue
 
-            for campaign_list in campaigns.values():
-                for campaign in campaign_list.values():
-                    dex_type = campaign.get("type", None)
-                    if dex_type in allowed_dexs:
-                        if dex_type == "balancerPool":
-                            pool_tokens = list(
-                                campaign["typeInfo"]["poolTokens"].keys()
-                            )
-                            token0 = pool_tokens[0]
-                            token1 = pool_tokens[1]
-                        if dex_type == "velodrome":
-                            token0 = campaign["typeInfo"].get("token0", None)
-                            token1 = campaign["typeInfo"].get("token1", None)
-                        if (
-                            token0 in allowed_assets[chain].values()
-                            and token1 in allowed_assets[chain].values()
-                        ):
-                            if (
-                                campaign.get("mainParameter", None)
-                                in allowed_lp_pools[dex_type][chain]
-                            ):
-                                filtered_pools[dex_type][chain].append(campaign)
-                                self.context.logger.info(
-                                    f"Added campaign for {chain} on {dex_type}: {campaign}"
-                                )
+            self._filter_campaigns(chain, campaigns, filtered_pools)
 
-        self.context.logger.info(f"Filtered pools: {filtered_pools}")
         return filtered_pools
 
-    def get_decision(self) -> bool:
-        """Get decision"""
-        # Step 1: Check highest APR exceeds threshold
-        if self.highest_apr_pool:
-            exceeds_apr_threshold = (
-                self.highest_apr_pool["apr"] > self.params.apr_threshold
-            )
-            if not exceeds_apr_threshold:
-                self.context.logger.info(
-                    f"apr of pool {self.highest_apr_pool['apr']} does not exceed apr_threshold {self.params.apr_threshold}"
+    def _filter_campaigns(self, chain, campaigns, filtered_pools):
+        """Filter campaigns based on allowed assets and LP pools"""
+        allowed_dexs = self.params.allowed_dexs
+
+        for campaign_list in campaigns.values():
+            for campaign in campaign_list.values():
+                dex_type = (
+                    campaign.get("type")
+                    if campaign.get("type")
+                    else campaign.get("ammName")
                 )
-                return False
+                if not dex_type:
+                    self.context.logger.warning("Dex type not specified in campaign")
+                    continue
 
-        # Step 2: Check round interval
-        is_round_threshold_exceeded = self._check_round_threshold_exceeded()
-        if not is_round_threshold_exceeded:
-            self.context.logger.info("round threshold not exceeded")
-            return False
+                campaign_apr = campaign.get("apr")
+                if not campaign_apr:
+                    self.context.logger.warning("APR not specified for campaign")
+                    continue
 
-        return True
-
-    def _check_round_threshold_exceeded(self) -> bool:
-        """Check round threshold exceeded"""
-        transaction_history = self.synchronized_data.transaction_history
-
-        if not transaction_history:
-            return True
-
-        latest_transaction = transaction_history[-1]
-        return (
-            latest_transaction["round"] + self.params.round_threshold
-            >= self.round_sequence
-        )
+                # The pool apr should be greater than the current pool apr
+                if dex_type in allowed_dexs:
+                    if campaign_apr > self.current_pool.get("apr", 0.0):
+                        campaign_pool_address = campaign.get("mainParameter")
+                        if not campaign_pool_address:
+                            self.context.logger.warning(
+                                "No pool address found for campaign"
+                            )
+                            continue
+                        current_pool_address = self.current_pool.get("address")
+                        # The pool should not be the current pool
+                        if campaign_pool_address != current_pool_address:
+                            filtered_pools[dex_type][chain].append(campaign)
 
     def get_order_of_transactions(
         self,
-    ) -> Optional[List[Dict[str, Any]]]:
-        """Get order of transactions"""
-        # Step 1- check if any liquidity exists, otherwise check for funds in safe
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Get the order of transactions to perform based on the current pool status and token balances."""
         actions = []
-        tokens = {}
 
-        if not self.synchronized_data.current_pool:
-            # If there is no current pool, then check for which tokens we have balance
-            tokens = self._get_token_addresses_over_min_balance()
-            if not tokens:
+        if not self.current_pool:
+            tokens = self._get_tokens_over_min_balance()
+            if not tokens or len(tokens) < 2:
                 self.context.logger.error(
-                    "No tokens in safe with over minimum balance to enter a pool"
+                    f"Minimun 2 tokens required in safe with over minimum balance to enter a pool, provided: {tokens}"
                 )
                 return None
         else:
             # If there is current pool, then get the lp pool token addresses
-            # getPoolTokens is getting reverted
-            # tokens = yield from self._get_exit_pool_tokens()
-            tokens = [
-                {"chain": "bnb", "token": "0x4200000000000000000000000000000000000006"},
-                {"chain": "bnb", "token": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527"},
-            ]
-            if not tokens:
+            tokens = yield from self._get_exit_pool_tokens()  # noqa: E800
+            if not tokens or len(tokens) < 2:
+                self.context.logger.error(
+                    f"2 tokens required to exit pool, provided: {tokens}"
+                )
+
+            exit_pool_action = self._build_exit_pool_action(tokens)
+            if not exit_pool_action:
+                self.context.logger.error("Error building exit pool action")
                 return None
 
-            action = {
-                "action": Action.EXIT_POOL.value,
-                "dex_type": self.synchronized_data.current_pool["dex_type"],
-                "chain": self.synchronized_data.current_pool["chain"],
-                "assets": [tokens[0][0], tokens[1][0]],
-                "pool_address": self.synchronized_data.current_pool["address"],
-            }
+            actions.append(exit_pool_action)
 
-        self.context.logger.info(f"TOKEN ADDRESSES: {tokens}")
+        bridge_swap_actions = self._build_bridge_swap_actions(tokens)
+        if bridge_swap_actions:
+            actions.extend(bridge_swap_actions)
 
-        # Step 2- build bridge and swap tokens action
-        # ASSUMPTION : TOKENS ARE AVAILABLE ON OTHER CHAIN AND THE DESTINATION TOKENS ON DIFFERENT CHAIN
-        action = {
-            "action": Action.BRIDGE_SWAP.value,
-            "source_chain": tokens[0]["chain"],
-            "destination_chain": self.highest_apr_pool["chain"],
-            "from_token": tokens[0]["token"],
-            "to_token": self.highest_apr_pool["token0"],
-        }
-        actions.append(action)
+        enter_pool_action = self._build_enter_pool_action()
+        if not enter_pool_action:
+            self.context.logger.error("Error building enter pool action")
+            return None
+        actions.append(enter_pool_action)
 
-        action = {
-            "action": Action.BRIDGE_SWAP.value,
-            "source_chain": tokens[1]["chain"],
-            "destination_chain": self.highest_apr_pool["chain"],
-            "from_token": tokens[1]["token"],
-            "to_token": self.highest_apr_pool["token1"],
-        }
-        actions.append(action)
-
-        # Step 3: get the info on which pool to enter
-        action = {
-            "action": Action.ENTER_POOL.value,
-            "dex_type": self.highest_apr_pool["dex_type"],
-            "chain": self.highest_apr_pool["chain"],
-            "assets": [
-                self.highest_apr_pool["token0"],
-                self.highest_apr_pool["token1"],
-            ],
-        }
-        actions.append(action)
-
-        self.context.logger.info(f"Actions {actions}")
+        self.context.logger.info(f"Actions: {actions}")
         return actions
 
-    def _get_token_addresses_over_min_balance(self) -> Optional[List[Any]]:
+    def _get_tokens_over_min_balance(self) -> Optional[List[Any]]:
+        # ASSUMPTION : WE HAVE FUNDS FOR ATLEAST 2 TOKENS
         """Get tokens over min balance"""
         tokens = []
+        highest_apr_chain = self.highest_apr_pool.get("chain")
+        token0 = self.highest_apr_pool.get("token0")
+        token1 = self.highest_apr_pool.get("token1")
+        token0_symbol = self.highest_apr_pool.get("token0")
+        token1_symbol = self.highest_apr_pool.get("token1")
 
-        # ASSUMPTION : WE HAVE BALANCE FOR EXACTLY 2 TOKENS
-        for position in self.synchronized_data.positions:
-            for asset in position["assets"]:
-                if asset["asset_type"] in ["erc_20", "native"]:
-                    min_balance = (
-                        self.params.min_balance_multiplier
-                        * self.params.gas_reserve[position["chain"]]
-                    )
-                    if asset["balance"] > min_balance:
-                        tokens.append(
-                            {"chain": position["chain"], "token": asset["address"]}
-                        )
+        # Ensure we have valid data before proceeding
+        if (
+            not highest_apr_chain
+            or not token0
+            or not token1
+            or not token0_symbol
+            or not token1_symbol
+        ):
+            self.context.logger.error(
+                f"Missing data in highest_apr_pool {self.highest_apr_pool}"
+            )
+            return None
+
+        # TO-DO: set the value for gas_reserve for each chain
+        # min_balance_threshold = (
+        #     self.params.min_balance_multiplier
+        #     * self.params.gas_reserve.get(highest_apr_chain, 0)
+        # )
+        min_balance_threshold = 0
+
+        # Check balances for token0 and token1 on the highest APR pool chain
+        for token, symbol in [(token0, token0_symbol), (token1, token1_symbol)]:
+            balance = self._get_balance(highest_apr_chain, token)
+            if balance and balance > min_balance_threshold:
+                tokens.append(
+                    {"chain": highest_apr_chain, "token": token, "token_symbol": symbol}
+                )
+
+        # We needs funds for atleast 2 tokens
+        if len(tokens) == 2:
+            return tokens
+
+        seen_tokens = set((token.get("chain"), token.get("token")) for token in tokens)
+
+        # If we still need more tokens, check all positions
+        if len(tokens) < 2:
+            for position in self.synchronized_data.positions:
+                chain = position.get("chain")
+                for asset in position.get("assets", {}):
+                    asset_address = asset.get("address")
+                    if not chain or not asset_address:
+                        continue
+                    if (chain, asset_address) not in seen_tokens:
+                        if asset.get("asset_type") in ["erc_20", "native"]:
+                            min_balance = (
+                                self.params.min_balance_multiplier
+                                * self.params.gas_reserve.get(chain, 0)
+                            )
+                            if asset.get("balance", 0) > min_balance:
+                                tokens.append(
+                                    {
+                                        "chain": position.get("chain"),
+                                        "token": asset.get("address"),
+                                        "token_symbol": asset.get("asset_symbol"),
+                                    }
+                                )
+                                if len(tokens) == 2:
+                                    return tokens
 
         return tokens
 
     def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
-        dex_type = self.synchronized_data.current_pool["dex_type"]
-        pool_address = self.synchronized_data.current_pool["address"]
-        chain = self.synchronized_data.current_pool["chain"]
 
-        if dex_type == "balancerPool":
-            # Get poolId from balancer weighted pool contract
-            pool_id = yield from self._get_pool_id(pool_address)
-            if not pool_id:
-                return None
+        if not self.current_pool:
+            self.context.logger.error("No pool present")
+            return None
 
-            # Get vault contract address from balancer weighted pool contract
-            vault_address = yield from self._get_vault_for_pool(pool_address, chain)
-            if not vault_address:
-                return None
+        dex_type = self.current_pool.get("dex_type")
+        pool_address = self.current_pool.get("address")
+        chain = self.current_pool.get("chain")
 
-            # Get pool tokens from balancer vault contract
-            tokens = yield from self._get_balancer_pool_tokens(pool_id, vault_address)
+        pool = self.pools.get(dex_type)
+        if not pool:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
+            return None
 
-        if dex_type == "velodrome":
-            # Get pool tokens from velodrome pool contract
-            tokens = yield from self._get_velodrome_pool_tokens()
-
-        if not tokens:
+        # Get tokens from balancer weighted pool contract
+        tokens = yield from pool._get_tokens(self, pool_address, chain)
+        if not tokens or any(v is None for v in tokens.items()):
+            self.context.logger.error(f"Missing information in tokens: {tokens}")
             return None
 
         return [
-            {"chain": chain, "token": tokens[0]},
-            {"chain": chain, "token": tokens[1]},
+            {
+                "chain": chain,
+                "token": tokens.get("token0"),
+                "token_symbol": self._get_asset_symbol(chain, tokens.get("token0")),
+            },
+            {
+                "chain": chain,
+                "token": tokens.get("token1"),
+                "token_symbol": self._get_asset_symbol(chain, tokens.get("token1")),
+            },
         ]
 
-    def _get_pool_id(self, pool_address: str) -> Generator[None, None, Optional[str]]:
-        """Get pool ids"""
-        pool_id = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=WeightedPoolContract.contract_id,
-            contract_callable="get_pool_id",
-            data_key="pool_id",
-            chain_id=self.synchronized_data.current_pool["chain"],
-        )
+    def _build_exit_pool_action(
+        self, tokens: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """Build action for exiting the current pool."""
+        if not self.current_pool:
+            self.context.logger.error("No pool present")
+            return None
 
-        if not pool_id:
+        if len(tokens) < 2:
             self.context.logger.error(
-                f"Could not fetch the pool id for pool {pool_address}"
+                f"Insufficient tokens provided for exit action. Required atleast 2, provided: {tokens}"
             )
             return None
 
-        self.context.logger.info(f"PoolId for balancer pool {pool_address}: {pool_id}")
-        return pool_id
+        exit_pool_action = {
+            "action": Action.EXIT_POOL.value,
+            "dex_type": self.current_pool.get("dex_type"),
+            "chain": self.current_pool.get("chain"),
+            "assets": [tokens[0].get("token"), tokens[1].get("token")],
+            "pool_address": self.current_pool.get("address"),
+        }
 
-    def _get_balancer_pool_tokens(
-        self, pool_id: str, vault_address: str
-    ) -> Generator[None, None, Optional[List[str]]]:
-        """Get balancer pool tokens"""
-        pool_tokens = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=vault_address,
-            contract_public_id=VaultContract.contract_id,
-            contract_callable="get_pool_tokens",
-            data_key="tokens",
-            pool_id=pool_id,
-        )
+        if exit_pool_action["dex_type"] == DexTypes.UNISWAP_V3.value:
+            exit_pool_action["token_id"] = self.current_pool.get("token_id")
+            exit_pool_action["liquidity"] = self.current_pool.get("liquidity")
 
-        if not pool_tokens:
+        return exit_pool_action
+
+    def _build_bridge_swap_actions(
+        self, tokens: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Build bridge and swap actions for the given tokens."""
+        # TO-DO: Add logic to handle swaps when there is a balance for only one token.
+        if not self.highest_apr_pool:
+            self.context.logger.error("No pool present.")
+            return None
+
+        bridge_swap_actions = []
+
+        # Get the highest APR pool's tokens
+        dest_token0_address = self.highest_apr_pool.get("token0")
+        dest_token1_address = self.highest_apr_pool.get("token1")
+        dest_token0_symbol = self.highest_apr_pool.get("token0_symbol")
+        dest_token1_symbol = self.highest_apr_pool.get("token1_symbol")
+        dest_chain = self.highest_apr_pool.get("chain")
+
+        if (
+            not dest_token0_address
+            or not dest_token1_address
+            or not dest_token0_symbol
+            or not dest_token1_symbol
+            or not dest_chain
+        ):
             self.context.logger.error(
-                f"Could not fetch tokens for balancer pool id {pool_id}"
+                f"Incomplete data in highest APR pool {self.highest_apr_pool}"
             )
             return None
 
-        self.context.logger.info(
-            f"Tokens for balancer poolId {pool_id} : {pool_tokens}"
-        )
-        return pool_tokens
+        source_token0_chain = tokens[0].get("chain")
+        source_token0_address = tokens[0].get("token")
+        source_token0_symbol = tokens[0].get("token_symbol")
+        source_token1_chain = tokens[1].get("chain")
+        source_token1_address = tokens[1].get("token")
+        source_token1_symbol = tokens[1].get("token_symbol")
 
-    def _get_velodrome_pool_tokens(
-        self, pool_address: str
-    ) -> Generator[None, None, Optional[List[str]]]:
-        """Get velodrome pool tokens"""
-        pool_tokens = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=PoolContract.contract_id,
-            contract_callable="get_pool_tokens",
-            data_key="tokens",
-        )
-
-        if not pool_tokens:
-            self.context.logger.error(
-                f"Could not fetch tokens for velodrome pool {pool_address}"
-            )
+        if (
+            not source_token0_chain
+            or not source_token0_address
+            or not source_token0_symbol
+            or not source_token1_chain
+            or not source_token1_address
+            or not source_token1_symbol
+        ):
+            self.context.logger.error(f"Incomplete data in tokens {tokens}")
             return None
 
-        self.context.logger.error(
-            f"Tokens for velodrome pool {pool_address} : {pool_tokens}"
-        )
-        return pool_tokens
+        # If either of the token to swap and destination token match, we need to check which token don't match and build the bridge swap action based on this assessment.
+        if source_token0_chain == dest_chain or source_token1_chain == dest_chain:
+            if source_token0_address not in [dest_token0_address, dest_token1_address]:
+                # for example :- from_tokens = [usdc, xdai], to_tokens = [xdai, weth], then the pair to be created is [usdc, weth]
+                to_token = (
+                    dest_token1_address
+                    if source_token1_address == dest_token0_address
+                    else dest_token0_address
+                )
+                to_token_symbol = (
+                    dest_token0_symbol
+                    if to_token == dest_token0_address
+                    else dest_token1_symbol
+                )
 
-    def _get_pool_address(
-        self, dex_type: str, chain: str, token0: str, token1: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Get pool address"""
+                bridge_swap_action = {
+                    "action": Action.BRIDGE_SWAP.value,
+                    "from_chain": source_token0_chain,
+                    "to_chain": dest_chain,
+                    "from_token": source_token0_address,
+                    "from_token_symbol": source_token0_symbol,
+                    "to_token": to_token,
+                    "to_token_symbol": to_token_symbol,
+                }
+                bridge_swap_actions.append(bridge_swap_action)
+
+            if source_token1_address not in [dest_token0_address, dest_token1_address]:
+                to_token = (
+                    dest_token0_address
+                    if source_token0_address == dest_token1_address
+                    else dest_token1_address
+                )
+                to_token_symbol = (
+                    dest_token0_symbol
+                    if to_token == dest_token0_address
+                    else dest_token1_symbol
+                )
+
+                bridge_swap_action = {
+                    "action": Action.BRIDGE_SWAP.value,
+                    "from_chain": source_token1_chain,
+                    "to_chain": dest_chain,
+                    "from_token": source_token1_address,
+                    "from_token_symbol": source_token1_symbol,
+                    "to_token": to_token,
+                    "to_token_symbol": to_token_symbol,
+                }
+                bridge_swap_actions.append(bridge_swap_action)
+        else:
+            bridge_swap_action = {
+                "action": Action.BRIDGE_SWAP.value,
+                "from_chain": source_token0_chain,
+                "to_chain": dest_chain,
+                "from_token": source_token0_address,
+                "from_token_symbol": source_token0_symbol,
+                "to_token": dest_token0_address,
+                "to_token_symbol": dest_token0_symbol,
+            }
+            bridge_swap_actions.append(bridge_swap_action)
+
+            bridge_swap_action = {
+                "action": Action.BRIDGE_SWAP.value,
+                "from_chain": source_token1_chain,
+                "to_chain": dest_chain,
+                "from_token": source_token1_address,
+                "from_token_symbol": source_token1_symbol,
+                "to_token": dest_token1_address,
+                "to_token_symbol": dest_token1_symbol,
+            }
+            bridge_swap_actions.append(bridge_swap_action)
+
+        return bridge_swap_actions
+
+    def _build_enter_pool_action(self) -> Dict[str, Any]:
+        """Build action for entering the pool with the highest APR."""
+        if not self.highest_apr_pool:
+            self.context.logger.error("No pool present.")
+            return None
+
+        return {
+            "action": Action.ENTER_POOL.value,
+            "dex_type": self.highest_apr_pool.get("dex_type"),
+            "chain": self.highest_apr_pool.get("chain"),
+            "assets": [
+                self.highest_apr_pool.get("token0"),
+                self.highest_apr_pool.get("token1"),
+            ],
+            "pool_address": self.highest_apr_pool.get("pool_address"),
+            "apr": self.highest_apr_pool.get("apr"),
+        }
+
+    def _get_asset_symbol(self, chain: str, address: str) -> Optional[str]:
+        positions = self.synchronized_data.positions
+        for position in positions:
+            if position.get("chain") == chain:
+                for asset in position.get("assets", {}):
+                    if asset.get("address") == address:
+                        return asset.get("asset_symbol")
+
         return None
 
 
@@ -780,6 +926,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
             next_event, updates = yield from self.get_next_event()
+
             payload = DecisionMakingPayload(
                 sender=sender,
                 content=json.dumps(
@@ -795,40 +942,148 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""
-        actions = self.synchronized_data.actions
 
+        actions = self.synchronized_data.actions
         # If there are no actions, we return
         if not actions:
             self.context.logger.info("No actions to prepare")
             return Event.DONE.value, {}
 
-        positions = self.synchronized_data.positions
+        last_executed_action_index = self.synchronized_data.last_executed_action_index
+        current_action_index = (
+            0 if last_executed_action_index is None else last_executed_action_index + 1
+        )
 
-        # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
         last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
             -1
         ].round_id
 
+        # check tx status if last action was bridge and swap and the last round was not DecisionMaking or EvaluateStrategy
+        if (
+            last_round_id != DecisionMakingRound.auto_round_id()
+            and last_round_id != EvaluateStrategyRound.auto_round_id()
+            and Action(actions[last_executed_action_index].get("action"))
+            == Action.BRIDGE_SWAP
+        ):
+            self.context.logger.info("Checking the status of swap tx")
+            decision = yield from self.get_decision_on_swap()
+            self.context.logger.info(f"Action to take {decision}")
+
+            # If tx is pending then we wait until it gets confirmed or refunded
+            if decision == Decision.WAIT:
+                self.context.logger.info("Waiting for tx to get executed")
+                while decision == Decision.WAIT:
+                    # Wait for given time between each status check
+                    yield from self.sleep(self.params.waiting_period_for_retry)
+                    self.context.logger.info("Checking the status of swap tx again")
+                    decision = (
+                        yield from self.get_decision_on_swap()
+                    )  # Check the status again
+                    self.context.logger.info(f"Action to take {decision}")
+
+            if decision == Decision.EXIT:
+                self.context.logger.error("Swap failed")
+                return Event.DONE.value, {}
+
+            # if swap was successful we update the list of assets
+            if decision == Decision.CONTINUE:
+                action = actions[last_executed_action_index]
+                self.read_assets()
+                current_assets = self.assets
+                # add asset if it doesn't exist
+                if not current_assets:
+                    current_assets = self.params.initial_assets
+
+                to_chain = action.get("to_chain")
+                if to_chain not in current_assets:
+                    current_assets[to_chain] = {}
+
+                # Add the 'to_token' if the 'to_token_symbol' key doesn't exist
+                to_token_symbol = action.get("to_token_symbol")
+                if to_token_symbol and to_token_symbol not in current_assets[to_chain]:
+                    current_assets[to_chain][to_token_symbol] = action.get("to_token")
+
+                from_chain = action.get("from_chain")
+                if from_chain not in current_assets:
+                    current_assets[from_chain] = {}
+
+                # Add the 'from_token' if the 'from_token_symbol' key doesn't exist
+                from_token_symbol = action.get("from_token_symbol")
+                if (
+                    from_token_symbol
+                    and from_token_symbol not in current_assets[from_chain]
+                ):
+                    current_assets[from_chain][from_token_symbol] = action.get(
+                        "from_token"
+                    )
+
+                self.assets = current_assets
+                self.store_assets()
+                self.context.logger.info(
+                    f"Bridge and swap was sucessful! Updating list of assets to {self.assets}"
+                )
+
+        # If last action was Enter Pool and it was successful we update the current pool
+        if (
+            last_executed_action_index is not None
+            and Action(actions[last_executed_action_index].get("action"))
+            == Action.ENTER_POOL
+        ):
+            action = actions[last_executed_action_index]
+            current_pool = {
+                "chain": action["chain"],
+                "address": action["pool_address"],
+                "dex_type": action["dex_type"],
+                "assets": action["assets"],
+                "apr": action["apr"],
+            }
+            if action.get("dex_type") == DexTypes.UNISWAP_V3.value:
+                token_id, liquidity = yield from self._get_data_from_mint_tx_receipt(
+                    self.synchronized_data.final_tx_hash, action.get("chain")
+                )
+                current_pool["token_id"] = token_id
+                current_pool["liquidity"] = liquidity
+            self.current_pool = current_pool
+            self.store_current_pool()
+            self.context.logger.info(
+                f"Enter pool was successful! Updating current pool to {current_pool}"
+            )
+
+        # If last action was Exit Pool and it was successful we remove the current pool
+        if (
+            last_executed_action_index is not None
+            and Action(actions[last_executed_action_index]["action"])
+            == Action.EXIT_POOL
+        ):
+            current_pool = {}
+            self.current_pool = current_pool
+            self.store_current_pool()
+            self.context.logger.info("Exit was successful! Removing current pool")
+
+        # if all actions have been executed we exit DecisionMaking
+        if current_action_index >= len(self.synchronized_data.actions):
+            self.context.logger.info("All actions have been executed")
+            return Event.DONE.value, {}
+
+        positions = self.synchronized_data.positions
+
+        # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
         if last_round_id != EvaluateStrategyRound.auto_round_id():
             positions = yield from self.get_positions()
 
-        if self.synchronized_data.last_action_index == len(
-            self.synchronized_data.actions
-        ):
-            return Event.DONE.value, {}
-
-        current_action_index = self.synchronized_data.last_action_index + 1
-
         # Prepare the next action
-        next_action = Action(actions[current_action_index]["action"])
+        next_action = Action(actions[current_action_index].get("action"))
+        self.context.logger.info(f"ACTION TO BE PERFORMED: {next_action}")
         next_action_details = self.synchronized_data.actions[current_action_index]
+
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
             )
+
         elif next_action == Action.EXIT_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_exit_pool_tx_hash(
-                positions, next_action_details
+                next_action_details
             )
 
         elif next_action == Action.BRIDGE_SWAP:
@@ -850,128 +1105,170 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "chain_id": chain_id,
             "safe_contract_address": safe_address,
             "positions": positions,
-            "last_action_index": current_action_index,
+            # TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
+            "last_executed_action_index": current_action_index,
         }
+
+    def get_decision_on_swap(self) -> Generator[None, None, str]:
+        """Get decision on swap"""
+        # TO-DO: Add logic to handle other statuses as well. Specifically:
+        # If a transaction fails, wait for it to be refunded.
+        # If the transaction is still not confirmed and the round times out, implement logic to continue checking the status.
+
+        try:
+            tx_hash = self.synchronized_data.final_tx_hash
+            self.context.logger.error(f"final tx hash {tx_hash}")
+        except Exception:
+            self.context.logger.error("No tx-hash found")
+            return Decision.EXIT
+
+        status, sub_status = yield from self.get_swap_status(tx_hash)
+        if status is None or sub_status is None:
+            return Decision.EXIT
+
+        self.context.logger.info(
+            f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}"
+        )
+
+        if status == SwapStatus.DONE.value:
+            # only continue if tx is fully completed
+            return Decision.CONTINUE
+        # wait if it is pending
+        elif status == SwapStatus.PENDING.value:
+                return Decision.WAIT
+        # exit if it fails
+        else:
+            return Decision.EXIT
+
+    def get_swap_status(
+        self, tx_hash: str
+    ) -> Generator[None, None, Optional[Tuple[str, str]]]:
+        """Fetch the status of tx"""
+
+        url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
+        self.context.logger.info(f"checking status from endpoint {url}")
+
+        response = yield from self.get_http_response(
+            method="GET",
+            url=url,
+            headers={"accept": "application/json"},
+        )
+
+        if response.status_code != 200:
+            self.context.logger.error(
+                f"Received status code {response.status_code} from url {url}."
+                f"Message {response.body}"
+            )
+            return None, None
+
+        try:
+            tx_status = json.loads(response.body)
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from api, "
+                f"the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None, None
+
+        status = tx_status.get("status")
+        sub_status = tx_status.get("substatus")
+
+        if not status and sub_status:
+            self.context.logger.error("No status or sub_status found in response")
+            return None, None
+
+        return status, sub_status
 
     def get_enter_pool_tx_hash(
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
-        if not action:
+        dex_type = action.get("dex_type")
+        chain = action.get("chain")
+        assets = action.get("assets", {})
+        if not assets or len(assets) < 2:
+            self.context.logger.error(f"2 assets required, provided: {assets}")
+            return None, None, None
+        pool_address = action.get("pool_address")
+        pool_fee = action.get("pool_fee")
+        safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
+
+        pool = self.pools.get(dex_type)
+        if not pool:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        dex_type = action["dex_type"]
-
-        if dex_type == "balancerPool":
-            (
-                tx_hash,
-                chain_id,
-                safe_address,
-            ) = yield from self.get_enter_pool_balancer_tx_hash(positions, action)
-            return tx_hash, chain_id, safe_address
-
-        if dex_type == "velodrome":
-            (
-                tx_hash,
-                chain_id,
-                safe_address,
-            ) = yield from self.get_enter_pool_velodrome_tx_hash(positions)
-            return tx_hash, chain_id, safe_address
-
-        self.context.logger.error(f"Unknown type of dex: {dex_type}")
-        return None, None, None
-
-    def get_enter_pool_balancer_tx_hash(
-        self, positions, action
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash for Balancer"""
-
-        if not action:
-            return None, None, None
-
-        chain = action["chain"]
-        if chain == "optimism":
-            chain = "bnb"
-
-        # Hardcoded 50WETH_50OLAS pool
-        pool_address = "0x5BB3E58887264B667f915130fD04bbB56116C278"
-        pool_id = "0x5bb3e58887264b667f915130fd04bbb56116c27800020000000000000000012a"  # getPoolId()
-
-        # Get vault contract address from balancer weighted pool contract
-        vault_address = yield from self._get_vault_for_pool(pool_address, chain)
-        if not vault_address:
-            return None, None, None
-
+        # Fetch the amount of tokens to send
         max_amounts_in = [
-            self._get_balance(chain, action["assets"][0]),
-            self._get_balance(chain, action["assets"][1]),
+            self._get_balance(chain, assets[0], positions),
+            self._get_balance(chain, assets[1], positions),
         ]
+        if any(amount == 0 or amount is None for amount in max_amounts_in):
+            self.context.logger.error("Insufficient balance for entering pool")
+            return None, None, None
+
+        tx_hash, contract_address = yield from pool.enter(
+            self,
+            pool_address=pool_address,
+            safe_address=safe_address,
+            assets=assets,
+            chain=chain,
+            max_amounts_in=max_amounts_in,
+            pool_fee=pool_fee,
+        )
+        if not tx_hash or not contract_address:
+            return None, None, None
 
         multi_send_txs = []
+        value = 0
+        if not assets[0] == ZERO_ADDRESS:
+            # Approve asset 0
+            token0_approval_tx_payload = yield from self.get_approval_tx_hash(
+                token_address=assets[0],
+                amount=max_amounts_in[0],
+                spender=contract_address,
+                chain=chain,
+            )
 
-        # Approve asset 0
-        approval_tx_hash_0 = yield from self.get_approval_tx_hash(
-            token_address=action["assets"][0],
-            amount=max_amounts_in[0],
-            spender=vault_address,
-            chain=chain,
-        )
-        multi_send_txs.append(approval_tx_hash_0)
+            if not token0_approval_tx_payload:
+                self.context.logger.error("Error preparing approval tx payload")
+                return None, None, None
 
-        # Approve asset 1
-        approval_tx_hash_1 = yield from self.get_approval_tx_hash(
-            token_address=action["assets"][0],
-            amount=max_amounts_in[1],
-            spender=vault_address,
-            chain=chain,
-        )
-        multi_send_txs.append(approval_tx_hash_1)
+            multi_send_txs.append(token0_approval_tx_payload)
+        else:
+            value = max_amounts_in[0]
 
-        # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
-        join_kind = 1  # EXACT_TOKENS_IN_FOR_BPT_OUT
+        if not assets[1] == ZERO_ADDRESS:
+            # Approve asset 1
+            token1_approval_tx_payload = yield from self.get_approval_tx_hash(
+                token_address=assets[1],
+                amount=max_amounts_in[1],
+                spender=contract_address,
+                chain=chain,
+            )
+            if not token1_approval_tx_payload:
+                self.context.logger.error("Error preparing approval tx payload")
+                return None, None, None
 
-        # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
-        from_internal_balance = ZERO_ADDRESS in action["assets"]
-
-        safe_address = self.params.safe_contract_addresses[action["chain"]]
-
-        tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=vault_address,
-            contract_public_id=VaultContract.contract_id,
-            contract_callable="join_pool",
-            data_key="tx_hash",
-            pool_id=pool_id,
-            sender=safe_address,
-            recipient=safe_address,
-            assets=action["assets"],
-            max_amounts_in=max_amounts_in,
-            join_kind=join_kind,
-            from_internal_balance=from_internal_balance,
-            chain_id=chain,
-        )
-
-        if not tx_hash:
-            return None, None, None
+            multi_send_txs.append(token1_approval_tx_payload)
+        else:
+            value = max_amounts_in[1]
 
         multi_send_txs.append(
             {
                 "operation": MultiSendOperation.CALL,
-                "to": vault_address,
-                "value": 0,
+                "to": contract_address,
+                "value": value,
                 "data": tx_hash,
             }
         )
 
         # Get the transaction from the multisend contract
-
-        multisend_address = self.params.multisend_contract_addresses[
-            chain if chain != "bnb" else "optimism"
-        ]
+        multisend_address = self.params.multisend_contract_addresses[chain]
 
         multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
-            contract_address=self.synchronized_data.safe_contract_address,
+            contract_address=multisend_address,
             contract_public_id=MultiSendContract.contract_id,
             contract_callable="get_tx_data",
             data_key="data",
@@ -1008,6 +1305,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             operation=SafeOperation.DELEGATE_CALL.value,
             to_address=multisend_address,
             data=bytes.fromhex(multisend_tx_hash[2:]),
+            gas_limit=self.params.manual_gas_limit,
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
@@ -1016,7 +1314,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_approval_tx_hash(
         self, token_address, amount: int, spender: str, chain: str
-    ) -> Generator[None, None, Dict]:
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get approve token tx hashes"""
 
         tx_hash = yield from self.contract_interact(
@@ -1030,6 +1328,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
 
+        if not tx_hash:
+            return {}
+
         return {
             "operation": MultiSendOperation.CALL,
             "to": token_address,
@@ -1037,98 +1338,117 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "data": tx_hash,
         }
 
-    def get_enter_pool_velodrome_tx_hash(
-        self, positions
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash for Balancer"""
-        pass
+    def _simulate_tx(
+        self,
+        ether_value: int,
+        safe_tx_gas: int,
+        operation: Any,
+        to_address: str,
+        data: bytes,
+        chain: str,
+        **kwargs: Any,
+    ) -> Generator[None, None, bool]:
+        """Simulate a tx"""
 
-    def get_exit_pool_tx_hash(
-        self, positions, action
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash"""
-        if not self.synchronized_data.actions:
-            return None, None, None
+        def get_signature(owner: str) -> str:
+            signatures = b""
+            # Convert address to bytes and ensure it is 32 bytes long (left-padded with zeros)
+            r_bytes = to_bytes(hexstr=owner[2:].rjust(64, "0"))
 
-        dex_type = action["dex_type"]
+            # `s` as 32 zero bytes
+            s_bytes = b"\x00" * 32
 
-        if dex_type == "balancerPool":
-            (
-                tx_hash,
-                chain_id,
-                safe_address,
-            ) = yield from self.get_exit_pool_balancer_tx_hash(positions, action)
-            return tx_hash, chain_id, safe_address
+            # `v` as a single byte
+            v_bytes = to_bytes(1)
 
-        if dex_type == "velodrome":
-            (
-                tx_hash,
-                chain_id,
-                safe_address,
-            ) = yield from self.get_exit_pool_velodrome_tx_hash(positions, action)
-            return tx_hash, chain_id, safe_address
+            # Concatenate r, s, and v to form the packed signature
+            packed_signature = r_bytes + s_bytes + v_bytes
+            signatures += packed_signature
 
-        self.context.logger.error(f"Unknown type of dex: {dex_type}")
-        return None, None, None
+            return signatures.hex()
 
-    def get_exit_pool_balancer_tx_hash(
-        self, positions, action
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash for Balancer"""
-
-        if not action:
-            return None, None, None
-
-        chain = action["chain"]
-        if chain == "optimism":
-            chain = "bnb"
-
-        # Hardcoded 50WETH_50OLAS pool
-        pool_address = "0x5BB3E58887264B667f915130fD04bbB56116C278"
-        pool_id = "0x5bb3e58887264b667f915130fd04bbb56116c27800020000000000000000012a"  # getPoolId()
-
-        # Get vault contract address from balancer weighted pool contract
-        vault_address = yield from self._get_vault_for_pool(pool_address, chain)
-        if not vault_address:
-            return None, None, None
-
-        # queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
-        min_amounts_out = [0, 0]
-
-        # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
-        exit_kind = 1  # EXACT_BPT_IN_FOR_TOKENS_OUT
-
-        # fromInternalBalance - True if you receiving tokens as internal token balances. False if receiving as ERC20
-        to_internal_balance = ZERO_ADDRESS in action["assets"]
-
-        # Get assets balances from positions
-        if chain == "bnb":
-            chain = "optimism"
-        safe_address = self.params.safe_contract_addresses[action["chain"]]
-
-        if chain == "bnb":
-            chain = "optimism"
-        # bpt amount to send
-        bpt_amount_in = self._get_balance(chain, action["pool_address"])
-
-        tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=vault_address,
-            contract_public_id=VaultContract.contract_id,
-            contract_callable="exit_pool",
-            data_key="tx_hash",
-            pool_id=pool_id,
-            sender=safe_address,
-            recipient=safe_address,
-            assets=action["assets"],
-            min_amounts_out=min_amounts_out,
-            exit_kind=exit_kind,
-            bpt_amount_in=bpt_amount_in,
-            to_internal_balance=to_internal_balance,
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        agent_address = self.context.agent_address
+        safe_tx = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_id=str(GnosisSafeContract.contract_id),
+            contract_callable="get_raw_safe_transaction",
+            sender_address=agent_address,
+            owners=(agent_address,),
+            to_address=to_address,
+            value=ether_value,
+            data=data,
+            safe_tx_gas=safe_tx_gas,
+            signatures_by_owner={agent_address: get_signature(agent_address)},
+            operation=operation,
             chain_id=chain,
         )
 
-        if not tx_hash:
+        tx_data = safe_tx.raw_transaction.body["data"]
+        simulation_ok = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=safe_address,
+            contract_public_id=VaultContract.contract_id,
+            contract_callable="simulate_tx",
+            sender_address=agent_address,
+            data=tx_data,
+            gas_limit=self.params.manual_gas_limit,
+            data_key="data",
+            chain_id=chain,
+        )
+        return simulation_ok
+
+    def get_exit_pool_tx_hash(
+        self, action
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Get enter pool tx hash for Balancer"""
+        dex_type = action.get("dex_type")
+        chain = action.get("chain")
+        assets = action.get("assets", {})
+        if not assets or len(assets) < 2:
+            self.context.logger.error(f"2 assets required, provided: {assets}")
+            return None, None, None
+        pool_address = action.get("pool_address")
+        token_id = action.get("token_id")
+        liquidity = action.get("liquidity")
+        safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
+
+        pool = self.pools.get(dex_type)
+        if not pool:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
+            return None, None, None
+
+        exit_pool_kwargs = {}
+
+        if dex_type == DexTypes.BALANCER.value:
+            exit_pool_kwargs.update(
+                {
+                    "safe_address": safe_address,
+                    "assets": assets,
+                    "pool_address": pool_address,
+                    "chain": chain,
+                }
+            )
+
+        if dex_type == DexTypes.UNISWAP_V3.value:
+            exit_pool_kwargs.update(
+                {
+                    "token_id": token_id,
+                    "safe_address": safe_address,
+                    "chain": chain,
+                    "liquidity": liquidity,
+                }
+            )
+
+        if not exit_pool_kwargs:
+            self.context.logger.error("Could not find kwargs for exit pool")
+            return None, None, None
+
+        tx_hash, contract_address, is_multisend = yield from pool.exit(
+            self, **exit_pool_kwargs
+        )
+        if not tx_hash or not contract_address:
             return None, None, None
 
         safe_tx_hash = yield from self.contract_interact(
@@ -1137,9 +1457,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=GnosisSafeContract.contract_id,
             contract_callable="get_raw_safe_transaction_hash",
             data_key="tx_hash",
-            to_address=vault_address,
+            to_address=contract_address,
             value=ETHER_VALUE,
             data=tx_hash,
+            operation=SafeOperation.DELEGATE_CALL.value
+            if is_multisend
+            else SafeOperation.CALL.value,
             safe_tx_gas=SAFE_TX_GAS,
             chain_id=chain,
         )
@@ -1151,25 +1474,333 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ETHER_VALUE, SAFE_TX_GAS, vault_address, tx_hash
+            safe_tx_hash=safe_tx_hash,
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value
+            if is_multisend
+            else SafeOperation.CALL.value,
+            to_address=contract_address,
+            data=tx_hash,
+            gas_limit=self.params.manual_gas_limit,
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
 
-    def get_exit_pool_velodrome_tx_hash(
-        self, positions
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
-        """Get enter pool tx hash for Balancer"""
-        pass
-
     def get_swap_tx_hash(
-        self, positions
+        self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get swap tx hash"""
-        # Call li.fi API
-        pass
+        multi_send_txs = []
+        chain = action.get("from_chain")
+        blacklisted_bridges = []
+        blacklisted_exchanges = []
+        multisend_tx_hash = None
+        safe_address = self.params.safe_contract_addresses[chain]
+
+        max_retry_count = self.params.max_num_of_retries
+        retry_count = 0
+
+        while True:
+            # Get swap tx
+            (
+                swap_tx_hash,
+                lifi_contract_address,
+                token_to_swap,
+                amount,
+                tool_name,
+                error
+            ) = yield from self.get_swap_tx_info(
+                positions, action, blacklisted_bridges, blacklisted_exchanges
+            )
+
+            if error:
+                #1002 stands for NoQuoteError 
+                #Reference: https://github.com/lifinance/types/blob/main/src/errors.ts
+                if error.get('code') == 1002:
+                    #Retry after some time if quote not found
+                    if retry_count < max_retry_count:
+                        retry_count += 1
+                        self.context.logger.warning(f"Error: {error.get('message')}. Retrying {retry_count}/{max_retry_count}")
+                        yield from self.sleep(self.params.waiting_period_for_retry) # wait for given time before retrying
+                        continue
+                    else:
+                        self.context.logger.error("Max retry count reached. Exiting.")
+                        return None, None, None
+                else:
+                        self.context.logger.error(f"Failed with code: {error.get('code')}, message: {error.get('message')}")
+                        return None, None, None
+
+            if (
+                not swap_tx_hash
+                or not lifi_contract_address
+                or not token_to_swap
+                or not amount
+                or not tool_name
+                ):
+                self.context.logger.error("Error fetching the swap related info")
+                return None, None, None
+
+            #If quote found, then build multisend tx
+            if not token_to_swap == ZERO_ADDRESS:
+                approval_tx_payload = yield from self.get_approval_tx_hash(
+                    token_address=token_to_swap,
+                    amount=amount,
+                    spender=lifi_contract_address,
+                    chain=chain,
+                )
+                if not approval_tx_payload:
+                    self.context.logger.error("Error preparing approval tx payload")
+                    return None, None, None
+
+                multi_send_txs.append(approval_tx_payload)
+
+            multi_send_txs.append(
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": lifi_contract_address,
+                    "value": 0 if token_to_swap != ZERO_ADDRESS else amount,
+                    "data": swap_tx_hash,
+                }
+            )
+
+            # Get the transaction from the multisend contract
+            multisend_address = self.params.multisend_contract_addresses[chain]
+
+            multisend_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+                contract_address=multisend_address,
+                contract_public_id=MultiSendContract.contract_id,
+                contract_callable="get_tx_data",
+                data_key="data",
+                multi_send_txs=multi_send_txs,
+                chain_id=chain,
+            )
+
+            self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
+
+            tx_params = dict(
+                ether_value=ETHER_VALUE,
+                safe_tx_gas=SAFE_TX_GAS,
+                operation=SafeOperation.DELEGATE_CALL.value,
+                to_address=multisend_address,
+                data=bytes.fromhex(multisend_tx_hash[2:]),
+                chain=chain,
+            )
+
+            is_ok = yield from self._simulate_tx(**tx_params)
+
+            if is_ok:
+                self.context.logger.error("Simulation successful")
+                break
+
+            if action.get("from_chain") == action.get("to_chain"):
+                # It's an exchange, add to deny_exchanges list
+                self.context.logger.info(
+                    f"Simulation Failed! Blacklisting {tool_name} exchange"
+                )
+                blacklisted_exchanges.append(tool_name)
+            else:
+                # It's a bridge, add to blacklisted_bridges list
+                self.context.logger.info(
+                    f"Simulation Failed! Blacklisting {tool_name} bridge"
+                )
+                blacklisted_bridges.append(tool_name)
+
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            to_address=multisend_address,
+            value=ETHER_VALUE,
+            data=bytes.fromhex(multisend_tx_hash[2:]),
+            operation=SafeOperation.DELEGATE_CALL.value,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain,
+        )
+
+        if not safe_tx_hash:
+            return None, None, None
+
+        safe_tx_hash = safe_tx_hash[2:]
+        self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
+
+        tx_params.pop("chain")
+        tx_params["safe_tx_hash"] = safe_tx_hash
+        tx_params["gas_limit"] = self.params.manual_gas_limit
+        payload_string = hash_payload_to_hex(**tx_params)
+        self.context.logger.info(f"Tx hash payload string is {payload_string}")
+
+        return payload_string, chain, safe_address
+
+    def get_swap_tx_info(
+        self, positions, action, blacklisted_bridges, blacklisted_exchanges
+    ) -> Generator[None, None, Optional[Tuple[str, str, str, int, str, Dict[str, Any]]]]:
+        """Get the quote for asset transfer from API"""
+        chain_keys = self.params.chain_to_chain_key_mapping
+
+        from_chain = chain_keys.get(action.get("from_chain"))
+        to_chain = chain_keys.get(action.get("to_chain"))
+        from_token = action.get("from_token")
+        to_token = action.get("to_token")
+
+        from_address = self.params.safe_contract_addresses.get(action.get("from_chain"))
+
+        if not from_address:
+            self.context.logger.error(
+                f"Could not find safe address for chain {from_chain}"
+            )
+            return None, None, None, None, None, None
+
+        to_address = self.params.safe_contract_addresses.get(action.get("to_chain"))
+        if not to_address:
+            self.context.logger.error(
+                f"Could not find safe address for chain {to_chain}"
+            )
+            return None, None, None, None, None, None
+
+        # TO-DO: Add logic to check if the amount is greater than the minimum required amount for a swap. Currently, we haven't set any such limit.
+        amount = self._get_balance(
+            action.get("from_chain"), action.get("from_token"), positions
+        )
+
+        if not amount or amount == 0:
+            self.context.logger.error(
+                f"Invalid amount for token {from_token} on chain {from_chain}"
+            )
+            return None, None, None, None, None, None
+
+        # TO-DO: add logic to dynamically adjust the value of slippage
+        slippage = self.params.slippage_for_swap
+
+        params = {
+            "fromChain": from_chain,
+            "toChain": to_chain,
+            "fromToken": from_token,
+            "toToken": to_token,
+            "fromAddress": from_address,
+            "toAddress": to_address,
+            "fromAmount": amount,
+            "slippage": slippage,
+        }
+
+        if blacklisted_bridges:
+            params["denyBridges"] = ",".join(blacklisted_bridges)
+
+        if blacklisted_exchanges:
+            params["denyExchanges"] = ",".join(blacklisted_exchanges)
+
+        base_url = self.params.lifi_request_quote_url
+        url = f"{base_url}?{urlencode(params)}"
+        self.context.logger.info(f"URL :- {url}")
+
+        # TO-DO: Add logic to handle scenarios when a route is not available for a swap.
+        response = yield from self.get_http_response(
+            method="GET",
+            url=url,
+            headers={"accept": "application/json"},
+        )
+
+        if response.status_code != 200:
+            response = json.loads(response.body)
+            error = {}
+            error['code'] = response.get('code')
+            error['message'] = response.get('message')
+            tool = None
+            return None, None, None, None, tool, error
+
+        try:
+            quote = json.loads(response.body)
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from api, "
+                f"the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None, None, None, None, None
+
+        tool = quote.get("tool")
+        self.context.logger.info(f"Tool(Bridge/Exchange) being used: {tool}")
+
+        tx_request = quote.get("transactionRequest", {})
+        self.context.logger.info(f"transaction data from api {tx_request}")
+
+        data = tx_request.get("data")
+        if not tx_request or not data or not tool:
+            self.context.logger.error(f"Missing data in quote: {quote}")
+            return None, None, None, None, None
+
+        return bytes.fromhex(data[2:]), tx_request.get("to"), from_token, amount, tool, None
+
+    def _get_data_from_mint_tx_receipt(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, Optional[Tuple[int, int]]]:
+        response = yield from self.get_transaction_receipt(
+            tx_hash,
+            chain_id=chain,
+        )
+        if not response:
+            self.context.logger.error(
+                f"Error fetching tx receipt! Response: {response}"
+            )
+            return None, None
+
+        # Define the event signature and calculate its hash
+        event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
+        event_signature_hash = keccak(text=event_signature)
+        event_signature_hex = to_hex(event_signature_hash)[2:]
+
+        # Extract logs from the response
+        logs = response.get("logs", [])
+
+        # Find the log that matches the IncreaseLiquidity event
+        log = next(
+            (
+                log
+                for log in logs
+                if log.get("topics", [])[0][2:] == event_signature_hex
+            ),
+            None,
+        )
+
+        if not log:
+            self.context.logger.error("No logs found for IncreaseLiquidity event")
+            return None, None
+
+        # Decode indexed parameter (tokenId)
+        try:
+            # Decode indexed parameter (tokenId)
+            token_id_topic = log.get("topics", [])[1]
+            if not token_id_topic:
+                self.context.logger.error(f"Token ID topic is missing from log {log}")
+                return None, None
+            # Convert hex to bytes and decode
+            token_id_bytes = bytes.fromhex(token_id_topic[2:])
+            token_id = decode(["uint256"], token_id_bytes)[0]
+
+            # Decode non-indexed parameters (liquidity, amount0, amount1) from the data field
+            data_hex = log.get("data")
+            if not data_hex:
+                self.context.logger.error(f"Data field is empty in log {log}")
+                return None, None
+
+            data_bytes = bytes.fromhex(data_hex[2:])
+            decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
+            liquidity = decoded_data[0]
+
+            self.context.logger.info(f"tokenId returned from mint function: {token_id}")
+            self.context.logger.info(
+                f"liquditiy returned from mint function: {liquidity}"
+            )
+
+            return token_id, liquidity
+
+        except Exception as e:
+            self.context.logger.error(f"Error decoding token ID: {e}")
+            return None, None
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

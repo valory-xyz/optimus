@@ -117,6 +117,11 @@ class SynchronizedData(BaseSynchronizedData):
     def final_tx_hash(self) -> str:
         """Get the verified tx hash."""
         return cast(str, self.db.get_strict("final_tx_hash"))
+    
+    @property
+    def last_reward_claimed_timestamp(self) -> Optional[int]:
+        """Get the last reward claimed timestamp."""
+        return cast(int, self.db.get("last_reward_claimed_timestamp", None))
 
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
@@ -226,7 +231,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound,
     }
     event_to_timeout: EventToTimeout = {}
-    cross_period_persisted_keys: FrozenSet[str] = frozenset()
+    cross_period_persisted_keys: FrozenSet[str] = frozenset(get_name(SynchronizedData.last_reward_claimed_timestamp))
     db_pre_conditions: Dict[AppState, Set[str]] = {
         GetPositionsRound: set(),
         DecisionMakingRound: set(),

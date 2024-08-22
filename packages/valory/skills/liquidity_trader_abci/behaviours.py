@@ -41,6 +41,7 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
+from packages.valory.contracts.merkl_distributor.contract import DistributorContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -48,7 +49,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.models import Params
+from packages.valory.skills.liquidity_trader_abci.models import Params, SharedState
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
     BalancerPoolBehaviour,
 )
@@ -89,7 +90,7 @@ class DexTypes(Enum):
 class Action(Enum):
     """Action"""
 
-    # Kept the values as Round name, so that in DecisionMaking we can match tx_submitter with action name(which is round name) and decide the next action
+    CLAIM_REWARDS = "ClaimRewards"
     EXIT_POOL = "ExitPool"
     ENTER_POOL = "EnterPool"
     BRIDGE_SWAP = "BridgeAndSwap"
@@ -412,6 +413,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if invest_in_pool:
                     actions = yield from self.get_order_of_transactions()
                     self.context.logger.info(f"Actions: {actions}")
+
+                current_timestamp = cast(
+                    SharedState, self.context.state
+                ).round_sequence.last_round_transition_timestamp.timestamp()
+                
+                # Check if rewards can be claimed. Rewards can be claimed if either:
+                # 1. No rewards have been claimed yet (last_reward_claimed_timestamp is None), or
+                # 2. The current timestamp exceeds the allowed reward claiming time period since the last claim.
+                claim_rewards = (
+                    True if self.synchronized_data.last_reward_claimed_timestamp is None 
+                    else current_timestamp >= self.synchronized_data.last_reward_claimed_timestamp + self.params.reward_claiming_time_period
+                )
+                if claim_rewards: 
+                    #check current reward
+                    allowed_chains = self.params.allowed_chains
+                    if not allowed_chains:
+                        self.context.logger.warning("No chains found")
+                        return None
+                    for chain, chain_id in allowed_chains.items():
+                        safe_address = self.params.safe_contract_addresses.get(chain)
+                        rewards = yield from self.get_rewards(chain_id, safe_address)
+                        if not rewards:
+                            self.context.logger.warning(f"No rewards to claim for user address {safe_address} on chain {chain}")
+                            continue
+                        action = self.build_claim_reward_action(rewards, chain)                       
+                        if action:
+                            actions.append(action)
 
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
@@ -915,6 +943,58 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return None
 
+    def get_rewards(self, chain_id: int, user_address: str) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        base_url = "https://api.merkl.xyz/v3/userRewards"
+        params = {
+            "user": user_address,
+            "chainId": chain_id,
+            "proof": True
+        }
+        api_url = f"{base_url}?{urlencode(params)}"
+        response = yield from self.get_http_response(
+            method="GET",
+            url=api_url,
+            headers={"accept": "application/json"},
+        )
+
+        if response.status_code != 200:
+            self.context.logger.error(
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
+            )
+            return None
+
+        try:
+            data = json.loads(response.body)
+            tokens = [k for k, v in data.items() if v.get("proof")]
+            if not tokens:
+                self.context.logger.warning("No tokens to claim")
+                return None
+            claims = [data[t]["accumulated"] for t in tokens]
+            proofs = [data[t]["proof"] for t in tokens]
+            return {
+                "users": [user_address] * len(tokens),
+                "tokens": tokens,
+                "claims": claims,
+                "proofs": proofs
+            }
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from api, "
+                f"the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None
+
+    def build_claim_reward_action(self, rewards: Dict[str, Any], chain: str) -> Optional[Dict[str, Any]]:
+        action = {}
+
+        action["action"] = Action.CLAIM_REWARDS.value
+        action["chain"] = chain
+        action["users"] = rewards.get("users")
+        action["tokens"] = rewards.get("tokens")
+        action["claims"] = rewards.get("claims")
+        action["proofs"] = rewards.get("proofs")
+
+        return action
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     """DecisionMakingBehaviour"""
@@ -1060,6 +1140,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.store_current_pool()
             self.context.logger.info("Exit was successful! Removing current pool")
 
+        #TO:DO- If last action was Claim Rewards and it was successful we update the list of assets
+         
         # if all actions have been executed we exit DecisionMaking
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
@@ -1089,6 +1171,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         elif next_action == Action.BRIDGE_SWAP:
             tx_hash, chain_id, safe_address = yield from self.get_swap_tx_hash(
                 positions, next_action_details
+            )
+        
+        elif next_action == Action.CLAIM_REWARDS:
+            tx_hash, chain_id, safe_address = yield from self.get_claim_rewards_tx_hash(
+                next_action_details
             )
 
         else:
@@ -1734,6 +1821,75 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None, None, None
 
         return bytes.fromhex(data[2:]), tx_request.get("to"), from_token, amount, tool, None
+
+    def get_claim_rewards_tx_hash(
+        self, action
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Get claim rewards tx hash"""
+        chain = action.get("chain")
+        users = action.get("users")
+        tokens = action.get("tokens")
+        claims = action.get("claims")
+        proofs = action.get("proofs")
+
+        if not tokens or not claims or not proofs:
+            self.context.logger.error(f"Missing information in action : {action}")
+            return None, None, None
+        
+        safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
+
+        tx_hash, contract_address, is_multisend = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.merkl_distributor_contract_addresses.get('chain'),
+            contract_public_id=DistributorContract.public_id,
+            contract_callable="claim_rewards",
+            data_key="tx_hash",
+            users=users,
+            tokens=tokens,
+            claims=claims,
+            proofs=proofs,
+            chain=chain
+        )
+        if not tx_hash or not contract_address:
+            return None, None, None
+
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            to_address=contract_address,
+            value=ETHER_VALUE,
+            data=tx_hash,
+            operation=SafeOperation.DELEGATE_CALL.value
+            if is_multisend
+            else SafeOperation.CALL.value,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain,
+        )
+
+        if not safe_tx_hash:
+            return None, None, None
+
+        safe_tx_hash = safe_tx_hash[2:]
+        self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
+
+        payload_string = hash_payload_to_hex(
+            safe_tx_hash=safe_tx_hash,
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value
+            if is_multisend
+            else SafeOperation.CALL.value,
+            to_address=contract_address,
+            data=tx_hash,
+            gas_limit=self.params.manual_gas_limit,
+        )
+
+        self.context.logger.info(f"Tx hash payload string is {payload_string}")
+
+        return payload_string, chain, safe_address
 
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str

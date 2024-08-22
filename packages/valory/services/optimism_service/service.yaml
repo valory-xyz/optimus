@@ -112,6 +112,8 @@ extra:
         chain_to_chain_key_mapping: ${CHAIN_TO_CHAIN_KEY_MAPPING:str:{"optimism":"opt","base":"bas"}}
         waiting_period_for_retry: ${WAITING_PERIOD_FOR_RETRY:int:5}
         max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
+        reward_claiming_time_period: ${REWARD_CLAIMING_TIME_PERIOD:int:28800}
+        merkl_distributor_contract_addresses: ${MERKL_DISTRIBUTOR_CONTRACT_ADDRESSES:str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
 1:
   models:
     benchmark_tool:
@@ -178,6 +180,8 @@ extra:
         chain_to_chain_key_mapping: ${CHAIN_TO_CHAIN_KEY_MAPPING:str:{"optimism":"opt","base":"bas"}}
         waiting_period_for_retry: ${WAITING_PERIOD_FOR_RETRY:int:5}
         max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
+        reward_claiming_time_period: ${REWARD_CLAIMING_TIME_PERIOD:int:28800}
+        merkl_distributor_contract_addresses: ${MERKL_DISTRIBUTOR_CONTRACT_ADDRESSES:str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
 2:
   models:
     benchmark_tool:
@@ -244,6 +248,8 @@ extra:
         chain_to_chain_key_mapping: ${CHAIN_TO_CHAIN_KEY_MAPPING:str:{"optimism":"opt","base":"bas"}}
         waiting_period_for_retry: ${WAITING_PERIOD_FOR_RETRY:int:5}
         max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
+        reward_claiming_time_period: ${REWARD_CLAIMING_TIME_PERIOD:int:28800}
+        merkl_distributor_contract_addresses: ${MERKL_DISTRIBUTOR_CONTRACT_ADDRESSES:str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
 3:
   models:
     benchmark_tool:
@@ -310,6 +316,8 @@ extra:
         chain_to_chain_key_mapping: ${CHAIN_TO_CHAIN_KEY_MAPPING:str:{"optimism":"opt","base":"bas"}}
         waiting_period_for_retry: ${WAITING_PERIOD_FOR_RETRY:int:5}
         max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
+        reward_claiming_time_period: ${REWARD_CLAIMING_TIME_PERIOD:int:28800}
+        merkl_distributor_contract_addresses: ${MERKL_DISTRIBUTOR_CONTRACT_ADDRESSES:str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

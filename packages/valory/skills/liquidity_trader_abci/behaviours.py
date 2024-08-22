@@ -37,11 +37,11 @@ from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
+from packages.valory.contracts.merkl_distributor.contract import DistributorContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
-from packages.valory.contracts.merkl_distributor.contract import DistributorContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -104,6 +104,7 @@ class SwapStatus(Enum):
     INVALID = "INVALID"
     NOT_FOUND = "NOT_FOUND"
     FAILED = "FAILED"
+
 
 class Decision(Enum):
     """Decision"""
@@ -417,16 +418,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 current_timestamp = cast(
                     SharedState, self.context.state
                 ).round_sequence.last_round_transition_timestamp.timestamp()
-                
+
                 # Check if rewards can be claimed. Rewards can be claimed if either:
                 # 1. No rewards have been claimed yet (last_reward_claimed_timestamp is None), or
                 # 2. The current timestamp exceeds the allowed reward claiming time period since the last claim.
                 claim_rewards = (
-                    True if self.synchronized_data.last_reward_claimed_timestamp is None 
-                    else current_timestamp >= self.synchronized_data.last_reward_claimed_timestamp + self.params.reward_claiming_time_period
+                    True
+                    if self.synchronized_data.last_reward_claimed_timestamp is None
+                    else current_timestamp
+                    >= self.synchronized_data.last_reward_claimed_timestamp
+                    + self.params.reward_claiming_time_period
                 )
-                if claim_rewards: 
-                    #check current reward
+                if claim_rewards:
+                    # check current reward
                     allowed_chains = self.params.allowed_chains
                     if not allowed_chains:
                         self.context.logger.warning("No chains found")
@@ -435,9 +439,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         safe_address = self.params.safe_contract_addresses.get(chain)
                         rewards = yield from self.get_rewards(chain_id, safe_address)
                         if not rewards:
-                            self.context.logger.warning(f"No rewards to claim for user address {safe_address} on chain {chain}")
+                            self.context.logger.warning(
+                                f"No rewards to claim for user address {safe_address} on chain {chain}"
+                            )
                             continue
-                        action = self.build_claim_reward_action(rewards, chain)                       
+                        action = self.build_claim_reward_action(rewards, chain)
                         if action:
                             actions.append(action)
 
@@ -943,13 +949,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return None
 
-    def get_rewards(self, chain_id: int, user_address: str) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def get_rewards(
+        self, chain_id: int, user_address: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         base_url = "https://api.merkl.xyz/v3/userRewards"
-        params = {
-            "user": user_address,
-            "chainId": chain_id,
-            "proof": True
-        }
+        params = {"user": user_address, "chainId": chain_id, "proof": True}
         api_url = f"{base_url}?{urlencode(params)}"
         response = yield from self.get_http_response(
             method="GET",
@@ -975,7 +979,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "users": [user_address] * len(tokens),
                 "tokens": tokens,
                 "claims": claims,
-                "proofs": proofs
+                "proofs": proofs,
             }
         except (ValueError, TypeError) as e:
             self.context.logger.error(
@@ -984,7 +988,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-    def build_claim_reward_action(self, rewards: Dict[str, Any], chain: str) -> Optional[Dict[str, Any]]:
+    def build_claim_reward_action(
+        self, rewards: Dict[str, Any], chain: str
+    ) -> Optional[Dict[str, Any]]:
         action = {}
 
         action["action"] = Action.CLAIM_REWARDS.value
@@ -995,6 +1001,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         action["proofs"] = rewards.get("proofs")
 
         return action
+
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     """DecisionMakingBehaviour"""
@@ -1140,8 +1147,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.store_current_pool()
             self.context.logger.info("Exit was successful! Removing current pool")
 
-        #TO:DO- If last action was Claim Rewards and it was successful we update the list of assets
-         
+        # TO:DO- If last action was Claim Rewards and it was successful we update the list of assets
+
         # if all actions have been executed we exit DecisionMaking
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
@@ -1172,7 +1179,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             tx_hash, chain_id, safe_address = yield from self.get_swap_tx_hash(
                 positions, next_action_details
             )
-        
+
         elif next_action == Action.CLAIM_REWARDS:
             tx_hash, chain_id, safe_address = yield from self.get_claim_rewards_tx_hash(
                 next_action_details
@@ -1222,7 +1229,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Decision.CONTINUE
         # wait if it is pending
         elif status == SwapStatus.PENDING.value:
-                return Decision.WAIT
+            return Decision.WAIT
         # exit if it fails
         else:
             return Decision.EXIT
@@ -1598,27 +1605,33 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 token_to_swap,
                 amount,
                 tool_name,
-                error
+                error,
             ) = yield from self.get_swap_tx_info(
                 positions, action, blacklisted_bridges, blacklisted_exchanges
             )
 
             if error:
-                #1002 stands for NoQuoteError 
-                #Reference: https://github.com/lifinance/types/blob/main/src/errors.ts
-                if error.get('code') == 1002:
-                    #Retry after some time if quote not found
+                # 1002 stands for NoQuoteError
+                # Reference: https://github.com/lifinance/types/blob/main/src/errors.ts
+                if error.get("code") == 1002:
+                    # Retry after some time if quote not found
                     if retry_count < max_retry_count:
                         retry_count += 1
-                        self.context.logger.warning(f"Error: {error.get('message')}. Retrying {retry_count}/{max_retry_count}")
-                        yield from self.sleep(self.params.waiting_period_for_retry) # wait for given time before retrying
+                        self.context.logger.warning(
+                            f"Error: {error.get('message')}. Retrying {retry_count}/{max_retry_count}"
+                        )
+                        yield from self.sleep(
+                            self.params.waiting_period_for_retry
+                        )  # wait for given time before retrying
                         continue
                     else:
                         self.context.logger.error("Max retry count reached. Exiting.")
                         return None, None, None
                 else:
-                        self.context.logger.error(f"Failed with code: {error.get('code')}, message: {error.get('message')}")
-                        return None, None, None
+                    self.context.logger.error(
+                        f"Failed with code: {error.get('code')}, message: {error.get('message')}"
+                    )
+                    return None, None, None
 
             if (
                 not swap_tx_hash
@@ -1626,11 +1639,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 or not token_to_swap
                 or not amount
                 or not tool_name
-                ):
+            ):
                 self.context.logger.error("Error fetching the swap related info")
                 return None, None, None
 
-            #If quote found, then build multisend tx
+            # If quote found, then build multisend tx
             if not token_to_swap == ZERO_ADDRESS:
                 approval_tx_payload = yield from self.get_approval_tx_hash(
                     token_address=token_to_swap,
@@ -1726,7 +1739,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def get_swap_tx_info(
         self, positions, action, blacklisted_bridges, blacklisted_exchanges
-    ) -> Generator[None, None, Optional[Tuple[str, str, str, int, str, Dict[str, Any]]]]:
+    ) -> Generator[
+        None, None, Optional[Tuple[str, str, str, int, str, Dict[str, Any]]]
+    ]:
         """Get the quote for asset transfer from API"""
         chain_keys = self.params.chain_to_chain_key_mapping
 
@@ -1795,8 +1810,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if response.status_code != 200:
             response = json.loads(response.body)
             error = {}
-            error['code'] = response.get('code')
-            error['message'] = response.get('message')
+            error["code"] = response.get("code")
+            error["message"] = response.get("message")
             tool = None
             return None, None, None, None, tool, error
 
@@ -1820,7 +1835,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Missing data in quote: {quote}")
             return None, None, None, None, None
 
-        return bytes.fromhex(data[2:]), tx_request.get("to"), from_token, amount, tool, None
+        return (
+            bytes.fromhex(data[2:]),
+            tx_request.get("to"),
+            from_token,
+            amount,
+            tool,
+            None,
+        )
 
     def get_claim_rewards_tx_hash(
         self, action
@@ -1835,12 +1857,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not tokens or not claims or not proofs:
             self.context.logger.error(f"Missing information in action : {action}")
             return None, None, None
-        
+
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
 
         tx_hash, contract_address, is_multisend = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=self.params.merkl_distributor_contract_addresses.get('chain'),
+            contract_address=self.params.merkl_distributor_contract_addresses.get(
+                "chain"
+            ),
             contract_public_id=DistributorContract.public_id,
             contract_callable="claim_rewards",
             data_key="tx_hash",
@@ -1848,7 +1872,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             tokens=tokens,
             claims=claims,
             proofs=proofs,
-            chain=chain
+            chain=chain,
         )
         if not tx_hash or not contract_address:
             return None, None, None

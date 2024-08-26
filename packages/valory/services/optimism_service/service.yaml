@@ -90,7 +90,7 @@ extra:
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
         allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
-        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -158,7 +158,7 @@ extra:
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
         allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
-        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -226,7 +226,7 @@ extra:
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
         allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
-        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
@@ -294,7 +294,7 @@ extra:
         default_chain_id: ${DEFAULT_CHAIN_ID:str:ethereum}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:34088325}
         allowed_dexs: ${ALLOWED_DEXS:list:["balancerPool"]}
-        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
+        initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
         allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}

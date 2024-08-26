@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigndinzenvr4gauojly3cieqscwf677i72di7nhfu3p3zxx6bmfyy
   build/Distributor.json: bafybeihtbkqhzavgficpiikharncvtysmoyacmqbkntsilrvwph44fkm3a
-  contract.py: bafybeifakcaxd3yh6j6edukezycitdcbmq37t7r4off5pvigx24rtuqpsu
+  contract.py: bafybeiafkrtatk646hkm2wbwcumgzlq5xaracjxnf7yyjhvcht2pze6vni
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: DistributorContract

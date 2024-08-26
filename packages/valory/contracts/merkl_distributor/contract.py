@@ -23,12 +23,9 @@ from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
-from eth_abi import encode
+
 
 PUBLIC_ID = PublicId.from_str("valory/merkl_distributor:0.1.0")
-_logger = logging.getLogger(
-    f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
-)
 class DistributorContract(Contract):
     """The Distributor contract."""
 

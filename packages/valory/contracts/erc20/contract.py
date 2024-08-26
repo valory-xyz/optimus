@@ -62,6 +62,17 @@ class ERC20(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         allowance = contract_instance.functions.allowance(owner, spender).call()
         return dict(data=allowance)
+    
+    @classmethod
+    def get_token_symbol(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Check the balance of the given account."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        symbol = contract_instance.functions.symbol().call()
+        return dict(data=symbol)
 
     @classmethod
     def build_deposit_tx(

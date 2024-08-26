@@ -1614,59 +1614,37 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Get swap tx hash"""
         multi_send_txs = []
         chain = action.get("from_chain")
-        blacklisted_bridges = []
-        blacklisted_exchanges = []
         multisend_tx_hash = None
         safe_address = self.params.safe_contract_addresses[chain]
 
-        max_retry_count = self.params.max_num_of_retries
-        retry_count = 0
+        from_chain = self.params.chain_to_chain_key_mapping.get(action.get('from_chain'))
+        to_chain = self.params.chain_to_chain_key_mapping.get(action.get('to_chain'))
 
-        while True:
+        all_tools = yield from self.fetch_all_available_tools(from_chain, to_chain) 
+        self.context.logger.info(f"List of tools: {all_tools}")       
+        if not all_tools:
+            self.context.logger.error("No tool(bridge/exchange) available")
+            return None, None, None
+        
+        for tool in all_tools:
             # Get swap tx
             (
                 swap_tx_hash,
                 lifi_contract_address,
                 token_to_swap,
                 amount,
-                tool_name,
-                error,
             ) = yield from self.get_swap_tx_info(
-                positions, action, blacklisted_bridges, blacklisted_exchanges
+                positions, action, tool
             )
-
-            if error:
-                # 1002 stands for NoQuoteError
-                # Reference: https://github.com/lifinance/types/blob/main/src/errors.ts
-                if error.get("code") == 1002:
-                    # Retry after some time if quote not found
-                    if retry_count < max_retry_count:
-                        retry_count += 1
-                        self.context.logger.warning(
-                            f"Error: {error.get('message')}. Retrying {retry_count}/{max_retry_count}"
-                        )
-                        yield from self.sleep(
-                            self.params.waiting_period_for_retry
-                        )  # wait for given time before retrying
-                        continue
-                    else:
-                        self.context.logger.error("Max retry count reached. Exiting.")
-                        return None, None, None
-                else:
-                    self.context.logger.error(
-                        f"Failed with code: {error.get('code')}, message: {error.get('message')}"
-                    )
-                    return None, None, None
 
             if (
                 not swap_tx_hash
                 or not lifi_contract_address
                 or not token_to_swap
                 or not amount
-                or not tool_name
             ):
-                self.context.logger.error("Error fetching the swap related info")
-                return None, None, None
+                self.context.logger.error(f"Error fetching the swap related info for {tool} tool")
+                continue
 
             # If quote found, then build multisend tx
             if not token_to_swap == ZERO_ADDRESS:
@@ -1716,24 +1694,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             is_ok = yield from self._simulate_tx(**tx_params)
-
             if is_ok:
-                self.context.logger.error("Simulation successful")
+                self.context.logger.error(f"Simulation successful with {tool} tool")
                 break
-
-            if action.get("from_chain") == action.get("to_chain"):
-                # It's an exchange, add to deny_exchanges list
-                self.context.logger.info(
-                    f"Simulation Failed! Blacklisting {tool_name} exchange"
-                )
-                blacklisted_exchanges.append(tool_name)
             else:
-                # It's a bridge, add to blacklisted_bridges list
-                self.context.logger.info(
-                    f"Simulation Failed! Blacklisting {tool_name} bridge"
+                multisend_tx_hash = None
+                self.context.logger.error(
+                    f"Simulation failed with {tool} tool"
                 )
-                blacklisted_bridges.append(tool_name)
 
+        if not multisend_tx_hash:
+            self.context.logger.error("Unable to swap/bridge with all available tools")
+            return None, None, None
+        
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
             contract_address=safe_address,
@@ -1763,9 +1736,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_swap_tx_info(
-        self, positions, action, blacklisted_bridges, blacklisted_exchanges
+        self, positions, action, tool
     ) -> Generator[
-        None, None, Optional[Tuple[str, str, str, int, str, Dict[str, Any]]]
+        None, None, Optional[Tuple[str, str, str, int]]
     ]:
         """Get the quote for asset transfer from API"""
         chain_keys = self.params.chain_to_chain_key_mapping
@@ -1781,14 +1754,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Could not find safe address for chain {from_chain}"
             )
-            return None, None, None, None, None, None
+            return None, None, None, None
 
         to_address = self.params.safe_contract_addresses.get(action.get("to_chain"))
         if not to_address:
             self.context.logger.error(
                 f"Could not find safe address for chain {to_chain}"
             )
-            return None, None, None, None, None, None
+            return None, None, None, None
 
         # TO-DO: Add logic to check if the amount is greater than the minimum required amount for a swap. Currently, we haven't set any such limit.
         amount = self._get_balance(
@@ -1799,7 +1772,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Invalid amount for token {from_token} on chain {from_chain}"
             )
-            return None, None, None, None, None, None
+            return None, None, None, None
 
         # TO-DO: add logic to dynamically adjust the value of slippage
         slippage = self.params.slippage_for_swap
@@ -1815,11 +1788,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "slippage": slippage,
         }
 
-        if blacklisted_bridges:
-            params["denyBridges"] = ",".join(blacklisted_bridges)
-
-        if blacklisted_exchanges:
-            params["denyExchanges"] = ",".join(blacklisted_exchanges)
+        if from_chain == to_chain:
+            params["allowExchanges"] = tool
+        else:
+            params["allowBridges"] = tool
 
         base_url = self.params.lifi_request_quote_url
         url = f"{base_url}?{urlencode(params)}"
@@ -1834,39 +1806,32 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code != 200:
             response = json.loads(response.body)
-            error = {}
-            error["code"] = response.get("code")
-            error["message"] = response.get("message")
-            tool = None
-            return None, None, None, None, tool, error
+            self.context.logger.error(f"Error encountered: {response['message']}")
+            return None, None, None, None
 
         try:
             quote = json.loads(response.body)
+            self.context.logger.info(f"QUOTE RECEIVED: {quote}")
         except (ValueError, TypeError) as e:
             self.context.logger.error(
                 f"Could not parse response from api, "
                 f"the following error was encountered {type(e).__name__}: {e}"
             )
-            return None, None, None, None, None
-
-        tool = quote.get("tool")
-        self.context.logger.info(f"Tool(Bridge/Exchange) being used: {tool}")
+            return None, None, None, None
 
         tx_request = quote.get("transactionRequest", {})
         self.context.logger.info(f"transaction data from api {tx_request}")
 
         data = tx_request.get("data")
-        if not tx_request or not data or not tool:
+        if not tx_request or not data:
             self.context.logger.error(f"Missing data in quote: {quote}")
-            return None, None, None, None, None
+            return None, None, None, None
 
         return (
             bytes.fromhex(data[2:]),
             tx_request.get("to"),
             from_token,
-            amount,
-            tool,
-            None,
+            amount
         )
 
     def get_claim_rewards_tx_hash(
@@ -1940,6 +1905,42 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
+    def fetch_all_available_tools(self, from_chain: str, to_chain: str) -> Generator[None, None, Optional[List[str]]]:
+        base_url = "https://li.quest/v1/tools"
+        params = {
+            "chains": from_chain,
+            "chains": to_chain
+        }
+        api_url = f"{base_url}?{urlencode(params)}"
+
+        response = yield from self.get_http_response(
+            method="GET",
+            url=api_url,
+            headers={"accept": "application/json"},
+        )
+
+        if response.status_code != 200:
+            self.context.logger.error(
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
+            )
+            return None
+
+        try:
+            data = json.loads(response.body)
+            tools = data.get('exchanges') if from_chain == to_chain else data.get('bridges')
+            if tools:
+                # Extract and return only the 'key' values from the tools
+                return [tool.get('key') for tool in tools]
+
+            return None
+            
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from api, "
+                f"the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None
+        
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str
     ) -> Generator[None, None, Optional[Tuple[int, int]]]:

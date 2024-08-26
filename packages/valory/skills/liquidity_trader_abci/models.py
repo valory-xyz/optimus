@@ -80,6 +80,7 @@ class Params(BaseParams):
             self._ensure("chain_to_chain_key_mapping", kwargs, str)
         )
         self.max_num_of_retries = self._ensure("max_num_of_retries", kwargs, int)
+        self.waiting_period_for_retry = self._ensure("waiting_period_for_retry", kwargs, int)
         self.reward_claiming_time_period = self._ensure(
             "reward_claiming_time_period", kwargs, int
         )

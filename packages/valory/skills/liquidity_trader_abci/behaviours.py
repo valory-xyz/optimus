@@ -421,7 +421,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 if invest_in_pool:
                     actions = yield from self.get_order_of_transactions()
-                    self.context.logger.info(f"Actions: {actions}")
 
             current_timestamp = cast(
                 SharedState, self.context.state
@@ -457,7 +456,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     action = yield from self.build_claim_reward_action(rewards, chain)
                     if action:
                         actions.append(action)
-
+                        
+            self.context.logger.info(f"Actions: {actions}")
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
             payload = EvaluateStrategyPayload(sender=sender, actions=serialized_actions)
@@ -1184,7 +1184,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.store_current_pool()
             self.context.logger.info("Exit was successful! Removing current pool")
 
-        # If last action was Claim Rewards and it was successful we update the list of assets
+        # If last action was Claim Rewards and it was successful we update the list of assets and the last_reward_claimed_timestamp
         if (
             last_executed_action_index is not None
             and Action(actions[last_executed_action_index]["action"])
@@ -1196,6 +1196,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 action.get("tokens"), action.get("token_symbols")
             ):
                 self._add_token_to_assets(chain, token, token_symbol)
+            
+            current_timestamp = cast(
+                SharedState, self.context.state
+            ).round_sequence.last_round_transition_timestamp.timestamp()
+
+            return Event.UPDATE.value, {"last_reward_claimed_timestamp": current_timestamp}, {}
 
         # if all actions have been executed we exit DecisionMaking
         if current_action_index >= len(self.synchronized_data.actions):

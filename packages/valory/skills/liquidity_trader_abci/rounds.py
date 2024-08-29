@@ -244,7 +244,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     }
     event_to_timeout: EventToTimeout = {}
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
-        get_name(SynchronizedData.last_reward_claimed_timestamp)
+        {get_name(SynchronizedData.last_reward_claimed_timestamp)}
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         GetPositionsRound: set(),

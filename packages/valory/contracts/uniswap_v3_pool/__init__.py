@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the support resources for the Pool contract interface."""
+"""This module contains the support resources for the  UniswapV3 Pool contract interface."""
 from pathlib import Path
 
 

@@ -17,40 +17,44 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This class contains a wrapper for Pool contract interface."""
-
+"""This class contains a wrapper for distributor contract interface."""
+import logging
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
-from aea_ledger_ethereum import EthereumApi, LedgerApi
+from aea_ledger_ethereum import EthereumApi
 
-PUBLIC_ID = PublicId.from_str("valory/velodrome_pool:0.1.0")
 
-class PoolContract(Contract):
-    """The Pool contract."""
+PUBLIC_ID = PublicId.from_str("valory/merkl_distributor:0.1.0")
+class DistributorContract(Contract):
+    """The Distributor contract."""
 
     contract_id = PUBLIC_ID
 
     @classmethod
-    def get_balance(
+    def claim_rewards(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
-        account: str,
+        users: list,
+        tokens: list,
+        amounts: list,
+        proofs: list[list[str]]
     ) -> JSONLike:
-        """get the balance of the given account."""
+        """Prepare a claim rewards transaction."""
+
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        balance = contract_instance.functions.balanceOf(account).call()
-        return dict(balance=balance)
-    
-    @classmethod
-    def get_pool_tokens(
-        cls,
-        ledger_api: EthereumApi,
-        contract_address: str,
-    ) -> JSONLike:
-        """get the balance of the given account."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        token0 = contract_instance.functions.token0().call()
-        token1 = contract_instance.functions.token1().call()
-        return dict(tokens=[token0,token1])
+        # Convert proofs from hex strings to bytes32
+        proofs_converted = [[bytes.fromhex(proof[2:]) for proof in proof_list] for proof_list in proofs]
+
+        data = contract_instance.encodeABI(
+            "claim",
+            args=(
+                users,
+                tokens,
+                amounts,
+                proofs_converted
+            )
+        )
+        return {"tx_hash": bytes.fromhex(data[2:])}
+

@@ -60,12 +60,20 @@ def main() -> None:
         ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
 
         config[5]["models"]["params"]["args"][
-            "pool_data_api_url"
-        ] = f"${{str:{os.getenv('POOL_DATA_API_URL')}}}"
-
-        config[5]["models"]["params"]["args"][
             "slippage_for_swap"
         ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "tenderly_access_key"
+        ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "tenderly_account_slug"
+        ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "tenderly_project_slug"
+        ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
 
     with open(Path("optimism_agent", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)

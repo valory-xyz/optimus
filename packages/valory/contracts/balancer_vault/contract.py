@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This class contains a wrapper for vault contract interface."""
-
+import logging
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
@@ -26,9 +26,11 @@ from aea_ledger_ethereum import EthereumApi
 from eth_abi import encode
 
 PUBLIC_ID = PublicId.from_str("valory/balancer_vault:0.1.0")
-
+_logger = logging.getLogger(
+    f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
+)
 class VaultContract(Contract):
-    """The Weighted Stable Pool contract."""
+    """The Vault contract."""
 
     contract_id = PUBLIC_ID
 
@@ -57,15 +59,14 @@ class VaultContract(Contract):
         assets: list,
         max_amounts_in: list,
         join_kind: int,
+        minimum_bpt: int,
         from_internal_balance: bool = False,
     ) -> JSONLike:
         """Prepare a join pool transaction."""
 
-        minimum_BPT = 0
-
         encoded_user_data = encode(
             ['uint256', 'uint256[]', 'uint256'],
-            [join_kind, max_amounts_in, minimum_BPT]
+            [join_kind, max_amounts_in, minimum_bpt]
         )
 
         join_pool_request = (
@@ -101,7 +102,7 @@ class VaultContract(Contract):
         bpt_amount_in: int,
         to_internal_balance: bool = False,
     ) -> JSONLike:
-        """Prepare a join pool transaction."""
+        """Prepare a exit pool transaction."""
 
         encoded_user_data = encode(
             ['uint256', 'uint256'],
@@ -126,3 +127,29 @@ class VaultContract(Contract):
             )
         )
         return {"tx_hash": bytes.fromhex(data[2:])}
+    
+    @classmethod
+    def simulate_tx(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        sender_address: str,
+        data: str,
+        gas_limit: int
+    ) -> JSONLike:
+        """Simulate the transaction."""
+        try:
+            ledger_api.api.eth.call(
+                {
+                    "from": ledger_api.api.to_checksum_address(sender_address),
+                    "to": ledger_api.api.to_checksum_address(contract_address),
+                    "data": data,
+                    "gas": gas_limit
+                }
+            )
+            simulation_ok = True
+        except Exception as e:
+            _logger.info(f"Simulation failed: {str(e)}")
+            simulation_ok = False
+
+        return dict(data=simulation_ok)

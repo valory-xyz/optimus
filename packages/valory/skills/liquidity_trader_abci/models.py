@@ -53,7 +53,9 @@ class Params(BaseParams):
             self._ensure("safe_contract_addresses", kwargs, str)
         )
         self.pool_data_api_url = self._ensure("pool_data_api_url", kwargs, str)
-        self.allowed_chains = json.loads(self._ensure("allowed_chains", kwargs, str))
+        self.allowed_chains: List[str] = self._ensure(
+            "allowed_chains", kwargs, List[str]
+        )
         self.gas_reserve = json.loads(self._ensure("gas_reserve", kwargs, str))
         self.apr_threshold = self._ensure("apr_threshold", kwargs, int)
         self.round_threshold = self._ensure("round_threshold", kwargs, int)
@@ -63,17 +65,46 @@ class Params(BaseParams):
         self.multisend_contract_addresses = json.loads(
             self._ensure("multisend_contract_addresses", kwargs, str)
         )
-        self.lifi_request_quote_url = self._ensure(
-            "lifi_request_quote_url", kwargs, str
+        self.lifi_advance_routes_url = self._ensure(
+            "lifi_advance_routes_url", kwargs, str
         )
         self.lifi_check_status_url = self._ensure("lifi_check_status_url", kwargs, str)
         self.slippage_for_swap = self._ensure("slippage_for_swap", kwargs, float)
         self.allowed_dexs: List[str] = self._ensure("allowed_dexs", kwargs, List[str])
         self.manual_gas_limit: int = self._ensure("manual_gas_limit", kwargs, int)
-        self.balancer_vault_addresses = json.loads(
-            self._ensure("balancer_vault_addresses", kwargs, str)
+        self.balancer_vault_contract_addresses = json.loads(
+            self._ensure("balancer_vault_contract_addresses", kwargs, str)
+        )
+        self.uniswap_position_manager_contract_addresses = json.loads(
+            self._ensure("uniswap_position_manager_contract_addresses", kwargs, str)
         )
         self.chain_to_chain_key_mapping = json.loads(
             self._ensure("chain_to_chain_key_mapping", kwargs, str)
+        )
+        self.max_num_of_retries = self._ensure("max_num_of_retries", kwargs, int)
+        self.waiting_period_for_retry = self._ensure(
+            "waiting_period_for_retry", kwargs, int
+        )
+        self.reward_claiming_time_period = self._ensure(
+            "reward_claiming_time_period", kwargs, int
+        )
+        self.merkl_distributor_contract_addresses = json.loads(
+            self._ensure("merkl_distributor_contract_addresses", kwargs, str)
+        )
+        self.intermediate_tokens = json.loads(
+            self._ensure("intermediate_tokens", kwargs, str)
+        )
+        self.lifi_fetch_tools_url = self._ensure("lifi_fetch_tools_url", kwargs, str)
+        self.merkl_user_rewards_url = self._ensure(
+            "merkl_user_rewards_url", kwargs, str
+        )
+        self.tenderly_bundle_simulation_url = self._ensure(
+            "tenderly_bundle_simulation_url", kwargs, str
+        )
+        self.tenderly_access_key = self._ensure("tenderly_access_key", kwargs, str)
+        self.tenderly_account_slug = self._ensure("tenderly_account_slug", kwargs, str)
+        self.tenderly_project_slug = self._ensure("tenderly_project_slug", kwargs, str)
+        self.chain_to_chain_id_mapping = json.loads(
+            self._ensure("chain_to_chain_id_mapping", kwargs, str)
         )
         super().__init__(*args, **kwargs)

@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the shared state for the abci skill of SuperAgentAbciApp."""
+"""This module contains the shared state for the abci skill of OptimusAbciApp."""
 
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
@@ -36,7 +36,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     Event as LiquidityTraderEvent,
 )
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
-from packages.valory.skills.superagent_abci.composition import SuperAgentAbciApp
+from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
 from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,
@@ -55,25 +55,25 @@ MULTIPLIER = 10
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
-    abci_app_cls = SuperAgentAbciApp  # type: ignore
+    abci_app_cls = OptimusAbciApp  # type: ignore
 
     def setup(self) -> None:
         """Set up."""
         super().setup()
 
-        SuperAgentAbciApp.event_to_timeout[
+        OptimusAbciApp.event_to_timeout[
             ResetPauseEvent.ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
-        SuperAgentAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT] = (
+        OptimusAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT] = (
             self.context.params.reset_pause_duration + MARGIN
         )
 
-        SuperAgentAbciApp.event_to_timeout[LiquidityTraderEvent.ROUND_TIMEOUT] = (
+        OptimusAbciApp.event_to_timeout[LiquidityTraderEvent.ROUND_TIMEOUT] = (
             self.context.params.round_timeout_seconds * MULTIPLIER
         )
 
-        SuperAgentAbciApp.event_to_timeout[
+        OptimusAbciApp.event_to_timeout[
             TransactionSettlementEvent.VALIDATE_TIMEOUT
         ] = self.context.params.validate_timeout
 

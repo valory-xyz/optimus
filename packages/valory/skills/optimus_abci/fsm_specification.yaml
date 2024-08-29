@@ -20,7 +20,7 @@ alphabet_in:
 - WAIT
 default_start_state: RegistrationStartupRound
 final_states: []
-label: SuperAgentAbciApp
+label: OptimusAbciApp
 start_states:
 - RegistrationRound
 - RegistrationStartupRound

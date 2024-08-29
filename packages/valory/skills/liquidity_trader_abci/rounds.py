@@ -51,6 +51,7 @@ class Event(Enum):
     DONE = "done"
     WAIT = "wait"
     SETTLE = "settle"
+    UPDATE = "update"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -118,6 +119,11 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the verified tx hash."""
         return cast(str, self.db.get_strict("final_tx_hash"))
 
+    @property
+    def last_reward_claimed_timestamp(self) -> Optional[int]:
+        """Get the last reward claimed timestamp."""
+        return cast(int, self.db.get("last_reward_claimed_timestamp", None))
+
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""
@@ -166,8 +172,20 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             if positions and not isinstance(positions, str):
                 payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
 
+            bridge_and_swap_actions = payload.get("bridge_and_swap_actions", {})
+            updated_actions = self.synchronized_data.actions
+            if bridge_and_swap_actions and bridge_and_swap_actions.get("actions"):
+                if not self.synchronized_data.last_executed_action_index:
+                    index = 1
+                else:
+                    index = self.synchronized_data.last_executed_action_index + 2
+                updated_actions[index:index] = bridge_and_swap_actions.get("actions")
+
+            serialized_actions = json.dumps(updated_actions)
             synchronized_data = synchronized_data.update(
-                synchronized_data_class=SynchronizedData, **payload.get("updates", {})
+                synchronized_data_class=SynchronizedData,
+                **payload.get("updates", {}),
+                actions=serialized_actions
             )
             return synchronized_data, event
 
@@ -176,8 +194,6 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
         ):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
-
-        # Event.SETTLE, Event.ERROR, Event.ROUND_TIMEOUT, Event.DONE
 
 
 class FinishedEvaluateStrategyRound(DegenerateRound):
@@ -215,6 +231,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: DecisionMakingRound,
             Event.ROUND_TIMEOUT: DecisionMakingRound,
             Event.SETTLE: FinishedTxPreparationRound,
+            Event.UPDATE: DecisionMakingRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
@@ -226,7 +243,9 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound,
     }
     event_to_timeout: EventToTimeout = {}
-    cross_period_persisted_keys: FrozenSet[str] = frozenset()
+    cross_period_persisted_keys: FrozenSet[str] = frozenset(
+        get_name(SynchronizedData.last_reward_claimed_timestamp)
+    )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         GetPositionsRound: set(),
         DecisionMakingRound: set(),

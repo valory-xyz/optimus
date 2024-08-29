@@ -17,50 +17,50 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This class contains a wrapper for Weighted Pool contract interface."""
+"""This class contains a wrapper for Pool contract interface."""
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
-from aea_ledger_ethereum import EthereumApi, LedgerApi
+from aea_ledger_ethereum import EthereumApi
 
-PUBLIC_ID = PublicId.from_str("valory/balancer_weighted_pool:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/uniswap_v3_pool:0.1.0")
 
-class WeightedPoolContract(Contract):
-    """The Weighted Stable Pool contract."""
+class UniswapV3PoolContract(Contract):
+    """The Uniswap V3 Pool contract."""
 
     contract_id = PUBLIC_ID
-
-    @classmethod
-    def get_balance(
-        cls,
-        ledger_api: EthereumApi,
-        contract_address: str,
-        account: str,
-    ) -> JSONLike:
-        """get the balance of the given account."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.functions.balanceOf(account).call()
-        return dict(balance=data)
     
     @classmethod
-    def get_pool_id(
+    def get_pool_tokens(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get pool id"""
+        """get the pool tokens."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.functions.getPoolId().call()
-        return dict(pool_id="0x"+data.hex())
+        token0 = contract_instance.functions.token0().call()
+        token1 = contract_instance.functions.token1().call()
+        return dict(tokens=[token0,token1])
     
     @classmethod
-    def get_vault_address(
+    def get_pool_fee(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """get vault address"""
+        """get the fee."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.functions.getVault().call()
-        return dict(vault=data)
+        fee = contract_instance.functions.fee().call()
+        return dict(data=fee)
+    
+    @classmethod
+    def get_tick_spacing(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """get the tick spacing."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        tick_spacing = contract_instance.functions.tickSpacing().call()
+        return dict(data=tick_spacing)

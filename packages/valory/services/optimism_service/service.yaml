@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimism_agent:0.1.0:bafybeicyqh2rspjlpbxn6vglxelygmmyklw6avafikdadxpmvvhe5myczi
+agent: valory/optimism_agent:0.1.0:bafybeiaygf45uhsemrfctzfqxqlylnmfmite263ikjglffsgb23sj2gana
 number_of_agents: 4
 deployment:
   agent:
@@ -93,13 +93,13 @@ extra:
         initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
-        allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
+        allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism"]}
         gas_reserve: ${GAS_RESERVE:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
         round_threshold: ${ROUND_THRESHOLD:int:5}
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
-        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_advance_routes_url: ${LIFI_ADVANCE_ROUTES_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
         slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
         gas_params:
@@ -114,6 +114,14 @@ extra:
         max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
         reward_claiming_time_period: ${REWARD_CLAIMING_TIME_PERIOD:int:28800}
         merkl_distributor_contract_addresses: ${MERKL_DISTRIBUTOR_CONTRACT_ADDRESSES:str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
+        intermediate_tokens: ${INTERMEDIATE_TOKENS:str:{"optimism":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0x4Fd63966879300caFafBB35D157dC5229278Ed23"},"0x7F5c764cBc14f9669B88837ca1490cCa17c31607":{"symbol":"USDC.e","liquidity_provider":"0xD1F1baD4c9E6c44DeC1e9bF3B94902205c5Cd6C3"},"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58":{"symbol":"USDT","liquidity_provider":"0xc858A329Bf053BE78D6239C4A4343B8FbD21472b"}},"base":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xC771c1a5905420DAEc317b154EB13e4198BA97D0"},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"symbol":"USDC","liquidity_provider":"0xd0b53D9277642d899DF5C87A3966A349A798F224"},"0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA":{"symbol":"USDbC","liquidity_provider":"0x4C36388bE6F416A29C8d8Eee81C771cE6bE14B18"}}}}
+        lifi_fetch_tools_url: ${LIFI_FETCH_TOOLS_URL:str:https://li.quest/v1/tools}
+        merkl_user_rewards_url: ${MERKL_USER_REWARDS_URL:str:https://api.merkl.xyz/v3/userRewards}
+        tenderly_bundle_simulation_url: ${TENDERLY_BUNDLE_SIMULATION_URL:str:https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle}
+        tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:""}
+        tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:""}
+        tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:""}
+        chain_to_chain_id_mapping: ${CHAIN_TO_CHAIN_ID_MAPPING:str:{"optimism":10,"base":8453,"ethereum":1}}
 1:
   models:
     benchmark_tool:
@@ -161,13 +169,13 @@ extra:
         initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
-        allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
+        allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism"]}
         gas_reserve: ${GAS_RESERVE:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
         round_threshold: ${ROUND_THRESHOLD:int:5}
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
-        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_advance_routes_url: ${LIFI_ADVANCE_ROUTES_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
         slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
         gas_params:
@@ -182,6 +190,14 @@ extra:
         max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
         reward_claiming_time_period: ${REWARD_CLAIMING_TIME_PERIOD:int:28800}
         merkl_distributor_contract_addresses: ${MERKL_DISTRIBUTOR_CONTRACT_ADDRESSES:str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
+        intermediate_tokens: ${INTERMEDIATE_TOKENS:str:{"optimism":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0x4Fd63966879300caFafBB35D157dC5229278Ed23"},"0x7F5c764cBc14f9669B88837ca1490cCa17c31607":{"symbol":"USDC.e","liquidity_provider":"0xD1F1baD4c9E6c44DeC1e9bF3B94902205c5Cd6C3"},"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58":{"symbol":"USDT","liquidity_provider":"0xc858A329Bf053BE78D6239C4A4343B8FbD21472b"}},"base":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xC771c1a5905420DAEc317b154EB13e4198BA97D0"},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"symbol":"USDC","liquidity_provider":"0xd0b53D9277642d899DF5C87A3966A349A798F224"},"0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA":{"symbol":"USDbC","liquidity_provider":"0x4C36388bE6F416A29C8d8Eee81C771cE6bE14B18"}}}}
+        lifi_fetch_tools_url: ${LIFI_FETCH_TOOLS_URL:str:https://li.quest/v1/tools}
+        merkl_user_rewards_url: ${MERKL_USER_REWARDS_URL:str:https://api.merkl.xyz/v3/userRewards}
+        tenderly_bundle_simulation_url: ${TENDERLY_BUNDLE_SIMULATION_URL:str:https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle}
+        tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:""}
+        tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:""}
+        tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:""}
+        chain_to_chain_id_mapping: ${CHAIN_TO_CHAIN_ID_MAPPING:str:{"optimism":10,"base":8453,"ethereum":1}}
 2:
   models:
     benchmark_tool:
@@ -229,13 +245,13 @@ extra:
         initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
-        allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
+        allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism"]}
         gas_reserve: ${GAS_RESERVE:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
         round_threshold: ${ROUND_THRESHOLD:int:5}
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
-        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_advance_routes_url: ${LIFI_ADVANCE_ROUTES_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
         slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
         gas_params:
@@ -250,6 +266,14 @@ extra:
         max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
         reward_claiming_time_period: ${REWARD_CLAIMING_TIME_PERIOD:int:28800}
         merkl_distributor_contract_addresses: ${MERKL_DISTRIBUTOR_CONTRACT_ADDRESSES:str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
+        intermediate_tokens: ${INTERMEDIATE_TOKENS:str:{"optimism":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0x4Fd63966879300caFafBB35D157dC5229278Ed23"},"0x7F5c764cBc14f9669B88837ca1490cCa17c31607":{"symbol":"USDC.e","liquidity_provider":"0xD1F1baD4c9E6c44DeC1e9bF3B94902205c5Cd6C3"},"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58":{"symbol":"USDT","liquidity_provider":"0xc858A329Bf053BE78D6239C4A4343B8FbD21472b"}},"base":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xC771c1a5905420DAEc317b154EB13e4198BA97D0"},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"symbol":"USDC","liquidity_provider":"0xd0b53D9277642d899DF5C87A3966A349A798F224"},"0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA":{"symbol":"USDbC","liquidity_provider":"0x4C36388bE6F416A29C8d8Eee81C771cE6bE14B18"}}}}
+        lifi_fetch_tools_url: ${LIFI_FETCH_TOOLS_URL:str:https://li.quest/v1/tools}
+        merkl_user_rewards_url: ${MERKL_USER_REWARDS_URL:str:https://api.merkl.xyz/v3/userRewards}
+        tenderly_bundle_simulation_url: ${TENDERLY_BUNDLE_SIMULATION_URL:str:https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle}
+        tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:""}
+        tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:""}
+        tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:""}
+        chain_to_chain_id_mapping: ${CHAIN_TO_CHAIN_ID_MAPPING:str:{"optimism":10,"base":8453,"ethereum":1}}
 3:
   models:
     benchmark_tool:
@@ -297,13 +321,13 @@ extra:
         initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}}
         safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
         pool_data_api_url: ${POOL_DATA_API_URL:str:"https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1"}
-        allowed_chains: ${ALLOWED_CHAINS:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
+        allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism"]}
         gas_reserve: ${GAS_RESERVE:str:{"ethereum":1,"optimism":10,"arbitrum":42161}}
         round_threshold: ${ROUND_THRESHOLD:int:5}
         apr_threshold: ${APR_THRESHOLD:int:5}
         min_balance_multiplier: ${MIN_BALANCE_MULTIPLIER:int:5}
         multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}}
-        lifi_request_quote_url: ${LIFI_REQUEST_QUOTE_URL:str:https://li.quest/v1/quote}
+        lifi_advance_routes_url: ${LIFI_ADVANCE_ROUTES_URL:str:https://li.quest/v1/quote}
         lifi_check_status_url: ${LIFI_CHECK_STATUS_URL:str:https://li.quest/v1/status}
         slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.08}
         gas_params:
@@ -318,6 +342,14 @@ extra:
         max_num_of_retries: ${MAX_NUM_OF_RETRIES:int:5}
         reward_claiming_time_period: ${REWARD_CLAIMING_TIME_PERIOD:int:28800}
         merkl_distributor_contract_addresses: ${MERKL_DISTRIBUTOR_CONTRACT_ADDRESSES:str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
+        intermediate_tokens: ${INTERMEDIATE_TOKENS:str:{"optimism":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0x4Fd63966879300caFafBB35D157dC5229278Ed23"},"0x7F5c764cBc14f9669B88837ca1490cCa17c31607":{"symbol":"USDC.e","liquidity_provider":"0xD1F1baD4c9E6c44DeC1e9bF3B94902205c5Cd6C3"},"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58":{"symbol":"USDT","liquidity_provider":"0xc858A329Bf053BE78D6239C4A4343B8FbD21472b"}},"base":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xC771c1a5905420DAEc317b154EB13e4198BA97D0"},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"symbol":"USDC","liquidity_provider":"0xd0b53D9277642d899DF5C87A3966A349A798F224"},"0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA":{"symbol":"USDbC","liquidity_provider":"0x4C36388bE6F416A29C8d8Eee81C771cE6bE14B18"}}}}
+        lifi_fetch_tools_url: ${LIFI_FETCH_TOOLS_URL:str:https://li.quest/v1/tools}
+        merkl_user_rewards_url: ${MERKL_USER_REWARDS_URL:str:https://api.merkl.xyz/v3/userRewards}
+        tenderly_bundle_simulation_url: ${TENDERLY_BUNDLE_SIMULATION_URL:str:https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle}
+        tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:""}
+        tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:""}
+        tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:""}
+        chain_to_chain_id_mapping: ${CHAIN_TO_CHAIN_ID_MAPPING:str:{"optimism":10,"base":8453,"ethereum":1}}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

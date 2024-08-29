@@ -207,7 +207,7 @@ models:
       lifi_advance_routes_url: ${str:https://li.quest/v1/advanced/routes}
       lifi_check_status_url: ${str:https://li.quest/v1/status}
       lifi_fetch_tools_url: ${str:https://li.quest/v1/tools}
-      slippage_for_swap: ${float:0.08}
+      slippage_for_swap: ${float:0.09}
       gas_params:
         gas_price: ${int:null}
         max_fee_per_gas: ${int:5000000000}

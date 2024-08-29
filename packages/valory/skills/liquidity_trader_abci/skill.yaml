@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeidevrhwro7a75hofantooelwlicg4luokrykhxb3n6sethuv7owja
+  behaviours.py: bafybeieulbimgfjg5v6jyto2zqz33zg64e7u2274mzricaue2xxuvmaeum
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeia7dh7vuifjebf63wdqlw6gtrwcss5mapmdzhbju7i6edsw3zqxki
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
@@ -119,7 +119,7 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      service_id: superagent
+      service_id: optimus
       service_registry_address: null
       setup:
         all_participants:
@@ -188,6 +188,11 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-dependencies: {}
+dependencies:
+  web3:
+    version: <7,>=6.0.0
+  eth_abi:
+    version: ==5.1.0
+  eth_utils: {}
 is_abstract: true
 customs: []

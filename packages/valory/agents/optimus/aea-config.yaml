@@ -1,11 +1,11 @@
-agent_name: optimism_agent
+agent_name: optimus
 author: valory
 version: 0.1.0
 license: Apache-2.0
 description: An optimism liquidity trader agent.
 aea_version: '>=1.19.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeidpghiw2mflx65pxagjjfkco2dfqc3gmfdgxkg5yb4xhk47of22wa
+  __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
 fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeie4eixvrdpc5ifoovj24a6res6g2e22dl6di6gzib7d3fczshzyti
@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihu2bcgjk2tqjiq2zhk3uogtfszqn4osvdt7ho3fubdpdj4jgdfjm
 - valory/abstract_round_abci:0.1.0:bafybeibovsktd3uxur45nrcomq5shcn46cgxd5idmhxbmjhg32c5abyqim
-- valory/liquidity_trader_abci:0.1.0:bafybeif4iouax3gdwys7m2qsaqfdbiiav4b72mfvtnmjq2k4nabexnpnlq
-- valory/superagent_abci:0.1.0:bafybeifzhwwtbfbozdk3zl2ztl6jlkxui6wjeypkfnc6f5mu27zsqcakxe
+- valory/liquidity_trader_abci:0.1.0:bafybeibfes2a4z6zarlh6bjywmzvp5fk26sp4wihqvby5iztqvlai4czwe
+- valory/optimus_abci:0.1.0:bafybeian47nlvgw7dm2xijjblhu2ih52l3a3npesysi45nuafflf3gdev4
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
@@ -78,7 +78,7 @@ default_connection: null
 public_id: valory/abci:0.1.0
 type: connection
 config:
-  target_skill_id: valory/superagent_abci:0.1.0
+  target_skill_id: valory/optimus_abci:0.1.0
   host: ${str:localhost}
   port: ${int:26658}
   use_tendermint: ${bool:false}
@@ -122,9 +122,9 @@ public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfezt
 type: connection
 config:
   host: 0.0.0.0
-  target_skill_id: valory/superagent_abci:0.1.0
+  target_skill_id: valory/optimus_abci:0.1.0
 ---
-public_id: valory/superagent_abci:0.1.0
+public_id: valory/optimus_abci:0.1.0
 type: skill
 models:
   benchmark_tool:
@@ -167,7 +167,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       round_timeout_seconds: 30.0
-      service_id: superagent
+      service_id: optimus
       service_registry_address: ${str:null}
       setup:
         all_participants: ${list:["0x1aCD50F973177f4D320913a9Cc494A9c66922fdF"]}

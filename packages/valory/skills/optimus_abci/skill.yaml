@@ -1,4 +1,4 @@
-name: superagent_abci
+name: optimus_abci
 author: valory
 version: 0.1.0
 type: skill
@@ -6,13 +6,13 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigbobqmqww7yld4kunet47kf2kib3kgfzwufqcdkleptdvtsudxtu
-  behaviours.py: bafybeiej6brcarvk26vmrce2omgytonyvytnj6pezvylm3gy24ceui6eqq
-  composition.py: bafybeifqegvv2i6bxgfhvjxlm6lh2cxcug4hf27hufbant7xymndtwdd7q
-  dialogues.py: bafybeigt3xl52z5ftxjoobzqlyqtoreftmndonbkpjgj2wjug4klyhyeby
-  fsm_specification.yaml: bafybeid2dbknhxsaww2jnih54xdo6u7xkqso6t4cifsu6wc5bb57how2zm
-  handlers.py: bafybeiaaqhk7hhrjd3ciumel7u3fmhhfzedwzl6uccoty6qz63ukw3bdp4
-  models.py: bafybeieo356pvzmbzcp7x5klbtgmhiymzo2mmws2wp5lmtzyoflqz7amgq
+  __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
+  behaviours.py: bafybeicbmhh74dgbp3roo2j45bdqnxekewug6km55ygfvsw7pvh2xq5bfy
+  composition.py: bafybeifjxluxy4ekiw43rhbyz5s2lbyep47ktdg7fylumdf45acxkzd6qi
+  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
+  fsm_specification.yaml: bafybeigzvaqy3upkomtkodb7z2jd7kikjjicwx72nito3pwesa2gc2gbbm
+  handlers.py: bafybeife4nrwqiwrx2ucza3vk6t5inpkncuewehtdnitax4lmqq2ptoona
+  models.py: bafybeifj44bwzawnbzoceyzgpvwjxltrvyvhacwvjyutka6yld4gdyfmsi
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,12 +22,12 @@ skills:
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
-- valory/liquidity_trader_abci:0.1.0:bafybeif4iouax3gdwys7m2qsaqfdbiiav4b72mfvtnmjq2k4nabexnpnlq
+- valory/liquidity_trader_abci:0.1.0:bafybeibfes2a4z6zarlh6bjywmzvp5fk26sp4wihqvby5iztqvlai4czwe
 - valory/transaction_settlement_abci:0.1.0:bafybeihq2yenstblmaadzcjousowj5kfn5l7ns5pxweq2gcrsczfyq5wzm
 behaviours:
   main:
     args: {}
-    class_name: SuperAgentConsensusBehaviour
+    class_name: OptimusConsensusBehaviour
 handlers:
   abci:
     args: {}
@@ -107,7 +107,7 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      service_id: superagent
+      service_id: optimus
       service_registry_address: null
       setup:
         all_participants: []
@@ -134,7 +134,7 @@ models:
       multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
       tx_timeout: 10.0
       ipfs_address: https://gateway.autonolas.tech/ipfs/
-      service_endpoint_base: https://superagent.staging.autonolas.tech/
+      service_endpoint_base: https://optimus.staging.autonolas.tech/
       allowed_dexs:
       - balancerPool
       initial_assets: '{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}'

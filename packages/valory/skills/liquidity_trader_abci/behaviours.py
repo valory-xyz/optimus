@@ -1608,6 +1608,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         from_address = self.params.safe_contract_addresses.get(from_chain)
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
+        # TO:DO - Add logic to maintain a list of blacklisted bridges
         params = {
             "fromAddress": from_address,
             "toAddress": to_address,
@@ -1620,6 +1621,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "slippage": slippage,
                 "allowSwitchChain": allow_switch_chain,
                 "integrator": "valory",
+                "bridges": {"deny": ["stargateV2Bus"]},
             },
         }
 

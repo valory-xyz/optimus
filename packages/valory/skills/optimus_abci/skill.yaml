@@ -6,13 +6,13 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigbobqmqww7yld4kunet47kf2kib3kgfzwufqcdkleptdvtsudxtu
-  behaviours.py: bafybeiej6brcarvk26vmrce2omgytonyvytnj6pezvylm3gy24ceui6eqq
-  composition.py: bafybeifqegvv2i6bxgfhvjxlm6lh2cxcug4hf27hufbant7xymndtwdd7q
-  dialogues.py: bafybeigt3xl52z5ftxjoobzqlyqtoreftmndonbkpjgj2wjug4klyhyeby
-  fsm_specification.yaml: bafybeid2dbknhxsaww2jnih54xdo6u7xkqso6t4cifsu6wc5bb57how2zm
-  handlers.py: bafybeiaaqhk7hhrjd3ciumel7u3fmhhfzedwzl6uccoty6qz63ukw3bdp4
-  models.py: bafybeieo356pvzmbzcp7x5klbtgmhiymzo2mmws2wp5lmtzyoflqz7amgq
+  __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
+  behaviours.py: bafybeicbmhh74dgbp3roo2j45bdqnxekewug6km55ygfvsw7pvh2xq5bfy
+  composition.py: bafybeifjxluxy4ekiw43rhbyz5s2lbyep47ktdg7fylumdf45acxkzd6qi
+  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
+  fsm_specification.yaml: bafybeigzvaqy3upkomtkodb7z2jd7kikjjicwx72nito3pwesa2gc2gbbm
+  handlers.py: bafybeife4nrwqiwrx2ucza3vk6t5inpkncuewehtdnitax4lmqq2ptoona
+  models.py: bafybeifj44bwzawnbzoceyzgpvwjxltrvyvhacwvjyutka6yld4gdyfmsi
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
-- valory/liquidity_trader_abci:0.1.0:bafybeibbi3fjcocg5dubavq6yiep7nshphci4uh3aakj2mnvxvgjkpobhe
+- valory/liquidity_trader_abci:0.1.0:bafybeianenio4iil3qtucwsjjrp42ixxfvibq72osd7shqseygbze4rgle
 - valory/transaction_settlement_abci:0.1.0:bafybeihq2yenstblmaadzcjousowj5kfn5l7ns5pxweq2gcrsczfyq5wzm
 behaviours:
   main:

@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigdfk3th36mcaoew2of5zo2rrgyc2oqntzznjkii6a3zuafyvriou
   build/WeightedPool.json: bafybeiclbkl3snzwo36nnbvjpge2jfcyo3a7lzzhfsfr4piv3n6djrs3le
-  contract.py: bafybeiaqczbcnpojad4274mrtczi2ziljsmop3b5vtb6m6wz45s3443qyy
+  contract.py: bafybeibojzlorprdqnbj4yp64ziheusdbvszijuk7xgeyjrcfzsw6z7koy
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: WeightedPoolContract

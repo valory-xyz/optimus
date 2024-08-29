@@ -3,9 +3,9 @@
 REPO_PATH=$PWD
 
 # Remove previous service build
-if test -d optimism_service; then
+if test -d optimus; then
   echo "Removing previous service build"
-  sudo rm -r optimism_service
+  sudo rm -r optimus
 fi
 
 # Push packages and fetch service
@@ -13,7 +13,7 @@ make clean
 
 autonomy push-all
 
-autonomy fetch --local --service valory/optimism_service && cd optimism_service
+autonomy fetch --local --service valory/optimus && cd optimus
 
 # Build the image
 autonomy init --reset --author author --remote --ipfs --ipfs-node "/dns/registry.autonolas.tech/tcp/443/https"

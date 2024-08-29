@@ -1,11 +1,11 @@
-agent_name: optimism_agent
+agent_name: optimus
 author: valory
 version: 0.1.0
 license: Apache-2.0
 description: An optimism liquidity trader agent.
 aea_version: '>=1.19.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeidpghiw2mflx65pxagjjfkco2dfqc3gmfdgxkg5yb4xhk47of22wa
+  __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
 fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeie4eixvrdpc5ifoovj24a6res6g2e22dl6di6gzib7d3fczshzyti
@@ -19,10 +19,10 @@ contracts:
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeihi4cvrnf5ne7t5cxcwix3dbtfjucfjux6zn4wouebjx3ldmrmnpm
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeieqgcuxmz4uxvlyb62mfsf33qy4xwa5lrij4vvcmrtcsfkng43oyq
-- valory/balancer_weighted_pool:0.1.0:bafybeicuze5u7535zhbty7keqyuhm7txfp2krp7cn37buqsy2e42s5qbyy
-- valory/balancer_vault:0.1.0:bafybeictha4qwxopkikvgi3dafjalwqravi4xkbazl6dq42kehwq6rebbm
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeihm37pvmmppu5254ho5hyd6jwygisc63mubqpqkp6fyss2mszfknu
-- valory/uniswap_v3_pool:0.1.0:bafybeidr7slxgoq4hfppjw757d7tsmmljeajdck4fuan4nimlpvcva27jy
+- valory/balancer_weighted_pool:0.1.0:bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq
+- valory/balancer_vault:0.1.0:bafybeie5nhvq6b5t62xaer5uej3vgyecvwnghslhuo2y2cdfniizuphh4m
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeieljamerttxyo7z2yokwripnnhzkn4zply5lz457vsixf5wfu5px4
+- valory/uniswap_v3_pool:0.1.0:bafybeidglijnyueahpgivaykbhio2r3ovfeo23a256y3yb6g7be4hngx3a
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihu2bcgjk2tqjiq2zhk3uogtfszqn4osvdt7ho3fubdpdj4jgdfjm
 - valory/abstract_round_abci:0.1.0:bafybeibovsktd3uxur45nrcomq5shcn46cgxd5idmhxbmjhg32c5abyqim
-- valory/liquidity_trader_abci:0.1.0:bafybeifcuetjxraylm5x2eqaqcbqqrdb2vlcdjvwpoduwnaxrafv3pc2l4
-- valory/superagent_abci:0.1.0:bafybeiagqdhd3coamtwchsvlaz4iii6ehauyfcv7jly27ockged5knnvce
+- valory/liquidity_trader_abci:0.1.0:bafybeidcwaaf3dhbfmo2fwq32q5fn5lvgsstqfl5gweavrxxsx2yg2erpm
+- valory/optimus_abci:0.1.0:bafybeie7ngwvevnt5a7zs6ma6yp6sxcu3wlo3f3l6of6lzs7ikn6qural4
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
@@ -78,7 +78,7 @@ default_connection: null
 public_id: valory/abci:0.1.0
 type: connection
 config:
-  target_skill_id: valory/superagent_abci:0.1.0
+  target_skill_id: valory/optimus_abci:0.1.0
   host: ${str:localhost}
   port: ${int:26658}
   use_tendermint: ${bool:false}
@@ -122,9 +122,9 @@ public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfezt
 type: connection
 config:
   host: 0.0.0.0
-  target_skill_id: valory/superagent_abci:0.1.0
+  target_skill_id: valory/optimus_abci:0.1.0
 ---
-public_id: valory/superagent_abci:0.1.0
+public_id: valory/optimus_abci:0.1.0
 type: skill
 models:
   benchmark_tool:
@@ -167,7 +167,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       round_timeout_seconds: 30.0
-      service_id: superagent
+      service_id: optimus
       service_registry_address: ${str:null}
       setup:
         all_participants: ${list:["0x1aCD50F973177f4D320913a9Cc494A9c66922fdF"]}
@@ -195,17 +195,18 @@ models:
       default_chain_id: ${str:optimism}
       termination_from_block: ${int:34088325}
       allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
-      initial_assets: ${str:{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}}
+      initial_assets: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
-      pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns?chainIds={chain_id}&live=true&types={type}}
-      allowed_chains: ${str:{"ethereum":1,"optimism":10,"base":8453}}
+      pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns}
+      allowed_chains: ${list:["optimism","base"]}
       gas_reserve: ${str:{"ethereum":1000,"optimism":1000,"base":1000}}
       round_threshold: ${int:0}
       apr_threshold: ${int:5}
       min_balance_multiplier: ${int:5}
       multisend_contract_addresses: ${str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}}
-      lifi_request_quote_url: ${str:https://li.quest/v1/quote}
+      lifi_advance_routes_url: ${str:https://li.quest/v1/advanced/routes}
       lifi_check_status_url: ${str:https://li.quest/v1/status}
+      lifi_fetch_tools_url: ${str:https://li.quest/v1/tools}
       slippage_for_swap: ${float:0.08}
       gas_params:
         gas_price: ${int:null}
@@ -217,3 +218,12 @@ models:
       chain_to_chain_key_mapping: ${str:{"ethereum":"eth","optimism":"opt","base":"bas"}}
       waiting_period_for_retry: ${int:5}
       max_num_of_retries: ${int:5}
+      reward_claiming_time_period: ${int:28800}
+      merkl_distributor_contract_addresses: ${str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
+      intermediate_tokens: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":{"symbol":"ETH","liquidity_provider":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"},"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2":{"symbol":"WETH","liquidity_provider":"0xF04a5cC80B1E94C69B48f5ee68a08CD2F09A7c3E"},"0xdAC17F958D2ee523a2206206994597C13D831ec7":{"symbol":"USDT","liquidity_provider":"0xcEe284F754E854890e311e3280b767F80797180d"},"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":{"symbol":"USDC","liquidity_provider":"0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"},"0x6B175474E89094C44Da98b954EedeAC495271d0F":{"symbol":"DAI","liquidity_provider":"0x517F9dD285e75b599234F7221227339478d0FcC8"},"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84":{"symbol":"stETH","liquidity_provider":"0x4028DAAC072e492d34a3Afdbef0ba7e35D8b55C4"},"0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0":{"symbol":"wstETH","liquidity_provider":"0x109830a1AAaD605BbF02a9dFA7B0B92EC2FB7dAa"},"0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599":{"symbol":"WBTC","liquidity_provider":"0xCBCdF9626bC03E24f779434178A73a0B4bad62eD"},"0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984":{"symbol":"UNI","liquidity_provider":"0x1d42064Fc4Beb5F8aAF85F4617AE8b3b5B8Bd801"}},"optimism":{"0x0000000000000000000000000000000000000000":{"symbol":"ETH","liquidity_provider":"0x4200000000000000000000000000000000000006"},"0x7F5c764cBc14f9669B88837ca1490cCa17c31607":{"symbol":"USDC.e","liquidity_provider":"0xD1F1baD4c9E6c44DeC1e9bF3B94902205c5Cd6C3"},"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"},"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58":{"symbol":"USDT","liquidity_provider":"0xA73C628eaf6e283E26A7b1f8001CF186aa4c0E8E"},"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1":{"symbol":"DAI","liquidity_provider":"0x03aF20bDAaFfB4cC0A521796a223f7D85e2aAc31"},"0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb":{"symbol":"wstETH","liquidity_provider":"0x04F6C85A1B00F6D9B75f91FD23835974Cc07E65c"},"0x68f180fcCe6836688e9084f035309E29Bf0A2095":{"symbol":"WBTC","liquidity_provider":"0x078f358208685046a11C85e8ad32895DED33A249"},"0x76FB31fb4af56892A25e32cFC43De717950c9278":{"symbol":"AAVE","liquidity_provider":"0xf329e36C7bF6E5E86ce2150875a84Ce77f477375"},"0x4200000000000000000000000000000000000042":{"symbol":"OP","liquidity_provider":"0x2A82Ae142b2e62Cb7D10b55E323ACB1Cab663a26"}},"base":{"0x0000000000000000000000000000000000000000":{"symbol":"ETH","liquidity_provider":"0xd0b53D9277642d899DF5C87A3966A349A798F224"},"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"symbol":"USDC","liquidity_provider":"0x0B0A5886664376F59C351ba3f598C8A8B4D0A6f3"},"0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA":{"symbol":"USDbC","liquidity_provider":"0x0B25c51637c43decd6CC1C1e3da4518D54ddb528"},"0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb":{"symbol":"DAI","liquidity_provider":"0x927860797d07b1C46fbBe7f6f73D45C7E1BFBb27"},"0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452":{"symbol":"wstETH","liquidity_provider":"0x99CBC45ea5bb7eF3a5BC08FB1B7E56bB2442Ef0D"},"0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c":{"symbol":"rETH","liquidity_provider":"0x95Fa1ddc9a78273f795e67AbE8f1Cd2Cd39831fF"},"0x532f27101965dd16442E59d40670FaF5eBB142E4":{"symbol":"BRETT","liquidity_provider":"0xBA3F945812a83471d709BCe9C3CA699A19FB46f7"}}}}
+      merkl_user_rewards_url: ${str:https://api.merkl.xyz/v3/userRewards}
+      tenderly_bundle_simulation_url: ${str:https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle}
+      tenderly_access_key: ${str:access_key}
+      tenderly_account_slug: ${str:account_slug}
+      tenderly_project_slug: ${str:project_slug}
+      chain_to_chain_id_mapping: ${str:{"optimism":10,"base":8453,"ethereum":1}}

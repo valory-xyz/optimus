@@ -24,9 +24,9 @@ repo_path=$PWD
 trap cleanup EXIT
 
 # Remove previous agent if exists
-if test -d optimism_agent; then
+if test -d optimus; then
   echo "Removing previous agent build"
-  rm -r optimism_agent
+  rm -r optimus
 fi
 
 # Remove empty directories to avoid wrong hashes
@@ -36,11 +36,11 @@ find . -empty -type d -delete
 autonomy packages lock
 
 # Fetch the agent
-autonomy fetch --local --agent valory/optimism_agent
+autonomy fetch --local --agent valory/optimus
 python scripts/aea-config-replace.py
 
 # Copy and add the keys and issue certificates
-cd optimism_agent
+cd optimus
 cp $PWD/../ethereum_private_key.txt .
 autonomy add-key ethereum ethereum_private_key.txt
 autonomy issue-certificates

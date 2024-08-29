@@ -6,13 +6,13 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
-  behaviours.py: bafybeicbmhh74dgbp3roo2j45bdqnxekewug6km55ygfvsw7pvh2xq5bfy
-  composition.py: bafybeigjgivjqnutuvh3lglaux33niit23mlr2bg2g5ityterkkpy3jy3q
-  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
-  fsm_specification.yaml: bafybeifdc2ch4f2jmdxvdib4guak4wr6rbrxl6zipjcanxx4eal2lotslm
-  handlers.py: bafybeife4nrwqiwrx2ucza3vk6t5inpkncuewehtdnitax4lmqq2ptoona
-  models.py: bafybeiaf3entny2m5kwbyd5y7lo335oxsa7rv6yate5lt4fmyfzp5cwpgm
+  __init__.py: bafybeigbobqmqww7yld4kunet47kf2kib3kgfzwufqcdkleptdvtsudxtu
+  behaviours.py: bafybeiej6brcarvk26vmrce2omgytonyvytnj6pezvylm3gy24ceui6eqq
+  composition.py: bafybeifqegvv2i6bxgfhvjxlm6lh2cxcug4hf27hufbant7xymndtwdd7q
+  dialogues.py: bafybeigt3xl52z5ftxjoobzqlyqtoreftmndonbkpjgj2wjug4klyhyeby
+  fsm_specification.yaml: bafybeid2dbknhxsaww2jnih54xdo6u7xkqso6t4cifsu6wc5bb57how2zm
+  handlers.py: bafybeiaaqhk7hhrjd3ciumel7u3fmhhfzedwzl6uccoty6qz63ukw3bdp4
+  models.py: bafybeieo356pvzmbzcp7x5klbtgmhiymzo2mmws2wp5lmtzyoflqz7amgq
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
-- valory/liquidity_trader_abci:0.1.0:bafybeicjingwiatzruk77jfb6boruipszo6fe4huj3j53daziruonyrf7y
+- valory/liquidity_trader_abci:0.1.0:bafybeibbi3fjcocg5dubavq6yiep7nshphci4uh3aakj2mnvxvgjkpobhe
 - valory/transaction_settlement_abci:0.1.0:bafybeihq2yenstblmaadzcjousowj5kfn5l7ns5pxweq2gcrsczfyq5wzm
 behaviours:
   main:
@@ -137,16 +137,18 @@ models:
       service_endpoint_base: https://optimus.staging.autonolas.tech/
       allowed_dexs:
       - balancerPool
-      initial_assets: '{"ethereum":{"eth":"0x0000000000000000000000000000000000000000","usdc":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}}'
+      initial_assets: '{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}'
       safe_contract_addresses: '{"ethereum":"0x0000000000000000000000000000000000000000","arbitrum":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}'
       pool_data_api_url: https://api.merkl.xyz/v3/campaigns?chainIds=42161&live=true&types=1
-      allowed_chains: '{"ethereum":1,"optimism":10,"arbitrum":42161}'
+      allowed_chains:
+      - base
+      - optimism
       gas_reserve: '{"ethereum":1,"optimism":10,"arbitrum":42161}'
       round_threshold: 5
       apr_threshold: 5
       min_balance_multiplier: 5
       multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
-      lifi_request_quote_url: https://li.quest/v1/quote
+      lifi_advance_routes_url: https://li.quest/v1/quote
       lifi_check_status_url: https://li.quest/v1/status
       slippage_for_swap: 0.08
       gas_params:
@@ -154,8 +156,21 @@ models:
         max_fee_per_gas: 50000000
         max_priority_fee_per_gas: 150000
       manual_gas_limit: 500000
-      balancer_vault_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
+      balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
+      uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
       chain_to_chain_key_mapping: '{"optimism":"opt","base":"bas"}'
+      waiting_period_for_retry: 5
+      max_num_of_retries: 5
+      reward_claiming_time_period: 28800
+      merkl_distributor_contract_addresses: '{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}'
+      intermediate_tokens: '{"optimism":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0x4Fd63966879300caFafBB35D157dC5229278Ed23"},"0x7F5c764cBc14f9669B88837ca1490cCa17c31607":{"symbol":"USDC.e","liquidity_provider":"0xD1F1baD4c9E6c44DeC1e9bF3B94902205c5Cd6C3"},"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58":{"symbol":"USDT","liquidity_provider":"0xc858A329Bf053BE78D6239C4A4343B8FbD21472b"}},"base":{"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xC771c1a5905420DAEc317b154EB13e4198BA97D0"},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"symbol":"USDC","liquidity_provider":"0xd0b53D9277642d899DF5C87A3966A349A798F224"},"0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA":{"symbol":"USDbC","liquidity_provider":"0x4C36388bE6F416A29C8d8Eee81C771cE6bE14B18"}}}'
+      lifi_fetch_tools_url: https://li.quest/v1/tools
+      merkl_user_rewards_url: https://api.merkl.xyz/v3/userRewards
+      tenderly_bundle_simulation_url: https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle
+      tenderly_access_key: access_key
+      tenderly_account_slug: account_slug
+      tenderly_project_slug: project_slug
+      chain_to_chain_id_mapping: '{"optimism":10,"base":8453,"ethereum":1}'
     class_name: Params
   randomness_api:
     args:

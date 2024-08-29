@@ -49,7 +49,7 @@ BenchmarkTool = BaseBenchmarkTool
 RandomnessApi = BaseRandomnessApi
 
 MARGIN = 5
-MULTIPLIER = 10
+MULTIPLIER = 40
 
 
 class SharedState(BaseSharedState):

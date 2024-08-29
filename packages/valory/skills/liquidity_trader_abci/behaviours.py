@@ -345,7 +345,13 @@ class LiquidityTraderBaseBehaviour(
                 except (json.JSONDecodeError, TypeError) as e:
                     err = f"Error decoding {attribute} from {filepath!r}: {str(e)}"
                     setattr(self, attribute, {})
-        except (FileNotFoundError, PermissionError, OSError) as e:
+        except FileNotFoundError:
+            # Create the file if it doesn't exist
+            with open(filepath, WRITE_MODE) as file:
+                json.dump({}, file)
+            setattr(self, attribute, {})
+            return
+        except (PermissionError, OSError) as e:
             err = f"Error reading from file {filepath!r}: {str(e)}"
             setattr(self, attribute, {})
 
@@ -583,7 +589,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             try:
                 data = json.loads(response.body)
-                self.context.logger.info("Pool Info retrieved from API")
             except (ValueError, TypeError) as e:
                 self.context.logger.error(
                     f"Could not parse response from api, "

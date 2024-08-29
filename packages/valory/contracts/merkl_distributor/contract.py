@@ -39,18 +39,21 @@ class DistributorContract(Contract):
         users: list,
         tokens: list,
         amounts: list,
-        proofs: list
+        proofs: list[list[str]]
     ) -> JSONLike:
         """Prepare a claim rewards transaction."""
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
+        # Convert proofs from hex strings to bytes32
+        proofs_converted = [[bytes.fromhex(proof[2:]) for proof in proof_list] for proof_list in proofs]
+
         data = contract_instance.encodeABI(
             "claim",
             args=(
                 users,
                 tokens,
                 amounts,
-                proofs
+                proofs_converted
             )
         )
         return {"tx_hash": bytes.fromhex(data[2:])}

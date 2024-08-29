@@ -6,10 +6,10 @@
         "contract/valory/uniswap_v3_non_fungible_position_manager/0.1.0": "bafybeieljamerttxyo7z2yokwripnnhzkn4zply5lz457vsixf5wfu5px4",
         "contract/valory/uniswap_v3_pool/0.1.0": "bafybeidglijnyueahpgivaykbhio2r3ovfeo23a256y3yb6g7be4hngx3a",
         "contract/valory/merkl_distributor/0.1.0": "bafybeihzjjrjq5auklml6xlnzuggeilgyttqobq455oddh5sxszgqq5alq",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeif4iouax3gdwys7m2qsaqfdbiiav4b72mfvtnmjq2k4nabexnpnlq",
-        "skill/valory/superagent_abci/0.1.0": "bafybeifzhwwtbfbozdk3zl2ztl6jlkxui6wjeypkfnc6f5mu27zsqcakxe",
-        "agent/valory/optimism_agent/0.1.0": "bafybeicrgv4blioq73sq2to47nw6jv6cn7oxf37nyuw3arq6ijp7mmv2za",
-        "service/valory/optimism_service/0.1.0": "bafybeifnel4yrsobxlo5hcywmj4c7slfq5iiluanzpimaylru4bptn7qf4"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeibfes2a4z6zarlh6bjywmzvp5fk26sp4wihqvby5iztqvlai4czwe",
+        "skill/valory/optimus_abci/0.1.0": "bafybeian47nlvgw7dm2xijjblhu2ih52l3a3npesysi45nuafflf3gdev4",
+        "agent/valory/optimus/0.1.0": "bafybeihqqzbfanuybjcobqejwn63jkhgjgcqrxfntrcq4b6ak4d5obv2ru",
+        "service/valory/optimus/0.1.0": "bafybeibygewwes63fidt63mg52afpwismsym77oaspg37zpsrn5jj7ph5i"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

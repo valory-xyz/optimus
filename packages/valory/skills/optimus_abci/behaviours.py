@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of SuperAgentAbciApp."""
+"""This package contains round behaviours of OptimusAbciApp."""
 
 from typing import Set, Type
 
@@ -35,7 +35,7 @@ from packages.valory.skills.registration_abci.behaviours import (
 from packages.valory.skills.reset_pause_abci.behaviours import (
     ResetPauseABCIConsensusBehaviour,
 )
-from packages.valory.skills.superagent_abci.composition import SuperAgentAbciApp
+from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
 from packages.valory.skills.termination_abci.behaviours import (
     BackgroundBehaviour,
     TerminationAbciBehaviours,
@@ -45,11 +45,11 @@ from packages.valory.skills.transaction_settlement_abci.behaviours import (
 )
 
 
-class SuperAgentConsensusBehaviour(AbstractRoundBehaviour):
+class OptimusConsensusBehaviour(AbstractRoundBehaviour):
     """Class to define the behaviours this AbciApp has."""
 
     initial_behaviour_cls = RegistrationStartupBehaviour
-    abci_app_cls = SuperAgentAbciApp  # type: ignore
+    abci_app_cls = OptimusAbciApp  # type: ignore
     behaviours: Set[Type[BaseBehaviour]] = {
         *AgentRegistrationRoundBehaviour.behaviours,
         *ResetPauseABCIConsensusBehaviour.behaviours,

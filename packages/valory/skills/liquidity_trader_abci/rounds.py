@@ -171,19 +171,21 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             positions = payload.get("updates", {}).get("positions", None)
             if positions and not isinstance(positions, str):
                 payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
-            
+
             bridge_and_swap_actions = payload.get("bridge_and_swap_actions", {})
             updated_actions = self.synchronized_data.actions
-            if bridge_and_swap_actions and bridge_and_swap_actions.get('actions'):
+            if bridge_and_swap_actions and bridge_and_swap_actions.get("actions"):
                 if not self.synchronized_data.last_executed_action_index:
                     index = 1
                 else:
-                    index = self.synchronized_data.last_executed_action_index+2
-                updated_actions[index: index] = bridge_and_swap_actions.get('actions')
+                    index = self.synchronized_data.last_executed_action_index + 2
+                updated_actions[index:index] = bridge_and_swap_actions.get("actions")
 
             serialized_actions = json.dumps(updated_actions)
             synchronized_data = synchronized_data.update(
-                synchronized_data_class=SynchronizedData, **payload.get("updates", {}), actions=serialized_actions
+                synchronized_data_class=SynchronizedData,
+                **payload.get("updates", {}),
+                actions=serialized_actions
             )
             return synchronized_data, event
 

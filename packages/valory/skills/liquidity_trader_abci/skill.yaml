@@ -113,7 +113,7 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      service_id: superagent
+      service_id: optimus
       service_registry_address: null
       setup:
         all_participants:

@@ -24,10 +24,10 @@ packages/valory/services/*
 packages/valory/protocols/*
 packages/valory/skills/*
 
-!packages/valory/agents/optimism_agent
-!packages/valory/services/optimism_service
+!packages/valory/agents/optimus
+!packages/valory/services/optimus
 !packages/valory/skills/liquidity_trader_abci
-!packages/valory/skills/superagent_abci
+!packages/valory/skills/optimus_abci
 
 leak_report
 /Pipfile.lock

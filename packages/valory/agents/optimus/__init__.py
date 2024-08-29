@@ -17,9 +17,8 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the default skill."""
+"""Package for valory/optimus agent."""
+from pathlib import Path
 
-from aea.configurations.base import PublicId
 
-
-PUBLIC_ID = PublicId.from_str("valory/superagent_abci:0.1.0")
+PACKAGE_DIR = Path(__file__).parent

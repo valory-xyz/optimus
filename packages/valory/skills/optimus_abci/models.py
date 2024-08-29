@@ -35,8 +35,8 @@ from packages.valory.skills.liquidity_trader_abci.models import (
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     Event as LiquidityTraderEvent,
 )
-from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
+from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
 from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,

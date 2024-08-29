@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeigrhcebb2opxa7guw22ignwq3s5hdz4sp43gkujrn77k3ut6wxobe
+  behaviours.py: bafybeih6fjcgvwzitvlujy56z3ugtk7nqfe47ohpdrpj7ggusigtmnyuya
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeia7dh7vuifjebf63wdqlw6gtrwcss5mapmdzhbju7i6edsw3zqxki
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
@@ -24,12 +24,12 @@ connections: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiho6sbfts3zk3mftrngw37d5qnlvkqtnttt3fzexmcwkeevhu4wwi
 - valory/balancer_weighted_pool:0.1.0:bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq
-- valory/balancer_vault:0.1.0:bafybeie5nhvq6b5t62xaer5uej3vgyecvwnghslhuo2y2cdfniizuphh4m
+- valory/balancer_vault:0.1.0:bafybeicewjzxphjxnzhjrgcycj5d3twuuuh2cvfkwzupxjmcrq2pp2iqgq
 - valory/erc20:0.1.0:bafybeigtb27utncatguvxs63cuqc2336y5jk7vksxh2ycq3rn7pvnj5ifq
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeieljamerttxyo7z2yokwripnnhzkn4zply5lz457vsixf5wfu5px4
 - valory/uniswap_v3_pool:0.1.0:bafybeidglijnyueahpgivaykbhio2r3ovfeo23a256y3yb6g7be4hngx3a
-- valory/merkl_distributor:0.1.0:bafybeihzjjrjq5auklml6xlnzuggeilgyttqobq455oddh5sxszgqq5alq
+- valory/merkl_distributor:0.1.0:bafybeifctofnyhdic2sxmkqujvf3j2wwydhtvzhi6kdeutykenymplf4e4
 protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
@@ -192,7 +192,7 @@ dependencies:
   web3:
     version: <7,>=6.0.0
   eth_abi:
-    version: ==5.1.0
+    version: ==4.0.0
   eth_utils: {}
 is_abstract: true
 customs: []

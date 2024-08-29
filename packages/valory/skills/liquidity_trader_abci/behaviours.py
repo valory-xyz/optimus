@@ -26,11 +26,11 @@ from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from urllib.parse import urlencode
-from web3 import Web3
 
 from aea.configurations.data_types import PublicId
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_hex
+from web3 import Web3
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.erc20.contract import ERC20
@@ -377,7 +377,6 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-
             if not self.assets:
                 self.assets = self.params.initial_assets
                 self.store_assets()
@@ -397,7 +396,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
-    
+
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """EvaluateStrategyBehaviour"""
@@ -754,14 +753,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Sort tokens by balance in descending order and add the highest one
             token_balances.sort(key=lambda x: x["balance"], reverse=True)
 
-            #TO:DO - Add another way to choose tokens because we can't rely on balance alone 
+            # TO:DO - Add another way to choose tokens because we can't rely on balance alone
             # (a.some tokens have 6 decimals  b.even though tokens have higher amount they might be less valuable)
             for token_data in token_balances:
                 tokens.append(token_data)
                 if len(tokens) == 2:
                     break
 
-        return tokens                
+        return tokens
+
     def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
 
@@ -999,12 +999,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if not tokens:
                 self.context.logger.warning("No tokens to claim")
                 return None
-            claims = [int(data[t].get("unclaimed",0)) for t in tokens]
+            claims = [int(data[t].get("unclaimed", 0)) for t in tokens]
             # Check if all claims are zero
             if all(claim == 0 for claim in claims):
                 self.context.logger.warning("All claims are zero, nothing to claim")
                 return None
-            
+
             proofs = [data[t].get("proof") for t in tokens]
             return {
                 "users": [user_address] * len(tokens),
@@ -1054,16 +1054,26 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     """DecisionMakingBehaviour"""
 
     matching_round: Type[AbstractRound] = DecisionMakingRound
+
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-            next_event, updates, bridge_and_swap_actions = yield from self.get_next_event()
+            (
+                next_event,
+                updates,
+                bridge_and_swap_actions,
+            ) = yield from self.get_next_event()
 
             payload = DecisionMakingPayload(
                 sender=sender,
                 content=json.dumps(
-                    {"event": next_event, "updates": updates, "bridge_and_swap_actions": bridge_and_swap_actions}, sort_keys=True
+                    {
+                        "event": next_event,
+                        "updates": updates,
+                        "bridge_and_swap_actions": bridge_and_swap_actions,
+                    },
+                    sort_keys=True,
                 ),
             )
 
@@ -1095,7 +1105,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if (
             last_round_id != DecisionMakingRound.auto_round_id()
             and last_round_id != EvaluateStrategyRound.auto_round_id()
-            and Action(actions[last_executed_action_index].get("action")) == Action.BRIDGE_SWAP
+            and Action(actions[last_executed_action_index].get("action"))
+            == Action.BRIDGE_SWAP
         ):
             self.context.logger.info("Checking the status of swap tx")
             decision = yield from self.get_decision_on_swap()
@@ -1212,17 +1223,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             bridge_and_swap_actions = yield from self.get_transaction_data_for_route(
                 positions, next_action_details
             )
-            if not bridge_and_swap_actions or not bridge_and_swap_actions.get('actions'):
+            if not bridge_and_swap_actions or not bridge_and_swap_actions.get(
+                "actions"
+            ):
                 return Event.DONE.value, {}, {}
-            
-            return Event.UPDATE.value, {"last_executed_action_index": current_action_index}, bridge_and_swap_actions
-        
+
+            return (
+                Event.UPDATE.value,
+                {"last_executed_action_index": current_action_index},
+                bridge_and_swap_actions,
+            )
+
         elif next_action == Action.BRIDGE_SWAP:
-            #wait for sometime to get the balances reflected
+            # wait for sometime to get the balances reflected
             yield from self.sleep(5)
-            tx_hash = next_action_details.get('payload')
-            chain_id = next_action_details.get('from_chain')
-            safe_address = next_action_details.get('safe_address')
+            tx_hash = next_action_details.get("payload")
+            chain_id = next_action_details.get("from_chain")
+            safe_address = next_action_details.get("safe_address")
 
         elif next_action == Action.CLAIM_REWARDS:
             tx_hash, chain_id, safe_address = yield from self.get_claim_rewards_tx_hash(
@@ -1238,14 +1255,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("There was an error preparing the next action")
             return Event.DONE.value, {}, {}
 
-        return Event.SETTLE.value, {
-            "most_voted_tx_hash": tx_hash,
-            "chain_id": chain_id,
-            "safe_contract_address": safe_address,
-            "positions": positions,
-            # TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
-            "last_executed_action_index": current_action_index,
-        }, {}
+        return (
+            Event.SETTLE.value,
+            {
+                "most_voted_tx_hash": tx_hash,
+                "chain_id": chain_id,
+                "safe_contract_address": safe_address,
+                "positions": positions,
+                # TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
+                "last_executed_action_index": current_action_index,
+            },
+            {},
+        )
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:
         """Get decision on swap"""
@@ -1564,17 +1585,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-    def get_transaction_data_for_route(self, positions, action) -> Generator[None, None, Dict]:
- 
+    def get_transaction_data_for_route(
+        self, positions, action
+    ) -> Generator[None, None, Dict]:
         bridge_and_swap_actions = {"actions": []}
-        from_chain = action.get('from_chain')
-        to_chain = action.get('to_chain')
+        from_chain = action.get("from_chain")
+        to_chain = action.get("to_chain")
         from_chain_id = self.params.chain_to_chain_id_mapping.get(from_chain)
         to_chain_id = self.params.chain_to_chain_id_mapping.get(to_chain)
-        from_token_address = action.get('from_token')
-        to_token_address = action.get('to_token')
-        from_token_symbol = action.get('from_token_symbol')
-        to_token_symbol = action.get('to_token_symbol')
+        from_token_address = action.get("from_token")
+        to_token_address = action.get("to_token")
+        from_token_symbol = action.get("from_token_symbol")
+        to_token_symbol = action.get("to_token_symbol")
         allow_switch_chain = True
         slippage = self.params.slippage_for_swap
         amount = self._get_balance(from_chain, from_token_address, positions)
@@ -1582,7 +1604,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
         params = {
-            "fromAddress" : from_address,
+            "fromAddress": from_address,
             "toAddress": to_address,
             "fromChainId": from_chain_id,
             "fromAmount": amount,
@@ -1592,24 +1614,26 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "options": {
                 "slippage": slippage,
                 "allowSwitchChain": allow_switch_chain,
-                "integrator": "valory"
-            }
+                "integrator": "valory",
+            },
         }
 
         if any(value is None for key, value in params.items()):
             self.context.logger.error(f"Missing value in params: {params}")
             return {}
-        
-        self.context.logger.info(f"Finding route: {from_token_symbol}({from_chain}) --> {to_token_symbol}({to_chain})")
-        
+
+        self.context.logger.info(
+            f"Finding route: {from_token_symbol}({from_chain}) --> {to_token_symbol}({to_chain})"
+        )
+
         url = self.params.lifi_advance_routes_url
         routes_response = yield from self.get_http_response(
             "POST",
             url,
             json.dumps(params).encode(),
             headers={
-            "accept": "application/json",
-            "Content-Type": "application/json"  # Ensure the correct content type
+                "accept": "application/json",
+                "Content-Type": "application/json",  # Ensure the correct content type
             },
         )
 
@@ -1629,20 +1653,44 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         routes = routes_response.get("routes", [])
         for route in routes:
-            steps = route.get('steps', {})
+            steps = route.get("steps", {})
             all_steps_successful = True
             for step in steps:
                 from_chain_id = step.get("action", {}).get("fromChainId")
-                from_chain = next((k for k, v in self.params.chain_to_chain_id_mapping.items() if v == from_chain_id), None)
+                from_chain = next(
+                    (
+                        k
+                        for k, v in self.params.chain_to_chain_id_mapping.items()
+                        if v == from_chain_id
+                    ),
+                    None,
+                )
                 to_chain_id = step.get("action", {}).get("toChainId")
-                to_chain = next((k for k, v in self.params.chain_to_chain_id_mapping.items() if v == to_chain_id), None)
-                step["action"]["fromAddress"] = self.params.safe_contract_addresses.get(from_chain)
-                step["action"]["toAddress"] = self.params.safe_contract_addresses.get(to_chain)
-                from_token_symbol = step.get("action", {}).get("fromToken", {}).get("symbol")
-                to_token_symbol = step.get("action", {}).get("toToken", {}).get("symbol")
+                to_chain = next(
+                    (
+                        k
+                        for k, v in self.params.chain_to_chain_id_mapping.items()
+                        if v == to_chain_id
+                    ),
+                    None,
+                )
+                step["action"]["fromAddress"] = self.params.safe_contract_addresses.get(
+                    from_chain
+                )
+                step["action"]["toAddress"] = self.params.safe_contract_addresses.get(
+                    to_chain
+                )
+                from_token_symbol = (
+                    step.get("action", {}).get("fromToken", {}).get("symbol")
+                )
+                to_token_symbol = (
+                    step.get("action", {}).get("toToken", {}).get("symbol")
+                )
                 tool = step.get("tool")
 
-                self.context.logger.info(f"TX: {from_token_symbol}({from_chain}) --> {to_token_symbol}({to_chain}). Tool being used: {tool}")
+                self.context.logger.info(
+                    f"TX: {from_token_symbol}({from_chain}) --> {to_token_symbol}({to_chain}). Tool being used: {tool}"
+                )
 
                 tx_info = yield from self.get_step_transaction(step)
 
@@ -1653,12 +1701,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
                 multisend_txs = []
 
-                if tx_info.get('source_token') != ZERO_ADDRESS:
+                if tx_info.get("source_token") != ZERO_ADDRESS:
                     approval_tx_payload = yield from self.get_approval_tx_hash(
-                        token_address=tx_info.get('source_token'),
-                        amount=tx_info.get('amount'),
-                        spender=tx_info.get('lifi_contract_address'),
-                        chain=tx_info.get('from_chain'),
+                        token_address=tx_info.get("source_token"),
+                        amount=tx_info.get("amount"),
+                        spender=tx_info.get("lifi_contract_address"),
+                        chain=tx_info.get("from_chain"),
                     )
                     if not approval_tx_payload:
                         self.context.logger.error("Error preparing approval tx payload")
@@ -1670,13 +1718,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 multisend_txs.append(
                     {
                         "operation": MultiSendOperation.CALL,
-                        "to": tx_info.get('lifi_contract_address'),
-                        "value": 0 if tx_info.get('source_token') != ZERO_ADDRESS else tx_info.get('amount'),
-                        "data": tx_info.get('tx_hash'),
+                        "to": tx_info.get("lifi_contract_address"),
+                        "value": 0
+                        if tx_info.get("source_token") != ZERO_ADDRESS
+                        else tx_info.get("amount"),
+                        "data": tx_info.get("tx_hash"),
                     }
                 )
 
-                multisend_address = self.params.multisend_contract_addresses[tx_info.get('from_chain')]
+                multisend_address = self.params.multisend_contract_addresses[
+                    tx_info.get("from_chain")
+                ]
 
                 multisend_tx_hash = yield from self.contract_interact(
                     performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -1685,21 +1737,38 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     contract_callable="get_tx_data",
                     data_key="data",
                     multi_send_txs=multisend_txs,
-                    chain_id=tx_info.get('from_chain'),
+                    chain_id=tx_info.get("from_chain"),
                 )
-                
+
                 data = bytes.fromhex(multisend_tx_hash[2:])
-                liquidity_provider = self.params.intermediate_tokens.get(tx_info.get('from_chain'), {}).get(tx_info.get('source_token'), {}).get('liquidity_provider')
-                #if we do not have an address from where we can perform a mock transfer we do not perform the simulation and proceed to the next steps
+                liquidity_provider = (
+                    self.params.intermediate_tokens.get(tx_info.get("from_chain"), {})
+                    .get(tx_info.get("source_token"), {})
+                    .get("liquidity_provider")
+                )
+                # if we do not have an address from where we can perform a mock transfer we do not perform the simulation and proceed to the next steps
                 if liquidity_provider:
-                    is_ok = yield from self._simulate_execution_bundle(to_address=multisend_address, data=data, token=tx_info.get('source_token'), mock_transfer_from=liquidity_provider, amount=tx_info.get('amount'), chain=tx_info.get('from_chain'))
+                    is_ok = yield from self._simulate_execution_bundle(
+                        to_address=multisend_address,
+                        data=data,
+                        token=tx_info.get("source_token"),
+                        mock_transfer_from=liquidity_provider,
+                        amount=tx_info.get("amount"),
+                        chain=tx_info.get("from_chain"),
+                    )
                     if not is_ok:
-                        self.context.logger.info(f"Simulation failed for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}")
+                        self.context.logger.info(
+                            f"Simulation failed for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
+                        )
                         all_steps_successful = False
                         break
-                    self.context.logger.info(f"Simulation successful for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}")
-                
-                safe_address = self.params.safe_contract_addresses.get(tx_info.get('from_chain'))
+                    self.context.logger.info(
+                        f"Simulation successful for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
+                    )
+
+                safe_address = self.params.safe_contract_addresses.get(
+                    tx_info.get("from_chain")
+                )
                 safe_tx_hash = yield from self.contract_interact(
                     performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
                     contract_address=safe_address,
@@ -1711,7 +1780,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     data=bytes.fromhex(multisend_tx_hash[2:]),
                     operation=SafeOperation.DELEGATE_CALL.value,
                     safe_tx_gas=SAFE_TX_GAS,
-                    chain_id=tx_info.get('from_chain'),
+                    chain_id=tx_info.get("from_chain"),
                 )
 
                 if not safe_tx_hash:
@@ -1727,30 +1796,36 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     to_address=multisend_address,
                     data=bytes.fromhex(multisend_tx_hash[2:]),
                     safe_tx_hash=safe_tx_hash,
-                    gas_limit=self.params.manual_gas_limit
+                    gas_limit=self.params.manual_gas_limit,
                 )
                 payload_string = hash_payload_to_hex(**tx_params)
-                
-                bridge_and_swap_actions["actions"].append({
-                    "action": Action.BRIDGE_SWAP.value,
-                    "from_chain": tx_info.get('from_chain'),
-                    "to_chain": tx_info.get('to_chain'),
-                    "from_token": tx_info.get('source_token'),
-                    "from_token_symbol": tx_info.get('source_token_symbol'),
-                    "to_token": tx_info.get('target_token'),
-                    "to_token_symbol": tx_info.get('target_token_symbol'),
-                    "payload": payload_string,
-                    "safe_address": safe_address
-                })
+
+                bridge_and_swap_actions["actions"].append(
+                    {
+                        "action": Action.BRIDGE_SWAP.value,
+                        "from_chain": tx_info.get("from_chain"),
+                        "to_chain": tx_info.get("to_chain"),
+                        "from_token": tx_info.get("source_token"),
+                        "from_token_symbol": tx_info.get("source_token_symbol"),
+                        "to_token": tx_info.get("target_token"),
+                        "to_token_symbol": tx_info.get("target_token_symbol"),
+                        "payload": payload_string,
+                        "safe_address": safe_address,
+                    }
+                )
 
             if all_steps_successful:
-                self.context.logger.info(f"BRIDGE SWAP ACTIONS: {bridge_and_swap_actions}")
+                self.context.logger.info(
+                    f"BRIDGE SWAP ACTIONS: {bridge_and_swap_actions}"
+                )
                 return bridge_and_swap_actions
-        
+
         self.context.logger.error("NONE OF THE ROUTES WERE SUCCESFUL!")
         return {}
 
-    def get_step_transaction(self, step: Dict[str, Any]) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def get_step_transaction(
+        self, step: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         base_url = "https://li.quest/v1/advanced/stepTransaction"
         response = yield from self.get_http_response(
             "POST",
@@ -1758,7 +1833,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             json.dumps(step).encode(),
             headers={
                 "accept": "application/json",
-                "Content-Type": "application/json"  # Ensure the correct content type
+                "Content-Type": "application/json",  # Ensure the correct content type
             },
         )
 
@@ -1777,15 +1852,33 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         source_token = response.get("action", {}).get("fromToken", {}).get("address")
-        source_token_symbol = response.get("action", {}).get("fromToken", {}).get("symbol")
+        source_token_symbol = (
+            response.get("action", {}).get("fromToken", {}).get("symbol")
+        )
         target_token = response.get("action", {}).get("toToken", {}).get("address")
-        target_token_symbol = response.get("action", {}).get("toToken", {}).get("symbol")
+        target_token_symbol = (
+            response.get("action", {}).get("toToken", {}).get("symbol")
+        )
         amount = int(response.get("estimate", {}).get("fromAmount", {}))
         lifi_contract_address = response.get("transactionRequest", {}).get("to")
         from_chain_id = response.get("action", {}).get("fromChainId")
-        from_chain = next((k for k, v in self.params.chain_to_chain_id_mapping.items() if v == from_chain_id), None)
+        from_chain = next(
+            (
+                k
+                for k, v in self.params.chain_to_chain_id_mapping.items()
+                if v == from_chain_id
+            ),
+            None,
+        )
         to_chain_id = response.get("action", {}).get("toChainId")
-        to_chain = next((k for k, v in self.params.chain_to_chain_id_mapping.items() if v == to_chain_id), None)
+        to_chain = next(
+            (
+                k
+                for k, v in self.params.chain_to_chain_id_mapping.items()
+                if v == to_chain_id
+            ),
+            None,
+        )
         tool = response.get("tool")
         data = response.get("transactionRequest", {}).get("data")
         tx_hash = bytes.fromhex(data[2:])
@@ -1801,9 +1894,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "to_chain": to_chain,
             "tool": tool,
             "data": data,
-            "tx_hash": tx_hash
+            "tx_hash": tx_hash,
         }
-    
+
     def _simulate_execution_bundle(
         self,
         to_address: str,
@@ -1813,7 +1906,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         amount: int,
         chain: str,
         **kwargs: Any,
-    ) -> Generator[None, None, bool]:        
+    ) -> Generator[None, None, bool]:
         safe_address = self.params.safe_contract_addresses.get(chain)
         agent_address = self.context.agent_address
         safe_tx = yield from self.get_contract_api_response(
@@ -1837,30 +1930,30 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         url_template = self.params.tenderly_bundle_simulation_url
         values = {
             "tenderly_account_slug": self.params.tenderly_account_slug,
-            "tenderly_project_slug": self.params.tenderly_project_slug
+            "tenderly_project_slug": self.params.tenderly_project_slug,
         }
         api_url = url_template.format(**values)
 
         transfer_data = self._encode_transfer_data(token, safe_address, amount)
-        body ={
+        body = {
             "simulations": [
                 {
-                "network_id": self.params.chain_to_chain_id_mapping.get(chain),
-                "save": True,
-                "save_if_fails": True,
-                "simulation_type": "quick",
-                "from": mock_transfer_from,
-                "to": token,
-                "input": transfer_data,
+                    "network_id": self.params.chain_to_chain_id_mapping.get(chain),
+                    "save": True,
+                    "save_if_fails": True,
+                    "simulation_type": "quick",
+                    "from": mock_transfer_from,
+                    "to": token,
+                    "input": transfer_data,
                 },
                 {
-                "network_id": self.params.chain_to_chain_id_mapping.get(chain),
-                "save": True,
-                "save_if_fails": True,
-                "simulation_type": "quick",
-                "from": self.context.agent_address,
-                "to": safe_address,
-                "input": tx_data
+                    "network_id": self.params.chain_to_chain_id_mapping.get(chain),
+                    "save": True,
+                    "save_if_fails": True,
+                    "simulation_type": "quick",
+                    "from": self.context.agent_address,
+                    "to": safe_address,
+                    "input": tx_data,
                 },
             ]
         }
@@ -1869,7 +1962,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "POST",
             api_url,
             json.dumps(body).encode(),
-            headers={"Content-Type": "application/json", "X-Access-Key": self.params.tenderly_access_key},
+            headers={
+                "Content-Type": "application/json",
+                "X-Access-Key": self.params.tenderly_access_key,
+            },
         )
         if response.status_code != 200:
             self.context.logger.error(
@@ -1880,13 +1976,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         try:
             data = json.loads(response.body)
             if data:
-                simulation_results = data.get('simulation_results', [])
+                simulation_results = data.get("simulation_results", [])
                 status = False
                 if simulation_results:
                     simulation_results = simulation_results[0]
                     for simulation in simulation_results.values():
                         if isinstance(simulation, Dict):
-                            status = simulation.get('status', False)              
+                            status = simulation.get("status", False)
                 return status
 
         except (ValueError, TypeError) as e:
@@ -1894,8 +1990,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"Could not parse response from api, "
                 f"the following error was encountered {type(e).__name__}: {e}"
             )
-            return False 
-    
+            return False
+
     def get_claim_rewards_tx_hash(
         self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
@@ -1912,7 +2008,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         contract_address = self.params.merkl_distributor_contract_addresses.get(chain)
-        tx_hash= yield from self.contract_interact(
+        tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=contract_address,
             contract_public_id=DistributorContract.contract_id,
@@ -1961,27 +2057,31 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-
     def _encode_transfer_data(self, token: str, to_address: str, amount: int) -> str:
-
-        transfer_data = Web3().eth.contract(
-        address=token,
-        abi=[{
-                "constant": False,
-                "inputs": [
-                    {"name": "to", "type": "address"},
-                    {"name": "value", "type": "uint256"}
+        transfer_data = (
+            Web3()
+            .eth.contract(
+                address=token,
+                abi=[
+                    {
+                        "constant": False,
+                        "inputs": [
+                            {"name": "to", "type": "address"},
+                            {"name": "value", "type": "uint256"},
+                        ],
+                        "name": "transfer",
+                        "outputs": [{"name": "", "type": "bool"}],
+                        "payable": False,
+                        "stateMutability": "nonpayable",
+                        "type": "function",
+                    }
                 ],
-                "name": "transfer",
-                "outputs": [{"name": "", "type": "bool"}],
-                "payable": False,
-                "stateMutability": "nonpayable",
-                "type": "function"
-            }]
-        ).encodeABI(fn_name='transfer', args=[to_address, amount])
+            )
+            .encodeABI(fn_name="transfer", args=[to_address, amount])
+        )
 
         return transfer_data
-    
+
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str
     ) -> Generator[None, None, Optional[Tuple[int, int]]]:
@@ -2088,7 +2188,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         signatures += packed_signature
 
         return signatures.hex()
-
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

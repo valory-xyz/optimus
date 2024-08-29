@@ -53,7 +53,9 @@ class Params(BaseParams):
             self._ensure("safe_contract_addresses", kwargs, str)
         )
         self.pool_data_api_url = self._ensure("pool_data_api_url", kwargs, str)
-        self.allowed_chains: List[str] = self._ensure("allowed_chains", kwargs, List[str])
+        self.allowed_chains: List[str] = self._ensure(
+            "allowed_chains", kwargs, List[str]
+        )
         self.gas_reserve = json.loads(self._ensure("gas_reserve", kwargs, str))
         self.apr_threshold = self._ensure("apr_threshold", kwargs, int)
         self.round_threshold = self._ensure("round_threshold", kwargs, int)
@@ -89,12 +91,20 @@ class Params(BaseParams):
         self.merkl_distributor_contract_addresses = json.loads(
             self._ensure("merkl_distributor_contract_addresses", kwargs, str)
         )
-        self.intermediate_tokens = json.loads(self._ensure("intermediate_tokens", kwargs, str))
+        self.intermediate_tokens = json.loads(
+            self._ensure("intermediate_tokens", kwargs, str)
+        )
         self.lifi_fetch_tools_url = self._ensure("lifi_fetch_tools_url", kwargs, str)
-        self.merkl_user_rewards_url = self._ensure("merkl_user_rewards_url", kwargs, str)
-        self.tenderly_bundle_simulation_url = self._ensure("tenderly_bundle_simulation_url", kwargs, str)
+        self.merkl_user_rewards_url = self._ensure(
+            "merkl_user_rewards_url", kwargs, str
+        )
+        self.tenderly_bundle_simulation_url = self._ensure(
+            "tenderly_bundle_simulation_url", kwargs, str
+        )
         self.tenderly_access_key = self._ensure("tenderly_access_key", kwargs, str)
         self.tenderly_account_slug = self._ensure("tenderly_account_slug", kwargs, str)
         self.tenderly_project_slug = self._ensure("tenderly_project_slug", kwargs, str)
-        self.chain_to_chain_id_mapping = json.loads(self._ensure("chain_to_chain_id_mapping", kwargs, str))
+        self.chain_to_chain_id_mapping = json.loads(
+            self._ensure("chain_to_chain_id_mapping", kwargs, str)
+        )
         super().__init__(*args, **kwargs)

@@ -422,41 +422,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if invest_in_pool:
                     actions = yield from self.get_order_of_transactions()
 
-            current_timestamp = cast(
-                SharedState, self.context.state
-            ).round_sequence.last_round_transition_timestamp.timestamp()
-
-            # Check if rewards can be claimed. Rewards can be claimed if either:
-            # 1. No rewards have been claimed yet (last_reward_claimed_timestamp is None), or
-            # 2. The current timestamp exceeds the allowed reward claiming time period since the last claim.
-            claim_rewards = (
-                True
-                if self.synchronized_data.last_reward_claimed_timestamp is None
-                else current_timestamp
-                >= self.synchronized_data.last_reward_claimed_timestamp
-                + self.params.reward_claiming_time_period
-            )
-            if claim_rewards:
-                # check current reward
-                allowed_chains = self.params.allowed_chains
-                if not allowed_chains:
-                    self.context.logger.warning("No chains found")
-                    return None
-                # we can claim all our token rewards at once
-                # hence we build only one action per chain
-                for chain in allowed_chains:
-                    chain_id = self.params.chain_to_chain_id_mapping.get(chain)
-                    safe_address = self.params.safe_contract_addresses.get(chain)
-                    rewards = yield from self.get_rewards(chain_id, safe_address)
-                    if not rewards:
-                        self.context.logger.warning(
-                            f"No rewards to claim for user address {safe_address} on chain {chain}"
-                        )
-                        continue
-                    action = yield from self.build_claim_reward_action(rewards, chain)
-                    if action:
-                        actions.append(action)
-                        
             self.context.logger.info(f"Actions: {actions}")
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
@@ -573,7 +538,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # use this if you want to test with script
             # api_url = self.params.pool_data_api_url
 
-            self.context.logger.info(f"{api_url}")
+            self.context.logger.info(f"Fetching campaigns from {api_url}")
 
             response = yield from self.get_http_response(
                 method="GET",
@@ -634,23 +599,38 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     # type 1 and 2 stand for ERC20 and Concentrated liquidity campaigns respectively
                     # https://docs.merkl.xyz/integrate-merkl/integrate-merkl-to-your-app#merkl-api
                     if campaign_type in [1, 2]:
-                        if campaign_apr > self.current_pool.get("apr", 0.0):
-                            campaign_pool_address = campaign.get("mainParameter")
-                            if not campaign_pool_address:
-                                self.context.logger.warning(
-                                    "No pool address found for campaign"
-                                )
-                                continue
-                            current_pool_address = self.current_pool.get("address")
-                            # The pool should not be the current pool
-                            if campaign_pool_address != current_pool_address:
-                                filtered_pools[dex_type][chain].append(campaign)
+                        if not campaign_apr > self.current_pool.get("apr", 0.0):
+                            self.context.logger.info(
+                                "APR does not exceed the current pool APR"
+                            )
+                            continue
+                        campaign_pool_address = campaign.get("mainParameter")
+                        if not campaign_pool_address:
+                            continue
+                        current_pool_address = self.current_pool.get("address")
+                        # The pool should not be the current pool
+                        if campaign_pool_address != current_pool_address:
+                            filtered_pools[dex_type][chain].append(campaign)
 
     def get_order_of_transactions(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Get the order of transactions to perform based on the current pool status and token balances."""
         actions = []
+
+        if self._can_claim_rewards():
+            # check current reward
+            allowed_chains = self.params.allowed_chains
+            # we can claim all our token rewards at once
+            # hence we build only one action per chain
+            for chain in allowed_chains:
+                chain_id = self.params.chain_to_chain_id_mapping.get(chain)
+                safe_address = self.params.safe_contract_addresses.get(chain)
+                rewards = yield from self._get_rewards(chain_id, safe_address)
+                if not rewards:
+                    continue
+                action = self._build_claim_reward_action(rewards, chain)
+                actions.append(action)
 
         if not self.current_pool:
             tokens = self._get_tokens_over_min_balance()
@@ -684,7 +664,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
         actions.append(enter_pool_action)
 
-        self.context.logger.info(f"Actions: {actions}")
         return actions
 
     def _get_tokens_over_min_balance(self) -> Optional[List[Any]]:
@@ -969,6 +948,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "apr": self.highest_apr_pool.get("apr"),
         }
 
+    def _build_claim_reward_action(
+        self, rewards: Dict[str, Any], chain: str
+    ) -> Dict[str, Any]:
+        return {
+            "action": Action.CLAIM_REWARDS.value,
+            "chain": chain,
+            "users": rewards.get("users"),
+            "tokens": rewards.get("tokens"),
+            "claims": rewards.get("claims"),
+            "proofs": rewards.get("proofs"),
+            "token_symbols": rewards.get("symbols"),
+        }
+
     def _get_asset_symbol(self, chain: str, address: str) -> Optional[str]:
         positions = self.synchronized_data.positions
         for position in positions:
@@ -979,7 +971,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return None
 
-    def get_rewards(
+    def _get_rewards(
         self, chain_id: int, user_address: str
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         base_url = self.params.merkl_user_rewards_url
@@ -1002,18 +994,29 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"User rewards: {data}")
             tokens = [k for k, v in data.items() if v.get("proof")]
             if not tokens:
-                self.context.logger.warning("No tokens to claim")
+                self.context.logger.info("No tokens to claim!")
                 return None
-            claims = [int(data[t].get("unclaimed", 0)) for t in tokens]
+            symbols = [data[t].get("symbol") for t in tokens]
+            claims = [int(data[t].get("accumulated", 0)) for t in tokens]
+
             # Check if all claims are zero
             if all(claim == 0 for claim in claims):
-                self.context.logger.warning("All claims are zero, nothing to claim")
+                self.context.logger.info("All claims are zero, nothing to claim")
+                return None
+
+            unclaimed = [int(data[t].get("unclaimed", 0)) for t in tokens]
+            # Check if everything has been already claimed are zero
+            if all(claim == 0 for claim in unclaimed):
+                self.context.logger.info(
+                    "All accumulated claims already made. Nothing left to claim."
+                )
                 return None
 
             proofs = [data[t].get("proof") for t in tokens]
             return {
                 "users": [user_address] * len(tokens),
                 "tokens": tokens,
+                "symbols": symbols,
                 "claims": claims,
                 "proofs": proofs,
             }
@@ -1024,35 +1027,22 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-    def build_claim_reward_action(
-        self, rewards: Dict[str, Any], chain: str
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        action = {}
-        action["action"] = Action.CLAIM_REWARDS.value
-        action["chain"] = chain
-        action["users"] = rewards.get("users")
-        action["tokens"] = rewards.get("tokens")
-        action["claims"] = rewards.get("claims")
-        action["proofs"] = rewards.get("proofs")
+    def _can_claim_rewards(self) -> bool:
+        # Check if rewards can be claimed. Rewards can be claimed if either:
+        # 1. No rewards have been claimed yet (last_reward_claimed_timestamp is None), or
+        # 2. The current timestamp exceeds the allowed reward claiming time period since the last claim.
 
-        token_symbols = []
-        # take each token and add its symbol
-        for token in rewards.get("tokens"):
-            token_symbol = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=token,
-                contract_public_id=ERC20.contract_id,
-                contract_callable="get_token_symbol",
-                data_key="data",
-                chain_id=chain,
-            )
-            if not token_symbol:
-                token_symbols.append("unknown")
-            else:
-                token_symbols.append(token_symbol)
+        current_timestamp = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
 
-        action["token_symbols"] = token_symbols
-        return action
+        last_claimed_timestamp = self.synchronized_data.last_reward_claimed_timestamp
+        if last_claimed_timestamp is None:
+            return True
+        return (
+            current_timestamp
+            >= last_claimed_timestamp + self.params.reward_claiming_time_period
+        )
 
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
@@ -1187,6 +1177,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # If last action was Claim Rewards and it was successful we update the list of assets and the last_reward_claimed_timestamp
         if (
             last_executed_action_index is not None
+            and last_round_id != DecisionMakingRound.auto_round_id()
             and Action(actions[last_executed_action_index]["action"])
             == Action.CLAIM_REWARDS
         ):
@@ -1196,12 +1187,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 action.get("tokens"), action.get("token_symbols")
             ):
                 self._add_token_to_assets(chain, token, token_symbol)
-            
+
             current_timestamp = cast(
                 SharedState, self.context.state
             ).round_sequence.last_round_transition_timestamp.timestamp()
 
-            return Event.UPDATE.value, {"last_reward_claimed_timestamp": current_timestamp}, {}
+            return (
+                Event.UPDATE.value,
+                {"last_reward_claimed_timestamp": current_timestamp},
+                {},
+            )
 
         # if all actions have been executed we exit DecisionMaking
         if current_action_index >= len(self.synchronized_data.actions):

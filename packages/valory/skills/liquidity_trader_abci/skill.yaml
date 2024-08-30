@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeiduwq37ba5bdtus2iwomcb2bhxerdiriuhpr2at5wzjxvqut2xjwm
+  behaviours.py: bafybeidczsocvdmtdhqh6jm4bdjzveuvcmxstmwwyomdrdvpels7r5qipa
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeia7dh7vuifjebf63wdqlw6gtrwcss5mapmdzhbju7i6edsw3zqxki
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
@@ -16,7 +16,7 @@ fingerprint:
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeieo53qtt557632vtp3x3huagdpqevptextbwd7euk6hpoz6ybtuci
   pools/uniswap.py: bafybeif2cjbtjh5altlgranmgrif4yaevnn344fn3askbjde5h4y4rh2mq
-  rounds.py: bafybeiattfoicojezsnc5pidpqkrl2ncglzhbzqufkmy37t7v2b7qta53q
+  rounds.py: bafybeico4zvu3fpnqbw3k2et3gzvliejjjkosmqrnbh3imblqppiui4alu
   strategies/simple_strategy.py: bafybeig2iygxz5gewmiyeawubs5f4pr5e3st22lmdkxthlfq7t5kbluw4a
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []

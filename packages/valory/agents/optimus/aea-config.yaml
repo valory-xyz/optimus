@@ -160,7 +160,7 @@ models:
       init_fallback_gas: 0
       keeper_allowed_retries: 3
       reset_pause_duration: ${int:10}
-      on_chain_service_id: ${int:null}
+      on_chain_service_id: ${int:1}
       reset_tendermint_after: ${int:10}
       retry_attempts: 400
       retry_timeout: 3
@@ -227,3 +227,6 @@ models:
       tenderly_account_slug: ${str:account_slug}
       tenderly_project_slug: ${str:project_slug}
       chain_to_chain_id_mapping: ${str:{"optimism":10,"base":8453,"ethereum":1}}
+      staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
+      staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
+      staking_threshold_period: ${int:5}

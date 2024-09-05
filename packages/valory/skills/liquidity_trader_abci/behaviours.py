@@ -20,11 +20,12 @@
 """This package contains round behaviours of LiquidityTraderAbciApp."""
 
 import json
+import math
 import os.path
 from abc import ABC
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, Union, cast
 from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
@@ -32,7 +33,6 @@ from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_hex
 from web3 import Web3
 
-from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -43,6 +43,10 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
+from packages.valory.contracts.staking_activity_checker.contract import (
+    StakingActivityCheckerContract,
+)
+from packages.valory.contracts.staking_token.contract import StakingTokenContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -58,6 +62,10 @@ from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
     UniswapPoolBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import (
+    CallCheckpointPayload,
+    CallCheckpointRound,
+    CheckStakingKPIMetPayload,
+    CheckStakingKPIMetRound,
     DecisionMakingPayload,
     DecisionMakingRound,
     EvaluateStrategyPayload,
@@ -66,6 +74,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     GetPositionsPayload,
     GetPositionsRound,
     LiquidityTraderAbciApp,
+    PostTxSettlementRound,
+    StakingState,
     SynchronizedData,
 )
 from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import (
@@ -153,6 +163,11 @@ class LiquidityTraderBaseBehaviour(
     def params(self) -> Params:
         """Return the params."""
         return cast(Params, super().params)
+
+    @property
+    def shared_state(self) -> SharedState:
+        """Get the parameters."""
+        return cast(SharedState, self.context.state)
 
     def default_error(
         self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage
@@ -372,6 +387,330 @@ class LiquidityTraderBaseBehaviour(
     def read_current_pool(self) -> None:
         """Read the current pool as JSON."""
         self._read_data("current_pool", self.current_pool_filepath)
+
+
+class CallCheckpointBehaviour(
+    LiquidityTraderBaseBehaviour
+):  # pylint-disable too-many-ancestors
+    matching_round = CallCheckpointRound
+
+    def async_act(self) -> Generator:
+        """Do the action."""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            service_staking_state = yield from self._get_service_staking_state(chain="optimism")
+            checkpoint_tx_hex = None
+            min_num_of_safe_tx_required = None
+
+            if service_staking_state == StakingState.STAKED:
+                is_checkpoint_reached = yield from self._check_if_checkpoint_reached(
+                    chain="optimism"
+                )
+                if is_checkpoint_reached:
+                    self.context.logger.info(
+                        "Checkpoint reached! Preparing checkpoint tx.."
+                    )
+                    checkpoint_tx_hex = yield from self._prepare_checkpoint_tx(
+                        chain="optimism"
+                    )
+
+                    min_num_of_safe_tx_required = (
+                        yield from self._calculate_min_num_of_safe_tx_required(
+                            chain="optimism"
+                        )
+                    )
+                    self.context.logger.info(
+                        f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
+                    )
+
+                    self.shared_state.last_checkpoint_executed_period_number = (
+                        self.synchronized_data.period_count
+                    )
+
+            elif service_staking_state == StakingState.EVICTED:
+                self.context.logger.error("Service has been evicted!")
+
+            else:
+                self.context.logger.error("Service has not been staked")
+
+            tx_submitter = self.matching_round.auto_round_id()
+            payload = CallCheckpointPayload(
+                self.context.agent_address,
+                tx_submitter,
+                service_staking_state.value,
+                min_num_of_safe_tx_required,
+                checkpoint_tx_hex,
+                safe_contract_address=self.params.safe_contract_addresses.get(
+                    "optimism"
+                ),
+                chain_id="optimism",
+            )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+            self.set_done()
+
+    def _calculate_min_num_of_safe_tx_required(
+        self, chain: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Calculates the minimun number of tx to hit to unlock the staking rewards"""
+        liveness_ratio = yield from self._get_liveness_ratio(chain)
+        liveness_period = yield from self._get_liveness_period(chain)
+
+        if not liveness_ratio or not liveness_period:
+            return None
+
+        # Calculate the minimum number of transactions
+        min_num_of_safe_tx_required = math.ceil(
+            liveness_ratio * liveness_period // 10**18
+        )
+
+        return min_num_of_safe_tx_required
+
+    def _get_liveness_ratio(self, chain: str) -> Generator[None, None, Optional[int]]:
+        liveness_ratio = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.staking_activity_checker_contract_address,
+            contract_public_id=StakingActivityCheckerContract.contract_id,
+            contract_callable="liveness_ratio",
+            data_key="data",
+            chain_id=chain,
+        )
+
+        if liveness_ratio is None or liveness_ratio == 0:
+            self.context.logger.error(
+                f"Invalid value for liveness ratio: {liveness_ratio}"
+            )
+
+        return liveness_ratio
+
+    def _get_liveness_period(self, chain: str) -> Generator[None, None, Optional[int]]:
+        liveness_period = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.staking_token_contract_address,
+            contract_public_id=StakingTokenContract.contract_id,
+            contract_callable="get_liveness_period",
+            data_key="data",
+            chain_id=chain,
+        )
+
+        if liveness_period is None or liveness_period == 0:
+            self.context.logger.error(
+                f"Invalid value for liveness period: {liveness_period}"
+            )
+
+        return liveness_period
+
+    def _get_service_staking_state(
+        self, chain: str
+    ) -> Generator[None, None, StakingState]:
+        service_id = self.params.on_chain_service_id
+        if service_id is None:
+            self.context.logger.warning(
+                "Cannot perform any staking-related operations without a configured on-chain service id. "
+                "Assuming service status 'UNSTAKED'."
+            )
+            return StakingState.UNSTAKED
+
+        service_staking_state = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.staking_token_contract_address,
+            contract_public_id=StakingTokenContract.contract_id,
+            contract_callable="get_service_staking_state",
+            data_key="data",
+            service_id=service_id,
+            chain_id=chain,
+        )
+        if service_staking_state is None:
+            self.context.logger.warning(
+                "Error fetching staking state for service."
+                "Assuming service status 'UNSTAKED'."
+            )
+            return StakingState.UNSTAKED
+
+        return StakingState(service_staking_state)
+
+    def _check_if_checkpoint_reached(
+        self, chain: str
+    ) -> Generator[None, None, Optional[bool]]:
+        next_checkpoint = yield from self._get_next_checkpoint(chain)
+        if next_checkpoint is None:
+            return None
+
+        if next_checkpoint == 0:
+            return True
+
+        synced_timestamp = int(
+            self.round_sequence.last_round_transition_timestamp.timestamp()
+        )
+        return next_checkpoint <= synced_timestamp
+
+    def _get_next_checkpoint(self, chain: str) -> Generator[None, None, Optional[int]]:
+        """Get the timestamp in which the next checkpoint is reached."""
+        next_checkpoint = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.staking_token_contract_address,
+            contract_public_id=StakingTokenContract.contract_id,
+            contract_callable="get_next_checkpoint_ts",
+            data_key="data",
+            chain_id=chain,
+        )
+        return next_checkpoint
+
+    def _prepare_checkpoint_tx(
+        self, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        checkpoint_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.staking_token_contract_address,
+            contract_public_id=StakingTokenContract.contract_id,
+            contract_callable="build_checkpoint_tx",
+            data_key="data",
+            chain_id=chain,
+        )
+
+        safe_tx_hash = yield from self._prepare_safe_tx(chain, data=checkpoint_data)
+
+        return safe_tx_hash
+
+    def _prepare_safe_tx(
+        self, chain: str, data: bytes
+    ) -> Generator[None, None, Optional[str]]:
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            data=data,
+            to_address=self.params.staking_token_contract_address,
+            value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain,
+        )
+
+        if safe_tx_hash is None:
+            return None
+
+        safe_tx_hash = safe_tx_hash[2:]
+        return hash_payload_to_hex(
+            safe_tx_hash=safe_tx_hash,
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.CALL.value,
+            to_address=self.params.staking_token_contract_address,
+            data=data,
+        )
+
+
+class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
+    # pylint-disable too-many-ancestors
+    matching_round: Type[AbstractRound] = CheckStakingKPIMetRound
+
+    def async_act(self) -> Generator:
+        """Do the action."""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            vanity_tx_hex = None
+            kpi_met_for_the_day = self.synchronized_data.kpi_met_for_the_day
+
+            if not kpi_met_for_the_day:
+                last_round_id = (
+                    self.context.state.round_sequence._abci_app._previous_rounds[
+                        -1
+                    ].round_id
+                )
+                
+                is_post_tx_settlement_round = (
+                    last_round_id == PostTxSettlementRound.auto_round_id()
+                    and self.synchronized_data.tx_submitter
+                    != CallCheckpointRound.auto_round_id()
+                )
+                is_period_threshold_exceeded = self._check_period_threshold_exceeded()
+
+                if is_post_tx_settlement_round or is_period_threshold_exceeded:
+                    min_num_of_safe_tx_required = (
+                        self.synchronized_data.min_num_of_safe_tx_required
+                    )
+                    if min_num_of_safe_tx_required is None:
+                        self.context.logger.info(
+                            f"Invalid value for minimum number of safe tx: {min_num_of_safe_tx_required}"
+                        )
+                    else:
+                        num_of_tx_left_to_meet_kpi = (
+                            min_num_of_safe_tx_required
+                            - self.synchronized_data.curr_num_of_safe_tx
+                        )
+                        if num_of_tx_left_to_meet_kpi > 0:
+                            self.context.logger.info(
+                                f"KPI not hit for the day, preparing vanity tx.."
+                            )
+                            vanity_tx_hex = yield from self._prepare_vanity_tx(
+                                chain="optimism"
+                            )
+                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
+                        else:
+                            kpi_met_for_the_day = True
+                            self.context.logger.info(f"KPI met for the day!")
+
+            tx_submitter = self.matching_round.auto_round_id()
+            payload = CheckStakingKPIMetPayload(
+                self.context.agent_address,
+                tx_submitter,
+                kpi_met_for_the_day,
+                vanity_tx_hex,
+                safe_contract_address=self.params.safe_contract_addresses.get(
+                    "optimism"
+                ),
+                chain_id="optimism",
+            )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+            self.set_done()
+
+    def _check_period_threshold_exceeded(self) -> Generator[None, None, bool]:
+        if not self.shared_state.last_checkpoint_executed_period_number:
+            return False
+
+        elapsed_periods = (
+            self.synchronized_data.period_count
+            - self.shared_state.last_checkpoint_executed_period_number
+        )
+        return elapsed_periods >= self.params.staking_threshold_period
+
+    def _prepare_vanity_tx(self, chain: str) -> Generator[None, None, Optional[str]]:
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        tx_data = b"0x"
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            to_address=ZERO_ADDRESS,
+            value=ETHER_VALUE,
+            data=tx_data,
+            operation=SafeOperation.CALL.value,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain,
+        )
+
+        if safe_tx_hash is None:
+            self.context.logger.info("Error preparing vanity tx")
+            return None
+
+        tx_hash = hash_payload_to_hex(
+            safe_tx_hash=safe_tx_hash[2:],
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.CALL.value,
+            to_address=ZERO_ADDRESS,
+            data=tx_data,
+        )
+
+        return tx_hash
 
 
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
@@ -2198,13 +2537,31 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return signatures.hex()
 
 
+class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
+    """
+    This behaviour should be executed after a tx is settled via the transaction_settlement_abci.
+    """
+
+    matching_round = PostTxSettlementRound
+
+    def async_act(self) -> Generator:
+        """Simply log that a tx is settled and wait for the round end."""
+        msg = f"The transaction submitted by {self.synchronized_data.tx_submitter} was successfully settled."
+        self.context.logger.info(msg)
+        yield from self.wait_until_round_end()
+        self.set_done()
+
+
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
 
-    initial_behaviour_cls = GetPositionsBehaviour
+    initial_behaviour_cls = CallCheckpointBehaviour
     abci_app_cls = LiquidityTraderAbciApp  # type: ignore
     behaviours: Set[Type[BaseBehaviour]] = [
+        CallCheckpointBehaviour,
+        CheckStakingKPIMetBehaviour,
         GetPositionsBehaviour,
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
+        PostTxSettlementBehaviour,
     ]

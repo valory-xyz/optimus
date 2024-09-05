@@ -175,6 +175,9 @@ models:
       tenderly_account_slug: account_slug
       tenderly_project_slug: project_slug
       chain_to_chain_id_mapping: '{"optimism":10,"base":8453,"ethereum":1}'
+      staking_token_contract_address: '0x63C2c53c09dE534Dd3bc0b7771bf976070936bAC'
+      staking_activity_checker_contract_address: '0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68'
+      staking_threshold_period: 5
     class_name: Params
   requests:
     args: {}

@@ -20,7 +20,9 @@
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
 
 import json
-from typing import Any, List
+from typing import Any, List, Optional
+
+from aea.skills.base import SkillContext
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
@@ -37,6 +39,12 @@ class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls = LiquidityTraderAbciApp
+
+    def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
+        """Initialize the state."""
+        super().__init__(*args, skill_context=skill_context, **kwargs)
+        # represents the period number at which last checkpoint tx was executed
+        self.last_checkpoint_executed_period_number: Optional[int] = None
 
 
 Requests = BaseRequests
@@ -106,5 +114,14 @@ class Params(BaseParams):
         self.tenderly_project_slug = self._ensure("tenderly_project_slug", kwargs, str)
         self.chain_to_chain_id_mapping = json.loads(
             self._ensure("chain_to_chain_id_mapping", kwargs, str)
+        )
+        self.staking_token_contract_address = self._ensure(
+            "staking_token_contract_address", kwargs, str
+        )
+        self.staking_activity_checker_contract_address = self._ensure(
+            "staking_activity_checker_contract_address", kwargs, str
+        )
+        self.staking_threshold_period = self._ensure(
+            "staking_threshold_period", kwargs, int
         )
         super().__init__(*args, **kwargs)

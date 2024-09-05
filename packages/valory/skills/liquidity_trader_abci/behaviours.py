@@ -140,12 +140,11 @@ class LiquidityTraderBaseBehaviour(
     def __init__(self, **kwargs: Any) -> None:
         """Initialize `LiquidityTraderBaseBehaviour`."""
         super().__init__(**kwargs)
-        parent_dir = os.path.dirname(self.context.data_dir)
         self.assets: Dict[str, Any] = {}
         # TO-DO: this will not work if we run it as a service
-        self.assets_filepath = os.path.join(parent_dir, ASSETS_FILENAME)
+        self.assets_filepath = self.params.store_path / self.params.assets_info_filename
         self.current_pool: Dict[str, Any] = {}
-        self.current_pool_filepath: str = os.path.join(parent_dir, POOL_FILENAME)
+        self.current_pool_filepath: str =  self.params.store_path / self.params.pool_info_filename
         self.pools: Dict[str, Any] = {}
         self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour

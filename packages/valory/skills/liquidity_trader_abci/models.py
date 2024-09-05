@@ -20,7 +20,9 @@
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
 
 import json
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
+from pathlib import Path
+import os
 
 from aea.skills.base import SkillContext
 
@@ -124,4 +126,20 @@ class Params(BaseParams):
         self.staking_threshold_period = self._ensure(
             "staking_threshold_period", kwargs, int
         )
-        super().__init__(*args, **kwargs)
+        self.store_path: Path = self.get_store_path(kwargs)
+        self.assets_info_filename: str = self._ensure("assets_info_filename", kwargs, str)
+        self.pool_info_filename: str = self._ensure("pool_info_filename", kwargs, str)
+
+    def get_store_path(self, kwargs: Dict) -> Path:
+        """Get the path of the store."""
+        path = self._ensure("store_path", kwargs, str)
+        # check if path exists, and we can write to it
+        if (
+            not os.path.isdir(path)
+            or not os.access(path, os.W_OK)
+            or not os.access(path, os.R_OK)
+        ):
+            raise ValueError(
+                f"Policy store path {path!r} is not a directory or is not writable."
+            )
+        return Path(path)

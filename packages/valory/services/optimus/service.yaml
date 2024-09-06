@@ -74,6 +74,7 @@ models:
       store_path: ${STORE_PATH:str:/data/}
       assets_info_filename: ${ASSETS_INFO_FILENAME:str:assets.json}
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}
+      merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"superfest","live":True}}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

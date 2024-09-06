@@ -6,9 +6,9 @@ description: Staking activity checker contract
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigxhiwzlu2otgglu7wc7wcyprgbx3d56yswl6rnlohpzlhtob2o2y
-  build/StakingActivityChecker.json: bafybeieo4hgyetulkuolv7hxpjwgcvceqrzmg76f3gwhj5jkzt62aryzcy
-  contract.py: bafybeiebf4crijgihwlnxvlqluo3h7erbk6gh5fqqwnrphkhi5ht2mtje4
+  __init__.py: bafybeigqm6q7kgfzgpcse7zer5uea3s7myolry2r3teovuzqgkn43j7bei
+  build/StakingActivityChecker.json: bafybeiety3kkkmdz2gdzktg54wvmhavftaw4wjnrddztt64jpknagrc6xa
+  contract.py: bafybeihnil43tcs2jhii5gxhsffzknsvljnnhradi62pnxhs525orc2cw4
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: StakingActivityCheckerContract

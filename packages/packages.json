@@ -6,12 +6,12 @@
         "contract/valory/uniswap_v3_non_fungible_position_manager/0.1.0": "bafybeieljamerttxyo7z2yokwripnnhzkn4zply5lz457vsixf5wfu5px4",
         "contract/valory/uniswap_v3_pool/0.1.0": "bafybeidglijnyueahpgivaykbhio2r3ovfeo23a256y3yb6g7be4hngx3a",
         "contract/valory/merkl_distributor/0.1.0": "bafybeifctofnyhdic2sxmkqujvf3j2wwydhtvzhi6kdeutykenymplf4e4",
-        "contract/valory/staking_token/0.1.0": "bafybeiakvgm2byyjfunb4npthioku2kwqpbcwm6dfov4akirqixtju6oai",
-        "contract/valory/staking_activity_checker/0.1.0": "bafybeigfiqmvzsf2etp6grtnfqg4y7nrlhwohbhfvggewhgvvolascs4fe",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeibprvn6y2prfrrwpqxsycvxkip34zhtqeznj75x4z2xq6azoxaedy",
-        "skill/valory/optimus_abci/0.1.0": "bafybeibbjjl7clr5i7hgyiz6ak2jk4naj5rncrwnp3ztudfgzc4g7piqwi",
-        "agent/valory/optimus/0.1.0": "bafybeigztjiwpgpcvz2ezasbpx6ciezu32itmibvx3ir37rylcvjv7thfy",
-        "service/valory/optimus/0.1.0": "bafybeigjgm3xadbusdb5dypqfjsnergrmq7giuyr4ggaqhppl52ezcybdm"
+        "contract/valory/staking_token/0.1.0": "bafybeihgp74ojttyzuriukd44biv2ehh4rcc3czm7mv2olw7amepxszbzu",
+        "contract/valory/staking_activity_checker/0.1.0": "bafybeifyahrictrtilxkaso7rrco4tg4w3ag7gmk7vojlg2tzvkxqxgjve",
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiatnafxcohayrxanj5evfhsn7ftmvv3pm3fqbbrzli36kytur3jcq",
+        "skill/valory/optimus_abci/0.1.0": "bafybeighkwdvqipaj44cinxuqgqamo55e4e67le7fhnjlfwrfsmaq6x5u4",
+        "agent/valory/optimus/0.1.0": "bafybeigd6d2eoifjfzpkx3ellukxvjmopbeoibse2gjb46vpcfzecqpg6e",
+        "service/valory/optimus/0.1.0": "bafybeidaecl6dpacdjxewlnv5leuqzs26dlodwgnfdkgjrk2yqj64oncg4"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

@@ -1601,6 +1601,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return (
             Event.SETTLE.value,
             {
+                "tx_submitter": DecisionMakingRound.auto_round_id(),
                 "most_voted_tx_hash": tx_hash,
                 "chain_id": chain_id,
                 "safe_contract_address": safe_address,

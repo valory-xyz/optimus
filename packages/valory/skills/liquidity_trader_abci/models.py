@@ -62,7 +62,9 @@ class Params(BaseParams):
         self.safe_contract_addresses = json.loads(
             self._ensure("safe_contract_addresses", kwargs, str)
         )
-        self.pool_data_api_url = self._ensure("pool_data_api_url", kwargs, str)
+        self.merkl_fetch_campaigns_args = json.loads(
+            self._ensure("merkl_fetch_campaigns_args", kwargs, str)
+        )
         self.allowed_chains: List[str] = self._ensure(
             "allowed_chains", kwargs, List[str]
         )

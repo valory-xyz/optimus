@@ -869,13 +869,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         for chain in self.params.allowed_chains:
             chain_id = self.params.chain_to_chain_id_mapping.get(chain)
-            base_url = self.params.pool_data_api_url
-            params = {"chainIds": chain_id, "creatorTag": "superfest", "live": "true"}
+            base_url = self.params.merkl_fetch_campaigns_args.get("url")
+            creator = self.params.merkl_fetch_campaigns_args.get("creator")
+            live = self.params.merkl_fetch_campaigns_args.get("live", "true")
+
+            params = {"chainIds": chain_id, "creatorTag": creator, "live": live}
             api_url = f"{base_url}?{urlencode(params)}"
-
-            # use this if you want to test with script
-            # api_url = self.params.pool_data_api_url
-
             self.context.logger.info(f"Fetching campaigns from {api_url}")
 
             response = yield from self.get_http_response(
@@ -1062,7 +1061,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             balance = asset.get("balance", 0)
                             # TO-DO: set the value for gas_reserve for each chain
                             min_balance = 0
-                            if balance > min_balance:
+                            if balance and balance > min_balance:
                                 token_balances.append(
                                     {
                                         "chain": chain,

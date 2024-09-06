@@ -20,9 +20,9 @@
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
 
 import json
-from typing import Any, List, Optional, Dict
-from pathlib import Path
 import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from aea.skills.base import SkillContext
 
@@ -129,7 +129,9 @@ class Params(BaseParams):
             "staking_threshold_period", kwargs, int
         )
         self.store_path: Path = self.get_store_path(kwargs)
-        self.assets_info_filename: str = self._ensure("assets_info_filename", kwargs, str)
+        self.assets_info_filename: str = self._ensure(
+            "assets_info_filename", kwargs, str
+        )
         self.pool_info_filename: str = self._ensure("pool_info_filename", kwargs, str)
 
         super().__init__(*args, **kwargs)

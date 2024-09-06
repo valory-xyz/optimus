@@ -23,12 +23,18 @@ alphabet_in:
 - CALLPOINT_TX_EXECUTED
 - VANITY_TX_EXECUTED
 - NEXT_CHECKPOINT_NOT_REACHED_YET
+- SERVICE_EVICTED
+- SERVICE_NOT_STAKED
+- UNRECOGNIZED
 default_start_state: RegistrationStartupRound
 final_states: []
 label: OptimusAbciApp
 start_states:
 - RegistrationRound
 - RegistrationStartupRound
+- CallCheckpointRound
+- CheckStakingKPIMetRound
+- PostTxSettlementRound
 states:
 - CallCheckpointRound
 - CheckStakingKPIMetRound

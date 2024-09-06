@@ -11,6 +11,7 @@ alphabet_in:
 - SERVICE_NOT_STAKED
 - SETTLE
 - UNRECOGNIZED
+- UPDATE
 - WAIT
 default_start_state: CallCheckpointRound
 final_states:
@@ -20,13 +21,13 @@ final_states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
-- FinishedPostTxSettlementRound
 label: LiquidityTraderAbciApp
 start_states:
 - CallCheckpointRound
 - CheckStakingKPIMetRound
-- GetPositionsRounds
+- GetPositionsRound
 - DecisionMakingRound
+- PostTxSettlementRound
 states:
 - CallCheckpointRound
 - CheckStakingKPIMetRound
@@ -34,10 +35,10 @@ states:
 - EvaluateStrategyRound
 - FailedMultiplexerRound
 - FinishedCallCheckpointRound
+- FinishedCheckStakingKPIMetRound
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
-- FinishedPostTxSettlementRound
 - GetPositionsRound
 - PostTxSettlementRound
 transition_func:

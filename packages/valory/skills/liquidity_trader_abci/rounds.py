@@ -480,7 +480,9 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedCheckStakingKPIMetRound,
         FailedMultiplexerRound,
     }
-    event_to_timeout: EventToTimeout = {}
+    event_to_timeout: Dict[Event, float] = {
+        Event.ROUND_TIMEOUT: 30.0,
+    }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         {
             get_name(SynchronizedData.last_reward_claimed_timestamp),

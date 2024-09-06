@@ -129,7 +129,7 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def last_executed_action_index(self) -> Optional[int]:
         """Get the last executed action index"""
-        return cast(int, self.db.get("last_executed_action_index"))
+        return cast(int, self.db.get("last_executed_action_index", None))
 
     @property
     def final_tx_hash(self) -> str:
@@ -139,7 +139,7 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def last_reward_claimed_timestamp(self) -> Optional[int]:
         """Get the last reward claimed timestamp."""
-        return cast(int, self.db.get("last_reward_claimed_timestamp"))
+        return cast(int, self.db.get("last_reward_claimed_timestamp", None))
 
     @property
     def service_staking_state(self) -> Optional[int]:

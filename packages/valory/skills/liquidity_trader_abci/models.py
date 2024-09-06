@@ -132,6 +132,8 @@ class Params(BaseParams):
         self.assets_info_filename: str = self._ensure("assets_info_filename", kwargs, str)
         self.pool_info_filename: str = self._ensure("pool_info_filename", kwargs, str)
 
+        super().__init__(*args, **kwargs)
+
     def get_store_path(self, kwargs: Dict) -> Path:
         """Get the path of the store."""
         path = self._ensure("store_path", kwargs, str)

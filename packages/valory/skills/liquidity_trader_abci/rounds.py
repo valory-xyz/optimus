@@ -369,7 +369,6 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
         synced_data = SynchronizedData(self.synchronized_data.db)
         event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
-
         # if a checkpoint tx was just executed, we reset the current number of safe tx and kpi met to False
         if event == Event.CHECKPOINT_TX_EXECUTED:
             self.synchronized_data.update(

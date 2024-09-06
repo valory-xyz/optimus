@@ -144,7 +144,9 @@ class LiquidityTraderBaseBehaviour(
         # TO-DO: this will not work if we run it as a service
         self.assets_filepath = self.params.store_path / self.params.assets_info_filename
         self.current_pool: Dict[str, Any] = {}
-        self.current_pool_filepath: str =  self.params.store_path / self.params.pool_info_filename
+        self.current_pool_filepath: str = (
+            self.params.store_path / self.params.pool_info_filename
+        )
         self.pools: Dict[str, Any] = {}
         self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour
@@ -396,7 +398,9 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            service_staking_state = yield from self._get_service_staking_state(chain="optimism")
+            service_staking_state = yield from self._get_service_staking_state(
+                chain="optimism"
+            )
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
 
@@ -619,7 +623,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                         -1
                     ].round_id
                 )
-                
+
                 is_post_tx_settlement_round = (
                     last_round_id == PostTxSettlementRound.auto_round_id()
                     and self.synchronized_data.tx_submitter

@@ -7,16 +7,16 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeid54s3hi3tsjev4bnj6e77t2lxn6lixhe576sn3oolalbxsi4zp2q
+  behaviours.py: bafybeig6rcjcpbr3hr2o4rx45ven3ok7zxn6bkq6acbb3uw6dfiwwzmvse
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeiafuebq2t4zs4mzz5sdopkzxnjlxmju2jgjen7zidsvaf2thltkta
+  fsm_specification.yaml: bafybeia7u62xbzkllitosyelsur3tmmet7k63lb6xzjdpqreb67siljbiu
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeihf7mblsnlyrutjrvceupnzwbxeuoy3gsgium2ryqra4n7egxdrzy
-  payloads.py: bafybeidh37j7d7p6sgnunuo2gwk426ukyo4e3a47hdiypqvxm3fdfx34t4
+  models.py: bafybeibc4okx7cd5nsf7soq6vxt2prvp3y56gwqjufeng4pzwnfehvqiwa
+  payloads.py: bafybeif2n5mdjv2vo7vulfxwgzchqyvklok746davqwwbwlmfd5xoycaku
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeieo53qtt557632vtp3x3huagdpqevptextbwd7euk6hpoz6ybtuci
   pools/uniswap.py: bafybeif2cjbtjh5altlgranmgrif4yaevnn344fn3askbjde5h4y4rh2mq
-  rounds.py: bafybeif6orer6acblhkuddspe3vjzaga45zz4bzvflmtkvhyfcwe4sovca
+  rounds.py: bafybeidqfjrqznv2e6jjvnb76exzksuef5nof4ebvz2rsv4rxgciqjf2pu
   strategies/simple_strategy.py: bafybeig2iygxz5gewmiyeawubs5f4pr5e3st22lmdkxthlfq7t5kbluw4a
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []

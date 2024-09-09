@@ -26,6 +26,29 @@ from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 
 
 @dataclass(frozen=True)
+class CallCheckpointPayload(BaseTxPayload):
+    """A transaction payload for the CallCheckpointRound."""
+
+    tx_submitter: str
+    service_staking_state: int
+    min_num_of_safe_tx_required: Optional[int]
+    tx_hash: Optional[str]
+    safe_contract_address: Optional[str]
+    chain_id: Optional[str]
+
+
+@dataclass(frozen=True)
+class CheckStakingKPIMetPayload(BaseTxPayload):
+    """A transaction payload for the CheckStakingKPIMetRound."""
+
+    tx_submitter: str
+    kpi_met_for_the_day: Optional[bool]
+    tx_hash: Optional[str]
+    safe_contract_address: Optional[str]
+    chain_id: Optional[str]
+
+
+@dataclass(frozen=True)
 class GetPositionsPayload(BaseTxPayload):
     """Represent a transaction payload for the GetPositionsRound."""
 

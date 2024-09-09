@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihu2bcgjk2tqjiq2zhk3uogtfszqn4osvdt7ho3fubdpdj4jgdfjm
 - valory/abstract_round_abci:0.1.0:bafybeibovsktd3uxur45nrcomq5shcn46cgxd5idmhxbmjhg32c5abyqim
-- valory/liquidity_trader_abci:0.1.0:bafybeia6pmuwqvpb6bdk75uywqxgr3puarikzcfkxj5xvwbyu7lxqzmkgi
-- valory/optimus_abci:0.1.0:bafybeifaid4m5y6nr6zhqhoyonl34gjq4sloajvnwfxp6odybb5tzdepnm
+- valory/liquidity_trader_abci:0.1.0:bafybeieoj2cuuwk32settpv44ailcyrd4lh7mj6exr5ufssnms3teyhxze
+- valory/optimus_abci:0.1.0:bafybeigfneogfptzhfovlqy5r57rlei7b6ixe2k37ke6xrv6lr76kcviai
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
@@ -160,7 +160,7 @@ models:
       init_fallback_gas: 0
       keeper_allowed_retries: 3
       reset_pause_duration: ${int:10}
-      on_chain_service_id: ${int:null}
+      on_chain_service_id: ${int:1}
       reset_tendermint_after: ${int:10}
       retry_attempts: 400
       retry_timeout: 3
@@ -197,7 +197,7 @@ models:
       allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
       initial_assets: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
-      pool_data_api_url: ${str:https://api.merkl.xyz/v3/campaigns}
+      merkl_fetch_campaigns_args: ${str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"superfest","live":"true"}}
       allowed_chains: ${list:["optimism","base"]}
       gas_reserve: ${str:{"ethereum":1000,"optimism":1000,"base":1000}}
       round_threshold: ${int:0}
@@ -227,3 +227,9 @@ models:
       tenderly_account_slug: ${str:account_slug}
       tenderly_project_slug: ${str:project_slug}
       chain_to_chain_id_mapping: ${str:{"optimism":10,"base":8453,"ethereum":1}}
+      staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
+      staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
+      staking_threshold_period: ${int:5}
+      store_path: ${str:/data/}
+      assets_info_filename: ${str:assets.json}
+      pool_info_filename: ${str:current_pool.json}

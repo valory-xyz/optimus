@@ -20,7 +20,11 @@
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
 
 import json
-from typing import Any, List
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from aea.skills.base import SkillContext
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
@@ -38,6 +42,12 @@ class SharedState(BaseSharedState):
 
     abci_app_cls = LiquidityTraderAbciApp
 
+    def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
+        """Initialize the state."""
+        super().__init__(*args, skill_context=skill_context, **kwargs)
+        # represents the period number at which last checkpoint tx was executed
+        self.last_checkpoint_executed_period_number: Optional[int] = None
+
 
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
@@ -52,7 +62,9 @@ class Params(BaseParams):
         self.safe_contract_addresses = json.loads(
             self._ensure("safe_contract_addresses", kwargs, str)
         )
-        self.pool_data_api_url = self._ensure("pool_data_api_url", kwargs, str)
+        self.merkl_fetch_campaigns_args = json.loads(
+            self._ensure("merkl_fetch_campaigns_args", kwargs, str)
+        )
         self.allowed_chains: List[str] = self._ensure(
             "allowed_chains", kwargs, List[str]
         )
@@ -107,4 +119,33 @@ class Params(BaseParams):
         self.chain_to_chain_id_mapping = json.loads(
             self._ensure("chain_to_chain_id_mapping", kwargs, str)
         )
+        self.staking_token_contract_address = self._ensure(
+            "staking_token_contract_address", kwargs, str
+        )
+        self.staking_activity_checker_contract_address = self._ensure(
+            "staking_activity_checker_contract_address", kwargs, str
+        )
+        self.staking_threshold_period = self._ensure(
+            "staking_threshold_period", kwargs, int
+        )
+        self.store_path: Path = self.get_store_path(kwargs)
+        self.assets_info_filename: str = self._ensure(
+            "assets_info_filename", kwargs, str
+        )
+        self.pool_info_filename: str = self._ensure("pool_info_filename", kwargs, str)
+
         super().__init__(*args, **kwargs)
+
+    def get_store_path(self, kwargs: Dict) -> Path:
+        """Get the path of the store."""
+        path = self._ensure("store_path", kwargs, str)
+        # check if path exists, and we can write to it
+        if (
+            not os.path.isdir(path)
+            or not os.access(path, os.W_OK)
+            or not os.access(path, os.R_OK)
+        ):
+            raise ValueError(
+                f"Policy store path {path!r} is not a directory or is not writable."
+            )
+        return Path(path)

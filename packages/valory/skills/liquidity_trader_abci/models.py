@@ -45,8 +45,6 @@ class SharedState(BaseSharedState):
     def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
         """Initialize the state."""
         super().__init__(*args, skill_context=skill_context, **kwargs)
-        # represents the period number at which last checkpoint tx was executed
-        self.last_checkpoint_executed_period_number: Optional[int] = None
 
 
 Requests = BaseRequests

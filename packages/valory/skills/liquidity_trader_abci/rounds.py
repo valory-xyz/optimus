@@ -72,6 +72,8 @@ class Event(Enum):
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
     STAKING_KPI_MET = "staking_kpi_met"
     WAIT_FOR_PERIODS_TO_PASS = "wait_for_periods_to_pass"
+
+
 class SynchronizedData(BaseSynchronizedData):
     """
     Class to represent the synchronized data.
@@ -152,7 +154,6 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the min number of safe tx required."""
         return cast(int, self.db.get("min_num_of_safe_tx_required"))
 
-
     @property
     def participant_to_checkpoint(self) -> DeserializedCollection:
         """Get the participants to the checkpoint round."""
@@ -209,13 +210,20 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
         if synced_data.service_staking_state == StakingState.EVICTED.value:
             return synced_data, Event.SERVICE_EVICTED
 
-        if synced_data.most_voted_tx_hash is None and synced_data.is_staking_kpi_met == False:
+        if (
+            synced_data.most_voted_tx_hash is None
+            and synced_data.is_staking_kpi_met == False
+        ):
             return synced_data, Event.STAKING_KPI_NOT_MET
-        
-        if synced_data.most_voted_tx_hash is None and synced_data.is_staking_kpi_met == True:
+
+        if (
+            synced_data.most_voted_tx_hash is None
+            and synced_data.is_staking_kpi_met == True
+        ):
             return synced_data, Event.STAKING_KPI_MET
 
         return res
+
 
 class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
     """CheckStakingKPIMetRound"""

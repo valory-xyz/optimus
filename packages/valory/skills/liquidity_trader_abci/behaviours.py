@@ -422,7 +422,7 @@ class LiquidityTraderBaseBehaviour(
         )
 
         return min_num_of_safe_tx_required
-    
+
     def _get_next_checkpoint(self, chain: str) -> Generator[None, None, Optional[int]]:
         """Get the timestamp in which the next checkpoint is reached."""
         next_checkpoint = yield from self.contract_interact(
@@ -434,7 +434,7 @@ class LiquidityTraderBaseBehaviour(
             chain_id=chain,
         )
         return next_checkpoint
-    
+
     def _get_ts_checkpoint(self, chain: str) -> Generator[None, None, Optional[int]]:
         """Get the ts checkpoint"""
         ts_checkpoint = yield from self.contract_interact(
@@ -446,7 +446,7 @@ class LiquidityTraderBaseBehaviour(
             chain_id=chain,
         )
         return ts_checkpoint
-    
+
     def _get_liveness_ratio(self, chain: str) -> Generator[None, None, Optional[int]]:
         liveness_ratio = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -480,7 +480,7 @@ class LiquidityTraderBaseBehaviour(
             )
 
         return liveness_period
-    
+
     def _is_staking_kpi_met(self) -> Generator[None, None, Optional[bool]]:
         """Return whether the staking KPI has been met (only for staked services)."""
         if self.service_staking_state is None:
@@ -490,19 +490,33 @@ class LiquidityTraderBaseBehaviour(
             return False
 
         if self.synchronized_data.min_num_of_safe_tx_required is None:
-            min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
+            min_num_of_safe_tx_required = (
+                yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
+            )
 
         if min_num_of_safe_tx_required is None:
-            self.context.logger.error("Error calculating min number of safe tx required.")
+            self.context.logger.error(
+                "Error calculating min number of safe tx required."
+            )
             return None
-        
-        multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(chain="optimism", multisig=self.params.safe_contract_addresses.get("optimism"))
-        if multisig_nonces_since_last_cp and multisig_nonces_since_last_cp >= min_num_of_safe_tx_required:
+
+        multisig_nonces_since_last_cp = (
+            yield from self._get_multisig_nonces_since_last_cp(
+                chain="optimism",
+                multisig=self.params.safe_contract_addresses.get("optimism"),
+            )
+        )
+        if (
+            multisig_nonces_since_last_cp
+            and multisig_nonces_since_last_cp >= min_num_of_safe_tx_required
+        ):
             return True
-        
+
         return False
-    
-    def _get_multisig_nonces(self, chain: str, multisig: str) -> Generator[None, None, Optional[int]]:
+
+    def _get_multisig_nonces(
+        self, chain: str, multisig: str
+    ) -> Generator[None, None, Optional[int]]:
         multisig_nonces = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=self.params.staking_activity_checker_contract_address,
@@ -513,8 +527,10 @@ class LiquidityTraderBaseBehaviour(
             multisig=multisig,
         )
         return multisig_nonces[0]
-    
-    def _get_multisig_nonces_since_last_cp(self, chain: str, multisig: str) -> Generator[None, None, Optional[int]]:
+
+    def _get_multisig_nonces_since_last_cp(
+        self, chain: str, multisig: str
+    ) -> Generator[None, None, Optional[int]]:
         multisig_nonces = yield from self._get_multisig_nonces(chain, multisig)
         service_info = yield from self._get_service_info(chain)
         if service_info is None or len(service_info[2]) == 0:
@@ -526,10 +542,14 @@ class LiquidityTraderBaseBehaviour(
         multisig_nonces_since_last_cp = (
             multisig_nonces - multisig_nonces_on_last_checkpoint
         )
-        self.context.logger.info(f"Multisig nonces since last checkpoint: {multisig_nonces_since_last_cp}")
+        self.context.logger.info(
+            f"Multisig nonces since last checkpoint: {multisig_nonces_since_last_cp}"
+        )
         return multisig_nonces_since_last_cp
-    
-    def _get_service_info(self, chain: str) -> Generator[None, None,  Optional[Tuple[Any, Any, Tuple[Any, Any]]]]:
+
+    def _get_service_info(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Tuple[Any, Any, Tuple[Any, Any]]]]:
         """Get the service info."""
         service_id = self.params.on_chain_service_id
         if service_id is None:
@@ -549,10 +569,8 @@ class LiquidityTraderBaseBehaviour(
             chain_id=chain,
         )
         return service_info
-    
-    def _get_service_staking_state(
-        self, chain: str
-    ) -> Generator[None, None, None]:
+
+    def _get_service_staking_state(self, chain: str) -> Generator[None, None, None]:
         service_id = self.params.on_chain_service_id
         if service_id is None:
             self.context.logger.warning(
@@ -582,6 +600,7 @@ class LiquidityTraderBaseBehaviour(
         self.service_staking_state = StakingState(service_staking_state)
         return
 
+
 class CallCheckpointBehaviour(
     LiquidityTraderBaseBehaviour
 ):  # pylint-disable too-many-ancestors
@@ -590,9 +609,7 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self._get_service_staking_state(
-                chain="optimism"
-            )
+            yield from self._get_service_staking_state(chain="optimism")
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
             is_staking_kpi_met = False
@@ -608,8 +625,12 @@ class CallCheckpointBehaviour(
                         chain="optimism"
                     )
 
-                    min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
-                    
+                    min_num_of_safe_tx_required = (
+                        yield from self._calculate_min_num_of_safe_tx_required(
+                            chain="optimism"
+                        )
+                    )
+
                     self.context.logger.info(
                         f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
                     )
@@ -730,26 +751,39 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                     and self.synchronized_data.tx_submitter
                     != CallCheckpointRound.auto_round_id()
                 )
-                is_period_threshold_exceeded = self.synchronized_data.period_count >= self.params.staking_threshold_period
+                is_period_threshold_exceeded = (
+                    self.synchronized_data.period_count
+                    >= self.params.staking_threshold_period
+                )
 
                 if is_post_tx_settlement_round or is_period_threshold_exceeded:
                     min_num_of_safe_tx_required = (
                         self.synchronized_data.min_num_of_safe_tx_required
                     )
                     if not min_num_of_safe_tx_required:
-                        min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
+                        min_num_of_safe_tx_required = (
+                            yield from self._calculate_min_num_of_safe_tx_required(
+                                chain="optimism"
+                            )
+                        )
 
-                    multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(chain="optimism", multisig=self.params.safe_contract_addresses.get("optimism"))
+                    multisig_nonces_since_last_cp = (
+                        yield from self._get_multisig_nonces_since_last_cp(
+                            chain="optimism",
+                            multisig=self.params.safe_contract_addresses.get(
+                                "optimism"
+                            ),
+                        )
+                    )
 
                     num_of_tx_left_to_meet_kpi = (
-                        min_num_of_safe_tx_required
-                        - multisig_nonces_since_last_cp
+                        min_num_of_safe_tx_required - multisig_nonces_since_last_cp
                     )
                     if num_of_tx_left_to_meet_kpi > 0:
-                        self.context.logger.info(f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}")
                         self.context.logger.info(
-                            f"Preparing vanity tx.."
+                            f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
                         )
+                        self.context.logger.info(f"Preparing vanity tx..")
                         vanity_tx_hex = yield from self._prepare_vanity_tx(
                             chain="optimism"
                         )
@@ -774,7 +808,6 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
-        
 
     def _prepare_vanity_tx(self, chain: str) -> Generator[None, None, Optional[str]]:
         safe_address = self.params.safe_contract_addresses.get(chain)

@@ -174,6 +174,7 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the chain id."""
         return cast(str, self.db.get("chain_id", None))
     
+
 class CallCheckpointRound(CollectSameUntilThresholdRound):
     """A round for the checkpoint call preparation."""
 

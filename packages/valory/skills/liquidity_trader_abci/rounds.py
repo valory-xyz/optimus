@@ -183,6 +183,7 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
         get_name(SynchronizedData.is_staking_kpi_met),
         get_name(SynchronizedData.most_voted_tx_hash),
         get_name(SynchronizedData.safe_contract_address),
+        get_name(SynchronizedData.chain_id),
     )
     collection_key = get_name(SynchronizedData.participant_to_checkpoint)
     synchronized_data_class = SynchronizedData
@@ -238,6 +239,7 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         get_name(SynchronizedData.is_staking_kpi_met),
         get_name(SynchronizedData.most_voted_tx_hash),
         get_name(SynchronizedData.safe_contract_address),
+        get_name(SynchronizedData.chain_id),
     )
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:

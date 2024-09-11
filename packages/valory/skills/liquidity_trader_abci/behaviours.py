@@ -489,10 +489,9 @@ class LiquidityTraderBaseBehaviour(
         if self.service_staking_state != StakingState.STAKED:
             return False
 
-        if self.synchronized_data.min_num_of_safe_tx_required is None:
-            min_num_of_safe_tx_required = (
-                yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
-            )
+        min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
+        if min_num_of_safe_tx_required is None:
+            min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
 
         if min_num_of_safe_tx_required is None:
             self.context.logger.error(
@@ -500,11 +499,9 @@ class LiquidityTraderBaseBehaviour(
             )
             return None
 
-        multisig_nonces_since_last_cp = (
-            yield from self._get_multisig_nonces_since_last_cp(
+        multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(
                 chain="optimism",
                 multisig=self.params.safe_contract_addresses.get("optimism"),
-            )
         )
         if (
             multisig_nonces_since_last_cp

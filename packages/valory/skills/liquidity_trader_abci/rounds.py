@@ -169,7 +169,11 @@ class SynchronizedData(BaseSynchronizedData):
         """Get kpi met for the day."""
         return cast(int, self.db.get("is_staking_kpi_met", False))
 
-
+    @property
+    def chain_id(self) -> Optional[str]:
+        """Get the chain id."""
+        return cast(str, self.db.get("chain_id", None))
+    
 class CallCheckpointRound(CollectSameUntilThresholdRound):
     """A round for the checkpoint call preparation."""
 

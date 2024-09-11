@@ -533,11 +533,11 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, Optional[int]]:
         multisig_nonces = yield from self._get_multisig_nonces(chain, multisig)
         service_info = yield from self._get_service_info(chain)
-        if service_info is None or len(service_info[2]) == 0:
+        if service_info is None or len(service_info) == 0 or len(service_info[2]) == 0:
             self.context.logger.error(f"Error fetching service info {service_info}")
             return None
 
-        multisig_nonces_on_last_checkpoint = service_info[2][1]
+        multisig_nonces_on_last_checkpoint = service_info[2][0]
 
         multisig_nonces_since_last_cp = (
             multisig_nonces - multisig_nonces_on_last_checkpoint

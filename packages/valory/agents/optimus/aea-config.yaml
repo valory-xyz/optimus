@@ -130,6 +130,15 @@ models:
   benchmark_tool:
     args:
       log_dir: ${str:/logs}
+  coingecko:
+    args:
+      token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
+      coin_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
+      api_key: ${str:null}
+      requests_per_minute: ${int:30}
+      credits: ${int:10000}
+      rate_limited_code: ${int:429}
+      chain_to_platform_id_mapping: ${str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}}
   params:
     args:
       cleanup_history_depth: 1
@@ -233,3 +242,6 @@ models:
       store_path: ${str:/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
+      min_swap_amount_threshold: ${int:5}
+      max_fee_percentage: ${float:0.02}
+      max_gas_percentage: ${float:0.1}

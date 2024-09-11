@@ -177,7 +177,20 @@ models:
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"superfest","live":"true"}'
+      min_swap_amount_threshold: 5
+      max_fee_percentage: 0.02
+      max_gas_percentage: 0.1
     class_name: Params
+  coingecko:
+    args:
+      token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
+      coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
+      api_key: null
+      requests_per_minute: 30
+      credits: 10000
+      rate_limited_code: 429
+      chain_to_platform_id_mapping: '{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}'
+    class_name: Coingecko
   randomness_api:
     args:
       api_id: cloudflare

@@ -18,28 +18,29 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
-from datetime import datetime
-from time import time
 import json
 import os
+from datetime import datetime
 from pathlib import Path
+from time import time
 from typing import Any, Dict, List, Optional
 
-from aea.skills.base import SkillContext
-from aea.skills.base import Model
+from aea.skills.base import Model, SkillContext
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
 )
 from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
-from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
+from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 
+
 MINUTE_UNIX = 60
+
 
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
@@ -53,6 +54,7 @@ class SharedState(BaseSharedState):
 
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
+
 
 class CoingeckoRateLimiter:
     """Keeps track of the rate limiting for Coingecko."""
@@ -143,11 +145,15 @@ class Coingecko(Model, TypeCheckMixin):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the Coingecko object."""
-        self.token_price_endpoint: str = self._ensure("token_price_endpoint", kwargs, str)
+        self.token_price_endpoint: str = self._ensure(
+            "token_price_endpoint", kwargs, str
+        )
         self.coin_price_endpoint: str = self._ensure("coin_price_endpoint", kwargs, str)
         self.api_key: Optional[str] = self._ensure("api_key", kwargs, Optional[str])
         self.rate_limited_code: int = self._ensure("rate_limited_code", kwargs, int)
-        self.chain_to_platform_id_mapping: Dict[str, str] = json.loads(self._ensure("chain_to_platform_id_mapping", kwargs, str))
+        self.chain_to_platform_id_mapping: Dict[str, str] = json.loads(
+            self._ensure("chain_to_platform_id_mapping", kwargs, str)
+        )
         limit: int = self._ensure("requests_per_minute", kwargs, int)
         credits_: int = self._ensure("credits", kwargs, int)
         self.rate_limiter = CoingeckoRateLimiter(limit, credits_)
@@ -244,7 +250,9 @@ class Params(BaseParams):
             "assets_info_filename", kwargs, str
         )
         self.pool_info_filename: str = self._ensure("pool_info_filename", kwargs, str)
-        self.min_swap_amount_threshold = self._ensure("min_swap_amount_threshold", kwargs, int)
+        self.min_swap_amount_threshold = self._ensure(
+            "min_swap_amount_threshold", kwargs, int
+        )
         self.max_fee_percentage = self._ensure("max_fee_percentage", kwargs, float)
         self.max_gas_percentage = self._ensure("max_gas_percentage", kwargs, float)
         super().__init__(*args, **kwargs)

@@ -25,7 +25,18 @@ import os.path
 from abc import ABC
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast, Callable
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    cast,
+)
 from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
@@ -54,7 +65,11 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.models import Params, SharedState, Coingecko
+from packages.valory.skills.liquidity_trader_abci.models import (
+    Coingecko,
+    Params,
+    SharedState,
+)
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
     BalancerPoolBehaviour,
 )
@@ -1037,9 +1052,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             campaigns = data.get(str(chain_id))
             if not campaigns:
-                self.context.logger.error(
-                    f"No campaigns available for {chain} chain"
-                )
+                self.context.logger.error(f"No campaigns available for {chain} chain")
                 continue
 
             self._filter_campaigns(chain, campaigns, filtered_pools)
@@ -1172,7 +1185,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 decimals = 18
             else:
                 decimals = yield from self._get_token_decimals(chain, token_address)
-            token_data["value"] = (token_data["balance"] / (10 ** decimals)) * token_price
+            token_data["value"] = (
+                token_data["balance"] / (10**decimals)
+            ) * token_price
 
         # Sort tokens by value in descending order and add the highest ones
         token_balances.sort(key=lambda x: x["value"], reverse=True)
@@ -1189,9 +1204,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        return tokens   
+        return tokens
 
-    def _fetch_token_prices(self, token_balances: List[Dict[str, Any]]) -> Dict[str, float]:
+    def _fetch_token_prices(
+        self, token_balances: List[Dict[str, Any]]
+    ) -> Dict[str, float]:
         """Fetch token prices from Coingecko"""
         token_prices = {}
         headers = {
@@ -1209,11 +1226,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if token_address == ZERO_ADDRESS:
                 success, response_json = yield from self._request_with_retries(
-                endpoint=self.coingecko.coin_price_endpoint.format(coin_id="ethereum"),
-                headers=headers,
-                rate_limited_code=self.coingecko.rate_limited_code,
-                rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                retry_wait=self.params.sleep_time,
+                    endpoint=self.coingecko.coin_price_endpoint.format(
+                        coin_id="ethereum"
+                    ),
+                    headers=headers,
+                    rate_limited_code=self.coingecko.rate_limited_code,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
                 )
 
                 if success:
@@ -1227,7 +1246,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(f"Missing platform id for chain {chain}")
 
                 success, response_json = yield from self._request_with_retries(
-                    endpoint=self.coingecko.token_price_endpoint.format(token_address=token_address, asset_platform_id=platform_id),
+                    endpoint=self.coingecko.token_price_endpoint.format(
+                        token_address=token_address, asset_platform_id=platform_id
+                    ),
                     headers=headers,
                     rate_limited_code=self.coingecko.rate_limited_code,
                     rate_limited_callback=self.coingecko.rate_limited_status_callback,
@@ -2477,7 +2498,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _check_is_route_profitable(self, steps: List[Dict[str, Any]]) -> bool:
         """Check if the route is profitable"""
-        import pdb; pdb.set_trace()
+        import pdb
+
+        pdb.set_trace()
         total_fee = 0
         total_gas_cost = 0
         total_cost = 0
@@ -2489,18 +2512,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             fee_costs = estimate.get("feeCosts", [])
             for fee_cost in fee_costs:
                 total_fee += float(fee_cost.get("amountUSD", 0))
-            
+
             gas_costs = estimate.get("gasCosts", [])
             for gas_cost in gas_costs:
                 total_gas_cost += float(gas_cost.get("amountUSD", 0))
-        
-            #if total_fee or total_gas_cost is greater than max_fee_percentage and max_gas_percentage of the to_amount_usd for any step, return False
+
+            # if total_fee or total_gas_cost is greater than max_fee_percentage and max_gas_percentage of the to_amount_usd for any step, return False
             fee_percentage = (total_fee / to_amount_usd) * 100
             gas_percentage = (total_gas_cost / to_amount_usd) * 100
             allowed_fee_percentage = self.params.max_fee_percentage * 100
             allowed_gas_percentage = self.params.max_gas_percentage * 100
 
-            if fee_percentage > allowed_fee_percentage or gas_percentage > allowed_gas_percentage:
+            if (
+                fee_percentage > allowed_fee_percentage
+                or gas_percentage > allowed_gas_percentage
+            ):
                 from_token = step.get("action", {}).get("fromToken", {}).get("symbol")
                 to_token = step.get("action", {}).get("toToken", {}).get("symbol")
                 from_chain = step.get("action", {}).get("fromChainId")

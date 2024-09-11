@@ -611,6 +611,12 @@ class CallCheckpointBehaviour(
             min_num_of_safe_tx_required = None
             is_staking_kpi_met = False
             if self.service_staking_state == StakingState.STAKED:
+                min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(
+                    chain="optimism"
+                )
+                self.context.logger.info(
+                    f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
+                )
                 is_checkpoint_reached = yield from self._check_if_checkpoint_reached(
                     chain="optimism"
                 )
@@ -621,17 +627,6 @@ class CallCheckpointBehaviour(
                     checkpoint_tx_hex = yield from self._prepare_checkpoint_tx(
                         chain="optimism"
                     )
-
-                    min_num_of_safe_tx_required = (
-                        yield from self._calculate_min_num_of_safe_tx_required(
-                            chain="optimism"
-                        )
-                    )
-
-                    self.context.logger.info(
-                        f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
-                    )
-
                     is_staking_kpi_met = False
                 else:
                     is_staking_kpi_met = yield from self._is_staking_kpi_met()

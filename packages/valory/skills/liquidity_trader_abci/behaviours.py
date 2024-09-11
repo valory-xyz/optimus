@@ -25,7 +25,7 @@ import os.path
 from abc import ABC
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, Union, cast
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast, Callable
 from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
@@ -54,7 +54,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.models import Params, SharedState
+from packages.valory.skills.liquidity_trader_abci.models import Params, SharedState, Coingecko
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
     BalancerPoolBehaviour,
 )
@@ -96,7 +96,8 @@ LIVENESS_RATIO_SCALE_FACTOR = 10**18
 # A safety margin in case there is a delay between the moment the KPI condition is
 # satisfied, and the moment where the checkpoint is called.
 REQUIRED_REQUESTS_SAFETY_MARGIN = 1
-
+MAX_RETRIES = 3
+HTTP_OK = [200, 201]
 WaitableConditionType = Generator[None, None, Any]
 
 
@@ -177,6 +178,11 @@ class LiquidityTraderBaseBehaviour(
     def shared_state(self) -> SharedState:
         """Get the parameters."""
         return cast(SharedState, self.context.state)
+
+    @property
+    def coingecko(self) -> Coingecko:
+        """Return the Coingecko."""
+        return cast(Coingecko, self.context.coingecko)
 
     def default_error(
         self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage
@@ -272,6 +278,7 @@ class LiquidityTraderBaseBehaviour(
                     balance = yield from self._get_token_balance(
                         chain, account, asset_address
                     )
+                    balance = 0 if balance is None else balance
 
                 asset_balances_dict[chain].append(
                     {
@@ -1031,7 +1038,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             campaigns = data.get(str(chain_id))
             if not campaigns:
                 self.context.logger.error(
-                    f"No info available for chainId {chain_id} in response"
+                    f"No campaigns available for {chain} chain"
                 )
                 continue
 
@@ -1100,7 +1107,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 actions.append(action)
 
         if not self.current_pool:
-            tokens = self._get_tokens_over_min_balance()
+            tokens = yield from self._get_top_tokens_by_value()
             if not tokens or len(tokens) < 2:
                 self.context.logger.error(
                     f"Minimun 2 tokens required in safe with over minimum balance to enter a pool, provided: {tokens}"
@@ -1133,85 +1140,176 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return actions
 
-    def _get_tokens_over_min_balance(self) -> Optional[List[Any]]:
-        # ASSUMPTION : WE HAVE FUNDS FOR ATLEAST 2 TOKENS
+    def _get_top_tokens_by_value(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get tokens over min balance"""
-        tokens = []
-        highest_apr_chain = self.highest_apr_pool.get("chain")
-        token0 = self.highest_apr_pool.get("token0")
-        token1 = self.highest_apr_pool.get("token1")
-        token0_symbol = self.highest_apr_pool.get("token0")
-        token1_symbol = self.highest_apr_pool.get("token1")
+        token_balances = []
+        for position in self.synchronized_data.positions:
+            chain = position.get("chain")
+            for asset in position.get("assets", {}):
+                asset_address = asset.get("address")
+                if not chain or not asset_address:
+                    continue
+                balance = asset.get("balance", 0)
+                if balance > 0:
+                    token_balances.append(
+                        {
+                            "chain": chain,
+                            "token": asset_address,
+                            "token_symbol": asset.get("asset_symbol"),
+                            "balance": balance,
+                        }
+                    )
 
-        # Ensure we have valid data before proceeding
-        if (
-            not highest_apr_chain
-            or not token0
-            or not token1
-            or not token0_symbol
-            or not token1_symbol
-        ):
+        # Fetch prices for tokens with balance greater than zero
+        token_prices = yield from self._fetch_token_prices(token_balances)
+
+        # Calculate the relative value of each token
+        for token_data in token_balances:
+            token_address = token_data["token"]
+            chain = token_data["chain"]
+            token_price = token_prices.get(token_address, 0)
+            if token_address == ZERO_ADDRESS:
+                decimals = 18
+            else:
+                decimals = yield from self._get_token_decimals(chain, token_address)
+            token_data["value"] = (token_data["balance"] / (10 ** decimals)) * token_price
+
+        # Sort tokens by value in descending order and add the highest ones
+        token_balances.sort(key=lambda x: x["value"], reverse=True)
+        tokens = []
+        for token_data in token_balances:
+            if token_data["value"] > self.params.min_swap_amount_threshold:
+                tokens.append(token_data)
+            if len(tokens) == 2:
+                break
+
+        if len(tokens) < 2:
             self.context.logger.error(
-                f"Missing data in highest_apr_pool {self.highest_apr_pool}"
+                f"Insufficient tokens with value over minimum threshold i.e. ${self.params.min_swap_amount_threshold}. Required at least 2, available: {token_balances}"
             )
             return None
 
-        # TO-DO: set the value for gas_reserve for each chain
-        # min_balance_threshold = (
-        #     self.params.min_balance_multiplier
-        #     * self.params.gas_reserve.get(highest_apr_chain, 0)
-        # )
-        min_balance_threshold = 0
+        return tokens   
 
-        # Check balances for token0 and token1 on the highest APR pool chain
-        for token, symbol in [(token0, token0_symbol), (token1, token1_symbol)]:
-            balance = self._get_balance(highest_apr_chain, token)
-            if balance and balance > min_balance_threshold:
-                tokens.append(
-                    {"chain": highest_apr_chain, "token": token, "token_symbol": symbol}
+    def _fetch_token_prices(self, token_balances: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Fetch token prices from Coingecko"""
+        token_prices = {}
+        headers = {
+            "Accept": "application/json",
+        }
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        for token_data in token_balances:
+            token_address = token_data["token"]
+            chain = token_data.get("chain")
+            if not chain:
+                self.context.logger.error(f"Missing chain for token {token_address}")
+                continue
+
+            if token_address == ZERO_ADDRESS:
+                success, response_json = yield from self._request_with_retries(
+                endpoint=self.coingecko.coin_price_endpoint.format(coin_id="ethereum"),
+                headers=headers,
+                rate_limited_code=self.coingecko.rate_limited_code,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
                 )
 
-        # We needs funds for atleast 2 tokens
-        if len(tokens) == 2:
-            return tokens
+                if success:
+                    # Extract the first (and only) item in the response dictionary
+                    token_data = next(iter(response_json.values()), {})
+                    price = token_data.get("usd", 0)
+                    token_prices[token_address] = price
+            else:
+                platform_id = self.coingecko.chain_to_platform_id_mapping.get(chain)
+                if not platform_id:
+                    self.context.logger.error(f"Missing platform id for chain {chain}")
 
-        seen_tokens = set((token.get("chain"), token.get("token")) for token in tokens)
+                success, response_json = yield from self._request_with_retries(
+                    endpoint=self.coingecko.token_price_endpoint.format(token_address=token_address, asset_platform_id=platform_id),
+                    headers=headers,
+                    rate_limited_code=self.coingecko.rate_limited_code,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
 
-        # If we still need more tokens, check all positions
-        if len(tokens) < 2:
-            token_balances = []
-            for position in self.synchronized_data.positions:
-                chain = position.get("chain")
-                for asset in position.get("assets", {}):
-                    asset_address = asset.get("address")
-                    if not chain or not asset_address:
-                        continue
-                    if (chain, asset_address) not in seen_tokens:
-                        if asset.get("asset_type") in ["erc_20", "native"]:
-                            balance = asset.get("balance", 0)
-                            # TO-DO: set the value for gas_reserve for each chain
-                            min_balance = 0
-                            if balance and balance > min_balance:
-                                token_balances.append(
-                                    {
-                                        "chain": chain,
-                                        "token": asset_address,
-                                        "token_symbol": asset.get("asset_symbol"),
-                                        "balance": balance,
-                                    }
-                                )
+                if success:
+                    token_data = response_json.get(token_address.lower(), {})
+                    price = token_data.get("usd", 0)
+                    token_prices[token_address] = price
 
-            # Sort tokens by balance in descending order and add the highest one
-            token_balances.sort(key=lambda x: x["balance"], reverse=True)
+        return token_prices
 
-            # TO:DO - Add another way to choose tokens because we can't rely on balance alone
-            # (a.some tokens have 6 decimals  b.even though tokens have higher amount they might be less valuable)
-            for token_data in token_balances:
-                tokens.append(token_data)
-                if len(tokens) == 2:
+    def _request_with_retries(
+        self,
+        endpoint: str,
+        rate_limited_callback: Callable,
+        method: str = "GET",
+        body: Optional[Any] = None,
+        headers: Optional[Dict] = None,
+        rate_limited_code: int = 429,
+        max_retries: int = MAX_RETRIES,
+        retry_wait: int = 0,
+    ) -> Generator[None, None, Tuple[bool, Dict]]:
+        """Request wrapped around a retry mechanism"""
+
+        self.context.logger.info(f"HTTP {method} call: {endpoint}")
+        content = json.dumps(body).encode(UTF8) if body else None
+
+        retries = 0
+        while True:
+            # Make the request
+            response = yield from self.get_http_response(
+                method, endpoint, content, headers
+            )
+
+            try:
+                response_json = json.loads(response.body)
+            except json.decoder.JSONDecodeError as exc:
+                self.context.logger.error(f"Exception during json loading: {exc}")
+                response_json = {"exception": str(exc)}
+
+            if response.status_code == rate_limited_code:
+                rate_limited_callback()
+                return False, response_json
+
+            if response.status_code not in HTTP_OK or "exception" in response_json:
+                self.context.logger.error(
+                    f"Request failed [{response.status_code}]: {response_json}"
+                )
+                retries += 1
+                if retries == max_retries:
                     break
+                yield from self.sleep(retry_wait)
+                continue
 
-        return tokens
+            self.context.logger.info("Request succeeded.")
+            return True, response_json
+
+        self.context.logger.error(f"Request failed after {retries} retries.")
+        return False, response_json
+
+    def _get_token_decimals(
+        self, chain: str, asset_address: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get token decimals"""
+        decimals = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=asset_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_token_decimals",
+            data_key="data",
+            chain_id=chain,
+        )
+        return decimals
+
+    def _get_token_id(self, token_address: str) -> Optional[str]:
+        """Get token ID from the whitelist"""
+        for token_data in self.params.token_symbol_whitelist:
+            if token_data.get(TOKEN_ADDRESS_FIELD) == token_address:
+                return token_data.get(TOKEN_ID_FIELD)
+        return None
 
     def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
@@ -2129,7 +2227,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         routes = routes_response.get("routes", [])
         for route in routes:
-            steps = route.get("steps", {})
+            steps = route.get("steps", [])
+            is_profitable = self._check_is_route_profitable(steps)
+            if not is_profitable:
+                self.context.logger.info(f"Switching to next route.")
+                continue
             all_steps_successful = True
             for step in steps:
                 from_chain_id = step.get("action", {}).get("fromChainId")
@@ -2372,6 +2474,45 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "data": data,
             "tx_hash": tx_hash,
         }
+
+    def _check_is_route_profitable(self, steps: List[Dict[str, Any]]) -> bool:
+        """Check if the route is profitable"""
+        import pdb; pdb.set_trace()
+        total_fee = 0
+        total_gas_cost = 0
+        total_cost = 0
+        for step in steps:
+            estimate = step.get("estimate", {})
+            from_amount_usd = float(estimate.get("fromAmountUSD", 0))
+            to_amount_usd = float(estimate.get("toAmountUSD", 0))
+
+            fee_costs = estimate.get("feeCosts", [])
+            for fee_cost in fee_costs:
+                total_fee += float(fee_cost.get("amountUSD", 0))
+            
+            gas_costs = estimate.get("gasCosts", [])
+            for gas_cost in gas_costs:
+                total_gas_cost += float(gas_cost.get("amountUSD", 0))
+        
+            #if total_fee or total_gas_cost is greater than max_fee_percentage and max_gas_percentage of the to_amount_usd for any step, return False
+            fee_percentage = (total_fee / to_amount_usd) * 100
+            gas_percentage = (total_gas_cost / to_amount_usd) * 100
+            allowed_fee_percentage = self.params.max_fee_percentage * 100
+            allowed_gas_percentage = self.params.max_gas_percentage * 100
+
+            if fee_percentage > allowed_fee_percentage or gas_percentage > allowed_gas_percentage:
+                from_token = step.get("action", {}).get("fromToken", {}).get("symbol")
+                to_token = step.get("action", {}).get("toToken", {}).get("symbol")
+                from_chain = step.get("action", {}).get("fromChainId")
+                to_chain = step.get("action", {}).get("toChainId")
+                self.context.logger.info(
+                    f"Fee is {fee_percentage:.2f}% of total amount allowed is {allowed_fee_percentage:.2f}% and gas is {gas_percentage:.2f}% of total amount allowed is {allowed_gas_percentage:.2f}%."
+                    f"Details: from_token={from_token}, to_token={to_token}, from_chain={from_chain}, to_chain={to_chain}, "
+                    f"total_fee={total_fee}, total_gas_cost={total_gas_cost}, from_amount_usd={from_amount_usd}, to_amount_usd={to_amount_usd}"
+                )
+                return False
+
+        return True
 
     def _simulate_execution_bundle(
         self,

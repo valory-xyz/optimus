@@ -714,7 +714,6 @@ class CallCheckpointBehaviour(
             safe_tx_hash=safe_tx_hash,
             ether_value=ETHER_VALUE,
             safe_tx_gas=SAFE_TX_GAS,
-            operation=SafeOperation.CALL.value,
             to_address=self.params.staking_token_contract_address,
             data=data,
         )

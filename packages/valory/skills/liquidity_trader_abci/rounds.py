@@ -174,6 +174,10 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the chain id."""
         return cast(str, self.db.get("chain_id", None))
     
+    @property
+    def period_number_at_last_cp(self) -> Optional[int]:
+        """Get the period number at last cp."""
+        return cast(int, self.db.get("period_number_at_last_cp", 0))
 
 class CallCheckpointRound(CollectSameUntilThresholdRound):
     """A round for the checkpoint call preparation."""
@@ -237,10 +241,10 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
     collection_key = get_name(SynchronizedData.participant_to_staking_kpi)
     selection_key = (
         get_name(SynchronizedData.tx_submitter),
-        get_name(SynchronizedData.is_staking_kpi_met),
         get_name(SynchronizedData.most_voted_tx_hash),
         get_name(SynchronizedData.safe_contract_address),
         get_name(SynchronizedData.chain_id),
+        get_name(SynchronizedData.is_staking_kpi_met),
     )
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
@@ -254,14 +258,15 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         if event != Event.DONE:
             return res
 
-        if synced_data.is_staking_kpi_met == True:
+        if synced_data.is_staking_kpi_met is None:
+            return synced_data, Event.ERROR
+        if synced_data.is_staking_kpi_met is True:
             return synced_data, Event.STAKING_KPI_MET
-
-        else:
-            if synced_data.most_voted_tx_hash is not None:
-                return synced_data, Event.SETTLE
-            else:
-                return synced_data, Event.WAIT_FOR_PERIODS_TO_PASS
+        if synced_data.most_voted_tx_hash is not None:
+            return synced_data, Event.SETTLE
+        if synced_data.is_staking_kpi_met is False:
+            return synced_data, Event.STAKING_KPI_NOT_MET
+        return synced_data, Event.ERROR
 
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
@@ -376,6 +381,12 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
         synced_data = SynchronizedData(self.synchronized_data.db)
         event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
 
+        if event == Event.CHECKPOINT_TX_EXECUTED:
+            synced_data = synced_data.update(
+                synchronized_data_class=SynchronizedData,
+                period_number_at_last_cp=synced_data.period_count
+            )
+
         return synced_data, event
 
 
@@ -429,7 +440,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.SETTLE: FinishedCheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: CheckStakingKPIMetRound,
             Event.NO_MAJORITY: CheckStakingKPIMetRound,
-            Event.WAIT_FOR_PERIODS_TO_PASS: GetPositionsRound,
+            Event.STAKING_KPI_NOT_MET: GetPositionsRound,
+            Event.ERROR: CheckStakingKPIMetRound,
         },
         GetPositionsRound: {
             Event.DONE: EvaluateStrategyRound,
@@ -452,7 +464,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         },
         PostTxSettlementRound: {
             Event.ACTION_EXECUTED: DecisionMakingRound,
-            Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
+            Event.CHECKPOINT_TX_EXECUTED: CheckStakingKPIMetRound,
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
             Event.UNRECOGNIZED: FailedMultiplexerRound,
@@ -480,6 +492,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             get_name(SynchronizedData.last_reward_claimed_timestamp),
             get_name(SynchronizedData.min_num_of_safe_tx_required),
             get_name(SynchronizedData.is_staking_kpi_met),
+            get_name(SynchronizedData.period_number_at_last_cp),
         }
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {

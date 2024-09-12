@@ -41,14 +41,10 @@ class CallCheckpointPayload(MultisigTxPayload):
 
 
 @dataclass(frozen=True)
-class CheckStakingKPIMetPayload(BaseTxPayload):
+class CheckStakingKPIMetPayload(MultisigTxPayload):
     """A transaction payload for the CheckStakingKPIMetRound."""
 
-    tx_submitter: str
     is_staking_kpi_met: Optional[bool]
-    tx_hash: Optional[str]
-    safe_contract_address: Optional[str]
-    chain_id: Optional[str]
 
 
 @dataclass(frozen=True)

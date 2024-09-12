@@ -437,7 +437,7 @@ class LiquidityTraderBaseBehaviour(
         last_ts_checkpoint = yield from self._get_ts_checkpoint(chain=STAKING_CHAIN)
         if last_ts_checkpoint is None:
             return None
-        
+
         min_num_of_safe_tx_required = (
             math.ceil(
                 max(liveness_period, (current_timestamp - last_ts_checkpoint))
@@ -519,9 +519,11 @@ class LiquidityTraderBaseBehaviour(
             )
             return None
 
-        multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(
+        multisig_nonces_since_last_cp = (
+            yield from self._get_multisig_nonces_since_last_cp(
                 chain=STAKING_CHAIN,
                 multisig=self.params.safe_contract_addresses.get(STAKING_CHAIN),
+            )
         )
         if (
             multisig_nonces_since_last_cp
@@ -553,7 +555,7 @@ class LiquidityTraderBaseBehaviour(
         multisig_nonces = yield from self._get_multisig_nonces(chain, multisig)
         if multisig_nonces is None:
             return None
-        
+
         service_info = yield from self._get_service_info(chain)
         if service_info is None or len(service_info) == 0 or len(service_info[2]) == 0:
             self.context.logger.error(f"Error fetching service info {service_info}")
@@ -635,11 +637,15 @@ class CallCheckpointBehaviour(
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
             if self.service_staking_state == StakingState.STAKED:
-                min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(
-                    chain=STAKING_CHAIN
+                min_num_of_safe_tx_required = (
+                    yield from self._calculate_min_num_of_safe_tx_required(
+                        chain=STAKING_CHAIN
+                    )
                 )
                 if min_num_of_safe_tx_required is None:
-                    self.context.logger.error("Error calculating min number of safe tx required.")
+                    self.context.logger.error(
+                        "Error calculating min number of safe tx required."
+                    )
 
                 self.context.logger.info(
                     f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
@@ -666,9 +672,7 @@ class CallCheckpointBehaviour(
                 self.context.agent_address,
                 tx_submitter,
                 checkpoint_tx_hex,
-                self.params.safe_contract_addresses.get(
-                    STAKING_CHAIN
-                ),
+                self.params.safe_contract_addresses.get(STAKING_CHAIN),
                 STAKING_CHAIN,
                 self.service_staking_state.value,
                 min_num_of_safe_tx_required,
@@ -755,15 +759,22 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info("KPI already met for the day!")
             else:
                 is_period_threshold_exceeded = (
-                    self.synchronized_data.period_count - self.synchronized_data.period_number_at_last_cp
+                    self.synchronized_data.period_count
+                    - self.synchronized_data.period_number_at_last_cp
                     >= self.params.staking_threshold_period
                 )
 
                 if is_period_threshold_exceeded:
-                    min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
-                    multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(
-                        chain=STAKING_CHAIN,
-                        multisig=self.params.safe_contract_addresses.get(STAKING_CHAIN),
+                    min_num_of_safe_tx_required = (
+                        self.synchronized_data.min_num_of_safe_tx_required
+                    )
+                    multisig_nonces_since_last_cp = (
+                        yield from self._get_multisig_nonces_since_last_cp(
+                            chain=STAKING_CHAIN,
+                            multisig=self.params.safe_contract_addresses.get(
+                                STAKING_CHAIN
+                            ),
+                        )
                     )
                     if multisig_nonces_since_last_cp and min_num_of_safe_tx_required:
                         num_of_tx_left_to_meet_kpi = (
@@ -784,11 +795,9 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.agent_address,
                 tx_submitter,
                 vanity_tx_hex,
-                self.params.safe_contract_addresses.get(
-                    STAKING_CHAIN
-                ),
+                self.params.safe_contract_addresses.get(STAKING_CHAIN),
                 STAKING_CHAIN,
-                is_staking_kpi_met
+                is_staking_kpi_met,
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
@@ -1289,7 +1298,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return decimals
-
 
     def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
@@ -2471,13 +2479,22 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning("toAmountUSD is zero, skipping step.")
                 continue
 
-            total_fee += sum(float(fee_cost.get("amountUSD", 0)) for fee_cost in estimate.get("feeCosts", []))
-            total_gas_cost += sum(float(gas_cost.get("amountUSD", 0)) for gas_cost in estimate.get("gasCosts", []))
+            total_fee += sum(
+                float(fee_cost.get("amountUSD", 0))
+                for fee_cost in estimate.get("feeCosts", [])
+            )
+            total_gas_cost += sum(
+                float(gas_cost.get("amountUSD", 0))
+                for gas_cost in estimate.get("gasCosts", [])
+            )
 
             fee_percentage = (total_fee / to_amount_usd) * 100
             gas_percentage = (total_gas_cost / to_amount_usd) * 100
 
-            if fee_percentage > allowed_fee_percentage or gas_percentage > allowed_gas_percentage:
+            if (
+                fee_percentage > allowed_fee_percentage
+                or gas_percentage > allowed_gas_percentage
+            ):
                 from_token = step.get("action", {}).get("fromToken", {}).get("symbol")
                 to_token = step.get("action", {}).get("toToken", {}).get("symbol")
                 from_chain = step.get("action", {}).get("fromChainId")
@@ -2490,7 +2507,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return False
 
         return True
-    
+
     def _simulate_execution_bundle(
         self,
         to_address: str,

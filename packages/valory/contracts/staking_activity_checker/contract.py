@@ -42,3 +42,16 @@ class StakingActivityCheckerContract(Contract):
         contract = cls.get_instance(ledger_api, contract_address)
         liveness_ratio = contract.functions.livenessRatio().call()
         return dict(data=liveness_ratio)
+    
+    @classmethod
+    def get_multisig_nonces(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        multisig: str,
+    ) -> JSONLike:
+        """Retrieve the nonces for a given multisig address."""
+        contract = cls.get_instance(ledger_api, contract_address)
+        nonces = contract.functions.getMultisigNonces(multisig).call()
+        return dict(data=nonces)
+

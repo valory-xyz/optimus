@@ -32,6 +32,7 @@ class CallCheckpointPayload(BaseTxPayload):
     tx_submitter: str
     service_staking_state: int
     min_num_of_safe_tx_required: Optional[int]
+    is_staking_kpi_met: Optional[bool]
     tx_hash: Optional[str]
     safe_contract_address: Optional[str]
     chain_id: Optional[str]
@@ -42,7 +43,7 @@ class CheckStakingKPIMetPayload(BaseTxPayload):
     """A transaction payload for the CheckStakingKPIMetRound."""
 
     tx_submitter: str
-    kpi_met_for_the_day: Optional[bool]
+    is_staking_kpi_met: Optional[bool]
     tx_hash: Optional[str]
     safe_contract_address: Optional[str]
     chain_id: Optional[str]

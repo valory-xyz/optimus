@@ -754,68 +754,41 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
             elif is_staking_kpi_met is True:
                 self.context.logger.info("KPI already met for the day!")
             else:
-                last_round_id = (
-                    self.context.state.round_sequence._abci_app._previous_rounds[
-                        -1
-                    ].round_id
-                )
-
-                is_post_tx_settlement_round = (
-                    last_round_id == PostTxSettlementRound.auto_round_id()
-                    and self.synchronized_data.tx_submitter
-                    != CallCheckpointRound.auto_round_id()
-                )
                 is_period_threshold_exceeded = (
-                    self.synchronized_data.period_count
+                    self.synchronized_data.period_count - self.synchronized_data.period_number_at_last_cp
                     >= self.params.staking_threshold_period
                 )
 
-                if is_post_tx_settlement_round or is_period_threshold_exceeded:
-                    min_num_of_safe_tx_required = (
-                        self.synchronized_data.min_num_of_safe_tx_required
+                if is_period_threshold_exceeded:
+                    min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
+                    multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(
+                        chain=STAKING_CHAIN,
+                        multisig=self.params.safe_contract_addresses.get(STAKING_CHAIN),
                     )
-                    if not min_num_of_safe_tx_required:
-                        min_num_of_safe_tx_required = (
-                            yield from self._calculate_min_num_of_safe_tx_required(
-                                chain="optimism"
+                    if multisig_nonces_since_last_cp and min_num_of_safe_tx_required:
+                        num_of_tx_left_to_meet_kpi = (
+                            min_num_of_safe_tx_required - multisig_nonces_since_last_cp
+                        )
+                        if num_of_tx_left_to_meet_kpi > 0:
+                            self.context.logger.info(
+                                f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
                             )
-                        )
-
-                    multisig_nonces_since_last_cp = (
-                        yield from self._get_multisig_nonces_since_last_cp(
-                            chain="optimism",
-                            multisig=self.params.safe_contract_addresses.get(
-                                "optimism"
-                            ),
-                        )
-                    )
-
-                    num_of_tx_left_to_meet_kpi = (
-                        min_num_of_safe_tx_required - multisig_nonces_since_last_cp
-                    )
-                    if num_of_tx_left_to_meet_kpi > 0:
-                        self.context.logger.info(
-                            f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
-                        )
-                        self.context.logger.info(f"Preparing vanity tx..")
-                        vanity_tx_hex = yield from self._prepare_vanity_tx(
-                            chain="optimism"
-                        )
-                        self.context.logger.info(f"tx hash: {vanity_tx_hex}")
-                    else:
-                        is_staking_kpi_met = True
-                        self.context.logger.info("KPI met for the day!")
+                            self.context.logger.info(f"Preparing vanity tx..")
+                            vanity_tx_hex = yield from self._prepare_vanity_tx(
+                                chain=STAKING_CHAIN
+                            )
+                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CheckStakingKPIMetPayload(
                 self.context.agent_address,
                 tx_submitter,
-                is_staking_kpi_met,
                 vanity_tx_hex,
-                safe_contract_address=self.params.safe_contract_addresses.get(
-                    "optimism"
+                self.params.safe_contract_addresses.get(
+                    STAKING_CHAIN
                 ),
-                chain_id="optimism",
+                STAKING_CHAIN,
+                is_staking_kpi_met
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():

@@ -173,11 +173,12 @@ class SynchronizedData(BaseSynchronizedData):
     def chain_id(self) -> Optional[str]:
         """Get the chain id."""
         return cast(str, self.db.get("chain_id", None))
-    
+
     @property
     def period_number_at_last_cp(self) -> Optional[int]:
         """Get the period number at last cp."""
         return cast(int, self.db.get("period_number_at_last_cp", 0))
+
 
 class CallCheckpointRound(CollectSameUntilThresholdRound):
     """A round for the checkpoint call preparation."""
@@ -207,8 +208,10 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
         if event != Event.DONE:
             return res
 
-        if(synced_data.service_staking_state == StakingState.STAKED.value
-           and synced_data.most_voted_tx_hash is None):
+        if (
+            synced_data.service_staking_state == StakingState.STAKED.value
+            and synced_data.most_voted_tx_hash is None
+        ):
             return synced_data, Event.NEXT_CHECKPOINT_NOT_REACHED_YET
 
         if (
@@ -222,10 +225,8 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
 
         if synced_data.service_staking_state == StakingState.EVICTED.value:
             return synced_data, Event.SERVICE_EVICTED
-        
-        if(
-            synced_data.min_num_of_safe_tx_required is None
-        ):
+
+        if synced_data.min_num_of_safe_tx_required is None:
             return synced_data, Event.ERROR
 
         return res
@@ -384,7 +385,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
         if event == Event.CHECKPOINT_TX_EXECUTED:
             synced_data = synced_data.update(
                 synchronized_data_class=SynchronizedData,
-                period_number_at_last_cp=synced_data.period_count
+                period_number_at_last_cp=synced_data.period_count,
             )
 
         return synced_data, event

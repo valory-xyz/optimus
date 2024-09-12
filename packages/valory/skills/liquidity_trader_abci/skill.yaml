@@ -7,16 +7,16 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeibenou4gelje3hmwh2vwffy4wdexfpbuvugi7lijwwn2e2jhwitbm
+  behaviours.py: bafybeie3juw6be73rhnhr46woqec3aoptb35s3bdgtjm3bjdnn6x2dso5a
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeif4v5cy62pcxtilwbxnxr3hbiwmwlmw2xucc6wl3paa6rsqxlndmm
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
   models.py: bafybeibawxhcg4ptra6jsbufjmiyte3cbvdi74duaqkyezbhtami2enf3u
-  payloads.py: bafybeigi7t4fe3gr4reuq2d2xz4qblbxlo6wwy2hwh7htaaihjoya7uqky
+  payloads.py: bafybeihi42vbsr2xyhzsp55tl6mqecqyy52jrhwjfw4trvrjlhfxuyaz3u
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeieo53qtt557632vtp3x3huagdpqevptextbwd7euk6hpoz6ybtuci
   pools/uniswap.py: bafybeif2cjbtjh5altlgranmgrif4yaevnn344fn3askbjde5h4y4rh2mq
-  rounds.py: bafybeid7jpwkznn5nmsqnspc6ykhfddwujmdxwkqmwjchmw6k7jjqgwg6e
+  rounds.py: bafybeidjwsnnuuyyujsm4e3j7vovfnn6omwozgfcjhf2ew4m4te5pb3fwe
   strategies/simple_strategy.py: bafybeig2iygxz5gewmiyeawubs5f4pr5e3st22lmdkxthlfq7t5kbluw4a
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []
@@ -25,7 +25,7 @@ contracts:
 - valory/gnosis_safe:0.1.0:bafybeiho6sbfts3zk3mftrngw37d5qnlvkqtnttt3fzexmcwkeevhu4wwi
 - valory/balancer_weighted_pool:0.1.0:bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq
 - valory/balancer_vault:0.1.0:bafybeicewjzxphjxnzhjrgcycj5d3twuuuh2cvfkwzupxjmcrq2pp2iqgq
-- valory/erc20:0.1.0:bafybeibk3nhy36dghedksemkfcrdpwoc4rnqw4oo6cw4fkvbaajpznscn4
+- valory/erc20:0.1.0:bafybeiccijjoojnos7mh4lbhfaf2zpqvkugl6kd33xwygdxdtpg7ttdzgu
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeieljamerttxyo7z2yokwripnnhzkn4zply5lz457vsixf5wfu5px4
 - valory/uniswap_v3_pool:0.1.0:bafybeidglijnyueahpgivaykbhio2r3ovfeo23a256y3yb6g7be4hngx3a

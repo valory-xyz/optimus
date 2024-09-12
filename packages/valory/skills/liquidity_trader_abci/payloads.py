@@ -24,18 +24,20 @@ from typing import Optional
 
 from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 
-
 @dataclass(frozen=True)
-class CallCheckpointPayload(BaseTxPayload):
-    """A transaction payload for the CallCheckpointRound."""
-
+class MultisigTxPayload(BaseTxPayload):
+    """Represents a transaction payload for preparing an on-chain transaction to be sent via the agents' multisig."""
     tx_submitter: str
-    service_staking_state: int
-    min_num_of_safe_tx_required: Optional[int]
-    is_staking_kpi_met: Optional[bool]
-    tx_hash: Optional[str]
+    tx_hash: Optional[str]  
     safe_contract_address: Optional[str]
     chain_id: Optional[str]
+
+@dataclass(frozen=True)
+class CallCheckpointPayload(MultisigTxPayload):
+    """A transaction payload for the CallCheckpointRound."""
+
+    service_staking_state: int
+    min_num_of_safe_tx_required: Optional[int]
 
 
 @dataclass(frozen=True)

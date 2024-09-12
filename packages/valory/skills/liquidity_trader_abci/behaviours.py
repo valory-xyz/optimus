@@ -175,7 +175,7 @@ class LiquidityTraderBaseBehaviour(
         self.pools: Dict[str, Any] = {}
         self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour
-        self.service_staking_state = None
+        self.service_staking_state = StakingState.UNSTAKED
         self.strategy = SimpleStrategyBehaviour
         # Read the assets and current pool
         self.read_current_pool()
@@ -427,7 +427,6 @@ class LiquidityTraderBaseBehaviour(
         """Calculates the minimun number of tx to hit to unlock the staking rewards"""
         liveness_ratio = yield from self._get_liveness_ratio(chain)
         liveness_period = yield from self._get_liveness_period(chain)
-
         if not liveness_ratio or not liveness_period:
             return None
 
@@ -435,7 +434,10 @@ class LiquidityTraderBaseBehaviour(
             self.round_sequence.last_round_transition_timestamp.timestamp()
         )
 
-        last_ts_checkpoint = yield from self._get_ts_checkpoint(chain="optimism")
+        last_ts_checkpoint = yield from self._get_ts_checkpoint(chain=STAKING_CHAIN)
+        if last_ts_checkpoint is None:
+            return None
+        
         min_num_of_safe_tx_required = (
             math.ceil(
                 max(liveness_period, (current_timestamp - last_ts_checkpoint))
@@ -507,16 +509,10 @@ class LiquidityTraderBaseBehaviour(
 
     def _is_staking_kpi_met(self) -> Generator[None, None, Optional[bool]]:
         """Return whether the staking KPI has been met (only for staked services)."""
-        if self.service_staking_state is None:
-            yield from self._get_service_staking_state(chain="optimism")
-
         if self.service_staking_state != StakingState.STAKED:
-            return False
+            return None
 
         min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
-        if min_num_of_safe_tx_required is None:
-            min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
-
         if min_num_of_safe_tx_required is None:
             self.context.logger.error(
                 "Error calculating min number of safe tx required."
@@ -547,12 +543,17 @@ class LiquidityTraderBaseBehaviour(
             chain_id=chain,
             multisig=multisig,
         )
+        if multisig_nonces is None or len(multisig_nonces) == 0:
+            return None
         return multisig_nonces[0]
 
     def _get_multisig_nonces_since_last_cp(
         self, chain: str, multisig: str
     ) -> Generator[None, None, Optional[int]]:
         multisig_nonces = yield from self._get_multisig_nonces(chain, multisig)
+        if multisig_nonces is None:
+            return None
+        
         service_info = yield from self._get_service_info(chain)
         if service_info is None or len(service_info) == 0 or len(service_info[2]) == 0:
             self.context.logger.error(f"Error fetching service info {service_info}")
@@ -564,7 +565,7 @@ class LiquidityTraderBaseBehaviour(
             multisig_nonces - multisig_nonces_on_last_checkpoint
         )
         self.context.logger.info(
-            f"Multisig nonces since last checkpoint: {multisig_nonces_since_last_cp}"
+            f"Safe transactions since last checkpoint: {multisig_nonces_since_last_cp}"
         )
         return multisig_nonces_since_last_cp
 
@@ -638,6 +639,9 @@ class CallCheckpointBehaviour(
                 min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(
                     chain="optimism"
                 )
+                if min_num_of_safe_tx_required is None:
+                    self.context.logger.error("Error calculating min number of safe tx required.")
+
                 self.context.logger.info(
                     f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
                 )
@@ -752,7 +756,9 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             vanity_tx_hex = None
             is_staking_kpi_met = yield from self._is_staking_kpi_met()
-            if is_staking_kpi_met:
+            if is_staking_kpi_met is None:
+                self.context.logger.error("Error checking if staking KPI is met.")
+            elif is_staking_kpi_met is True:
                 self.context.logger.info("KPI already met for the day!")
             else:
                 last_round_id = (

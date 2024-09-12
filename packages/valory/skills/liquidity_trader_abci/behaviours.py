@@ -511,10 +511,9 @@ class LiquidityTraderBaseBehaviour(
         if self.service_staking_state != StakingState.STAKED:
             return False
 
-        if self.synchronized_data.min_num_of_safe_tx_required is None:
-            min_num_of_safe_tx_required = (
-                yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
-            )
+        min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
+        if min_num_of_safe_tx_required is None:
+            min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
 
         if min_num_of_safe_tx_required is None:
             self.context.logger.error(
@@ -522,11 +521,9 @@ class LiquidityTraderBaseBehaviour(
             )
             return None
 
-        multisig_nonces_since_last_cp = (
-            yield from self._get_multisig_nonces_since_last_cp(
+        multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(
                 chain="optimism",
                 multisig=self.params.safe_contract_addresses.get("optimism"),
-            )
         )
         if (
             multisig_nonces_since_last_cp
@@ -636,6 +633,12 @@ class CallCheckpointBehaviour(
             min_num_of_safe_tx_required = None
             is_staking_kpi_met = False
             if self.service_staking_state == StakingState.STAKED:
+                min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(
+                    chain="optimism"
+                )
+                self.context.logger.info(
+                    f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
+                )
                 is_checkpoint_reached = yield from self._check_if_checkpoint_reached(
                     chain="optimism"
                 )
@@ -646,17 +649,6 @@ class CallCheckpointBehaviour(
                     checkpoint_tx_hex = yield from self._prepare_checkpoint_tx(
                         chain="optimism"
                     )
-
-                    min_num_of_safe_tx_required = (
-                        yield from self._calculate_min_num_of_safe_tx_required(
-                            chain="optimism"
-                        )
-                    )
-
-                    self.context.logger.info(
-                        f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
-                    )
-
                     is_staking_kpi_met = False
                 else:
                     is_staking_kpi_met = yield from self._is_staking_kpi_met()
@@ -744,7 +736,6 @@ class CallCheckpointBehaviour(
             safe_tx_hash=safe_tx_hash,
             ether_value=ETHER_VALUE,
             safe_tx_gas=SAFE_TX_GAS,
-            operation=SafeOperation.CALL.value,
             to_address=self.params.staking_token_contract_address,
             data=data,
         )

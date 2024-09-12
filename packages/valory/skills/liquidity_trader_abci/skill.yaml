@@ -16,7 +16,7 @@ fingerprint:
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeieo53qtt557632vtp3x3huagdpqevptextbwd7euk6hpoz6ybtuci
   pools/uniswap.py: bafybeif2cjbtjh5altlgranmgrif4yaevnn344fn3askbjde5h4y4rh2mq
-  rounds.py: bafybeihjdqygj33kckeedunzygcjf4lcehnctm75zre35a2pwqbglttbw4
+  rounds.py: bafybeid7jpwkznn5nmsqnspc6ykhfddwujmdxwkqmwjchmw6k7jjqgwg6e
   strategies/simple_strategy.py: bafybeig2iygxz5gewmiyeawubs5f4pr5e3st22lmdkxthlfq7t5kbluw4a
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []

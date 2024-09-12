@@ -113,6 +113,8 @@ LIVENESS_RATIO_SCALE_FACTOR = 10**18
 REQUIRED_REQUESTS_SAFETY_MARGIN = 1
 MAX_RETRIES = 3
 HTTP_OK = [200, 201]
+UTF8 = "utf-8"
+STAKING_CHAIN = "optimism"
 WaitableConditionType = Generator[None, None, Any]
 
 
@@ -1199,7 +1201,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _fetch_token_prices(
         self, token_balances: List[Dict[str, Any]]
-    ) -> Dict[str, float]:
+    ) -> Generator[None, None, Dict[str, float]]:
         """Fetch token prices from Coingecko"""
         token_prices = {}
         headers = {
@@ -1316,12 +1318,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
         return decimals
 
-    def _get_token_id(self, token_address: str) -> Optional[str]:
-        """Get token ID from the whitelist"""
-        for token_data in self.params.token_symbol_whitelist:
-            if token_data.get(TOKEN_ADDRESS_FIELD) == token_address:
-                return token_data.get(TOKEN_ID_FIELD)
-        return None
 
     def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
@@ -2410,7 +2406,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return bridge_and_swap_actions
 
-        self.context.logger.error("NONE OF THE ROUTES WERE SUCCESFUL!")
+        self.context.logger.error("NONE OF THE ROUTES WERE SUCCESSFUL!")
         return {}
 
     def get_step_transaction(
@@ -2489,35 +2485,27 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _check_is_route_profitable(self, steps: List[Dict[str, Any]]) -> bool:
         """Check if the route is profitable"""
-        import pdb
-
-        pdb.set_trace()
         total_fee = 0
         total_gas_cost = 0
-        total_cost = 0
+
+        allowed_fee_percentage = self.params.max_fee_percentage * 100
+        allowed_gas_percentage = self.params.max_gas_percentage * 100
+
         for step in steps:
             estimate = step.get("estimate", {})
-            from_amount_usd = float(estimate.get("fromAmountUSD", 0))
             to_amount_usd = float(estimate.get("toAmountUSD", 0))
 
-            fee_costs = estimate.get("feeCosts", [])
-            for fee_cost in fee_costs:
-                total_fee += float(fee_cost.get("amountUSD", 0))
+            if to_amount_usd == 0:
+                self.context.logger.warning("toAmountUSD is zero, skipping step.")
+                continue
 
-            gas_costs = estimate.get("gasCosts", [])
-            for gas_cost in gas_costs:
-                total_gas_cost += float(gas_cost.get("amountUSD", 0))
+            total_fee += sum(float(fee_cost.get("amountUSD", 0)) for fee_cost in estimate.get("feeCosts", []))
+            total_gas_cost += sum(float(gas_cost.get("amountUSD", 0)) for gas_cost in estimate.get("gasCosts", []))
 
-            # if total_fee or total_gas_cost is greater than max_fee_percentage and max_gas_percentage of the to_amount_usd for any step, return False
             fee_percentage = (total_fee / to_amount_usd) * 100
             gas_percentage = (total_gas_cost / to_amount_usd) * 100
-            allowed_fee_percentage = self.params.max_fee_percentage * 100
-            allowed_gas_percentage = self.params.max_gas_percentage * 100
 
-            if (
-                fee_percentage > allowed_fee_percentage
-                or gas_percentage > allowed_gas_percentage
-            ):
+            if fee_percentage > allowed_fee_percentage or gas_percentage > allowed_gas_percentage:
                 from_token = step.get("action", {}).get("fromToken", {}).get("symbol")
                 to_token = step.get("action", {}).get("toToken", {}).get("symbol")
                 from_chain = step.get("action", {}).get("fromChainId")
@@ -2525,12 +2513,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(
                     f"Fee is {fee_percentage:.2f}% of total amount allowed is {allowed_fee_percentage:.2f}% and gas is {gas_percentage:.2f}% of total amount allowed is {allowed_gas_percentage:.2f}%."
                     f"Details: from_token={from_token}, to_token={to_token}, from_chain={from_chain}, to_chain={to_chain}, "
-                    f"total_fee={total_fee}, total_gas_cost={total_gas_cost}, from_amount_usd={from_amount_usd}, to_amount_usd={to_amount_usd}"
+                    f"total_fee={total_fee}, total_gas_cost={total_gas_cost}, to_amount_usd={to_amount_usd}"
                 )
                 return False
 
         return True
-
+    
     def _simulate_execution_bundle(
         self,
         to_address: str,

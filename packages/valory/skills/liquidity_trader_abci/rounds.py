@@ -183,12 +183,11 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
     no_majority_event: Enum = Event.NO_MAJORITY
     selection_key = (
         get_name(SynchronizedData.tx_submitter),
-        get_name(SynchronizedData.service_staking_state),
-        get_name(SynchronizedData.min_num_of_safe_tx_required),
-        get_name(SynchronizedData.is_staking_kpi_met),
         get_name(SynchronizedData.most_voted_tx_hash),
         get_name(SynchronizedData.safe_contract_address),
         get_name(SynchronizedData.chain_id),
+        get_name(SynchronizedData.service_staking_state),
+        get_name(SynchronizedData.min_num_of_safe_tx_required),
     )
     collection_key = get_name(SynchronizedData.participant_to_checkpoint)
     synchronized_data_class = SynchronizedData
@@ -204,6 +203,10 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
         if event != Event.DONE:
             return res
 
+        if(synced_data.service_staking_state == StakingState.STAKED.value
+           and synced_data.most_voted_tx_hash is None):
+            return synced_data, Event.NEXT_CHECKPOINT_NOT_REACHED_YET
+
         if (
             synced_data.service_staking_state == StakingState.STAKED.value
             and synced_data.most_voted_tx_hash is not None
@@ -215,18 +218,11 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
 
         if synced_data.service_staking_state == StakingState.EVICTED.value:
             return synced_data, Event.SERVICE_EVICTED
-
-        if (
-            synced_data.most_voted_tx_hash is None
-            and synced_data.is_staking_kpi_met == False
+        
+        if(
+            synced_data.min_num_of_safe_tx_required is None
         ):
-            return synced_data, Event.STAKING_KPI_NOT_MET
-
-        if (
-            synced_data.most_voted_tx_hash is None
-            and synced_data.is_staking_kpi_met == True
-        ):
-            return synced_data, Event.STAKING_KPI_MET
+            return synced_data, Event.ERROR
 
         return res
 
@@ -420,14 +416,13 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     }
     transition_function: AbciAppTransitionFunction = {
         CallCheckpointRound: {
-            Event.DONE: CheckStakingKPIMetRound,
+            Event.NEXT_CHECKPOINT_NOT_REACHED_YET: CheckStakingKPIMetRound,
             Event.SETTLE: FinishedCallCheckpointRound,
             Event.SERVICE_NOT_STAKED: GetPositionsRound,
             Event.SERVICE_EVICTED: GetPositionsRound,
             Event.ROUND_TIMEOUT: CallCheckpointRound,
             Event.NO_MAJORITY: CallCheckpointRound,
-            Event.STAKING_KPI_NOT_MET: CheckStakingKPIMetRound,
-            Event.STAKING_KPI_MET: GetPositionsRound,
+            Event.ERROR: CallCheckpointRound,
         },
         CheckStakingKPIMetRound: {
             Event.STAKING_KPI_MET: GetPositionsRound,

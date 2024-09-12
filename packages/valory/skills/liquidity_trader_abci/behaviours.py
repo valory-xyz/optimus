@@ -520,8 +520,8 @@ class LiquidityTraderBaseBehaviour(
             return None
 
         multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(
-                chain="optimism",
-                multisig=self.params.safe_contract_addresses.get("optimism"),
+                chain=STAKING_CHAIN,
+                multisig=self.params.safe_contract_addresses.get(STAKING_CHAIN),
         )
         if (
             multisig_nonces_since_last_cp
@@ -634,10 +634,9 @@ class CallCheckpointBehaviour(
             yield from self._get_service_staking_state(chain="optimism")
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
-            is_staking_kpi_met = False
             if self.service_staking_state == StakingState.STAKED:
                 min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(
-                    chain="optimism"
+                    chain=STAKING_CHAIN
                 )
                 if min_num_of_safe_tx_required is None:
                     self.context.logger.error("Error calculating min number of safe tx required.")
@@ -646,20 +645,15 @@ class CallCheckpointBehaviour(
                     f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
                 )
                 is_checkpoint_reached = yield from self._check_if_checkpoint_reached(
-                    chain="optimism"
+                    chain=STAKING_CHAIN
                 )
                 if is_checkpoint_reached:
                     self.context.logger.info(
                         "Checkpoint reached! Preparing checkpoint tx.."
                     )
                     checkpoint_tx_hex = yield from self._prepare_checkpoint_tx(
-                        chain="optimism"
+                        chain=STAKING_CHAIN
                     )
-                    is_staking_kpi_met = False
-                else:
-                    is_staking_kpi_met = yield from self._is_staking_kpi_met()
-                    if is_staking_kpi_met is None:
-                        self.service_staking_state = StakingState.UNSTAKED
 
             elif self.service_staking_state == StakingState.EVICTED:
                 self.context.logger.error("Service has been evicted!")
@@ -671,14 +665,13 @@ class CallCheckpointBehaviour(
             payload = CallCheckpointPayload(
                 self.context.agent_address,
                 tx_submitter,
+                checkpoint_tx_hex,
+                self.params.safe_contract_addresses.get(
+                    STAKING_CHAIN
+                ),
+                STAKING_CHAIN,
                 self.service_staking_state.value,
                 min_num_of_safe_tx_required,
-                is_staking_kpi_met,
-                checkpoint_tx_hex,
-                safe_contract_address=self.params.safe_contract_addresses.get(
-                    "optimism"
-                ),
-                chain_id="optimism",
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
@@ -691,7 +684,7 @@ class CallCheckpointBehaviour(
     ) -> Generator[None, None, Optional[bool]]:
         next_checkpoint = yield from self._get_next_checkpoint(chain)
         if next_checkpoint is None:
-            return None
+            return False
 
         if next_checkpoint == 0:
             return True

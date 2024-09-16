@@ -115,6 +115,7 @@ MAX_RETRIES = 3
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
 STAKING_CHAIN = "optimism"
+INTEGRATOR = "valory"
 WaitableConditionType = Generator[None, None, Any]
 
 
@@ -2173,6 +2174,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "toChainId": to_chain_id,
             "toTokenAddress": to_token_address,
             "options": {
+                "integrator": INTEGRATOR,
                 "slippage": slippage,
                 "allowSwitchChain": allow_switch_chain,
                 "integrator": "valory",
@@ -2216,7 +2218,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         routes = routes_response.get("routes", [])
         for route in routes:
             steps = route.get("steps", [])
-            is_profitable = self._check_is_route_profitable(steps)
+            is_profitable = self._is_route_profitable(steps)
             if not is_profitable:
                 self.context.logger.info(f"Switching to next route.")
                 continue
@@ -2463,7 +2465,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "tx_hash": tx_hash,
         }
 
-    def _check_is_route_profitable(self, steps: List[Dict[str, Any]]) -> bool:
+    def _is_route_profitable(self, steps: List[Dict[str, Any]]) -> bool:
         """Check if the route is profitable"""
         total_fee = 0
         total_gas_cost = 0
@@ -2473,6 +2475,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         for step in steps:
             estimate = step.get("estimate", {})
+            from_amount_usd = float(estimate.get("fromAmountUSD", 0))
             to_amount_usd = float(estimate.get("toAmountUSD", 0))
 
             if to_amount_usd == 0:
@@ -2501,11 +2504,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 to_chain = step.get("action", {}).get("toChainId")
                 self.context.logger.info(
                     f"Fee is {fee_percentage:.2f}% of total amount allowed is {allowed_fee_percentage:.2f}% and gas is {gas_percentage:.2f}% of total amount allowed is {allowed_gas_percentage:.2f}%."
-                    f"Details: from_token={from_token}, to_token={to_token}, from_chain={from_chain}, to_chain={to_chain}, "
-                    f"total_fee={total_fee}, total_gas_cost={total_gas_cost}, to_amount_usd={to_amount_usd}"
+                    f"Details: from_token={from_token}, from_chain={from_chain}, to_token={to_token}, to_chain={to_chain}, "
+                    f"total_fee={total_fee}, total_gas_cost={total_gas_cost}, from_amount_usd={from_amount_usd}, to_amount_usd={to_amount_usd}"
                 )
                 return False
 
+        self.context.logger.info(f"All steps have fees within the allowed percentage.")
         return True
 
     def _simulate_execution_bundle(
@@ -2578,6 +2582,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "X-Access-Key": self.params.tenderly_access_key,
             },
         )
+
         if response.status_code != 200:
             self.context.logger.error(
                 f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
@@ -2590,8 +2595,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 simulation_results = data.get("simulation_results", [])
                 status = False
                 if simulation_results:
-                    simulation_results = simulation_results[0]
-                    for simulation in simulation_results.values():
+                    for simulation_result in simulation_results:
+                        simulation = simulation_result.get("simulation", {})
                         if isinstance(simulation, Dict):
                             status = simulation.get("status", False)
                 return status

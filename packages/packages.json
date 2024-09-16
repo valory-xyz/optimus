@@ -2,16 +2,16 @@
     "dev": {
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeidg4i3d3dn4dnrixz65u2bjsoqfdwqxblhpd764q3ecwvudu4dxmq",
         "contract/valory/balancer_vault/0.1.0": "bafybeicewjzxphjxnzhjrgcycj5d3twuuuh2cvfkwzupxjmcrq2pp2iqgq",
-        "contract/valory/erc20/0.1.0": "bafybeiccijjoojnos7mh4lbhfaf2zpqvkugl6kd33xwygdxdtpg7ttdzgu",
+        "contract/valory/erc20/0.1.0": "bafybeibk3nhy36dghedksemkfcrdpwoc4rnqw4oo6cw4fkvbaajpznscn4",
         "contract/valory/uniswap_v3_non_fungible_position_manager/0.1.0": "bafybeieljamerttxyo7z2yokwripnnhzkn4zply5lz457vsixf5wfu5px4",
         "contract/valory/uniswap_v3_pool/0.1.0": "bafybeidglijnyueahpgivaykbhio2r3ovfeo23a256y3yb6g7be4hngx3a",
         "contract/valory/merkl_distributor/0.1.0": "bafybeifctofnyhdic2sxmkqujvf3j2wwydhtvzhi6kdeutykenymplf4e4",
         "contract/valory/staking_token/0.1.0": "bafybeihgp74ojttyzuriukd44biv2ehh4rcc3czm7mv2olw7amepxszbzu",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeibfqnnqgrchsykidx3x3fgwjmjnml7jyl6e66prhxars3gzgosvxq",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidz35e3o22rzw6wlqgnk3k6samn5sgczxr2wosmvg7zp4aqmhezeq",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiew3mcnd46m7hs6r4j4gzqevh3uqepjhqnrmtyapeb3mikodlp5o4",
-        "agent/valory/optimus/0.1.0": "bafybeihqrspxqfvzqrbcqlg37tu5g75phgtexul6zzdn4kwamggtqpy5ba",
-        "service/valory/optimus/0.1.0": "bafybeidujhm5gm5vbwmqhthrpgx4nsztawo2vtst3py7zv2o6eusb5wnvq"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeigyfmoksjah5suxds7jxuxtrpjw5rxrzvbtmdg3z7mopf4dxdyk4a",
+        "skill/valory/optimus_abci/0.1.0": "bafybeib4r37oqfqxkvaecf4jfu2r2yjht5itjxyjtqaabaluh7cc2upmsm",
+        "agent/valory/optimus/0.1.0": "bafybeic3uohprycghvx7sduinyagwvcy5m67gofkakrwoiwowobfmu6aoe",
+        "service/valory/optimus/0.1.0": "bafybeihalpb5zljmjsgjzukun7kydub7qa6fiym2o6kygeglgga2tlhct4"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

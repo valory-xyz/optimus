@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeicjbstfud6oljhtbobgahpzujyigo2u3eit62srji2ik52irhdv7i
+agent: valory/optimus:0.1.0:bafybeifu4v6a77qnqidz72unxy25xlagcnex65znhtsvkfsm3qmcv2vyue
 number_of_agents: 1
 deployment: {}
 ---
@@ -51,6 +51,10 @@ models:
       reset_pause_duration: ${RESET_PAUSE_DURATION:int:300}
       on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
       reset_tendermint_after: ${RESET_TENDERMINT_AFTER:int:30}
+      gas_params:
+        gas_price: ${GAS_PRICE:int:null}
+        max_fee_per_gas: ${MAX_FEE_PER_GAS:int:null}
+        max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:null}
       retry_attempts: 400
       retry_timeout: 3
       request_retry_delay: 1.0

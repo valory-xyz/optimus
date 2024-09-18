@@ -174,6 +174,11 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the chain id."""
         return cast(str, self.db.get("chain_id", None))
     
+    @property
+    def period_number_at_last_cp(self) -> Optional[int]:
+        """Get the period number at last cp."""
+        return cast(int, self.db.get("period_number_at_last_cp", 0))
+    
 
 class CallCheckpointRound(CollectSameUntilThresholdRound):
     """A round for the checkpoint call preparation."""
@@ -216,16 +221,10 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
         if synced_data.service_staking_state == StakingState.EVICTED.value:
             return synced_data, Event.SERVICE_EVICTED
 
-        if (
-            synced_data.most_voted_tx_hash is None
-            and synced_data.is_staking_kpi_met == False
-        ):
+        if synced_data.is_staking_kpi_met is False:
             return synced_data, Event.STAKING_KPI_NOT_MET
 
-        if (
-            synced_data.most_voted_tx_hash is None
-            and synced_data.is_staking_kpi_met == True
-        ):
+        if synced_data.is_staking_kpi_met is True:
             return synced_data, Event.STAKING_KPI_MET
 
         return res
@@ -258,15 +257,16 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         if event != Event.DONE:
             return res
 
-        if synced_data.is_staking_kpi_met == True:
+        if synced_data.most_voted_tx_hash is not None:
+            return synced_data, Event.SETTLE
+
+        if synced_data.is_staking_kpi_met is True:
             return synced_data, Event.STAKING_KPI_MET
 
-        else:
-            if synced_data.most_voted_tx_hash is not None:
-                return synced_data, Event.SETTLE
-            else:
-                return synced_data, Event.WAIT_FOR_PERIODS_TO_PASS
-
+        if synced_data.is_staking_kpi_met is False:
+            return synced_data, Event.WAIT_FOR_PERIODS_TO_PASS
+        
+        return res
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""
@@ -376,9 +376,15 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
             CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
             DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
         }
-
+                    
         synced_data = SynchronizedData(self.synchronized_data.db)
         event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
+
+        if event == Event.CHECKPOINT_TX_EXECUTED:
+            synced_data = synced_data.update(
+                synchronized_data_class=SynchronizedData,
+                period_number_at_last_cp=synced_data.period_count
+            )
 
         return synced_data, event
 
@@ -485,6 +491,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             get_name(SynchronizedData.last_reward_claimed_timestamp),
             get_name(SynchronizedData.min_num_of_safe_tx_required),
             get_name(SynchronizedData.is_staking_kpi_met),
+            get_name(SynchronizedData.period_number_at_last_cp),
         }
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {

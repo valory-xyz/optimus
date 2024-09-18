@@ -98,7 +98,7 @@ REQUIRED_REQUESTS_SAFETY_MARGIN = 1
 
 # type 1 and 2 stand for ERC20 and Concentrated liquidity campaigns respectively
 # https://docs.merkl.xyz/integrate-merkl/integrate-merkl-to-your-app#merkl-api
-CAMPAIGN_TYPES = ["1", "2"] 
+CAMPAIGN_TYPES = ["1", "2"]
 INTEGRATOR = "valory"
 WaitableConditionType = Generator[None, None, Any]
 
@@ -417,7 +417,7 @@ class LiquidityTraderBaseBehaviour(
         last_ts_checkpoint = yield from self._get_ts_checkpoint(chain="optimism")
         if last_ts_checkpoint is None:
             return None
-        
+
         min_num_of_safe_tx_required = (
             math.ceil(
                 max(liveness_period, (current_timestamp - last_ts_checkpoint))
@@ -494,7 +494,9 @@ class LiquidityTraderBaseBehaviour(
 
         min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
         if min_num_of_safe_tx_required is None:
-            min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
+            min_num_of_safe_tx_required = (
+                yield from self._calculate_min_num_of_safe_tx_required(chain="optimism")
+            )
 
         if min_num_of_safe_tx_required is None:
             self.context.logger.error(
@@ -502,9 +504,11 @@ class LiquidityTraderBaseBehaviour(
             )
             return False
 
-        multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(
+        multisig_nonces_since_last_cp = (
+            yield from self._get_multisig_nonces_since_last_cp(
                 chain="optimism",
                 multisig=self.params.safe_contract_addresses.get("optimism"),
+            )
         )
         if (
             multisig_nonces_since_last_cp
@@ -529,7 +533,7 @@ class LiquidityTraderBaseBehaviour(
 
         if multisig_nonces is None or len(multisig_nonces) == 0:
             return None
-        
+
         return multisig_nonces[0]
 
     def _get_multisig_nonces_since_last_cp(
@@ -538,7 +542,7 @@ class LiquidityTraderBaseBehaviour(
         multisig_nonces = yield from self._get_multisig_nonces(chain, multisig)
         if multisig_nonces is None:
             return None
-        
+
         service_info = yield from self._get_service_info(chain)
         if service_info is None or len(service_info) == 0 or len(service_info[2]) == 0:
             self.context.logger.error(f"Error fetching service info {service_info}")
@@ -621,12 +625,16 @@ class CallCheckpointBehaviour(
             min_num_of_safe_tx_required = None
             is_staking_kpi_met = False
             if self.service_staking_state == StakingState.STAKED:
-                min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(
-                    chain="optimism"
+                min_num_of_safe_tx_required = (
+                    yield from self._calculate_min_num_of_safe_tx_required(
+                        chain="optimism"
+                    )
                 )
                 if min_num_of_safe_tx_required is None:
-                    self.context.logger.error("Error calculating min number of safe tx required.")
-                else:   
+                    self.context.logger.error(
+                        "Error calculating min number of safe tx required."
+                    )
+                else:
                     self.context.logger.info(
                         f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
                     )
@@ -753,12 +761,15 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                     != CallCheckpointRound.auto_round_id()
                 )
                 is_period_threshold_exceeded = (
-                    self.synchronized_data.period_count - self.synchronized_data.period_number_at_last_cp
+                    self.synchronized_data.period_count
+                    - self.synchronized_data.period_number_at_last_cp
                     >= self.params.staking_threshold_period
                 )
 
                 if is_post_tx_settlement_round or is_period_threshold_exceeded:
-                    min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
+                    min_num_of_safe_tx_required = (
+                        self.synchronized_data.min_num_of_safe_tx_required
+                    )
                     if not min_num_of_safe_tx_required:
                         min_num_of_safe_tx_required = (
                             yield from self._calculate_min_num_of_safe_tx_required(
@@ -912,7 +923,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not eligible_pools:
             self.context.logger.info("No eligible pools found.")
             return
-        self.highest_apr_pool = yield from self._determine_highest_apr_pool(eligible_pools)
+        self.highest_apr_pool = yield from self._determine_highest_apr_pool(
+            eligible_pools
+        )
 
         if self.highest_apr_pool:
             self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")
@@ -921,12 +934,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _fetch_all_pools(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Fetch all pools based on allowed chains."""
-        chain_ids = ",".join(str(self.params.chain_to_chain_id_mapping[chain]) for chain in self.params.allowed_chains)
+        chain_ids = ",".join(
+            str(self.params.chain_to_chain_id_mapping[chain])
+            for chain in self.params.allowed_chains
+        )
         base_url = self.params.merkl_fetch_campaigns_args.get("url")
         creator = self.params.merkl_fetch_campaigns_args.get("creator")
         live = self.params.merkl_fetch_campaigns_args.get("live", "true")
 
-        params = {"chainIds": chain_ids, "creatorTag": creator, "live": live, "types": CAMPAIGN_TYPES}
+        params = {
+            "chainIds": chain_ids,
+            "creatorTag": creator,
+            "live": live,
+            "types": CAMPAIGN_TYPES,
+        }
         api_url = f"{base_url}?{urlencode(params, doseq=True)}"
         self.context.logger.info(f"Fetching campaigns from {api_url}")
 
@@ -937,13 +958,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if response.status_code != 200:
-            self.context.logger.error(f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}")
+            self.context.logger.error(
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
+            )
             return None
 
         try:
             return json.loads(response.body)
         except (ValueError, TypeError) as e:
-            self.context.logger.error(f"Could not parse response from api, the following error was encountered {type(e).__name__}: {e}")
+            self.context.logger.error(
+                f"Could not parse response from api, the following error was encountered {type(e).__name__}: {e}"
+            )
             return None
 
     def _filter_eligible_pools(self, all_pools: Dict[str, Any]) -> Dict[str, Any]:
@@ -959,25 +984,40 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     campaign_apr = campaign.get("apr", 0)
-                    if not campaign_apr or campaign_apr <= 0 or campaign_apr <= self.current_pool.get("apr", 0):
+                    if (
+                        not campaign_apr
+                        or campaign_apr <= 0
+                        or campaign_apr <= self.current_pool.get("apr", 0)
+                    ):
                         continue
-                    
+
                     campaign_pool_address = campaign.get("mainParameter")
-                    if not campaign_pool_address or campaign_pool_address == self.current_pool.get("address"):
+                    if (
+                        not campaign_pool_address
+                        or campaign_pool_address == self.current_pool.get("address")
+                    ):
                         continue
-                    
-                    chain = next((k for k, v in self.params.chain_to_chain_id_mapping.items() if v == int(chain_id)), None)
+
+                    chain = next(
+                        (
+                            k
+                            for k, v in self.params.chain_to_chain_id_mapping.items()
+                            if v == int(chain_id)
+                        ),
+                        None,
+                    )
                     eligible_pools[dex_type][chain].append(campaign)
 
         return eligible_pools
-    
-    def _determine_highest_apr_pool(self, eligible_pools: Dict[str, Any]) -> Generator[None, None, Optional[Dict[str, Any]]]:
+
+    def _determine_highest_apr_pool(
+        self, eligible_pools: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Determine the pool with the highest APR from the eligible pools."""
 
         highest_apr_pool = None
         highest_apr_pool_info = None
         while eligible_pools:
-
             highest_apr = -float("inf")
             for dex_type, chains in eligible_pools.items():
                 for chain, campaigns in chains.items():
@@ -989,16 +1029,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if highest_apr_pool_info:
                 dex_type, chain, campaign = highest_apr_pool_info
-                highest_apr_pool = yield from self._extract_pool_info(dex_type, chain, highest_apr, campaign)
+                highest_apr_pool = yield from self._extract_pool_info(
+                    dex_type, chain, highest_apr, campaign
+                )
 
                 # Check the number of tokens for the highest APR pool if it's a Balancer pool
                 if dex_type == DexTypes.BALANCER.value:
-
                     pool_id = highest_apr_pool.get("pool_id")
-                    tokensList = yield from self._fetch_balancer_pool_info(pool_id, chain, detail="tokensList")
+                    tokensList = yield from self._fetch_balancer_pool_info(
+                        pool_id, chain, detail="tokensList"
+                    )
                     if not tokensList or len(tokensList) != 2:
                         num_of_tokens = len(tokensList) if tokensList else None
-                        self.context.logger.warning(f"Balancer pool {pool_id} has {num_of_tokens} tokens, currently we support pools with only 2 tokens")
+                        self.context.logger.warning(
+                            f"Balancer pool {pool_id} has {num_of_tokens} tokens, currently we support pools with only 2 tokens"
+                        )
                         self.context.logger.info("Searching for another pool")
                         highest_apr_pool = None
                         highest_apr_pool_info = None
@@ -1018,7 +1063,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.warning("No eligible pools found.")
         return None
 
-    def _extract_pool_info(self, dex_type, chain, apr, campaign) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def _extract_pool_info(
+        self, dex_type, chain, apr, campaign
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Extract pool info from campaign data."""
         pool_address = campaign.get("mainParameter")
         if not pool_address:
@@ -1028,17 +1075,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pool_token_dict = {}
         pool_id = None
         pool_type = None
-        
+
         if dex_type == DexTypes.BALANCER.value:
             type_info = campaign.get("typeInfo", {})
             pool_id = type_info.get("poolId")
             pool_tokens = type_info.get("poolTokens", {})
             pool_token_items = list(pool_tokens.items())
-            if len(pool_token_items) < 2 or any(token.get("symbol") is None for _, token in pool_token_items):
-                self.context.logger.error(f"Invalid pool tokens found in campaign {pool_token_items}")
+            if len(pool_token_items) < 2 or any(
+                token.get("symbol") is None for _, token in pool_token_items
+            ):
+                self.context.logger.error(
+                    f"Invalid pool tokens found in campaign {pool_token_items}"
+                )
                 return None
 
-            pool_type = yield from self._fetch_balancer_pool_info(pool_id, chain, detail="poolType")  
+            pool_type = yield from self._fetch_balancer_pool_info(
+                pool_id, chain, detail="poolType"
+            )
             pool_token_dict = {
                 "token0": pool_token_items[0][0],
                 "token1": pool_token_items[1][0],
@@ -1049,7 +1102,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         elif dex_type == DexTypes.UNISWAP_V3.value:
             pool_info = campaign.get("campaignParameters", {})
             if not pool_info:
-                self.context.logger.error(f"No pool tokens info present in campaign {campaign}")
+                self.context.logger.error(
+                    f"No pool tokens info present in campaign {campaign}"
+                )
                 return None
 
             pool_token_dict = {
@@ -1061,7 +1116,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             }
 
         if any(v is None for v in pool_token_dict.values()):
-            self.context.logger.error(f"Invalid pool tokens found in campaign {pool_token_dict}")
+            self.context.logger.error(
+                f"Invalid pool tokens found in campaign {pool_token_dict}"
+            )
             return None
 
         return {
@@ -1073,14 +1130,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "pool_type": pool_type,
             **pool_token_dict,
         }
-    
-    def _fetch_balancer_pool_info(self, pool_id: str, chain: str, detail: str) -> Generator[None, None, Optional[Any]]:
+
+    def _fetch_balancer_pool_info(
+        self, pool_id: str, chain: str, detail: str
+    ) -> Generator[None, None, Optional[Any]]:
         """Fetch the pool type for a Balancer pool using a GraphQL query."""
+
         def to_content(query: str) -> bytes:
             """Convert the given query string to payload content."""
             finalized_query = {"query": query}
             encoded_query = json.dumps(finalized_query, sort_keys=True).encode("utf-8")
-            return encoded_query    
+            return encoded_query
 
         query = f"""
                     query {{
@@ -1109,11 +1169,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         try:
-            res = json.loads(response.body)          
+            res = json.loads(response.body)
             if res is None:
-                self.context.logger.error(f"Could not get pool type for pool ID {pool_id}")
+                self.context.logger.error(
+                    f"Could not get pool type for pool ID {pool_id}"
+                )
                 return None
-            
+
             pools = res.get("data", {}).get("pools", [])
             if pools:
                 return pools[0].get(detail)
@@ -1121,7 +1183,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         except json.JSONDecodeError as e:
             self.context.logger.error(f"Error decoding JSON response: {str(e)}")
             return None
-    
+
     def get_order_of_transactions(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
@@ -1616,7 +1678,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             == Action.BRIDGE_SWAP
         ):
             self.context.logger.info("Checking the status of swap tx")
-            #we wait for some time before checking the status of the tx because the tx may take time to reflect on the lifi endpoint
+            # we wait for some time before checking the status of the tx because the tx may take time to reflect on the lifi endpoint
             yield from self.sleep(self.params.waiting_period_for_status_check)
             decision = yield from self.get_decision_on_swap()
             self.context.logger.info(f"Action to take {decision}")

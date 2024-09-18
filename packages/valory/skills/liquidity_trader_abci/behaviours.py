@@ -160,7 +160,7 @@ class LiquidityTraderBaseBehaviour(
         self.pools: Dict[str, Any] = {}
         self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour
-        self.service_staking_state = None
+        self.service_staking_state = StakingState.UNSTAKED
         self.strategy = SimpleStrategyBehaviour
         # Read the assets and current pool
         self.read_current_pool()
@@ -415,6 +415,9 @@ class LiquidityTraderBaseBehaviour(
         )
 
         last_ts_checkpoint = yield from self._get_ts_checkpoint(chain="optimism")
+        if last_ts_checkpoint is None:
+            return None
+        
         min_num_of_safe_tx_required = (
             math.ceil(
                 max(liveness_period, (current_timestamp - last_ts_checkpoint))
@@ -486,9 +489,6 @@ class LiquidityTraderBaseBehaviour(
 
     def _is_staking_kpi_met(self) -> Generator[None, None, Optional[bool]]:
         """Return whether the staking KPI has been met (only for staked services)."""
-        if self.service_staking_state is None:
-            yield from self._get_service_staking_state(chain="optimism")
-
         if self.service_staking_state != StakingState.STAKED:
             return False
 
@@ -500,7 +500,7 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.error(
                 "Error calculating min number of safe tx required."
             )
-            return None
+            return False
 
         multisig_nonces_since_last_cp = yield from self._get_multisig_nonces_since_last_cp(
                 chain="optimism",
@@ -526,12 +526,19 @@ class LiquidityTraderBaseBehaviour(
             chain_id=chain,
             multisig=multisig,
         )
+
+        if multisig_nonces is None or len(multisig_nonces) == 0:
+            return None
+        
         return multisig_nonces[0]
 
     def _get_multisig_nonces_since_last_cp(
         self, chain: str, multisig: str
     ) -> Generator[None, None, Optional[int]]:
         multisig_nonces = yield from self._get_multisig_nonces(chain, multisig)
+        if multisig_nonces is None:
+            return None
+        
         service_info = yield from self._get_service_info(chain)
         if service_info is None or len(service_info) == 0 or len(service_info[2]) == 0:
             self.context.logger.error(f"Error fetching service info {service_info}")
@@ -543,7 +550,7 @@ class LiquidityTraderBaseBehaviour(
             multisig_nonces - multisig_nonces_on_last_checkpoint
         )
         self.context.logger.info(
-            f"Multisig nonces since last checkpoint: {multisig_nonces_since_last_cp}"
+            f"Number of safe transactions since last checkpoint: {multisig_nonces_since_last_cp}"
         )
         return multisig_nonces_since_last_cp
 
@@ -617,9 +624,12 @@ class CallCheckpointBehaviour(
                 min_num_of_safe_tx_required = yield from self._calculate_min_num_of_safe_tx_required(
                     chain="optimism"
                 )
-                self.context.logger.info(
-                    f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
-                )
+                if min_num_of_safe_tx_required is None:
+                    self.context.logger.error("Error calculating min number of safe tx required.")
+                else:   
+                    self.context.logger.info(
+                        f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
+                    )
                 is_checkpoint_reached = yield from self._check_if_checkpoint_reached(
                     chain="optimism"
                 )
@@ -633,8 +643,6 @@ class CallCheckpointBehaviour(
                     is_staking_kpi_met = False
                 else:
                     is_staking_kpi_met = yield from self._is_staking_kpi_met()
-                    if is_staking_kpi_met is None:
-                        self.service_staking_state = StakingState.UNSTAKED
 
             elif self.service_staking_state == StakingState.EVICTED:
                 self.context.logger.error("Service has been evicted!")
@@ -739,21 +747,18 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                         -1
                     ].round_id
                 )
-
                 is_post_tx_settlement_round = (
                     last_round_id == PostTxSettlementRound.auto_round_id()
                     and self.synchronized_data.tx_submitter
                     != CallCheckpointRound.auto_round_id()
                 )
                 is_period_threshold_exceeded = (
-                    self.synchronized_data.period_count
+                    self.synchronized_data.period_count - self.synchronized_data.period_number_at_last_cp
                     >= self.params.staking_threshold_period
                 )
 
                 if is_post_tx_settlement_round or is_period_threshold_exceeded:
-                    min_num_of_safe_tx_required = (
-                        self.synchronized_data.min_num_of_safe_tx_required
-                    )
+                    min_num_of_safe_tx_required = self.synchronized_data.min_num_of_safe_tx_required
                     if not min_num_of_safe_tx_required:
                         min_num_of_safe_tx_required = (
                             yield from self._calculate_min_num_of_safe_tx_required(
@@ -770,21 +775,22 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                         )
                     )
 
-                    num_of_tx_left_to_meet_kpi = (
-                        min_num_of_safe_tx_required - multisig_nonces_since_last_cp
-                    )
-                    if num_of_tx_left_to_meet_kpi > 0:
-                        self.context.logger.info(
-                            f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
+                    if multisig_nonces_since_last_cp and min_num_of_safe_tx_required:
+                        num_of_tx_left_to_meet_kpi = (
+                            min_num_of_safe_tx_required - multisig_nonces_since_last_cp
                         )
-                        self.context.logger.info(f"Preparing vanity tx..")
-                        vanity_tx_hex = yield from self._prepare_vanity_tx(
-                            chain="optimism"
-                        )
-                        self.context.logger.info(f"tx hash: {vanity_tx_hex}")
-                    else:
-                        is_staking_kpi_met = True
-                        self.context.logger.info("KPI met for the day!")
+                        if num_of_tx_left_to_meet_kpi > 0:
+                            self.context.logger.info(
+                                f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
+                            )
+                            self.context.logger.info(f"Preparing vanity tx..")
+                            vanity_tx_hex = yield from self._prepare_vanity_tx(
+                                chain="optimism"
+                            )
+                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
+                        else:
+                            is_staking_kpi_met = True
+                            self.context.logger.info("KPI met for the day!")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CheckStakingKPIMetPayload(
@@ -875,7 +881,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self.get_highest_apr_pool()
+            yield from self.find_highest_apr_pool()
             actions = []
             if self.highest_apr_pool is not None:
                 invest_in_pool = self.strategy.get_decision(
@@ -1610,6 +1616,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             == Action.BRIDGE_SWAP
         ):
             self.context.logger.info("Checking the status of swap tx")
+            #we wait for some time before checking the status of the tx because the tx may take time to reflect on the lifi endpoint
+            yield from self.sleep(self.params.waiting_period_for_status_check)
             decision = yield from self.get_decision_on_swap()
             self.context.logger.info(f"Action to take {decision}")
 
@@ -1618,7 +1626,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info("Waiting for tx to get executed")
                 while decision == Decision.WAIT:
                     # Wait for given time between each status check
-                    yield from self.sleep(self.params.waiting_period_for_retry)
+                    yield from self.sleep(self.params.waiting_period_for_status_check)
                     self.context.logger.info("Checking the status of swap tx again")
                     decision = (
                         yield from self.get_decision_on_swap()
@@ -2131,6 +2139,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "toChainId": to_chain_id,
             "toTokenAddress": to_token_address,
             "options": {
+                "integrator": INTEGRATOR,
                 "slippage": slippage,
                 "allowSwitchChain": allow_switch_chain,
                 "integrator": "valory",
@@ -2499,9 +2508,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 simulation_results = data.get("simulation_results", [])
                 status = False
                 if simulation_results:
-                    simulation_results = simulation_results[0]
-                    for simulation in simulation_results.values():
-                        if isinstance(simulation, Dict):
+                    for simulation_result in simulation_results:
+                        simulation = simulation_result.get("simulation", {})
+                        if simulation.get("status", False):
                             status = simulation.get("status", False)
                 return status
 

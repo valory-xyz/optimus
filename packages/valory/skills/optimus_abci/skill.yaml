@@ -158,7 +158,7 @@ models:
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
       uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
       chain_to_chain_key_mapping: '{"optimism":"opt","base":"bas"}'
-      waiting_period_for_retry: 5
+      waiting_period_for_status_check: 5
       max_num_of_retries: 5
       reward_claiming_time_period: 28800
       merkl_distributor_contract_addresses: '{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}'
@@ -176,7 +176,8 @@ models:
       store_path: data
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
-      merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"superfest","live":"true"}'
+      merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
+      balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}'
     class_name: Params
   randomness_api:
     args:

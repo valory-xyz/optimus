@@ -20,8 +20,8 @@
 """This package contains the implemenatation of the BalancerPoolBehaviour class."""
 
 from abc import ABC
-from typing import Any, Dict, Generator, List, Optional, Tuple
 from enum import Enum
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
@@ -33,6 +33,7 @@ from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBeha
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
+
 class PoolType(Enum):
     """PoolType"""
 
@@ -43,8 +44,10 @@ class PoolType(Enum):
     STABLE = "Stable"
     INVESTMENT = "Investment"
 
+
 class JoinKind:
     """JoinKind Enums for different pool types."""
+
     # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
     class WeightedPool(Enum):
         INIT = 0
@@ -63,8 +66,10 @@ class JoinKind:
         TOKEN_IN_FOR_EXACT_BPT_OUT = 2
         ALL_TOKENS_IN_FOR_EXACT_BPT_OUT = 3
 
+
 class ExitKind:
     """ExitKind Enums for different pool types."""
+
     # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
     class WeightedPool(Enum):
         EXACT_BPT_IN_FOR_ONE_TOKEN_OUT = 0
@@ -98,7 +103,9 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         chain = kwargs.get("chain")
         max_amounts_in = kwargs.get("max_amounts_in")
         pool_type = kwargs.get("pool_type")
-        if not all([pool_address, safe_address, assets, chain, max_amounts_in, pool_type]):
+        if not all(
+            [pool_address, safe_address, assets, chain, max_amounts_in, pool_type]
+        ):
             self.context.logger.error(
                 f"Missing required parameters for entering the pool. Here are the kwargs: {kwargs}"
             )
@@ -106,7 +113,9 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
         join_kind = self._determine_join_kind(pool_type)
         if not join_kind:
-            self.context.logger.error(f"Could not determine join kind for pool type {pool_type}")
+            self.context.logger.error(
+                f"Could not determine join kind for pool type {pool_type}"
+            )
             return None, None
         # Get vault contract address from balancer weighted pool contract
         vault_address = self.params.balancer_vault_contract_addresses.get(chain)
@@ -161,7 +170,9 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
         exit_kind = self._determine_exit_kind(pool_type)
         if not exit_kind:
-            self.context.logger.error(f"Could not determine exit kind for pool type {pool_type}")
+            self.context.logger.error(
+                f"Could not determine exit kind for pool type {pool_type}"
+            )
             return None, None, None
 
         # Get vault contract address from balancer weighted pool contract
@@ -280,7 +291,11 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
     def _determine_join_kind(self, pool_type: PoolType) -> Optional[int]:
         """Determine the join kind based on the pool type."""
-        if pool_type in [PoolType.WEIGHTED.value, PoolType.LIQUIDITY_BOOTSTRAPING.value, PoolType.INVESTMENT.value]:
+        if pool_type in [
+            PoolType.WEIGHTED.value,
+            PoolType.LIQUIDITY_BOOTSTRAPING.value,
+            PoolType.INVESTMENT.value,
+        ]:
             return JoinKind.WeightedPool.EXACT_TOKENS_IN_FOR_BPT_OUT.value
         elif pool_type in [PoolType.STABLE.value, PoolType.META_STABLE.value]:
             return JoinKind.StableAndMetaStablePool.EXACT_TOKENS_IN_FOR_BPT_OUT.value
@@ -292,7 +307,11 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
     def _determine_exit_kind(self, pool_type: PoolType) -> Optional[int]:
         """Determine the exit kind based on the pool type."""
-        if pool_type in [PoolType.WEIGHTED.value, PoolType.LIQUIDITY_BOOTSTRAPING.value, PoolType.INVESTMENT.value]:
+        if pool_type in [
+            PoolType.WEIGHTED.value,
+            PoolType.LIQUIDITY_BOOTSTRAPING.value,
+            PoolType.INVESTMENT.value,
+        ]:
             return ExitKind.WeightedPool.EXACT_BPT_IN_FOR_TOKENS_OUT.value
         elif pool_type in [PoolType.STABLE.value, PoolType.META_STABLE.value]:
             return ExitKind.StableAndMetaStablePool.EXACT_BPT_IN_FOR_TOKENS_OUT.value
@@ -301,5 +320,3 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         else:
             self.context.logger.error(f"Unknown pool type: {pool_type}")
             return None
-
-

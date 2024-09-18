@@ -36,9 +36,12 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 
+
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
+
     abci_app_cls = LiquidityTraderAbciApp
+
 
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool

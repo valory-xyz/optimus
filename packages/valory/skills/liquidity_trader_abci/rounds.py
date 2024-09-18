@@ -173,12 +173,12 @@ class SynchronizedData(BaseSynchronizedData):
     def chain_id(self) -> Optional[str]:
         """Get the chain id."""
         return cast(str, self.db.get("chain_id", None))
-    
+
     @property
     def period_number_at_last_cp(self) -> Optional[int]:
         """Get the period number at last cp."""
         return cast(int, self.db.get("period_number_at_last_cp", 0))
-    
+
 
 class CallCheckpointRound(CollectSameUntilThresholdRound):
     """A round for the checkpoint call preparation."""
@@ -265,8 +265,9 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
 
         if synced_data.is_staking_kpi_met is False:
             return synced_data, Event.WAIT_FOR_PERIODS_TO_PASS
-        
+
         return res
+
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
     """GetPositionsRound"""
@@ -376,14 +377,14 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
             CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
             DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
         }
-                    
+
         synced_data = SynchronizedData(self.synchronized_data.db)
         event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
 
         if event == Event.CHECKPOINT_TX_EXECUTED:
             synced_data = synced_data.update(
                 synchronized_data_class=SynchronizedData,
-                period_number_at_last_cp=synced_data.period_count
+                period_number_at_last_cp=synced_data.period_count,
             )
 
         return synced_data, event

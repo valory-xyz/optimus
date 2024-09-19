@@ -59,6 +59,7 @@ transition_func:
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, SETTLE): FinishedCheckStakingKPIMetRound
     (CheckStakingKPIMetRound, WAIT_FOR_PERIODS_TO_PASS): GetPositionsRound
+    (CheckStakingKPIMetRound, DONE): GetPositionsRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound

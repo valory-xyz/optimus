@@ -24,8 +24,6 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List
 
-from aea.skills.base import SkillContext
-
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,

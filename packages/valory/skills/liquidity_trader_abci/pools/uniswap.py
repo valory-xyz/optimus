@@ -21,7 +21,7 @@
 
 import sys
 from abc import ABC
-from typing import Any, Dict, Generator, List, Optional, Tuple, cast
+from typing import Any, Dict, Generator, Optional, Tuple, cast
 
 from web3 import Web3
 
@@ -45,6 +45,8 @@ INT_MAX = sys.maxsize
 
 
 class MintParams:
+    """Mint parameters for uniswap v3"""
+
     def __init__(
         self,
         token0,
@@ -59,6 +61,7 @@ class MintParams:
         recipient,
         deadline,
     ):
+        """Initialize mint parameters"""
         self.token0 = token0
         self.token1 = token1
         self.fee = fee
@@ -316,6 +319,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         deadline: int,
         chain: str,
     ) -> Generator[None, None, Optional[str]]:
+        """Decrease liquidity"""
         position_manager_address = (
             self.params.uniswap_position_manager_contract_addresses.get(chain, "")
         )
@@ -344,6 +348,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
     def get_liquidity_for_token(
         self, token_id: int, chain: str
     ) -> Generator[None, None, Optional[str]]:
+        """Get liquidity for token"""
         position_manager_address = (
             self.params.uniswap_position_manager_contract_addresses.get(chain, "")
         )

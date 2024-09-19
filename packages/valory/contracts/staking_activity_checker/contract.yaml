@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigqm6q7kgfzgpcse7zer5uea3s7myolry2r3teovuzqgkn43j7bei
   build/StakingActivityChecker.json: bafybeiety3kkkmdz2gdzktg54wvmhavftaw4wjnrddztt64jpknagrc6xa
-  contract.py: bafybeialo57soqxxxozi545hb3gqtf644qr2od4gskexdhhv6nmwpw6ktu
+  contract.py: bafybeiagtrdo6icjnzgap23xqaij2ptsdkqka4n25qg5srutoy6bfleqae
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: StakingActivityCheckerContract

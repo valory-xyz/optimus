@@ -12,7 +12,7 @@ fingerprint:
   dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
   fsm_specification.yaml: bafybeia5uzg27tczkp3gw6k73zrpnnesbdzhpjt6ylyxfpvbarlixmueme
   handlers.py: bafybeife4nrwqiwrx2ucza3vk6t5inpkncuewehtdnitax4lmqq2ptoona
-  models.py: bafybeihvuvhlmumkoqhhnw3bw4ixwvjkb3gwkgnu653ggj3zpqahyyasui
+  models.py: bafybeicmy2pydoqvhuqbv5csz5apyr3qbi5p5g6i3bjcpbknvhkgo6fmwq
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeicnth5q4httefsusywx3zrrq4al47owvge72dqf2fziruicq6hqta
 - valory/reset_pause_abci:0.1.0:bafybeievjciqdvxhqxfjd4whqs27h6qbxqzrae7wwj7fpvxlvmtw3x35im
 - valory/termination_abci:0.1.0:bafybeid54buqxipiuduw7b6nnliiwsxajnltseuroad53wukfonpxca2om
-- valory/liquidity_trader_abci:0.1.0:bafybeigeqyocva2olyod3mcev3v2gdhricy7zw2o2fkzxjc7ffjo5xnisq
+- valory/liquidity_trader_abci:0.1.0:bafybeifmzd2tdxiirurm3e2g7dk2outbergbr47bizrtjl5r3pd2h3m7iq
 - valory/transaction_settlement_abci:0.1.0:bafybeihq2yenstblmaadzcjousowj5kfn5l7ns5pxweq2gcrsczfyq5wzm
 behaviours:
   main:

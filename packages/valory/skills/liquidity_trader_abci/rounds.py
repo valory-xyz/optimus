@@ -32,7 +32,6 @@ from packages.valory.skills.abstract_round_abci.base import (
     CollectionRound,
     DegenerateRound,
     DeserializedCollection,
-    EventToTimeout,
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
@@ -70,8 +69,8 @@ class Event(Enum):
     VANITY_TX_EXECUTED = "vanity_tx_executed"
     WAIT = "wait"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
-    STAKING_KPI_MET = "staking_kpi_met"
-    WAIT_FOR_PERIODS_TO_PASS = "wait_for_periods_to_pass"
+    STAKING_KPI_MET = "staking_kpi_met"  # nosec
+    WAIT_FOR_PERIODS_TO_PASS = "wait_for_periods_to_pass"  # nosec
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -437,6 +436,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.STAKING_KPI_MET: GetPositionsRound,
         },
         CheckStakingKPIMetRound: {
+            Event.DONE: GetPositionsRound,
             Event.STAKING_KPI_MET: GetPositionsRound,
             Event.SETTLE: FinishedCheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: CheckStakingKPIMetRound,

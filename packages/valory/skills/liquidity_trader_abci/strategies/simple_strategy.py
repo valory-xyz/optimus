@@ -1,7 +1,7 @@
 """This package contains the implemenatation of the SimpleStrategyBehaviour class."""
 
 from abc import ABC
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any
 
 from packages.valory.skills.liquidity_trader_abci.strategy_behaviour import (
     StrategyBehaviour,
@@ -9,11 +9,14 @@ from packages.valory.skills.liquidity_trader_abci.strategy_behaviour import (
 
 
 class SimpleStrategyBehaviour(StrategyBehaviour, ABC):
+    """SimpleStrategyBehaviour"""
+
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the simple strategy behaviour."""
         super().__init__(**kwargs)
 
     def get_decision(self, **kwargs: Any) -> bool:
+        """Get decision on whether to enter a pool"""
         pool_apr = kwargs.get("pool_apr")
         """Get decision"""
 

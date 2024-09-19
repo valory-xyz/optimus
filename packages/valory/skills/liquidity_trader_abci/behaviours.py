@@ -786,7 +786,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                         )
                     )
 
-                    if multisig_nonces_since_last_cp and min_num_of_safe_tx_required:
+                    if multisig_nonces_since_last_cp is not None and min_num_of_safe_tx_required is not None:
                         num_of_tx_left_to_meet_kpi = (
                             min_num_of_safe_tx_required - multisig_nonces_since_last_cp
                         )

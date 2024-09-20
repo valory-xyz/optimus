@@ -32,7 +32,6 @@ from packages.valory.skills.abstract_round_abci.base import (
     CollectionRound,
     DegenerateRound,
     DeserializedCollection,
-    EventToTimeout,
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
@@ -70,8 +69,8 @@ class Event(Enum):
     VANITY_TX_EXECUTED = "vanity_tx_executed"
     WAIT = "wait"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
-    STAKING_KPI_MET = "staking_kpi_met"
-    WAIT_FOR_PERIODS_TO_PASS = "wait_for_periods_to_pass"
+    STAKING_KPI_MET = "staking_kpi_met"  # nosec
+    WAIT_FOR_PERIODS_TO_PASS = "wait_for_periods_to_pass"  # nosec
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -317,6 +316,10 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
 
     payload_class = DecisionMakingPayload
     synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    settle_event = Event.SETTLE
+    update_event = Event.UPDATE
+    error_event = Event.ERROR
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
@@ -415,7 +418,74 @@ class FailedMultiplexerRound(DegenerateRound):
 
 
 class LiquidityTraderAbciApp(AbciApp[Event]):
-    """LiquidityTraderAbciApp"""
+    """
+    LiquidityTraderAbciApp
+
+        Initial round: CallCheckpointRound
+
+        Initial states:
+            - CallCheckpointRound
+            - CheckStakingKPIMetRound
+            - GetPositionsRound
+            - DecisionMakingRound
+            - PostTxSettlementRound
+
+        Transition states:
+            0. CallCheckpointRound
+                - done: CheckStakingKPIMetRound
+                - settle: FinishedCallCheckpointRound
+                - service not staked: GetPositionsRound
+                - service evicted: GetPositionsRound
+                - staking kpi not met: CheckStakingKPIMetRound
+                - staking kpi met: GetPositionsRound
+                - round timeout: CallCheckpointRound
+                - no majority: CallCheckpointRound
+
+            1. CheckStakingKPIMetRound
+                - staking kpi met: GetPositionsRound
+                - no majority: CheckStakingKPIMetRound
+                - round timeout: CheckStakingKPIMetRound
+                - settle: FinishedCheckStakingKPIMetRound
+                - wait for periods to pass: GetPositionsRound
+                - done: GetPositionsRound
+
+            2. GetPositionsRound
+                - done: EvaluateStrategyRound
+                - no majority: GetPositionsRound
+                - round timeout: GetPositionsRound
+
+            3. EvaluateStrategyRound
+                - done: DecisionMakingRound
+                - no majority: EvaluateStrategyRound
+                - round timeout: EvaluateStrategyRound
+                - wait: FinishedEvaluateStrategyRound
+
+            4. DecisionMakingRound
+                - done: FinishedDecisionMakingRound
+                - error: FinishedDecisionMakingRound
+                - no majority: DecisionMakingRound
+                - round timeout: DecisionMakingRound
+                - update: DecisionMakingRound
+                - settle: FinishedTxPreparationRound
+
+            5. PostTxSettlementRound
+                - action executed: DecisionMakingRound
+                - callpoint tx executed: CallCheckpointRound
+                - vanity tx executed: CheckStakingKPIMetRound
+                - round timeout: PostTxSettlementRound
+                - unrecognized: FailedMultiplexerRound
+
+        Final states:
+            - FinishedCallCheckpointRound
+            - FinishedCheckStakingKPIMetRound
+            - FinishedDecisionMakingRound
+            - FinishedEvaluateStrategyRound
+            - FinishedTxPreparationRound
+            - FailedMultiplexerRound
+
+        Timeouts:
+            - round timeout: 30.0
+    """
 
     initial_round_cls: AppState = CallCheckpointRound
     initial_states: Set[AppState] = {
@@ -437,6 +507,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.STAKING_KPI_MET: GetPositionsRound,
         },
         CheckStakingKPIMetRound: {
+            Event.DONE: GetPositionsRound,
             Event.STAKING_KPI_MET: GetPositionsRound,
             Event.SETTLE: FinishedCheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: CheckStakingKPIMetRound,

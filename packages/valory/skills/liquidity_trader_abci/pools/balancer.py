@@ -21,7 +21,7 @@
 
 from abc import ABC
 from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, Optional, Tuple
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
@@ -50,17 +50,23 @@ class JoinKind:
 
     # https://docs.balancer.fi/reference/joins-and-exits/pool-joins.html#userdata
     class WeightedPool(Enum):
+        """Weighted pool join kind"""
+
         INIT = 0
         EXACT_TOKENS_IN_FOR_BPT_OUT = 1
         TOKEN_IN_FOR_EXACT_BPT_OUT = 2
         ALL_TOKENS_IN_FOR_EXACT_BPT_OUT = 3
 
     class StableAndMetaStablePool(Enum):
+        """Stable and meta stable pool join kind"""
+
         INIT = 0
         EXACT_TOKENS_IN_FOR_BPT_OUT = 1
         TOKEN_IN_FOR_EXACT_BPT_OUT = 2
 
     class ComposableStablePool(Enum):
+        """Composable stable pool join kind"""
+
         INIT = 0
         EXACT_TOKENS_IN_FOR_BPT_OUT = 1
         TOKEN_IN_FOR_EXACT_BPT_OUT = 2
@@ -72,17 +78,23 @@ class ExitKind:
 
     # https://docs.balancer.fi/reference/joins-and-exits/pool-exits.html#userdata
     class WeightedPool(Enum):
+        """Weighted pool exit kind"""
+
         EXACT_BPT_IN_FOR_ONE_TOKEN_OUT = 0
         EXACT_BPT_IN_FOR_TOKENS_OUT = 1
         BPT_IN_FOR_EXACT_TOKENS_OUT = 2
         MANAGEMENT_FEE_TOKENS_OUT = 3  # for InvestmentPool only
 
     class StableAndMetaStablePool(Enum):
+        """Stable and meta stable pool exit kind"""
+
         EXACT_BPT_IN_FOR_ONE_TOKEN_OUT = 0
         EXACT_BPT_IN_FOR_TOKENS_OUT = 1
         BPT_IN_FOR_EXACT_TOKENS_OUT = 2
 
     class ComposableStablePool(Enum):
+        """Composable stable pool exit kind"""
+
         EXACT_BPT_IN_FOR_ONE_TOKEN_OUT = 0
         BPT_IN_FOR_EXACT_TOKENS_OUT = 1
         EXACT_BPT_IN_FOR_ALL_TOKENS_OUT = 2

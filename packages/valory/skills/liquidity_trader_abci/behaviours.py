@@ -104,6 +104,8 @@ WaitableConditionType = Generator[None, None, Any]
 
 
 class DexTypes(Enum):
+    """DexTypes"""
+
     BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
 
@@ -279,9 +281,9 @@ class LiquidityTraderBaseBehaviour(
                 asset_balances_dict[chain].append(
                     {
                         "asset_symbol": asset_symbol,
-                        "asset_type": "native"
-                        if asset_address == ZERO_ADDRESS
-                        else "erc_20",
+                        "asset_type": (
+                            "native" if asset_address == ZERO_ADDRESS else "erc_20"
+                        ),
                         "address": asset_address,
                         "balance": balance,
                     }
@@ -615,6 +617,8 @@ class LiquidityTraderBaseBehaviour(
 class CallCheckpointBehaviour(
     LiquidityTraderBaseBehaviour
 ):  # pylint-disable too-many-ancestors
+    """Behaviour that calls the checkpoint contract function if the service is staked and if it is necessary."""
+
     matching_round = CallCheckpointRound
 
     def async_act(self) -> Generator:
@@ -739,6 +743,8 @@ class CallCheckpointBehaviour(
 
 
 class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that checks if the staking KPI has been met and makes vanity transactions if necessary."""
+
     # pylint-disable too-many-ancestors
     matching_round: Type[AbstractRound] = CheckStakingKPIMetRound
 
@@ -786,7 +792,10 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                         )
                     )
 
-                    if multisig_nonces_since_last_cp is not None and min_num_of_safe_tx_required is not None:
+                    if (
+                        multisig_nonces_since_last_cp is not None
+                        and min_num_of_safe_tx_required is not None
+                    ):
                         num_of_tx_left_to_meet_kpi = (
                             min_num_of_safe_tx_required - multisig_nonces_since_last_cp
                         )
@@ -794,7 +803,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             self.context.logger.info(
                                 f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
                             )
-                            self.context.logger.info(f"Preparing vanity tx..")
+                            self.context.logger.info("Preparing vanity tx..")
                             vanity_tx_hex = yield from self._prepare_vanity_tx(
                                 chain="optimism"
                             )
@@ -854,7 +863,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
 
 
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
-    """GetPositionsBehaviour"""
+    """Behaviour that gets the balances of the assets of agent safes."""
 
     matching_round: Type[AbstractRound] = GetPositionsRound
     current_pool = None
@@ -884,7 +893,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
-    """EvaluateStrategyBehaviour"""
+    """Behaviour that finds the opportunity and builds actions."""
 
     matching_round: Type[AbstractRound] = EvaluateStrategyRound
     highest_apr_pool = None
@@ -1036,6 +1045,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 # Check the number of tokens for the highest APR pool if it's a Balancer pool
                 if dex_type == DexTypes.BALANCER.value:
                     pool_id = highest_apr_pool.get("pool_id")
+                    if highest_apr_pool.get("pool_type") is None:
+                        self.context.logger.error(
+                            f"Pool type not found for pool {pool_id}"
+                        )
+                        continue
                     tokensList = yield from self._fetch_balancer_pool_info(
                         pool_id, chain, detail="tokensList"
                     )
@@ -1144,7 +1158,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         query = f"""
                     query {{
-                    pools(where: {{ id: "{pool_id}" }}) {{
+                    pools(where: {{ id: "{pool_id}" }}) {{ # noqa: B028
                         id
                         {detail}
                     }}
@@ -1178,6 +1192,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             pools = res.get("data", {}).get("pools", [])
             if pools:
+                self.context.logger.info(
+                    f"{detail} for pool {pool_id}: {pools[0].get(detail)}"
+                )
                 return pools[0].get(detail)
             return None
         except json.JSONDecodeError as e:
@@ -1261,11 +1278,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        # TO-DO: set the value for gas_reserve for each chain
-        # min_balance_threshold = (
-        #     self.params.min_balance_multiplier
-        #     * self.params.gas_reserve.get(highest_apr_chain, 0)
-        # )
+        # TO-DO: set the value for gas_reserve for each chain  # noqa: E800
+        # min_balance_threshold = ( #noqa: E800
+        #     self.params.min_balance_multiplier #noqa: E800
+        #     * self.params.gas_reserve.get(highest_apr_chain, 0) #noqa: E800
+        # )  # noqa: E800
         min_balance_threshold = 0
 
         # Check balances for token0 and token1 on the highest APR pool chain
@@ -1559,7 +1576,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code != 200:
             self.context.logger.error(
-                f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
             )
             return None
 
@@ -1620,7 +1637,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
-    """DecisionMakingBehaviour"""
+    """Behaviour that executes all the actions."""
 
     matching_round: Type[AbstractRound] = DecisionMakingRound
 
@@ -2144,9 +2161,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             to_address=contract_address,
             value=ETHER_VALUE,
             data=tx_hash,
-            operation=SafeOperation.DELEGATE_CALL.value
-            if is_multisend
-            else SafeOperation.CALL.value,
+            operation=(
+                SafeOperation.DELEGATE_CALL.value
+                if is_multisend
+                else SafeOperation.CALL.value
+            ),
             safe_tx_gas=SAFE_TX_GAS,
             chain_id=chain,
         )
@@ -2161,9 +2180,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             safe_tx_hash=safe_tx_hash,
             ether_value=ETHER_VALUE,
             safe_tx_gas=SAFE_TX_GAS,
-            operation=SafeOperation.DELEGATE_CALL.value
-            if is_multisend
-            else SafeOperation.CALL.value,
+            operation=(
+                SafeOperation.DELEGATE_CALL.value
+                if is_multisend
+                else SafeOperation.CALL.value
+            ),
             to_address=contract_address,
             data=tx_hash,
             gas_limit=self.params.manual_gas_limit,
@@ -2176,6 +2197,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def get_transaction_data_for_route(
         self, positions, action
     ) -> Generator[None, None, Dict]:
+        """Get transaction data for route from LiFi API"""
         bridge_and_swap_actions = {"actions": []}
         from_chain = action.get("from_chain")
         to_chain = action.get("to_chain")
@@ -2204,7 +2226,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "integrator": INTEGRATOR,
                 "slippage": slippage,
                 "allowSwitchChain": allow_switch_chain,
-                "integrator": "valory",
                 "bridges": {"deny": ["stargateV2Bus"]},
             },
         }
@@ -2310,9 +2331,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     {
                         "operation": MultiSendOperation.CALL,
                         "to": tx_info.get("lifi_contract_address"),
-                        "value": 0
-                        if tx_info.get("source_token") != ZERO_ADDRESS
-                        else tx_info.get("amount"),
+                        "value": (
+                            0
+                            if tx_info.get("source_token") != ZERO_ADDRESS
+                            else tx_info.get("amount")
+                        ),
                         "data": tx_info.get("tx_hash"),
                     }
                 )
@@ -2375,7 +2398,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if not safe_tx_hash:
-                    self.context.logger.error(f"Error preparing safe tx!")
+                    self.context.logger.error("Error preparing safe tx!")
                     all_steps_successful = False
                     break
 
@@ -2417,6 +2440,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def get_step_transaction(
         self, step: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get transaction data for a step from LiFi API"""
         base_url = "https://li.quest/v1/advanced/stepTransaction"
         response = yield from self.get_http_response(
             "POST",
@@ -2560,7 +2584,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         if response.status_code != 200:
             self.context.logger.error(
-                f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message {response.body}"
             )
             return False
 
@@ -2782,9 +2806,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
 
 class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
-    """
-    This behaviour should be executed after a tx is settled via the transaction_settlement_abci.
-    """
+    """Behaviour that is executed after a tx is settled via the transaction_settlement_abci."""
 
     matching_round = PostTxSettlementRound
 

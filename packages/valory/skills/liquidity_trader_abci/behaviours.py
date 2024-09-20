@@ -1045,6 +1045,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 # Check the number of tokens for the highest APR pool if it's a Balancer pool
                 if dex_type == DexTypes.BALANCER.value:
                     pool_id = highest_apr_pool.get("pool_id")
+                    if highest_apr_pool.get("pool_type") is None:
+                        self.context.logger.error(
+                            f"Pool type not found for pool {pool_id}"
+                        )
+                        continue
                     tokensList = yield from self._fetch_balancer_pool_info(
                         pool_id, chain, detail="tokensList"
                     )
@@ -1153,7 +1158,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         query = f"""
                     query {{
-                    pools(where: {{ id: {pool_id} }}) {{
+                    pools(where: {{ id: "{pool_id}" }}) {{ # noqa: B028
                         id
                         {detail}
                     }}
@@ -1187,6 +1192,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             pools = res.get("data", {}).get("pools", [])
             if pools:
+                self.context.logger.info(
+                    f"{detail} for pool {pool_id}: {pools[0].get(detail)}"
+                )
                 return pools[0].get(detail)
             return None
         except json.JSONDecodeError as e:
@@ -1568,7 +1576,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code != 200:
             self.context.logger.error(
-                f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
             )
             return None
 
@@ -2576,7 +2584,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         if response.status_code != 200:
             self.context.logger.error(
-                f"Could not retrieve data from url {api_url}. Status code {response.status_code}."
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message {response.body}"
             )
             return False
 

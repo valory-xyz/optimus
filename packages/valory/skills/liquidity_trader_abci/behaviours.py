@@ -2065,7 +2065,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             operation=SafeOperation.DELEGATE_CALL.value,
             to_address=multisend_address,
             data=bytes.fromhex(multisend_tx_hash[2:]),
-            gas_limit=self.params.manual_gas_limit,
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
@@ -2187,7 +2186,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             ),
             to_address=contract_address,
             data=tx_hash,
-            gas_limit=self.params.manual_gas_limit,
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
@@ -2410,7 +2408,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     to_address=multisend_address,
                     data=bytes.fromhex(multisend_tx_hash[2:]),
                     safe_tx_hash=safe_tx_hash,
-                    gas_limit=self.params.manual_gas_limit,
                 )
                 payload_string = hash_payload_to_hex(**tx_params)
 
@@ -2665,7 +2662,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             operation=SafeOperation.CALL.value,
             to_address=contract_address,
             data=tx_hash,
-            gas_limit=self.params.manual_gas_limit,
         )
 
         self.context.logger.info(f"Tx hash payload string is {payload_string}")

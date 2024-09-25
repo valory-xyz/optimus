@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeihf6ak7mhin3fgf5ki4jwgtyscnnyguqlp2tadt6kg5dyyrgdb4wu
-- valory/optimus_abci:0.1.0:bafybeiawkxsypwh2zz23kgfomz567cri5hsi7w2gmjlxf5jcp4p4wvckya
+- valory/liquidity_trader_abci:0.1.0:bafybeibbuksarqul4w2yx4klow3ljoamflwdbq773dyirizkzeadpybbf4
+- valory/optimus_abci:0.1.0:bafybeidomufrxqjzlaoxgnfalq3qt5yqadqk5jn3mbxovs5r5fnygsxxym
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -208,10 +208,6 @@ models:
       lifi_check_status_url: ${str:https://li.quest/v1/status}
       lifi_fetch_tools_url: ${str:https://li.quest/v1/tools}
       slippage_for_swap: ${float:0.09}
-      gas_params:
-        gas_price: ${int:null}
-        max_fee_per_gas: ${int:5000000000}
-        max_priority_fee_per_gas: ${int:150000}
       manual_gas_limit: 950000
       balancer_vault_contract_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
       uniswap_position_manager_contract_addresses: ${str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}

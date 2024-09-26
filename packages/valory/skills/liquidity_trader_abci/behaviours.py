@@ -558,7 +558,7 @@ class LiquidityTraderBaseBehaviour(
             multisig_nonces - multisig_nonces_on_last_checkpoint
         )
         self.context.logger.info(
-            f"Multisig nonces since last checkpoint: {multisig_nonces_since_last_cp}"
+            f"Number of safe transactions since last checkpoint: {multisig_nonces_since_last_cp}"
         )
         return multisig_nonces_since_last_cp
 
@@ -871,7 +871,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self.get_highest_apr_pool()
+            yield from self.find_highest_apr_pool()
             actions = []
             if self.highest_apr_pool is not None:
                 invest_in_pool = self.strategy.get_decision(
@@ -2500,6 +2500,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def _get_step_transaction(
         self, step: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get transaction data for a step from LiFi API"""
         base_url = "https://li.quest/v1/advanced/stepTransaction"
         response = yield from self.get_http_response(
             "POST",

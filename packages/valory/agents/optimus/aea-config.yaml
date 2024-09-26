@@ -208,7 +208,6 @@ models:
       lifi_check_status_url: ${str:https://li.quest/v1/status}
       lifi_fetch_tools_url: ${str:https://li.quest/v1/tools}
       slippage_for_swap: ${float:0.09}
-      manual_gas_limit: 950000
       balancer_vault_contract_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
       uniswap_position_manager_contract_addresses: ${str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
       chain_to_chain_key_mapping: ${str:{"ethereum":"eth","optimism":"opt","base":"bas"}}

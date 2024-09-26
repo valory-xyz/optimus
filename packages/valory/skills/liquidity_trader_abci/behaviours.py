@@ -105,6 +105,7 @@ HTTP_OK = 200
 HTTP_NOT_FOUND = 404
 RETRIES = 5
 
+
 class DexTypes(Enum):
     """DexTypes"""
 
@@ -1910,7 +1911,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
         self.context.logger.info(f"checking status from endpoint {url}")
 
-        for attempt in range(RETRIES):
+        for _attempt in range(RETRIES):
             response = yield from self.get_http_response(
                 method="GET",
                 url=url,
@@ -1918,7 +1919,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if response.status_code == HTTP_NOT_FOUND:
-                self.context.logger.warning(f"Message {response.body}. Retrying...")
+                self.context.logger.warning(f"Message {response.body}. Retrying..")
                 yield from self.sleep(self.params.waiting_period_for_status_check)
                 continue
 
@@ -1947,7 +1948,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             return status, sub_status
 
-        self.context.logger.error(f"Failed to fetch status after {retries} retries.")
+        self.context.logger.error(f"Failed to fetch status after {RETRIES} retries.")
         return None, None
 
     def get_enter_pool_tx_hash(

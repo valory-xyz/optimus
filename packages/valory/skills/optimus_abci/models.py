@@ -19,6 +19,8 @@
 
 """This module contains the shared state for the abci skill of OptimusAbciApp."""
 
+from typing import Dict, Type, Union, cast
+
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
 )
@@ -26,9 +28,9 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.tests.data.dummy_abci.models import (
     RandomnessApi as BaseRandomnessApi,
 )
-from packages.valory.skills.liquidity_trader_abci.models import Coingecko
 from packages.valory.skills.liquidity_trader_abci.models import (
     Params as LiquidityTraderParams,
+    Coingecko
 )
 from packages.valory.skills.liquidity_trader_abci.models import (
     SharedState as BaseSharedState,
@@ -44,39 +46,24 @@ from packages.valory.skills.transaction_settlement_abci.rounds import (
 )
 
 
+EventType = Union[
+    Type[LiquidityTraderEvent],
+    Type[TransactionSettlementEvent],
+    Type[ResetPauseEvent],
+]
+EventToTimeoutMappingType = Dict[
+    Union[LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent],
+    float,
+]
+
 Coingecko = Coingecko
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
+
 RandomnessApi = BaseRandomnessApi
 
 MARGIN = 5
 MULTIPLIER = 40
-
-
-class SharedState(BaseSharedState):
-    """Keep the current shared state of the skill."""
-
-    abci_app_cls = OptimusAbciApp  # type: ignore
-
-    def setup(self) -> None:
-        """Set up."""
-        super().setup()
-
-        OptimusAbciApp.event_to_timeout[
-            ResetPauseEvent.ROUND_TIMEOUT
-        ] = self.context.params.round_timeout_seconds
-
-        OptimusAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT] = (
-            self.context.params.reset_pause_duration + MARGIN
-        )
-
-        OptimusAbciApp.event_to_timeout[LiquidityTraderEvent.ROUND_TIMEOUT] = (
-            self.context.params.round_timeout_seconds * MULTIPLIER
-        )
-
-        OptimusAbciApp.event_to_timeout[
-            TransactionSettlementEvent.VALIDATE_TIMEOUT
-        ] = self.context.params.validate_timeout
 
 
 class Params(  # pylint: disable=too-many-ancestors
@@ -84,3 +71,36 @@ class Params(  # pylint: disable=too-many-ancestors
     LiquidityTraderParams,
 ):
     """A model to represent params for multiple abci apps."""
+
+
+class SharedState(BaseSharedState):
+    """Keep the current shared state of the skill."""
+
+    abci_app_cls = OptimusAbciApp  # type: ignore
+
+    @property
+    def params(self) -> Params:
+        """Get the parameters."""
+        return cast(Params, self.context.params)
+
+    def setup(self) -> None:
+        """Set up."""
+        super().setup()
+
+        events = (LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent)
+        round_timeout = self.params.round_timeout_seconds
+        round_timeout_overrides = {
+            cast(EventType, event).ROUND_TIMEOUT: round_timeout for event in events
+        }
+        reset_pause_timeout = self.params.reset_pause_duration + MARGIN
+        event_to_timeout_overrides: EventToTimeoutMappingType = {
+            **round_timeout_overrides,
+            TransactionSettlementEvent.RESET_TIMEOUT: round_timeout,
+            TransactionSettlementEvent.VALIDATE_TIMEOUT: self.params.validate_timeout,
+            LiquidityTraderEvent.ROUND_TIMEOUT: self.params.round_timeout_seconds
+            * MULTIPLIER,
+            ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT: reset_pause_timeout,
+        }
+
+        for event, override in event_to_timeout_overrides.items():
+            OptimusAbciApp.event_to_timeout[event] = override

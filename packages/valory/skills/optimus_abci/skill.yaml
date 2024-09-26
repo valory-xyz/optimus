@@ -10,7 +10,7 @@ fingerprint:
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
   composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
   dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
-  fsm_specification.yaml: bafybeih7zbhfuh7d4o3dob7uysdkbmptesjiept3sipmahie2zuze24aae
+  fsm_specification.yaml: bafybeiehe6ps7xi7i7tu4mduid7vbvszhsiu5juyard24i3nhtqgljpcza
   handlers.py: bafybeife4nrwqiwrx2ucza3vk6t5inpkncuewehtdnitax4lmqq2ptoona
   models.py: bafybeicbr3lfurtfvr3by6xp5a3zzj245o37efhumus4qacjjcqezlyceq
 fingerprint_ignore_patterns: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
-- valory/liquidity_trader_abci:0.1.0:bafybeifnhv3ufpvz7l3xbcszllb5cdkjes2ano3sh57yeia75nemcf3yui
+- valory/liquidity_trader_abci:0.1.0:bafybeibyjddjcwqcinbw3rgised6h7orwwrj7kmjw3xkscs4bcgwasbm5m
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
 behaviours:
   main:
@@ -150,11 +150,6 @@ models:
       lifi_advance_routes_url: https://li.quest/v1/quote
       lifi_check_status_url: https://li.quest/v1/status
       slippage_for_swap: 0.08
-      gas_params:
-        gas_price: null
-        max_fee_per_gas: 50000000
-        max_priority_fee_per_gas: 150000
-      manual_gas_limit: 500000
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
       uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
       chain_to_chain_key_mapping: '{"optimism":"opt","base":"bas"}'

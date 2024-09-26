@@ -431,6 +431,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     }
     transition_function: AbciAppTransitionFunction = {
         CallCheckpointRound: {
+            Event.DONE: CheckStakingKPIMetRound,
             Event.NEXT_CHECKPOINT_NOT_REACHED_YET: CheckStakingKPIMetRound,
             Event.SETTLE: FinishedCallCheckpointRound,
             Event.SERVICE_NOT_STAKED: GetPositionsRound,

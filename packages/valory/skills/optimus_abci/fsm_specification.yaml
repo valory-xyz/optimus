@@ -56,6 +56,7 @@ states:
 - SynchronizeLateMessagesRound
 - ValidateTransactionRound
 transition_func:
+    (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
     (CallCheckpointRound, NO_MAJORITY): CallCheckpointRound
     (CallCheckpointRound, ROUND_TIMEOUT): CallCheckpointRound

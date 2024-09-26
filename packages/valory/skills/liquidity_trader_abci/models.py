@@ -47,10 +47,6 @@ class SharedState(BaseSharedState):
 
     abci_app_cls = LiquidityTraderAbciApp
 
-    def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
-        """Initialize the state."""
-        super().__init__(*args, skill_context=skill_context, **kwargs)
-
 
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
@@ -211,8 +207,8 @@ class Params(BaseParams):
             self._ensure("chain_to_chain_key_mapping", kwargs, str)
         )
         self.max_num_of_retries = self._ensure("max_num_of_retries", kwargs, int)
-        self.waiting_period_for_retry = self._ensure(
-            "waiting_period_for_retry", kwargs, int
+        self.waiting_period_for_status_check = self._ensure(
+            "waiting_period_for_status_check", kwargs, int
         )
         self.reward_claiming_time_period = self._ensure(
             "reward_claiming_time_period", kwargs, int
@@ -255,6 +251,9 @@ class Params(BaseParams):
         )
         self.max_fee_percentage = self._ensure("max_fee_percentage", kwargs, float)
         self.max_gas_percentage = self._ensure("max_gas_percentage", kwargs, float)
+        self.balancer_graphql_endpoints = json.loads(
+            self._ensure("balancer_graphql_endpoints", kwargs, str)
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

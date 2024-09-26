@@ -58,7 +58,7 @@ class ERC20(Contract):
         owner: str,
         spender: str,
     ) -> JSONLike:
-        """Check the allowance of the given account."""
+        """Check the balance of the given account."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         allowance = contract_instance.functions.allowance(owner, spender).call()
         return dict(data=allowance)
@@ -69,7 +69,7 @@ class ERC20(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Get the token symbol."""
+        """Check the balance of the given account."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         symbol = contract_instance.functions.symbol().call()
         return dict(data=symbol)

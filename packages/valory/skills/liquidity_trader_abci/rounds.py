@@ -32,7 +32,6 @@ from packages.valory.skills.abstract_round_abci.base import (
     CollectionRound,
     DegenerateRound,
     DeserializedCollection,
-    EventToTimeout,
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
@@ -70,8 +69,7 @@ class Event(Enum):
     VANITY_TX_EXECUTED = "vanity_tx_executed"
     WAIT = "wait"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
-    STAKING_KPI_MET = "staking_kpi_met"
-    WAIT_FOR_PERIODS_TO_PASS = "wait_for_periods_to_pass"
+    STAKING_KPI_MET = "staking_kpi_met"  # nosec
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -226,9 +224,6 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
         if synced_data.service_staking_state == StakingState.EVICTED.value:
             return synced_data, Event.SERVICE_EVICTED
 
-        if synced_data.min_num_of_safe_tx_required is None:
-            return synced_data, Event.ERROR
-
         return res
 
 
@@ -261,13 +256,14 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
 
         if synced_data.is_staking_kpi_met is None:
             return synced_data, Event.ERROR
-        if synced_data.is_staking_kpi_met is True:
-            return synced_data, Event.STAKING_KPI_MET
         if synced_data.most_voted_tx_hash is not None:
             return synced_data, Event.SETTLE
+        if synced_data.is_staking_kpi_met is True:
+            return synced_data, Event.STAKING_KPI_MET
         if synced_data.is_staking_kpi_met is False:
             return synced_data, Event.STAKING_KPI_NOT_MET
-        return synced_data, Event.ERROR
+
+        return res
 
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
@@ -318,6 +314,10 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
 
     payload_class = DecisionMakingPayload
     synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    settle_event = Event.SETTLE
+    update_event = Event.UPDATE
+    error_event = Event.ERROR
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
@@ -416,7 +416,10 @@ class FailedMultiplexerRound(DegenerateRound):
 
 
 class LiquidityTraderAbciApp(AbciApp[Event]):
-    """LiquidityTraderAbciApp"""
+    """
+    LiquidityTraderAbciApp
+
+    """
 
     initial_round_cls: AppState = CallCheckpointRound
     initial_states: Set[AppState] = {
@@ -434,15 +437,15 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.SERVICE_EVICTED: GetPositionsRound,
             Event.ROUND_TIMEOUT: CallCheckpointRound,
             Event.NO_MAJORITY: CallCheckpointRound,
-            Event.ERROR: CallCheckpointRound,
         },
         CheckStakingKPIMetRound: {
+            Event.DONE: GetPositionsRound,
             Event.STAKING_KPI_MET: GetPositionsRound,
             Event.SETTLE: FinishedCheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: CheckStakingKPIMetRound,
             Event.NO_MAJORITY: CheckStakingKPIMetRound,
             Event.STAKING_KPI_NOT_MET: GetPositionsRound,
-            Event.ERROR: CheckStakingKPIMetRound,
+            Event.ERROR: GetPositionsRound,
         },
         GetPositionsRound: {
             Event.DONE: EvaluateStrategyRound,
@@ -465,7 +468,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         },
         PostTxSettlementRound: {
             Event.ACTION_EXECUTED: DecisionMakingRound,
-            Event.CHECKPOINT_TX_EXECUTED: CheckStakingKPIMetRound,
+            Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
             Event.UNRECOGNIZED: FailedMultiplexerRound,

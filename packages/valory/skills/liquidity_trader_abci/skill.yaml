@@ -7,16 +7,16 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeib66xuowrg6nqlvtymdton4o5uselmjfqawypy7td4ah3kzgzcgwu
+  behaviours.py: bafybeiaktfldwuypicsiqbyxjulesfxhfbbjzu6p7bwtpvfwx2cdyweqmq
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeid4mvr4i5irsywyiyzy5dryifl3zvaitamjiih6syrxzmax4rvg24
+  fsm_specification.yaml: bafybeiabbiulb7k6xkjysulmy6o4ugnhxlpp5jiaeextvwj65q4ttadoeq
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeihtkasldprnnsqlora7tfqrswdbqsvqcfvlxwuverjla7huzqiyku
-  payloads.py: bafybeiekxq6clp5jvb2ep5pregto3hgmymjfejxzv5obj2hvyiwgeqjtom
+  models.py: bafybeiahzdqz6megfdtiskfnh2hxukkhvp7lpjbif47druqsdnlpnzijnq
+  payloads.py: bafybeihi42vbsr2xyhzsp55tl6mqecqyy52jrhwjfw4trvrjlhfxuyaz3u
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeifann2hv4sikunp2k47gql6oj4m7scb7sz4xiybpxqtude4beasu4
+  rounds.py: bafybeidorqqosfidfxqwwegjjifzuqapl65ndpdnakolhlwawf57moopli
   strategies/simple_strategy.py: bafybeiasu2nchowx6leksjllpuum4ckezxoj4o2m4sstavblplvvutmvzm
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []
@@ -25,7 +25,7 @@ contracts:
 - valory/gnosis_safe:0.1.0:bafybeib375xmvcplw7ageic2np3hq4yqeijrvd5kl7rrdnyvswats6ngmm
 - valory/balancer_weighted_pool:0.1.0:bafybeidyjlrlq3jrbackewedwt5irokhjupxgpqfgur2ri426cap2oqt7a
 - valory/balancer_vault:0.1.0:bafybeie6twptrkqddget7pjijzob2c4jqmrrtpkwombneh35xx56djz4ru
-- valory/erc20:0.1.0:bafybeibnsmxcllsvvoqc3pz4xzp3i3bzf5gahqm4er4ivkoyz77udnoxl4
+- valory/erc20:0.1.0:bafybeiav4gh7lxfnwp4f7oorkbvjxrdsgjgyhl43rgbblaugtl76zlx7vy
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeigadr3nyx6tkrual7oqn2qiup35addfevromxjzzlvkiukpyhtz6y
 - valory/uniswap_v3_pool:0.1.0:bafybeih64nqgwlverl2tubnkymtlvewngn2pthzzfjewvxpk7dt2im6gza
@@ -182,8 +182,21 @@ models:
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
+      min_swap_amount_threshold: 5
+      max_fee_percentage: 0.02
+      max_gas_percentage: 0.1
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}'
     class_name: Params
+  coingecko:
+    args:
+      token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
+      coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
+      api_key: null
+      requests_per_minute: 30
+      credits: 10000
+      rate_limited_code: 429
+      chain_to_platform_id_mapping: '{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}'
+    class_name: Coingecko
   requests:
     args: {}
     class_name: Requests

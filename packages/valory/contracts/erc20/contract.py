@@ -75,6 +75,17 @@ class ERC20(Contract):
         return dict(data=symbol)
 
     @classmethod
+    def get_token_decimals(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the token decimals."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        decimals = contract_instance.functions.decimals().call()
+        return dict(data=decimals)
+
+    @classmethod
     def build_deposit_tx(
         cls,
         ledger_api: EthereumApi,

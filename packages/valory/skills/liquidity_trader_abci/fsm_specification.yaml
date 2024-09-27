@@ -3,6 +3,7 @@ alphabet_in:
 - CHECKPOINT_TX_EXECUTED
 - DONE
 - ERROR
+- NEXT_CHECKPOINT_NOT_REACHED_YET
 - NO_MAJORITY
 - ROUND_TIMEOUT
 - SERVICE_EVICTED
@@ -14,7 +15,6 @@ alphabet_in:
 - UPDATE
 - VANITY_TX_EXECUTED
 - WAIT
-- WAIT_FOR_PERIODS_TO_PASS
 default_start_state: CallCheckpointRound
 final_states:
 - FailedMultiplexerRound
@@ -45,19 +45,19 @@ states:
 - PostTxSettlementRound
 transition_func:
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
+    (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
     (CallCheckpointRound, NO_MAJORITY): CallCheckpointRound
     (CallCheckpointRound, ROUND_TIMEOUT): CallCheckpointRound
     (CallCheckpointRound, SERVICE_EVICTED): GetPositionsRound
     (CallCheckpointRound, SERVICE_NOT_STAKED): GetPositionsRound
     (CallCheckpointRound, SETTLE): FinishedCallCheckpointRound
-    (CallCheckpointRound, STAKING_KPI_MET): GetPositionsRound
-    (CallCheckpointRound, STAKING_KPI_NOT_MET): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, DONE): GetPositionsRound
+    (CheckStakingKPIMetRound, ERROR): GetPositionsRound
     (CheckStakingKPIMetRound, NO_MAJORITY): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, SETTLE): FinishedCheckStakingKPIMetRound
     (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
-    (CheckStakingKPIMetRound, WAIT_FOR_PERIODS_TO_PASS): GetPositionsRound
+    (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound

@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeihlimmcs6fv7capvbvfdaj4kou4tpknlvhnmwpra3brf66rerppcm
-- valory/optimus_abci:0.1.0:bafybeia6ucm5n7oeqrs6cotpivnnok5d2kb2kxiahmkwuw2jifb4if3fb4
+- valory/liquidity_trader_abci:0.1.0:bafybeibb37nibvq6ceseuptyqid6oevdr5taywmt5xrnyv4aom2yuboszy
+- valory/optimus_abci:0.1.0:bafybeiddcr6ynnhmpdxojtyf7inervcqjbar3wlujgauwvd27tuv2mctqe
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -130,6 +130,15 @@ models:
   benchmark_tool:
     args:
       log_dir: ${str:/logs}
+  coingecko:
+    args:
+      token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
+      coin_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
+      api_key: ${str:null}
+      requests_per_minute: ${int:30}
+      credits: ${int:10000}
+      rate_limited_code: ${int:429}
+      chain_to_platform_id_mapping: ${str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}}
   params:
     args:
       cleanup_history_depth: 1
@@ -228,4 +237,7 @@ models:
       store_path: ${str:/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
+      min_swap_amount_threshold: ${int:10}
+      max_fee_percentage: ${float:0.02}
+      max_gas_percentage: ${float:0.25}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}}

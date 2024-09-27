@@ -11,6 +11,7 @@ alphabet_in:
 - INCORRECT_SERIALIZATION
 - INSUFFICIENT_FUNDS
 - NEGATIVE
+- NEXT_CHECKPOINT_NOT_REACHED_YET
 - NONE
 - NO_MAJORITY
 - RESET_AND_PAUSE_TIMEOUT
@@ -27,7 +28,6 @@ alphabet_in:
 - VALIDATE_TIMEOUT
 - VANITY_TX_EXECUTED
 - WAIT
-- WAIT_FOR_PERIODS_TO_PASS
 default_start_state: RegistrationStartupRound
 final_states: []
 label: OptimusAbciApp
@@ -57,13 +57,12 @@ states:
 - ValidateTransactionRound
 transition_func:
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
+    (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
     (CallCheckpointRound, NO_MAJORITY): CallCheckpointRound
     (CallCheckpointRound, ROUND_TIMEOUT): CallCheckpointRound
     (CallCheckpointRound, SERVICE_EVICTED): GetPositionsRound
     (CallCheckpointRound, SERVICE_NOT_STAKED): GetPositionsRound
     (CallCheckpointRound, SETTLE): RandomnessTransactionSubmissionRound
-    (CallCheckpointRound, STAKING_KPI_MET): GetPositionsRound
-    (CallCheckpointRound, STAKING_KPI_NOT_MET): CheckStakingKPIMetRound
     (CheckLateTxHashesRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckLateTxHashesRound, CHECK_TIMEOUT): CheckLateTxHashesRound
     (CheckLateTxHashesRound, DONE): PostTxSettlementRound
@@ -71,11 +70,12 @@ transition_func:
     (CheckLateTxHashesRound, NONE): ResetAndPauseRound
     (CheckLateTxHashesRound, NO_MAJORITY): ResetAndPauseRound
     (CheckStakingKPIMetRound, DONE): GetPositionsRound
+    (CheckStakingKPIMetRound, ERROR): GetPositionsRound
     (CheckStakingKPIMetRound, NO_MAJORITY): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, SETTLE): RandomnessTransactionSubmissionRound
     (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
-    (CheckStakingKPIMetRound, WAIT_FOR_PERIODS_TO_PASS): GetPositionsRound
+    (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
     (CheckTransactionHistoryRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckTransactionHistoryRound, CHECK_TIMEOUT): CheckTransactionHistoryRound
     (CheckTransactionHistoryRound, DONE): PostTxSettlementRound

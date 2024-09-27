@@ -107,6 +107,9 @@ CAMPAIGN_TYPES = [1,2]
 INTEGRATOR = "valory"
 WAITING_PERIOD_FOR_BALANCE_TO_REFLECT = 5
 WaitableConditionType = Generator[None, None, Any]
+HTTP_OK = 200
+HTTP_NOT_FOUND = 404
+RETRIES = 5
 
 
 class DexTypes(Enum):
@@ -936,7 +939,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             headers={"accept": "application/json"},
         )
 
-        if response.status_code != 200:
+        if response.status_code != HTTP_OK:
             self.context.logger.error(
                 f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
             )
@@ -1146,7 +1149,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             url=url,
             headers={"Content-Type": "application/json"},
         )
-        if response.status_code != 200:
+        if response.status_code != HTTP_OK:
             self.context.logger.error(
                 f"Received status code {response.status_code} from the API. Response: {response.body}"
             )
@@ -1681,7 +1684,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             headers={"accept": "application/json"},
         )
 
-        if response.status_code != 200:
+        if response.status_code != HTTP_OK:
             self.context.logger.error(
                 f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
             )
@@ -2017,36 +2020,45 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
         self.context.logger.info(f"checking status from endpoint {url}")
 
-        response = yield from self.get_http_response(
-            method="GET",
-            url=url,
-            headers={"accept": "application/json"},
-        )
-
-        if response.status_code != 200:
-            self.context.logger.error(
-                f"Received status code {response.status_code} from url {url}."
-                f"Message {response.body}"
+        for _attempt in range(RETRIES):
+            response = yield from self.get_http_response(
+                method="GET",
+                url=url,
+                headers={"accept": "application/json"},
             )
-            return None, None
 
-        try:
-            tx_status = json.loads(response.body)
-        except (ValueError, TypeError) as e:
-            self.context.logger.error(
-                f"Could not parse response from api, "
-                f"the following error was encountered {type(e).__name__}: {e}"
-            )
-            return None, None
+            if response.status_code == HTTP_NOT_FOUND:
+                self.context.logger.warning(f"Message {response.body}. Retrying..")
+                yield from self.sleep(self.params.waiting_period_for_status_check)
+                continue
 
-        status = tx_status.get("status")
-        sub_status = tx_status.get("substatus")
+            if response.status_code != HTTP_OK:
+                self.context.logger.error(
+                    f"Received status code {response.status_code} from url {url}."
+                    f"Message {response.body}"
+                )
+                return None, None
 
-        if not status and sub_status:
-            self.context.logger.error("No status or sub_status found in response")
-            return None, None
+            try:
+                tx_status = json.loads(response.body)
+            except (ValueError, TypeError) as e:
+                self.context.logger.error(
+                    f"Could not parse response from api, "
+                    f"the following error was encountered {type(e).__name__}: {e}"
+                )
+                return None, None
 
-        return status, sub_status
+            status = tx_status.get("status")
+            sub_status = tx_status.get("substatus")
+
+            if not status and sub_status:
+                self.context.logger.error("No status or sub_status found in response")
+                return None, None
+
+            return status, sub_status
+
+        self.context.logger.error(f"Failed to fetch status after {RETRIES} retries.")
+        return None, None
 
     def get_enter_pool_tx_hash(
         self, positions, action
@@ -2515,7 +2527,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             },
         )
 
-        if response.status_code != 200:
+        if response.status_code != HTTP_OK:
             response = json.loads(response.body)
             self.context.logger.error(f"Error encountered: {response['message']}")
             return None
@@ -2758,7 +2770,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             },
         )
 
-        if response.status_code != 200:
+        if response.status_code != HTTP_OK:
             self.context.logger.error(
                 f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message {response.body}"
             )

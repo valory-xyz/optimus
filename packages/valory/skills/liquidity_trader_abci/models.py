@@ -25,7 +25,7 @@ from pathlib import Path
 from time import time
 from typing import Any, Dict, List, Optional
 
-from aea.skills.base import Model, SkillContext
+from aea.skills.base import Model
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (

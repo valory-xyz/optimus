@@ -118,7 +118,6 @@ CAMPAIGN_TYPES = [1, 2]
 INTEGRATOR = "valory"
 WAITING_PERIOD_FOR_BALANCE_TO_REFLECT = 5
 WaitableConditionType = Generator[None, None, Any]
-HTTP_OK = 200
 HTTP_NOT_FOUND = 404
 RETRIES = 5
 
@@ -955,7 +954,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             headers={"accept": "application/json"},
         )
 
-        if response.status_code != HTTP_OK:
+        if response.status_code not in HTTP_OK:
             self.context.logger.error(
                 f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
             )
@@ -1165,7 +1164,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             url=url,
             headers={"Content-Type": "application/json"},
         )
-        if response.status_code != HTTP_OK:
+        if response.status_code not in HTTP_OK:
             self.context.logger.error(
                 f"Received status code {response.status_code} from the API. Response: {response.body}"
             )
@@ -1297,7 +1296,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if not chain or not asset_address:
                     continue
                 balance = asset.get("balance", 0)
-                if balance > 0:
+                if balance and balance > 0:
                     token_balances.append(
                         {
                             "chain": chain,
@@ -1708,7 +1707,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             headers={"accept": "application/json"},
         )
 
-        if response.status_code != HTTP_OK:
+        if response.status_code not in HTTP_OK:
             self.context.logger.error(
                 f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
             )
@@ -2056,7 +2055,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.sleep(self.params.waiting_period_for_status_check)
                 continue
 
-            if response.status_code != HTTP_OK:
+            if response.status_code not in HTTP_OK:
                 self.context.logger.error(
                     f"Received status code {response.status_code} from url {url}."
                     f"Message {response.body}"
@@ -2567,7 +2566,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             },
         )
 
-        if response.status_code != HTTP_OK:
+        if response.status_code not in HTTP_OK:
             response = json.loads(response.body)
             self.context.logger.error(f"Error encountered: {response['message']}")
             return None
@@ -2812,7 +2811,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             },
         )
 
-        if response.status_code != HTTP_OK:
+        if response.status_code not in HTTP_OK:
             self.context.logger.error(
                 f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message {response.body}"
             )

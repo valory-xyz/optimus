@@ -10,9 +10,9 @@ fingerprint:
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
   composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
   dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
-  fsm_specification.yaml: bafybeif33vsuwg5op3ulbnoz3llxhvw6aus3esiaqltuc35pink2ky7xxe
+  fsm_specification.yaml: bafybeiehe6ps7xi7i7tu4mduid7vbvszhsiu5juyard24i3nhtqgljpcza
   handlers.py: bafybeife4nrwqiwrx2ucza3vk6t5inpkncuewehtdnitax4lmqq2ptoona
-  models.py: bafybeicmy2pydoqvhuqbv5csz5apyr3qbi5p5g6i3bjcpbknvhkgo6fmwq
+  models.py: bafybeibxpw4zmigtel3emgbz2jz6xgsfx7eavxvhqrqftwcsul6lwcpjou
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
-- valory/liquidity_trader_abci:0.1.0:bafybeihlimmcs6fv7capvbvfdaj4kou4tpknlvhnmwpra3brf66rerppcm
+- valory/liquidity_trader_abci:0.1.0:bafybeibb37nibvq6ceseuptyqid6oevdr5taywmt5xrnyv4aom2yuboszy
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
 behaviours:
   main:
@@ -171,9 +171,22 @@ models:
       store_path: data
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
+      min_swap_amount_threshold: 5
+      max_fee_percentage: 0.02
+      max_gas_percentage: 0.1
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}'
     class_name: Params
+  coingecko:
+    args:
+      token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
+      coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
+      api_key: null
+      requests_per_minute: 30
+      credits: 10000
+      rate_limited_code: 429
+      chain_to_platform_id_mapping: '{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}'
+    class_name: Coingecko
   randomness_api:
     args:
       api_id: cloudflare

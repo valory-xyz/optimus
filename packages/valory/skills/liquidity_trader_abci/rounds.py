@@ -70,7 +70,6 @@ class Event(Enum):
     WAIT = "wait"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
     STAKING_KPI_MET = "staking_kpi_met"  # nosec
-    WAIT_FOR_PERIODS_TO_PASS = "wait_for_periods_to_pass"  # nosec
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -187,12 +186,11 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
     no_majority_event: Enum = Event.NO_MAJORITY
     selection_key = (
         get_name(SynchronizedData.tx_submitter),
-        get_name(SynchronizedData.service_staking_state),
-        get_name(SynchronizedData.min_num_of_safe_tx_required),
-        get_name(SynchronizedData.is_staking_kpi_met),
         get_name(SynchronizedData.most_voted_tx_hash),
         get_name(SynchronizedData.safe_contract_address),
         get_name(SynchronizedData.chain_id),
+        get_name(SynchronizedData.service_staking_state),
+        get_name(SynchronizedData.min_num_of_safe_tx_required),
     )
     collection_key = get_name(SynchronizedData.participant_to_checkpoint)
     synchronized_data_class = SynchronizedData
@@ -210,6 +208,12 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
 
         if (
             synced_data.service_staking_state == StakingState.STAKED.value
+            and synced_data.most_voted_tx_hash is None
+        ):
+            return synced_data, Event.NEXT_CHECKPOINT_NOT_REACHED_YET
+
+        if (
+            synced_data.service_staking_state == StakingState.STAKED.value
             and synced_data.most_voted_tx_hash is not None
         ):
             return synced_data, Event.SETTLE
@@ -219,12 +223,6 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
 
         if synced_data.service_staking_state == StakingState.EVICTED.value:
             return synced_data, Event.SERVICE_EVICTED
-
-        if synced_data.is_staking_kpi_met is False:
-            return synced_data, Event.STAKING_KPI_NOT_MET
-
-        if synced_data.is_staking_kpi_met is True:
-            return synced_data, Event.STAKING_KPI_MET
 
         return res
 
@@ -239,10 +237,10 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
     collection_key = get_name(SynchronizedData.participant_to_staking_kpi)
     selection_key = (
         get_name(SynchronizedData.tx_submitter),
-        get_name(SynchronizedData.is_staking_kpi_met),
         get_name(SynchronizedData.most_voted_tx_hash),
         get_name(SynchronizedData.safe_contract_address),
         get_name(SynchronizedData.chain_id),
+        get_name(SynchronizedData.is_staking_kpi_met),
     )
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
@@ -256,14 +254,14 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         if event != Event.DONE:
             return res
 
+        if synced_data.is_staking_kpi_met is None:
+            return synced_data, Event.ERROR
         if synced_data.most_voted_tx_hash is not None:
             return synced_data, Event.SETTLE
-
         if synced_data.is_staking_kpi_met is True:
             return synced_data, Event.STAKING_KPI_MET
-
         if synced_data.is_staking_kpi_met is False:
-            return synced_data, Event.WAIT_FOR_PERIODS_TO_PASS
+            return synced_data, Event.STAKING_KPI_NOT_MET
 
         return res
 
@@ -418,74 +416,7 @@ class FailedMultiplexerRound(DegenerateRound):
 
 
 class LiquidityTraderAbciApp(AbciApp[Event]):
-    """
-    LiquidityTraderAbciApp
-
-        Initial round: CallCheckpointRound
-
-        Initial states:
-            - CallCheckpointRound
-            - CheckStakingKPIMetRound
-            - GetPositionsRound
-            - DecisionMakingRound
-            - PostTxSettlementRound
-
-        Transition states:
-            0. CallCheckpointRound
-                - done: CheckStakingKPIMetRound
-                - settle: FinishedCallCheckpointRound
-                - service not staked: GetPositionsRound
-                - service evicted: GetPositionsRound
-                - staking kpi not met: CheckStakingKPIMetRound
-                - staking kpi met: GetPositionsRound
-                - round timeout: CallCheckpointRound
-                - no majority: CallCheckpointRound
-
-            1. CheckStakingKPIMetRound
-                - staking kpi met: GetPositionsRound
-                - no majority: CheckStakingKPIMetRound
-                - round timeout: CheckStakingKPIMetRound
-                - settle: FinishedCheckStakingKPIMetRound
-                - wait for periods to pass: GetPositionsRound
-                - done: GetPositionsRound
-
-            2. GetPositionsRound
-                - done: EvaluateStrategyRound
-                - no majority: GetPositionsRound
-                - round timeout: GetPositionsRound
-
-            3. EvaluateStrategyRound
-                - done: DecisionMakingRound
-                - no majority: EvaluateStrategyRound
-                - round timeout: EvaluateStrategyRound
-                - wait: FinishedEvaluateStrategyRound
-
-            4. DecisionMakingRound
-                - done: FinishedDecisionMakingRound
-                - error: FinishedDecisionMakingRound
-                - no majority: DecisionMakingRound
-                - round timeout: DecisionMakingRound
-                - update: DecisionMakingRound
-                - settle: FinishedTxPreparationRound
-
-            5. PostTxSettlementRound
-                - action executed: DecisionMakingRound
-                - callpoint tx executed: CallCheckpointRound
-                - vanity tx executed: CheckStakingKPIMetRound
-                - round timeout: PostTxSettlementRound
-                - unrecognized: FailedMultiplexerRound
-
-        Final states:
-            - FinishedCallCheckpointRound
-            - FinishedCheckStakingKPIMetRound
-            - FinishedDecisionMakingRound
-            - FinishedEvaluateStrategyRound
-            - FinishedTxPreparationRound
-            - FailedMultiplexerRound
-
-        Timeouts:
-            - round timeout: 30.0
-    """
+    """LiquidityTraderAbciApp"""
 
     initial_round_cls: AppState = CallCheckpointRound
     initial_states: Set[AppState] = {
@@ -498,13 +429,12 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     transition_function: AbciAppTransitionFunction = {
         CallCheckpointRound: {
             Event.DONE: CheckStakingKPIMetRound,
+            Event.NEXT_CHECKPOINT_NOT_REACHED_YET: CheckStakingKPIMetRound,
             Event.SETTLE: FinishedCallCheckpointRound,
             Event.SERVICE_NOT_STAKED: GetPositionsRound,
             Event.SERVICE_EVICTED: GetPositionsRound,
             Event.ROUND_TIMEOUT: CallCheckpointRound,
             Event.NO_MAJORITY: CallCheckpointRound,
-            Event.STAKING_KPI_NOT_MET: CheckStakingKPIMetRound,
-            Event.STAKING_KPI_MET: GetPositionsRound,
         },
         CheckStakingKPIMetRound: {
             Event.DONE: GetPositionsRound,
@@ -512,7 +442,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.SETTLE: FinishedCheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: CheckStakingKPIMetRound,
             Event.NO_MAJORITY: CheckStakingKPIMetRound,
-            Event.WAIT_FOR_PERIODS_TO_PASS: GetPositionsRound,
+            Event.STAKING_KPI_NOT_MET: GetPositionsRound,
+            Event.ERROR: GetPositionsRound,
         },
         GetPositionsRound: {
             Event.DONE: EvaluateStrategyRound,

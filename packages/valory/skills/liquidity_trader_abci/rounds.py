@@ -416,10 +416,7 @@ class FailedMultiplexerRound(DegenerateRound):
 
 
 class LiquidityTraderAbciApp(AbciApp[Event]):
-    """
-    LiquidityTraderAbciApp
-
-    """
+    """LiquidityTraderAbciApp"""
 
     initial_round_cls: AppState = CallCheckpointRound
     initial_states: Set[AppState] = {

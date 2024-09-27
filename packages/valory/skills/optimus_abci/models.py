@@ -28,9 +28,9 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.tests.data.dummy_abci.models import (
     RandomnessApi as BaseRandomnessApi,
 )
+from packages.valory.skills.liquidity_trader_abci.models import Coingecko
 from packages.valory.skills.liquidity_trader_abci.models import (
     Params as LiquidityTraderParams,
-    Coingecko
 )
 from packages.valory.skills.liquidity_trader_abci.models import (
     SharedState as BaseSharedState,

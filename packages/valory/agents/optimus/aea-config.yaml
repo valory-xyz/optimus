@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeibyjddjcwqcinbw3rgised6h7orwwrj7kmjw3xkscs4bcgwasbm5m
-- valory/optimus_abci:0.1.0:bafybeige7r4uvmdun3vycjnmkbcfqs4obz6ci3gs2o3xh27gponyviqahe
+- valory/liquidity_trader_abci:0.1.0:bafybeidq2bwyy7t5ezmqxcz7lhqrcdcjwu3ngdphqwpego7zyy3lqetqsm
+- valory/optimus_abci:0.1.0:bafybeiat2lyj2qquw6bzsniidzh7y3hkkmoaxrbsamfmzl4l3w6lerxu34
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -237,7 +237,7 @@ models:
       store_path: ${str:/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
-      min_swap_amount_threshold: ${int:5}
+      min_swap_amount_threshold: ${int:10}
       max_fee_percentage: ${float:0.02}
-      max_gas_percentage: ${float:0.1}
+      max_gas_percentage: ${float:0.25}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}}

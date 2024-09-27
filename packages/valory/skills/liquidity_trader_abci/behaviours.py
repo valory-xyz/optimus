@@ -1254,6 +1254,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             actions.append(exit_pool_action)
 
         bridge_swap_actions = self._build_bridge_swap_actions(tokens)
+        if bridge_swap_actions is None:
+            self.context.logger.info("Error preparing bridge swap actions")
+            return None
         if bridge_swap_actions:
             actions.extend(bridge_swap_actions)
 

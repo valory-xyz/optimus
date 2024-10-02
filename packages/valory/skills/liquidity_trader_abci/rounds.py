@@ -108,8 +108,6 @@ class SynchronizedData(BaseSynchronizedData):
     def positions(self) -> List[Dict[str, Any]]:
         """Get the positions."""
         serialized = self.db.get("positions", "[]")
-        if serialized is None:
-            serialized = "[]"
         positions = json.loads(serialized)
         return positions
 
@@ -122,8 +120,6 @@ class SynchronizedData(BaseSynchronizedData):
     def actions(self) -> Optional[List[Dict[str, Any]]]:
         """Get the actions"""
         serialized = self.db.get("actions", "[]")
-        if serialized is None:
-            serialized = "[]"
         actions = json.loads(serialized)
         return actions
 
@@ -176,8 +172,44 @@ class SynchronizedData(BaseSynchronizedData):
     def period_number_at_last_cp(self) -> Optional[int]:
         """Get the period number at last cp."""
         return cast(int, self.db.get("period_number_at_last_cp", 0))
+    
+    @property
+    def last_executed_route_index(self) -> Optional[int]:
+        """Get the last executed route index."""
+        return cast(int, self.db.get("last_executed_route_index", None))
 
+    @property
+    def last_executed_step_index(self) -> Optional[int]:
+        """Get the last executed step index."""
+        return cast(int, self.db.get("last_executed_step_index", None))
+    
+    @property
+    def routes_retry_attempt(self) -> Optional[int]:
+        """Get the routes retry attempt index."""
+        return cast(int, self.db.get("routes_retry_attempt", 0))
+    
+    @property
+    def routes(self) -> Optional[List[Dict[str, Any]]]:
+        """Get the routes"""
+        serialized = self.db.get("routes", "[]")
+        routes = json.loads(serialized)
+        return routes
 
+    @property
+    def fee_details(self) -> Optional[Dict[str, Any]]:
+        """Get fee details related to route"""
+        return self.db.get("fee_details", {})
+
+    @property
+    def max_allowed_steps_in_a_route(self) -> Optional[int]:
+        """Get the max allowed steps in a route index."""
+        return cast(int, self.db.get("max_allowed_steps_in_a_route", None))
+
+    @property
+    def last_action(self) -> Optional[str]:
+        """Get the last action."""
+        return cast(str, self.db.get("last_action", None))
+        
 class CallCheckpointRound(CollectSameUntilThresholdRound):
     """A round for the checkpoint call preparation."""
 
@@ -286,7 +318,6 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
 
     payload_class = EvaluateStrategyPayload
     synchronized_data_class = SynchronizedData
-    selection_key = get_name(SynchronizedData.actions)
     done_event = Event.DONE
     collection_key = get_name(SynchronizedData.participant_to_actions_round)
     selection_key = get_name(SynchronizedData.actions)
@@ -332,14 +363,14 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             if positions and not isinstance(positions, str):
                 payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
 
-            bridge_and_swap_actions = payload.get("bridge_and_swap_actions", {})
+            new_action = payload.get("updates", {}).get("new_action", {})
             updated_actions = self.synchronized_data.actions
-            if bridge_and_swap_actions and bridge_and_swap_actions.get("actions"):
-                if not self.synchronized_data.last_executed_action_index:
-                    index = 1
+            if new_action:
+                if self.synchronized_data.last_executed_action_index is None:
+                    index = 0
                 else:
-                    index = self.synchronized_data.last_executed_action_index + 2
-                updated_actions[index:index] = bridge_and_swap_actions.get("actions")
+                    index = self.synchronized_data.last_executed_action_index + 1
+                updated_actions.insert(new_action)
 
             serialized_actions = json.dumps(updated_actions)
             synchronized_data = synchronized_data.update(

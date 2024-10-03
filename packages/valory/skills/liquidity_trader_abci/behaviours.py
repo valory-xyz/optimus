@@ -118,6 +118,7 @@ STAKING_CHAIN = "optimism"
 CAMPAIGN_TYPES = [1, 2]
 INTEGRATOR = "valory"
 WAITING_PERIOD_FOR_BALANCE_TO_REFLECT = 5
+MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = 404
 
@@ -1222,7 +1223,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if dex_type in allowed_dexs:
                     # type 1 and 2 stand for ERC20 and Concentrated liquidity campaigns respectively
                     # https://docs.merkl.xyz/integrate-merkl/integrate-merkl-to-your-app#merkl-api
-                    if campaign_type in [1, 2]:
+                    if campaign_type in CAMPAIGN_TYPES:
                         if not campaign_apr > self.current_pool.get("apr", 0.0):
                             self.context.logger.info(
                                 "APR does not exceed the current pool APR"
@@ -1784,12 +1785,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            self.context.logger.info(f"ROUTES: {self.synchronized_data.routes}")
             sender = self.context.agent_address
             (
                 next_event,
-                updates,
-                bridge_and_swap_actions,
+                updates
             ) = yield from self.get_next_event()
 
             payload = DecisionMakingPayload(
@@ -1824,7 +1823,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[-1].round_id
 
         if self.synchronized_data.last_action == Action.EXECUTE_STEP.value:
-            return yield from self._post_execute_step(actions, last_executed_action_index)
+            res = yield from self._post_execute_step(actions, last_executed_action_index)
+            return res
 
         if last_executed_action_index is not None:
             if self.synchronized_data.last_action == Action.ENTER_POOL.value:
@@ -1837,13 +1837,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if last_executed_action_index is not None and self.synchronized_data.last_action in [
             Action.ROUTES_FETCHED.value, Action.STEP_EXECUTED.value, Action.SWITCH_ROUTE.value
         ]:
-            return yield from self._post_execute_route_execution()
+            res = yield from self._post_execute_route_execution()
+            return res
 
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
             return Event.DONE.value, {}, {}
 
-        return yield from self._prepare_next_action(actions, current_action_index, last_round_id)
+        res = yield from self._prepare_next_action(actions, current_action_index, last_round_id)
+        return res
 
     def _post_execute_step(self, actions, last_executed_action_index) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Handle the execution of a step."""
@@ -1979,7 +1981,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "last_action": Action.BRIDGE_SWAP_EXECUTED.value,
             }
 
-        return yield from self._execute_route_step(routes, to_execute_route_index, to_execute_step_index)
+        res = yield from self._execute_route_step(routes, to_execute_route_index, to_execute_step_index)
+        return res
 
     def _execute_route_step(self, routes, to_execute_route_index, to_execute_step_index) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Execute a step in the route."""
@@ -2062,11 +2065,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         next_action_details = self.synchronized_data.actions[current_action_index]
         self.context.logger.info(f"ACTION DETAILS: {next_action_details}")
 
-        return yield from self._prepare_action(next_action, positions, next_action_details)
-        
-
-    def _prepare_action(self, next_action, positions, next_action_details) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
-        """Prepare the action based on the next action type."""
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
@@ -2095,10 +2093,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.UPDATE.value, {
                 "routes": serialized_routes,
                 "last_action": Action.ROUTES_FETCHED.value,
+                "last_executed_action_index": current_action_index
             }
 
         elif next_action == Action.BRIDGE_SWAP:
-            yield from self.sleep(5)
+            yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
             tx_hash = next_action_details.get("payload")
             chain_id = next_action_details.get("from_chain")
             safe_address = next_action_details.get("safe_address")
@@ -2496,8 +2495,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             from_chain, multisend_tx_hash, multisend_address
         )
         if not payload_string:
-            all_steps_successful = False
-            break
+            return None
 
         bridge_and_swap_action = {
                 "action": Action.BRIDGE_SWAP.value,
@@ -2516,7 +2514,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
         return bridge_and_swap_action
         
-    def check_if_route_is_profitable(self, route: Dict[str, Any]) -> Generator[None, None, Optional[bool, float, float]]:
+    def check_if_route_is_profitable(self, route: Dict[str, Any]) -> Generator[None, None, Tuple[Optional[bool], Optional[float], Optional[float]]]:
         """Checks if the entire route is profitable"""
         step_transactions = yield from self._get_step_transactions_data(route)
         total_gas_cost = 0
@@ -2559,15 +2557,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         step_fee = step_data.get("fee", 0)
         step_gas_cost = step_data.get("gas_cost", 0)
 
-        if step_index == total_steps - 1:
+        if total_steps != 1 and step_index == total_steps - 1:
             # For the last step, ensure it is not more than 50% of the remaining fee and gas allowance
-            if step_fee > 0.5 * remaining_fee_allowance or step_gas_cost > 0.5 * remaining_gas_allowance:
-                self.context.logger.error("Last step exceeds 50%% of the remaining fee or gas allowance. Dropping step.")
+            if step_fee > MAX_STEP_COST_RATIO * remaining_fee_allowance or step_gas_cost > MAX_STEP_COST_RATIO * remaining_gas_allowance:
+                self.context.logger.error(
+                    f"Step exceeds 50% of the remaining fee or gas allowance. "
+                    f"Step fee: {step_fee}, Remaining fee allowance: {remaining_fee_allowance}, "
+                    f"Step gas cost: {step_gas_cost}, Remaining gas allowance: {remaining_gas_allowance}. Dropping step."
+                )
                 return False, None
 
         else:
             if step_fee > remaining_fee_allowance or step_gas_cost > remaining_gas_allowance:
-                self.context.logger.error("First step exceeds remaining fee or gas allowance. Dropping step.")
+                self.context.logger.error(
+                    f"Step exceeds remaining fee or gas allowance. "
+                    f"Step fee: {step_fee}, Remaining fee allowance: {remaining_fee_allowance}, "
+                    f"Step gas cost: {step_gas_cost}, Remaining gas allowance: {remaining_gas_allowance}. Dropping step."
+                )
                 return False, None
 
         return True, step_data
@@ -2666,7 +2672,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, step: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get transaction data for a step from LiFi API"""
-        base_url = "https://li.quest/v1/advanced/stepTransaction"
+        base_url = self.params.lifi_fetch_step_transaction_url
         response = yield from self.get_http_response(
             "POST",
             base_url,
@@ -2891,18 +2897,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "tenderly_project_slug": self.params.tenderly_project_slug,
         }
         api_url = url_template.format(**values)
-
-        transfer_data = self._encode_transfer_data(token, safe_address, amount)
+        
         body = {
                     "network_id": self.params.chain_to_chain_id_mapping.get(chain),
-                    "block_number": "latest",
-                    "save": True,
-                    "save_if_fails": True,
-                    "gas": 0,
-                    "simulation_type": "quick",
+                    "block_number": ledger_api.api.eth.get_block("latest")["number"],
                     "from": self.context.agent_address,
                     "to": safe_address,
+                    "gas": 8000000,
                     "input": tx_data,
+                    "simulation_type": "quick",
                 }
 
         response = yield from self.get_http_response(
@@ -3000,31 +3003,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
-
-    def _encode_transfer_data(self, token: str, to_address: str, amount: int) -> str:
-        transfer_data = (
-            Web3()
-            .eth.contract(
-                address=token,
-                abi=[
-                    {
-                        "constant": False,
-                        "inputs": [
-                            {"name": "to", "type": "address"},
-                            {"name": "value", "type": "uint256"},
-                        ],
-                        "name": "transfer",
-                        "outputs": [{"name": "", "type": "bool"}],
-                        "payable": False,
-                        "stateMutability": "nonpayable",
-                        "type": "function",
-                    }
-                ],
-            )
-            .encodeABI(fn_name="transfer", args=[to_address, amount])
-        )
-
-        return transfer_data
 
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str

@@ -41,7 +41,6 @@ from urllib.parse import urlencode
 from aea.configurations.data_types import PublicId
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_hex
-from web3 import Web3
 
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
@@ -120,8 +119,7 @@ INTEGRATOR = "valory"
 WAITING_PERIOD_FOR_BALANCE_TO_REFLECT = 5
 MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
-HTTP_NOT_FOUND = 404
-
+HTTP_NOT_FOUND = [400, 404]
 
 
 class DexTypes(Enum):
@@ -1786,10 +1784,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-            (
-                next_event,
-                updates
-            ) = yield from self.get_next_event()
+            (next_event, updates) = yield from self.get_next_event()
 
             payload = DecisionMakingPayload(
                 sender=sender,
@@ -1820,10 +1815,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             0 if last_executed_action_index is None else last_executed_action_index + 1
         )
 
-        last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[-1].round_id
+        last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
+            -1
+        ].round_id
 
-        if self.synchronized_data.last_action == Action.EXECUTE_STEP.value:
-            res = yield from self._post_execute_step(actions, last_executed_action_index)
+        if (
+            self.synchronized_data.last_action == Action.EXECUTE_STEP.value
+            and last_round_id != DecisionMakingRound.auto_round_id()
+        ):
+            res = yield from self._post_execute_step(
+                actions, last_executed_action_index
+            )
             return res
 
         if last_executed_action_index is not None:
@@ -1831,29 +1833,46 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self._post_execute_enter_pool(actions, last_executed_action_index)
             if self.synchronized_data.last_action == Action.EXIT_POOL.value:
                 self._post_execute_exit_pool()
-            if self.synchronized_data.last_action == Action.CLAIM_REWARDS.value and last_round_id != DecisionMakingRound.auto_round_id():
-                return self._post_execute_claim_rewards(actions, last_executed_action_index)
+            if (
+                self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
+                and last_round_id != DecisionMakingRound.auto_round_id()
+            ):
+                return self._post_execute_claim_rewards(
+                    actions, last_executed_action_index
+                )
 
-        if last_executed_action_index is not None and self.synchronized_data.last_action in [
-            Action.ROUTES_FETCHED.value, Action.STEP_EXECUTED.value, Action.SWITCH_ROUTE.value
-        ]:
-            res = yield from self._post_execute_route_execution()
+        if (
+            last_executed_action_index is not None
+            and self.synchronized_data.last_action
+            in [
+                Action.ROUTES_FETCHED.value,
+                Action.STEP_EXECUTED.value,
+                Action.SWITCH_ROUTE.value,
+            ]
+        ):
+            res = yield from self._process_route_execution()
             return res
 
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
             return Event.DONE.value, {}, {}
 
-        res = yield from self._prepare_next_action(actions, current_action_index, last_round_id)
+        res = yield from self._prepare_next_action(
+            actions, current_action_index, last_round_id
+        )
         return res
 
-    def _post_execute_step(self, actions, last_executed_action_index) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+    def _post_execute_step(
+        self, actions, last_executed_action_index
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Handle the execution of a step."""
         self.context.logger.info("Checking the status of swap tx")
+        # we wait for some time before checking the status of the tx because the tx may take time to reflect on the lifi endpoint
         yield from self.sleep(self.params.waiting_period_for_status_check)
         decision = yield from self.get_decision_on_swap()
         self.context.logger.info(f"Action to take {decision}")
 
+        # If tx is pending then we wait until it gets confirmed or refunded
         if decision == Decision.WAIT:
             decision = yield from self._wait_for_swap_confirmation()
 
@@ -1875,7 +1894,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 break
         return decision
 
-    def _update_assets_after_swap(self, actions, last_executed_action_index) -> Tuple[Optional[str], Optional[Dict]]:
+    def _update_assets_after_swap(
+        self, actions, last_executed_action_index
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
         self._add_token_to_assets(
@@ -1893,7 +1914,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "remaining_gas_allowance": action.get("remaining_gas_allowance"),
         }
         return Event.UPDATE.value, {
-            "last_executed_step_index": self.synchronized_data.last_executed_step_index + 1,
+            "last_executed_step_index": (
+                self.synchronized_data.last_executed_step_index + 1
+                if self.synchronized_data.last_executed_step_index is not None
+                else 0
+            ),
             "fee_details": fee_details,
             "last_action": Action.STEP_EXECUTED.value,
         }
@@ -1926,10 +1951,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.current_pool = {}
         self.store_current_pool()
         self.context.logger.info("Exit was successful! Removing current pool")
+        # when we exit the pool, it may take time to reflect the balance of our assets in safe
         yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
 
-
-    def _post_execute_claim_rewards(self, actions, last_executed_action_index) -> Tuple[Optional[str], Optional[Dict]]:
+    def _post_execute_claim_rewards(
+        self, actions, last_executed_action_index
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """Handle claiming rewards."""
         action = actions[last_executed_action_index]
         chain = action.get("chain")
@@ -1947,7 +1974,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "last_action": Action.CLAIM_REWARDS.value,
         }
 
-    def _post_execute_route_execution(self) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+    def _process_route_execution(
+        self,
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Handle route execution."""
         routes = self.synchronized_data.routes
         if not routes:
@@ -1955,13 +1984,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.DONE.value, {}
 
         last_executed_route_index = (
-            -1 if self.synchronized_data.last_executed_route_index is None
+            -1
+            if self.synchronized_data.last_executed_route_index is None
             else self.synchronized_data.last_executed_route_index
         )
         to_execute_route_index = last_executed_route_index + 1
 
         last_executed_step_index = (
-            -1 if self.synchronized_data.last_executed_step_index is None
+            -1
+            if self.synchronized_data.last_executed_step_index is None
             else self.synchronized_data.last_executed_step_index
         )
         to_execute_step_index = last_executed_step_index + 1
@@ -1969,35 +2000,53 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if to_execute_route_index >= len(routes):
             self.context.logger.error("No more routes left to execute")
             return Event.DONE.value, {}
-        if to_execute_step_index >= len(routes[to_execute_route_index]):
+        if to_execute_step_index >= len(
+            routes[to_execute_route_index].get("steps", [])
+        ):
             self.context.logger.info("All steps executed successfully!")
             return Event.UPDATE.value, {
                 "last_executed_route_index": None,
                 "last_executed_step_index": None,
-                "fee_details": {},
-                "routes": {},
+                "fee_details": None,
+                "routes": None,
                 "max_allowed_steps_in_a_route": None,
                 "routes_retry_attempt": 0,
                 "last_action": Action.BRIDGE_SWAP_EXECUTED.value,
             }
 
-        res = yield from self._execute_route_step(routes, to_execute_route_index, to_execute_step_index)
+        res = yield from self._execute_route_step(
+            routes, to_execute_route_index, to_execute_step_index
+        )
         return res
 
-    def _execute_route_step(self, routes, to_execute_route_index, to_execute_step_index) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+    def _execute_route_step(
+        self, routes, to_execute_route_index, to_execute_step_index
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Execute a step in the route."""
         steps = routes[to_execute_route_index].get("steps")
         step = steps[to_execute_step_index]
 
         total_fee = self.synchronized_data.fee_details.get("total_fee")
         total_gas_cost = self.synchronized_data.fee_details.get("total_gas_cost")
-        remaining_fee_allowance = self.synchronized_data.fee_details.get("remaining_fee_allowance")
-        remaining_gas_allowance = self.synchronized_data.fee_details.get("remaining_gas_allowance")
+        remaining_fee_allowance = self.synchronized_data.fee_details.get(
+            "remaining_fee_allowance"
+        )
+        remaining_gas_allowance = self.synchronized_data.fee_details.get(
+            "remaining_gas_allowance"
+        )
 
         if to_execute_step_index == 0:
-            is_profitable, total_fee, total_gas_cost = yield from self.check_if_route_is_profitable(routes[to_execute_route_index])
+            (
+                is_profitable,
+                total_fee,
+                total_gas_cost,
+            ) = yield from self.check_if_route_is_profitable(
+                routes[to_execute_route_index]
+            )
             if not is_profitable:
-                self.context.logger.error("Route not profitable. Switching to next route..")
+                self.context.logger.error(
+                    "Route not profitable. Switching to next route.."
+                )
                 return Event.UPDATE.value, {
                     "last_executed_route_index": to_execute_route_index,
                     "last_executed_step_index": None,
@@ -2007,20 +2056,36 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             remaining_fee_allowance = total_fee
             remaining_gas_allowance = total_gas_cost
 
-        step_profitable, step_data = yield from self.check_step_costs(step, remaining_fee_allowance, remaining_gas_allowance, to_execute_step_index, len(steps))
+        step_profitable, step_data = yield from self.check_step_costs(
+            step,
+            remaining_fee_allowance,
+            remaining_gas_allowance,
+            to_execute_step_index,
+            len(steps),
+        )
         if not step_profitable:
             return Event.DONE.value, {}
 
-        bridge_swap_action = yield from self.prepare_bridge_swap_action(step_data, remaining_fee_allowance, remaining_gas_allowance)
+        self.context.logger.info(
+            f"Preparing bridge swap action for {step_data.get('source_token_symbol')}({step_data.get('from_chain')}) "
+            f"to {step_data.get('target_token_symbol')}({step_data.get('to_chain')}) using tool {step_data.get('tool')}"
+        )
+        bridge_swap_action = yield from self.prepare_bridge_swap_action(
+            step_data, remaining_fee_allowance, remaining_gas_allowance
+        )
         if not bridge_swap_action:
-            return self._handle_failed_step(to_execute_step_index, to_execute_route_index, step_data, len(steps))
+            return self._handle_failed_step(
+                to_execute_step_index, to_execute_route_index, step_data, len(steps)
+            )
 
-        return Event.EXECUTE_STEP.value, {
+        return Event.UPDATE.value, {
             "new_action": bridge_swap_action,
-            "last_action": Event.EXECUTE_STEP.value,
+            "last_action": Action.EXECUTE_STEP.value,
         }
 
-    def _handle_failed_step(self, to_execute_step_index, to_execute_route_index, step_data, total_steps) -> Tuple[Optional[str], Optional[Dict]]:
+    def _handle_failed_step(
+        self, to_execute_step_index, to_execute_route_index, step_data, total_steps
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """Handle a failed step in the route."""
         if to_execute_step_index == 0:
             self.context.logger.error("First step failed. Switching to next route..")
@@ -2043,19 +2108,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "from_token": step_data["source_token"],
             "from_token_symbol": step_data["source_token_symbol"],
             "to_token": step_data["target_token"],
-            "to_token_symbol": step_data["target_token_symbol"]
+            "to_token_symbol": step_data["target_token_symbol"],
         }
 
         return Event.UPDATE.value, {
             "last_executed_step_index": None,
             "last_executed_route_index": None,
+            "fee_details": None,
+            "routes": None,
             "new_action": find_route_action,
-            "last_executed_action_index": self.synchronized_data.last_executed_action_index + 1,
             "routes_retry_attempt": routes_retry_attempt,
+            "max_allowed_steps_in_a_route": total_steps - to_execute_step_index,
             "last_action": Action.FIND_ROUTE.value,
         }
 
-    def _prepare_next_action(self, actions, current_action_index, last_round_id) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+    def _prepare_next_action(
+        self, actions, current_action_index, last_round_id
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Prepare the next action."""
         positions = self.synchronized_data.positions
         if last_round_id != EvaluateStrategyRound.auto_round_id():
@@ -2081,8 +2150,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             routes = yield from self.fetch_routes(positions, next_action_details)
             if self.synchronized_data.max_allowed_steps_in_a_route:
                 routes = [
-                    route for route in routes
-                    if len(route.get("steps", [])) <= self.synchronized_data.max_allowed_steps_in_a_route
+                    route
+                    for route in routes
+                    if len(route.get("steps", []))
+                    <= self.synchronized_data.max_allowed_steps_in_a_route
                 ]
 
             serialized_routes = json.dumps(routes)
@@ -2093,7 +2164,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.UPDATE.value, {
                 "routes": serialized_routes,
                 "last_action": Action.ROUTES_FETCHED.value,
-                "last_executed_action_index": current_action_index
+                "last_executed_action_index": current_action_index,
             }
 
         elif next_action == Action.BRIDGE_SWAP:
@@ -2166,15 +2237,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
         self.context.logger.info(f"checking status from endpoint {url}")
-
-        for _attempt in range(MAX_RETRIES_FOR_API_CALL):
+        MAX_RETRIES = 10
+        for _attempt in range(MAX_RETRIES):
             response = yield from self.get_http_response(
                 method="GET",
                 url=url,
                 headers={"accept": "application/json"},
             )
 
-            if response.status_code == HTTP_NOT_FOUND:
+            if response.status_code in HTTP_NOT_FOUND:
                 self.context.logger.warning(f"Message {response.body}. Retrying..")
                 yield from self.sleep(self.params.waiting_period_for_status_check)
                 continue
@@ -2204,7 +2275,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             return status, sub_status
 
-        self.context.logger.error(f"Failed to fetch status after {MAX_RETRIES_FOR_API_CALL} retries.")
+        self.context.logger.error(
+            f"Failed to fetch status after {MAX_RETRIES} retries."
+        )
         return None, None
 
     def get_enter_pool_tx_hash(
@@ -2462,7 +2535,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-    def prepare_bridge_swap_action(self, tx_info: Dict[str,Any], remaining_fee_allowance: float, remaining_gas_allowance: float) -> Generator[None, None, Optional[Dict]]:
+    def prepare_bridge_swap_action(
+        self,
+        tx_info: Dict[str, Any],
+        remaining_fee_allowance: float,
+        remaining_gas_allowance: float,
+    ) -> Generator[None, None, Optional[Dict]]:
         """Prepares the bridge swap action"""
         multisend_tx_hash = yield from self._build_multisend_tx(tx_info)
         if not multisend_tx_hash:
@@ -2498,30 +2576,29 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         bridge_and_swap_action = {
-                "action": Action.BRIDGE_SWAP.value,
-                "from_chain": tx_info.get("from_chain"),
-                "to_chain": tx_info.get("to_chain"),
-                "from_token": tx_info.get("source_token"),
-                "from_token_symbol": tx_info.get("source_token_symbol"),
-                "to_token": tx_info.get("target_token"),
-                "to_token_symbol": tx_info.get("target_token_symbol"),
-                "payload": payload_string,
-                "safe_address": self.params.safe_contract_addresses.get(
-                    from_chain
-                ),
-                "remaining_gas_allowance": remaining_gas_allowance - tx_info.get("gas_cost"),
-                "remaining_fee_allowance": remaining_fee_allowance - tx_info.get("fee")
+            "action": Action.BRIDGE_SWAP.value,
+            "from_chain": tx_info.get("from_chain"),
+            "to_chain": tx_info.get("to_chain"),
+            "from_token": tx_info.get("source_token"),
+            "from_token_symbol": tx_info.get("source_token_symbol"),
+            "to_token": tx_info.get("target_token"),
+            "to_token_symbol": tx_info.get("target_token_symbol"),
+            "payload": payload_string,
+            "safe_address": self.params.safe_contract_addresses.get(from_chain),
+            "remaining_gas_allowance": remaining_gas_allowance
+            - tx_info.get("gas_cost"),
+            "remaining_fee_allowance": remaining_fee_allowance - tx_info.get("fee"),
         }
         return bridge_and_swap_action
-        
-    def check_if_route_is_profitable(self, route: Dict[str, Any]) -> Generator[None, None, Tuple[Optional[bool], Optional[float], Optional[float]]]:
+
+    def check_if_route_is_profitable(
+        self, route: Dict[str, Any]
+    ) -> Generator[None, None, Tuple[Optional[bool], Optional[float], Optional[float]]]:
         """Checks if the entire route is profitable"""
         step_transactions = yield from self._get_step_transactions_data(route)
         total_gas_cost = 0
         total_fee = 0
-        total_fee += sum(
-            float(tx_info.get("fee", 0)) for tx_info in step_transactions
-        )
+        total_fee += sum(float(tx_info.get("fee", 0)) for tx_info in step_transactions)
         total_gas_cost += sum(
             float(tx_info.get("gas_cost", 0)) for tx_info in step_transactions
         )
@@ -2542,24 +2619,41 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"Details: total_fee={total_fee}, total_gas_cost={total_gas_cost}, from_amount_usd={from_amount_usd}, to_amount_usd={to_amount_usd}"
         )
 
-        if fee_percentage > allowed_fee_percentage or gas_percentage > allowed_gas_percentage:
+        if (
+            fee_percentage > allowed_fee_percentage
+            or gas_percentage > allowed_gas_percentage
+        ):
             self.context.logger.error("Route is not profitable!")
             return False, None, None
 
         self.context.logger.info("Route is profitable!")
-        return True, total_fee, total_gas_cost        
+        return True, total_fee, total_gas_cost
 
-    def check_step_costs(self, step, remaining_fee_allowance, remaining_gas_allowance, step_index, total_steps) -> Generator[None, None, Tuple[Optional[bool], Optional[Dict[str,Any]]]]:
+    def check_step_costs(
+        self,
+        step,
+        remaining_fee_allowance,
+        remaining_gas_allowance,
+        step_index,
+        total_steps,
+    ) -> Generator[None, None, Tuple[Optional[bool], Optional[Dict[str, Any]]]]:
         """Check if the step costs are within the allowed range."""
         step = self._set_step_addresses(step)
         step_data = yield from self._get_step_transaction(step)
+        if not step_data:
+            self.context.logger.error("Error fetching step transaction")
+            return False, None
 
         step_fee = step_data.get("fee", 0)
         step_gas_cost = step_data.get("gas_cost", 0)
 
         if total_steps != 1 and step_index == total_steps - 1:
             # For the last step, ensure it is not more than 50% of the remaining fee and gas allowance
-            if step_fee > MAX_STEP_COST_RATIO * remaining_fee_allowance or step_gas_cost > MAX_STEP_COST_RATIO * remaining_gas_allowance:
+            if math.ceil(step_fee) > math.ceil(
+                MAX_STEP_COST_RATIO * remaining_fee_allowance
+            ) or math.ceil(step_gas_cost) > math.ceil(
+                MAX_STEP_COST_RATIO * remaining_gas_allowance
+            ):
                 self.context.logger.error(
                     f"Step exceeds 50% of the remaining fee or gas allowance. "
                     f"Step fee: {step_fee}, Remaining fee allowance: {remaining_fee_allowance}, "
@@ -2568,7 +2662,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return False, None
 
         else:
-            if step_fee > remaining_fee_allowance or step_gas_cost > remaining_gas_allowance:
+            if math.ceil(step_fee) > math.ceil(remaining_fee_allowance) or math.ceil(
+                step_gas_cost
+            ) > math.ceil(remaining_gas_allowance):
                 self.context.logger.error(
                     f"Step exceeds remaining fee or gas allowance. "
                     f"Step fee: {step_fee}, Remaining fee allowance: {remaining_fee_allowance}, "
@@ -2576,6 +2672,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return False, None
 
+        self.context.logger.info(
+            f"Step is profitable! Step fee: {step_fee}, Step gas cost: {step_gas_cost}"
+        )
         return True, step_data
 
     def _build_safe_tx(
@@ -2754,7 +2853,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "fee": fee,
             "gas_cost": gas_cost,
             "from_amount_usd": from_amount_usd,
-            "to_amount_usd": to_amount_usd
+            "to_amount_usd": to_amount_usd,
         }
 
     def _set_step_addresses(self, step: Dict[str, Any]) -> Dict[str, Any]:
@@ -2781,9 +2880,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         step["action"]["fromAddress"] = self.params.safe_contract_addresses.get(
             from_chain
         )
-        step["action"]["toAddress"] = self.params.safe_contract_addresses.get(
-            to_chain
-        )
+        step["action"]["toAddress"] = self.params.safe_contract_addresses.get(to_chain)
 
         return step
 
@@ -2897,16 +2994,32 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "tenderly_project_slug": self.params.tenderly_project_slug,
         }
         api_url = url_template.format(**values)
-        
+
+        ledger_api_response = (
+            ledger_api_response
+        ) = yield from self.get_ledger_api_response(
+            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
+            ledger_callable="get_block",
+            block_identifier="latest",
+            chain_id="base",
+        )
+
+        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
+            self.context.logger.error(
+                f"Could not fetch the latest blocok number: {ledger_api_response}"
+            )
+            return None
+
+        latest_block = int(ledger_api_response.state.body["number"])
+
         body = {
-                    "network_id": self.params.chain_to_chain_id_mapping.get(chain),
-                    "block_number": ledger_api.api.eth.get_block("latest")["number"],
-                    "from": self.context.agent_address,
-                    "to": safe_address,
-                    "gas": 8000000,
-                    "input": tx_data,
-                    "simulation_type": "quick",
-                }
+            "network_id": self.params.chain_to_chain_id_mapping.get(chain),
+            "block_number": latest_block,
+            "from": self.context.agent_address,
+            "to": safe_address,
+            "simulation_type": "quick",
+            "data": tx_data,
+        }
 
         response = yield from self.get_http_response(
             "POST",

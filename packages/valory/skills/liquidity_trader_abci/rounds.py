@@ -172,7 +172,7 @@ class SynchronizedData(BaseSynchronizedData):
     def period_number_at_last_cp(self) -> Optional[int]:
         """Get the period number at last cp."""
         return cast(int, self.db.get("period_number_at_last_cp", 0))
-    
+
     @property
     def last_executed_route_index(self) -> Optional[int]:
         """Get the last executed route index."""
@@ -182,12 +182,12 @@ class SynchronizedData(BaseSynchronizedData):
     def last_executed_step_index(self) -> Optional[int]:
         """Get the last executed step index."""
         return cast(int, self.db.get("last_executed_step_index", None))
-    
+
     @property
     def routes_retry_attempt(self) -> Optional[int]:
         """Get the routes retry attempt index."""
         return cast(int, self.db.get("routes_retry_attempt", 0))
-    
+
     @property
     def routes(self) -> Optional[List[Dict[str, Any]]]:
         """Get the routes"""
@@ -209,7 +209,8 @@ class SynchronizedData(BaseSynchronizedData):
     def last_action(self) -> Optional[str]:
         """Get the last action."""
         return cast(str, self.db.get("last_action", None))
-        
+
+
 class CallCheckpointRound(CollectSameUntilThresholdRound):
     """A round for the checkpoint call preparation."""
 
@@ -370,7 +371,7 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
                     index = 0
                 else:
                     index = self.synchronized_data.last_executed_action_index + 1
-                updated_actions.insert(new_action)
+                updated_actions.insert(index, new_action)
 
             serialized_actions = json.dumps(updated_actions)
             synchronized_data = synchronized_data.update(

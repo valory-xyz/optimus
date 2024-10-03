@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeidxpwveipbrdhzlawtzvkhtuwqp42ys2vw25tu5iqiu6tndlz7aom
-- valory/optimus_abci:0.1.0:bafybeibzjuqil6ipnzhmljlorobbjnv3ai3uv4cave5sv43k336mvbj2ia
+- valory/liquidity_trader_abci:0.1.0:bafybeidnvedww6egshhgfpvac5t274g6aekqxnfqwr3c7qsztnso4zde5a
+- valory/optimus_abci:0.1.0:bafybeihwwwy74dwskaqbqmwijfp46jwhjzxruwjmfwrx37mptzugkg6cn4
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -214,6 +214,7 @@ models:
       min_balance_multiplier: ${int:5}
       multisend_contract_addresses: ${str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}}
       lifi_advance_routes_url: ${str:https://li.quest/v1/advanced/routes}
+      lifi_fetch_step_transaction_url: ${str:https://li.quest/v1/advanced/stepTransaction}
       lifi_check_status_url: ${str:https://li.quest/v1/status}
       lifi_fetch_tools_url: ${str:https://li.quest/v1/tools}
       slippage_for_swap: ${float:0.09}

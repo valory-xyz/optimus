@@ -193,6 +193,9 @@ class Params(BaseParams):
         self.lifi_advance_routes_url = self._ensure(
             "lifi_advance_routes_url", kwargs, str
         )
+        self.lifi_fetch_step_transaction_url = self._ensure(
+            "lifi_fetch_step_transaction_url", kwargs, str
+        )
         self.lifi_check_status_url = self._ensure("lifi_check_status_url", kwargs, str)
         self.slippage_for_swap = self._ensure("slippage_for_swap", kwargs, float)
         self.allowed_dexs: List[str] = self._ensure("allowed_dexs", kwargs, List[str])

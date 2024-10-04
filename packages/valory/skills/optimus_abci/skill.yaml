@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
-- valory/liquidity_trader_abci:0.1.0:bafybeich6pbchgdy7v56dwfdq6btb2blcagfquhytdhaemdfgmtgk4hbv4
+- valory/liquidity_trader_abci:0.1.0:bafybeife34jpiod7ydz75yxceqyl4v7oi7ldj7ecgglvumqjisql3mmsua
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
 behaviours:
   main:
@@ -147,7 +147,8 @@ models:
       apr_threshold: 5
       min_balance_multiplier: 5
       multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
-      lifi_advance_routes_url: https://li.quest/v1/quote
+      lifi_advance_routes_url: https://li.quest/v1/advanced/routes
+      lifi_fetch_step_transaction_url: https://li.quest/v1/advanced/stepTransaction
       lifi_check_status_url: https://li.quest/v1/status
       slippage_for_swap: 0.08
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
@@ -171,7 +172,7 @@ models:
       store_path: data
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
-      min_swap_amount_threshold: 5
+      min_swap_amount_threshold: 10
       max_fee_percentage: 0.02
       max_gas_percentage: 0.1
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'

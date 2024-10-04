@@ -120,6 +120,7 @@ WAITING_PERIOD_FOR_BALANCE_TO_REFLECT = 5
 MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
+ERC20_DECIMALS = 18
 
 
 class DexTypes(Enum):
@@ -2917,7 +2918,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
         amount = self._get_balance(from_chain, from_token_address, positions)
-        token_decimals = 18
+        token_decimals = ERC20_DECIMALS
         if from_token_address != ZERO_ADDRESS:
             token_decimals = yield from self._get_token_decimals(
                 from_chain, from_token_address

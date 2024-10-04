@@ -365,9 +365,6 @@ class LiquidityTraderBaseBehaviour(
         self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
     ) -> Optional[int]:
         """Get balance"""
-        if not positions:
-            positions = self.synchronized_data.positions
-
         for position in positions:
             if position.get("chain") == chain:
                 for asset in position.get("assets", {}):
@@ -375,6 +372,20 @@ class LiquidityTraderBaseBehaviour(
                         return asset.get("balance")
 
         return None
+
+    def _get_token_decimals(
+        self, chain: str, asset_address: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get token decimals"""
+        decimals = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=asset_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_token_decimals",
+            data_key="data",
+            chain_id=chain,
+        )
+        return decimals
 
     def _store_data(self, data: Any, attribute: str, filepath: str) -> None:
         """Generic method to store data as JSON."""
@@ -1454,20 +1465,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.error(f"Request failed after {retries} retries.")
         return False, response_json
 
-    def _get_token_decimals(
-        self, chain: str, asset_address: str
-    ) -> Generator[None, None, Optional[int]]:
-        """Get token decimals"""
-        decimals = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=asset_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="get_token_decimals",
-            data_key="data",
-            chain_id=chain,
-        )
-        return decimals
-
     def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
 
@@ -1810,14 +1807,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("No actions to prepare")
             return Event.DONE.value, {}, {}
 
+        positions = self.synchronized_data.positions
+        last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
+            -1
+        ].round_id
+        if last_round_id != EvaluateStrategyRound.auto_round_id():
+            positions = yield from self.get_positions()
+
         last_executed_action_index = self.synchronized_data.last_executed_action_index
         current_action_index = (
             0 if last_executed_action_index is None else last_executed_action_index + 1
         )
-
-        last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
-            -1
-        ].round_id
 
         if (
             self.synchronized_data.last_action == Action.EXECUTE_STEP.value
@@ -1850,7 +1850,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 Action.SWITCH_ROUTE.value,
             ]
         ):
-            res = yield from self._process_route_execution()
+            res = yield from self._process_route_execution(positions)
             return res
 
         if current_action_index >= len(self.synchronized_data.actions):
@@ -1858,7 +1858,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.DONE.value, {}, {}
 
         res = yield from self._prepare_next_action(
-            actions, current_action_index, last_round_id
+            positions, actions, current_action_index, last_round_id
         )
         return res
 
@@ -1975,7 +1975,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def _process_route_execution(
-        self,
+        self, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Handle route execution."""
         routes = self.synchronized_data.routes
@@ -2015,25 +2015,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             }
 
         res = yield from self._execute_route_step(
-            routes, to_execute_route_index, to_execute_step_index
+            positions, routes, to_execute_route_index, to_execute_step_index
         )
         return res
 
     def _execute_route_step(
-        self, routes, to_execute_route_index, to_execute_step_index
+        self, positions, routes, to_execute_route_index, to_execute_step_index
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Execute a step in the route."""
         steps = routes[to_execute_route_index].get("steps")
         step = steps[to_execute_step_index]
 
-        total_fee = self.synchronized_data.fee_details.get("total_fee")
-        total_gas_cost = self.synchronized_data.fee_details.get("total_gas_cost")
-        remaining_fee_allowance = self.synchronized_data.fee_details.get(
-            "remaining_fee_allowance"
-        )
-        remaining_gas_allowance = self.synchronized_data.fee_details.get(
-            "remaining_gas_allowance"
-        )
+        remaining_fee_allowance = 0
+        remaining_gas_allowance = 0
 
         if to_execute_step_index == 0:
             (
@@ -2056,6 +2050,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             remaining_fee_allowance = total_fee
             remaining_gas_allowance = total_gas_cost
 
+        else:
+            remaining_fee_allowance = self.synchronized_data.fee_details.get(
+                "remaining_fee_allowance"
+            )
+            remaining_gas_allowance = self.synchronized_data.fee_details.get(
+                "remaining_gas_allowance"
+            )
+
         step_profitable, step_data = yield from self.check_step_costs(
             step,
             remaining_fee_allowance,
@@ -2071,7 +2073,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"to {step_data.get('target_token_symbol')}({step_data.get('to_chain')}) using tool {step_data.get('tool')}"
         )
         bridge_swap_action = yield from self.prepare_bridge_swap_action(
-            step_data, remaining_fee_allowance, remaining_gas_allowance
+            positions, step_data, remaining_fee_allowance, remaining_gas_allowance
         )
         if not bridge_swap_action:
             return self._handle_failed_step(
@@ -2123,13 +2125,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def _prepare_next_action(
-        self, actions, current_action_index, last_round_id
+        self, positions, actions, current_action_index, last_round_id
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Prepare the next action."""
-        positions = self.synchronized_data.positions
-        if last_round_id != EvaluateStrategyRound.auto_round_id():
-            positions = yield from self.get_positions()
-
         next_action = Action(actions[current_action_index].get("action"))
         next_action_details = self.synchronized_data.actions[current_action_index]
         self.context.logger.info(f"ACTION DETAILS: {next_action_details}")
@@ -2537,12 +2535,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def prepare_bridge_swap_action(
         self,
+        positions: List[Dict[str, Any]],
         tx_info: Dict[str, Any],
         remaining_fee_allowance: float,
         remaining_gas_allowance: float,
     ) -> Generator[None, None, Optional[Dict]]:
         """Prepares the bridge swap action"""
-        multisend_tx_hash = yield from self._build_multisend_tx(tx_info)
+        multisend_tx_hash = yield from self._build_multisend_tx(positions, tx_info)
         if not multisend_tx_hash:
             return None
 
@@ -2647,12 +2646,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         step_fee = step_data.get("fee", 0)
         step_gas_cost = step_data.get("gas_cost", 0)
 
+        TOLERANCE = 0.02
+
         if total_steps != 1 and step_index == total_steps - 1:
             # For the last step, ensure it is not more than 50% of the remaining fee and gas allowance
-            if math.ceil(step_fee) > math.ceil(
-                MAX_STEP_COST_RATIO * remaining_fee_allowance
-            ) or math.ceil(step_gas_cost) > math.ceil(
-                MAX_STEP_COST_RATIO * remaining_gas_allowance
+            if (
+                step_fee > MAX_STEP_COST_RATIO * remaining_fee_allowance + TOLERANCE
+                or step_gas_cost
+                > MAX_STEP_COST_RATIO * remaining_gas_allowance + TOLERANCE
             ):
                 self.context.logger.error(
                     f"Step exceeds 50% of the remaining fee or gas allowance. "
@@ -2662,9 +2663,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return False, None
 
         else:
-            if math.ceil(step_fee) > math.ceil(remaining_fee_allowance) or math.ceil(
-                step_gas_cost
-            ) > math.ceil(remaining_gas_allowance):
+            if (
+                step_fee > remaining_fee_allowance + TOLERANCE
+                or step_gas_cost > remaining_gas_allowance + TOLERANCE
+            ):
                 self.context.logger.error(
                     f"Step exceeds remaining fee or gas allowance. "
                     f"Step fee: {step_fee}, Remaining fee allowance: {remaining_fee_allowance}, "
@@ -2711,12 +2713,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         payload_string = hash_payload_to_hex(**tx_params)
         return payload_string
 
-    def _build_multisend_tx(self, tx_info) -> Generator[None, None, Optional[str]]:
+    def _build_multisend_tx(
+        self, positions, tx_info
+    ) -> Generator[None, None, Optional[str]]:
         multisend_txs = []
+        amount = self._get_balance(
+            tx_info.get("from_chain"), tx_info.get("source_token"), positions
+        )
+
         if tx_info.get("source_token") != ZERO_ADDRESS:
             approval_tx_payload = yield from self.get_approval_tx_hash(
                 token_address=tx_info.get("source_token"),
-                amount=tx_info.get("amount"),
+                amount=amount,
                 spender=tx_info.get("lifi_contract_address"),
                 chain=tx_info.get("from_chain"),
             )
@@ -2730,11 +2738,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             {
                 "operation": MultiSendOperation.CALL,
                 "to": tx_info.get("lifi_contract_address"),
-                "value": (
-                    0
-                    if tx_info.get("source_token") != ZERO_ADDRESS
-                    else tx_info.get("amount")
-                ),
+                "value": (0 if tx_info.get("source_token") != ZERO_ADDRESS else amount),
                 "data": tx_info.get("tx_hash"),
             }
         )
@@ -2888,6 +2892,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Optional[List[Any]]]:
         """Get transaction data for route from LiFi API"""
+
+        def round_down_amount(amount: int, decimals: int) -> int:
+            """Round down the amount to the nearest round_factor to avoid API rounding issues."""
+            if decimals == 18:
+                # For tokens like ETH/WETH with 18 decimals, round to nearest 1000 wei
+                round_factor = 1000
+                rounded_amount = (amount // round_factor) * round_factor
+                return rounded_amount
+            else:
+                return amount
+
         from_chain = action.get("from_chain")
         to_chain = action.get("to_chain")
         from_chain_id = self.params.chain_to_chain_id_mapping.get(from_chain)
@@ -2898,10 +2913,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_token_symbol = action.get("to_token_symbol")
         allow_switch_chain = True
         slippage = self.params.slippage_for_swap
-        amount = self._get_balance(from_chain, from_token_address, positions)
         from_address = self.params.safe_contract_addresses.get(from_chain)
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
+        amount = self._get_balance(from_chain, from_token_address, positions)
+        token_decimals = yield from self._get_token_decimals(
+            from_chain, from_token_address
+        )
+
+        amount = round_down_amount(amount, token_decimals)
         # TO:DO - Add logic to maintain a list of blacklisted bridges
         params = {
             "fromAddress": from_address,
@@ -2995,30 +3015,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
         api_url = url_template.format(**values)
 
-        ledger_api_response = (
-            ledger_api_response
-        ) = yield from self.get_ledger_api_response(
-            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
-            ledger_callable="get_block",
-            block_identifier="latest",
-            chain_id="base",
-        )
-
-        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
-            self.context.logger.error(
-                f"Could not fetch the latest blocok number: {ledger_api_response}"
-            )
-            return None
-
-        latest_block = int(ledger_api_response.state.body["number"])
-
         body = {
-            "network_id": self.params.chain_to_chain_id_mapping.get(chain),
-            "block_number": latest_block,
-            "from": self.context.agent_address,
-            "to": safe_address,
-            "simulation_type": "quick",
-            "data": tx_data,
+            "simulations": [
+                {
+                    "network_id": self.params.chain_to_chain_id_mapping.get(chain),
+                    "from": self.context.agent_address,
+                    "to": safe_address,
+                    "simulation_type": "quick",
+                    "input": tx_data,
+                }
+            ]
         }
 
         response = yield from self.get_http_response(
@@ -3040,10 +3046,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         try:
             data = json.loads(response.body)
             if data:
-                simulation = data.get("simulation", {})
+                simulation_results = data.get("simulation_results", [])
                 status = False
-                if isinstance(simulation, Dict):
-                    status = simulation.get("status", False)
+                if simulation_results:
+                    for simulation_result in simulation_results:
+                        simulation = simulation_result.get("simulation", {})
+                        if isinstance(simulation, Dict):
+                            status = simulation.get("status", False)
                 return status
 
         except (ValueError, TypeError) as e:

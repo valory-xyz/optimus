@@ -257,3 +257,4 @@ f162f6e9ce964277d59ff703f905ce4d7e514339:packages/valory/contracts/staking_token
 83d7eb6162fe8ca00109167fb139b470cb8bdacd:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 293094bdd1180c1f29da321ab6ffc9f661e00d17:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 d82b489e8772df10d476d6ebb3fb6527e525e1cf:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
+c44680132c9ee15749aa0e9b78e68de64c8012a6:packages/valory/skills/liquidity_trader_abci/behaviours.py:generic-api-key:2921

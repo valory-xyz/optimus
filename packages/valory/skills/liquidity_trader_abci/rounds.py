@@ -108,6 +108,8 @@ class SynchronizedData(BaseSynchronizedData):
     def positions(self) -> List[Dict[str, Any]]:
         """Get the positions."""
         serialized = self.db.get("positions", "[]")
+        if serialized is None:
+            serialized = "[]"
         positions = json.loads(serialized)
         return positions
 
@@ -120,6 +122,8 @@ class SynchronizedData(BaseSynchronizedData):
     def actions(self) -> Optional[List[Dict[str, Any]]]:
         """Get the actions"""
         serialized = self.db.get("actions", "[]")
+        if serialized is None:
+            serialized = "[]"
         actions = json.loads(serialized)
         return actions
 
@@ -192,6 +196,8 @@ class SynchronizedData(BaseSynchronizedData):
     def routes(self) -> Optional[List[Dict[str, Any]]]:
         """Get the routes"""
         serialized = self.db.get("routes", "[]")
+        if serialized is None:
+            serialized = "[]"
         routes = json.loads(serialized)
         return routes
 

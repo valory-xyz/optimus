@@ -41,7 +41,6 @@ from urllib.parse import urlencode
 from aea.configurations.data_types import PublicId
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_hex
-from web3 import Web3
 
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
@@ -110,16 +109,17 @@ LIVENESS_RATIO_SCALE_FACTOR = 10**18
 # A safety margin in case there is a delay between the moment the KPI condition is
 # satisfied, and the moment where the checkpoint is called.
 REQUIRED_REQUESTS_SAFETY_MARGIN = 1
-MAX_RETRIES = 3
+MAX_RETRIES_FOR_API_CALL = 3
+MAX_RETRIES_FOR_ROUTES = 3
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
 STAKING_CHAIN = "optimism"
 CAMPAIGN_TYPES = [1, 2]
 INTEGRATOR = "valory"
 WAITING_PERIOD_FOR_BALANCE_TO_REFLECT = 5
+MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
-HTTP_NOT_FOUND = 404
-RETRIES = 5
+HTTP_NOT_FOUND = [400, 404]
 
 
 class DexTypes(Enum):
@@ -137,6 +137,12 @@ class Action(Enum):
     ENTER_POOL = "EnterPool"
     BRIDGE_SWAP = "BridgeAndSwap"
     FIND_BRIDGE_ROUTE = "FindBridgeRoute"
+    EXECUTE_STEP = "execute_step"
+    ROUTES_FETCHED = "routes_fetched"
+    FIND_ROUTE = "find_route"
+    BRIDGE_SWAP_EXECUTED = "bridge_swap_executed"
+    STEP_EXECUTED = "step_executed"
+    SWITCH_ROUTE = "switch_route"
 
 
 class SwapStatus(Enum):
@@ -359,9 +365,6 @@ class LiquidityTraderBaseBehaviour(
         self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
     ) -> Optional[int]:
         """Get balance"""
-        if not positions:
-            positions = self.synchronized_data.positions
-
         for position in positions:
             if position.get("chain") == chain:
                 for asset in position.get("assets", {}):
@@ -369,6 +372,20 @@ class LiquidityTraderBaseBehaviour(
                         return asset.get("balance")
 
         return None
+
+    def _get_token_decimals(
+        self, chain: str, asset_address: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get token decimals"""
+        decimals = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=asset_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_token_decimals",
+            data_key="data",
+            chain_id=chain,
+        )
+        return decimals
 
     def _store_data(self, data: Any, attribute: str, filepath: str) -> None:
         """Generic method to store data as JSON."""
@@ -1215,7 +1232,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if dex_type in allowed_dexs:
                     # type 1 and 2 stand for ERC20 and Concentrated liquidity campaigns respectively
                     # https://docs.merkl.xyz/integrate-merkl/integrate-merkl-to-your-app#merkl-api
-                    if campaign_type in [1, 2]:
+                    if campaign_type in CAMPAIGN_TYPES:
                         if not campaign_apr > self.current_pool.get("apr", 0.0):
                             self.context.logger.info(
                                 "APR does not exceed the current pool APR"
@@ -1327,7 +1344,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         tokens = []
         for token_data in token_balances:
-            if token_data["value"] > self.params.min_swap_amount_threshold:
+            if token_data["value"] >= self.params.min_swap_amount_threshold:
                 tokens.append(token_data)
             if len(tokens) == 2:
                 self.context.logger.info(
@@ -1407,7 +1424,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         body: Optional[Any] = None,
         headers: Optional[Dict] = None,
         rate_limited_code: int = 429,
-        max_retries: int = MAX_RETRIES,
+        max_retries: int = MAX_RETRIES_FOR_API_CALL,
         retry_wait: int = 0,
     ) -> Generator[None, None, Tuple[bool, Dict]]:
         """Request wrapped around a retry mechanism"""
@@ -1447,20 +1464,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.error(f"Request failed after {retries} retries.")
         return False, response_json
-
-    def _get_token_decimals(
-        self, chain: str, asset_address: str
-    ) -> Generator[None, None, Optional[int]]:
-        """Get token decimals"""
-        decimals = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=asset_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="get_token_decimals",
-            data_key="data",
-            chain_id=chain,
-        )
-        return decimals
 
     def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get exit pool tokens"""
@@ -1778,11 +1781,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-            (
-                next_event,
-                updates,
-                bridge_and_swap_actions,
-            ) = yield from self.get_next_event()
+            (next_event, updates) = yield from self.get_next_event()
 
             payload = DecisionMakingPayload(
                 sender=sender,
@@ -1790,7 +1789,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     {
                         "event": next_event,
                         "updates": updates,
-                        "bridge_and_swap_actions": bridge_and_swap_actions,
                     },
                     sort_keys=True,
                 ),
@@ -1802,207 +1800,402 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def get_next_event(self) -> Generator[None, None, Tuple[str, Dict, Optional[Dict]]]:
+    def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""
-
         actions = self.synchronized_data.actions
-        # If there are no actions, we return
         if not actions:
             self.context.logger.info("No actions to prepare")
             return Event.DONE.value, {}, {}
+
+        positions = self.synchronized_data.positions
+        last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
+            -1
+        ].round_id
+        if last_round_id != EvaluateStrategyRound.auto_round_id():
+            positions = yield from self.get_positions()
 
         last_executed_action_index = self.synchronized_data.last_executed_action_index
         current_action_index = (
             0 if last_executed_action_index is None else last_executed_action_index + 1
         )
 
-        last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
-            -1
-        ].round_id
-
-        # check tx status if last action was bridge and swap and the last round was not DecisionMaking or EvaluateStrategy
         if (
-            last_round_id != DecisionMakingRound.auto_round_id()
-            and last_round_id != EvaluateStrategyRound.auto_round_id()
-            and Action(actions[last_executed_action_index].get("action"))
-            == Action.BRIDGE_SWAP
-        ):
-            self.context.logger.info("Checking the status of swap tx")
-            # we wait for some time before checking the status of the tx because the tx may take time to reflect on the lifi endpoint
-            yield from self.sleep(self.params.waiting_period_for_status_check)
-            decision = yield from self.get_decision_on_swap()
-            self.context.logger.info(f"Action to take {decision}")
-
-            # If tx is pending then we wait until it gets confirmed or refunded
-            if decision == Decision.WAIT:
-                self.context.logger.info("Waiting for tx to get executed")
-                while decision == Decision.WAIT:
-                    # Wait for given time between each status check
-                    yield from self.sleep(self.params.waiting_period_for_status_check)
-                    self.context.logger.info("Checking the status of swap tx again")
-                    decision = (
-                        yield from self.get_decision_on_swap()
-                    )  # Check the status again
-                    self.context.logger.info(f"Action to take {decision}")
-
-            if decision == Decision.EXIT:
-                self.context.logger.error("Swap failed")
-                return Event.DONE.value, {}, {}
-
-            # if swap was successful we update the list of assets
-            if decision == Decision.CONTINUE:
-                action = actions[last_executed_action_index]
-                self._add_token_to_assets(
-                    action.get("from_chain"),
-                    action.get("from_token"),
-                    action.get("from_token_symbol"),
-                )
-                self._add_token_to_assets(
-                    action.get("to_chain"),
-                    action.get("to_token"),
-                    action.get("to_token_symbol"),
-                )
-
-        # If last action was Enter Pool and it was successful we update the current pool
-        if (
-            last_executed_action_index is not None
-            and Action(actions[last_executed_action_index].get("action"))
-            == Action.ENTER_POOL
-        ):
-            action = actions[last_executed_action_index]
-            current_pool = {
-                "chain": action["chain"],
-                "address": action["pool_address"],
-                "dex_type": action["dex_type"],
-                "assets": action["assets"],
-                "apr": action["apr"],
-                "pool_type": action["pool_type"],
-            }
-            if action.get("dex_type") == DexTypes.UNISWAP_V3.value:
-                token_id, liquidity = yield from self._get_data_from_mint_tx_receipt(
-                    self.synchronized_data.final_tx_hash, action.get("chain")
-                )
-                current_pool["token_id"] = token_id
-                current_pool["liquidity"] = liquidity
-            self.current_pool = current_pool
-            self.store_current_pool()
-            self.context.logger.info(
-                f"Enter pool was successful! Updating current pool to {current_pool}"
-            )
-
-        # If last action was Exit Pool and it was successful we remove the current pool
-        if (
-            last_executed_action_index is not None
-            and Action(actions[last_executed_action_index]["action"])
-            == Action.EXIT_POOL
-        ):
-            current_pool = {}
-            self.current_pool = current_pool
-            self.store_current_pool()
-            self.context.logger.info("Exit was successful! Removing current pool")
-            # when we exit the pool, it may take time to reflect the balance of our assets
-            yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
-
-        # If last action was Claim Rewards and it was successful we update the list of assets and the last_reward_claimed_timestamp
-        if (
-            last_executed_action_index is not None
+            self.synchronized_data.last_action == Action.EXECUTE_STEP.value
             and last_round_id != DecisionMakingRound.auto_round_id()
-            and Action(actions[last_executed_action_index]["action"])
-            == Action.CLAIM_REWARDS
         ):
-            action = actions[last_executed_action_index]
-            chain = action.get("chain")
-            for token, token_symbol in zip(
-                action.get("tokens"), action.get("token_symbols")
-            ):
-                self._add_token_to_assets(chain, token, token_symbol)
-
-            current_timestamp = cast(
-                SharedState, self.context.state
-            ).round_sequence.last_round_transition_timestamp.timestamp()
-
-            return (
-                Event.UPDATE.value,
-                {"last_reward_claimed_timestamp": current_timestamp},
-                {},
+            res = yield from self._post_execute_step(
+                actions, last_executed_action_index
             )
+            return res
 
-        # if all actions have been executed we exit DecisionMaking
+        if last_executed_action_index is not None:
+            if self.synchronized_data.last_action == Action.ENTER_POOL.value:
+                self._post_execute_enter_pool(actions, last_executed_action_index)
+            if self.synchronized_data.last_action == Action.EXIT_POOL.value:
+                self._post_execute_exit_pool()
+            if (
+                self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
+                and last_round_id != DecisionMakingRound.auto_round_id()
+            ):
+                return self._post_execute_claim_rewards(
+                    actions, last_executed_action_index
+                )
+
+        if (
+            last_executed_action_index is not None
+            and self.synchronized_data.last_action
+            in [
+                Action.ROUTES_FETCHED.value,
+                Action.STEP_EXECUTED.value,
+                Action.SWITCH_ROUTE.value,
+            ]
+        ):
+            res = yield from self._process_route_execution(positions)
+            return res
+
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
             return Event.DONE.value, {}, {}
 
-        positions = self.synchronized_data.positions
+        res = yield from self._prepare_next_action(
+            positions, actions, current_action_index, last_round_id
+        )
+        return res
 
-        # If the previous round was not EvaluateStrategyRound, we need to update the balances after a transaction
-        if last_round_id != EvaluateStrategyRound.auto_round_id():
-            positions = yield from self.get_positions()
+    def _post_execute_step(
+        self, actions, last_executed_action_index
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+        """Handle the execution of a step."""
+        self.context.logger.info("Checking the status of swap tx")
+        # we wait for some time before checking the status of the tx because the tx may take time to reflect on the lifi endpoint
+        yield from self.sleep(self.params.waiting_period_for_status_check)
+        decision = yield from self.get_decision_on_swap()
+        self.context.logger.info(f"Action to take {decision}")
 
-        # Prepare the next action
+        # If tx is pending then we wait until it gets confirmed or refunded
+        if decision == Decision.WAIT:
+            decision = yield from self._wait_for_swap_confirmation()
+
+        if decision == Decision.EXIT:
+            self.context.logger.error("Swap failed")
+            return Event.DONE.value, {}
+
+        if decision == Decision.CONTINUE:
+            return self._update_assets_after_swap(actions, last_executed_action_index)
+
+    def _wait_for_swap_confirmation(self) -> Generator[None, None, Optional[Decision]]:
+        """Wait for swap confirmation."""
+        self.context.logger.info("Waiting for tx to get executed")
+        while True:
+            yield from self.sleep(self.params.waiting_period_for_status_check)
+            decision = yield from self.get_decision_on_swap()
+            self.context.logger.info(f"Action to take {decision}")
+            if decision != Decision.WAIT:
+                break
+        return decision
+
+    def _update_assets_after_swap(
+        self, actions, last_executed_action_index
+    ) -> Tuple[Optional[str], Optional[Dict]]:
+        """Update assets after a successful swap."""
+        action = actions[last_executed_action_index]
+        self._add_token_to_assets(
+            action.get("from_chain"),
+            action.get("from_token"),
+            action.get("from_token_symbol"),
+        )
+        self._add_token_to_assets(
+            action.get("to_chain"),
+            action.get("to_token"),
+            action.get("to_token_symbol"),
+        )
+        fee_details = {
+            "remaining_fee_allowance": action.get("remaining_fee_allowance"),
+            "remaining_gas_allowance": action.get("remaining_gas_allowance"),
+        }
+        return Event.UPDATE.value, {
+            "last_executed_step_index": (
+                self.synchronized_data.last_executed_step_index + 1
+                if self.synchronized_data.last_executed_step_index is not None
+                else 0
+            ),
+            "fee_details": fee_details,
+            "last_action": Action.STEP_EXECUTED.value,
+        }
+
+    def _post_execute_enter_pool(self, actions, last_executed_action_index):
+        """Handle entering a pool."""
+        action = actions[last_executed_action_index]
+        current_pool = {
+            "chain": action["chain"],
+            "address": action["pool_address"],
+            "dex_type": action["dex_type"],
+            "assets": action["assets"],
+            "apr": action["apr"],
+            "pool_type": action["pool_type"],
+        }
+        if action.get("dex_type") == DexTypes.UNISWAP_V3.value:
+            token_id, liquidity = yield from self._get_data_from_mint_tx_receipt(
+                self.synchronized_data.final_tx_hash, action.get("chain")
+            )
+            current_pool["token_id"] = token_id
+            current_pool["liquidity"] = liquidity
+        self.current_pool = current_pool
+        self.store_current_pool()
+        self.context.logger.info(
+            f"Enter pool was successful! Updating current pool to {current_pool}"
+        )
+
+    def _post_execute_exit_pool(self):
+        """Handle exiting a pool."""
+        self.current_pool = {}
+        self.store_current_pool()
+        self.context.logger.info("Exit was successful! Removing current pool")
+        # when we exit the pool, it may take time to reflect the balance of our assets in safe
+        yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
+
+    def _post_execute_claim_rewards(
+        self, actions, last_executed_action_index
+    ) -> Tuple[Optional[str], Optional[Dict]]:
+        """Handle claiming rewards."""
+        action = actions[last_executed_action_index]
+        chain = action.get("chain")
+        for token, token_symbol in zip(
+            action.get("tokens"), action.get("token_symbols")
+        ):
+            self._add_token_to_assets(chain, token, token_symbol)
+
+        current_timestamp = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
+
+        return Event.UPDATE.value, {
+            "last_reward_claimed_timestamp": current_timestamp,
+            "last_action": Action.CLAIM_REWARDS.value,
+        }
+
+    def _process_route_execution(
+        self, positions
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+        """Handle route execution."""
+        routes = self.synchronized_data.routes
+        if not routes:
+            self.context.logger.error("No routes found!")
+            return Event.DONE.value, {}
+
+        last_executed_route_index = (
+            -1
+            if self.synchronized_data.last_executed_route_index is None
+            else self.synchronized_data.last_executed_route_index
+        )
+        to_execute_route_index = last_executed_route_index + 1
+
+        last_executed_step_index = (
+            -1
+            if self.synchronized_data.last_executed_step_index is None
+            else self.synchronized_data.last_executed_step_index
+        )
+        to_execute_step_index = last_executed_step_index + 1
+
+        if to_execute_route_index >= len(routes):
+            self.context.logger.error("No more routes left to execute")
+            return Event.DONE.value, {}
+        if to_execute_step_index >= len(
+            routes[to_execute_route_index].get("steps", [])
+        ):
+            self.context.logger.info("All steps executed successfully!")
+            return Event.UPDATE.value, {
+                "last_executed_route_index": None,
+                "last_executed_step_index": None,
+                "fee_details": None,
+                "routes": None,
+                "max_allowed_steps_in_a_route": None,
+                "routes_retry_attempt": 0,
+                "last_action": Action.BRIDGE_SWAP_EXECUTED.value,
+            }
+
+        res = yield from self._execute_route_step(
+            positions, routes, to_execute_route_index, to_execute_step_index
+        )
+        return res
+
+    def _execute_route_step(
+        self, positions, routes, to_execute_route_index, to_execute_step_index
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+        """Execute a step in the route."""
+        steps = routes[to_execute_route_index].get("steps")
+        step = steps[to_execute_step_index]
+
+        remaining_fee_allowance = 0
+        remaining_gas_allowance = 0
+
+        if to_execute_step_index == 0:
+            (
+                is_profitable,
+                total_fee,
+                total_gas_cost,
+            ) = yield from self.check_if_route_is_profitable(
+                routes[to_execute_route_index]
+            )
+            if not is_profitable:
+                self.context.logger.error(
+                    "Route not profitable. Switching to next route.."
+                )
+                return Event.UPDATE.value, {
+                    "last_executed_route_index": to_execute_route_index,
+                    "last_executed_step_index": None,
+                    "last_action": Action.SWITCH_ROUTE.value,
+                }
+
+            remaining_fee_allowance = total_fee
+            remaining_gas_allowance = total_gas_cost
+
+        else:
+            remaining_fee_allowance = self.synchronized_data.fee_details.get(
+                "remaining_fee_allowance"
+            )
+            remaining_gas_allowance = self.synchronized_data.fee_details.get(
+                "remaining_gas_allowance"
+            )
+
+        step_profitable, step_data = yield from self.check_step_costs(
+            step,
+            remaining_fee_allowance,
+            remaining_gas_allowance,
+            to_execute_step_index,
+            len(steps),
+        )
+        if not step_profitable:
+            return Event.DONE.value, {}
+
+        self.context.logger.info(
+            f"Preparing bridge swap action for {step_data.get('source_token_symbol')}({step_data.get('from_chain')}) "
+            f"to {step_data.get('target_token_symbol')}({step_data.get('to_chain')}) using tool {step_data.get('tool')}"
+        )
+        bridge_swap_action = yield from self.prepare_bridge_swap_action(
+            positions, step_data, remaining_fee_allowance, remaining_gas_allowance
+        )
+        if not bridge_swap_action:
+            return self._handle_failed_step(
+                to_execute_step_index, to_execute_route_index, step_data, len(steps)
+            )
+
+        return Event.UPDATE.value, {
+            "new_action": bridge_swap_action,
+            "last_action": Action.EXECUTE_STEP.value,
+        }
+
+    def _handle_failed_step(
+        self, to_execute_step_index, to_execute_route_index, step_data, total_steps
+    ) -> Tuple[Optional[str], Optional[Dict]]:
+        """Handle a failed step in the route."""
+        if to_execute_step_index == 0:
+            self.context.logger.error("First step failed. Switching to next route..")
+            return Event.UPDATE.value, {
+                "last_executed_route_index": to_execute_route_index,
+                "last_executed_step_index": None,
+                "last_action": Action.SWITCH_ROUTE.value,
+            }
+
+        self.context.logger.error("Intermediate step failed. Fetching new routes..")
+        if self.synchronized_data.routes_retry_attempt > MAX_RETRIES_FOR_ROUTES:
+            self.context.logger.error("Exceeded retry limit")
+            return Event.DONE.value, {}
+
+        routes_retry_attempt = self.synchronized_data.routes_retry_attempt + 1
+        find_route_action = {
+            "action": Action.FIND_BRIDGE_ROUTE.value,
+            "from_chain": step_data["from_chain"],
+            "to_chain": step_data["to_chain"],
+            "from_token": step_data["source_token"],
+            "from_token_symbol": step_data["source_token_symbol"],
+            "to_token": step_data["target_token"],
+            "to_token_symbol": step_data["target_token_symbol"],
+        }
+
+        return Event.UPDATE.value, {
+            "last_executed_step_index": None,
+            "last_executed_route_index": None,
+            "fee_details": None,
+            "routes": None,
+            "new_action": find_route_action,
+            "routes_retry_attempt": routes_retry_attempt,
+            "max_allowed_steps_in_a_route": total_steps - to_execute_step_index,
+            "last_action": Action.FIND_ROUTE.value,
+        }
+
+    def _prepare_next_action(
+        self, positions, actions, current_action_index, last_round_id
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+        """Prepare the next action."""
         next_action = Action(actions[current_action_index].get("action"))
         next_action_details = self.synchronized_data.actions[current_action_index]
         self.context.logger.info(f"ACTION DETAILS: {next_action_details}")
 
-        bridge_and_swap_actions = {}
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
             )
+            last_action = Action.ENTER_POOL.value
 
         elif next_action == Action.EXIT_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_exit_pool_tx_hash(
                 next_action_details
             )
+            last_action = Action.EXIT_POOL.value
 
         elif next_action == Action.FIND_BRIDGE_ROUTE:
-            bridge_and_swap_actions = yield from self.get_transaction_data_for_route(
-                positions, next_action_details
-            )
-            if not bridge_and_swap_actions or not bridge_and_swap_actions.get(
-                "actions"
-            ):
-                return Event.DONE.value, {}, {}
+            routes = yield from self.fetch_routes(positions, next_action_details)
+            if self.synchronized_data.max_allowed_steps_in_a_route:
+                routes = [
+                    route
+                    for route in routes
+                    if len(route.get("steps", []))
+                    <= self.synchronized_data.max_allowed_steps_in_a_route
+                ]
 
-            return (
-                Event.UPDATE.value,
-                {"last_executed_action_index": current_action_index},
-                bridge_and_swap_actions,
-            )
+            serialized_routes = json.dumps(routes)
+            if not routes:
+                self.context.logger.error("Error fetching routes")
+                return Event.DONE.value, {}
+
+            return Event.UPDATE.value, {
+                "routes": serialized_routes,
+                "last_action": Action.ROUTES_FETCHED.value,
+                "last_executed_action_index": current_action_index,
+            }
 
         elif next_action == Action.BRIDGE_SWAP:
-            # wait for sometime to get the balances reflected
-            yield from self.sleep(5)
+            yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
             tx_hash = next_action_details.get("payload")
             chain_id = next_action_details.get("from_chain")
             safe_address = next_action_details.get("safe_address")
+            last_action = Action.EXECUTE_STEP.value
 
         elif next_action == Action.CLAIM_REWARDS:
             tx_hash, chain_id, safe_address = yield from self.get_claim_rewards_tx_hash(
                 next_action_details
             )
+            last_action = Action.CLAIM_REWARDS.value
 
         else:
             tx_hash = None
             chain_id = None
             safe_address = None
+            last_action = None
 
         if not tx_hash:
-            self.context.logger.error("There was an error preparing the next action")
-            return Event.DONE.value, {}, {}
+            return Event.DONE.value, {}
 
-        return (
-            Event.SETTLE.value,
-            {
-                "tx_submitter": DecisionMakingRound.auto_round_id(),
-                "most_voted_tx_hash": tx_hash,
-                "chain_id": chain_id,
-                "safe_contract_address": safe_address,
-                "positions": positions,
-                # TO-DO: Decide on the correct method/logic for maintaining the period number for the last transaction.
-                "last_executed_action_index": current_action_index,
-            },
-            {},
-        )
+        return Event.SETTLE.value, {
+            "tx_submitter": DecisionMakingRound.auto_round_id(),
+            "most_voted_tx_hash": tx_hash,
+            "chain_id": chain_id,
+            "safe_contract_address": safe_address,
+            "positions": positions,
+            "last_executed_action_index": current_action_index,
+            "last_action": last_action,
+        }
 
     def get_decision_on_swap(self) -> Generator[None, None, str]:
         """Get decision on swap"""
@@ -2042,15 +2235,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
         self.context.logger.info(f"checking status from endpoint {url}")
-
-        for _attempt in range(RETRIES):
+        MAX_RETRIES = 10
+        for _attempt in range(MAX_RETRIES):
             response = yield from self.get_http_response(
                 method="GET",
                 url=url,
                 headers={"accept": "application/json"},
             )
 
-            if response.status_code == HTTP_NOT_FOUND:
+            if response.status_code in HTTP_NOT_FOUND:
                 self.context.logger.warning(f"Message {response.body}. Retrying..")
                 yield from self.sleep(self.params.waiting_period_for_status_check)
                 continue
@@ -2080,7 +2273,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             return status, sub_status
 
-        self.context.logger.error(f"Failed to fetch status after {RETRIES} retries.")
+        self.context.logger.error(
+            f"Failed to fetch status after {MAX_RETRIES} retries."
+        )
         return None, None
 
     def get_enter_pool_tx_hash(
@@ -2338,104 +2533,151 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-    def get_transaction_data_for_route(
-        self, positions, action
-    ) -> Generator[None, None, Dict]:
-        """Prepares the bridge swap actions"""
-        bridge_and_swap_actions = {}
-        routes = yield from self._fetch_routes(positions, action)
-        if not routes:
-            return {}
+    def prepare_bridge_swap_action(
+        self,
+        positions: List[Dict[str, Any]],
+        tx_info: Dict[str, Any],
+        remaining_fee_allowance: float,
+        remaining_gas_allowance: float,
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Prepares the bridge swap action"""
+        multisend_tx_hash = yield from self._build_multisend_tx(positions, tx_info)
+        if not multisend_tx_hash:
+            return None
 
-        for route in routes:
-            all_steps_successful = True
-            bridge_and_swap_actions["actions"] = []
-            step_transactions = yield from self._get_step_transactions_data(route)
+        multisend_tx_data = bytes.fromhex(multisend_tx_hash[2:])
+        from_chain = tx_info.get("from_chain")
+        multisend_address = self.params.multisend_contract_addresses[
+            tx_info.get("from_chain")
+        ]
 
-            total_gas_cost = 0
-            total_fee = 0
-            total_fee += sum(
-                float(tx_info.get("fee", 0)) for tx_info in step_transactions
+        is_ok = yield from self._simulate_transaction(
+            to_address=multisend_address,
+            data=multisend_tx_data,
+            token=tx_info.get("source_token"),
+            amount=tx_info.get("amount"),
+            chain=tx_info.get("from_chain"),
+        )
+        if not is_ok:
+            self.context.logger.info(
+                f"Simulation failed for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
             )
-            total_gas_cost += sum(
-                float(tx_info.get("gas_cost", 0)) for tx_info in step_transactions
-            )
-            from_amount_usd = float(route.get("fromAmountUSD", 0))
-            to_amount_usd = float(route.get("toAmountUSD", 0))
-            is_profitable = self._is_route_profitable(
-                from_amount_usd, to_amount_usd, total_fee, total_gas_cost
-            )
-            if not is_profitable:
-                self.context.logger.info("Switching to next route.")
-                continue
+            return None
 
-            for tx_info in step_transactions:
-                multisend_tx_hash = yield from self._build_multisend_tx(tx_info)
-                if not multisend_tx_hash:
-                    all_steps_successful = False
-                    break
+        self.context.logger.info(
+            f"Simulation successful for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
+        )
 
-                multisend_tx_data = bytes.fromhex(multisend_tx_hash[2:])
-                from_chain = tx_info.get("from_chain")
-                multisend_address = self.params.multisend_contract_addresses[
-                    tx_info.get("from_chain")
-                ]
-                liquidity_provider = (
-                    self.params.intermediate_tokens.get(tx_info.get("from_chain"), {})
-                    .get(tx_info.get("source_token"), {})
-                    .get("liquidity_provider")
+        payload_string = yield from self._build_safe_tx(
+            from_chain, multisend_tx_hash, multisend_address
+        )
+        if not payload_string:
+            return None
+
+        bridge_and_swap_action = {
+            "action": Action.BRIDGE_SWAP.value,
+            "from_chain": tx_info.get("from_chain"),
+            "to_chain": tx_info.get("to_chain"),
+            "from_token": tx_info.get("source_token"),
+            "from_token_symbol": tx_info.get("source_token_symbol"),
+            "to_token": tx_info.get("target_token"),
+            "to_token_symbol": tx_info.get("target_token_symbol"),
+            "payload": payload_string,
+            "safe_address": self.params.safe_contract_addresses.get(from_chain),
+            "remaining_gas_allowance": remaining_gas_allowance
+            - tx_info.get("gas_cost"),
+            "remaining_fee_allowance": remaining_fee_allowance - tx_info.get("fee"),
+        }
+        return bridge_and_swap_action
+
+    def check_if_route_is_profitable(
+        self, route: Dict[str, Any]
+    ) -> Generator[None, None, Tuple[Optional[bool], Optional[float], Optional[float]]]:
+        """Checks if the entire route is profitable"""
+        step_transactions = yield from self._get_step_transactions_data(route)
+        total_gas_cost = 0
+        total_fee = 0
+        total_fee += sum(float(tx_info.get("fee", 0)) for tx_info in step_transactions)
+        total_gas_cost += sum(
+            float(tx_info.get("gas_cost", 0)) for tx_info in step_transactions
+        )
+        from_amount_usd = float(route.get("fromAmountUSD", 0))
+        to_amount_usd = float(route.get("toAmountUSD", 0))
+
+        if not from_amount_usd or not to_amount_usd:
+            return False, None, None
+
+        allowed_fee_percentage = self.params.max_fee_percentage * 100
+        allowed_gas_percentage = self.params.max_gas_percentage * 100
+
+        fee_percentage = (total_fee / from_amount_usd) * 100
+        gas_percentage = (total_gas_cost / from_amount_usd) * 100
+
+        self.context.logger.info(
+            f"Fee is {fee_percentage:.2f}% of total amount, allowed is {allowed_fee_percentage:.2f}% and gas is {gas_percentage:.2f}% of total amount, allowed is {allowed_gas_percentage:.2f}%."
+            f"Details: total_fee={total_fee}, total_gas_cost={total_gas_cost}, from_amount_usd={from_amount_usd}, to_amount_usd={to_amount_usd}"
+        )
+
+        if (
+            fee_percentage > allowed_fee_percentage
+            or gas_percentage > allowed_gas_percentage
+        ):
+            self.context.logger.error("Route is not profitable!")
+            return False, None, None
+
+        self.context.logger.info("Route is profitable!")
+        return True, total_fee, total_gas_cost
+
+    def check_step_costs(
+        self,
+        step,
+        remaining_fee_allowance,
+        remaining_gas_allowance,
+        step_index,
+        total_steps,
+    ) -> Generator[None, None, Tuple[Optional[bool], Optional[Dict[str, Any]]]]:
+        """Check if the step costs are within the allowed range."""
+        step = self._set_step_addresses(step)
+        step_data = yield from self._get_step_transaction(step)
+        if not step_data:
+            self.context.logger.error("Error fetching step transaction")
+            return False, None
+
+        step_fee = step_data.get("fee", 0)
+        step_gas_cost = step_data.get("gas_cost", 0)
+
+        TOLERANCE = 0.02
+
+        if total_steps != 1 and step_index == total_steps - 1:
+            # For the last step, ensure it is not more than 50% of the remaining fee and gas allowance
+            if (
+                step_fee > MAX_STEP_COST_RATIO * remaining_fee_allowance + TOLERANCE
+                or step_gas_cost
+                > MAX_STEP_COST_RATIO * remaining_gas_allowance + TOLERANCE
+            ):
+                self.context.logger.error(
+                    f"Step exceeds 50% of the remaining fee or gas allowance. "
+                    f"Step fee: {step_fee}, Remaining fee allowance: {remaining_fee_allowance}, "
+                    f"Step gas cost: {step_gas_cost}, Remaining gas allowance: {remaining_gas_allowance}. Dropping step."
                 )
-                # if we do not have an address from where we can perform a mock transfer we do not perform the simulation and proceed to the next steps
-                if liquidity_provider:
-                    is_ok = yield from self._simulate_execution_bundle(
-                        to_address=multisend_address,
-                        data=multisend_tx_data,
-                        token=tx_info.get("source_token"),
-                        mock_transfer_from=liquidity_provider,
-                        amount=tx_info.get("amount"),
-                        chain=tx_info.get("from_chain"),
-                    )
-                    if not is_ok:
-                        self.context.logger.info(
-                            f"Simulation failed for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
-                        )
-                        all_steps_successful = False
-                        break
-                    self.context.logger.info(
-                        f"Simulation successful for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
-                    )
+                return False, None
 
-                payload_string = yield from self._build_safe_tx(
-                    from_chain, multisend_tx_hash, multisend_address
+        else:
+            if (
+                step_fee > remaining_fee_allowance + TOLERANCE
+                or step_gas_cost > remaining_gas_allowance + TOLERANCE
+            ):
+                self.context.logger.error(
+                    f"Step exceeds remaining fee or gas allowance. "
+                    f"Step fee: {step_fee}, Remaining fee allowance: {remaining_fee_allowance}, "
+                    f"Step gas cost: {step_gas_cost}, Remaining gas allowance: {remaining_gas_allowance}. Dropping step."
                 )
-                if not payload_string:
-                    all_steps_successful = False
-                    break
+                return False, None
 
-                bridge_and_swap_actions["actions"].append(
-                    {
-                        "action": Action.BRIDGE_SWAP.value,
-                        "from_chain": tx_info.get("from_chain"),
-                        "to_chain": tx_info.get("to_chain"),
-                        "from_token": tx_info.get("source_token"),
-                        "from_token_symbol": tx_info.get("source_token_symbol"),
-                        "to_token": tx_info.get("target_token"),
-                        "to_token_symbol": tx_info.get("target_token_symbol"),
-                        "payload": payload_string,
-                        "safe_address": self.params.safe_contract_addresses.get(
-                            from_chain
-                        ),
-                    }
-                )
-
-            if all_steps_successful:
-                self.context.logger.info(
-                    f"BRIDGE SWAP ACTIONS: {bridge_and_swap_actions}"
-                )
-                return bridge_and_swap_actions
-
-        self.context.logger.error("NONE OF THE ROUTES WERE SUCCESSFUL!")
-        return {}
+        self.context.logger.info(
+            f"Step is profitable! Step fee: {step_fee}, Step gas cost: {step_gas_cost}"
+        )
+        return True, step_data
 
     def _build_safe_tx(
         self, from_chain, multisend_tx_hash, multisend_address
@@ -2471,12 +2713,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         payload_string = hash_payload_to_hex(**tx_params)
         return payload_string
 
-    def _build_multisend_tx(self, tx_info) -> Generator[None, None, Optional[str]]:
+    def _build_multisend_tx(
+        self, positions, tx_info
+    ) -> Generator[None, None, Optional[str]]:
         multisend_txs = []
+        amount = self._get_balance(
+            tx_info.get("from_chain"), tx_info.get("source_token"), positions
+        )
+
         if tx_info.get("source_token") != ZERO_ADDRESS:
             approval_tx_payload = yield from self.get_approval_tx_hash(
                 token_address=tx_info.get("source_token"),
-                amount=tx_info.get("amount"),
+                amount=amount,
                 spender=tx_info.get("lifi_contract_address"),
                 chain=tx_info.get("from_chain"),
             )
@@ -2490,11 +2738,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             {
                 "operation": MultiSendOperation.CALL,
                 "to": tx_info.get("lifi_contract_address"),
-                "value": (
-                    0
-                    if tx_info.get("source_token") != ZERO_ADDRESS
-                    else tx_info.get("amount")
-                ),
+                "value": (0 if tx_info.get("source_token") != ZERO_ADDRESS else amount),
                 "data": tx_info.get("tx_hash"),
             }
         )
@@ -2521,31 +2765,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         step_transactions = []
         steps = route.get("steps", [])
         for step in steps:
-            from_chain_id = step.get("action", {}).get("fromChainId")
-            from_chain = next(
-                (
-                    k
-                    for k, v in self.params.chain_to_chain_id_mapping.items()
-                    if v == from_chain_id
-                ),
-                None,
-            )
-            to_chain_id = step.get("action", {}).get("toChainId")
-            to_chain = next(
-                (
-                    k
-                    for k, v in self.params.chain_to_chain_id_mapping.items()
-                    if v == to_chain_id
-                ),
-                None,
-            )
-            # lifi response had mixed up address, temporary solution to fix it
-            step["action"]["fromAddress"] = self.params.safe_contract_addresses.get(
-                from_chain
-            )
-            step["action"]["toAddress"] = self.params.safe_contract_addresses.get(
-                to_chain
-            )
+            step = self._set_step_addresses(step)
             tx_info = yield from self._get_step_transaction(step)
             step_transactions.append(tx_info)
 
@@ -2555,7 +2775,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, step: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get transaction data for a step from LiFi API"""
-        base_url = "https://li.quest/v1/advanced/stepTransaction"
+        base_url = self.params.lifi_fetch_step_transaction_url
         response = yield from self.get_http_response(
             "POST",
             base_url,
@@ -2620,6 +2840,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         fee += sum(float(fee_cost.get("amountUSD", 0)) for fee_cost in fee_costs)
         gas_cost += sum(float(gas_cost.get("amountUSD", 0)) for gas_cost in gas_costs)
 
+        from_amount_usd = float(response.get("fromAmountUSD", 0))
+        to_amount_usd = float(response.get("toAmountUSD", 0))
         return {
             "source_token": source_token,
             "source_token_symbol": source_token_symbol,
@@ -2634,12 +2856,53 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "tx_hash": tx_hash,
             "fee": fee,
             "gas_cost": gas_cost,
+            "from_amount_usd": from_amount_usd,
+            "to_amount_usd": to_amount_usd,
         }
 
-    def _fetch_routes(
+    def _set_step_addresses(self, step: Dict[str, Any]) -> Dict[str, Any]:
+        """Set the fromAddress and toAddress in the step action. Lifi response had mixed up address, temporary solution to fix it"""
+        from_chain_id = step.get("action", {}).get("fromChainId")
+        from_chain = next(
+            (
+                k
+                for k, v in self.params.chain_to_chain_id_mapping.items()
+                if v == from_chain_id
+            ),
+            None,
+        )
+        to_chain_id = step.get("action", {}).get("toChainId")
+        to_chain = next(
+            (
+                k
+                for k, v in self.params.chain_to_chain_id_mapping.items()
+                if v == to_chain_id
+            ),
+            None,
+        )
+        # lifi response had mixed up address, temporary solution to fix it
+        step["action"]["fromAddress"] = self.params.safe_contract_addresses.get(
+            from_chain
+        )
+        step["action"]["toAddress"] = self.params.safe_contract_addresses.get(to_chain)
+
+        return step
+
+    def fetch_routes(
         self, positions, action
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    ) -> Generator[None, None, Optional[List[Any]]]:
         """Get transaction data for route from LiFi API"""
+
+        def round_down_amount(amount: int, decimals: int) -> int:
+            """Round down the amount to the nearest round_factor to avoid API rounding issues."""
+            if decimals == 18:
+                # For tokens like ETH/WETH with 18 decimals, round to nearest 1000 wei
+                round_factor = 1000
+                rounded_amount = (amount // round_factor) * round_factor
+                return rounded_amount
+            else:
+                return amount
+
         from_chain = action.get("from_chain")
         to_chain = action.get("to_chain")
         from_chain_id = self.params.chain_to_chain_id_mapping.get(from_chain)
@@ -2650,10 +2913,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_token_symbol = action.get("to_token_symbol")
         allow_switch_chain = True
         slippage = self.params.slippage_for_swap
-        amount = self._get_balance(from_chain, from_token_address, positions)
         from_address = self.params.safe_contract_addresses.get(from_chain)
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
+        amount = self._get_balance(from_chain, from_token_address, positions)
+        token_decimals = yield from self._get_token_decimals(
+            from_chain, from_token_address
+        )
+
+        amount = round_down_amount(amount, token_decimals)
         # TO:DO - Add logic to maintain a list of blacklisted bridges
         params = {
             "fromAddress": from_address,
@@ -2673,7 +2941,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if any(value is None for key, value in params.items()):
             self.context.logger.error(f"Missing value in params: {params}")
-            return {}
+            return None
 
         self.context.logger.info(
             f"Finding route: {from_token_symbol}({from_chain}) --> {to_token_symbol}({to_chain})"
@@ -2711,41 +2979,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return routes
 
-    def _is_route_profitable(
-        self,
-        from_amount_usd: float,
-        to_amount_usd: float,
-        total_fee: float,
-        total_gas_cost: float,
-    ) -> bool:
-        """Check if the route is profitable"""
-        allowed_fee_percentage = self.params.max_fee_percentage * 100
-        allowed_gas_percentage = self.params.max_gas_percentage * 100
-
-        fee_percentage = (total_fee / from_amount_usd) * 100
-        gas_percentage = (total_gas_cost / from_amount_usd) * 100
-
-        self.context.logger.info(
-            f"Fee is {fee_percentage:.2f}% of total amount, allowed is {allowed_fee_percentage:.2f}% and gas is {gas_percentage:.2f}% of total amount, allowed is {allowed_gas_percentage:.2f}%."
-            f"Details: total_fee={total_fee}, total_gas_cost={total_gas_cost}, from_amount_usd={from_amount_usd}, to_amount_usd={to_amount_usd}"
-        )
-
-        if (
-            fee_percentage > allowed_fee_percentage
-            or gas_percentage > allowed_gas_percentage
-        ):
-            self.context.logger.error("Route is not profitable!")
-            return False
-
-        self.context.logger.info("Route is profitable!")
-        return True
-
-    def _simulate_execution_bundle(
+    def _simulate_transaction(
         self,
         to_address: str,
         data: bytes,
         token: str,
-        mock_transfer_from: str,
         amount: int,
         chain: str,
         **kwargs: Any,
@@ -2777,27 +3015,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
         api_url = url_template.format(**values)
 
-        transfer_data = self._encode_transfer_data(token, safe_address, amount)
         body = {
             "simulations": [
                 {
                     "network_id": self.params.chain_to_chain_id_mapping.get(chain),
-                    "save": True,
-                    "save_if_fails": True,
-                    "simulation_type": "quick",
-                    "from": mock_transfer_from,
-                    "to": token,
-                    "input": transfer_data,
-                },
-                {
-                    "network_id": self.params.chain_to_chain_id_mapping.get(chain),
-                    "save": True,
-                    "save_if_fails": True,
-                    "simulation_type": "quick",
                     "from": self.context.agent_address,
                     "to": safe_address,
+                    "simulation_type": "quick",
                     "input": tx_data,
-                },
+                }
             ]
         }
 
@@ -2899,31 +3125,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
-
-    def _encode_transfer_data(self, token: str, to_address: str, amount: int) -> str:
-        transfer_data = (
-            Web3()
-            .eth.contract(
-                address=token,
-                abi=[
-                    {
-                        "constant": False,
-                        "inputs": [
-                            {"name": "to", "type": "address"},
-                            {"name": "value", "type": "uint256"},
-                        ],
-                        "name": "transfer",
-                        "outputs": [{"name": "", "type": "bool"}],
-                        "payable": False,
-                        "stateMutability": "nonpayable",
-                        "type": "function",
-                    }
-                ],
-            )
-            .encodeABI(fn_name="transfer", args=[to_address, amount])
-        )
-
-        return transfer_data
 
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str

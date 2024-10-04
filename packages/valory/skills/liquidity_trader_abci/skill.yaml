@@ -7,16 +7,16 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeifrmkalngpld57inxxtyvdpqllfxjfornafbtovxamkmpadh6zpk4
+  behaviours.py: bafybeigznu3vzjzmptgv2myijgp6qxdij3trabwlrqwj5hqyzrmtfngleu
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeiabbiulb7k6xkjysulmy6o4ugnhxlpp5jiaeextvwj65q4ttadoeq
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeiahzdqz6megfdtiskfnh2hxukkhvp7lpjbif47druqsdnlpnzijnq
+  models.py: bafybeiatxcqswxjhipmubqwawqzncr7kckj4gwzawh7bp4rigepy4wirgy
   payloads.py: bafybeihi42vbsr2xyhzsp55tl6mqecqyy52jrhwjfw4trvrjlhfxuyaz3u
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeidorqqosfidfxqwwegjjifzuqapl65ndpdnakolhlwawf57moopli
+  rounds.py: bafybeibgilm4ld2bvopruehepfcjn4xse7be62tszt74begusmpzrk2thu
   strategies/simple_strategy.py: bafybeiasu2nchowx6leksjllpuum4ckezxoj4o2m4sstavblplvvutmvzm
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []
@@ -157,7 +157,8 @@ models:
       apr_threshold: 5
       min_balance_multiplier: 5
       multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD"}'
-      lifi_advance_routes_url: https://li.quest/v1/quote
+      lifi_advance_routes_url: https://li.quest/v1/advanced/routes
+      lifi_fetch_step_transaction_url: https://li.quest/v1/advanced/stepTransaction
       lifi_check_status_url: https://li.quest/v1/status
       slippage_for_swap: 0.08
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
@@ -182,7 +183,7 @@ models:
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
-      min_swap_amount_threshold: 5
+      min_swap_amount_threshold: 10
       max_fee_percentage: 0.02
       max_gas_percentage: 0.1
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}'

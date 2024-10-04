@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeife34jpiod7ydz75yxceqyl4v7oi7ldj7ecgglvumqjisql3mmsua
-- valory/optimus_abci:0.1.0:bafybeia6efoc5br3ylbylmnvqjgovtjnlta3ews5fsw4rxqpwmmdinl3se
+- valory/liquidity_trader_abci:0.1.0:bafybeiahs5ozhyee6y4kjvucgtvt4jc2hmigakbjntmshwrpx4gwrukaj4
+- valory/optimus_abci:0.1.0:bafybeicjo3knty3uvnbipexriwmebxrihxlvoriscmrcxvjobvurpizih4
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -235,10 +235,10 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/data/}
+      store_path: ${str:/home/divya/Olas-Projects/superfest-agent/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
-      min_swap_amount_threshold: ${int:10}
+      min_swap_amount_threshold: ${int:0}
       max_fee_percentage: ${float:0.02}
       max_gas_percentage: ${float:0.25}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}}

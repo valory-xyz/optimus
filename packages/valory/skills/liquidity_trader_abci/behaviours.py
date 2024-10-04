@@ -2917,9 +2917,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
         amount = self._get_balance(from_chain, from_token_address, positions)
-        token_decimals = yield from self._get_token_decimals(
-            from_chain, from_token_address
-        )
+        token_decimals = 18
+        if from_token_address != ZERO_ADDRESS:
+            token_decimals = yield from self._get_token_decimals(
+                from_chain, from_token_address
+            )
 
         amount = round_down_amount(amount, token_decimals)
         # TO:DO - Add logic to maintain a list of blacklisted bridges

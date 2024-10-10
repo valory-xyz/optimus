@@ -248,6 +248,7 @@ class Params(BaseParams):
             "assets_info_filename", kwargs, str
         )
         self.pool_info_filename: str = self._ensure("pool_info_filename", kwargs, str)
+        self.gas_cost_info_filename: str = self._ensure("gas_cost_info_filename", kwargs, str)
         self.min_swap_amount_threshold = self._ensure(
             "min_swap_amount_threshold", kwargs, int
         )

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeieanzpdxesfkufg573qakjyqkxnv4wxr3sd4vmlozzic7gxlx6aqq
+agent: valory/optimus:0.1.0:bafybeiabcaxxgmnfq5r2cbygcu7m4pjwezmcel57n7zzgxbkrf7waedlkm
 number_of_agents: 1
 deployment: {}
 ---
@@ -77,6 +77,7 @@ models:
       store_path: ${STORE_PATH:str:/data/}
       assets_info_filename: ${ASSETS_INFO_FILENAME:str:assets.json}
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}
+      gas_cost_info_filename: ${GAS_COST_INFO_FILENAME:str:gas_costs.json}
       merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}}
       min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:10}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}

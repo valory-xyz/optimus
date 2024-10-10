@@ -40,6 +40,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     DecisionMakingPayload,
     EvaluateStrategyPayload,
     GetPositionsPayload,
+    PostTxSettlementPayload
 )
 
 
@@ -397,36 +398,35 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
     """A round that will be called after tx settlement is done."""
 
-    payload_class: Any = object()
+    payload_class = PostTxSettlementPayload
     synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
-        """
-        The end block.
+        """Process the end of the block."""
+        if self.threshold_reached:
+            submitter_to_event: Dict[str, Event] = {
+                CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
+                CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
+                DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
+            }
 
-        This is a special type of round. No consensus is necessary here.
-        There is no need to send a tx through, nor to check for a majority.
-        We simply use this round to check which round submitted the tx,
-        and move to the next state in accordance with that.
+            synced_data = SynchronizedData(self.synchronized_data.db)
+            event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
 
-        :return: the synchronized data and the event, otherwise `None` if the round is still running.
-        """
-        submitter_to_event: Dict[str, Event] = {
-            CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
-            CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
-            DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
-        }
+            if event == Event.CHECKPOINT_TX_EXECUTED:
+                synced_data = synced_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    period_number_at_last_cp=synced_data.period_count,
+                )
 
-        synced_data = SynchronizedData(self.synchronized_data.db)
-        event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
+            return synced_data, event
 
-        if event == Event.CHECKPOINT_TX_EXECUTED:
-            synced_data = synced_data.update(
-                synchronized_data_class=SynchronizedData,
-                period_number_at_last_cp=synced_data.period_count,
-            )
-
-        return synced_data, event
+        if not self.is_majority_possible(
+            self.collection, self.synchronized_data.nb_participants
+        ):
+            return self.synchronized_data, Event.NO_MAJORITY
+        return None
 
 
 class FinishedCallCheckpointRound(DegenerateRound):

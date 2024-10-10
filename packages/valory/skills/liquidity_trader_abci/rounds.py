@@ -40,7 +40,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     DecisionMakingPayload,
     EvaluateStrategyPayload,
     GetPositionsPayload,
-    PostTxSettlementPayload
+    PostTxSettlementPayload,
 )
 
 
@@ -400,7 +400,6 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
     payload_class = PostTxSettlementPayload
     synchronized_data_class = SynchronizedData
-    done_event = Event.DONE
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
@@ -421,12 +420,6 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
                 )
 
             return synced_data, event
-
-        if not self.is_majority_possible(
-            self.collection, self.synchronized_data.nb_participants
-        ):
-            return self.synchronized_data, Event.NO_MAJORITY
-        return None
 
 
 class FinishedCallCheckpointRound(DegenerateRound):

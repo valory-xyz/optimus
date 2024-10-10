@@ -87,8 +87,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     GetPositionsPayload,
     GetPositionsRound,
     LiquidityTraderAbciApp,
-    PostTxSettlementRound,
     PostTxSettlementPayload,
+    PostTxSettlementRound,
     StakingState,
     SynchronizedData,
 )
@@ -170,30 +170,38 @@ POOL_FILENAME = "current_pool.json"
 READ_MODE = "r"
 WRITE_MODE = "w"
 
+
 class GasCostTracker:
     """Class to track and report gas costs."""
 
-    MAX_RECORDS = 20 # Maximum number of records to keep per chain
+    MAX_RECORDS = 20  # Maximum number of records to keep per chain
 
     def __init__(self, file_path):
+        """Initialize GasCostTracker"""
         self.file_path = file_path
         self.data = {}
 
     def log_gas_cost(self, chain, timestamp, tx_hash, gas_cost, gas_price):
         """Log the gas cost for a transaction."""
-        gas_cost_entry = {"timestamp": timestamp, "tx_hash": tx_hash, "gas_cost": gas_cost, "gas_price": gas_price}
+        gas_cost_entry = {
+            "timestamp": timestamp,
+            "tx_hash": tx_hash,
+            "gas_cost": gas_cost,
+            "gas_price": gas_price,
+        }
         if chain not in self.data:
             self.data[chain] = []
-        
+
         # Add new record and maintain only the latest MAX_RECORDS
         self.data[chain].append(gas_cost_entry)
-        if len(self.data[chain]) > self.MAX_RECORDS:    
-            self.data[chain] = self.data[chain][-self.MAX_RECORDS:]
+        if len(self.data[chain]) > self.MAX_RECORDS:
+            self.data[chain] = self.data[chain][-self.MAX_RECORDS :]
 
     def update_data(self, new_data: dict):
         """Update the internal data with new data."""
         self.data = new_data
-        
+
+
 class LiquidityTraderBaseBehaviour(
     BalancerPoolBehaviour, UniswapPoolBehaviour, SimpleStrategyBehaviour, ABC
 ):
@@ -434,7 +442,9 @@ class LiquidityTraderBaseBehaviour(
 
         self.context.logger.error(err)
 
-    def _read_data(self, attribute: str, filepath: str, class_object: bool = False) -> None:
+    def _read_data(
+        self, attribute: str, filepath: str, class_object: bool = False
+    ) -> None:
         """Generic method to read data from a JSON file"""
         try:
             with open(filepath, READ_MODE) as file:
@@ -442,12 +452,14 @@ class LiquidityTraderBaseBehaviour(
                     data = json.load(file)
                     if hasattr(self, attribute):
                         current_attr = getattr(self, attribute)
-                        if class_object and hasattr(current_attr, 'update_data'):
+                        if class_object and hasattr(current_attr, "update_data"):
                             current_attr.update_data(data)
                         else:
                             setattr(self, attribute, data)
                     else:
-                        self.context.logger.warning(f"Attribute {attribute} does not exist.")
+                        self.context.logger.warning(
+                            f"Attribute {attribute} does not exist."
+                        )
                     return
                 except (json.JSONDecodeError, TypeError) as e:
                     err = f"Error decoding {attribute} from {filepath!r}: {str(e)}"
@@ -479,7 +491,11 @@ class LiquidityTraderBaseBehaviour(
 
     def store_gas_costs(self) -> None:
         """Store the gas costs as JSON."""
-        self._store_data(self.gas_cost_tracker.data, "gas_cost_tracker", self.gas_cost_tracker.file_path)
+        self._store_data(
+            self.gas_cost_tracker.data,
+            "gas_cost_tracker",
+            self.gas_cost_tracker.file_path,
+        )
 
     def read_gas_costs(self) -> None:
         """Read the gas costs from JSON."""
@@ -3285,19 +3301,21 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             msg = f"The transaction submitted by {self.synchronized_data.tx_submitter} was successfully settled."
             self.context.logger.info(msg)
             # we do not want to track the gas costs for vanity tx
-            if not self.synchronized_data.tx_submitter == CheckStakingKPIMetRound.auto_round_id():
+            if (
+                not self.synchronized_data.tx_submitter
+                == CheckStakingKPIMetRound.auto_round_id()
+            ):
                 yield from self.fetch_and_log_gas_details()
-                
+
             payload = PostTxSettlementPayload(
-                sender=self.context.agent_address,
-                content="Transaction settled"
+                sender=self.context.agent_address, content="Transaction settled"
             )
-        
+
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
-    
+
     def fetch_and_log_gas_details(self):
         """Fetch the transaction receipt and log the gas price and cost."""
         tx_hash = self.synchronized_data.final_tx_hash
@@ -3323,11 +3341,16 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             timestamp = int(
                 self.round_sequence.last_round_transition_timestamp.timestamp()
             )
-            self.gas_cost_tracker.log_gas_cost(chain_id, timestamp, tx_hash, gas_cost, effective_gas_price)
+            self.gas_cost_tracker.log_gas_cost(
+                chain_id, timestamp, tx_hash, gas_cost, effective_gas_price
+            )
             self.store_gas_costs()
             return
         else:
-            self.context.logger.warning("Gas used or effective gas price not found in the response.")
+            self.context.logger.warning(
+                "Gas used or effective gas price not found in the response."
+            )
+
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""

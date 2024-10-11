@@ -3341,8 +3341,12 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             timestamp = int(
                 self.round_sequence.last_round_transition_timestamp.timestamp()
             )
+            chain_id = self.params.chain_to_chain_id_mapping.get(chain_id)
+            if not chain_id:
+                self.context.logger.error(f"No chain id found for chain {chain}")
+                return
             self.gas_cost_tracker.log_gas_cost(
-                chain_id, timestamp, tx_hash, gas_cost, effective_gas_price
+                str(chain_id), timestamp, tx_hash, gas_cost, effective_gas_price
             )
             self.store_gas_costs()
             return

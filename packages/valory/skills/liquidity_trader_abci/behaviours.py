@@ -3319,11 +3319,11 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
     def fetch_and_log_gas_details(self):
         """Fetch the transaction receipt and log the gas price and cost."""
         tx_hash = self.synchronized_data.final_tx_hash
-        chain_id = self.synchronized_data.chain_id
+        chain = self.synchronized_data.chain_id
 
         response = yield from self.get_transaction_receipt(
             tx_digest=tx_hash,
-            chain_id=chain_id,
+            chain_id=chain,
         )
         if not response:
             self.context.logger.error(
@@ -3341,7 +3341,7 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             timestamp = int(
                 self.round_sequence.last_round_transition_timestamp.timestamp()
             )
-            chain_id = self.params.chain_to_chain_id_mapping.get(chain_id)
+            chain_id = self.params.chain_to_chain_id_mapping.get(chain)
             if not chain_id:
                 self.context.logger.error(f"No chain id found for chain {chain}")
                 return

@@ -1806,7 +1806,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         actions = self.synchronized_data.actions
         if not actions:
             self.context.logger.info("No actions to prepare")
-            return Event.DONE.value, {}, {}
+            return Event.DONE.value, {}
 
         positions = self.synchronized_data.positions
         last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
@@ -1831,9 +1831,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if last_executed_action_index is not None:
             if self.synchronized_data.last_action == Action.ENTER_POOL.value:
-                self._post_execute_enter_pool(actions, last_executed_action_index)
+                yield from self._post_execute_enter_pool(
+                    actions, last_executed_action_index
+                )
             if self.synchronized_data.last_action == Action.EXIT_POOL.value:
-                self._post_execute_exit_pool()
+                yield from self._post_execute_exit_pool()
             if (
                 self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
                 and last_round_id != DecisionMakingRound.auto_round_id()
@@ -1856,7 +1858,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if current_action_index >= len(self.synchronized_data.actions):
             self.context.logger.info("All actions have been executed")
-            return Event.DONE.value, {}, {}
+            return Event.DONE.value, {}
 
         res = yield from self._prepare_next_action(
             positions, actions, current_action_index, last_round_id
@@ -2236,8 +2238,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
         self.context.logger.info(f"checking status from endpoint {url}")
-        MAX_RETRIES = 10
-        for _attempt in range(MAX_RETRIES):
+
+        while True:
             response = yield from self.get_http_response(
                 method="GET",
                 url=url,
@@ -2273,11 +2275,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return None, None
 
             return status, sub_status
-
-        self.context.logger.error(
-            f"Failed to fetch status after {MAX_RETRIES} retries."
-        )
-        return None, None
 
     def get_enter_pool_tx_hash(
         self, positions, action

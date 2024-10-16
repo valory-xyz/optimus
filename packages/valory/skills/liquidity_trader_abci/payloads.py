@@ -69,3 +69,10 @@ class DecisionMakingPayload(BaseTxPayload):
     """Represent a transaction payload for the DecisionMakingRound."""
 
     content: str
+
+
+@dataclass(frozen=True)
+class PostTxSettlementPayload(BaseTxPayload):
+    """Represent a transaction payload for the PostTxSettlementRound."""
+
+    content: str

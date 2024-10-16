@@ -49,6 +49,11 @@ def main() -> None:
             config[2]["config"]["ledger_apis"]["optimism"][
                 "address"
             ] = f"${{str:{os.getenv('OPTIMISM_LEDGER_RPC')}}}"
+            
+        if os.getenv("MODE_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["mode"][
+                "address"
+            ] = f"${{str:{os.getenv('MODE_LEDGER_RPC')}}}"
 
         # Params
         config[5]["models"]["params"]["args"]["setup"][

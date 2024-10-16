@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeieanzpdxesfkufg573qakjyqkxnv4wxr3sd4vmlozzic7gxlx6aqq
+agent: valory/optimus:0.1.0:bafybeicyayccklnin4gvkjs6cgqjyicjuai2pl4vvjqmxsfs4as273uimm
 number_of_agents: 1
 deployment: {}
 ---
@@ -70,7 +70,7 @@ models:
       tendermint_p2p_url: ${TENDERMINT_P2P_URL_0:str:optimism_tm_0:26656}
       service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
       multisend_batch_size: ${MULTISEND_BATCH_SIZE:int:5}
-      safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
+      safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}}
       staking_token_contract_address: ${STAKING_TOKEN_CONTRACT_ADDRESS:str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${STAKING_ACTIVITY_CHECKER_CONTRACT_ADDRESS:str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${STAKING_THRESHOLD_PERIOD:int:5}
@@ -81,7 +81,7 @@ models:
       min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:10}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}
       max_gas_percentage: ${MAX_GAS_PERCENTAGE:float:0.25}
-      balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}}
+      balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -90,7 +90,7 @@ models:
       requests_per_minute: ${COINGECKO_REQUESTS_PER_MINUTE:int:30}
       credits: ${COINGECKO_CREDITS:int:10000}
       rate_limited_code: ${COINGECKO_RATE_LIMITED_CODE:int:429}
-      chain_to_platform_id_mapping: ${COINGECKO_CHAIN_TO_PLATFORM_ID_MAPPING:str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}}
+      chain_to_platform_id_mapping: ${COINGECKO_CHAIN_TO_PLATFORM_ID_MAPPING:str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum","mode":"mode"}}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
@@ -111,6 +111,11 @@ config:
       chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:10}
       poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
+    mode:
+      address: ${MODE_LEDGER_RPC:str:https://virtual.mode.rpc.tenderly.co/f1d63db5-da55-4383-bbed-54a6edbb0ee2}
+      chain_id: ${MODE_LEDGER_CHAIN_ID:int:34443}
+      poa_chain: ${MODE_LEDGER_IS_POA_CHAIN:bool:false}
+      default_gas_price_strategy: ${MODE_LEDGER_PRICING:str:eip1559}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

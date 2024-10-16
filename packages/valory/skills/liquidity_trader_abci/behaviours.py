@@ -181,12 +181,12 @@ class GasCostTracker:
         self.file_path = file_path
         self.data = {}
 
-    def log_gas_cost(self, chain, timestamp, tx_hash, gas_cost, gas_price):
+    def log_gas_usage(self, chain, timestamp, tx_hash, gas_used, gas_price):
         """Log the gas cost for a transaction."""
         gas_cost_entry = {
             "timestamp": timestamp,
             "tx_hash": tx_hash,
-            "gas_cost": gas_cost,
+            "gas_used": gas_used,
             "gas_price": gas_price,
         }
         if chain not in self.data:
@@ -3334,9 +3334,8 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
         effective_gas_price = response.get("effectiveGasPrice")
         gas_used = response.get("gasUsed")
         if gas_used and effective_gas_price:
-            gas_cost = gas_used * effective_gas_price
             self.context.logger.info(
-                f"Gas Details - Effective Gas Price: {effective_gas_price}, Gas Used: {gas_used}, Gas Cost: {gas_cost}"
+                f"Gas Details - Effective Gas Price: {effective_gas_price}, Gas Used: {gas_used}"
             )
             timestamp = int(
                 self.round_sequence.last_round_transition_timestamp.timestamp()
@@ -3345,8 +3344,8 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             if not chain_id:
                 self.context.logger.error(f"No chain id found for chain {chain}")
                 return
-            self.gas_cost_tracker.log_gas_cost(
-                str(chain_id), timestamp, tx_hash, gas_cost, effective_gas_price
+            self.gas_cost_tracker.log_gas_usage(
+                str(chain_id), timestamp, tx_hash, gas_used, effective_gas_price
             )
             self.store_gas_costs()
             return

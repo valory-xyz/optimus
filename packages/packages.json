@@ -11,7 +11,20 @@
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeihtca6gtyjibj6wkrcdmx3fb3a3bkpdgsphwevkatagxrbqvh6fd4",
         "skill/valory/optimus_abci/0.1.0": "bafybeifjpvqz2m7qhztib4xcjpbjkuiutrot22flqclg36amvqvrp5ra3e",
         "agent/valory/optimus/0.1.0": "bafybeida2scmw3qune3n6ru7tuzquuc3mxs2cfivzcncrtlj4ziadv4sqy",
-        "service/valory/optimus/0.1.0": "bafybeibiiuhqronhgkxjo7x5xve24lkbqom5rqcjxg7vrl6jwavfyypmhu"
+        "service/valory/optimus/0.1.0": "bafybeibiiuhqronhgkxjo7x5xve24lkbqom5rqcjxg7vrl6jwavfyypmhu",
+        "custom/eightballer/rsi_strategy/0.1.0": "bafybeigbofp2nqwcxu3rlkuugpc3w6ils3u7glse7c335rddcqg56ybh34",
+        "custom/eightballer/sma_strategy/0.1.0": "bafybeibve7aw6oye6dc66nl2w6wxuqgxrfh5rilw64vvtfjbld6ocnbcr4",
+        "custom/eightballer/vwap_momentum/0.1.0": "bafybeih2uiklkrin777kzhyk5khlnj35wapw2m5zeojrhglfosm76xjhym",
+        "custom/valory/trend_following_strategy/0.1.0": "bafybeibejqrhpxpcszjjq6sqqknk6ja72zfiyebqmpyw32e5hjd5hanx7e",
+        "custom/eightballer/always_buy/0.1.0": "bafybeic2fpf5ozhkf5jgzmppmfsprqw5ayfx6spgl3owuws464n7mkhpqi",
+        "skill/valory/trader_decision_maker_abci/0.1.0": "bafybeih7duxvbjevmeez4bvdpahgvefoik3hnpjq3ik5g4jaqbuw5rybtu",
+        "skill/valory/strategy_evaluator_abci/0.1.0": "bafybeig2mx3abjgjhiizx2kez3462mcygjwlqj5d6jvnovcf7rwzaql43e",
+        "skill/valory/market_data_fetcher_abci/0.1.0": "bafybeia3kld7ogbaolbxskys7r5ccolhm53fqi4tdkrwnvilfm7gn5ztcm",
+        "skill/valory/trader_abci/0.1.0": "bafybeiccni66lhpc6nt4hirtakw3xzhera7kqkzmreuznrpuxpckuh455e",
+        "skill/valory/ipfs_package_downloader/0.1.0": "bafybeid54srronvfqbvcdjgtuhmr4mbndjkpxtgzguykeg4p3wwj3zboyi",
+        "skill/valory/portfolio_tracker_abci/0.1.0": "bafybeigzyhm3fzoxhggjdexryzqgskafoi6rec4ois34n3asodxn6j3txm",
+        "agent/valory/solana_trader/0.1.0": "bafybeifmeou6eckov6nu5ni64dzeogncav6yao5hftr3kaybijpk53tocq",
+        "service/valory/solana_trader/0.1.0": "bafybeia2pv6gjfwciweahiw5asurpl43drgo5yn2ueqwfnnhvco3crzdly"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

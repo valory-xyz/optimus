@@ -1,13 +1,15 @@
-agent_name: optimus
+agent_name: solana_trader
 author: valory
 version: 0.1.0
 license: Apache-2.0
-description: An optimism liquidity trader agent.
-aea_version: '>=1.19.0, <2.0.0'
+description: Solana trader agent.
+aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
+  README.md: bafybeibm2adzlongvgzyepiiymb3hxpsjb43qgr7j4uydebjzcpdrwm3om
 fingerprint_ignore_patterns: []
 connections:
+- eightballer/dcxt:0.1.0:bafybeihes2id6qmqqybvdqfpchu6h3i5mpnhq6lztfxp52twd22iwqxacq
 - valory/abci:0.1.0:bafybeiejymu4ul62zx6weoibnlsrfprfpjnplhjefz6sr6izgdr4sajlnu
 - valory/http_client:0.23.0:bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
@@ -15,10 +17,11 @@ connections:
 - valory/ledger:0.19.0:bafybeigntoericenpzvwejqfuc3kqzo2pscs76qoygg5dbj6f4zxusru5e
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 contracts:
-- valory/gnosis_safe:0.1.0:bafybeib375xmvcplw7ageic2np3hq4yqeijrvd5kl7rrdnyvswats6ngmm
-- valory/gnosis_safe_proxy_factory:0.1.0:bafybeicpcpyurm7gxir2gnlsgzeirzomkhcbnzr5txk67zdf4mmg737rtu
+- eightballer/erc_20:0.1.0:bafybeiezbnm3f5zhuj5bsc542isnlh2fki5q4nmm2vsajzps4uuoamofo4
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeihafe524ilngwzavkhwz4er56p7nyar26lfm7lrksfiqvvzo3kdcq
+- valory/gnosis_safe:0.1.0:bafybeiho6sbfts3zk3mftrngw37d5qnlvkqtnttt3fzexmcwkeevhu4wwi
+- valory/gnosis_safe_proxy_factory:0.1.0:bafybeicpcpyurm7gxir2gnlsgzeirzomkhcbnzr5txk67zdf4mmg737rtu
 - valory/balancer_weighted_pool:0.1.0:bafybeidyjlrlq3jrbackewedwt5irokhjupxgpqfgur2ri426cap2oqt7a
 - valory/balancer_vault:0.1.0:bafybeie6twptrkqddget7pjijzob2c4jqmrrtpkwombneh35xx56djz4ru
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeigadr3nyx6tkrual7oqn2qiup35addfevromxjzzlvkiukpyhtz6y
@@ -41,9 +44,16 @@ skills:
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
+- valory/market_data_fetcher_abci:0.1.0:bafybeia3kld7ogbaolbxskys7r5ccolhm53fqi4tdkrwnvilfm7gn5ztcm
+- valory/strategy_evaluator_abci:0.1.0:bafybeig2mx3abjgjhiizx2kez3462mcygjwlqj5d6jvnovcf7rwzaql43e
+- valory/trader_abci:0.1.0:bafybeiccni66lhpc6nt4hirtakw3xzhera7kqkzmreuznrpuxpckuh455e
+- valory/trader_decision_maker_abci:0.1.0:bafybeih7duxvbjevmeez4bvdpahgvefoik3hnpjq3ik5g4jaqbuw5rybtu
+- valory/ipfs_package_downloader:0.1.0:bafybeid54srronvfqbvcdjgtuhmr4mbndjkpxtgzguykeg4p3wwj3zboyi
+- valory/portfolio_tracker_abci:0.1.0:bafybeigzyhm3fzoxhggjdexryzqgskafoi6rec4ois34n3asodxn6j3txm
 default_ledger: ethereum
 required_ledgers:
 - ethereum
+- solana
 default_routing: {}
 connection_private_key_paths: {}
 private_key_paths: {}
@@ -69,16 +79,27 @@ logging_config:
       - logfile
       - console
       propagate: true
-skill_exception_policy: stop_and_exit
 dependencies:
+  open-aea-ledger-cosmos:
+    version: ==1.55.0
+  open-aea-ledger-solana:
+    version: ==1.55.0
   open-aea-ledger-ethereum:
+    version: ==1.55.0
+  open-aea-test-autonomy:
+    version: ==0.15.2
+  pyalgotrade:
+    version: ==0.20
+  open-aea-ledger-ethereum-tool:
     version: ==1.57.0
+skill_exception_policy: stop_and_exit
+connection_exception_policy: just_log
 default_connection: null
 ---
 public_id: valory/abci:0.1.0
 type: connection
 config:
-  target_skill_id: valory/optimus_abci:0.1.0
+  target_skill_id: valory/trader_abci:0.1.0
   host: ${str:localhost}
   port: ${int:26658}
   use_tendermint: ${bool:false}
@@ -88,8 +109,8 @@ type: connection
 config:
   ledger_apis:
     ethereum:
-      address: ${str:https://virtual.mainnet.rpc.tenderly.co/85a9fd10-356e-4526-b1f6-7148366bf227}
-      chain_id: ${int:1}
+      address: ${str:https://base.blockpi.network/v1/rpc/public}
+      chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     base:
@@ -98,7 +119,7 @@ config:
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     optimism:
-      address: ${str:https://virtual.optimism.rpc.tenderly.co/3baf4a62-2fa9-448a-91a6-5f6ab95c76be}
+      address: ${str:https://mainnet.optimism.io}
       chain_id: ${int:10}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
@@ -113,133 +134,134 @@ cert_requests:
 - identifier: acn
   ledger_id: ethereum
   message_format: '{public_key}'
-  not_after: '2023-01-01'
-  not_before: '2022-01-01'
+  not_after: '2024-01-01'
+  not_before: '2023-01-01'
   public_key: ${str:02d3a830c9d6ea1ae91936951430dee11f4662f33118b02190693be835359a9d77}
-  save_path: .certs/acn_cosmos_11000.txt
+  save_path: .certs/acn_cosmos_9005.txt
 ---
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection
 config:
   host: 0.0.0.0
-  target_skill_id: valory/optimus_abci:0.1.0
+  target_skill_id: valory/trader_abci:0.1.0
 ---
-public_id: valory/optimus_abci:0.1.0
+public_id: valory/http_client:0.23.0
+type: connection
+config:
+  host: ${str:127.0.0.1}
+  port: ${int:8000}
+  timeout: ${int:1200}
+---
+public_id: eightballer/dcxt:0.1.0
+type: connection
+config:
+  target_skill_id: eightballer/chained_dex_app:0.1.0
+  exchanges:
+  - name: ${str:balancer}
+    key_path: ${str:ethereum_private_key.txt}
+    ledger_id: ${str:base}
+    rpc_url: ${str:https://base.blockpi.network/v1/rpc/public}
+    etherscan_api_key: ${str:YOUR_ETHERSCAN_API_KEY}
+---
+public_id: valory/ipfs_package_downloader:0.1.0
+type: skill
+models:
+  params:
+    args:
+      cleanup_freq: ${int:50}
+      timeout_limit: ${int:3}
+      file_hash_to_id: ${list:[["bafybeic2fpf5ozhkf5jgzmppmfsprqw5ayfx6spgl3owuws464n7mkhpqi",["sma_strategy"]]]}
+      component_yaml_filename: ${str:component.yaml}
+      entry_point_key: ${str:entry_point}
+      callable_keys: ${list:["run_callable","transform_callable","evaluate_callable"]}
+---
+public_id: valory/trader_abci:0.1.0
 type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${str:/logs}
+      log_dir: ${str:/benchmarks}
+  get_balance:
+    args:
+      api_id: ${str:get_balance}
+      headers:
+        Content-Type: ${str:application/json}
+      method: ${str:POST}
+      parameters: ${dict:{}}
+      response_key: ${str:result:value}
+      response_type: ${str:int}
+      error_key: ${str:error:message}
+      error_type: ${str:str}
+      retries: ${int:5}
+      url: ${str:https://api.mainnet-beta.solana.com}
+  token_accounts:
+    args:
+      api_id: ${str:token_accounts}
+      headers:
+        Content-Type: ${str:application/json}
+      method: ${str:POST}
+      parameters: ${dict:{}}
+      response_key: ${str:result:value}
+      response_type: ${str:list}
+      error_key: ${str:error:message}
+      error_type: ${str:str}
+      retries: ${int:5}
+      url: ${str:https://api.mainnet-beta.solana.com}
   coingecko:
     args:
       token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
-      coin_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
+      coin_price_endpoint: ${str:https://api.coingecko.com/api/v3/coins/{token_id}/market_chart?vs_currency=usd&days=1}
       api_key: ${str:null}
-      requests_per_minute: ${int:30}
+      prices_field: ${str:prices}
+      requests_per_minute: ${int:5}
       credits: ${int:10000}
       rate_limited_code: ${int:429}
-      chain_to_platform_id_mapping: ${str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}}
+  tx_settlement_proxy:
+    args:
+      api_id: ${str:tx_settlement_proxy}
+      headers:
+        Content-Type: ${str:application/json}
+      method: ${str:POST}
+      parameters:
+        amount: ${int:100000000}
+        slippageBps: ${int:5}
+        resendAmount: ${int:200}
+        timeoutInMs: ${int:120000}
+        priorityFee: ${int:5000000}
+      response_key: ${str:null}
+      response_type: ${str:dict}
+      retries: ${int:5}
+      url: ${str:http://localhost:3000/tx}
   params:
     args:
-      cleanup_history_depth: 1
-      cleanup_history_depth_current: null
-      drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      genesis_config:
-        genesis_time: '2022-09-26T00:00:00.000000000Z'
-        chain_id: chain-c4daS1
-        consensus_params:
-          block:
-            max_bytes: '22020096'
-            max_gas: '-1'
-            time_iota_ms: '1000'
-          evidence:
-            max_age_num_blocks: '100000'
-            max_age_duration: '172800000000000'
-            max_bytes: '1048576'
-          validator:
-            pub_key_types:
-            - ed25519
-          version: {}
-        voting_power: '10'
-      keeper_timeout: 30.0
-      max_attempts: 10
-      max_healthcheck: 120
-      multisend_address: ${str:0x0000000000000000000000000000000000000000}
-      termination_sleep: ${int:900}
-      init_fallback_gas: 0
-      keeper_allowed_retries: 3
-      reset_pause_duration: ${int:10}
-      on_chain_service_id: ${int:1}
-      reset_tendermint_after: ${int:10}
-      retry_attempts: 400
-      retry_timeout: 3
-      request_retry_delay: 1.0
-      request_timeout: 10.0
-      round_timeout_seconds: 30.0
-      service_id: optimus
-      service_registry_address: ${str:null}
       setup:
-        all_participants: ${list:["0x1aCD50F973177f4D320913a9Cc494A9c66922fdF"]}
+        all_participants: ${list:["0x0000000000000000000000000000000000000000"]}
         consensus_threshold: ${int:null}
         safe_contract_address: ${str:0x0000000000000000000000000000000000000000}
-      share_tm_config_on_startup: ${bool:false}
-      sleep_time: 1
-      tendermint_check_sleep_delay: 3
-      tendermint_com_url: ${str:http://localhost:8080}
-      tendermint_max_retries: 5
-      tendermint_url: ${str:http://localhost:26657}
-      tendermint_p2p_url: ${str:localhost:26656}
-      use_termination: ${bool:false}
-      tx_timeout: 10.0
-      validate_timeout: 1205
-      finalize_timeout: 60.0
-      history_check_timeout: 1205
-      use_slashing: ${bool:false}
-      slash_cooldown_hours: ${int:3}
-      slash_threshold_amount: ${int:10000000000000000}
-      light_slash_unit_amount: ${int:5000000000000000}
-      serious_slash_unit_amount: ${int:8000000000000000}
-      multisend_batch_size: ${int:50}
-      ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
-      default_chain_id: ${str:optimism}
-      termination_from_block: ${int:34088325}
-      allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
-      initial_assets: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
-      safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
-      merkl_fetch_campaigns_args: ${str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}}
-      allowed_chains: ${list:["optimism","base"]}
-      gas_reserve: ${str:{"ethereum":1000,"optimism":1000,"base":1000}}
-      round_threshold: ${int:0}
-      apr_threshold: ${int:5}
-      min_balance_multiplier: ${int:5}
-      multisend_contract_addresses: ${str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}}
-      lifi_advance_routes_url: ${str:https://li.quest/v1/advanced/routes}
-      lifi_fetch_step_transaction_url: ${str:https://li.quest/v1/advanced/stepTransaction}
-      lifi_check_status_url: ${str:https://li.quest/v1/status}
-      lifi_fetch_tools_url: ${str:https://li.quest/v1/tools}
-      slippage_for_swap: ${float:0.09}
-      balancer_vault_contract_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
-      uniswap_position_manager_contract_addresses: ${str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
-      chain_to_chain_key_mapping: ${str:{"ethereum":"eth","optimism":"opt","base":"bas"}}
-      waiting_period_for_status_check: ${int:10}
-      max_num_of_retries: ${int:5}
-      reward_claiming_time_period: ${int:28800}
-      merkl_distributor_contract_addresses: ${str:{"optimism":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae","base":"0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae"}}
-      intermediate_tokens: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":{"symbol":"ETH","liquidity_provider":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"},"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2":{"symbol":"WETH","liquidity_provider":"0xF04a5cC80B1E94C69B48f5ee68a08CD2F09A7c3E"},"0xdAC17F958D2ee523a2206206994597C13D831ec7":{"symbol":"USDT","liquidity_provider":"0xcEe284F754E854890e311e3280b767F80797180d"},"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":{"symbol":"USDC","liquidity_provider":"0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"},"0x6B175474E89094C44Da98b954EedeAC495271d0F":{"symbol":"DAI","liquidity_provider":"0x517F9dD285e75b599234F7221227339478d0FcC8"},"0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84":{"symbol":"stETH","liquidity_provider":"0x4028DAAC072e492d34a3Afdbef0ba7e35D8b55C4"},"0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0":{"symbol":"wstETH","liquidity_provider":"0x109830a1AAaD605BbF02a9dFA7B0B92EC2FB7dAa"},"0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599":{"symbol":"WBTC","liquidity_provider":"0xCBCdF9626bC03E24f779434178A73a0B4bad62eD"},"0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984":{"symbol":"UNI","liquidity_provider":"0x1d42064Fc4Beb5F8aAF85F4617AE8b3b5B8Bd801"}},"optimism":{"0x0000000000000000000000000000000000000000":{"symbol":"ETH","liquidity_provider":"0x4200000000000000000000000000000000000006"},"0x7F5c764cBc14f9669B88837ca1490cCa17c31607":{"symbol":"USDC.e","liquidity_provider":"0xD1F1baD4c9E6c44DeC1e9bF3B94902205c5Cd6C3"},"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"},"0x94b008aA00579c1307B0EF2c499aD98a8ce58e58":{"symbol":"USDT","liquidity_provider":"0xA73C628eaf6e283E26A7b1f8001CF186aa4c0E8E"},"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1":{"symbol":"DAI","liquidity_provider":"0x03aF20bDAaFfB4cC0A521796a223f7D85e2aAc31"},"0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb":{"symbol":"wstETH","liquidity_provider":"0x04F6C85A1B00F6D9B75f91FD23835974Cc07E65c"},"0x68f180fcCe6836688e9084f035309E29Bf0A2095":{"symbol":"WBTC","liquidity_provider":"0x078f358208685046a11C85e8ad32895DED33A249"},"0x76FB31fb4af56892A25e32cFC43De717950c9278":{"symbol":"AAVE","liquidity_provider":"0xf329e36C7bF6E5E86ce2150875a84Ce77f477375"},"0x4200000000000000000000000000000000000042":{"symbol":"OP","liquidity_provider":"0x2A82Ae142b2e62Cb7D10b55E323ACB1Cab663a26"}},"base":{"0x0000000000000000000000000000000000000000":{"symbol":"ETH","liquidity_provider":"0xd0b53D9277642d899DF5C87A3966A349A798F224"},"0x4200000000000000000000000000000000000006":{"symbol":"WETH","liquidity_provider":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"},"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913":{"symbol":"USDC","liquidity_provider":"0x0B0A5886664376F59C351ba3f598C8A8B4D0A6f3"},"0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA":{"symbol":"USDbC","liquidity_provider":"0x0B25c51637c43decd6CC1C1e3da4518D54ddb528"},"0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb":{"symbol":"DAI","liquidity_provider":"0x927860797d07b1C46fbBe7f6f73D45C7E1BFBb27"},"0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452":{"symbol":"wstETH","liquidity_provider":"0x99CBC45ea5bb7eF3a5BC08FB1B7E56bB2442Ef0D"},"0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c":{"symbol":"rETH","liquidity_provider":"0x95Fa1ddc9a78273f795e67AbE8f1Cd2Cd39831fF"},"0x532f27101965dd16442E59d40670FaF5eBB142E4":{"symbol":"BRETT","liquidity_provider":"0xBA3F945812a83471d709BCe9C3CA699A19FB46f7"}}}}
-      merkl_user_rewards_url: ${str:https://api.merkl.xyz/v3/userRewards}
-      tenderly_bundle_simulation_url: ${str:https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle}
-      tenderly_access_key: ${str:access_key}
-      tenderly_account_slug: ${str:account_slug}
-      tenderly_project_slug: ${str:project_slug}
-      chain_to_chain_id_mapping: ${str:{"optimism":10,"base":8453,"ethereum":1}}
-      staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
-      staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
-      staking_threshold_period: ${int:5}
-      store_path: ${str:/data/}
-      assets_info_filename: ${str:assets.json}
-      pool_info_filename: ${str:current_pool.json}
-      gas_cost_info_filename: ${str:gas_costs.json}
-      min_swap_amount_threshold: ${int:10}
-      max_fee_percentage: ${float:0.02}
-      max_gas_percentage: ${float:0.25}
-      balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}}
+      cleanup_history_depth: ${int:1}
+      cleanup_history_depth_current: ${int:null}
+      drand_public_key: ${str:868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31}
+      genesis_config:
+        genesis_time: ${str:2022-09-26T00:00:00.000000000Z}
+        chain_id: ${str:chain-c4daS1}
+        consensus_params:
+          block:
+            max_bytes: ${str:22020096}
+            max_gas: ${str:-1}
+            time_iota_ms: ${str:1000}
+          evidence:
+            max_age_num_blocks: ${str:100000}
+            max_age_duration: ${str:172800000000000}
+            max_bytes: ${str:1048576}
+          validator:
+            pub_key_types: ${list:["ed25519"]}
+          version: ${dict:{}}
+        voting_power: ${str:10}
+      init_fallback_gas: ${int:0}
+      keeper_allowed_retries: ${int:3}
+      keeper_timeout: ${float:30.0}
+      max_attempts: ${int:10}
+      reset_tendermint_after: ${int:2}
+      retry_attempts: ${int:400}
+      retry_timeout: ${int:3}
+      request

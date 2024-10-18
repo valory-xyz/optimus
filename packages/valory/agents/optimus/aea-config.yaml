@@ -264,4 +264,8 @@ models:
       reset_tendermint_after: ${int:2}
       retry_attempts: ${int:400}
       retry_timeout: ${int:3}
-      request
+      request_retry_delay: ${float:1.0}
+      request_timeout: ${float:10.0}
+      service_id: ${str:solana_trader}
+      tendermint_url: ${str:http://localhost:26657}
+      tendermint_com_url: ${str:http://localhost:8080

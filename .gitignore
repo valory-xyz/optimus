@@ -20,7 +20,7 @@ packages/valory/contracts/multisend
 packages/valory/contracts/service_registry
 packages/valory/services/*
 packages/valory/protocols/*
-packages/valory/skills/*
+!packages/valory/skills/*
 
 !packages/valory/agents/optimus
 !packages/valory/services/optimus

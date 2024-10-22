@@ -1,0 +1,17 @@
+token_id-"component_id"
+X-"contract/valory/balancer_vault/0.1.0"
+X-"contract/valory/balancer_weighted_pool/0.1.0"
+X-"contract/valory/erc20/0.1.0"
+X-"contract/valory/merkl_distributor/0.1.0"
+X-"contract/valory/staking_activity_checker/0.1.0"
+X-"contract/valory/staking_token/0.1.0"
+X-"contract/valory/uniswap_v3_non_fungible_position_manager/0.1.0"
+X-"contract/valory/uniswap_v3_pool/0.1.0"
+X-"skill/valory/liquidity_trader_abci/0.1.0"
+X-"skill/valory/optimus_abci/0.1.0"
+---
+token_id-"agent_id"
+X-"agent/valory/optimus/0.1.0"
+---
+token_id-"service_id" (Ethereum)
+X-"service/valory/optimus/0.1.0"

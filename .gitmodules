@@ -1,0 +1,9 @@
+[submodule "third_party/balpy"]
+	path = third_party/balpy
+	url = https://github.com/8ball030/balpy.git
+[submodule "third_party/multicaller"]
+	path = third_party/multicaller
+	url = https://github.com/8ball030/multicaller.git
+[submodule "olas_arbitrage/aea_contracts_solana"]
+	path = olas_arbitrage/aea_contracts_solana
+	url = https://github.com/Dassy23/aea_contracts_solana.git

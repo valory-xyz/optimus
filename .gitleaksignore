@@ -258,3 +258,12 @@ f162f6e9ce964277d59ff703f905ce4d7e514339:packages/valory/contracts/staking_token
 293094bdd1180c1f29da321ab6ffc9f661e00d17:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 d82b489e8772df10d476d6ebb3fb6527e525e1cf:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 c44680132c9ee15749aa0e9b78e68de64c8012a6:packages/valory/skills/liquidity_trader_abci/behaviours.py:generic-api-key:2921
+c1df2c40d616f55da657d42be6aaeb9d5569772d:packages/valory/agents/optimus/aea-config.yaml:generic-api-key:146
+c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/abstract_round_abci/tests/data/dummy_abci/skill.yaml:generic-api-key:73
+c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/market_data_fetcher_abci/skill.yaml:generic-api-key:78
+c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/portfolio_tracker_abci/skill.yaml:generic-api-key:80
+c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/registration_abci/skill.yaml:generic-api-key:86
+c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/reset_pause_abci/skill.yaml:generic-api-key:80
+c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/strategy_evaluator_abci/skill.yaml:generic-api-key:101
+c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/trader_decision_maker_abci/skill.yaml:generic-api-key:76
+c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/transaction_settlement_abci/skill.yaml:generic-api-key:93

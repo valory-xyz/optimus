@@ -7,30 +7,30 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
-  behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
-  composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
-  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
+  behaviours.py: bafybeidutyxryf6h7ooc7ggrdl5lojfv3anrvf3zq4tbwkiwxm7qqrriye
+  composition.py: bafybeiff7fikz76hrhfv6cgajfov3kb2ivkhkzmvhqzfnchqjtdxh6qb2u
+  dialogues.py: bafybeift7d4mk4qkzm4rqmdrfv43erhunzyqmwn6pecuumq25amy7q7fp4
   fsm_specification.yaml: bafybeiehe6ps7xi7i7tu4mduid7vbvszhsiu5juyard24i3nhtqgljpcza
   handlers.py: bafybeife4nrwqiwrx2ucza3vk6t5inpkncuewehtdnitax4lmqq2ptoona
-  models.py: bafybeibxpw4zmigtel3emgbz2jz6xgsfx7eavxvhqrqftwcsul6lwcpjou
+  models.py: bafybeihwcvw363vsglhgtneklcihcngnqmegjzasjow3ftxkfwnopomhoe
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
-protocols: 
+protocols:
 - eightballer/tickers:0.1.0:bafybeicjbpa24tla2enenmlzipqhu6grutqso74q6y7is2cpk7acub3bca
 - eightballer/orders:0.1.0:bafybeibprhniaoq3y2uzc4arwwl7yws3i54ahaicrphh5gtl4xxhxqexdy
-- eightballer/balances:0.1.0:bafybeieczloag3mjzvd4y2qqpbrtx6suoqjww3v7mf3dgrez5xopmo4h3m
+- eightballer/balances:0.1.0:bafybeiajh5vzhcofdpemm3545t3yh6g4okpwnejvbqchxapo765batiitu
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
-- valory/liquidity_trader_abci:0.1.0:bafybeihtca6gtyjibj6wkrcdmx3fb3a3bkpdgsphwevkatagxrbqvh6fd4
+- valory/liquidity_trader_abci:0.1.0:bafybeidccg5fwmxcdoo6llhxbyqwtxjayvz7byd5c4h6q7fsqkma4uioru
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
-- valory/market_data_fetcher_abci:0.1.0:bafybeieyaop63uqw3nk2mx7nu3yvqp45eioz7rkfn5n3ocvvt3odrddoke
-- valory/trader_decision_maker_abci:0.1.0:bafybeih7duxvbjevmeez4bvdpahgvefoik3hnpjq3ik5g4jaqbuw5rybtu
-- valory/strategy_evaluator_abci:0.1.0:bafybeihc7pxnwmgj2wrf7awdeiu2yjyvudlmdyfkahmpkiwq7dyt5aa44u
-- valory/portfolio_tracker_abci:0.1.0:bafybeictj7o35cttmhy43xi25fxyqmfhb7g2rd4yefj6hq2362xukifrpi
+- valory/market_data_fetcher_abci:0.1.0:bafybeiffexwacktnhihmnhxdqs2msdzbigth62oqb7ghe2bqxwfkyvs5ty
+- valory/trader_decision_maker_abci:0.1.0:bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm
+- valory/strategy_evaluator_abci:0.1.0:bafybeibdq4s53qakp55lagj6i2aut5vvqzidcvmo6bnqezie6ki7uzqnta
+- valory/portfolio_tracker_abci:0.1.0:bafybeiay2lasy2mtp5fxd77wgn2ocgy5neg42mlyitltuzrr7b6yzbduoa
 behaviours:
   main:
     args: {}
@@ -183,6 +183,7 @@ models:
       min_swap_amount_threshold: 10
       max_fee_percentage: 0.02
       max_gas_percentage: 0.1
+      agent_transition: false
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}'
       token_symbol_whitelist: []
@@ -336,5 +337,5 @@ models:
     class_name: OrdersDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.55.0
+    version: ==1.57.0
 is_abstract: false

@@ -7,16 +7,16 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeidjzfcuxv7nazzflbzwzb7qiihxkyjcvhx6762v6il6evert33epi
+  behaviours.py: bafybeigkt4ay2bydfntmtzadl5xtz3pdk2nvityudwyplc3n6xswhuhjwy
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeiabbiulb7k6xkjysulmy6o4ugnhxlpp5jiaeextvwj65q4ttadoeq
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeicfw4yk5atz456qt6urbkyhmav2lbchy3bu3rcv2zezmsqj2zxk3y
-  payloads.py: bafybeie5tbx3lqcklwfqdqft5t33oluvkltnbjqavhj3ddjjblocyq62qm
+  models.py: bafybeihhdgk5ui4qmcszamyaxthtgizrlmmbmlo2y6hu7taqis5u44favq
+  payloads.py: bafybeifl4vmex2tj4k4ysv65ds5kzdjpydusxoatph7avfsbebfuhnygvm
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeifncouov6hhpfx2yihtapl5lgn5rn3nojhifwsdlclrtgv7bnldfu
+  rounds.py: bafybeidm3pkkrokqpyb7ncjfvekaezpx57o2mmyc2qgcn7wagtmu5xsyqm
   strategies/simple_strategy.py: bafybeiasu2nchowx6leksjllpuum4ckezxoj4o2m4sstavblplvvutmvzm
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []
@@ -173,7 +173,7 @@ models:
       merkl_user_rewards_url: https://api.merkl.xyz/v3/userRewards
       tenderly_bundle_simulation_url: https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle
       tenderly_access_key: access_key
-      agent_transition: agent_transition
+      agent_transition: false
       tenderly_account_slug: account_slug
       tenderly_project_slug: project_slug
       chain_to_chain_id_mapping: '{"optimism":10,"base":8453,"ethereum":1}'

@@ -20,9 +20,13 @@
 """This package contains round behaviours of OptimusAbciApp."""
 
 import packages.valory.skills.liquidity_trader_abci.rounds as LiquidityTraderAbci
+import packages.valory.skills.market_data_fetcher_abci.rounds as MarketDataFetcherAbci
+import packages.valory.skills.portfolio_tracker_abci.rounds as PortfolioTrackerAbci
 import packages.valory.skills.registration_abci.rounds as RegistrationAbci
 import packages.valory.skills.reset_pause_abci.rounds as ResetAndPauseAbci
-import packages.valory.skills.transaction_settlement_abci.rounds as TxSettlementAbci
+import packages.valory.skills.strategy_evaluator_abci.rounds as StrategyEvaluatorAbci
+import packages.valory.skills.trader_decision_maker_abci.rounds as TraderDecisionMakerAbci
+import packages.valory.skills.transaction_settlement_abci.rounds as TransactionSettlementAbci
 from packages.valory.skills.abstract_round_abci.abci_app_chain import (
     AbciAppTransitionMapping,
     chain,
@@ -37,14 +41,28 @@ from packages.valory.skills.termination_abci.rounds import (
 
 abci_app_transition_mapping: AbciAppTransitionMapping = {
     RegistrationAbci.FinishedRegistrationRound: LiquidityTraderAbci.CallCheckpointRound,
-    LiquidityTraderAbci.FinishedCallCheckpointRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
-    LiquidityTraderAbci.FinishedCheckStakingKPIMetRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
+    LiquidityTraderAbci.FinishedCallCheckpointRound: TransactionSettlementAbci.RandomnessTransactionSubmissionRound,
+    LiquidityTraderAbci.FinishedCheckStakingKPIMetRound: TransactionSettlementAbci.RandomnessTransactionSubmissionRound,
+    LiquidityTraderAbci.SwitchAgentRound:TraderDecisionMakerAbci.RandomnessRound,
+    TraderDecisionMakerAbci.FinishedTraderDecisionMakerRound: MarketDataFetcherAbci.FetchMarketDataRound,
+    TraderDecisionMakerAbci.FailedTraderDecisionMakerRound: TraderDecisionMakerAbci.RandomnessRound,
+    MarketDataFetcherAbci.FinishedMarketFetchRound: PortfolioTrackerAbci.PortfolioTrackerRound,
+    MarketDataFetcherAbci.FailedMarketFetchRound: TraderDecisionMakerAbci.RandomnessRound,
+    PortfolioTrackerAbci.FinishedPortfolioTrackerRound: StrategyEvaluatorAbci.StrategyExecRound,
+    PortfolioTrackerAbci.FailedPortfolioTrackerRound: TraderDecisionMakerAbci.RandomnessRound,
+    StrategyEvaluatorAbci.SwapTxPreparedRound: TransactionSettlementAbci.RandomnessTransactionSubmissionRound,
+    StrategyEvaluatorAbci.NoMoreSwapsRound: ResetAndPauseAbci.ResetAndPauseRound,
+    StrategyEvaluatorAbci.StrategyExecutionFailedRound: TraderDecisionMakerAbci.RandomnessRound,
+    StrategyEvaluatorAbci.InstructionPreparationFailedRound: TraderDecisionMakerAbci.RandomnessRound,
+    StrategyEvaluatorAbci.HodlRound: ResetAndPauseAbci.ResetAndPauseRound,
+    StrategyEvaluatorAbci.BacktestingNegativeRound: TraderDecisionMakerAbci.RandomnessRound,
+    StrategyEvaluatorAbci.BacktestingFailedRound: TraderDecisionMakerAbci.RandomnessRound,
     LiquidityTraderAbci.FinishedDecisionMakingRound: ResetAndPauseAbci.ResetAndPauseRound,
     LiquidityTraderAbci.FinishedEvaluateStrategyRound: ResetAndPauseAbci.ResetAndPauseRound,
-    LiquidityTraderAbci.FinishedTxPreparationRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,
+    LiquidityTraderAbci.FinishedTxPreparationRound: TransactionSettlementAbci.RandomnessTransactionSubmissionRound,
     LiquidityTraderAbci.FailedMultiplexerRound: ResetAndPauseAbci.ResetAndPauseRound,
-    TxSettlementAbci.FinishedTransactionSubmissionRound: LiquidityTraderAbci.PostTxSettlementRound,
-    TxSettlementAbci.FailedRound: ResetAndPauseAbci.ResetAndPauseRound,
+    TransactionSettlementAbci.FinishedTransactionSubmissionRound: LiquidityTraderAbci.PostTxSettlementRound,
+    TransactionSettlementAbci.FailedRound: ResetAndPauseAbci.ResetAndPauseRound,
     ResetAndPauseAbci.FinishedResetAndPauseRound: LiquidityTraderAbci.CallCheckpointRound,
     ResetAndPauseAbci.FinishedResetAndPauseErrorRound: RegistrationAbci.RegistrationRound,
 }
@@ -55,11 +73,15 @@ termination_config = BackgroundAppConfig(
     abci_app=TerminationAbciApp,
 )
 
-OptimusAbciApp = chain(
+OptimusTraderAbciApp = chain(
     (
         RegistrationAbci.AgentRegistrationAbciApp,
+        TraderDecisionMakerAbci.TraderDecisionMakerAbciApp,
+        MarketDataFetcherAbci.MarketDataFetcherAbciApp,
+        PortfolioTrackerAbci.PortfolioTrackerAbciApp,
+        StrategyEvaluatorAbci.StrategyEvaluatorAbciApp,
         LiquidityTraderAbci.LiquidityTraderAbciApp,
-        TxSettlementAbci.TransactionSubmissionAbciApp,
+        TransactionSettlementAbci.TransactionSubmissionAbciApp,
         ResetAndPauseAbci.ResetPauseAbciApp,
     ),
     abci_app_transition_mapping,

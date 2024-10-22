@@ -16,7 +16,10 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
-protocols: []
+protocols: 
+- eightballer/tickers:0.1.0:bafybeicjbpa24tla2enenmlzipqhu6grutqso74q6y7is2cpk7acub3bca
+- eightballer/orders:0.1.0:bafybeibprhniaoq3y2uzc4arwwl7yws3i54ahaicrphh5gtl4xxhxqexdy
+- eightballer/balances:0.1.0:bafybeieczloag3mjzvd4y2qqpbrtx6suoqjww3v7mf3dgrez5xopmo4h3m
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
@@ -24,6 +27,10 @@ skills:
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
 - valory/liquidity_trader_abci:0.1.0:bafybeihtca6gtyjibj6wkrcdmx3fb3a3bkpdgsphwevkatagxrbqvh6fd4
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
+- valory/market_data_fetcher_abci:0.1.0:bafybeieyaop63uqw3nk2mx7nu3yvqp45eioz7rkfn5n3ocvvt3odrddoke
+- valory/trader_decision_maker_abci:0.1.0:bafybeih7duxvbjevmeez4bvdpahgvefoik3hnpjq3ik5g4jaqbuw5rybtu
+- valory/strategy_evaluator_abci:0.1.0:bafybeihc7pxnwmgj2wrf7awdeiu2yjyvudlmdyfkahmpkiwq7dyt5aa44u
+- valory/portfolio_tracker_abci:0.1.0:bafybeictj7o35cttmhy43xi25fxyqmfhb7g2rd4yefj6hq2362xukifrpi
 behaviours:
   main:
     args: {}
@@ -178,9 +185,44 @@ models:
       max_gas_percentage: 0.1
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}'
+      token_symbol_whitelist: []
+      trading_strategy: strategy_name
+      strategies_kwargs:
+      - - extra_1
+        - value
+      - - extra_2
+        - value
+      use_proxy_server: false
+      expected_swap_tx_cost: 20000000
+      ipfs_fetch_retries: 5
+      squad_vault: 39Zh4C687EXLY7CT8gjCxe2hUc3krESjUsqs7A1CKD5E
+      agent_balance_threshold: 50000000
+      multisig_balance_threshold: 1000000000
+      tracked_tokens: []
+      refill_action_timeout: 10
+      rpc_polling_interval: 5
+      epsilon: 0.1
+      sharpe_threshold: 1.0
+      use_solana: false
+      trade_size_in_base_token: 0.0001
+      ledger_ids:
+      - optimism
+      exchange_ids:
+        ethereum: []
+        optimism: []
+        base: []
+      base_tokens:
+        ethereum: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+        optimism: '0x0b2c639c533813f4aa9d7837caf62653d097ff85'
+        base: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
+      native_currencies:
+        ethereum: ETH
+        optimism: oETH
+        base: ETH
     class_name: Params
   coingecko:
     args:
+      endpoint: https://api.coingecko.com/api/v3/coins/{token_id}/market_chart?vs_currency=usd&days=1
       token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
       coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
       api_key: null
@@ -200,6 +242,77 @@ models:
       retries: 5
       url: https://drand.cloudflare.com/public/latest
     class_name: RandomnessApi
+  swap_quotes:
+    args:
+      api_id: swap_quotes
+      headers:
+        Content-Type: application/json
+      method: GET
+      parameters:
+        amount: 100000000
+        slippageBps: 5
+      response_key: null
+      response_type: dict
+      retries: 5
+      url: https://quote-api.jup.ag/v6/quote
+    class_name: SwapQuotesSpecs
+  swap_instructions:
+    args:
+      api_id: swap_instructions
+      headers:
+        Content-Type: application/json
+      method: POST
+      parameters: {}
+      response_key: null
+      response_type: dict
+      retries: 5
+      url: https://quote-api.jup.ag/v6/swap-instructions
+    class_name: SwapInstructionsSpecs
+  tx_settlement_proxy:
+    args:
+      api_id: tx_settlement_proxy
+      headers:
+        Content-Type: application/json
+      method: POST
+      parameters:
+        amount: 100000000
+        slippageBps: 5
+        resendAmount: 200
+        timeoutInMs: 120000
+        priorityFee: 5000000
+      response_key: null
+      response_type: dict
+      retries: 5
+      url: http://tx_proxy:3000/tx
+    class_name: TxSettlementProxy
+  get_balance:
+    args:
+      api_id: get_balance
+      headers:
+        Content-Type: application/json
+      method: POST
+      parameters: {}
+      response_key: result:value
+      response_type: int
+      error_key: error:message
+      error_type: str
+      retries: 5
+      url: replace_with_a_rpc
+    class_name: GetBalance
+  token_accounts:
+    args:
+      api_id: token_accounts
+      headers:
+        Content-Type: application/json
+      method: POST
+      parameters: {}
+      response_key: result:value
+      response_type: list
+      error_key: error:message
+      error_type: str
+      retries: 5
+      url: replace_with_a_rpc
+    class_name: TokenAccounts
   requests:
     args: {}
     class_name: Requests
@@ -212,6 +325,16 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-dependencies: {}
+  tickers_dialogues:
+    args: {}
+    class_name: TickersDialogues
+  balances_dialogues:
+    args: {}
+    class_name: BalancesDialogues
+  orders_dialogues:
+    args: {}
+    class_name: OrdersDialogues
+dependencies:
+  open-aea-cli-ipfs:
+    version: ==1.55.0
 is_abstract: false
-customs: []

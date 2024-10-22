@@ -68,6 +68,10 @@ def main() -> None:
         ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
 
         config[5]["models"]["params"]["args"][
+            "agent_transition"
+        ] = f"${{str:{os.getenv('AGENT_TRANSITION')}}}"
+
+        config[5]["models"]["params"]["args"][
             "tenderly_account_slug"
         ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
 

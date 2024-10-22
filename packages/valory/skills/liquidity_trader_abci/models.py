@@ -254,6 +254,9 @@ class Params(BaseParams):
         self.min_swap_amount_threshold = self._ensure(
             "min_swap_amount_threshold", kwargs, int
         )
+        self.agent_transition = self._ensure(
+            "merge_agent", kwargs, bool
+        )
         self.max_fee_percentage = self._ensure("max_fee_percentage", kwargs, float)
         self.max_gas_percentage = self._ensure("max_gas_percentage", kwargs, float)
         self.balancer_graphql_endpoints = json.loads(

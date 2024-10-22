@@ -41,6 +41,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
+    DecideAgentPayload,
 )
 
 
@@ -539,6 +540,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
         FinishedDecisionMakingRound: {},
+        SwitchAgentRound:{},
         FinishedCallCheckpointRound: {},
         FinishedCheckStakingKPIMetRound: {},
         FailedMultiplexerRound: {},
@@ -546,6 +548,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     final_states: Set[AppState] = {
         FinishedEvaluateStrategyRound,
         FinishedDecisionMakingRound,
+        SwitchAgentRound,
         FinishedTxPreparationRound,
         FinishedCallCheckpointRound,
         FinishedCheckStakingKPIMetRound,
@@ -577,5 +580,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FailedMultiplexerRound: set(),
         FinishedEvaluateStrategyRound: set(),
         FinishedDecisionMakingRound: set(),
+        SwitchAgentRound: set(),
         FinishedTxPreparationRound: {get_name(SynchronizedData.most_voted_tx_hash)},
     }

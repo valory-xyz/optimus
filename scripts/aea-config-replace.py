@@ -32,6 +32,7 @@ def main() -> None:
     load_dotenv()
 
     with open(Path("optimus", "aea-config.yaml"), "r", encoding="utf-8") as file:
+        print("config path",Path("optimus", "aea-config.yaml"))
         config = list(yaml.safe_load_all(file))
 
         # Ledger RPCs
@@ -51,37 +52,40 @@ def main() -> None:
             ] = f"${{str:{os.getenv('OPTIMISM_LEDGER_RPC')}}}"
 
         # Params
-        config[5]["models"]["params"]["args"]["setup"][
-            "all_participants"
-        ] = f"${{list:{os.getenv('ALL_PARTICIPANTS')}}}"
+        try:
+            config[5]["models"]["params"]["args"]["setup"][
+                "all_participants"
+            ] = f"${{list:{os.getenv('ALL_PARTICIPANTS')}}}"
 
-        config[5]["models"]["params"]["args"][
-            "safe_contract_addresses"
-        ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
+            config[5]["models"]["params"]["args"][
+                "safe_contract_addresses"
+            ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
 
-        config[5]["models"]["params"]["args"][
-            "slippage_for_swap"
-        ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
+            config[5]["models"]["params"]["args"][
+                "slippage_for_swap"
+            ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
 
-        config[5]["models"]["params"]["args"][
-            "tenderly_access_key"
-        ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
+            config[5]["models"]["params"]["args"][
+                "tenderly_access_key"
+            ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
 
-        config[5]["models"]["params"]["args"][
-            "agent_transition"
-        ] = f"${{str:{os.getenv('AGENT_TRANSITION')}}}"
+            config[5]["models"]["params"]["args"][
+                "agent_transition"
+            ] = f"${{bool:{os.getenv('AGENT_TRANSITION')}}}"
 
-        config[5]["models"]["params"]["args"][
-            "tenderly_account_slug"
-        ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
+            config[5]["models"]["params"]["args"][
+                "tenderly_account_slug"
+            ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
 
-        config[5]["models"]["params"]["args"][
-            "tenderly_project_slug"
-        ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
+            config[5]["models"]["params"]["args"][
+                "tenderly_project_slug"
+            ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
 
-        config[5]["models"]["coingecko"]["args"][
-            "api_key"
-        ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
+            config[5]["models"]["coingecko"]["args"][
+                "api_key"
+            ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
+        except KeyError as e:
+                print("Error", e)    
 
     with open(Path("optimus", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)

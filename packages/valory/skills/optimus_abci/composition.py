@@ -73,7 +73,7 @@ termination_config = BackgroundAppConfig(
     abci_app=TerminationAbciApp,
 )
 
-OptimusTraderAbciApp = chain(
+OptimusAbciApp = chain(
     (
         RegistrationAbci.AgentRegistrationAbciApp,
         TraderDecisionMakerAbci.TraderDecisionMakerAbciApp,

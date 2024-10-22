@@ -41,6 +41,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
+    DecideAgentPayload,
 )
 
 
@@ -70,7 +71,9 @@ class Event(Enum):
     VANITY_TX_EXECUTED = "vanity_tx_executed"
     WAIT = "wait"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
-    STAKING_KPI_MET = "staking_kpi_met"  # nosec
+    STAKING_KPI_MET = "staking_kpi_met"
+    MOVE_TO_NEXT_AGENT = "move_to_next_agent"
+    DONT_MOVE_TO_NEXT_AGENT = "dont_move_to_next_agent" # nosec
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -394,6 +397,28 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
 
+class DecideAgentRound(CollectSameUntilThresholdRound):
+    """DecisionMakingRound"""
+
+    payload_class = DecisionMakingPayload
+    synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
+        """Process the end of the block."""
+        if self.threshold_reached:
+            # We reference all the events here to prevent the check-abciapp-specs tool from complaining
+            payload = json.loads(self.most_voted_payload)
+            event = Event(payload["event"])
+            synchronized_data = cast(SynchronizedData, self.synchronized_data)
+
+            return synchronized_data, event
+
+        if not self.is_majority_possible(
+            self.collection, self.synchronized_data.nb_participants
+        ):
+            return self.synchronized_data, Event.NO_MAJORITY
+        return None
 
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
     """A round that will be called after tx settlement is done."""
@@ -445,6 +470,9 @@ class FinishedTxPreparationRound(DegenerateRound):
 class FailedMultiplexerRound(DegenerateRound):
     """FailedMultiplexerRound"""
 
+class SwitchAgentRound(DegenerateRound):
+    """SwitchAgentRound"""    
+
 
 class LiquidityTraderAbciApp(AbciApp[Event]):
     """LiquidityTraderAbciApp"""
@@ -485,15 +513,22 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONE: DecisionMakingRound,
             Event.NO_MAJORITY: EvaluateStrategyRound,
             Event.ROUND_TIMEOUT: EvaluateStrategyRound,
-            Event.WAIT: FinishedEvaluateStrategyRound,
+            Event.WAIT: DecideAgentRound,
         },
         DecisionMakingRound: {
-            Event.DONE: FinishedDecisionMakingRound,
+            Event.DONE: DecideAgentRound,
             Event.ERROR: FinishedDecisionMakingRound,
             Event.NO_MAJORITY: DecisionMakingRound,
             Event.ROUND_TIMEOUT: DecisionMakingRound,
             Event.SETTLE: FinishedTxPreparationRound,
             Event.UPDATE: DecisionMakingRound,
+        },
+        DecideAgentRound: {
+            Event.DONT_MOVE_TO_NEXT_AGENT: FinishedDecisionMakingRound,
+            Event.MOVE_TO_NEXT_AGENT: SwitchAgentRound,
+            Event.DONE: FinishedDecisionMakingRound,
+            Event.NO_MAJORITY: FinishedDecisionMakingRound,
+
         },
         PostTxSettlementRound: {
             Event.ACTION_EXECUTED: DecisionMakingRound,
@@ -505,6 +540,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
         FinishedDecisionMakingRound: {},
+        SwitchAgentRound:{},
         FinishedCallCheckpointRound: {},
         FinishedCheckStakingKPIMetRound: {},
         FailedMultiplexerRound: {},
@@ -512,6 +548,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     final_states: Set[AppState] = {
         FinishedEvaluateStrategyRound,
         FinishedDecisionMakingRound,
+        SwitchAgentRound,
         FinishedTxPreparationRound,
         FinishedCallCheckpointRound,
         FinishedCheckStakingKPIMetRound,
@@ -543,5 +580,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FailedMultiplexerRound: set(),
         FinishedEvaluateStrategyRound: set(),
         FinishedDecisionMakingRound: set(),
+        SwitchAgentRound: set(),
         FinishedTxPreparationRound: {get_name(SynchronizedData.most_voted_tx_hash)},
     }

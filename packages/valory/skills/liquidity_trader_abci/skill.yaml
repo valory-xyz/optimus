@@ -173,6 +173,7 @@ models:
       merkl_user_rewards_url: https://api.merkl.xyz/v3/userRewards
       tenderly_bundle_simulation_url: https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle
       tenderly_access_key: access_key
+      agent_transition: agent_transition
       tenderly_account_slug: account_slug
       tenderly_project_slug: project_slug
       chain_to_chain_id_mapping: '{"optimism":10,"base":8453,"ethereum":1}'

@@ -1,0 +1,57 @@
+name: ipfs_package_downloader
+author: valory
+version: 0.1.0
+type: skill
+description: A skill used for monitoring and executing tasks.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiaqd27il3osn4novyzipdtql4p36mnrskk2dqdsqthgjnb4gqixii
+  behaviours.py: bafybeig3lvx2viwoqynctj4wfusgx6h2qd7xchp6bfbfgnxq7xolm3mdhe
+  dialogues.py: bafybeibdxvhpzzqn4qa7us6cpkmtliwl7qziodt2srnicrdamfcev2mumi
+  handlers.py: bafybeieuf3jxlnzfs4yifwuvklzc2c7ps7kf4bmnzbd54ofz3q7jhpfgqy
+  models.py: bafybeibqo32ohd6o6au5lspvbnvkyptctegq6gto5jgz4mk6rj673fghf4
+  utils/__init__.py: bafybeige5xuo32v4dykt6shggs452eliha5e5qzci5dwr6uowash3fq23q
+  utils/ipfs.py: bafybeihjb237abhcjupmmyswvfk7xmzgx3d4iufixes7v3yjmlycnca4xm
+  utils/task.py: bafybeiggyjn23wtzahdvq447jjwzmwn3hs2bc4sxkiy3wuzkugp35uoysq
+fingerprint_ignore_patterns: []
+connections:
+- valory/ipfs:0.1.0:bafybeiefkqvh5ylbk77xylcmshyuafmiecopt4gvardnubq52psvogis6a
+contracts: []
+protocols:
+- valory/ipfs:0.1.0:bafybeiftxi2qhreewgsc5wevogi7yc5g6hbcbo4uiuaibauhv3nhfcdtvm
+skills: []
+behaviours:
+  ipfs_package_downloader:
+    args: {}
+    class_name: IpfsPackageDownloader
+handlers:
+  ipfs_handler:
+    args: {}
+    class_name: IpfsHandler
+models:
+  ipfs_dialogues:
+    args: {}
+    class_name: IpfsDialogues
+  params:
+    args:
+      cleanup_freq: 50
+      timeout_limit: 3
+      file_hash_to_id:
+      - - bafybeiabkbfjjakf7gvewxk5gvyybqvecy3k2tipvntjcovng2sbt3dq5m
+        - - follow_trend_strategy
+      component_yaml_filename: component.yaml
+      entry_point_key: entry_point
+      callable_keys:
+      - run_callable
+      - transform_callable
+      - evaluate_callable
+    class_name: Params
+dependencies:
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
+  pyyaml:
+    version: <=6.0.1,>=3.10
+is_abstract: false

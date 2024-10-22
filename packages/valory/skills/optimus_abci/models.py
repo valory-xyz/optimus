@@ -44,7 +44,13 @@ from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,
 )
-
+from packages.valory.skills.portfolio_tracker_abci.models import GetBalance
+from packages.valory.skills.portfolio_tracker_abci.models import TokenAccounts
+from packages.valory.skills.strategy_evaluator_abci.models import (
+    SwapInstructionsSpecs,
+    SwapQuotesSpecs,
+    TxSettlementProxy,
+)
 
 EventType = Union[
     Type[LiquidityTraderEvent],
@@ -59,6 +65,11 @@ EventToTimeoutMappingType = Dict[
 Coingecko = Coingecko
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
+SwapQuotesSpecs = SwapQuotesSpecs
+SwapInstructionsSpecs = SwapInstructionsSpecs
+TxSettlementProxy = TxSettlementProxy
+GetBalance = GetBalance
+TokenAccounts = TokenAccounts
 
 RandomnessApi = BaseRandomnessApi
 

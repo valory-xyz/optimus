@@ -3366,9 +3366,9 @@ class DecideAgentBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
             if self.params.agent_transition is True:
-                next_event = Event.MOVE_TO_NEXT_AGENT
+                next_event = Event.MOVE_TO_NEXT_AGENT.value
             else:
-                next_event = Event.DONT_MOVE_TO_NEXT_AGENT
+                next_event = Event.DONT_MOVE_TO_NEXT_AGENT.value
                     
             payload = DecideAgentPayload(
                 sender=sender,

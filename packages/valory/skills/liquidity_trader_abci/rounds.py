@@ -513,7 +513,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONE: DecisionMakingRound,
             Event.NO_MAJORITY: EvaluateStrategyRound,
             Event.ROUND_TIMEOUT: EvaluateStrategyRound,
-            Event.WAIT: FinishedEvaluateStrategyRound,
+            Event.WAIT: DecideAgentRound,
         },
         DecisionMakingRound: {
             Event.DONE: DecideAgentRound,

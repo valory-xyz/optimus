@@ -7,11 +7,11 @@ X-"contract/valory/staking_activity_checker/0.1.0"
 X-"contract/valory/staking_token/0.1.0"
 X-"contract/valory/uniswap_v3_non_fungible_position_manager/0.1.0"
 X-"contract/valory/uniswap_v3_pool/0.1.0"
-X-"skill/valory/liquidity_trader_abci/0.1.0"
-X-"skill/valory/optimus_abci/0.1.0"
+X-"skill/valory/liquidity_trader_abci/0.1.0" -> previous 8 ids tbd, 3, 5, 14, 19, 20, 22
+X-"skill/valory/optimus_abci/0.1.0" -> 14, 16, 17, 22, 33, previous skill
 ---
 token_id-"agent_id"
-X-"agent/valory/optimus/0.1.0"
+X-"agent/valory/optimus/0.1.0" -> 1-7, 8-11, 39, 50, 60, all contracts above, 18, 19, 20, 13, 14, 16, 17, 22, 33, two skills above
 ---
 token_id-"service_id" (Ethereum)
 X-"service/valory/optimus/0.1.0"

@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeiexvi2dcshz4au52cw4op25dfamuyjv6qxty2vvh7ie3mqw5fdv6a
-- valory/optimus_abci:0.1.0:bafybeideqaphxoewriurhambhl3xn5d4747w4ibzk72q4sqjug7z4imdxq
+- valory/liquidity_trader_abci:0.1.0:bafybeihio7imf5ss6347irw2sd5crek2tq6vg2vy6z2nmwadmpnehvkpbi
+- valory/optimus_abci:0.1.0:bafybeibqps5sjkcictxgifovck5x5xquuiyckopq6js3ymvaogl5mpn3tu
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -107,6 +107,9 @@ config:
       chain_id: ${int:34443}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
+      gas_price_strategies:
+        eip1559:
+          fee_history_percentile: 50
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

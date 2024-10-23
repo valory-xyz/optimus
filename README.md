@@ -5,6 +5,7 @@ The Optimus service currently operates on the following chains:
 - Optimism
 - Base
 - Ethereum
+- Mode
 
 **Supported DEXs:**
 The Optimus service trades on the following decentralized exchanges (DEXs):

@@ -64,7 +64,7 @@ First, prepare the `keys.json` file with the Gnosis keypair of your agent. (Repl
     ]
     EOF
 
-2. You need to deploy 4 **[Safes](https://safe.global/) on the following networks - Ethereum-Mainnet, Optimism, Base, Mode**
+2. You need to deploy **[Safes](https://safe.global/) on the following networks - Ethereum-Mainnet, Optimism, Base, Mode**
 
 3. You need to provide some funds ETH and USDC both to your Safe address on Ethereum-Mainnet, and some ETH to your agent across all the chains (Ethereum-Mainnet, Optimism, Base, Mode) to cover for gas fees.
 
@@ -90,6 +90,7 @@ export TENDERLY_ACCESS_KEY=YOUR_TENDERLY_ACCESS_KEY
 export TENDERLY_ACCOUNT_SLUG=YOUR_TENDERLY_ACCOUNT_SLUG
 export TENDERLY_PROJECT_SLUG=YOUR_TENDERLY_PROJECT_SLUG
 export COINGECKO_API_KEY=YOUR_COINGECKO_API_KEY
+```
 
 Note - We provide default value for SLIPPAGE_FOR_SWAP, but feel free to experiment with different values. It indicates the allowed slippage when bridging/swapping assets using LiFi.
 

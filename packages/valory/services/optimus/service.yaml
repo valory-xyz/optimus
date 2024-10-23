@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeicyayccklnin4gvkjs6cgqjyicjuai2pl4vvjqmxsfs4as273uimm
+agent: valory/optimus:0.1.0:bafybeihvl6elual5znl2vavg6my7btstd4qjthy52s2b4wzaaboevxxu3a
 number_of_agents: 1
 deployment: {}
 ---
@@ -116,6 +116,9 @@ config:
       chain_id: ${MODE_LEDGER_CHAIN_ID:int:34443}
       poa_chain: ${MODE_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${MODE_LEDGER_PRICING:str:eip1559}
+      gas_price_strategies:
+        eip1559:
+          fee_history_percentile: ${FEE_HISTORY_PERCENTILE:50}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

@@ -2715,9 +2715,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, tx_info
     ) -> Generator[None, None, Optional[str]]:
         multisend_txs = []
-        amount = self._get_balance(
-            tx_info.get("from_chain"), tx_info.get("source_token"), positions
-        )
+        amount= tx_info.get("amount")
 
         if tx_info.get("source_token") != ZERO_ADDRESS:
             approval_tx_payload = yield from self.get_approval_tx_hash(

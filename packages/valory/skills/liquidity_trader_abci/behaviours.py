@@ -91,8 +91,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     PostTxSettlementRound,
     StakingState,
     SynchronizedData,
-    DecideAgentRound,
-    DecideAgentPayload,
+    DecideAgentStartingRound,
+    DecideAgentStartingPayload
 )
 from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import (
     SimpleStrategyBehaviour,
@@ -3356,10 +3356,10 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
                 "Gas used or effective gas price not found in the response."
             )
 
-class DecideAgentBehaviour(LiquidityTraderBaseBehaviour):
+class DecideAgentStartingBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that executes all the actions."""
 
-    matching_round: Type[AbstractRound] = DecideAgentRound
+    matching_round: Type[AbstractRound] = DecideAgentStartingRound
 
     def async_act(self) -> Generator:
         """Async act"""
@@ -3370,7 +3370,7 @@ class DecideAgentBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 next_event = Event.DONT_MOVE_TO_NEXT_AGENT.value
                     
-            payload = DecideAgentPayload(
+            payload = DecideAgentStartingPayload(
                 sender=sender,
                 content=json.dumps(
                     {
@@ -3383,7 +3383,7 @@ class DecideAgentBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
-        self.set_done()
+        self.set_done()        
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
@@ -3396,7 +3396,7 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         GetPositionsBehaviour,
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
-        DecideAgentBehaviour,
+        DecideAgentStartingBehaviour,
         PostTxSettlementBehaviour,
     ]
 

@@ -37,15 +37,15 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeidccg5fwmxcdoo6llhxbyqwtxjayvz7byd5c4h6q7fsqkma4uioru
+- valory/liquidity_trader_abci:0.1.0:bafybeihafrz72evtascc2q5f2thpvunmr7vec6gipvqp3upnhkvkbqqrnu
 - valory/market_data_fetcher_abci:0.1.0:bafybeiffexwacktnhihmnhxdqs2msdzbigth62oqb7ghe2bqxwfkyvs5ty
-- valory/strategy_evaluator_abci:0.1.0:bafybeibdq4s53qakp55lagj6i2aut5vvqzidcvmo6bnqezie6ki7uzqnta
-- valory/optimus_abci:0.1.0:bafybeialrii6l3bhz3zbij4fm7ls5bgjvavhahfxbgg3kfktrjnmlxoqrq
+- valory/strategy_evaluator_abci:0.1.0:bafybeicsxyuh2xa33h5jogq2bqumo3c3vutpsi5nj7aarfxfmy3jrjvxqe
+- valory/optimus_abci:0.1.0:bafybeidtf4zg7qkef5biruh4vlcql2vd2ide4yhm4oza2vp263crx54wy4
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
-- valory/trader_decision_maker_abci:0.1.0:bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm
+- valory/trader_decision_maker_abci:0.1.0:bafybeigkks2o42hoemll7qxq7ulgidqynvjczmpa2ifuhnztltjf7p63b4
 - valory/ipfs_package_downloader:0.1.0:bafybeieokinjosnulrsee3kbj7ly4kjfx2ub6lmwkyplgs33vxgmx3fbvm
 - valory/portfolio_tracker_abci:0.1.0:bafybeiay2lasy2mtp5fxd77wgn2ocgy5neg42mlyitltuzrr7b6yzbduoa
 default_ledger: ethereum
@@ -101,7 +101,7 @@ config:
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     base:
-      address: ${str:https://virtual.base.rpc.tenderly.co/5d9c013b-879b-4f20-a6cc-e95dee0d109f}
+      address: ${str:https://virtual.base.rpc.tenderly.co/828d3af0-504a-47ed-bd0c-41fc71f15f74}
       chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
@@ -239,12 +239,13 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       round_timeout_seconds: 30.0
+      proxy_round_timeout_seconds: ${float:1200.0}
       service_id: optimus
       service_registry_address: ${str:null}
       setup:
         all_participants: ${list:["0x08012c56eD8adF43586A3cEf68EEb13FDfF70Ef5"]}
         consensus_threshold: ${int:null}
-        safe_contract_address: ${str:0x0000000000000000000000000000000000000000}
+        safe_contract_address: ${str:0xc4ed6F4B3059AD6aa985A9e47C133a45A39db66e}
       share_tm_config_on_startup: ${bool:false}
       sleep_time: 1
       tendermint_check_sleep_delay: 3

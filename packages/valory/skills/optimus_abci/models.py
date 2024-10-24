@@ -52,13 +52,40 @@ from packages.valory.skills.strategy_evaluator_abci.models import (
     TxSettlementProxy,
 )
 
+from packages.valory.skills.transaction_settlement_abci.models import TransactionParams
+from packages.valory.skills.strategy_evaluator_abci.models import (
+    StrategyEvaluatorParams as StrategyEvaluatorParams,
+)
+from packages.valory.skills.market_data_fetcher_abci.models import (
+    Params as MarketDataFetcherParams,
+)
+from packages.valory.skills.portfolio_tracker_abci.models import (
+    Params as PortfolioTrackerParams,
+)
+from packages.valory.skills.trader_decision_maker_abci.models import (
+    Params as TraderDecisionMakerParams,
+)
+
+from packages.valory.skills.market_data_fetcher_abci.rounds import (
+    Event as MarketDataFetcherEvent,
+)
+from packages.valory.skills.trader_decision_maker_abci.rounds import (
+    Event as DecisionMakingEvent,
+)
+from packages.valory.skills.strategy_evaluator_abci.rounds import (
+    Event as StrategyEvaluatorEvent,
+)
+
 EventType = Union[
     Type[LiquidityTraderEvent],
     Type[TransactionSettlementEvent],
     Type[ResetPauseEvent],
+    Type[MarketDataFetcherEvent],
+    Type[DecisionMakingEvent],
+    Type[StrategyEvaluatorEvent],
 ]
 EventToTimeoutMappingType = Dict[
-    Union[LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent],
+    Union[LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent, MarketDataFetcherEvent, DecisionMakingEvent, StrategyEvaluatorEvent],
     float,
 ]
 
@@ -80,6 +107,11 @@ MULTIPLIER = 40
 class Params(  # pylint: disable=too-many-ancestors
     TerminationParams,
     LiquidityTraderParams,
+    TraderDecisionMakerParams,
+    MarketDataFetcherParams,
+    StrategyEvaluatorParams,
+    PortfolioTrackerParams,
+    TransactionParams,
 ):
     """A model to represent params for multiple abci apps."""
 
@@ -98,7 +130,7 @@ class SharedState(BaseSharedState):
         """Set up."""
         super().setup()
 
-        events = (LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent)
+        events = (LiquidityTraderEvent, TransactionSettlementEvent, ResetPauseEvent, MarketDataFetcherEvent, DecisionMakingEvent, StrategyEvaluatorEvent)
         round_timeout = self.params.round_timeout_seconds
         round_timeout_overrides = {
             cast(EventType, event).ROUND_TIMEOUT: round_timeout for event in events
@@ -111,6 +143,7 @@ class SharedState(BaseSharedState):
             LiquidityTraderEvent.ROUND_TIMEOUT: self.params.round_timeout_seconds
             * MULTIPLIER,
             ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT: reset_pause_timeout,
+            StrategyEvaluatorEvent.PROXY_SWAP_TIMEOUT: self.params.proxy_round_timeout_seconds,
         }
 
         for event, override in event_to_timeout_overrides.items():

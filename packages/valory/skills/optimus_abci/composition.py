@@ -40,10 +40,10 @@ from packages.valory.skills.termination_abci.rounds import (
 
 
 abci_app_transition_mapping: AbciAppTransitionMapping = {
-    RegistrationAbci.FinishedRegistrationRound: LiquidityTraderAbci.CallCheckpointRound,
+    RegistrationAbci.FinishedRegistrationRound: LiquidityTraderAbci.DecideAgentStartingRound,
     LiquidityTraderAbci.FinishedCallCheckpointRound: TransactionSettlementAbci.RandomnessTransactionSubmissionRound,
     LiquidityTraderAbci.FinishedCheckStakingKPIMetRound: TransactionSettlementAbci.RandomnessTransactionSubmissionRound,
-    LiquidityTraderAbci.SwitchAgentRound:TraderDecisionMakerAbci.RandomnessRound,
+    LiquidityTraderAbci.SwitchAgentStartingRound:TraderDecisionMakerAbci.RandomnessRound,
     TraderDecisionMakerAbci.FinishedTraderDecisionMakerRound: MarketDataFetcherAbci.FetchMarketDataRound,
     TraderDecisionMakerAbci.FailedTraderDecisionMakerRound: TraderDecisionMakerAbci.RandomnessRound,
     MarketDataFetcherAbci.FinishedMarketFetchRound: PortfolioTrackerAbci.PortfolioTrackerRound,
@@ -63,7 +63,7 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     LiquidityTraderAbci.FailedMultiplexerRound: ResetAndPauseAbci.ResetAndPauseRound,
     TransactionSettlementAbci.FinishedTransactionSubmissionRound: LiquidityTraderAbci.PostTxSettlementRound,
     TransactionSettlementAbci.FailedRound: ResetAndPauseAbci.ResetAndPauseRound,
-    ResetAndPauseAbci.FinishedResetAndPauseRound: LiquidityTraderAbci.CallCheckpointRound,
+    ResetAndPauseAbci.FinishedResetAndPauseRound: LiquidityTraderAbci.DecideAgentStartingRound,
     ResetAndPauseAbci.FinishedResetAndPauseErrorRound: RegistrationAbci.RegistrationRound,
 }
 

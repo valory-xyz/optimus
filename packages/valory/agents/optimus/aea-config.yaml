@@ -8,7 +8,7 @@ fingerprint:
   __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/dcxt:0.1.0:bafybeihes2id6qmqqybvdqfpchu6h3i5mpnhq6lztfxp52twd22iwqxacq
+- eightballer/dcxt:0.1.0:bafybeihnaxpiki57ivphf24qpie5g6rxwnztbrymutlw4yuyjxzvj3pdry
 - valory/abci:0.1.0:bafybeiejymu4ul62zx6weoibnlsrfprfpjnplhjefz6sr6izgdr4sajlnu
 - valory/http_client:0.23.0:bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
@@ -38,16 +38,16 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
 - valory/liquidity_trader_abci:0.1.0:bafybeihafrz72evtascc2q5f2thpvunmr7vec6gipvqp3upnhkvkbqqrnu
-- valory/market_data_fetcher_abci:0.1.0:bafybeiffexwacktnhihmnhxdqs2msdzbigth62oqb7ghe2bqxwfkyvs5ty
-- valory/strategy_evaluator_abci:0.1.0:bafybeicsxyuh2xa33h5jogq2bqumo3c3vutpsi5nj7aarfxfmy3jrjvxqe
-- valory/optimus_abci:0.1.0:bafybeidtf4zg7qkef5biruh4vlcql2vd2ide4yhm4oza2vp263crx54wy4
+- valory/market_data_fetcher_abci:0.1.0:bafybeibaf2ubj56busl7ngaamyjtm3tqsxthluuve6znxeogoxo7ta6b3y
+- valory/strategy_evaluator_abci:0.1.0:bafybeibsk56r3dd5tza5yl2ltbonxdkb7zgfrupgiq3iyzr2ywqycskvz4
+- valory/optimus_abci:0.1.0:bafybeiarvc5dcslcpjzatygne44jmhegvhzduzyf3gv65ih63zg77f4pp4
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
-- valory/trader_decision_maker_abci:0.1.0:bafybeigkks2o42hoemll7qxq7ulgidqynvjczmpa2ifuhnztltjf7p63b4
+- valory/trader_decision_maker_abci:0.1.0:bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm
 - valory/ipfs_package_downloader:0.1.0:bafybeieokinjosnulrsee3kbj7ly4kjfx2ub6lmwkyplgs33vxgmx3fbvm
-- valory/portfolio_tracker_abci:0.1.0:bafybeiay2lasy2mtp5fxd77wgn2ocgy5neg42mlyitltuzrr7b6yzbduoa
+- valory/portfolio_tracker_abci:0.1.0:bafybeidprqeiomlvs6e5nvcqr2hnntwiuwyaxifidznjowoexx65yoplmq
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -101,7 +101,7 @@ config:
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     base:
-      address: ${str:https://virtual.base.rpc.tenderly.co/828d3af0-504a-47ed-bd0c-41fc71f15f74}
+      address: ${str:https://virtual.base.rpc.tenderly.co/70dfa32a-6f92-4dd8-ba44-45bc16760de9}
       chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
@@ -344,5 +344,5 @@ config:
   - name: ${str:balancer}
     key_path: ${str:ethereum_private_key.txt}
     ledger_id: ${str:base}
-    rpc_url: ${str:https://base.blockpi.network/v1/rpc/public}
+    rpc_url: ${str:https://virtual.base.rpc.tenderly.co/70dfa32a-6f92-4dd8-ba44-45bc16760de9}
     etherscan_api_key: ${str:YOUR_ETHERSCAN_API_KEY}

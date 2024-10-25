@@ -41,7 +41,8 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
-    DecideAgentStartingPayload
+    DecideAgentStartingPayload,
+    DecideAgentEndingPayload,
 )
 
 
@@ -420,6 +421,29 @@ class DecideAgentStartingRound(CollectSameUntilThresholdRound):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
     
+class DecideAgentEndingRound(CollectSameUntilThresholdRound):
+    """DecideAgentRound"""
+
+    payload_class = DecideAgentEndingPayload
+    synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
+        """Process the end of the block."""
+        if self.threshold_reached:
+            # We reference all the events here to prevent the check-abciapp-specs tool from complaining
+            payload = json.loads(self.most_voted_payload)
+            event = Event(payload["event"])
+            synchronized_data = cast(SynchronizedData, self.synchronized_data)
+
+            return synchronized_data, event
+
+        if not self.is_majority_possible(
+            self.collection, self.synchronized_data.nb_participants
+        ):
+            return self.synchronized_data, Event.NO_MAJORITY
+        return None  
+    
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
     """A round that will be called after tx settlement is done."""
 
@@ -473,6 +497,9 @@ class FailedMultiplexerRound(DegenerateRound):
 class SwitchAgentStartingRound(DegenerateRound):
     """SwitchAgentRound"""   
 
+class SwitchAgentEndingRound(DegenerateRound):
+    """SwitchAgentRound"""  
+
 class LiquidityTraderAbciApp(AbciApp[Event]):
     """LiquidityTraderAbciApp"""
 
@@ -480,6 +507,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     initial_states: Set[AppState] = {
         CallCheckpointRound,
         DecideAgentStartingRound,
+        DecideAgentEndingRound,
         CheckStakingKPIMetRound,
         GetPositionsRound,
         DecisionMakingRound,
@@ -529,6 +557,12 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONE: CallCheckpointRound,
             Event.NO_MAJORITY: CallCheckpointRound,
         },
+        DecideAgentEndingRound: {
+            Event.DONT_MOVE_TO_NEXT_AGENT: PostTxSettlementRound,
+            Event.MOVE_TO_NEXT_AGENT: SwitchAgentEndingRound,
+            Event.DONE: PostTxSettlementRound,
+            Event.NO_MAJORITY: PostTxSettlementRound,
+        },
         PostTxSettlementRound: {
             Event.ACTION_EXECUTED: DecisionMakingRound,
             Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
@@ -540,6 +574,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound: {},
         FinishedDecisionMakingRound: {},
         SwitchAgentStartingRound:{},
+        SwitchAgentEndingRound:{},
         FinishedCallCheckpointRound: {},
         FinishedCheckStakingKPIMetRound: {},
         FailedMultiplexerRound: {},
@@ -548,6 +583,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedEvaluateStrategyRound,
         FinishedDecisionMakingRound,
         SwitchAgentStartingRound,
+        SwitchAgentEndingRound,
         FinishedTxPreparationRound,
         FinishedCallCheckpointRound,
         FinishedCheckStakingKPIMetRound,
@@ -569,6 +605,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         CheckStakingKPIMetRound: set(),
         GetPositionsRound: set(),
         DecideAgentStartingRound: set(),
+        DecideAgentEndingRound: set(),
         DecisionMakingRound: set(),
         PostTxSettlementRound: set(),
     }
@@ -581,5 +618,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedEvaluateStrategyRound: set(),
         FinishedDecisionMakingRound: set(),
         SwitchAgentStartingRound: set(),
+        SwitchAgentEndingRound: set(),
         FinishedTxPreparationRound: {get_name(SynchronizedData.most_voted_tx_hash)},
     }

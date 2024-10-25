@@ -37,10 +37,10 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeihafrz72evtascc2q5f2thpvunmr7vec6gipvqp3upnhkvkbqqrnu
+- valory/liquidity_trader_abci:0.1.0:bafybeiaseqi3uzajwqboejbgndxbfbvgjcn7a6vvncmfxjegpvam3m3e3y
 - valory/market_data_fetcher_abci:0.1.0:bafybeibaf2ubj56busl7ngaamyjtm3tqsxthluuve6znxeogoxo7ta6b3y
 - valory/strategy_evaluator_abci:0.1.0:bafybeibsk56r3dd5tza5yl2ltbonxdkb7zgfrupgiq3iyzr2ywqycskvz4
-- valory/optimus_abci:0.1.0:bafybeiarvc5dcslcpjzatygne44jmhegvhzduzyf3gv65ih63zg77f4pp4
+- valory/optimus_abci:0.1.0:bafybeicsgjtgrfqgfhqnecm55d2hxrsqjox5w422adqsabvg2pocb5fvcu
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -105,6 +105,9 @@ config:
       chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
+      gas_price_strategies:
+        eip1559:
+          default_priority_fee: 500
     optimism:
       address: ${str:https://virtual.optimism.rpc.tenderly.co/3baf4a62-2fa9-448a-91a6-5f6ab95c76be}
       chain_id: ${int:10}
@@ -265,7 +268,7 @@ models:
       serious_slash_unit_amount: ${int:8000000000000000}
       multisend_batch_size: ${int:50}
       ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
-      default_chain_id: ${str:optimism}
+      default_chain_id: ${str:base}
       termination_from_block: ${int:34088325}
       allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
       initial_assets: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}

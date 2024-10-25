@@ -92,7 +92,9 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     StakingState,
     SynchronizedData,
     DecideAgentStartingRound,
-    DecideAgentStartingPayload
+    DecideAgentStartingPayload,
+    DecideAgentEndingRound,
+    DecideAgentEndingPayload,
 )
 from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import (
     SimpleStrategyBehaviour,
@@ -3383,7 +3385,36 @@ class DecideAgentStartingBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
-        self.set_done()        
+        self.set_done() 
+
+class DecideAgentEndingBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that executes all the actions."""
+
+    matching_round: Type[AbstractRound] = DecideAgentEndingRound
+
+    def async_act(self) -> Generator:
+        """Async act"""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            sender = self.context.agent_address
+            if self.params.agent_transition is True:
+                next_event = Event.MOVE_TO_NEXT_AGENT.value
+            else:
+                next_event = Event.DONT_MOVE_TO_NEXT_AGENT.value
+                    
+            payload = DecideAgentEndingPayload(
+                sender=sender,
+                content=json.dumps(
+                    {
+                        "event": next_event
+                    }
+                ),
+            )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+
+        self.set_done()                   
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
@@ -3397,6 +3428,7 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
         DecideAgentStartingBehaviour,
+        DecideAgentEndingBehaviour,
         PostTxSettlementBehaviour,
     ]
 

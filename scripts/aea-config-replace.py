@@ -87,6 +87,10 @@ def main() -> None:
         except KeyError as e:
                 print("Error", e)    
 
+        config[5]["models"]["params"]["args"][
+            "allowed_chains"
+        ] = f"${{list:{os.getenv('ALLOWED_CHAINS')}}}"
+
     with open(Path("optimus", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)
 

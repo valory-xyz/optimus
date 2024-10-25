@@ -3366,20 +3366,7 @@ class DecideAgentStartingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            sender = self.context.agent_address
-            if self.params.agent_transition is True:
-                next_event = Event.MOVE_TO_NEXT_AGENT.value
-            else:
-                next_event = Event.DONT_MOVE_TO_NEXT_AGENT.value
-                    
-            payload = DecideAgentStartingPayload(
-                sender=sender,
-                content=json.dumps(
-                    {
-                        "event": next_event
-                    }
-                ),
-            )
+            payload = DecideAgentStartingPayload(self.context.agent_address, self.params.agent_transition)
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -3395,26 +3382,13 @@ class DecideAgentEndingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            sender = self.context.agent_address
-            if self.params.agent_transition is True:
-                next_event = Event.MOVE_TO_NEXT_AGENT.value
-            else:
-                next_event = Event.DONT_MOVE_TO_NEXT_AGENT.value
-                    
-            payload = DecideAgentEndingPayload(
-                sender=sender,
-                content=json.dumps(
-                    {
-                        "event": next_event
-                    }
-                ),
-            )
-
+            payload = DecideAgentEndingPayload(self.context.agent_address, self.params.agent_transition)
+            
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
-        self.set_done()                   
+        self.set_done()                 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""

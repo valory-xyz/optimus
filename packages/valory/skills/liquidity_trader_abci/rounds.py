@@ -33,6 +33,7 @@ from packages.valory.skills.abstract_round_abci.base import (
     DegenerateRound,
     DeserializedCollection,
     get_name,
+    VotingRound,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     CallCheckpointPayload,
@@ -56,7 +57,8 @@ class StakingState(Enum):
 
 class Event(Enum):
     """LiquidityTraderAbciApp Events"""
-
+    NEGATIVE = "negative"
+    NONE = "none"
     ACTION_EXECUTED = "execute_next_action"
     CHECKPOINT_TX_EXECUTED = "checkpoint_tx_executed"
     DONE = "done"
@@ -398,51 +400,64 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
 
-class DecideAgentStartingRound(CollectSameUntilThresholdRound):
+class DecideAgentStartingRound(VotingRound):
     """DecisionMakingRound"""
 
     payload_class = DecideAgentStartingPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.DONE
+    negative_event = Event.NEGATIVE
+    none_event = Event.NONE
+    no_majority_event = Event.NO_MAJORITY
+    collection_key = get_name(SynchronizedData.participant_to_votes)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if self.threshold_reached:
+        if self.positive_vote_threshold_reached:
             # We reference all the events here to prevent the check-abciapp-specs tool from complaining
-            payload = json.loads(self.most_voted_payload)
-            event = Event(payload["event"])
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
-            return synchronized_data, event
 
+            return synchronized_data, Event.MOVE_TO_NEXT_AGENT
+        
+        if self.negative_vote_threshold_reached:
+            return self.synchronized_data, Event.DONT_MOVE_TO_NEXT_AGENT
+        if self.none_vote_threshold_reached:
+            return self.synchronized_data, self.none_event
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
-            return self.synchronized_data, Event.NO_MAJORITY
+            return self.synchronized_data, self.no_majority_event
         return None
+
     
-class DecideAgentEndingRound(CollectSameUntilThresholdRound):
+class DecideAgentEndingRound(VotingRound):
     """DecideAgentRound"""
 
     payload_class = DecideAgentEndingPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.DONE
+    negative_event = Event.NEGATIVE
+    none_event = Event.NONE
+    no_majority_event = Event.NO_MAJORITY
+    collection_key = get_name(SynchronizedData.participant_to_votes)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if self.threshold_reached:
+        if self.positive_vote_threshold_reached:
             # We reference all the events here to prevent the check-abciapp-specs tool from complaining
-            payload = json.loads(self.most_voted_payload)
-            event = Event(payload["event"])
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
-
-            return synchronized_data, event
-
+            return synchronized_data, Event.MOVE_TO_NEXT_AGENT
+        
+        if self.negative_vote_threshold_reached:
+            return self.synchronized_data, Event.DONT_MOVE_TO_NEXT_AGENT
+        if self.none_vote_threshold_reached:
+            return self.synchronized_data, self.none_event
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
-            return self.synchronized_data, Event.NO_MAJORITY
-        return None  
+            return self.synchronized_data, self.no_majority_event
+        return None
     
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
     """A round that will be called after tx settlement is done."""
@@ -555,6 +570,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONT_MOVE_TO_NEXT_AGENT: CallCheckpointRound,
             Event.MOVE_TO_NEXT_AGENT: SwitchAgentStartingRound,
             Event.DONE: CallCheckpointRound,
+            Event.NONE: CallCheckpointRound,
             Event.NO_MAJORITY: CallCheckpointRound,
         },
         DecideAgentEndingRound: {

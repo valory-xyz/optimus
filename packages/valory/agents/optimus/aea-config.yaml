@@ -37,10 +37,10 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeiaseqi3uzajwqboejbgndxbfbvgjcn7a6vvncmfxjegpvam3m3e3y
+- valory/liquidity_trader_abci:0.1.0:bafybeib2r7z5ufnb5nmtvob4bejb6ql3rrocqb6oinsze7xcaa33ulibye
 - valory/market_data_fetcher_abci:0.1.0:bafybeibaf2ubj56busl7ngaamyjtm3tqsxthluuve6znxeogoxo7ta6b3y
 - valory/strategy_evaluator_abci:0.1.0:bafybeibsk56r3dd5tza5yl2ltbonxdkb7zgfrupgiq3iyzr2ywqycskvz4
-- valory/optimus_abci:0.1.0:bafybeicsgjtgrfqgfhqnecm55d2hxrsqjox5w422adqsabvg2pocb5fvcu
+- valory/optimus_abci:0.1.0:bafybeider6qgvmw64zzigonfp6coaap3gubredzqcz7oq7luf3aqkqincm
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi

@@ -46,14 +46,15 @@ packages/valory/skills/registration_abci/
 packages/valory/skills/reset_pause_abci/
 packages/valory/skills/transaction_settlement_abci/
 packages/valory/skills/termination_abci/
+packages/valory/skills/ipfs_package_downloader/
+packages/valory/skills/market_data_fetcher_abci/
+packages/valory/skills/portfolio_tracker_abci/
+packages/valory/skills/strategy_evaluator_abci/
+packages/valory/skills/trader_decision_maker_abci
+packages/valory/customs
 
-packages/valory/protocols/abci
-packages/valory/protocols/acn
-packages/valory/protocols/contract_api
-packages/valory/protocols/http
-packages/valory/protocols/ipfs
-packages/valory/protocols/ledger_api
-packages/valory/protocols/tendermint
+
+packages/valory/protocols/*
 
 .idea
 **/__pycache__/
@@ -80,15 +81,4 @@ node_modules/
 .env
 
 packages/open_aea/protocols/signing
-packages/eightballer/protocols/order_book
-packages/eightballer/protocols/ohlcv
-packages/eightballer/protocols/balances
-packages/eightballer/protocols/positions
-packages/eightballer/protocols/spot_asset
-packages/eightballer/protocols/orders
-packages/eightballer/protocols/tickers
-packages/eightballer/protocols/default
-packages/eightballer/protocols/markets
-packages/eightballer/contracts/erc_20
-packages/eightballer/contracts/spl_token
-packages/eightballer/connections/dcxt
+packages/eightballer/*

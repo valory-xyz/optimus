@@ -37,10 +37,10 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeigbpqzyvlc4xqkepq7ph5cebp2itr2bn2f4stiv3wpuko5hzzgmre
+- valory/liquidity_trader_abci:0.1.0:bafybeibxgayrhcuc6r63fjvo2zvuurby4d3weasoccyjad5c4el5logcfq
 - valory/market_data_fetcher_abci:0.1.0:bafybeies3ib3ft3tqepogstxjarq3ku4xepnfozyvg2rur5ztq4afchgcq
 - valory/strategy_evaluator_abci:0.1.0:bafybeidbib2sdjgq3354emzcc22zzgdm4z5hjdz2gbvcqabw5j4rdgcx5a
-- valory/optimus_abci:0.1.0:bafybeifdbwlnkhlho22tudcini32gc64kcujisoib3yqlbs6uextv6uwsu
+- valory/optimus_abci:0.1.0:bafybeiddf5rudq2kdlzmy5oq3ukhqzl2sfkzv456uybzzpkbecf73cy2hu
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -152,7 +152,7 @@ type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${str:/Users/gauravlochab/repos/optimus/logs}
+      log_dir: ${str:/logs}
   get_balance:
     args:
       api_id: ${str:get_balance}
@@ -303,7 +303,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/Users/gauravlochab/repos/optimus/data/}
+      store_path: ${str:/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}

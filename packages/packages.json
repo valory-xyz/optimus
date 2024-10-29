@@ -43,7 +43,7 @@
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeicpcpyurm7gxir2gnlsgzeirzomkhcbnzr5txk67zdf4mmg737rtu",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
         "contract/valory/gnosis_safe/0.1.0": "bafybeib375xmvcplw7ageic2np3hq4yqeijrvd5kl7rrdnyvswats6ngmm",
-        "connection/eightballer/dcxt/0.1.0": "bafybeihnaxpiki57ivphf24qpie5g6rxwnztbrymutlw4yuyjxzvj3pdry",
+        "connection/eightballer/dcxt/0.1.0": "bafybeiexzq2nvwi5mpgsnbfjorfd4hr5v56ocy4xshjyqcv43nwcbo6zk4",
         "connection/valory/abci/0.1.0": "bafybeiejymu4ul62zx6weoibnlsrfprfpjnplhjefz6sr6izgdr4sajlnu",
         "connection/valory/http_client/0.23.0": "bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u",
         "connection/valory/ipfs/0.1.0": "bafybeiegnapkvkamis47v5ioza2haerrjdzzb23rptpmcydyneas7jc2wm",

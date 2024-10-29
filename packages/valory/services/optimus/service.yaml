@@ -27,7 +27,7 @@ type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${LOG_DIR:str:/Users/gauravlochab/Documents/Code/optimus/logs}
+      log_dir: ${LOG_DIR:str:/logs}
   params:
     args:
       setup:
@@ -79,7 +79,7 @@ models:
       tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:access_key}
       tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:account_slug}
       tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:project_slug}
-      agent_transition: ${AGENT_TRANSITION:bool:true}
+      agent_transition: ${AGENT_TRANSITION:bool:False}
       tendermint_p2p_url: ${TENDERMINT_P2P_URL_0:str:optimism_tm_0:26656}
       service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
       multisend_batch_size: ${MULTISEND_BATCH_SIZE:int:5}

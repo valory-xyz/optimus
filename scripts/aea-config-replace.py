@@ -88,7 +88,7 @@ def main() -> None:
             config[6]["models"]["params"]["args"][
                 "allowed_chains"
             ] = f"${{list:{os.getenv('ALLOWED_CHAINS')}}}"
-        
+
         except KeyError as e:
             print("Error", e)
 

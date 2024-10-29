@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidsaqz3zc7g7mjfmw5p3zydg4aru546re4yce3ddpyiibocvwvnt4
+agent: valory/optimus:0.1.0:bafybeie2eu7yzb6i4spwgq63zo6jdpbsxam5nlw4ridiatw5jwjjm4qxu4
 number_of_agents: 1
 deployment: {}
 ---
@@ -129,3 +129,21 @@ cert_requests:
   not_before: '2022-01-01'
   public_key: ${ACN_NODE_PUBLIC_KEY:str:02d3a830c9d6ea1ae91936951430dee11f4662f33118b02190693be835359a9d77}
   save_path: .certs/acn_cosmos_11000.txt
+---
+public_id: valory/http_client:0.23.0
+type: connection
+config:
+  host: ${HTTP_CLIENT_HOST:str:127.0.0.1}
+  port: ${HTTP_CLIENT_PORT:int:8000}
+  timeout: ${HTTP_CLIENT_TIMEOUT:int:1200}
+---
+public_id: eightballer/dcxt:0.1.0
+type: connection
+config:
+  target_skill_id: valory/trader_abci:0.1.0
+  exchanges:
+  - name: ${DCXT_EXCHANGE_NAME:str:balancer}
+    key_path: ${DCXT_KEY_PATH:str:ethereum_private_key.txt}
+    ledger_id: ${DCXT_LEDGER_ID:str:ethereum}
+    rpc_url: ${DCXT_RPC_URL:str:http://host.docker.internal:8545}
+    etherscan_api_key: ${DCXT_ETHERSCAN_API_KEY:str:null}

@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
-  behaviours.py: bafybeidutyxryf6h7ooc7ggrdl5lojfv3anrvf3zq4tbwkiwxm7qqrriye
-  composition.py: bafybeiczokwfi2h6qkw4lk5cp52tafddxxysh6qwrnzqt4cfu67yb5a2nq
-  dialogues.py: bafybeift7d4mk4qkzm4rqmdrfv43erhunzyqmwn6pecuumq25amy7q7fp4
+  behaviours.py: bafybeihqhdnqza5f27soi4pf3x3bxqcachbsmx7zceqcw6uv2obgynxrm4
+  composition.py: bafybeibiyxe22c5c33keuosha2t6b4zez2iqghawbtfhumqrubrtsuun4y
+  dialogues.py: bafybeihhgzlutexxt6ry74m2rlaxdhu3ldbvhugmmgxxjlfcxf4xaipisy
   fsm_specification.yaml: bafybeiasafyyxit3jv5tpd73knlw245oge357yj3af6lzvowmu5gqemic4
-  handlers.py: bafybeibjxph27kmpljyeqkednkrfgrtelksfs3kbgjbvh6eycjrfqz5o2y
-  models.py: bafybeibbnyxant6quqcbzwebu5jyws46mjpvpvsxnr3yrnq6slhrbd6zsa
+  handlers.py: bafybeidmh47f6uk3rvgh6ivvb2v43mxugiujoee6zxofhclqoyt7u7r524
+  models.py: bafybeidczdw3drlmdaetc3rvlvniyc6etrdvpdzhlgmvgxj6stfue7vqoy
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -25,7 +25,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
-- valory/liquidity_trader_abci:0.1.0:bafybeibxgayrhcuc6r63fjvo2zvuurby4d3weasoccyjad5c4el5logcfq
+- valory/liquidity_trader_abci:0.1.0:bafybeid7yambarhmg5xnlwxvhqwmwjmvf3wr7a3zzzicmac7buroq5d4we
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
 - valory/market_data_fetcher_abci:0.1.0:bafybeies3ib3ft3tqepogstxjarq3ku4xepnfozyvg2rur5ztq4afchgcq
 - valory/trader_decision_maker_abci:0.1.0:bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm

@@ -152,7 +152,7 @@ type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${str:/logs}
+      log_dir: ${str:/Users/gauravlochab/Documents/Code/optimus/logs}
   get_balance:
     args:
       api_id: ${str:get_balance}
@@ -246,7 +246,7 @@ models:
       service_id: optimus
       service_registry_address: ${str:null}
       setup:
-        all_participants: ${list:["0x08012c56eD8adF43586A3cEf68EEb13FDfF70Ef5"]}
+        all_participants: ${list:["0x1aCD50F973177f4D320913a9Cc494A9c66922fdF"]}
         consensus_threshold: ${int:null}
         safe_contract_address: ${str:0xc4ed6F4B3059AD6aa985A9e47C133a45A39db66e}
       share_tm_config_on_startup: ${bool:false}
@@ -298,12 +298,12 @@ models:
       tenderly_access_key: ${str:access_key}
       tenderly_account_slug: ${str:account_slug}
       tenderly_project_slug: ${str:project_slug}
-      agent_transition: ${bool:True}
+      agent_transition: ${bool:False}
       chain_to_chain_id_mapping: ${str:{"optimism":10,"base":8453,"ethereum":1}}
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/data/}
+      store_path: ${str:/Users/gauravlochab/Documents/Code/optimus/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}

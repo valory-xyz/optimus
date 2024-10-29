@@ -10,12 +10,24 @@ agent: valory/optimus:0.1.0:bafybeie2eu7yzb6i4spwgq63zo6jdpbsxam5nlw4ridiatw5jwj
 number_of_agents: 1
 deployment: {}
 ---
+public_id: valory/ipfs_package_downloader:0.1.0
+type: skill
+models:
+  params:
+    args:
+      cleanup_freq: ${CLEANUP_FREQ:int:50}
+      timeout_limit: ${TIMEOUT_LIMIT:int:3}
+      file_hash_to_id: ${FILE_HASH_TO_ID:list:[["bafybeifpqcxwjjlenpa7n3nnx5ornrg7uz5d7h76ugzhiwk45bx3sx3cta",["sma_strategy"]]]}
+      component_yaml_filename: ${COMPONENT_YAML_FILENAME:str:component.yaml}
+      entry_point_key: ${ENTRY_POINT_KEY:str:entry_point}
+      callable_keys: ${CALLABLE_KEYS:list:["run_callable","transform_callable","evaluate_callable"]}
+---
 public_id: valory/optimus_abci:0.1.0
 type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${LOG_DIR:str:/logs}
+      log_dir: ${LOG_DIR:str:/Users/gauravlochab/Documents/Code/optimus/logs}
   params:
     args:
       setup:
@@ -67,7 +79,7 @@ models:
       tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:access_key}
       tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:account_slug}
       tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:project_slug}
-      agent_transition: ${AGENT_TRANSITION:bool:agent_transition}
+      agent_transition: ${AGENT_TRANSITION:bool:true}
       tendermint_p2p_url: ${TENDERMINT_P2P_URL_0:str:optimism_tm_0:26656}
       service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
       multisend_batch_size: ${MULTISEND_BATCH_SIZE:int:5}
@@ -85,6 +97,25 @@ models:
       max_gas_percentage: ${MAX_GAS_PERCENTAGE:float:0.25}
       balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}}
       allowed_chains: ${ALLOWED_CHAINS:list:["optimism","base"]}
+      tx_timeout: ${TX_TIMEOUT:float:10.0}
+      use_termination: ${USE_TERMINATION:bool:false}
+      validate_timeout: ${VALIDATE_TIMEOUT:int:1205}
+      history_check_timeout: ${HISTORY_CHECK_TIMEOUT:int:1205}
+      token_symbol_whitelist: ${TOKEN_SYMBOL_WHITELIST:list:["coingecko_id=solana&address=So11111111111111111111111111111111111111112"]}
+      strategies_kwargs: ${STRATEGIES_KWARGS:list:[["ma_period",20],["rsi_period",14],["rsi_overbought_threshold",70],["rsi_oversold_threshold",30]]}
+      use_proxy_server: ${USE_PROXY_SERVER:bool:false}
+      expected_swap_tx_cost: ${EXPECTED_SWAP_TX_COST:int:20000000}
+      ipfs_fetch_retries: ${IPFS_FETCH_RETRIES:int:5}
+      squad_vault: ${SQUAD_VAULT:str:39Zh4C687EXLY7CT8gjCxe2hUc3krESjUsqs7A1CKD5E}
+      agent_balance_threshold: ${AGENT_BALANCE_THRESHOLD:int:50000000}
+      multisig_balance_threshold: ${MULTISIG_BALANCE_THRESHOLD:int:1000000000}
+      tracked_tokens: ${TRACKED_TOKENS:list:[]}
+      refill_action_timeout: ${REFILL_ACTION_TIMEOUT:int:10}
+      rpc_polling_interval: ${RPC_POLLING_INTERVAL:int:5}
+      epsilon: ${EPSILON:float:0.1}
+      sharpe_threshold: ${SHARPE_THRESHOLD:float:1.0}
+      ledger_ids: ${LEDGER_IDS:list:["ethereum"]}
+      trade_size_in_base_token: ${TRADE_SIZE_IN_BASE_TOKEN:float:0.0001}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -94,6 +125,20 @@ models:
       credits: ${COINGECKO_CREDITS:int:10000}
       rate_limited_code: ${COINGECKO_RATE_LIMITED_CODE:int:429}
       chain_to_platform_id_mapping: ${COINGECKO_CHAIN_TO_PLATFORM_ID_MAPPING:str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}}
+      prices_field: ${COINGECKO_PRICES_FIELD:str:prices}
+      endpoint: ${COINGECKO_ENDPOINT:str:https://api.coingecko.com/api/v3/coins/{token_id}/market_chart?vs_currency=usd&days=1}
+  tx_settlement_proxy:
+    args:
+      parameters:
+        amount: ${TX_PROXY_SWAP_AMOUNT:int:100000000}
+        slippageBps: ${TX_PROXY_SLIPPAGE_BPS:int:5}
+        resendAmount: ${TX_PROXY_SPAM_AMOUNT:int:200}
+        timeoutInMs: ${TX_PROXY_VERIFICATION_TIMEOUT_MS:int:120000}
+        priorityFee: ${TX_PROXY_PRIORITY_FEE:int:5000000}
+      response_key: ${TX_PROXY_RESPONSE_KEY:str:null}
+      response_type: ${TX_PROXY_RESPONSE_TYPE:str:dict}
+      retries: ${TX_PROXY_RETRIES:int:5}
+      url: ${TX_PROXY_URL:str:http://localhost:3000/tx}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

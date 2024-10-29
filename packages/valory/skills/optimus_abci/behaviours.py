@@ -28,16 +28,13 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.liquidity_trader_abci.behaviours import (
     LiquidityTraderRoundBehaviour,
 )
-
-from packages.valory.skills.portfolio_tracker_abci.behaviours import (
-    PortfolioTrackerRoundBehaviour,
-)
-
 from packages.valory.skills.market_data_fetcher_abci.behaviours import (
     MarketDataFetcherRoundBehaviour,
 )
-
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp
+from packages.valory.skills.portfolio_tracker_abci.behaviours import (
+    PortfolioTrackerRoundBehaviour,
+)
 from packages.valory.skills.registration_abci.behaviours import (
     AgentRegistrationRoundBehaviour,
     RegistrationStartupBehaviour,
@@ -45,7 +42,6 @@ from packages.valory.skills.registration_abci.behaviours import (
 from packages.valory.skills.reset_pause_abci.behaviours import (
     ResetPauseABCIConsensusBehaviour,
 )
-
 from packages.valory.skills.strategy_evaluator_abci.behaviours.round_behaviour import (
     AgentStrategyEvaluatorRoundBehaviour,
 )
@@ -53,7 +49,6 @@ from packages.valory.skills.termination_abci.behaviours import (
     BackgroundBehaviour,
     TerminationAbciBehaviours,
 )
-
 from packages.valory.skills.trader_decision_maker_abci.behaviours import (
     TraderDecisionMakerRoundBehaviour,
 )

@@ -50,6 +50,7 @@ from packages.valory.skills.strategy_evaluator_abci.handlers import (
     DcxtOrdersHandler as BaseDcxtOrdersHandler,
 )
 
+
 ABCIHandler = BaseABCIRoundHandler
 HttpHandler = BaseHttpHandler
 SigningHandler = BaseSigningHandler

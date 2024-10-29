@@ -32,18 +32,18 @@ from packages.valory.skills.abstract_round_abci.base import (
     CollectionRound,
     DegenerateRound,
     DeserializedCollection,
-    get_name,
     VotingRound,
+    get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     CallCheckpointPayload,
     CheckStakingKPIMetPayload,
+    DecideAgentEndingPayload,
+    DecideAgentStartingPayload,
     DecisionMakingPayload,
     EvaluateStrategyPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
-    DecideAgentStartingPayload,
-    DecideAgentEndingPayload,
 )
 
 
@@ -57,6 +57,7 @@ class StakingState(Enum):
 
 class Event(Enum):
     """LiquidityTraderAbciApp Events"""
+
     NEGATIVE = "negative"
     NONE = "none"
     ACTION_EXECUTED = "execute_next_action"
@@ -76,7 +77,7 @@ class Event(Enum):
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
     STAKING_KPI_MET = "staking_kpi_met"
     MOVE_TO_NEXT_AGENT = "move_to_next_agent"
-    DONT_MOVE_TO_NEXT_AGENT = "dont_move_to_next_agent" # nosec
+    DONT_MOVE_TO_NEXT_AGENT = "dont_move_to_next_agent"  # nosec
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -400,6 +401,7 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
 
+
 class DecideAgentStartingRound(VotingRound):
     """DecisionMakingRound"""
 
@@ -415,9 +417,8 @@ class DecideAgentStartingRound(VotingRound):
             # We reference all the events here to prevent the check-abciapp-specs tool from complaining
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
-
             return synchronized_data, Event.MOVE_TO_NEXT_AGENT
-        
+
         if self.negative_vote_threshold_reached:
             return self.synchronized_data, Event.DONT_MOVE_TO_NEXT_AGENT
         if self.none_vote_threshold_reached:
@@ -428,7 +429,7 @@ class DecideAgentStartingRound(VotingRound):
             return self.synchronized_data, self.no_majority_event
         return None
 
-    
+
 class DecideAgentEndingRound(VotingRound):
     """DecideAgentRound"""
 
@@ -444,7 +445,7 @@ class DecideAgentEndingRound(VotingRound):
             # We reference all the events here to prevent the check-abciapp-specs tool from complaining
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
             return synchronized_data, Event.MOVE_TO_NEXT_AGENT
-        
+
         if self.negative_vote_threshold_reached:
             return self.synchronized_data, Event.DONT_MOVE_TO_NEXT_AGENT
         if self.none_vote_threshold_reached:
@@ -454,7 +455,8 @@ class DecideAgentEndingRound(VotingRound):
         ):
             return self.synchronized_data, self.no_majority_event
         return None
-    
+
+
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
     """A round that will be called after tx settlement is done."""
 
@@ -503,13 +505,16 @@ class FinishedTxPreparationRound(DegenerateRound):
 
 
 class FailedMultiplexerRound(DegenerateRound):
-    """FailedMultiplexerRound"""   
+    """FailedMultiplexerRound"""
+
 
 class SwitchAgentStartingRound(DegenerateRound):
-    """SwitchAgentRound"""   
+    """SwitchAgentRound"""
+
 
 class SwitchAgentEndingRound(DegenerateRound):
-    """SwitchAgentRound"""  
+    """SwitchAgentRound"""
+
 
 class LiquidityTraderAbciApp(AbciApp[Event]):
     """LiquidityTraderAbciApp"""
@@ -586,8 +591,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
         FinishedDecisionMakingRound: {},
-        SwitchAgentStartingRound:{},
-        SwitchAgentEndingRound:{},
+        SwitchAgentStartingRound: {},
+        SwitchAgentEndingRound: {},
         FinishedCallCheckpointRound: {},
         FinishedCheckStakingKPIMetRound: {},
         FailedMultiplexerRound: {},
@@ -605,7 +610,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     event_to_timeout: Dict[Event, float] = {
         Event.ROUND_TIMEOUT: 30.0,
         Event.NONE: 30.0,
-
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         {

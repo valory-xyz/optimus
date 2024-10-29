@@ -36,7 +36,6 @@ from packages.eightballer.protocols.tickers.dialogues import (
 from packages.eightballer.protocols.tickers.dialogues import (
     TickersDialogues as BaseTickersDialogues,
 )
-
 from packages.valory.skills.abstract_round_abci.dialogues import (
     AbciDialogue as BaseAbciDialogue,
 )

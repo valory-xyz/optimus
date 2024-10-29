@@ -79,6 +79,10 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     CallCheckpointRound,
     CheckStakingKPIMetPayload,
     CheckStakingKPIMetRound,
+    DecideAgentEndingPayload,
+    DecideAgentEndingRound,
+    DecideAgentStartingPayload,
+    DecideAgentStartingRound,
     DecisionMakingPayload,
     DecisionMakingRound,
     EvaluateStrategyPayload,
@@ -91,10 +95,6 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     PostTxSettlementRound,
     StakingState,
     SynchronizedData,
-    DecideAgentStartingRound,
-    DecideAgentStartingPayload,
-    DecideAgentEndingRound,
-    DecideAgentEndingPayload,
 )
 from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import (
     SimpleStrategyBehaviour,
@@ -3358,6 +3358,7 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
                 "Gas used or effective gas price not found in the response."
             )
 
+
 class DecideAgentStartingBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that executes all the actions."""
 
@@ -3366,13 +3367,16 @@ class DecideAgentStartingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            payload = DecideAgentStartingPayload(self.context.agent_address, self.params.agent_transition)
+            payload = DecideAgentStartingPayload(
+                self.context.agent_address, self.params.agent_transition
+            )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
-        self.set_done() 
+        self.set_done()
+
 
 class DecideAgentEndingBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that executes all the actions."""
@@ -3382,13 +3386,16 @@ class DecideAgentEndingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            payload = DecideAgentEndingPayload(self.context.agent_address, self.params.agent_transition)
-            
+            payload = DecideAgentEndingPayload(
+                self.context.agent_address, self.params.agent_transition
+            )
+
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
-        self.set_done()                 
+        self.set_done()
+
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
@@ -3405,4 +3412,3 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         DecideAgentEndingBehaviour,
         PostTxSettlementBehaviour,
     ]
-

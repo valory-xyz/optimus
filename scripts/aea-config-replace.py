@@ -32,7 +32,7 @@ def main() -> None:
     load_dotenv()
 
     with open(Path("optimus", "aea-config.yaml"), "r", encoding="utf-8") as file:
-        print("config path",Path("optimus", "aea-config.yaml"))
+        print("config path", Path("optimus", "aea-config.yaml"))
         config = list(yaml.safe_load_all(file))
 
         # Ledger RPCs
@@ -85,7 +85,7 @@ def main() -> None:
                 "api_key"
             ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
         except KeyError as e:
-                print("Error", e)    
+            print("Error", e)
 
         config[5]["models"]["params"]["args"][
             "allowed_chains"

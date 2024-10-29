@@ -10,9 +10,9 @@ fingerprint:
   behaviours.py: bafybeidutyxryf6h7ooc7ggrdl5lojfv3anrvf3zq4tbwkiwxm7qqrriye
   composition.py: bafybeiczokwfi2h6qkw4lk5cp52tafddxxysh6qwrnzqt4cfu67yb5a2nq
   dialogues.py: bafybeift7d4mk4qkzm4rqmdrfv43erhunzyqmwn6pecuumq25amy7q7fp4
-  fsm_specification.yaml: bafybeiehe6ps7xi7i7tu4mduid7vbvszhsiu5juyard24i3nhtqgljpcza
+  fsm_specification.yaml: bafybeicyobvq7eow6dabjk6sd7yyqh2agbrumkuiljz2hc2ouz3by7tjui
   handlers.py: bafybeibjxph27kmpljyeqkednkrfgrtelksfs3kbgjbvh6eycjrfqz5o2y
-  models.py: bafybeibbnyxant6quqcbzwebu5jyws46mjpvpvsxnr3yrnq6slhrbd6zsa
+  models.py: bafybeicgyhodahs7r5nizhto3omlbu3vd2ryehgbfmocy6d4sgi3rddqgy
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -25,12 +25,12 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
-- valory/liquidity_trader_abci:0.1.0:bafybeib2r7z5ufnb5nmtvob4bejb6ql3rrocqb6oinsze7xcaa33ulibye
+- valory/liquidity_trader_abci:0.1.0:bafybeigbpqzyvlc4xqkepq7ph5cebp2itr2bn2f4stiv3wpuko5hzzgmre
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
-- valory/market_data_fetcher_abci:0.1.0:bafybeibaf2ubj56busl7ngaamyjtm3tqsxthluuve6znxeogoxo7ta6b3y
+- valory/market_data_fetcher_abci:0.1.0:bafybeies3ib3ft3tqepogstxjarq3ku4xepnfozyvg2rur5ztq4afchgcq
 - valory/trader_decision_maker_abci:0.1.0:bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm
-- valory/strategy_evaluator_abci:0.1.0:bafybeibsk56r3dd5tza5yl2ltbonxdkb7zgfrupgiq3iyzr2ywqycskvz4
-- valory/portfolio_tracker_abci:0.1.0:bafybeidprqeiomlvs6e5nvcqr2hnntwiuwyaxifidznjowoexx65yoplmq
+- valory/strategy_evaluator_abci:0.1.0:bafybeidbib2sdjgq3354emzcc22zzgdm4z5hjdz2gbvcqabw5j4rdgcx5a
+- valory/portfolio_tracker_abci:0.1.0:bafybeihigssk7zxefcr44hpxwrnsa6ho53zyulqhepxvm3idsywzd6w5wq
 behaviours:
   main:
     args: {}

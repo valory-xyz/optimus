@@ -8,7 +8,7 @@ fingerprint:
   __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/dcxt:0.1.0:bafybeihnaxpiki57ivphf24qpie5g6rxwnztbrymutlw4yuyjxzvj3pdry
+- eightballer/dcxt:0.1.0:bafybeiexzq2nvwi5mpgsnbfjorfd4hr5v56ocy4xshjyqcv43nwcbo6zk4
 - valory/abci:0.1.0:bafybeiejymu4ul62zx6weoibnlsrfprfpjnplhjefz6sr6izgdr4sajlnu
 - valory/http_client:0.23.0:bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
@@ -37,17 +37,17 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeib2r7z5ufnb5nmtvob4bejb6ql3rrocqb6oinsze7xcaa33ulibye
-- valory/market_data_fetcher_abci:0.1.0:bafybeibaf2ubj56busl7ngaamyjtm3tqsxthluuve6znxeogoxo7ta6b3y
-- valory/strategy_evaluator_abci:0.1.0:bafybeibsk56r3dd5tza5yl2ltbonxdkb7zgfrupgiq3iyzr2ywqycskvz4
-- valory/optimus_abci:0.1.0:bafybeider6qgvmw64zzigonfp6coaap3gubredzqcz7oq7luf3aqkqincm
+- valory/liquidity_trader_abci:0.1.0:bafybeigbpqzyvlc4xqkepq7ph5cebp2itr2bn2f4stiv3wpuko5hzzgmre
+- valory/market_data_fetcher_abci:0.1.0:bafybeies3ib3ft3tqepogstxjarq3ku4xepnfozyvg2rur5ztq4afchgcq
+- valory/strategy_evaluator_abci:0.1.0:bafybeidbib2sdjgq3354emzcc22zzgdm4z5hjdz2gbvcqabw5j4rdgcx5a
+- valory/optimus_abci:0.1.0:bafybeifdbwlnkhlho22tudcini32gc64kcujisoib3yqlbs6uextv6uwsu
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
 - valory/trader_decision_maker_abci:0.1.0:bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm
 - valory/ipfs_package_downloader:0.1.0:bafybeieokinjosnulrsee3kbj7ly4kjfx2ub6lmwkyplgs33vxgmx3fbvm
-- valory/portfolio_tracker_abci:0.1.0:bafybeidprqeiomlvs6e5nvcqr2hnntwiuwyaxifidznjowoexx65yoplmq
+- valory/portfolio_tracker_abci:0.1.0:bafybeihigssk7zxefcr44hpxwrnsa6ho53zyulqhepxvm3idsywzd6w5wq
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -152,7 +152,7 @@ type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${str:/logs}
+      log_dir: ${str:/Users/gauravlochab/repos/optimus/logs}
   get_balance:
     args:
       api_id: ${str:get_balance}
@@ -272,7 +272,7 @@ models:
       termination_from_block: ${int:34088325}
       allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
       initial_assets: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
-      safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
+      safe_contract_addresses: ${str:{"ethereum":"0x553Ce54DE9b219ecFfa9B65AEF49597c884AC64a","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C"}}
       merkl_fetch_campaigns_args: ${str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}}
       allowed_chains: ${list:["optimism","base"]}
       gas_reserve: ${str:{"ethereum":1000,"optimism":1000,"base":1000}}
@@ -298,12 +298,12 @@ models:
       tenderly_access_key: ${str:access_key}
       tenderly_account_slug: ${str:account_slug}
       tenderly_project_slug: ${str:project_slug}
-      agent_transition: ${bool:true}
+      agent_transition: ${bool:True}
       chain_to_chain_id_mapping: ${str:{"optimism":10,"base":8453,"ethereum":1}}
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/data/}
+      store_path: ${str:/Users/gauravlochab/repos/optimus/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}

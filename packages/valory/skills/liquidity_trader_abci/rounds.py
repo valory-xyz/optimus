@@ -406,8 +406,6 @@ class DecideAgentStartingRound(VotingRound):
     payload_class = DecideAgentStartingPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.DONE
-    negative_event = Event.NEGATIVE
-    none_event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_votes)
 
@@ -437,8 +435,6 @@ class DecideAgentEndingRound(VotingRound):
     payload_class = DecideAgentEndingPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.DONE
-    negative_event = Event.NEGATIVE
-    none_event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_votes)
 
@@ -577,6 +573,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.DONT_MOVE_TO_NEXT_AGENT: PostTxSettlementRound,
             Event.MOVE_TO_NEXT_AGENT: SwitchAgentEndingRound,
             Event.DONE: PostTxSettlementRound,
+            Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
         },
         PostTxSettlementRound: {
@@ -607,6 +604,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
     }
     event_to_timeout: Dict[Event, float] = {
         Event.ROUND_TIMEOUT: 30.0,
+        Event.NONE: 30.0,
+
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         {

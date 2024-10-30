@@ -19,10 +19,10 @@ contracts:
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeicpcpyurm7gxir2gnlsgzeirzomkhcbnzr5txk67zdf4mmg737rtu
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeihafe524ilngwzavkhwz4er56p7nyar26lfm7lrksfiqvvzo3kdcq
-- valory/balancer_weighted_pool:0.1.0:bafybeidyjlrlq3jrbackewedwt5irokhjupxgpqfgur2ri426cap2oqt7a
-- valory/balancer_vault:0.1.0:bafybeie6twptrkqddget7pjijzob2c4jqmrrtpkwombneh35xx56djz4ru
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeigadr3nyx6tkrual7oqn2qiup35addfevromxjzzlvkiukpyhtz6y
-- valory/uniswap_v3_pool:0.1.0:bafybeih64nqgwlverl2tubnkymtlvewngn2pthzzfjewvxpk7dt2im6gza
+- valory/balancer_weighted_pool:0.1.0:bafybeigqt5fofqh4jakrty5xkyap5jkuv4ib7oeyxprksb7xf4dqivxpcq
+- valory/balancer_vault:0.1.0:bafybeib3gxzp73qpfenwei4w4lridam2sdnzwszwyjc6bn342d7tuwrttu
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeibza3bamh3dcuc5i3dysrhtb5lbuetd4s2hzbolqxkzywtkkhihva
+- valory/uniswap_v3_pool:0.1.0:bafybeicvypbpkhshkuaiul35mojqupr6vxqinfqzypbebmmbxsvlil3hva
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
-- valory/liquidity_trader_abci:0.1.0:bafybeihio7imf5ss6347irw2sd5crek2tq6vg2vy6z2nmwadmpnehvkpbi
-- valory/optimus_abci:0.1.0:bafybeibqps5sjkcictxgifovck5x5xquuiyckopq6js3ymvaogl5mpn3tu
+- valory/liquidity_trader_abci:0.1.0:bafybeid6i25tn6xnpf2qljm2cr26tsqxlfrdgiyt4m3qpjpu25t77fgbmq
+- valory/optimus_abci:0.1.0:bafybeigfrgx2ocrr4ujcwexsv2xvbfaawauef7lmrpvcjck5gqemubjqry
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
@@ -72,7 +72,7 @@ logging_config:
 skill_exception_policy: stop_and_exit
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.57.0
+    version: ==1.59.0
 default_connection: null
 ---
 public_id: valory/abci:0.1.0

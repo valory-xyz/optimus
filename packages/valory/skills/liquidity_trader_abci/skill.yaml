@@ -23,15 +23,15 @@ fingerprint_ignore_patterns: []
 connections: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeib375xmvcplw7ageic2np3hq4yqeijrvd5kl7rrdnyvswats6ngmm
-- valory/balancer_weighted_pool:0.1.0:bafybeidyjlrlq3jrbackewedwt5irokhjupxgpqfgur2ri426cap2oqt7a
-- valory/balancer_vault:0.1.0:bafybeie6twptrkqddget7pjijzob2c4jqmrrtpkwombneh35xx56djz4ru
-- valory/erc20:0.1.0:bafybeiav4gh7lxfnwp4f7oorkbvjxrdsgjgyhl43rgbblaugtl76zlx7vy
+- valory/balancer_weighted_pool:0.1.0:bafybeigqt5fofqh4jakrty5xkyap5jkuv4ib7oeyxprksb7xf4dqivxpcq
+- valory/balancer_vault:0.1.0:bafybeib3gxzp73qpfenwei4w4lridam2sdnzwszwyjc6bn342d7tuwrttu
+- valory/erc20:0.1.0:bafybeiemh4warjroyqwkuaso3jwfjfvobyuydj5xyppi7cepo7wtu5ab64
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeigadr3nyx6tkrual7oqn2qiup35addfevromxjzzlvkiukpyhtz6y
-- valory/uniswap_v3_pool:0.1.0:bafybeih64nqgwlverl2tubnkymtlvewngn2pthzzfjewvxpk7dt2im6gza
-- valory/merkl_distributor:0.1.0:bafybeihaqsvmncuzmwv2r6iuzc5t7ur6ugdhephz7ydftypksjidpsylbq
-- valory/staking_token:0.1.0:bafybeifrvtkofw5c26b3irm6izqfdpik6vpjhm6hqwcdzx333h6vhdanai
-- valory/staking_activity_checker:0.1.0:bafybeibjzsi2r5b6xd4iwl4wbwldptnynryzsdpifym4mkv32ynswx22ou
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeibza3bamh3dcuc5i3dysrhtb5lbuetd4s2hzbolqxkzywtkkhihva
+- valory/uniswap_v3_pool:0.1.0:bafybeicvypbpkhshkuaiul35mojqupr6vxqinfqzypbebmmbxsvlil3hva
+- valory/merkl_distributor:0.1.0:bafybeig2dedt2lrvhpvpifhgv3j3v7v62iwu6jzi36zs2dldm5alst2wpm
+- valory/staking_token:0.1.0:bafybeiaxmfmcmya6ece6sjsmpk5oorfpetkxj264jkkwmpoue7d5zgia7y
+- valory/staking_activity_checker:0.1.0:bafybeih73uqolwmfxcagqxlaoyutmfwvzjg5lwknmahu5oipnmbyicjbcy
 protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni

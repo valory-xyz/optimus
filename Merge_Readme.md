@@ -75,14 +75,13 @@ Deploy [Safe](https://safe.global/) contracts on the following networks:
 - Ethereum Mainnet
 - Optimism
 - Base
-- Mode
 
 ### b. Fund Your Safe and Agent Addresses
 
 - **Safe Addresses**:
   - Deposit **ETH** and **USDC** into your Safe address on **Ethereum Mainnet**.
 - **Agent Addresses**:
-  - Deposit **ETH** into your agent addresses on all networks (Ethereum Mainnet, Optimism, Base, Mode) to cover gas fees.
+  - Deposit **ETH** into your agent addresses on all networks (Ethereum Mainnet, Optimism, Base) to cover gas fees.
 
 ### c. Obtain API Keys
 
@@ -95,29 +94,31 @@ Deploy [Safe](https://safe.global/) contracts on the following networks:
   - API Key
   - Obtain it from your account's [Developer Dashboard](https://www.coingecko.com/account/dashboard).
 
-### d. Set Environment Variables
+### d. Create a `.env` File
 
-Replace placeholder values with your actual data:
+Instead of exporting environment variables, create a `.env` file in your project directory and add the following configurations. Replace placeholder values with your actual data:
 
-```bash
-export ETHEREUM_LEDGER_RPC=YOUR_ETHEREUM_RPC_URL
-export OPTIMISM_LEDGER_RPC=YOUR_OPTIMISM_RPC_URL
-export BASE_LEDGER_RPC=YOUR_BASE_RPC_URL
-
-export ALL_PARTICIPANTS='["YOUR_AGENT_ADDRESS"]'
-export SAFE_CONTRACT_ADDRESSES='{
+```dotenv
+PYTHONWARNINGS="ignore"
+ALL_PARTICIPANTS=["YOUR_AGENT_ADDRESS"]
+SAFE_CONTRACT_ADDRESSES='{
   "ethereum": "YOUR_SAFE_ADDRESS_ON_ETHEREUM",
   "optimism": "YOUR_SAFE_ADDRESS_ON_OPTIMISM",
-  "base": "YOUR_SAFE_ADDRESS_ON_BASE",
-  "mode": "YOUR_SAFE_ADDRESS_ON_MODE"
+  "base": "YOUR_SAFE_ADDRESS_ON_BASE"
 }'
-
-export SLIPPAGE_FOR_SWAP=0.09
-export TENDERLY_ACCESS_KEY=YOUR_TENDERLY_ACCESS_KEY
-export TENDERLY_ACCOUNT_SLUG=YOUR_TENDERLY_ACCOUNT_SLUG
-export TENDERLY_PROJECT_SLUG=YOUR_TENDERLY_PROJECT_SLUG
-export COINGECKO_API_KEY=YOUR_COINGECKO_API_KEY
+ETHEREUM_LEDGER_RPC=YOUR_ETHEREUM_RPC_URL
+OPTIMISM_LEDGER_RPC=YOUR_OPTIMISM_RPC_URL
+BASE_LEDGER_RPC=YOUR_BASE_RPC_URL
+MODE_LEDGER_RPC=
+SLIPPAGE_FOR_SWAP=0.09
+TENDERLY_ACCESS_KEY=YOUR_TENDERLY_ACCESS_KEY
+TENDERLY_ACCOUNT_SLUG=YOUR_TENDERLY_ACCOUNT_SLUG
+TENDERLY_PROJECT_SLUG=YOUR_TENDERLY_PROJECT_SLUG
+COINGECKO_API_KEY=YOUR_COINGECKO_API_KEY
+ALLOWED_CHAINS=["optimism","base"]
 ```
+
+**Note:** Ensure you remove any references to the **Mode** network, as it's not required for Optimus.
 
 ---
 
@@ -127,15 +128,19 @@ If you prefer to run the **BabyDegen** agent, follow these additional steps:
 
 ### a. Set the AGENT_TRANSITION Flag
 
-Set the `AGENT_TRANSITION` flag to `true` in your environment or configuration files.
+Set the `AGENT_TRANSITION` flag to `true` in your `.env` file:
+
+```dotenv
+AGENT_TRANSITION=true
+```
 
 ### b. Update Safe Address and Participants
 
 Replace placeholders with your actual Safe address and agent address:
 
-```bash
-export SAFE_ADDRESS="YOUR_SAFE_ADDRESS"
-export ALL_PARTICIPANTS='["YOUR_AGENT_ADDRESS"]'
+```dotenv
+SAFE_ADDRESS="YOUR_SAFE_ADDRESS"
+ALL_PARTICIPANTS=["YOUR_AGENT_ADDRESS"]
 ```
 
 ### c. Fund the Safe Account

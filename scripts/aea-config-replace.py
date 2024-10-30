@@ -71,7 +71,7 @@ def main() -> None:
 
             config[6]["models"]["params"]["args"][
                 "agent_transition"
-            ] = f"${{bool:{os.getenv('AGENT_TRANSITION')}}}"
+            ] = f"${{bool:{os.getenv('AGENT_TRANSITION', 'False') == 'True'}}}"
 
             config[6]["models"]["params"]["args"][
                 "tenderly_account_slug"

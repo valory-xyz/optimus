@@ -99,20 +99,20 @@ type: connection
 config:
   ledger_apis:
     ethereum:
-      address: ${ETHEREUM_LEDGER_RPC:str:https://virtual.mainnet.rpc.tenderly.co/85a9fd10-356e-4526-b1f6-7148366bf227}
-      chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
-      poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
-      default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      address: https://virtual.mainnet.rpc.tenderly.co/85a9fd10-356e-4526-b1f6-7148366bf227
+      chain_id: 1
+      poa_chain: false
+      default_gas_price_strategy: eip1559
     base:
-      address: ${BASE_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
-      chain_id: ${BASE_LEDGER_CHAIN_ID:int:8453}
-      poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:false}
-      default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
+      address: https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46
+      chain_id: 8453
+      poa_chain: false
+      default_gas_price_strategy: eip1559
     optimism:
-      address: ${OPTIMISM_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
-      chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:10}
-      poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
-      default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
+      address: https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46
+      chain_id: 10
+      poa_chain: false
+      default_gas_price_strategy: eip1559
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

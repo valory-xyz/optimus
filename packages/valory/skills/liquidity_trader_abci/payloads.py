@@ -26,11 +26,35 @@ from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 
 
 @dataclass(frozen=True)
+class MultisigTxPayload(BaseTxPayload):
+    """Represents a transaction payload for preparing an on-chain transaction to be sent via the agents' multisig."""
+
+    tx_submitter: str
+    tx_hash: Optional[str]
+    safe_contract_address: Optional[str]
+    chain_id: Optional[str]
+
+
+@dataclass(frozen=True)
+class CallCheckpointPayload(MultisigTxPayload):
+    """A transaction payload for the CallCheckpointRound."""
+
+    service_staking_state: int
+    min_num_of_safe_tx_required: Optional[int]
+
+
+@dataclass(frozen=True)
+class CheckStakingKPIMetPayload(MultisigTxPayload):
+    """A transaction payload for the CheckStakingKPIMetRound."""
+
+    is_staking_kpi_met: Optional[bool]
+
+
+@dataclass(frozen=True)
 class GetPositionsPayload(BaseTxPayload):
     """Represent a transaction payload for the GetPositionsRound."""
 
     positions: Optional[str]
-    current_pool: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -43,5 +67,12 @@ class EvaluateStrategyPayload(BaseTxPayload):
 @dataclass(frozen=True)
 class DecisionMakingPayload(BaseTxPayload):
     """Represent a transaction payload for the DecisionMakingRound."""
+
+    content: str
+
+
+@dataclass(frozen=True)
+class PostTxSettlementPayload(BaseTxPayload):
+    """Represent a transaction payload for the PostTxSettlementRound."""
 
     content: str

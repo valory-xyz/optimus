@@ -32,25 +32,45 @@ from packages.valory.skills.abstract_round_abci.base import (
     CollectionRound,
     DegenerateRound,
     DeserializedCollection,
-    EventToTimeout,
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
+    CallCheckpointPayload,
+    CheckStakingKPIMetPayload,
     DecisionMakingPayload,
     EvaluateStrategyPayload,
     GetPositionsPayload,
+    PostTxSettlementPayload,
 )
+
+
+class StakingState(Enum):
+    """Staking state enumeration for the staking."""
+
+    UNSTAKED = 0
+    STAKED = 1
+    EVICTED = 2
 
 
 class Event(Enum):
     """LiquidityTraderAbciApp Events"""
 
-    ERROR = "error"
-    ROUND_TIMEOUT = "round_timeout"
-    NO_MAJORITY = "no_majority"
+    ACTION_EXECUTED = "execute_next_action"
+    CHECKPOINT_TX_EXECUTED = "checkpoint_tx_executed"
     DONE = "done"
-    WAIT = "wait"
+    ERROR = "error"
+    NEXT_CHECKPOINT_NOT_REACHED_YET = "next_checkpoint_not_reached_yet"
+    NO_MAJORITY = "no_majority"
+    ROUND_TIMEOUT = "round_timeout"
+    SERVICE_EVICTED = "service_evicted"
+    SERVICE_NOT_STAKED = "service_not_staked"
     SETTLE = "settle"
+    UNRECOGNIZED = "unrecognized"
+    UPDATE = "update"
+    VANITY_TX_EXECUTED = "vanity_tx_executed"
+    WAIT = "wait"
+    STAKING_KPI_NOT_MET = "staking_kpi_not_met"
+    STAKING_KPI_MET = "staking_kpi_met"  # nosec
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -95,15 +115,6 @@ class SynchronizedData(BaseSynchronizedData):
         return positions
 
     @property
-    def current_pool(self) -> Dict[str, Any]:
-        """Get the current pool"""
-        serialized = self.db.get("current_pool", "{}")
-        if serialized is None:
-            serialized = "{}"
-        current_pool = json.loads(serialized)
-        return current_pool
-
-    @property
     def participant_to_actions_round(self) -> DeserializedCollection:
         """Get the participants to actions rounds"""
         return self._get_deserialized("participant_to_actions_round")
@@ -118,18 +129,181 @@ class SynchronizedData(BaseSynchronizedData):
         return actions
 
     @property
-    def transaction_history(self) -> Optional[List[Dict[str, Any]]]:
-        """Get the transactions"""
-        serialized = self.db.get("transactions", "[]")
-        if serialized is None:
-            serialized = "[]"
-        transactions = json.loads(serialized)
-        return transactions
+    def last_executed_action_index(self) -> Optional[int]:
+        """Get the last executed action index"""
+        return cast(int, self.db.get("last_executed_action_index", None))
 
     @property
-    def last_action_index(self) -> Optional[int]:
-        """Get the current action index"""
-        return cast(int, self.db.get("last_action_index", -1))
+    def final_tx_hash(self) -> str:
+        """Get the verified tx hash."""
+        return cast(str, self.db.get_strict("final_tx_hash"))
+
+    @property
+    def last_reward_claimed_timestamp(self) -> Optional[int]:
+        """Get the last reward claimed timestamp."""
+        return cast(int, self.db.get("last_reward_claimed_timestamp", None))
+
+    @property
+    def service_staking_state(self) -> Optional[int]:
+        """Get the min number of safe tx required."""
+        return cast(int, self.db.get("service_staking_state"))
+
+    @property
+    def min_num_of_safe_tx_required(self) -> Optional[int]:
+        """Get the min number of safe tx required."""
+        return cast(int, self.db.get("min_num_of_safe_tx_required"))
+
+    @property
+    def participant_to_checkpoint(self) -> DeserializedCollection:
+        """Get the participants to the checkpoint round."""
+        return self._get_deserialized("participant_to_checkpoint")
+
+    @property
+    def participant_to_staking_kpi(self) -> DeserializedCollection:
+        """Get the participants to the CheckStakingKPIMet round."""
+        return self._get_deserialized("participant_to_staking_kpi")
+
+    @property
+    def is_staking_kpi_met(self) -> Optional[bool]:
+        """Get kpi met for the day."""
+        return cast(int, self.db.get("is_staking_kpi_met", False))
+
+    @property
+    def chain_id(self) -> Optional[str]:
+        """Get the chain id."""
+        return cast(str, self.db.get("chain_id", None))
+
+    @property
+    def period_number_at_last_cp(self) -> Optional[int]:
+        """Get the period number at last cp."""
+        return cast(int, self.db.get("period_number_at_last_cp", 0))
+
+    @property
+    def last_executed_route_index(self) -> Optional[int]:
+        """Get the last executed route index."""
+        return cast(int, self.db.get("last_executed_route_index", None))
+
+    @property
+    def last_executed_step_index(self) -> Optional[int]:
+        """Get the last executed step index."""
+        return cast(int, self.db.get("last_executed_step_index", None))
+
+    @property
+    def routes_retry_attempt(self) -> Optional[int]:
+        """Get the routes retry attempt index."""
+        return cast(int, self.db.get("routes_retry_attempt", 0))
+
+    @property
+    def routes(self) -> Optional[List[Dict[str, Any]]]:
+        """Get the routes"""
+        serialized = self.db.get("routes", "[]")
+        if serialized is None:
+            serialized = "[]"
+        routes = json.loads(serialized)
+        return routes
+
+    @property
+    def fee_details(self) -> Optional[Dict[str, Any]]:
+        """Get fee details related to route"""
+        return self.db.get("fee_details", {})
+
+    @property
+    def max_allowed_steps_in_a_route(self) -> Optional[int]:
+        """Get the max allowed steps in a route index."""
+        return cast(int, self.db.get("max_allowed_steps_in_a_route", None))
+
+    @property
+    def last_action(self) -> Optional[str]:
+        """Get the last action."""
+        return cast(str, self.db.get("last_action", None))
+
+
+class CallCheckpointRound(CollectSameUntilThresholdRound):
+    """A round for the checkpoint call preparation."""
+
+    payload_class = CallCheckpointPayload
+    done_event: Enum = Event.DONE
+    no_majority_event: Enum = Event.NO_MAJORITY
+    selection_key = (
+        get_name(SynchronizedData.tx_submitter),
+        get_name(SynchronizedData.most_voted_tx_hash),
+        get_name(SynchronizedData.safe_contract_address),
+        get_name(SynchronizedData.chain_id),
+        get_name(SynchronizedData.service_staking_state),
+        get_name(SynchronizedData.min_num_of_safe_tx_required),
+    )
+    collection_key = get_name(SynchronizedData.participant_to_checkpoint)
+    synchronized_data_class = SynchronizedData
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
+        """Process the end of the block."""
+        res = super().end_block()
+        if res is None:
+            return None
+
+        synced_data, event = cast(Tuple[SynchronizedData, Enum], res)
+
+        if event != Event.DONE:
+            return res
+
+        if (
+            synced_data.service_staking_state == StakingState.STAKED.value
+            and synced_data.most_voted_tx_hash is None
+        ):
+            return synced_data, Event.NEXT_CHECKPOINT_NOT_REACHED_YET
+
+        if (
+            synced_data.service_staking_state == StakingState.STAKED.value
+            and synced_data.most_voted_tx_hash is not None
+        ):
+            return synced_data, Event.SETTLE
+
+        if synced_data.service_staking_state == StakingState.UNSTAKED.value:
+            return synced_data, Event.SERVICE_NOT_STAKED
+
+        if synced_data.service_staking_state == StakingState.EVICTED.value:
+            return synced_data, Event.SERVICE_EVICTED
+
+        return res
+
+
+class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
+    """CheckStakingKPIMetRound"""
+
+    payload_class = CheckStakingKPIMetPayload
+    synchronized_data_class = SynchronizedData
+    done_event: Enum = Event.DONE
+    no_majority_event: Enum = Event.NO_MAJORITY
+    collection_key = get_name(SynchronizedData.participant_to_staking_kpi)
+    selection_key = (
+        get_name(SynchronizedData.tx_submitter),
+        get_name(SynchronizedData.most_voted_tx_hash),
+        get_name(SynchronizedData.safe_contract_address),
+        get_name(SynchronizedData.chain_id),
+        get_name(SynchronizedData.is_staking_kpi_met),
+    )
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
+        """Process the end of the block."""
+        res = super().end_block()
+        if res is None:
+            return None
+
+        synced_data, event = cast(Tuple[SynchronizedData, Enum], res)
+
+        if event != Event.DONE:
+            return res
+
+        if synced_data.is_staking_kpi_met is None:
+            return synced_data, Event.ERROR
+        if synced_data.most_voted_tx_hash is not None:
+            return synced_data, Event.SETTLE
+        if synced_data.is_staking_kpi_met is True:
+            return synced_data, Event.STAKING_KPI_MET
+        if synced_data.is_staking_kpi_met is False:
+            return synced_data, Event.STAKING_KPI_NOT_MET
+
+        return res
 
 
 class GetPositionsRound(CollectSameUntilThresholdRound):
@@ -140,10 +314,7 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_positions_round)
-    selection_key = (
-        get_name(SynchronizedData.positions),
-        get_name(SynchronizedData.current_pool),
-    )
+    selection_key = get_name(SynchronizedData.positions)
 
     ERROR_PAYLOAD = {}
 
@@ -155,10 +326,24 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
 
     payload_class = EvaluateStrategyPayload
     synchronized_data_class = SynchronizedData
-    selection_key = get_name(SynchronizedData.actions)
     done_event = Event.DONE
     collection_key = get_name(SynchronizedData.participant_to_actions_round)
     selection_key = get_name(SynchronizedData.actions)
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
+        """Process the end of the block."""
+        res = super().end_block()
+        if res is None:
+            return None
+
+        synced_data, event = cast(Tuple[SynchronizedData, Enum], res)
+        if event != Event.DONE:
+            return res
+
+        if not synced_data.actions:
+            return synced_data, Event.WAIT
+
+        return synced_data, Event.DONE
 
     # Event.NO_MAJORITY, Event.WAIT, Event.ROUND_TIMEOUT
 
@@ -168,6 +353,10 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
 
     payload_class = DecisionMakingPayload
     synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    settle_event = Event.SETTLE
+    update_event = Event.UPDATE
+    error_event = Event.ERROR
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
@@ -182,8 +371,20 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             if positions and not isinstance(positions, str):
                 payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
 
+            new_action = payload.get("updates", {}).get("new_action", {})
+            updated_actions = self.synchronized_data.actions
+            if new_action:
+                if self.synchronized_data.last_executed_action_index is None:
+                    index = 0
+                else:
+                    index = self.synchronized_data.last_executed_action_index + 1
+                updated_actions.insert(index, new_action)
+
+            serialized_actions = json.dumps(updated_actions)
             synchronized_data = synchronized_data.update(
-                synchronized_data_class=SynchronizedData, **payload.get("updates", {})
+                synchronized_data_class=SynchronizedData,
+                **payload.get("updates", {}),
+                actions=serialized_actions
             )
             return synchronized_data, event
 
@@ -193,7 +394,40 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
 
-        # Event.SETTLE, Event.ERROR, Event.ROUND_TIMEOUT, Event.DONE
+
+class PostTxSettlementRound(CollectSameUntilThresholdRound):
+    """A round that will be called after tx settlement is done."""
+
+    payload_class = PostTxSettlementPayload
+    synchronized_data_class = SynchronizedData
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
+        """Process the end of the block."""
+        if self.threshold_reached:
+            submitter_to_event: Dict[str, Event] = {
+                CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
+                CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
+                DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
+            }
+
+            synced_data = SynchronizedData(self.synchronized_data.db)
+            event = submitter_to_event.get(synced_data.tx_submitter, Event.UNRECOGNIZED)
+
+            if event == Event.CHECKPOINT_TX_EXECUTED:
+                synced_data = synced_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    period_number_at_last_cp=synced_data.period_count,
+                )
+
+            return synced_data, event
+
+
+class FinishedCallCheckpointRound(DegenerateRound):
+    """FinishedCallCheckpointRound"""
+
+
+class FinishedCheckStakingKPIMetRound(DegenerateRound):
+    """FinishedCheckStakingKPIMetRound"""
 
 
 class FinishedEvaluateStrategyRound(DegenerateRound):
@@ -208,12 +442,40 @@ class FinishedTxPreparationRound(DegenerateRound):
     """FinishedTxPreparationRound"""
 
 
+class FailedMultiplexerRound(DegenerateRound):
+    """FailedMultiplexerRound"""
+
+
 class LiquidityTraderAbciApp(AbciApp[Event]):
     """LiquidityTraderAbciApp"""
 
-    initial_round_cls: AppState = GetPositionsRound
-    initial_states: Set[AppState] = {GetPositionsRound, DecisionMakingRound}
+    initial_round_cls: AppState = CallCheckpointRound
+    initial_states: Set[AppState] = {
+        CallCheckpointRound,
+        CheckStakingKPIMetRound,
+        GetPositionsRound,
+        DecisionMakingRound,
+        PostTxSettlementRound,
+    }
     transition_function: AbciAppTransitionFunction = {
+        CallCheckpointRound: {
+            Event.DONE: CheckStakingKPIMetRound,
+            Event.NEXT_CHECKPOINT_NOT_REACHED_YET: CheckStakingKPIMetRound,
+            Event.SETTLE: FinishedCallCheckpointRound,
+            Event.SERVICE_NOT_STAKED: GetPositionsRound,
+            Event.SERVICE_EVICTED: GetPositionsRound,
+            Event.ROUND_TIMEOUT: CallCheckpointRound,
+            Event.NO_MAJORITY: CallCheckpointRound,
+        },
+        CheckStakingKPIMetRound: {
+            Event.DONE: GetPositionsRound,
+            Event.STAKING_KPI_MET: GetPositionsRound,
+            Event.SETTLE: FinishedCheckStakingKPIMetRound,
+            Event.ROUND_TIMEOUT: CheckStakingKPIMetRound,
+            Event.NO_MAJORITY: CheckStakingKPIMetRound,
+            Event.STAKING_KPI_NOT_MET: GetPositionsRound,
+            Event.ERROR: GetPositionsRound,
+        },
         GetPositionsRound: {
             Event.DONE: EvaluateStrategyRound,
             Event.NO_MAJORITY: GetPositionsRound,
@@ -231,23 +493,54 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: DecisionMakingRound,
             Event.ROUND_TIMEOUT: DecisionMakingRound,
             Event.SETTLE: FinishedTxPreparationRound,
+            Event.UPDATE: DecisionMakingRound,
+        },
+        PostTxSettlementRound: {
+            Event.ACTION_EXECUTED: DecisionMakingRound,
+            Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
+            Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
+            Event.ROUND_TIMEOUT: PostTxSettlementRound,
+            Event.UNRECOGNIZED: FailedMultiplexerRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
         FinishedDecisionMakingRound: {},
+        FinishedCallCheckpointRound: {},
+        FinishedCheckStakingKPIMetRound: {},
+        FailedMultiplexerRound: {},
     }
     final_states: Set[AppState] = {
         FinishedEvaluateStrategyRound,
         FinishedDecisionMakingRound,
         FinishedTxPreparationRound,
+        FinishedCallCheckpointRound,
+        FinishedCheckStakingKPIMetRound,
+        FailedMultiplexerRound,
     }
-    event_to_timeout: EventToTimeout = {}
-    cross_period_persisted_keys: FrozenSet[str] = frozenset()
+    event_to_timeout: Dict[Event, float] = {
+        Event.ROUND_TIMEOUT: 30.0,
+    }
+    cross_period_persisted_keys: FrozenSet[str] = frozenset(
+        {
+            get_name(SynchronizedData.last_reward_claimed_timestamp),
+            get_name(SynchronizedData.min_num_of_safe_tx_required),
+            get_name(SynchronizedData.is_staking_kpi_met),
+            get_name(SynchronizedData.period_number_at_last_cp),
+        }
+    )
     db_pre_conditions: Dict[AppState, Set[str]] = {
+        CallCheckpointRound: set(),
+        CheckStakingKPIMetRound: set(),
         GetPositionsRound: set(),
         DecisionMakingRound: set(),
+        PostTxSettlementRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
+        FinishedCallCheckpointRound: {get_name(SynchronizedData.most_voted_tx_hash)},
+        FinishedCheckStakingKPIMetRound: {
+            get_name(SynchronizedData.most_voted_tx_hash)
+        },
+        FailedMultiplexerRound: set(),
         FinishedEvaluateStrategyRound: set(),
         FinishedDecisionMakingRound: set(),
         FinishedTxPreparationRound: {get_name(SynchronizedData.most_voted_tx_hash)},

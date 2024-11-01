@@ -15,7 +15,7 @@ classifiers = [ "Environment :: Console", "Environment :: Web Environment", "Dev
 include = "packages"
 
 [tool.poetry.dependencies]
-python = "<4.0,>=3.10"
+python = "<3.13,>=3.10"
 open-autonomy = "==0.16.1"
 open-aea-test-autonomy = "==0.16.1"
 open-aea = "==1.57.0"

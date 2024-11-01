@@ -1,0 +1,23 @@
+name: merkl_distributor
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the Merkl Distributor interface.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeigndinzenvr4gauojly3cieqscwf677i72di7nhfu3p3zxx6bmfyy
+  build/Distributor.json: bafybeihtbkqhzavgficpiikharncvtysmoyacmqbkntsilrvwph44fkm3a
+  contract.py: bafybeieq6hddnw6ib2ufwnrrfr6yo5g4hyidtpn3n2dl6si3yrloymjj3y
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: DistributorContract
+contract_interface_paths:
+  ethereum: build/Distributor.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.57.0
+  web3:
+    version: <7,>=6.0.0
+  eth_abi:
+    version: ==4.0.0

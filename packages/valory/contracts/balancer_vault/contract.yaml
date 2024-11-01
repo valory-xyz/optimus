@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibily2cg2o4zkvol6amu2ewzdq5kmtzlml3qor45na3s7l5fmay2a
   build/Vault.json: bafybeifbvxyx43jmtchbzerapzqeblmmsppfbvfkwrag4nsfydad6bqwje
-  contract.py: bafybeidhousks7mz64hx32qv7ijqq24yuurrfo4xxwwu2mthc62m2s5fci
+  contract.py: bafybeicu7xsjywccqscshsfwe23kiimvhee74s3u7vpkunglfarszdttke
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VaultContract
@@ -16,8 +16,8 @@ contract_interface_paths:
   ethereum: build/Vault.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.53.0
+    version: ==1.57.0
   web3:
     version: <7,>=6.0.0
   eth_abi:
-    version: ==5.1.0
+    version: ==4.0.0

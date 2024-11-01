@@ -31,7 +31,7 @@ def main() -> None:
     """Main"""
     load_dotenv()
 
-    with open(Path("optimism_agent", "aea-config.yaml"), "r", encoding="utf-8") as file:
+    with open(Path("optimus", "aea-config.yaml"), "r", encoding="utf-8") as file:
         config = list(yaml.safe_load_all(file))
 
         # Ledger RPCs
@@ -40,15 +40,15 @@ def main() -> None:
                 "address"
             ] = f"${{str:{os.getenv('ETHEREUM_LEDGER_RPC')}}}"
 
-        if os.getenv("ARBITRUM_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["arbitrum"][
+        if os.getenv("BASE_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["base"][
                 "address"
-            ] = f"${{str:{os.getenv('ARBITRUM_LEDGER_RPC')}}}"
+            ] = f"${{str:{os.getenv('BASE_LEDGER_RPC')}}}"
 
-        if os.getenv("BNB_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["bnb"][
+        if os.getenv("OPTIMISM_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["optimism"][
                 "address"
-            ] = f"${{str:{os.getenv('BNB_LEDGER_RPC')}}}"
+            ] = f"${{str:{os.getenv('OPTIMISM_LEDGER_RPC')}}}"
 
         # Params
         config[5]["models"]["params"]["args"]["setup"][
@@ -60,10 +60,30 @@ def main() -> None:
         ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
 
         config[5]["models"]["params"]["args"][
-            "pool_data_api_url"
-        ] = f"${{str:{os.getenv('POOL_DATA_API_URL')}}}"
+            "slippage_for_swap"
+        ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
 
-    with open(Path("optimism_agent", "aea-config.yaml"), "w", encoding="utf-8") as file:
+        config[5]["models"]["params"]["args"][
+            "tenderly_access_key"
+        ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "tenderly_account_slug"
+        ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "tenderly_project_slug"
+        ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
+
+        config[5]["models"]["coingecko"]["args"][
+            "api_key"
+        ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
+
+        config[5]["models"]["params"]["args"][
+            "allowed_chains"
+        ] = f"${{list:{os.getenv('ALLOWED_CHAINS')}}}"
+
+    with open(Path("optimus", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)
 
 

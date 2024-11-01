@@ -1,1 +1,1 @@
-# Optimism agent
+# optimus-agent

@@ -121,7 +121,8 @@ cert_requests:
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection
 config:
-  host: 0.0.0.0
+  host: ${str:0.0.0.0}
+  port: ${int:8716}
   target_skill_id: valory/optimus_abci:0.1.0
 ---
 public_id: valory/optimus_abci:0.1.0

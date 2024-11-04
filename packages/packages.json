@@ -11,7 +11,8 @@
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeihtca6gtyjibj6wkrcdmx3fb3a3bkpdgsphwevkatagxrbqvh6fd4",
         "skill/valory/optimus_abci/0.1.0": "bafybeifjpvqz2m7qhztib4xcjpbjkuiutrot22flqclg36amvqvrp5ra3e",
         "agent/valory/optimus/0.1.0": "bafybeida2scmw3qune3n6ru7tuzquuc3mxs2cfivzcncrtlj4ziadv4sqy",
-        "service/valory/optimus/0.1.0": "bafybeiejrmmbh7upqd3ahfi5rrpyexv55txegrfrtlmn6mn3u3d5zz4m6u"
+        "service/valory/optimus/0.1.0": "bafybeidlfxklqbwrba5xdbigchkl5dcqcrlpzbrkem62jbzr5yghwe7tgu",
+        "service/valory/optimus_pearl/0.1.0": "bafybeiejrmmbh7upqd3ahfi5rrpyexv55txegrfrtlmn6mn3u3d5zz4m6u"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

@@ -8,7 +8,11 @@ fingerprint: {}
 fingerprint_ignore_patterns: []
 agent: valory/optimus:0.1.0:bafybeida2scmw3qune3n6ru7tuzquuc3mxs2cfivzcncrtlj4ziadv4sqy
 number_of_agents: 1
-deployment: {}
+deployment:
+  agent:
+    ports:
+      0:
+        8716: 8716
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidaqh3dc3phcfkt7ny7qvtaa33lk3xbnnodbculyd3il6rkmibvim
+agent: valory/optimus:0.1.0:bafybeihxsj7gt6eqmritqkfpc4ddylcqi6qvxumjwbxwitowiy7b3x2i24
 number_of_agents: 1
 deployment: {}
 ---
@@ -83,6 +83,8 @@ models:
       max_gas_percentage: ${MAX_GAS_PERCENTAGE:float:0.25}
       balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism","mode"]}
+      target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
+      staking_chain: ${STAKING_CHAIN:str:optimism}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

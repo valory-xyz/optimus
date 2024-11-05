@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
-- valory/liquidity_trader_abci:0.1.0:bafybeifcfxijpk7ry6or7zxwhfztzn4puyhfbh7m5mxcu2xiucdgotqkji
+- valory/liquidity_trader_abci:0.1.0:bafybeiawabx5dukbxjdcwdglln2km4kv6evfq2gxug2o26w5iue2bagok4
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 behaviours:
   main:
@@ -178,6 +178,11 @@ models:
       max_gas_percentage: 0.1
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}'
+      target_investment_chains:
+      - base
+      - optimism
+      - mode
+      staking_chain: optimism
     class_name: Params
   coingecko:
     args:

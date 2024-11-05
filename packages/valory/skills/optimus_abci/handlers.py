@@ -65,10 +65,13 @@ TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
 
 
-OK_CODE = 200
-NOT_FOUND_CODE = 404
-BAD_REQUEST_CODE = 400
-AVERAGE_PERIOD_SECONDS = 10
+class HttpCode(Enum):
+    """Http codes"""
+
+    OK_CODE = 200
+    NOT_FOUND_CODE = 404
+    BAD_REQUEST_CODE = 400
+    NOT_READY = 503
 
 
 class HttpMethod(Enum):
@@ -80,29 +83,31 @@ class HttpMethod(Enum):
 
 
 class HttpHandler(BaseHttpHandler):
-    """This implements the echo handler."""
+    """This implements the HTTP handler."""
 
     SUPPORTED_PROTOCOL = HttpMessage.protocol_id
 
     def setup(self) -> None:
         """Implement the setup."""
-        config_uri_base_hostname = urlparse(
-            self.context.params.service_endpoint
+
+        # Custom hostname (set via params)
+        service_endpoint_base = urlparse(
+            self.context.params.service_endpoint_base
         ).hostname
 
+        # Propel hostname regex
         propel_uri_base_hostname = (
             r"https?:\/\/[a-zA-Z0-9]{16}.agent\.propel\.(staging\.)?autonolas\.tech"
         )
 
-        local_ip_regex = r"192\.168(\.\d{1,3}){2}"
-
         # Route regexes
-        hostname_regex = rf".*({config_uri_base_hostname}|{propel_uri_base_hostname}|{local_ip_regex}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
+        hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
 
         # Routes
         self.routes = {
+            (HttpMethod.POST.value,): [],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
             ],
@@ -121,16 +126,21 @@ class HttpHandler(BaseHttpHandler):
         """Check if an url is meant to be handled in this handler
 
         We expect url to match the pattern {hostname}/.*,
-        where hostname is allowed to be localhost, 127.0.0.1 or the service_endpoint's hostname.
+        where hostname is allowed to be localhost, 127.0.0.1 or the token_uri_base's hostname.
+        Examples:
+            localhost:8000/0
+            127.0.0.1:8000/100
+            https://pfp.staging.autonolas.tech/45
+            http://pfp.staging.autonolas.tech/120
 
         :param url: the url to check
-        :param method: the method
+        :param method: the http method
         :returns: the handling method if the message is intended to be handled by this handler, None otherwise, and the regex captures
         """
         # Check base url
         if not re.match(self.handler_url_regex, url):
             self.context.logger.info(
-                f"The url {url} does not match the DynamicNFT HttpHandler's pattern"
+                f"The url {url} does not match the HttpHandler's pattern"
             )
             return None, {}
 
@@ -139,7 +149,7 @@ class HttpHandler(BaseHttpHandler):
             if method not in methods:
                 continue
 
-            for route in routes:
+            for route in routes:  # type: ignore
                 # Routes are tuples like (route_regex, handle_method)
                 m = re.match(route[0], url)
                 if m:
@@ -147,7 +157,7 @@ class HttpHandler(BaseHttpHandler):
 
         # No route found
         self.context.logger.info(
-            f"The message [{method}] {url} is intended for the DynamicNFT HttpHandler but did not match any valid pattern"
+            f"The message [{method}] {url} is intended for the HttpHandler but did not match any valid pattern"
         )
         return self._handle_bad_request, {}
 
@@ -209,10 +219,31 @@ class HttpHandler(BaseHttpHandler):
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
             version=http_msg.version,
-            status_code=BAD_REQUEST_CODE,
+            status_code=HttpCode.BAD_REQUEST_CODE.value,
             status_text="Bad request",
             headers=http_msg.headers,
             body=b"",
+        )
+
+        # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)
+
+    def _send_ok_response(
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        data: Union[Dict, List],
+    ) -> None:
+        """Send an OK response with the provided data"""
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=HttpCode.OK_CODE.value,
+            status_text="Success",
+            headers=f"{self.json_content_header}{http_msg.headers}",
+            body=json.dumps(data).encode("utf-8"),
         )
 
         # Send response
@@ -269,38 +300,3 @@ class HttpHandler(BaseHttpHandler):
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
-
-    def _send_ok_response(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, data: Dict
-    ) -> None:
-        """Send an OK response with the provided data"""
-        http_response = http_dialogue.reply(
-            performative=HttpMessage.Performative.RESPONSE,
-            target_message=http_msg,
-            version=http_msg.version,
-            status_code=OK_CODE,
-            status_text="Success",
-            headers=f"{self.json_content_header}{http_msg.headers}",
-            body=json.dumps(data).encode("utf-8"),
-        )
-
-        # Send response
-        self.context.logger.info("Responding with: {}".format(http_response))
-        self.context.outbox.put_message(message=http_response)
-
-    def _send_not_found_response(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """Send an not found response"""
-        http_response = http_dialogue.reply(
-            performative=HttpMessage.Performative.RESPONSE,
-            target_message=http_msg,
-            version=http_msg.version,
-            status_code=NOT_FOUND_CODE,
-            status_text="Not found",
-            headers=http_msg.headers,
-            body=b"",
-        )
-        # Send response
-        self.context.logger.info("Responding with: {}".format(http_response))
-        self.context.outbox.put_message(message=http_response)

@@ -23,7 +23,7 @@ import json
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Dict, Optional, Tuple, cast
+from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
 from aea.protocols.base import Message
@@ -55,6 +55,7 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.optimus_abci.dialogues import HttpDialogue, HttpDialogues
+from packages.valory.skills.optimus_abci.models import SharedState
 
 
 ABCIHandler = BaseABCIRoundHandler

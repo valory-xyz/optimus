@@ -11,8 +11,8 @@ fingerprint:
   composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
   dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
   fsm_specification.yaml: bafybeiehe6ps7xi7i7tu4mduid7vbvszhsiu5juyard24i3nhtqgljpcza
-  handlers.py: bafybeife4nrwqiwrx2ucza3vk6t5inpkncuewehtdnitax4lmqq2ptoona
-  models.py: bafybeibxpw4zmigtel3emgbz2jz6xgsfx7eavxvhqrqftwcsul6lwcpjou
+  handlers.py: bafybeicfpzypdyqbg3mocdndsorkjja4jlvaz6s4utldwmyrliawvv6su4
+  models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []

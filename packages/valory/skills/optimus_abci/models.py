@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of OptimusAbciApp."""
 
-from typing import Dict, Type, Union, cast
+from typing import Any, Dict, Type, Union, cast
 
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
@@ -71,6 +71,11 @@ class Params(  # pylint: disable=too-many-ancestors
     LiquidityTraderParams,
 ):
     """A model to represent params for multiple abci apps."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Init"""
+        self.service_endpoint_base = self._ensure("service_endpoint_base", kwargs, str)
+        super().__init__(*args, **kwargs)
 
 
 class SharedState(BaseSharedState):

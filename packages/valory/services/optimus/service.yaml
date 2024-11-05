@@ -13,6 +13,8 @@ deployment:
     ports:
       0:
         8716: 8716
+    volumes:
+      ./data: /data
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill

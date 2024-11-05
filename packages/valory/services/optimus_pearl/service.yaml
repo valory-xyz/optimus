@@ -6,13 +6,15 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeid6iedxqwyvofrmcmihcsc66vxrcpjtoty7inf4bqtvjwbmbeehwm
+agent: valory/optimus:0.1.0:bafybeig56xw6p7leswmarrpulhaestyjjhwargya2cobafi5acnvdbxkyq
 number_of_agents: 1
 deployment:
   agent:
     ports:
       0:
         8716: 8716
+    volumes:
+      ./data: /data
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill

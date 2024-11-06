@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeig346cfrzpw7soodg7zlylj7y3zbimhbb7xbk5vuygsymmjydek6i
+agent: valory/optimus:0.1.0:bafybeievfj455motcwbazndaxgeynuzy5vvtaiulhk2ot6376aspfpjcfu
 number_of_agents: 1
 deployment: {}
 ---
@@ -122,6 +122,7 @@ config:
       gas_price_strategies:
         eip1559:
           fee_history_percentile: ${FEE_HISTORY_PERCENTILE:50}
+          default_priority_fee: ${DEFAULT_PRIORITY_FEE:2000000}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

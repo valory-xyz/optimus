@@ -110,6 +110,7 @@ config:
       gas_price_strategies:
         eip1559:
           fee_history_percentile: 50
+          default_priority_fee: 2000000
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

@@ -2154,6 +2154,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         elif next_action == Action.FIND_BRIDGE_ROUTE:
             routes = yield from self.fetch_routes(positions, next_action_details)
+            if not routes:
+                self.context.logger.error("Error fetching routes")
+                return Event.DONE.value, {}
+            
             if self.synchronized_data.max_allowed_steps_in_a_route:
                 routes = [
                     route
@@ -2161,11 +2165,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     if len(route.get("steps", []))
                     <= self.synchronized_data.max_allowed_steps_in_a_route
                 ]
-
+                if not routes:
+                    self.context.logger.error(f"Needed routes with equal to or less than {self.synchronized_data.max_allowed_steps_in_a_route} steps, none found!")
+                    return Event.DONE.value, {}
+            
             serialized_routes = json.dumps(routes)
-            if not routes:
-                self.context.logger.error("Error fetching routes")
-                return Event.DONE.value, {}
 
             return Event.UPDATE.value, {
                 "routes": serialized_routes,

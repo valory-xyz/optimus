@@ -2040,9 +2040,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 routes[to_execute_route_index]
             )
             if not is_profitable:
-                self.context.logger.error(
-                    "Route not profitable. Switching to next route.."
-                )
+                if is_profitable is None:
+                    self.context.logger.error(
+                        "Error calculating profitability of route. Switching to next route.."
+                    )
+                if is_profitable is False:
+                    self.context.logger.error(
+                        "Route not profitable. Switching to next route.."
+                    )
+
                 return Event.UPDATE.value, {
                     "last_executed_route_index": to_execute_route_index,
                     "last_executed_step_index": None,
@@ -2592,6 +2598,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[bool], Optional[float], Optional[float]]]:
         """Checks if the entire route is profitable"""
         step_transactions = yield from self._get_step_transactions_data(route)
+        if not step_transactions:
+            return None, None, None
+        
         total_gas_cost = 0
         total_fee = 0
         total_fee += sum(float(tx_info.get("fee", 0)) for tx_info in step_transactions)
@@ -2762,6 +2771,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         for step in steps:
             step = self._set_step_addresses(step)
             tx_info = yield from self._get_step_transaction(step)
+            if tx_info is None:
+                self.context.logger.error("Error fetching step transaction data")
+                return None
             step_transactions.append(tx_info)
 
         return step_transactions

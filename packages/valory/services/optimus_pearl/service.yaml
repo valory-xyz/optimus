@@ -1,4 +1,4 @@
-name: optimus
+name: optimus_pearl
 author: valory
 version: 0.1.0
 description: An optimism liquidity trader service.
@@ -6,9 +6,15 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeida2scmw3qune3n6ru7tuzquuc3mxs2cfivzcncrtlj4ziadv4sqy
+agent: valory/optimus:0.1.0:bafybeie5vm4ucwtouxocxtd2aj6kvnrqsfngg32rhewvnzkfxnshqalepy
 number_of_agents: 1
-deployment: {}
+deployment:
+  agent:
+    ports:
+      0:
+        8716: 8716
+    volumes:
+      ./data: /data
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill
@@ -128,3 +134,9 @@ cert_requests:
   not_before: '2022-01-01'
   public_key: ${ACN_NODE_PUBLIC_KEY:str:02d3a830c9d6ea1ae91936951430dee11f4662f33118b02190693be835359a9d77}
   save_path: .certs/acn_cosmos_11000.txt
+---
+public_id: valory/http_server:0.22.0
+type: connection
+config:
+  host: ${HTTP_SERVER_HOST:str:0.0.0.0}
+  port: ${HTTP_SERVER_PORT:int:8716}

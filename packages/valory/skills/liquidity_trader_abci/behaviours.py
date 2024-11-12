@@ -658,7 +658,7 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self._get_service_staking_state(chain="optimism")
+            yield from self._get_service_staking_state(chain=self.params.staking_chain)
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
             if self.service_staking_state == StakingState.STAKED:

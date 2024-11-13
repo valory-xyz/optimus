@@ -36,7 +36,7 @@ jobs:
               autonomy push-all
   publish-images:
     name: Publish Docker Images
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     needs:
       - "publish-packages"
     strategy:

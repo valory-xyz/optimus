@@ -8,8 +8,8 @@ on:
           required: true
           default: 'main'
   push:
-    branches:
-      - feat/remove-mainnet
+    tags:
+      - 'dev.*'
 
 jobs:
   publish-packages:

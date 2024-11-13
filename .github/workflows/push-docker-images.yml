@@ -32,8 +32,8 @@ jobs:
               echo "Pushing Packages"
               cd /work
               export AUTHOR=$(grep 'service' packages/packages.json | awk -F/ '{print $2}' | head -1)
-              autonomy init --reset --author $AUTHOR --ipfs --remote
-              autonomy push-all
+              sudo autonomy init --reset --author $AUTHOR --ipfs --remote
+              sudo autonomy push-all
   publish-images:
     name: Publish Docker Images
     runs-on: ${{ matrix.os }}
@@ -136,11 +136,11 @@ jobs:
           echo "Building Docker Images"
           source env.sh || exit 1
           echo "Building images for $AUTHOR for service $SERVICE"
-          autonomy init --reset --author $AUTHOR --ipfs --remote
-          autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
+          sudo autonomy init --reset --author $AUTHOR --ipfs --remote
+          sudo autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
           cd $SERVICE || exit 1
-          autonomy build-image || exit 1
-          autonomy build-image --version $VERSION || exit 1
+          sudo autonomy build-image || exit 1
+          sudo autonomy build-image --version $VERSION || exit 1
 
       - name: Docker login
         run: |

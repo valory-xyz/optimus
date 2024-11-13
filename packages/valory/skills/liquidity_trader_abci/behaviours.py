@@ -2222,9 +2222,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     <= self.synchronized_data.max_allowed_steps_in_a_route
                 ]
                 if not routes:
-                    self.context.logger.error(f"Needed routes with equal to or less than {self.synchronized_data.max_allowed_steps_in_a_route} steps, none found!")
+                    self.context.logger.error(
+                        f"Needed routes with equal to or less than {self.synchronized_data.max_allowed_steps_in_a_route} steps, none found!"
+                    )
                     return Event.DONE.value, {}
-                    
+
             serialized_routes = json.dumps(routes)
 
             return Event.UPDATE.value, {

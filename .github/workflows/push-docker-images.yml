@@ -58,7 +58,7 @@ jobs:
             run: |
               echo "Setting Tag Images"
               cd /work
-              sudo apt-get update && sudo apt-get install git -y || exit 1
+              apt-get update && apt-get install git -y || exit 1
               git config --global --add safe.directory /work
               export TAG=$(git describe --exact-match --tags $(git rev-parse HEAD)) || exit 1
               if [ $? -eq 0 ]; then
@@ -115,7 +115,7 @@ jobs:
       - name: Set up tag and vars
         run: |
           echo "Setting Tag Images"
-          apt-get update && apt-get install git -y || exit 1
+          sudo apt-get update && sudo apt-get install git -y || exit 1
           git config --global --add safe.directory $GITHUB_WORKSPACE
           export TAG=$(git describe --exact-match --tags $(git rev-parse HEAD)) || exit 1
           if [ $? -eq 0 ]; then

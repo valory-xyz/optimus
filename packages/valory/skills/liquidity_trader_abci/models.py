@@ -259,6 +259,9 @@ class Params(BaseParams):
         self.balancer_graphql_endpoints = json.loads(
             self._ensure("balancer_graphql_endpoints", kwargs, str)
         )
+        self.target_investment_chains: List[str] = self._ensure(
+            "target_investment_chains", kwargs, List[str]
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

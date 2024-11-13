@@ -1007,7 +1007,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch all pools based on allowed chains."""
         chain_ids = ",".join(
             str(self.params.chain_to_chain_id_mapping[chain])
-            for chain in self.params.allowed_chains
+            for chain in self.params.target_investment_chains
         )
         base_url = self.params.merkl_fetch_campaigns_args.get("url")
         creator = self.params.merkl_fetch_campaigns_args.get("creator")
@@ -1311,7 +1311,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if self._can_claim_rewards():
             # check current reward
-            allowed_chains = self.params.allowed_chains
+            allowed_chains = self.params.target_investment_chains
             # we can claim all our token rewards at once
             # hence we build only one action per chain
             for chain in allowed_chains:
@@ -2097,9 +2097,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 routes[to_execute_route_index]
             )
             if not is_profitable:
-                self.context.logger.error(
-                    "Route not profitable. Switching to next route.."
-                )
+                if is_profitable is None:
+                    self.context.logger.error(
+                        "Error calculating profitability of route. Switching to next route.."
+                    )
+                if is_profitable is False:
+                    self.context.logger.error(
+                        "Route not profitable. Switching to next route.."
+                    )
                 return Event.UPDATE.value, {
                     "last_executed_route_index": to_execute_route_index,
                     "last_executed_step_index": None,
@@ -2205,6 +2210,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         elif next_action == Action.FIND_BRIDGE_ROUTE:
             routes = yield from self.fetch_routes(positions, next_action_details)
+            if not routes:
+                self.context.logger.error("Error fetching routes")
+                return Event.DONE.value, {}
+
             if self.synchronized_data.max_allowed_steps_in_a_route:
                 routes = [
                     route
@@ -2212,11 +2221,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     if len(route.get("steps", []))
                     <= self.synchronized_data.max_allowed_steps_in_a_route
                 ]
-
+                if not routes:
+                    self.context.logger.error(f"Needed routes with equal to or less than {self.synchronized_data.max_allowed_steps_in_a_route} steps, none found!")
+                    return Event.DONE.value, {}
+                    
             serialized_routes = json.dumps(routes)
-            if not routes:
-                self.context.logger.error("Error fetching routes")
-                return Event.DONE.value, {}
 
             return Event.UPDATE.value, {
                 "routes": serialized_routes,
@@ -2649,6 +2658,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[bool], Optional[float], Optional[float]]]:
         """Checks if the entire route is profitable"""
         step_transactions = yield from self._get_step_transactions_data(route)
+        if not step_transactions:
+            return None, None, None
         total_gas_cost = 0
         total_fee = 0
         total_fee += sum(float(tx_info.get("fee", 0)) for tx_info in step_transactions)
@@ -2821,6 +2832,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         for step in steps:
             step = self._set_step_addresses(step)
             tx_info = yield from self._get_step_transaction(step)
+            if tx_info is None:
+                self.context.logger.error("Error fetching step transaction data")
+                return None
             step_transactions.append(tx_info)
 
         return step_transactions

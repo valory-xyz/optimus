@@ -114,7 +114,6 @@ MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
-STAKING_CHAIN = "optimism"
 CAMPAIGN_TYPES = [1, 2]
 INTEGRATOR = "valory"
 WAITING_PERIOD_FOR_BALANCE_TO_REFLECT = 5
@@ -514,7 +513,9 @@ class LiquidityTraderBaseBehaviour(
             self.round_sequence.last_round_transition_timestamp.timestamp()
         )
 
-        last_ts_checkpoint = yield from self._get_ts_checkpoint(chain=STAKING_CHAIN)
+        last_ts_checkpoint = yield from self._get_ts_checkpoint(
+            chain=self.params.staking_chain
+        )
         if last_ts_checkpoint is None:
             return None
 
@@ -601,8 +602,10 @@ class LiquidityTraderBaseBehaviour(
 
         multisig_nonces_since_last_cp = (
             yield from self._get_multisig_nonces_since_last_cp(
-                chain=STAKING_CHAIN,
-                multisig=self.params.safe_contract_addresses.get(STAKING_CHAIN),
+                chain=self.params.staking_chain,
+                multisig=self.params.safe_contract_addresses.get(
+                    self.params.staking_chain
+                ),
             )
         )
         if multisig_nonces_since_last_cp is None:
@@ -715,46 +718,55 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self._get_service_staking_state(chain="optimism")
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
-            if self.service_staking_state == StakingState.STAKED:
-                min_num_of_safe_tx_required = (
-                    yield from self._calculate_min_num_of_safe_tx_required(
-                        chain=STAKING_CHAIN
-                    )
-                )
-                if min_num_of_safe_tx_required is None:
-                    self.context.logger.error(
-                        "Error calculating min number of safe tx required."
-                    )
-                else:
-                    self.context.logger.info(
-                        f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
-                    )
-                is_checkpoint_reached = yield from self._check_if_checkpoint_reached(
-                    chain=STAKING_CHAIN
-                )
-                if is_checkpoint_reached:
-                    self.context.logger.info(
-                        "Checkpoint reached! Preparing checkpoint tx.."
-                    )
-                    checkpoint_tx_hex = yield from self._prepare_checkpoint_tx(
-                        chain=STAKING_CHAIN
-                    )
-            elif self.service_staking_state == StakingState.EVICTED:
-                self.context.logger.error("Service has been evicted!")
 
+            if not self.params.staking_chain:
+                self.context.logger.warning("Service has not been staked on any chain!")
+                self.service_staking_state = StakingState.UNSTAKED
             else:
-                self.context.logger.error("Service has not been staked")
+                yield from self._get_service_staking_state(
+                    chain=self.params.staking_chain
+                )
+                if self.service_staking_state == StakingState.STAKED:
+                    min_num_of_safe_tx_required = (
+                        yield from self._calculate_min_num_of_safe_tx_required(
+                            chain=self.params.staking_chain
+                        )
+                    )
+                    if min_num_of_safe_tx_required is None:
+                        self.context.logger.error(
+                            "Error calculating min number of safe tx required."
+                        )
+                    else:
+                        self.context.logger.info(
+                            f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
+                        )
+                    is_checkpoint_reached = (
+                        yield from self._check_if_checkpoint_reached(
+                            chain=self.params.staking_chain
+                        )
+                    )
+                    if is_checkpoint_reached:
+                        self.context.logger.info(
+                            "Checkpoint reached! Preparing checkpoint tx.."
+                        )
+                        checkpoint_tx_hex = yield from self._prepare_checkpoint_tx(
+                            chain=self.params.staking_chain
+                        )
+                elif self.service_staking_state == StakingState.EVICTED:
+                    self.context.logger.error("Service has been evicted!")
+
+                else:
+                    self.context.logger.error("Service has not been staked")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CallCheckpointPayload(
                 self.context.agent_address,
                 tx_submitter,
                 checkpoint_tx_hex,
-                self.params.safe_contract_addresses.get(STAKING_CHAIN),
-                STAKING_CHAIN,
+                self.params.safe_contract_addresses.get(self.params.staking_chain),
+                self.params.staking_chain,
                 self.service_staking_state.value,
                 min_num_of_safe_tx_required,
             )
@@ -853,9 +865,9 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     multisig_nonces_since_last_cp = (
                         yield from self._get_multisig_nonces_since_last_cp(
-                            chain=STAKING_CHAIN,
+                            chain=self.params.staking_chain,
                             multisig=self.params.safe_contract_addresses.get(
-                                STAKING_CHAIN
+                                self.params.staking_chain
                             ),
                         )
                     )
@@ -872,7 +884,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             )
                             self.context.logger.info("Preparing vanity tx..")
                             vanity_tx_hex = yield from self._prepare_vanity_tx(
-                                chain=STAKING_CHAIN
+                                chain=self.params.staking_chain
                             )
                             self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
@@ -881,8 +893,8 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.agent_address,
                 tx_submitter,
                 vanity_tx_hex,
-                self.params.safe_contract_addresses.get(STAKING_CHAIN),
-                STAKING_CHAIN,
+                self.params.safe_contract_addresses.get(self.params.staking_chain),
+                self.params.staking_chain,
                 is_staking_kpi_met,
             )
 
@@ -1007,7 +1019,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch all pools based on allowed chains."""
         chain_ids = ",".join(
             str(self.params.chain_to_chain_id_mapping[chain])
-            for chain in self.params.allowed_chains
+            for chain in self.params.target_investment_chains
         )
         base_url = self.params.merkl_fetch_campaigns_args.get("url")
         creator = self.params.merkl_fetch_campaigns_args.get("creator")
@@ -1311,7 +1323,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if self._can_claim_rewards():
             # check current reward
-            allowed_chains = self.params.allowed_chains
+            allowed_chains = self.params.target_investment_chains
             # we can claim all our token rewards at once
             # hence we build only one action per chain
             for chain in allowed_chains:
@@ -2097,9 +2109,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 routes[to_execute_route_index]
             )
             if not is_profitable:
-                self.context.logger.error(
-                    "Route not profitable. Switching to next route.."
-                )
+                if is_profitable is None:
+                    self.context.logger.error(
+                        "Error calculating profitability of route. Switching to next route.."
+                    )
+                if is_profitable is False:
+                    self.context.logger.error(
+                        "Route not profitable. Switching to next route.."
+                    )
                 return Event.UPDATE.value, {
                     "last_executed_route_index": to_execute_route_index,
                     "last_executed_step_index": None,
@@ -2205,6 +2222,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         elif next_action == Action.FIND_BRIDGE_ROUTE:
             routes = yield from self.fetch_routes(positions, next_action_details)
+            if not routes:
+                self.context.logger.error("Error fetching routes")
+                return Event.DONE.value, {}
+
             if self.synchronized_data.max_allowed_steps_in_a_route:
                 routes = [
                     route
@@ -2212,11 +2233,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     if len(route.get("steps", []))
                     <= self.synchronized_data.max_allowed_steps_in_a_route
                 ]
+                if not routes:
+                    self.context.logger.error(
+                        f"Needed routes with equal to or less than {self.synchronized_data.max_allowed_steps_in_a_route} steps, none found!"
+                    )
+                    return Event.DONE.value, {}
 
             serialized_routes = json.dumps(routes)
-            if not routes:
-                self.context.logger.error("Error fetching routes")
-                return Event.DONE.value, {}
 
             return Event.UPDATE.value, {
                 "routes": serialized_routes,
@@ -2649,6 +2672,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[bool], Optional[float], Optional[float]]]:
         """Checks if the entire route is profitable"""
         step_transactions = yield from self._get_step_transactions_data(route)
+        if not step_transactions:
+            return None, None, None
         total_gas_cost = 0
         total_fee = 0
         total_fee += sum(float(tx_info.get("fee", 0)) for tx_info in step_transactions)
@@ -2821,6 +2846,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         for step in steps:
             step = self._set_step_addresses(step)
             tx_info = yield from self._get_step_transaction(step)
+            if tx_info is None:
+                self.context.logger.error("Error fetching step transaction data")
+                return None
             step_transactions.append(tx_info)
 
         return step_transactions

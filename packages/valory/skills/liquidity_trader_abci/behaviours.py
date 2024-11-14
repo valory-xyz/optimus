@@ -722,7 +722,7 @@ class CallCheckpointBehaviour(
             min_num_of_safe_tx_required = None
 
             if not self.params.staking_chain:
-                self.context.logger.warning("Service has not been staked on any chain!")
+                self.context.logger.warning("Service has not been staked on any chain")
                 self.service_staking_state = StakingState.UNSTAKED
             else:
                 yield from self._get_service_staking_state(

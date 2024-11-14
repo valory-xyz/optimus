@@ -1,10 +1,19 @@
-name: Release Flow
-
+name: Temporary Push Docker Images
 on:
+  workflow_dispatch:
+    inputs:
+        branch:
+          description: 'Branch to build from'
+          required: true
+          default: 'main'
   push:
     tags:
-      - 'v*.*.*'
-
+      - 'dev.*'
+    branches:
+        - feat/remove-mainnet
+    pull_request:
+      branches:
+        - main
 jobs:
   publish-packages:
     name: Push Packages
@@ -28,10 +37,9 @@ jobs:
               export AUTHOR=$(grep 'service' packages/packages.json | awk -F/ '{print $2}' | head -1)
               autonomy init --reset --author $AUTHOR --ipfs --remote
               autonomy push-all
-              
   publish-images:
     name: Publish Docker Images
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     needs:
       - "publish-packages"
     strategy:
@@ -68,7 +76,6 @@ jobs:
               echo AGENT=$(grep 'agent/' packages/packages.json | awk -F/ '{print $3}' | head -1) >> env.sh
               echo DEFAULT_IMAGE_TAG=$(cat packages/packages.json | grep agent/ | awk -F: '{print $2}' | tr -d '", ' | head -n 1) >> env.sh
               cat env.sh
-
       - uses: addnab/docker-run-action@v3
         name: Build Images
         with:
@@ -85,7 +92,6 @@ jobs:
               cd $SERVICE || exit 1
               autonomy build-image || exit 1
               autonomy build-image --version $VERSION || exit 1
-
       - name: Docker login
         run: |
             echo  $DOCKER_PASSWORD | docker login -u $DOCKER_USER --password-stdin
@@ -96,68 +102,3 @@ jobs:
           echo "Pushing $DOCKER_USER/oar-$AGENT:$DEFAULT_IMAGE_TAG"
           docker push $DOCKER_USER/oar-$AGENT:$VERSION
           docker push $DOCKER_USER/oar-$AGENT:$DEFAULT_IMAGE_TAG
-  
-  build-macos-pyinstaller:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ macos-14, macos-14-large ]
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install and configure Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: '1.4.0'
-          virtualenvs-create: true
-          virtualenvs-in-project: false
-          virtualenvs-path: ~/my-custom-path
-          installer-parallel: true
-
-      - name: Install dependencies
-        run: poetry install
-
-      - name: Set arch environment variable for macos-latest-large
-        if: contains(matrix.os, 'large')
-        run: echo "OS_ARCH=x64" >> $GITHUB_ENV
-
-      - name: Set arch environment variable for other macOS versions
-        if: ${{ !contains(matrix.os, 'large') }}
-        run: echo "OS_ARCH=arm64" >> $GITHUB_ENV
-
-      - name: Build with PyInstaller
-        run: |
-           poetry run pyinstaller --collect-data eth_account --collect-all aea --collect-all autonomy --collect-all operate --collect-all aea_ledger_ethereum --collect-all aea_ledger_cosmos --collect-all aea_ledger_ethereum_flashbots --hidden-import aea_ledger_ethereum --hidden-import aea_ledger_cosmos --hidden-import aea_ledger_ethereum_flashbots --hidden-import grpc --hidden-import openapi_core --collect-all google.protobuf --collect-all openapi_core --collect-all openapi_spec_validator --collect-all asn1crypto --hidden-import py_ecc --hidden-import pytz --onefile pyinstaller/optimus_bin.py --name optimus_bin_${{env.OS_ARCH}}
-      - name: Upload Release Assets
-        uses: actions/upload-artifact@v4
-        with:
-          name: optimus_bin_${{env.OS_ARCH}}
-          path: dist/optimus_bin_${{env.OS_ARCH}}
-
-  upload-assets:
-      needs: build-macos-pyinstaller
-      runs-on: ubuntu-latest
-
-      steps:
-        - name: Download artifacts
-          uses: actions/download-artifact@v4
-          with:
-            name: optimus_bin_x64
-            path: ./dist/
-        - name: Download artifacts
-          uses: actions/download-artifact@v4
-          with:
-            name: optimus_bin_arm64
-            path: ./dist/
-
-        - name: Publish Release
-          uses: softprops/action-gh-release@v2
-          if: startsWith(github.ref, 'refs/tags/')
-          with:
-            files: |
-              ./dist/optimus_bin_x64
-              ./dist/optimus_bin_arm64

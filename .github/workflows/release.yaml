@@ -1,11 +1,9 @@
 name: Release Flow
 
 on:
-  push:
-    tags:
-      - 'dev.*'
-    branches:
-      - feat/remove-mainnet
+    push:
+        tags:
+            - 'v*.*.*'
 
 jobs:
   publish-packages:

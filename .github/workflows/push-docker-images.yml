@@ -1,4 +1,5 @@
 name: Temporary Push Docker Images
+
 on:
   workflow_dispatch:
     inputs:
@@ -9,11 +10,10 @@ on:
   push:
     tags:
       - 'dev.*'
-    branches:
-        - feat/remove-mainnet
     pull_request:
       branches:
         - main
+
 jobs:
   publish-packages:
     name: Push Packages

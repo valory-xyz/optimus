@@ -28,6 +28,7 @@ jobs:
               export AUTHOR=$(grep 'service' packages/packages.json | awk -F/ '{print $2}' | head -1)
               autonomy init --reset --author $AUTHOR --ipfs --remote
               autonomy push-all
+              
   publish-images:
     name: Publish Docker Images
     runs-on: ${{ matrix.os }}

@@ -24,7 +24,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey
 - valory/reset_pause_abci:0.1.0:bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq
 - valory/termination_abci:0.1.0:bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi
-- valory/liquidity_trader_abci:0.1.0:bafybeielg6jlltyfwbla5wyk7e3bqxmaa723wu644njyxnal3y7l2p3sxy
+- valory/liquidity_trader_abci:0.1.0:bafybeihaewp654hk2xw7vqgfb6lh2x2l2viprsq2phmu6fb63q7nw2bgpy
 - valory/transaction_settlement_abci:0.1.0:bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm
 behaviours:
   main:
@@ -184,6 +184,7 @@ models:
       - base
       - optimism
       - mode
+      staking_chain: ''
     class_name: Params
   coingecko:
     args:

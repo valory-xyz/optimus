@@ -114,7 +114,6 @@ MAX_RETRIES_FOR_API_CALL = 3
 MAX_RETRIES_FOR_ROUTES = 3
 HTTP_OK = [200, 201]
 UTF8 = "utf-8"
-STAKING_CHAIN = "optimism"
 CAMPAIGN_TYPES = [1, 2]
 INTEGRATOR = "valory"
 WAITING_PERIOD_FOR_BALANCE_TO_REFLECT = 5
@@ -514,7 +513,9 @@ class LiquidityTraderBaseBehaviour(
             self.round_sequence.last_round_transition_timestamp.timestamp()
         )
 
-        last_ts_checkpoint = yield from self._get_ts_checkpoint(chain=STAKING_CHAIN)
+        last_ts_checkpoint = yield from self._get_ts_checkpoint(
+            chain=self.params.staking_chain
+        )
         if last_ts_checkpoint is None:
             return None
 
@@ -601,8 +602,10 @@ class LiquidityTraderBaseBehaviour(
 
         multisig_nonces_since_last_cp = (
             yield from self._get_multisig_nonces_since_last_cp(
-                chain=STAKING_CHAIN,
-                multisig=self.params.safe_contract_addresses.get(STAKING_CHAIN),
+                chain=self.params.staking_chain,
+                multisig=self.params.safe_contract_addresses.get(
+                    self.params.staking_chain
+                ),
             )
         )
         if multisig_nonces_since_last_cp is None:
@@ -715,46 +718,55 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self._get_service_staking_state(chain="optimism")
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
-            if self.service_staking_state == StakingState.STAKED:
-                min_num_of_safe_tx_required = (
-                    yield from self._calculate_min_num_of_safe_tx_required(
-                        chain=STAKING_CHAIN
-                    )
-                )
-                if min_num_of_safe_tx_required is None:
-                    self.context.logger.error(
-                        "Error calculating min number of safe tx required."
-                    )
-                else:
-                    self.context.logger.info(
-                        f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
-                    )
-                is_checkpoint_reached = yield from self._check_if_checkpoint_reached(
-                    chain=STAKING_CHAIN
-                )
-                if is_checkpoint_reached:
-                    self.context.logger.info(
-                        "Checkpoint reached! Preparing checkpoint tx.."
-                    )
-                    checkpoint_tx_hex = yield from self._prepare_checkpoint_tx(
-                        chain=STAKING_CHAIN
-                    )
-            elif self.service_staking_state == StakingState.EVICTED:
-                self.context.logger.error("Service has been evicted!")
 
+            if not self.params.staking_chain:
+                self.context.logger.warning("Service has not been staked on any chain")
+                self.service_staking_state = StakingState.UNSTAKED
             else:
-                self.context.logger.error("Service has not been staked")
+                yield from self._get_service_staking_state(
+                    chain=self.params.staking_chain
+                )
+                if self.service_staking_state == StakingState.STAKED:
+                    min_num_of_safe_tx_required = (
+                        yield from self._calculate_min_num_of_safe_tx_required(
+                            chain=self.params.staking_chain
+                        )
+                    )
+                    if min_num_of_safe_tx_required is None:
+                        self.context.logger.error(
+                            "Error calculating min number of safe tx required."
+                        )
+                    else:
+                        self.context.logger.info(
+                            f"The minimum number of safe tx required to unlock rewards are {min_num_of_safe_tx_required}"
+                        )
+                    is_checkpoint_reached = (
+                        yield from self._check_if_checkpoint_reached(
+                            chain=self.params.staking_chain
+                        )
+                    )
+                    if is_checkpoint_reached:
+                        self.context.logger.info(
+                            "Checkpoint reached! Preparing checkpoint tx.."
+                        )
+                        checkpoint_tx_hex = yield from self._prepare_checkpoint_tx(
+                            chain=self.params.staking_chain
+                        )
+                elif self.service_staking_state == StakingState.EVICTED:
+                    self.context.logger.error("Service has been evicted!")
+
+                else:
+                    self.context.logger.error("Service has not been staked")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CallCheckpointPayload(
                 self.context.agent_address,
                 tx_submitter,
                 checkpoint_tx_hex,
-                self.params.safe_contract_addresses.get(STAKING_CHAIN),
-                STAKING_CHAIN,
+                self.params.safe_contract_addresses.get(self.params.staking_chain),
+                self.params.staking_chain,
                 self.service_staking_state.value,
                 min_num_of_safe_tx_required,
             )
@@ -853,9 +865,9 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     multisig_nonces_since_last_cp = (
                         yield from self._get_multisig_nonces_since_last_cp(
-                            chain=STAKING_CHAIN,
+                            chain=self.params.staking_chain,
                             multisig=self.params.safe_contract_addresses.get(
-                                STAKING_CHAIN
+                                self.params.staking_chain
                             ),
                         )
                     )
@@ -872,7 +884,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             )
                             self.context.logger.info("Preparing vanity tx..")
                             vanity_tx_hex = yield from self._prepare_vanity_tx(
-                                chain=STAKING_CHAIN
+                                chain=self.params.staking_chain
                             )
                             self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
@@ -881,8 +893,8 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.agent_address,
                 tx_submitter,
                 vanity_tx_hex,
-                self.params.safe_contract_addresses.get(STAKING_CHAIN),
-                STAKING_CHAIN,
+                self.params.safe_contract_addresses.get(self.params.staking_chain),
+                self.params.staking_chain,
                 is_staking_kpi_met,
             )
 

@@ -38,7 +38,7 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
 - valory/liquidity_trader_abci:0.1.0:bafybeid7yambarhmg5xnlwxvhqwmwjmvf3wr7a3zzzicmac7buroq5d4we
-- valory/optimus_abci:0.1.0:bafybeid4c572pmxtqcrx4bojzkcdlc4m3zzse2gphy57lldyp3p732buqm
+- valory/optimus_abci:0.1.0:bafybeidd7zp5wxxmpixg6s3gcthtxfdtcvosrdmf2eki26a2k5ze6qkcvu
 - valory/market_data_fetcher_abci:0.1.0:bafybeies3ib3ft3tqepogstxjarq3ku4xepnfozyvg2rur5ztq4afchgcq
 - valory/strategy_evaluator_abci:0.1.0:bafybeidbib2sdjgq3354emzcc22zzgdm4z5hjdz2gbvcqabw5j4rdgcx5a
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey

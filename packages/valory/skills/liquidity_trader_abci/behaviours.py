@@ -303,11 +303,13 @@ class LiquidityTraderBaseBehaviour(
             for asset_address, asset_symbol in assets.items():
                 if asset_address == ZERO_ADDRESS:
                     balance = yield from self._get_native_balance(chain, account)
+                    decimal = 18
                 else:
                     balance = yield from self._get_token_balance(
                         chain, account, asset_address
                     )
                     balance = 0 if balance is None else balance
+                    decimal = yield from self._get_token_decimals(chain, asset_address)
 
                 asset_balances_dict[chain].append(
                     {
@@ -321,7 +323,7 @@ class LiquidityTraderBaseBehaviour(
                 )
 
                 self.context.logger.info(
-                    f"Balance of account {account} on {chain} chain for {asset_symbol}: {balance}"
+                    f"Balance of account {account} on {chain} for {asset_symbol}: {self._convert_to_token_units(balance, decimal)}"
                 )
 
         return asset_balances_dict
@@ -387,6 +389,11 @@ class LiquidityTraderBaseBehaviour(
         )
         return decimals
 
+    def _convert_to_token_units(self,amount: int, token_decimal: int = 18) -> str:
+        """Convert smallest unit to token's base unit."""
+        value = amount / 10**token_decimal
+        return f"{value:.{token_decimal}f}"
+    
     def _store_data(self, data: Any, attribute: str, filepath: str) -> None:
         """Generic method to store data as JSON."""
         if data is None:
@@ -956,6 +963,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _fetch_all_pools(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Fetch all pools based on allowed chains."""
+        if not self.params.target_investment_chains:
+            self.context.logger.warning("No chain selected for investment!")
+            return None
+        
         chain_ids = ",".join(
             str(self.params.chain_to_chain_id_mapping[chain])
             for chain in self.params.target_investment_chains
@@ -1314,6 +1325,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _get_top_tokens_by_value(self) -> Generator[None, None, Optional[List[Any]]]:
         """Get tokens over min balance"""
         token_balances = []
+        eligibility_factor = 0.8
         for position in self.synchronized_data.positions:
             chain = position.get("chain")
             for asset in position.get("assets", {}):
@@ -1352,7 +1364,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         tokens = []
         for token_data in token_balances:
-            if token_data["value"] >= self.params.min_swap_amount_threshold:
+            if token_data["value"] >= eligibility_factor * self.params.min_swap_amount_threshold:
                 tokens.append(token_data)
             if len(tokens) == 2:
                 self.context.logger.info(

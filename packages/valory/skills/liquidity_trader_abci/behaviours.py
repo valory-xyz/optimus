@@ -2819,7 +2819,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code not in HTTP_OK:
             response = json.loads(response.body)
-            self.context.logger.error(f"Error encountered: {response['message']}")
+            self.context.logger.error(f"[LiFi API Error Message] Error encountered: {response['message']}")
             return None
 
         try:
@@ -2993,7 +2993,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if routes_response.status_code != 200:
             response = json.loads(routes_response.body)
-            self.context.logger.error(f"Error encountered: {response['message']}")
+            self.context.logger.error(f"[LiFi API Error Message] Error encountered: {response['message']}")
             return None
 
         try:
@@ -3007,7 +3007,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         routes = routes_response.get("routes", [])
         if not routes:
-            self.context.logger.error("No routes available for this pair")
+            self.context.logger.error("[LiFi API Error Message] No routes available for this pair")
             return None
 
         return routes

@@ -6,9 +6,9 @@ description: The contract package for the Merkl Distributor interface.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigndinzenvr4gauojly3cieqscwf677i72di7nhfu3p3zxx6bmfyy
-  build/Distributor.json: bafybeihtbkqhzavgficpiikharncvtysmoyacmqbkntsilrvwph44fkm3a
-  contract.py: bafybeieq6hddnw6ib2ufwnrrfr6yo5g4hyidtpn3n2dl6si3yrloymjj3y
+  __init__.py: bafybeictnkdkelaghpkgodnjlfdqqextynue7ra3g5bz2ioxmk27yesaxu
+  build/Distributor.json: bafybeihzpteywhvuujzr2gjmmjfve6aqn6xfwd4k5iqlnwuulqeoyyyc44
+  contract.py: bafybeibftqb6uj44nwq7cz4wa3jpy4allyb3llegypuwrw6l7brpjn24ce
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: DistributorContract
@@ -16,7 +16,7 @@ contract_interface_paths:
   ethereum: build/Distributor.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.59.0
+    version: ==1.60.0
   web3:
     version: <7,>=6.0.0
   eth_abi:

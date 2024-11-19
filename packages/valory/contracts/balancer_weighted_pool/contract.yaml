@@ -6,9 +6,9 @@ description: The contract package for the balancer WeightedPool interface.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigdfk3th36mcaoew2of5zo2rrgyc2oqntzznjkii6a3zuafyvriou
-  build/WeightedPool.json: bafybeiclbkl3snzwo36nnbvjpge2jfcyo3a7lzzhfsfr4piv3n6djrs3le
-  contract.py: bafybeibojzlorprdqnbj4yp64ziheusdbvszijuk7xgeyjrcfzsw6z7koy
+  __init__.py: bafybeieabdck6osm6aeqonyflzx3oc2ytv6rdykjlltxkawcd5jwwm23uq
+  build/WeightedPool.json: bafybeicqma7gs5obx7oesmgqeqldos3oaz624d2llf6sft6tslvacn2tny
+  contract.py: bafybeiaqczbcnpojad4274mrtczi2ziljsmop3b5vtb6m6wz45s3443qyy
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: WeightedPoolContract
@@ -16,6 +16,6 @@ contract_interface_paths:
   ethereum: build/WeightedPool.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.59.0
+    version: ==1.60.0
   web3:
     version: <7,>=6.0.0

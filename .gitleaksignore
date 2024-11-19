@@ -267,3 +267,4 @@ c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/reset_pause_abci
 c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/strategy_evaluator_abci/skill.yaml:generic-api-key:101
 c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/trader_decision_maker_abci/skill.yaml:generic-api-key:76
 c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/transaction_settlement_abci/skill.yaml:generic-api-key:93
+34591764415f2fbc959e41feb4b7aaef733285aa:packages/valory/services/optimus_pearl/service.yaml:generic-api-key:44

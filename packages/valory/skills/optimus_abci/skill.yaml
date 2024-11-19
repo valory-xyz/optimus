@@ -11,15 +11,17 @@ fingerprint:
   composition.py: bafybeibiyxe22c5c33keuosha2t6b4zez2iqghawbtfhumqrubrtsuun4y
   dialogues.py: bafybeihhgzlutexxt6ry74m2rlaxdhu3ldbvhugmmgxxjlfcxf4xaipisy
   fsm_specification.yaml: bafybeiasafyyxit3jv5tpd73knlw245oge357yj3af6lzvowmu5gqemic4
-  handlers.py: bafybeidmh47f6uk3rvgh6ivvb2v43mxugiujoee6zxofhclqoyt7u7r524
-  models.py: bafybeidczdw3drlmdaetc3rvlvniyc6etrdvpdzhlgmvgxj6stfue7vqoy
+  handlers.py: bafybeibd2jqboa6pcmmxefjjvka4egacncnviopxgtfxequlqut7tueboy
+  models.py: bafybeiamgoetd2gdm3rf33sa2rh3l36is3mdev3ghpinjfe4hprvodezqe
 fingerprint_ignore_patterns: []
-connections: []
+connections:
+- valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
 contracts: []
 protocols:
 - eightballer/tickers:0.1.0:bafybeihmlyrsrztednef3p2nu42z5vnkur2jr46kbesxqujbfo3ap26jze
 - eightballer/orders:0.1.0:bafybeifhwwwwj2ygxd3k5syf3oaohhhvwlb3frspszzofyatempnhnk3la
 - eightballer/balances:0.1.0:bafybeicjxjwmr4wubghu4fa3cdg7dhwpy6b3dhvuaqbzem3jvycooyyazm
+- valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
 - valory/registration_abci:0.1.0:bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey

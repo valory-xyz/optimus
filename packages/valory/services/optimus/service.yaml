@@ -6,9 +6,27 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeibhxa4mapznr5epbnr4q3kuhofc72spmp4n54ufl3avf5rjkfdq4m
+agent: valory/optimus:0.1.0:bafybeie5vm4ucwtouxocxtd2aj6kvnrqsfngg32rhewvnzkfxnshqalepy
 number_of_agents: 1
-deployment: {}
+deployment:
+  agent:
+    ports:
+      0:
+        8716: 8716
+    volumes:
+      ./data: /data
+---
+public_id: valory/ipfs_package_downloader:0.1.0
+type: skill
+models:
+  params:
+    args:
+      cleanup_freq: ${CLEANUP_FREQ:int:50}
+      timeout_limit: ${TIMEOUT_LIMIT:int:3}
+      file_hash_to_id: ${FILE_HASH_TO_ID:list:[["bafybeifpqcxwjjlenpa7n3nnx5ornrg7uz5d7h76ugzhiwk45bx3sx3cta",["sma_strategy"]]]}
+      component_yaml_filename: ${COMPONENT_YAML_FILENAME:str:component.yaml}
+      entry_point_key: ${ENTRY_POINT_KEY:str:entry_point}
+      callable_keys: ${CALLABLE_KEYS:list:["run_callable","transform_callable","evaluate_callable"]}
 ---
 public_id: valory/ipfs_package_downloader:0.1.0
 type: skill
@@ -174,6 +192,12 @@ cert_requests:
   not_before: '2022-01-01'
   public_key: ${ACN_NODE_PUBLIC_KEY:str:02d3a830c9d6ea1ae91936951430dee11f4662f33118b02190693be835359a9d77}
   save_path: .certs/acn_cosmos_11000.txt
+---
+public_id: valory/http_server:0.22.0
+type: connection
+config:
+  host: ${HTTP_SERVER_HOST:str:0.0.0.0}
+  port: ${HTTP_SERVER_PORT:int:8716}
 ---
 public_id: valory/http_client:0.23.0
 type: connection

@@ -15,7 +15,7 @@ classifiers = [ "Environment :: Console", "Environment :: Web Environment", "Dev
 include = "packages"
 
 [tool.poetry.dependencies]
-python = "<3.11.9,>=3.10"
+python = "<3.12,>=3.10"
 open-autonomy = "==0.16.1"
 open-aea-test-autonomy = "==0.16.1"
 open-aea = "==1.57.0"
@@ -33,6 +33,7 @@ openapi-core = "==0.15.0"
 openapi-spec-validator = "<0.5.0,>=0.4.0"
 hypothesis = "==6.21.6"
 requests = "<2.31.2,>=2.28.1"
+pyinstaller = "==6.8.0"
 py-multibase = "==1.0.3"
 py-multicodec = "==0.2.1"
 py-eth-sig-utils = "*"

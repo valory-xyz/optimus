@@ -131,15 +131,11 @@ transition_func:
     (CollectSignatureRound, DONE): FinalizationRound
     (CollectSignatureRound, NO_MAJORITY): ResetRound
     (CollectSignatureRound, ROUND_TIMEOUT): CollectSignatureRound
-    (DecideAgentEndingRound, DONE): PostTxSettlementRound
     (DecideAgentEndingRound, DONT_MOVE_TO_NEXT_AGENT): PostTxSettlementRound
     (DecideAgentEndingRound, MOVE_TO_NEXT_AGENT): RandomnessRound
-    (DecideAgentEndingRound, NONE): PostTxSettlementRound
     (DecideAgentEndingRound, NO_MAJORITY): PostTxSettlementRound
-    (DecideAgentStartingRound, DONE): CallCheckpointRound
     (DecideAgentStartingRound, DONT_MOVE_TO_NEXT_AGENT): CallCheckpointRound
     (DecideAgentStartingRound, MOVE_TO_NEXT_AGENT): RandomnessRound
-    (DecideAgentStartingRound, NONE): CallCheckpointRound
     (DecideAgentStartingRound, NO_MAJORITY): CallCheckpointRound
     (DecisionMakingRound, DONE): ResetAndPauseRound
     (DecisionMakingRound, ERROR): ResetAndPauseRound

@@ -58,7 +58,6 @@ class Event(Enum):
     """LiquidityTraderAbciApp Events"""
 
     NEGATIVE = "negative"
-    NONE = "none"
     ACTION_EXECUTED = "execute_next_action"
     CHECKPOINT_TX_EXECUTED = "checkpoint_tx_executed"
     DONE = "done"
@@ -537,15 +536,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         DecideAgentStartingRound: {
             Event.DONT_MOVE_TO_NEXT_AGENT: CallCheckpointRound,
             Event.MOVE_TO_NEXT_AGENT: SwitchAgentStartingRound,
-            Event.DONE: CallCheckpointRound,
-            Event.NONE: CallCheckpointRound,
             Event.NO_MAJORITY: CallCheckpointRound,
         },
         DecideAgentEndingRound: {
             Event.DONT_MOVE_TO_NEXT_AGENT: PostTxSettlementRound,
             Event.MOVE_TO_NEXT_AGENT: SwitchAgentEndingRound,
-            Event.DONE: PostTxSettlementRound,
-            Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
         },
         PostTxSettlementRound: {

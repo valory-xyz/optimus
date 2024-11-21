@@ -79,9 +79,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     CallCheckpointRound,
     CheckStakingKPIMetPayload,
     CheckStakingKPIMetRound,
-    DecideAgentEndingPayload,
     DecideAgentEndingRound,
-    DecideAgentStartingPayload,
+    DecideAgentPayload,
     DecideAgentStartingRound,
     DecisionMakingPayload,
     DecisionMakingRound,
@@ -3367,7 +3366,7 @@ class DecideAgentStartingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            payload = DecideAgentStartingPayload(
+            payload = DecideAgentPayload(
                 self.context.agent_address, self.params.agent_transition
             )
 
@@ -3378,23 +3377,10 @@ class DecideAgentStartingBehaviour(LiquidityTraderBaseBehaviour):
         self.set_done()
 
 
-class DecideAgentEndingBehaviour(LiquidityTraderBaseBehaviour):
+class DecideAgentEndingBehaviour(DecideAgentStartingBehaviour):
     """Behaviour that executes all the actions."""
 
     matching_round: Type[AbstractRound] = DecideAgentEndingRound
-
-    def async_act(self) -> Generator:
-        """Async act"""
-        with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            payload = DecideAgentEndingPayload(
-                self.context.agent_address, self.params.agent_transition
-            )
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
-            yield from self.send_a2a_transaction(payload)
-            yield from self.wait_until_round_end()
-
-        self.set_done()
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

@@ -55,7 +55,7 @@ autonomy packages sync --update-packages
 Create a `keys.json` file containing wallet addresses and private keys for four agents:
 
 ```bash
-autonomy generate-key ethereum -n 4
+autonomy generate-key ethereum -n 1
 ```
 
 ### Create Ethereum Private Key File
@@ -117,8 +117,6 @@ TENDERLY_PROJECT_SLUG=YOUR_TENDERLY_PROJECT_SLUG
 COINGECKO_API_KEY=YOUR_COINGECKO_API_KEY
 ALLOWED_CHAINS=["optimism","base"]
 ```
-
-**Note:** Ensure you remove any references to the **Mode** network, as it's not required for Optimus.
 
 ---
 

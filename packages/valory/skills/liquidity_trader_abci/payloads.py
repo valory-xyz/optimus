@@ -72,17 +72,11 @@ class DecisionMakingPayload(BaseTxPayload):
 
 
 @dataclass(frozen=True)
-class DecideAgentStartingPayload(BaseTxPayload):
+class DecideAgentPayload(BaseTxPayload):
     """Represent a transaction payload for the DecideAgentRound."""
 
     vote: bool
 
-
-@dataclass(frozen=True)
-class DecideAgentEndingPayload(BaseTxPayload):
-    """Represent a transaction payload for the DecideAgentRound."""
-
-    vote: bool
 
 
 @dataclass(frozen=True)

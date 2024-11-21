@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeicbsx4lfpvqzqsx25qh3cy5iorystmfs4djqwz2sf6ev25l66hlmi
-- valory/optimus_abci:0.1.0:bafybeicms3q4frgtlvrx4adec6cf4jk2b5m3o4wy3xaxcrb3q26eot5kvi
+- valory/liquidity_trader_abci:0.1.0:bafybeib5sdafxjifu7rlldc573hruohzihorihjftmi3mvnc7oxrta54q4
+- valory/optimus_abci:0.1.0:bafybeiebiredielcxi44ea6cqftxqvykxo3zz5f5agbeltmgzhhbfazkyi
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -207,9 +207,6 @@ models:
       slash_threshold_amount: ${int:10000000000000000}
       light_slash_unit_amount: ${int:5000000000000000}
       serious_slash_unit_amount: ${int:8000000000000000}
-      multisend_batch_size: ${int:50}
-      ipfs_address: ${str:https://gateway.autonolas.tech/ipfs/}
-      default_chain_id: ${str:optimism}
       termination_from_block: ${int:34088325}
       allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
       initial_assets: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
@@ -251,4 +248,4 @@ models:
       max_gas_percentage: ${float:0.25}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["optimism","base","mode"]}
-      staking_chain: ${str:"optimism"}
+      staking_chain: ${str:optimism}

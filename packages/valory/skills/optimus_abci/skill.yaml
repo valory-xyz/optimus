@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeicbsx4lfpvqzqsx25qh3cy5iorystmfs4djqwz2sf6ev25l66hlmi
+- valory/liquidity_trader_abci:0.1.0:bafybeib5sdafxjifu7rlldc573hruohzihorihjftmi3mvnc7oxrta54q4
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -129,12 +129,8 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      default_chain_id: ethereum
-      multisend_batch_size: 50
       multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
       tx_timeout: 10.0
-      ipfs_address: https://gateway.autonolas.tech/ipfs/
-      service_endpoint_base: https://optimus.staging.autonolas.tech/
       allowed_dexs:
       - balancerPool
       initial_assets: '{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}'

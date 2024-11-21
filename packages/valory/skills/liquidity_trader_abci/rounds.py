@@ -162,7 +162,7 @@ class SynchronizedData(BaseSynchronizedData):
     def participant_to_staking_kpi(self) -> DeserializedCollection:
         """Get the participants to the CheckStakingKPIMet round."""
         return self._get_deserialized("participant_to_staking_kpi")
-    
+
     @property
     def participant_to_decision_making(self) -> DeserializedCollection:
         """Get the participants to the DecisionMaking round."""
@@ -172,7 +172,7 @@ class SynchronizedData(BaseSynchronizedData):
     def participant_to_post_tx_settlement(self) -> DeserializedCollection:
         """Get the participants to the PostTxSettlement round."""
         return self._get_deserialized("participant_to_post_tx_settlement")
-    
+
     @property
     def is_staking_kpi_met(self) -> Optional[bool]:
         """Get kpi met for the day."""
@@ -375,9 +375,7 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
     none_event: Enum = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_decision_making)
-    selection_key = (
-        get_name(SynchronizedData.chain_id),
-    )
+    selection_key = (get_name(SynchronizedData.chain_id),)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
@@ -425,9 +423,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     none_event: Enum = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_post_tx_settlement)
-    selection_key = (
-        get_name(SynchronizedData.chain_id),
-    )
+    selection_key = (get_name(SynchronizedData.chain_id),)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """

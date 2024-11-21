@@ -12,11 +12,11 @@ fingerprint:
   fsm_specification.yaml: bafybeieapooqv5cg2rgum3qjk2r63k7m6wojmzhhdxsek2znimrl3hzsxi
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
   models.py: bafybeieciktnznsw32woxt2z5oepka44lx7gfje3an6gevue4s6t7hghry
-  payloads.py: bafybeig65hwvn5koiiqg3aqmoey7o6m7bkevrn65yqwuyo64barsy7ce4u
+  payloads.py: bafybeidu4rqqto2yzsqj7niuzlp5idw6ot3ohsj7gs6hjxnn66wauecsfm
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeibdyl7gj2k2d7kunbynafyso2dpjmvs7d3cvqdeguuyqk74yi24rm
+  rounds.py: bafybeics3734oeicct3w5c72jqdmg4zxcfjpdscwdshimbsn42i5srk4ye
   strategies/simple_strategy.py: bafybeiasu2nchowx6leksjllpuum4ckezxoj4o2m4sstavblplvvutmvzm
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []

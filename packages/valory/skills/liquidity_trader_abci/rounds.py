@@ -422,7 +422,6 @@ class DecideAgentEndingRound(VotingRound):
     collection_key = get_name(SynchronizedData.participant_to_votes)
 
 
-
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
     """A round that will be called after tx settlement is done."""
 

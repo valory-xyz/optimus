@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeihkag6vngj56vas2vziqpekvzgwlcqyfdaexl5kke2seh5lohcllq
+agent: valory/optimus:0.1.0:bafybeiein5emjdfetob2dc5nkfketimy7kes22oaflcpnqjznkoatiwjiq
 number_of_agents: 1
 deployment: {}
 ---
@@ -68,8 +68,6 @@ models:
       tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:account_slug}
       tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:project_slug}
       tendermint_p2p_url: ${TENDERMINT_P2P_URL_0:str:optimism_tm_0:26656}
-      service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
-      multisend_batch_size: ${MULTISEND_BATCH_SIZE:int:5}
       safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}}
       staking_token_contract_address: ${STAKING_TOKEN_CONTRACT_ADDRESS:str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${STAKING_ACTIVITY_CHECKER_CONTRACT_ADDRESS:str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}

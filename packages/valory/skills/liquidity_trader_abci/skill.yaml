@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeidumf2rfnckzwpuwxf366sphmrjfvh5vsy5s5mzdhbjo6sw5ewgp4
+  behaviours.py: bafybeigjgayywhoae2uaqpm5m4nxxh4fhd7yealypeo7oeiyf6ufas4p2u
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeiabbiulb7k6xkjysulmy6o4ugnhxlpp5jiaeextvwj65q4ttadoeq
   handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
@@ -16,7 +16,7 @@ fingerprint:
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeig4pqddfq6ukbxgl5kqsuwlscjzocymusz7adctnt7vakprmvow5u
+  rounds.py: bafybeihsfsgt4mamb47hg5ylphydy7lcftdtbvyhxnqz3j7sfzqtzvbzje
   strategies/simple_strategy.py: bafybeiasu2nchowx6leksjllpuum4ckezxoj4o2m4sstavblplvvutmvzm
   strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
 fingerprint_ignore_patterns: []
@@ -143,7 +143,6 @@ models:
       serious_slash_unit_amount: 8000000000000000
       tx_timeout: 10.0
       validate_timeout: 1205
-      multisend_batch_size: 50
       multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
       allowed_dexs:
       - balancerPool

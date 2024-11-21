@@ -389,11 +389,11 @@ class LiquidityTraderBaseBehaviour(
         )
         return decimals
 
-    def _convert_to_token_units(self,amount: int, token_decimal: int = 18) -> str:
+    def _convert_to_token_units(self, amount: int, token_decimal: int = 18) -> str:
         """Convert smallest unit to token's base unit."""
         value = amount / 10**token_decimal
         return f"{value:.{token_decimal}f}"
-    
+
     def _store_data(self, data: Any, attribute: str, filepath: str) -> None:
         """Generic method to store data as JSON."""
         if data is None:
@@ -464,7 +464,9 @@ class LiquidityTraderBaseBehaviour(
             self.round_sequence.last_round_transition_timestamp.timestamp()
         )
 
-        last_ts_checkpoint = yield from self._get_ts_checkpoint(chain=self.params.staking_chain)
+        last_ts_checkpoint = yield from self._get_ts_checkpoint(
+            chain=self.params.staking_chain
+        )
         if last_ts_checkpoint is None:
             return None
 
@@ -552,7 +554,9 @@ class LiquidityTraderBaseBehaviour(
         multisig_nonces_since_last_cp = (
             yield from self._get_multisig_nonces_since_last_cp(
                 chain=self.params.staking_chain,
-                multisig=self.params.safe_contract_addresses.get(self.params.staking_chain),
+                multisig=self.params.safe_contract_addresses.get(
+                    self.params.staking_chain
+                ),
             )
         )
         if multisig_nonces_since_last_cp is None:
@@ -783,6 +787,7 @@ class CallCheckpointBehaviour(
             data=data,
         )
 
+
 class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that checks if the staking KPI has been met and makes vanity transactions if necessary."""
 
@@ -966,7 +971,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not self.params.target_investment_chains:
             self.context.logger.warning("No chain selected for investment!")
             return None
-        
+
         chain_ids = ",".join(
             str(self.params.chain_to_chain_id_mapping[chain])
             for chain in self.params.target_investment_chains
@@ -1364,7 +1369,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         tokens = []
         for token_data in token_balances:
-            if token_data["value"] >= eligibility_factor * self.params.min_swap_amount_threshold:
+            if (
+                token_data["value"]
+                >= eligibility_factor * self.params.min_swap_amount_threshold
+            ):
                 tokens.append(token_data)
             if len(tokens) == 2:
                 self.context.logger.info(
@@ -2177,7 +2185,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if not routes:
                 self.context.logger.error("Error fetching routes")
                 return Event.DONE.value, {}
-            
+
             if self.synchronized_data.max_allowed_steps_in_a_route:
                 routes = [
                     route
@@ -2186,9 +2194,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     <= self.synchronized_data.max_allowed_steps_in_a_route
                 ]
                 if not routes:
-                    self.context.logger.error(f"Needed routes with equal to or less than {self.synchronized_data.max_allowed_steps_in_a_route} steps, none found!")
+                    self.context.logger.error(
+                        f"Needed routes with equal to or less than {self.synchronized_data.max_allowed_steps_in_a_route} steps, none found!"
+                    )
                     return Event.DONE.value, {}
-            
+
             serialized_routes = json.dumps(routes)
 
             return Event.UPDATE.value, {
@@ -2624,7 +2634,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         step_transactions = yield from self._get_step_transactions_data(route)
         if not step_transactions:
             return None, None, None
-        
+
         total_gas_cost = 0
         total_fee = 0
         total_fee += sum(float(tx_info.get("fee", 0)) for tx_info in step_transactions)
@@ -2747,7 +2757,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, tx_info
     ) -> Generator[None, None, Optional[str]]:
         multisend_txs = []
-        amount= tx_info.get("amount")
+        amount = tx_info.get("amount")
 
         if tx_info.get("source_token") != ZERO_ADDRESS:
             approval_tx_payload = yield from self.get_approval_tx_hash(
@@ -2819,7 +2829,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code not in HTTP_OK:
             response = json.loads(response.body)
-            self.context.logger.error(f"[LiFi API Error Message] Error encountered: {response['message']}")
+            self.context.logger.error(
+                f"[LiFi API Error Message] Error encountered: {response['message']}"
+            )
             return None
 
         try:
@@ -2993,7 +3005,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if routes_response.status_code != 200:
             response = json.loads(routes_response.body)
-            self.context.logger.error(f"[LiFi API Error Message] Error encountered: {response['message']}")
+            self.context.logger.error(
+                f"[LiFi API Error Message] Error encountered: {response['message']}"
+            )
             return None
 
         try:
@@ -3007,7 +3021,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         routes = routes_response.get("routes", [])
         if not routes:
-            self.context.logger.error("[LiFi API Error Message] No routes available for this pair")
+            self.context.logger.error(
+                "[LiFi API Error Message] No routes available for this pair"
+            )
             return None
 
         return routes

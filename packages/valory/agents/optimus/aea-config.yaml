@@ -96,12 +96,12 @@ type: connection
 config:
   ledger_apis:
     ethereum:
-      address: ${str:https://virtual.mainnet.rpc.tenderly.co/85a9fd10-356e-4526-b1f6-7148366bf227}
+      address: ${str:""}
       chain_id: ${int:1}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     base:
-      address: ${str:https://virtual.base.rpc.tenderly.co/70dfa32a-6f92-4dd8-ba44-45bc16760de9}
+      address: ${str:''}
       chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
@@ -109,7 +109,7 @@ config:
         eip1559:
           default_priority_fee: 500
     optimism:
-      address: ${str:https://virtual.optimism.rpc.tenderly.co/3baf4a62-2fa9-448a-91a6-5f6ab95c76be}
+      address: ${str:''}
       chain_id: ${int:10}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
@@ -153,7 +153,7 @@ type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${str:/Users/gauravlochab/Documents/Code/optimus/logs}
+      log_dir: ${str:/logs}
   get_balance:
     args:
       api_id: ${str:get_balance}
@@ -304,7 +304,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/Users/gauravlochab/Documents/Code/optimus/data/}
+      store_path: ${str:/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}
@@ -349,5 +349,5 @@ config:
   - name: ${str:balancer}
     key_path: ${str:ethereum_private_key.txt}
     ledger_id: ${str:base}
-    rpc_url: ${str:https://virtual.base.rpc.tenderly.co/70dfa32a-6f92-4dd8-ba44-45bc16760de9}
+    rpc_url: ${str:''}
     etherscan_api_key: ${str:YOUR_ETHERSCAN_API_KEY}

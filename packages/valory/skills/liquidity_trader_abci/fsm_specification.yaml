@@ -71,9 +71,11 @@ transition_func:
     (DecideAgentEndingRound, DONT_MOVE_TO_NEXT_AGENT): PostTxSettlementRound
     (DecideAgentEndingRound, MOVE_TO_NEXT_AGENT): SwitchAgentEndingRound
     (DecideAgentEndingRound, NO_MAJORITY): PostTxSettlementRound
+    (DecideAgentEndingRound, ROUND_TIMEOUT): DecideAgentEndingRound
     (DecideAgentStartingRound, DONT_MOVE_TO_NEXT_AGENT): CallCheckpointRound
     (DecideAgentStartingRound, MOVE_TO_NEXT_AGENT): SwitchAgentStartingRound
     (DecideAgentStartingRound, NO_MAJORITY): CallCheckpointRound
+    (DecideAgentStartingRound, ROUND_TIMEOUT): DecideAgentStartingRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound

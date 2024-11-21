@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeib5sdafxjifu7rlldc573hruohzihorihjftmi3mvnc7oxrta54q4
-- valory/optimus_abci:0.1.0:bafybeiebiredielcxi44ea6cqftxqvykxo3zz5f5agbeltmgzhhbfazkyi
+- valory/liquidity_trader_abci:0.1.0:bafybeic4lrfkju6btm45msbzibuvcokbyycwfnazkvbb4fsnyh7ti4sh2y
+- valory/optimus_abci:0.1.0:bafybeicjmhnxpniwjkysppw5mrfowlwebdusp6w3euw43oih4crnt2v43e
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -248,4 +248,4 @@ models:
       max_gas_percentage: ${float:0.25}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["optimism","base","mode"]}
-      staking_chain: ${str:optimism}
+      staking_chain: ${str:""}

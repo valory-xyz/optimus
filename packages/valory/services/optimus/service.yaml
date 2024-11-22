@@ -84,9 +84,6 @@ models:
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
       staking_chain: ${STAKING_CHAIN:str:""}
       initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
-      gas_params:
-        max_fee_per_gas: ${MAX_FEE_PER_GAS:int:20000000}
-        max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:3000000}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

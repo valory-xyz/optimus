@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidsx3mjdvh3n27zlbtfl6vhwo3lcqj3ddnnhz6yrdddv7mpai3sbq
+agent: valory/optimus:0.1.0:bafybeibfrqs46nxoigc7pnyht25krp4y4vkkotgtdpgu7qlq3j77bellmy
 number_of_agents: 1
 deployment: {}
 ---
@@ -84,6 +84,10 @@ models:
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
       staking_chain: ${STAKING_CHAIN:str:""}
       initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
+      gas_params:
+        gas_price: ${GAS_PRICE:int:null}
+        max_fee_per_gas: ${MAX_FEE_PER_GAS:int:20000000}
+        max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:3000000}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

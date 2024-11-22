@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeiceo2vyyc5xc4f5juortmwrxanopyqlgfduiwudjqkgewzbh6t4h4
-- valory/optimus_abci:0.1.0:bafybeideo5mt4mtihrrgsvwvg5n5lbmtbrsotmhk3hj7nmovzdgxtdu5gm
+- valory/liquidity_trader_abci:0.1.0:bafybeidu3ybo5ppjkyzme5dzglsw4af6fb2j4ccoufoj3knd5mjf2qaksm
+- valory/optimus_abci:0.1.0:bafybeieyktk53rsdyvedivsdktdxd55m2p6lz2eblwpq63rmj3ihfqnray
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -250,6 +250,5 @@ models:
       target_investment_chains: ${list:["optimism","base","mode"]}
       staking_chain: ${str:""}
       gas_params:
-        gas_price: ${int:null}
         max_fee_per_gas: ${int:20000000}
         max_priority_fee_per_gas: ${int:3000000}

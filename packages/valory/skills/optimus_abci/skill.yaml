@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeiceo2vyyc5xc4f5juortmwrxanopyqlgfduiwudjqkgewzbh6t4h4
+- valory/liquidity_trader_abci:0.1.0:bafybeidu3ybo5ppjkyzme5dzglsw4af6fb2j4ccoufoj3knd5mjf2qaksm
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -179,7 +179,6 @@ models:
       - optimism
       - mode
       gas_params:
-        gas_price: null
         max_fee_per_gas: 20000000
         max_priority_fee_per_gas: 3000000
       staking_chain: optimism

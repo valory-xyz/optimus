@@ -101,7 +101,7 @@ config:
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     base:
-      address: ${str:''}
+      address: ${str:""}
       chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
@@ -109,7 +109,7 @@ config:
         eip1559:
           default_priority_fee: 500
     optimism:
-      address: ${str:''}
+      address: ${str:""}
       chain_id: ${int:10}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
@@ -349,5 +349,5 @@ config:
   - name: ${str:balancer}
     key_path: ${str:ethereum_private_key.txt}
     ledger_id: ${str:base}
-    rpc_url: ${str:''}
+    rpc_url: ${str:""}
     etherscan_api_key: ${str:YOUR_ETHERSCAN_API_KEY}

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeibffygb2z4nohf3nkw77whtgg3hivqtpqrfqlfbza4emqcykmcvpm
+agent: valory/optimus:0.1.0:bafybeifphkcegzmwdyw7f3ov5awrcdnsvxfhns6ff7yp4xtzy4ozbgu7zi
 number_of_agents: 1
 deployment:
   agent:
@@ -37,7 +37,7 @@ models:
   params:
     args:
       setup:
-        all_participants: ${ALL_PARTICIPANTS:list:[]}
+        all_participants: ${ALL_PARTICIPANTS:list:['0x73D936493a3c3F756cDD7501C82a8260127Ab672']}
         consensus_threshold: null
         safe_contract_address: ${SAFE_CONTRACT_ADDRESS:str:0x0000000000000000000000000000000000000000}
       genesis_config:
@@ -195,6 +195,6 @@ config:
   exchanges:
   - name: ${DCXT_EXCHANGE_NAME:str:balancer}
     key_path: ${DCXT_KEY_PATH:str:ethereum_private_key.txt}
-    ledger_id: ${DCXT_LEDGER_ID:str:ethereum}
-    rpc_url: ${DCXT_RPC_URL:str:http://host.docker.internal:8545}
-    etherscan_api_key: ${DCXT_ETHERSCAN_API_KEY:str:null}
+    ledger_id: ${DCXT_LEDGER_ID:str:base}
+    rpc_url: ${DCXT_RPC_URL:str:''}
+    etherscan_api_key: ${DCXT_ETHERSCAN_API_KEY:str:YOUR_ETHERSCAN_API_KEY}

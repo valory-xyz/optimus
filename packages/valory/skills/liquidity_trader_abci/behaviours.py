@@ -960,6 +960,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     matching_round: Type[AbstractRound] = EvaluateStrategyRound
     highest_apr_pool = None
 
+    SUPPORTED_POOL_TYPES = {
+        "WEIGHTED": "Weighted",
+        "COMPOSABLE_STABLE": "ComposableStable",
+        "LIQUIDITY_BOOTSTRAPING": "LiquidityBootstrapping",
+        "META_STABLE": "MetaStable",
+        "STABLE": "Stable",
+        "INVESTMENT": "Investment"
+    }
+
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
@@ -982,6 +991,149 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
+
+    def run_query(self, query: str, variables=None) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Run GraphQL query"""
+        url = 'https://api-v3.balancer.fi/'
+        headers = {'Content-Type': 'application/json'}
+        payload = {'query': query, 'variables': variables or {}}
+
+        response = yield from self.get_http_response(
+            method="POST",
+            url=url,
+            content=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+        )
+
+        if response.status_code not in HTTP_OK:
+            self.context.logger.error(
+                f"Could not retrieve data from url {url}. Status code {response.status_code}. Error Message: {response.body}"
+            )
+            return None
+
+        try:
+            result = json.loads(response.body)
+            if 'errors' in result:
+                self.context.logger.error(f"GraphQL Errors: {result['errors']}")
+                return None
+            return result['data']
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from API, the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None  
+
+    def get_best_pool(self, chain_names: List[str]) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get best pool by APR across specific chains"""
+        chain_names = [chain.upper() for chain in chain_names]
+        chain_list_str = ', '.join(f'"{chain}"' for chain in chain_names)
+        
+        graphql_query = f"""
+        {{
+          poolGetPools(where: {{chainIn: [{chain_list_str}]}}) {{
+            id
+            address
+            chain
+            type
+            poolTokens {{
+              address
+              symbol
+            }}
+            dynamicData {{
+              aprItems {{
+                type
+                apr
+              }}
+            }}
+          }}
+        }}
+        """    
+        data = yield from self.run_query(graphql_query)
+        if data is None:
+            return None
+
+        pools = data.get("poolGetPools", [])
+        
+        filtered_pools = []
+        for pool in pools:
+            pool_type = pool.get('type')
+            mapped_type = self.SUPPORTED_POOL_TYPES.get(pool_type)
+            if mapped_type and len(pool.get('poolTokens', [])) == 2:
+                pool['type'] = mapped_type  # Update pool type to the mapped type
+                filtered_pools.append(pool)
+        
+        if not filtered_pools:
+            return None
+
+        def get_total_apr(pool):
+            apr_items = pool.get('dynamicData', {}).get('aprItems', [])
+            filtered_apr_items = [
+                item for item in apr_items
+                if item['type'] not in {"SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
+            ]
+            return sum(item['apr'] for item in filtered_apr_items)
+
+        best_pool = max(filtered_pools, key=get_total_apr, default=None)
+        if best_pool is None:
+            return None
+
+        total_apr = get_total_apr(best_pool)
+        
+        dex_type = 'balancer'
+        chain = best_pool['chain'].lower()
+        apr = total_apr * 100  # Convert APR to percentage
+        pool_address = best_pool['address']
+        pool_id = best_pool['id']
+        pool_type = best_pool['type']
+        
+        pool_tokens = best_pool['poolTokens']
+        token0 = pool_tokens[0].get('address')
+        token1 = pool_tokens[1].get('address')
+        token0_symbol = pool_tokens[0].get('symbol')
+        token1_symbol = pool_tokens[1].get('symbol')
+        
+        pool_token_dict = {
+            "token0": token0,
+            "token1": token1,
+            "token0_symbol": token0_symbol,
+            "token1_symbol": token1_symbol,
+        }
+
+        if any(v is None for v in pool_token_dict.values()):
+            self.context.logger.error(f"Invalid pool tokens found: {pool_token_dict}")
+            return None
+        
+        return {
+            "dex_type": dex_type,
+            "chain": chain,
+            "apr": apr,
+            "pool_address": pool_address,
+            "pool_id": pool_id,
+            "pool_type": pool_type,
+            **pool_token_dict,
+        }
+
+    def find_highest_apr_pool_balancer(self) -> Generator[None, None, None]:
+        """Find the pool with the highest APR."""
+        best_pool = yield from self._fetch_best_pool()
+        if best_pool is not None:
+            self.highest_apr_pool = best_pool
+            self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")  
+
+    def _fetch_best_pool(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Fetch the best pool by APR for allowed chains."""
+        chains = [chain.upper() for chain in self.params.allowed_chains]
+        
+        # Get the best pool across allowed chains
+        best_pool = yield from self.get_best_pool(chains)
+
+        if best_pool:
+            self.context.logger.info(f"Best pool found: {best_pool}")
+        else:
+            self.context.logger.info("No eligible pools found")
+
+        return best_pool          
+          
 
     def find_highest_apr_pool(self) -> Generator[None, None, None]:
         """Find the pool with the highest APR."""

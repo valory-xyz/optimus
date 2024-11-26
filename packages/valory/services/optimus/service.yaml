@@ -135,12 +135,6 @@ models:
       endpoint: ${COINGECKO_ENDPOINT:str:https://api.coingecko.com/api/v3/coins/{token_id}/market_chart?vs_currency=usd&days=1}
   tx_settlement_proxy:
     args:
-      parameters:
-        amount: ${TX_PROXY_SWAP_AMOUNT:int:100000000}
-        slippageBps: ${TX_PROXY_SLIPPAGE_BPS:int:5}
-        resendAmount: ${TX_PROXY_SPAM_AMOUNT:int:200}
-        timeoutInMs: ${TX_PROXY_VERIFICATION_TIMEOUT_MS:int:120000}
-        priorityFee: ${TX_PROXY_PRIORITY_FEE:int:5000000}
       response_key: ${TX_PROXY_RESPONSE_KEY:str:null}
       response_type: ${TX_PROXY_RESPONSE_TYPE:str:dict}
       retries: ${TX_PROXY_RETRIES:int:5}

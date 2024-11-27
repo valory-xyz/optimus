@@ -7,11 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeigjgayywhoae2uaqpm5m4nxxh4fhd7yealypeo7oeiyf6ufas4p2u
+  behaviours.py: bafybeihpqaxusybxhgzhvdonjzu7tudg5crbpujsx6d5itploi5x4gd4ui
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeiabbiulb7k6xkjysulmy6o4ugnhxlpp5jiaeextvwj65q4ttadoeq
-  handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeifo5cvwazahd77jcx76rnz73egmgt27g7tmcjji4rdh4xehixfuxy
+  handlers.py: bafybeibj7b3hjirgvrge7qcramcughdlvgfvjb7c7ggatky4slt2c2icne
+  io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
+  io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
+  models.py: bafybeicorkpapvtrk3zmhnoyqiihiy5bvr36os4lgv2ji5nnexavw57sa4
   payloads.py: bafybeibozjbr4sxafd6aizge3hb5vn6gowdcszsdzbhwzzcbg6gmpy4pki
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
@@ -35,6 +37,7 @@ contracts:
 protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
+- valory/ipfs:0.1.0:bafybeiftxi2qhreewgsc5wevogi7yc5g6hbcbo4uiuaibauhv3nhfcdtvm
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
@@ -109,6 +112,7 @@ models:
         voting_power: '10'
       history_check_timeout: 1205
       ipfs_domain_name: null
+      ipfs_address: https://gateway.autonolas.tech/ipfs/
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
       max_attempts: 10
@@ -195,6 +199,15 @@ models:
       gas_params:
         max_fee_per_gas: 20000000
         max_priority_fee_per_gas: 3000000
+      file_hash_to_strategies_json:
+      - - bafybeihufqu2ra7vud4h6g2nwahx7mvdido7ff6prwnib2tdlc4np7dw24
+        - - lp_strategy
+      strategies_kwargs: '{"lp_strategy":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
+      selected_strategies:
+      - lp_strategy
+      selected_protocols:
+      - balancer
+      - uniswap
     class_name: Params
   coingecko:
     args:

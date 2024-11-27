@@ -1,5 +1,6 @@
 {
     "dev": {
+        "custom/valory/lp_strategy/0.1.0": "bafybeifpjqi6zfm3alltnz6fscjas4tatqlezqwpok2mxmfyroe2ncpkc4",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeiedi74xjsrxyf7fc6pov23ol5ycd6fi7v6c6nfgwo6yij6k353cbq",
         "contract/valory/balancer_vault/0.1.0": "bafybeichirxrzvxughksr3ycjlwsbdeb5rk5hvttqi46bw7djmcmtbecfm",
         "contract/valory/erc20/0.1.0": "bafybeie7es6tlembjlh7h5oe4qqhsaailr5nhwshuw346bxeflfsirxrc4",
@@ -8,10 +9,10 @@
         "contract/valory/merkl_distributor/0.1.0": "bafybeigrnymn2g4m7yv5bah7r3mphni7cim2pg25uffbtatyvnjip7rp3e",
         "contract/valory/staking_token/0.1.0": "bafybeic3odqiitp7grubfuukubml73pofxnfwh2dx5zqj4c6zrsc2uel4y",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeidwyuiv7ef7unrdpkzhpkkbssovfoqqti6ojlcibj4cvqkiyzypbi",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidu3ybo5ppjkyzme5dzglsw4af6fb2j4ccoufoj3knd5mjf2qaksm",
-        "skill/valory/optimus_abci/0.1.0": "bafybeieyktk53rsdyvedivsdktdxd55m2p6lz2eblwpq63rmj3ihfqnray",
-        "agent/valory/optimus/0.1.0": "bafybeifmuejp362bgfw5t4dlwjtpd3qfsbgfrw5g7armaijiicrswz4xfy",
-        "service/valory/optimus/0.1.0": "bafybeiazaphqrn65tvscbubjvuh6mzmodqp3inwayjmye2jjweu3uea7wi"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeigxr3ur7c32q6v5beod5a7wkvozj52a4z73fkbuhi5xvsqfr2xqpu",
+        "skill/valory/optimus_abci/0.1.0": "bafybeicjsl5f7apa3hr6pn4zribogffzz7obmphp6vc7uw7zva7g4hh7ke",
+        "agent/valory/optimus/0.1.0": "bafybeicqiie6qzsy5fispogrk5jjoadwyjrauqqx4dpaes3f23uwttcedq",
+        "service/valory/optimus/0.1.0": "bafybeib5zum6ldt56u7fhhp5zhrwfrxyp6eh5acvikj7e56nnm2g5nkoxq"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
   dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
   fsm_specification.yaml: bafybeiehe6ps7xi7i7tu4mduid7vbvszhsiu5juyard24i3nhtqgljpcza
-  handlers.py: bafybeih2mtdrorwy3csi73wcwpxiqznvmxqe2qfixkq75g5qlbxzvybmja
+  handlers.py: bafybeiejq6jvb5a6ixorj34qpyw7vmowtgvr2drifhl63ifqqvrn2audhm
   models.py: bafybeig7ytwxlfuhmwhksasidyoq6xeb3fb6vyihdbf5cmc4g7l73etq5e
 fingerprint_ignore_patterns: []
 connections: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeidu3ybo5ppjkyzme5dzglsw4af6fb2j4ccoufoj3knd5mjf2qaksm
+- valory/liquidity_trader_abci:0.1.0:bafybeigxr3ur7c32q6v5beod5a7wkvozj52a4z73fkbuhi5xvsqfr2xqpu
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -182,6 +182,15 @@ models:
         max_fee_per_gas: 20000000
         max_priority_fee_per_gas: 3000000
       staking_chain: optimism
+      file_hash_to_strategies_json:
+      - - bafybeihufqu2ra7vud4h6g2nwahx7mvdido7ff6prwnib2tdlc4np7dw24
+        - - lp_strategy
+      strategies_kwargs: '{"lp_strategy":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
+      selected_strategies:
+      - lp_strategy
+      selected_protocols:
+      - balancer
+      - uniswap
     class_name: Params
   coingecko:
     args:

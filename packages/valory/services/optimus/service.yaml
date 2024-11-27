@@ -37,7 +37,7 @@ models:
   params:
     args:
       setup:
-        all_participants: ${ALL_PARTICIPANTS:list:["0x73D936493a3c3F756cDD7501C82a8260127Ab672"]}
+        all_participants: ${ALL_PARTICIPANTS:list:[]}
         consensus_threshold: null
         safe_contract_address: ${SAFE_CONTRACT_ADDRESS:str:0x0000000000000000000000000000000000000000}
       genesis_config:

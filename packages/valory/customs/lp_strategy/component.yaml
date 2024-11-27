@@ -1,0 +1,15 @@
+name: lp_strategy
+author: valory
+version: 0.1.0
+type: custom
+description: A strategy that returns the highest APR yielding liquidity pool over
+  Balancer and Uniswap
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeicpapvukcglcti76a5ggwx2sb6xjrjq5a425tialt2cljc3qo5jpy
+  lp_strategy.py: bafybeidd5lupfaxbyx3zi5q3duwnyjy4d3j4qz2cty4wst7chcaoogqdde
+fingerprint_ignore_patterns: []
+entry_point: lp_strategy.py
+callable: run
+dependencies: {}

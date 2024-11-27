@@ -95,9 +95,6 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     StakingState,
     SynchronizedData,
 )
-from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import (
-    SimpleStrategyBehaviour,
-)
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -124,7 +121,7 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
-HIGHEST_APR_POOL = "highest_apr_pool"
+SELECTED_OPPORTUNITY = "selected_opportunity"
 
 class DexTypes(Enum):
     """DexTypes"""
@@ -174,7 +171,7 @@ WRITE_MODE = "w"
 
 
 class LiquidityTraderBaseBehaviour(
-    BalancerPoolBehaviour, UniswapPoolBehaviour, SimpleStrategyBehaviour, ABC
+    BalancerPoolBehaviour, UniswapPoolBehaviour, ABC
 ):
     """Base behaviour for the liquidity_trader_abci skill."""
 
@@ -192,7 +189,6 @@ class LiquidityTraderBaseBehaviour(
         self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour
         self.service_staking_state = StakingState.UNSTAKED
-        self.strategy = SimpleStrategyBehaviour
         self._inflight_strategy_req: Optional[str] = None
         # Read the assets and current pool
         self.read_current_pool()
@@ -926,14 +922,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that finds the opportunity and builds actions."""
 
     matching_round: Type[AbstractRound] = EvaluateStrategyRound
-    highest_apr_pool = None
+    selected_opportunity = None
+    trading_opportunities = None
 
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self.find_highest_apr_pool()
+            yield from self.fetch_all_trading_opportunities()
+            yield from self.execute_hyper_strategy()
             actions = []
-            if self.highest_apr_pool is not None:  
+            if self.selected_opportunity is not None:  
                 actions = yield from self.get_order_of_transactions()
 
             self.context.logger.info(f"Actions: {actions}")
@@ -947,14 +945,22 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def find_highest_apr_pool(self) -> Generator[None, None, None]:
-        """Find the pool with the highest APR using the hyper strategy."""
+    def execute_hyper_strategy(self) -> Generator[None, None, None]:
+        """Executes hyper strategy"""
+
+        hyper_strategy = self.params.selected_hyper_strategy
+        kwargs = {
+                    "strategy": hyper_strategy,
+                    "trading_opportunites" : self.trading_opportunities
+        }
+        self.selected_opportunity = self.execute_strategy(**kwargs)
+
+    def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
+        """Fetches all the trading opportunities"""
         yield from self.download_strategies()
 
         strategies = self.params.selected_strategies
         tried_strategies: Set[str] = set()
-        highest_apr_pool = None
-        highest_apr = -float("inf")
 
         while True:
             next_strategy = strategies.pop(0)
@@ -966,16 +972,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "apr_threshold": self.params.apr_threshold
+                    "apr_threshold": self.current_pool.get('apr') if self.current_pool else self.params.apr_threshold,
+                    "current_pool": self.current_pool.get('address') if self.current_pool else None
                 }
             )
             self.context.logger.info(f"KWARGS: {kwargs}")
-            pool = self.execute_strategy(**kwargs)
-            if pool is not None:
-                apr = pool.get("apr", 0)
-                if apr > highest_apr:
-                    highest_apr = apr
-                    highest_apr_pool = pool
+            opportunity = self.execute_strategy(**kwargs)
+            if opportunity is not None:
+                self.trading_opportunities.append(opportunity)
 
             tried_strategies.add(next_strategy)
             remaining_strategies = set(strategies) - tried_strategies
@@ -983,12 +987,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 break
 
             next_strategy = remaining_strategies.pop()
-
-        if highest_apr_pool:
-            self.highest_apr_pool = highest_apr_pool
-            self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")
-        else:
-            self.context.logger.warning("No pools with APR found.")
 
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""
@@ -1017,14 +1015,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategy = kwargs.pop("strategy", None)
         if strategy is None:
             self.context.logger.error(f"No trading strategy was given in {kwargs=}!")
-            return {HIGHEST_APR_POOL: {}}
+            return {SELECTED_OPPORTUNITY: None}
 
         strategy = self.strategy_exec(strategy)
         if strategy is None:
             self.context.logger.error(
                 f"No executable was found for {strategy=}!"
             )
-            return {HIGHEST_APR_POOL: {}}
+            return {SELECTED_OPPORTUNITY: None}
 
         strategy_exec, callable_method = strategy
         if callable_method in globals():
@@ -1036,7 +1034,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"No {callable_method!r} method was found in {strategy} executable."
             )
-            return {HIGHEST_APR_POOL: {}}
+            return {SELECTED_OPPORTUNITY: None}
 
         return method(*args, **kwargs)
     
@@ -1364,18 +1362,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
         # TO-DO: Add logic to handle swaps when there is a balance for only one token.
-        if not self.highest_apr_pool:
+        if not self.selected_opportunity:
             self.context.logger.error("No pool present.")
             return None
 
         bridge_swap_actions = []
 
         # Get the highest APR pool's tokens
-        dest_token0_address = self.highest_apr_pool.get("token0")
-        dest_token1_address = self.highest_apr_pool.get("token1")
-        dest_token0_symbol = self.highest_apr_pool.get("token0_symbol")
-        dest_token1_symbol = self.highest_apr_pool.get("token1_symbol")
-        dest_chain = self.highest_apr_pool.get("chain")
+        dest_token0_address = self.selected_opportunity.get("token0")
+        dest_token1_address = self.selected_opportunity.get("token1")
+        dest_token0_symbol = self.selected_opportunity.get("token0_symbol")
+        dest_token1_symbol = self.selected_opportunity.get("token1_symbol")
+        dest_chain = self.selected_opportunity.get("chain")
 
         if (
             not dest_token0_address
@@ -1385,7 +1383,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             or not dest_chain
         ):
             self.context.logger.error(
-                f"Incomplete data in highest APR pool {self.highest_apr_pool}"
+                f"Incomplete data in highest APR pool {self.selected_opportunity}"
             )
             return None
 
@@ -1488,21 +1486,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _build_enter_pool_action(self) -> Dict[str, Any]:
         """Build action for entering the pool with the highest APR."""
-        if not self.highest_apr_pool:
+        if not self.selected_opportunity:
             self.context.logger.error("No pool present.")
             return None
 
         return {
             "action": Action.ENTER_POOL.value,
-            "dex_type": self.highest_apr_pool.get("dex_type"),
-            "chain": self.highest_apr_pool.get("chain"),
+            "dex_type": self.selected_opportunity.get("dex_type"),
+            "chain": self.selected_opportunity.get("chain"),
             "assets": [
-                self.highest_apr_pool.get("token0"),
-                self.highest_apr_pool.get("token1"),
+                self.selected_opportunity.get("token0"),
+                self.selected_opportunity.get("token1"),
             ],
-            "pool_address": self.highest_apr_pool.get("pool_address"),
-            "apr": self.highest_apr_pool.get("apr"),
-            "pool_type": self.highest_apr_pool.get("pool_type"),
+            "pool_address": self.selected_opportunity.get("pool_address"),
+            "apr": self.selected_opportunity.get("apr"),
+            "pool_type": self.selected_opportunity.get("pool_type"),
         }
 
     def _build_claim_reward_action(

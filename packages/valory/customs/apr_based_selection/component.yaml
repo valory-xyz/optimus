@@ -1,0 +1,14 @@
+name: apr_based_selection
+author: valory
+version: 0.1.0
+type: custom
+description: A strategy that selects the best yielding strategy based on APR
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeifjsn3dek6bm3b5a2eu55acniehapedobhzvz3x5nub563v5s7vsu
+  apr_based_selection.py: bafybeiakzmrimkyhm6m3uub2pbmi3zgf6pzp74ga75mii4gr3yh6yjq7zi
+fingerprint_ignore_patterns: []
+entry_point: apr_based_selection.py
+callable: run
+dependencies: {}

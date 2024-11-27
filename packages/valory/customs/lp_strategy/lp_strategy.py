@@ -34,7 +34,7 @@ from urllib.parse import urlencode
 
 CAMPAIGN_TYPES = [1, 2]
 HTTP_OK = [200, 201]
-REQUIRED_FIELDS = ("chains", "apr_threshold", "protocols", "balancer_graphql_endpoints", "merkl_fetch_campaign_args", "chain_to_chain_id_mapping")
+REQUIRED_FIELDS = ("chains", "apr_threshold", "protocols", "balancer_graphql_endpoints", "merkl_fetch_campaign_args", "chain_to_chain_id_mapping", "current_pool")
 
 class DexTypes(Enum):
     """DexTypes"""
@@ -56,15 +56,15 @@ def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
 def highest_apr_opportunity(
-    chains: List[str], 
-    apr_threshold: float, 
-    merkl_fetch_campaigns_args: Dict[str, Any],
-    protocols: List[str],
     balancer_graphql_endpoints: Dict[str, Any],
-    chain_to_chain_id_mapping: Dict[str, Any]
-
-) -> Dict[str, Union[bool, str]]:
-    """Get the highest APR yielding opportunity over Balancer using Merkl API."""
+    merkl_fetch_campaign_args: Dict[str, Any],
+    chains: List[str], 
+    protocols: List[str],
+    chain_to_chain_id_mapping: Dict[str, Any],
+    apr_threshold: float, 
+    current_pool: Optional[str]
+) -> Dict[str, Any]:
+    """Get the highest APR yielding opportunity over given protocols using Merkl API."""
 
     def fetch_all_pools() -> Optional[Dict[str, Any]]:
         """Fetch all pools based on allowed chains."""
@@ -79,9 +79,9 @@ def highest_apr_opportunity(
             str(chain_to_chain_id_mapping[chain])
             for chain in chains
         )
-        base_url = merkl_fetch_campaigns_args.get("url")
-        creator = merkl_fetch_campaigns_args.get("creator")
-        live = merkl_fetch_campaigns_args.get("live", "true")
+        base_url = merkl_fetch_campaign_args.get("url")
+        creator = merkl_fetch_campaign_args.get("creator")
+        live = merkl_fetch_campaign_args.get("live", "true")
 
         query_params = {
             "chainIds": chain_ids,
@@ -126,7 +126,7 @@ def highest_apr_opportunity(
                         continue
 
                     campaign_pool_address = campaign.get("mainParameter")
-                    if not campaign_pool_address:
+                    if not campaign_pool_address or campaign_pool_address == current_pool:
                         continue
                     
                     chain = next(
@@ -292,7 +292,7 @@ def highest_apr_opportunity(
 
     highest_apr_pool = determine_highest_apr_pool(eligible_pools)
     if highest_apr_pool:
-        return {"highest_apr_pool": highest_apr_pool}
+        return {"selected_opportunity": highest_apr_pool}
     else:
         return {
             "error": (
@@ -307,4 +307,5 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
         return {"error": f"Required kwargs {missing} were not provided."}
 
     kwargs = remove_irrelevant_fields(kwargs)
+    print("KWARGS in run", kwargs)
     return highest_apr_opportunity(**kwargs)

@@ -60,8 +60,7 @@ class SharedState(BaseSharedState):
         params = self.context.params
         self.strategy_to_filehash = {
             value: key
-            for key, values in params.file_hash_to_strategies.items()
-            for value in values
+            for key, value in params.file_hash_to_strategies.items()
         }
         strategy_exec = self.strategy_to_filehash.keys()
         for selected_strategy in params.selected_strategies:
@@ -284,14 +283,10 @@ class Params(BaseParams):
         )
         self.staking_chain: Optional[str] = self._ensure("staking_chain", kwargs, Optional[str])
         self.selected_strategies: List[str] = self._ensure("selected_strategies", kwargs, List[str])
-        self.file_hash_to_strategies: Dict[
-            str, List[str]
-        ] = nested_list_todict_workaround(
-            kwargs,
-            "file_hash_to_strategies_json"
-        )
-        self.strategies_kwargs: str = json.loads(self._ensure("strategies_kwargs", kwargs, str))
+        self.file_hash_to_strategies = json.loads(self._ensure("file_hash_to_strategies", kwargs, str))
+        self.strategies_kwargs = json.loads(self._ensure("strategies_kwargs", kwargs, str))
         self.selected_protocols =  self._ensure("selected_protocols", kwargs, List[str])
+        self.selected_hyper_strategy = self._ensure("selected_hyper_strategy", kwargs, str)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:
@@ -307,24 +302,3 @@ class Params(BaseParams):
                 f"Policy store path {path!r} is not a directory or is not writable."
             )
         return Path(path)
-
-def _raise_incorrect_config(key: str, values: Any) -> None:
-    """Raise a `ValueError` for incorrect configuration of a nested_list workaround."""
-    raise ValueError(
-        f"The given configuration for {key!r} is incorrectly formatted: {values}!"
-        "The value is expected to be a list of lists that can be represented as a dictionary."
-    )
-
-def nested_list_todict_workaround(
-    kwargs: Dict,
-    key: str,
-) -> Dict:
-    """Get a nested list from the kwargs and convert it to a dictionary."""
-    values = list(kwargs.get(key, []))
-    if len(values) == 0:
-        raise ValueError(f"No {key!r} specified in agent's configurations: {kwargs}!")
-    if any(not issubclass(type(nested_values), Iterable) for nested_values in values):
-        _raise_incorrect_config(key, values)
-    if any(len(nested_values) % 2 == 1 for nested_values in values):
-        _raise_incorrect_config(key, values)
-    return {value[0]: value[1] for value in values}

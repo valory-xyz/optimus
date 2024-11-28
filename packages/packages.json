@@ -1,6 +1,6 @@
 {
     "dev": {
-        "custom/valory/lp_strategy/0.1.0": "bafybeievbi5tbvszq6hdpzasffxj4aaeljczwtpxzdrd33o6wlsathy26u",
+        "custom/valory/lp_strategy/0.1.0": "bafybeiekugat67ivytlniyhthcvp7qkq4ezx7qcurm2i2aaxtbfoqambte",
         "custom/valory/apr_based_selection/0.1.0": "bafybeibhnkzoxeraqzki7hal3w5sx737sraqmi6qxhssfulwpxkiy4c7ta",
         "custom/valory/balancer_strategy/0.1.0": "bafybeihdi4vtyjqt4qe67ii6l3minopmqxvmkidcn5tjn3w74cl7ovfcta",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeiedi74xjsrxyf7fc6pov23ol5ycd6fi7v6c6nfgwo6yij6k353cbq",
@@ -11,10 +11,10 @@
         "contract/valory/merkl_distributor/0.1.0": "bafybeigrnymn2g4m7yv5bah7r3mphni7cim2pg25uffbtatyvnjip7rp3e",
         "contract/valory/staking_token/0.1.0": "bafybeic3odqiitp7grubfuukubml73pofxnfwh2dx5zqj4c6zrsc2uel4y",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeidwyuiv7ef7unrdpkzhpkkbssovfoqqti6ojlcibj4cvqkiyzypbi",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeih56m62hngzbwbognl553tbtxnjnolj3lqyaobbrtgc6svqduzzry",
-        "skill/valory/optimus_abci/0.1.0": "bafybeibyc43ohsdrdbbl3lkycteqvxn3xxc4tcuzjcpye4ad3236asezly",
-        "agent/valory/optimus/0.1.0": "bafybeidor5m3fm6xe2qab3gahvnhe3it3eo5fstc6hqgxo3hjffwuzv7ue",
-        "service/valory/optimus/0.1.0": "bafybeih2m5cmg2yjbbxjwxf5xh4k7a4xdtlo73kxcc4uhxir6ezgrqhp7i"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiekkd4vhzprii5msqaxrpmoianaasyfyms6xb7ejss3nwaa2rn5v4",
+        "skill/valory/optimus_abci/0.1.0": "bafybeicx3peqemyryj2mtavcsygfvnc353ii6ctxu76ebwntppmoh7pxgu",
+        "agent/valory/optimus/0.1.0": "bafybeihg4anjlmr3nwoqkqf5egchhclv6u45y7wpawpiv6ftochpjyei4q",
+        "service/valory/optimus/0.1.0": "bafybeifdnw7yccrkygtldtd47bmp7bucvjbeqqxodnqphn56geyeodwe7a"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

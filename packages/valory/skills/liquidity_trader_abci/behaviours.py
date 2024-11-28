@@ -981,7 +981,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             opportunity = self.execute_strategy(**kwargs)
             if opportunity is not None:
                 self.trading_opportunities.append(opportunity)
-                
+
             tried_strategies.add(next_strategy)
             remaining_strategies = set(strategies) - tried_strategies
             if len(remaining_strategies) == 0:
@@ -989,6 +989,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             next_strategy = remaining_strategies.pop()
 
+        self.context.logger.info(f"available opportunities: {self.trading_opportunities}")
+        
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""
         if self._inflight_strategy_req is not None:

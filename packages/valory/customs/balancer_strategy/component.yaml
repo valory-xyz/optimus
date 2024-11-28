@@ -1,15 +1,15 @@
-name: lp_strategy
+name: balancer_strategy
 author: valory
 version: 0.1.0
 type: custom
 description: A strategy that returns the highest APR yielding liquidity pool over
-  Balancer and Uniswap using Merkl
+  Balancer
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeico7avmekvnpeefqyruchcgdcfmrarjt74xertll4gurai4bmdbxa
-  lp_strategy.py: bafybeihyfc7rrs6polj6iyhzm7mp5vajrd6umyfqcly2qxvd3ycsxq3hqu
+  __init__.py: bafybeih5ut32gpd74oj33oautjlv6sswnqwwep7hpnnjuos3mqpyyjn6zy
+  balancer_strategy.py: bafybeicec5k2xyxo3it3olk4do5qdroy6j24b7dgsiiepijb6wi4uyuycm
 fingerprint_ignore_patterns: []
-entry_point: lp_strategy.py
+entry_point: balancer_strategy.py
 callable: run
 dependencies: {}

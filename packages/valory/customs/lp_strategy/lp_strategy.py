@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains a strategy that returns the highest APR yielding liquidity pool over Balancer and Uniswap."""
+"""This module contains a strategy that returns the highest APR yielding liquidity pool over Balancer and Uniswap using Merkl"""
 
 import json
 import requests

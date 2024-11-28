@@ -957,7 +957,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Evaluating {hyper_strategy} hyper strategy..")
         self.selected_opportunity = self.execute_strategy(**kwargs)
         self.context.logger.info(f"Selected opportunity: {self.selected_opportunity}")
-        
+
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities"""
         yield from self.download_strategies()
@@ -974,14 +974,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "apr_threshold": 5,
-                    "current_pool": self.current_pool.get('address') if self.current_pool else None
+                    "apr_threshold": self.current_pool.get('apr') if self.current_pool else self.params.apr_threshold,
+                    "current_pool": self.current_pool.get('address') if self.current_pool else ''
                 }
             )
             opportunity = self.execute_strategy(**kwargs)
             if opportunity is not None:
                 self.trading_opportunities.append(opportunity)
-
+                
             tried_strategies.add(next_strategy)
             remaining_strategies = set(strategies) - tried_strategies
             if len(remaining_strategies) == 0:

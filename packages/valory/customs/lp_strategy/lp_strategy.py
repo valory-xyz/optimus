@@ -291,11 +291,8 @@ def highest_apr_opportunity(
     if highest_apr_pool:
         return highest_apr_pool
     else:
-        return {
-            "error": (
-                "No pools with APR found."
-            )
-        }
+        print("No opportunity found on merkl")
+        return None
     
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""

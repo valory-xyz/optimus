@@ -923,15 +923,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round: Type[AbstractRound] = EvaluateStrategyRound
     selected_opportunity = None
-    trading_opportunities = None
+    trading_opportunities = []
 
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.fetch_all_trading_opportunities()
-            yield from self.execute_hyper_strategy()
+            self.execute_hyper_strategy()
             actions = []
             if self.selected_opportunity is not None:  
+                self.context.logger.info(f"Selected opportunity: {self.selected_opportunity}")
                 actions = yield from self.get_order_of_transactions()
 
             self.context.logger.info(f"Actions: {actions}")
@@ -945,20 +946,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def execute_hyper_strategy(self) -> Generator[None, None, None]:
+    def execute_hyper_strategy(self) -> None:
         """Executes hyper strategy"""
 
         hyper_strategy = self.params.selected_hyper_strategy
         kwargs = {
-                    "strategy": hyper_strategy,
-                    "trading_opportunites" : self.trading_opportunities
-        }
+                "strategy": hyper_strategy,
+                "trading_opportunities" : self.trading_opportunities
+                }
+        self.context.logger.info(f"Evaluating {hyper_strategy} hyper strategy..")
         self.selected_opportunity = self.execute_strategy(**kwargs)
-
+        self.context.logger.info(f"Selected opportunity: {self.selected_opportunity}")
+        
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities"""
         yield from self.download_strategies()
-
         strategies = self.params.selected_strategies
         tried_strategies: Set[str] = set()
 
@@ -972,11 +974,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "apr_threshold": self.current_pool.get('apr') if self.current_pool else self.params.apr_threshold,
+                    "apr_threshold": 5,
                     "current_pool": self.current_pool.get('address') if self.current_pool else None
                 }
             )
-            self.context.logger.info(f"KWARGS: {kwargs}")
             opportunity = self.execute_strategy(**kwargs)
             if opportunity is not None:
                 self.trading_opportunities.append(opportunity)
@@ -997,7 +998,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # no strategies pending to be fetched
             return
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
-            self.context.logger.info(f"{strategy} {file_hash}")
             self.context.logger.info(f"Fetching {strategy} strategy...")
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
             self._inflight_strategy_req = strategy
@@ -1010,19 +1010,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.download_next_strategy()
             yield from self.sleep(self.params.sleep_time)
     
-    def execute_strategy(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    def execute_strategy(self, *args: Any, **kwargs: Any) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Execute the strategy and return the results."""
+        
         strategy = kwargs.pop("strategy", None)
         if strategy is None:
             self.context.logger.error(f"No trading strategy was given in {kwargs=}!")
-            return {SELECTED_OPPORTUNITY: None}
-
+            return None
+        
         strategy = self.strategy_exec(strategy)
         if strategy is None:
             self.context.logger.error(
                 f"No executable was found for {strategy=}!"
             )
-            return {SELECTED_OPPORTUNITY: None}
+            return None
 
         strategy_exec, callable_method = strategy
         if callable_method in globals():
@@ -1034,7 +1035,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"No {callable_method!r} method was found in {strategy} executable."
             )
-            return {SELECTED_OPPORTUNITY: None}
+            return None
 
         return method(*args, **kwargs)
     

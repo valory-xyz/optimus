@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicpapvukcglcti76a5ggwx2sb6xjrjq5a425tialt2cljc3qo5jpy
-  lp_strategy.py: bafybeicdqa3loaynt5pmk23pptzxpvrzs6y4jw22s5mtiiw63mgujhk3hy
+  lp_strategy.py: bafybeieuvsjwgczrvlcpbb32yv653uazs5xazuncpiqk5klvanyvrsevtm
 fingerprint_ignore_patterns: []
 entry_point: lp_strategy.py
 callable: run

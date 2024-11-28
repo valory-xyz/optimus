@@ -49,6 +49,7 @@ def run_query(query, graphql_endpoint, variables=None):
     return result['data']
 
 def get_best_pool(chains, apr_threshold, graphql_endpoint):
+    print(f"{apr_threshold=}")
     # Ensure all chain names are uppercase
     chain_names = [chain.upper() for chain in chains]
     chain_list_str = ', '.join(chain_names)

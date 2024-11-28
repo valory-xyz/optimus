@@ -981,7 +981,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             opportunity = self.execute_strategy(**kwargs)
             if opportunity is not None:
                 self.trading_opportunities.append(opportunity)
-
+            else:
+                self.context.logger.warning(f"No opportunity found using {next_strategy}")
+                
             tried_strategies.add(next_strategy)
             remaining_strategies = set(strategies) - tried_strategies
             if len(remaining_strategies) == 0:

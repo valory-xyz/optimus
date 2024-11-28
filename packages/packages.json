@@ -1,8 +1,8 @@
 {
     "dev": {
-        "custom/valory/lp_strategy/0.1.0": "bafybeiekugat67ivytlniyhthcvp7qkq4ezx7qcurm2i2aaxtbfoqambte",
+        "custom/valory/lp_strategy/0.1.0": "bafybeibugdhqrvvr24n5o5lkt2kvzhmxd7mexf5a2oecsaqng5juj34znm",
         "custom/valory/apr_based_selection/0.1.0": "bafybeibhnkzoxeraqzki7hal3w5sx737sraqmi6qxhssfulwpxkiy4c7ta",
-        "custom/valory/balancer_strategy/0.1.0": "bafybeihdi4vtyjqt4qe67ii6l3minopmqxvmkidcn5tjn3w74cl7ovfcta",
+        "custom/valory/balancer_strategy/0.1.0": "bafybeihk4h6aou2g2hgvdz77qqtwf7dny5rq2zyzlbl5rivjhiz24yfvwu",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeiedi74xjsrxyf7fc6pov23ol5ycd6fi7v6c6nfgwo6yij6k353cbq",
         "contract/valory/balancer_vault/0.1.0": "bafybeichirxrzvxughksr3ycjlwsbdeb5rk5hvttqi46bw7djmcmtbecfm",
         "contract/valory/erc20/0.1.0": "bafybeie7es6tlembjlh7h5oe4qqhsaailr5nhwshuw346bxeflfsirxrc4",
@@ -11,10 +11,10 @@
         "contract/valory/merkl_distributor/0.1.0": "bafybeigrnymn2g4m7yv5bah7r3mphni7cim2pg25uffbtatyvnjip7rp3e",
         "contract/valory/staking_token/0.1.0": "bafybeic3odqiitp7grubfuukubml73pofxnfwh2dx5zqj4c6zrsc2uel4y",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeidwyuiv7ef7unrdpkzhpkkbssovfoqqti6ojlcibj4cvqkiyzypbi",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiekkd4vhzprii5msqaxrpmoianaasyfyms6xb7ejss3nwaa2rn5v4",
-        "skill/valory/optimus_abci/0.1.0": "bafybeicx3peqemyryj2mtavcsygfvnc353ii6ctxu76ebwntppmoh7pxgu",
-        "agent/valory/optimus/0.1.0": "bafybeihg4anjlmr3nwoqkqf5egchhclv6u45y7wpawpiv6ftochpjyei4q",
-        "service/valory/optimus/0.1.0": "bafybeifdnw7yccrkygtldtd47bmp7bucvjbeqqxodnqphn56geyeodwe7a"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeif2dyhfvn42trlhd74oubicvplbmey3tzvyvogc6qfo2hbc2ahpxq",
+        "skill/valory/optimus_abci/0.1.0": "bafybeig4hkauprjmy35kkygfwyvoskzp5z27q6v4i64xmzld23rhe5hk3e",
+        "agent/valory/optimus/0.1.0": "bafybeiatod6d7j7m57umvc5lha6zkvvnqjpiqnpytkfqf4kqy2kjyjlqvu",
+        "service/valory/optimus/0.1.0": "bafybeidre44bcsv24zz2wzpnl7gorxk2s4bhazgepxcv6r2i46e7mcwxgi"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

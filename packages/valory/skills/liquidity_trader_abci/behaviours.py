@@ -962,6 +962,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches all the trading opportunities"""
         yield from self.download_strategies()
         strategies = self.params.selected_strategies
+        self.context.logger.info(f"Selected Strategies: {self.params.selected_strategies}")
         tried_strategies: Set[str] = set()
 
         while True:

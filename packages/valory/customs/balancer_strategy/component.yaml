@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeih5ut32gpd74oj33oautjlv6sswnqwwep7hpnnjuos3mqpyyjn6zy
-  balancer_strategy.py: bafybeicec5k2xyxo3it3olk4do5qdroy6j24b7dgsiiepijb6wi4uyuycm
+  balancer_strategy.py: bafybeia74pk3lxmkmbs4zocrcezsr7sq2n24oevleztwcku3rla4j23spa
 fingerprint_ignore_patterns: []
 entry_point: balancer_strategy.py
 callable: run

@@ -27,13 +27,8 @@ from typing import (
     Union,
 )
 
-REQUIRED_FIELDS = ("trading_opportunities")
+REQUIRED_FIELDS = ("trading_opportunities",)
 
-class DexTypes(Enum):
-    """DexTypes"""
-
-    BALANCER = "balancerPool"
-    UNISWAP_V3 = "UniswapV3"
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
@@ -42,7 +37,6 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
         if kwargs.get(field, None) is None:
             missing.append(field)
     return missing
-
 
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Remove the irrelevant fields from the given kwargs."""

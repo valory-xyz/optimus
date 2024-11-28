@@ -50,7 +50,6 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
             missing.append(field)
     return missing
 
-
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Remove the irrelevant fields from the given kwargs."""
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
@@ -113,7 +112,6 @@ def highest_apr_opportunity(
         """Filter pools based on allowed assets and LP pools."""
         eligible_pools = defaultdict(lambda: defaultdict(list))
         allowed_dex_types = [DexTypes[protocol.upper()].value for protocol in protocols]
-
         for chain_id, campaigns in all_pools.items():
             for campaign_list in campaigns.values():
                 for campaign in campaign_list.values():
@@ -132,7 +130,7 @@ def highest_apr_opportunity(
                     chain = next(
                         (
                             k
-                            for k, v in "chain_to_chain_id_mapping".items()
+                            for k, v in chain_to_chain_id_mapping.items()
                             if v == int(chain_id)
                         ),
                         None,
@@ -158,7 +156,6 @@ def highest_apr_opportunity(
             if highest_apr_pool_info:
                 dex_type, chain, campaign = highest_apr_pool_info
                 highest_apr_pool = extract_pool_info(dex_type, chain, highest_apr, campaign)
-
                 # Check the number of tokens for the highest APR pool if it's a Balancer pool
                 if dex_type == DexTypes.BALANCER.value:
                     pool_id = highest_apr_pool.get("pool_id")
@@ -292,11 +289,11 @@ def highest_apr_opportunity(
 
     highest_apr_pool = determine_highest_apr_pool(eligible_pools)
     if highest_apr_pool:
-        return {"selected_opportunity": highest_apr_pool}
+        return highest_apr_pool
     else:
         return {
             "error": (
-                "No pools with APR found.",
+                "No pools with APR found."
             )
         }
     
@@ -307,5 +304,4 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
         return {"error": f"Required kwargs {missing} were not provided."}
 
     kwargs = remove_irrelevant_fields(kwargs)
-    print("KWARGS in run", kwargs)
     return highest_apr_opportunity(**kwargs)

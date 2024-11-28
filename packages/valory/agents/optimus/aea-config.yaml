@@ -35,15 +35,15 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeidxs24ujiott6byhwcdcavuhtppz7d67lz5u4cio3cvr3whgenqs4
-- valory/optimus_abci:0.1.0:bafybeicycfuzmm2am7wvdpk3pyceuvwwr5vodenwf2w2sgiukfqp2sorre
+- valory/liquidity_trader_abci:0.1.0:bafybeibq4cyldpbtnu7v5h6flzn7gzlinxxnlanojtdhddeqnkh3d3lnh4
+- valory/optimus_abci:0.1.0:bafybeib4o24bo4wxuoqckzqhqgtalxqwwvnle7idaivmi2bwryrqbuxyyq
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 customs:
-- valory/lp_strategy:0.1.0:bafybeickvpuibzudphykhvuus2a6vyhdf7f4annoljary2jftje6bwmj2u
-- valory/apr_based_selection:0.1.0:bafybeighu2qmxopdbgk6orx45fea3ka7jwf657ihasem6jexpmg7xpe7ha
+- valory/lp_strategy:0.1.0:bafybeia7scjod4vjli76sqstih3wvu7eaw37xflkhz5pswknu6twgf6qiu
+- valory/apr_based_selection:0.1.0:bafybeidmgmjdjv4pablvkv3x5bnyehvfmdy5f5yu7m7swdcmci6xfnwdju
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -255,8 +255,8 @@ models:
       gas_params:
         max_fee_per_gas: ${int:20000000}
         max_priority_fee_per_gas: ${int:3000000}
-      file_hash_to_strategies: ${str:{"bafybeiez4r4yv3so2j33opdywov6y7sbl65j5ew5n53vidqzhj2jicu3yy":"lp_strategy","bafybeighu2qmxopdbgk6orx45fea3ka7jwf657ihasem6jexpmg7xpe7ha":"apr_based_selection"}}
+      file_hash_to_strategies: ${str:{"bafybeia7scjod4vjli76sqstih3wvu7eaw37xflkhz5pswknu6twgf6qiu":"lp_strategy","bafybeidmgmjdjv4pablvkv3x5bnyehvfmdy5f5yu7m7swdcmci6xfnwdju":"apr_based_selection"}}
       strategies_kwargs: ${str:{"lp_strategy":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}}}
       selected_strategies: ${list:["lp_strategy"]}
-      selected_protocols: ${list:["balancer","uniswap"]}
-      selected_hyper_strategy: ${str:"apr_based_selection"}
+      selected_protocols: ${list:["BALANCER","UNISWAP_V3"]}
+      selected_hyper_strategy: ${str:apr_based_selection}

@@ -64,7 +64,7 @@ def highest_apr_opportunity(
     current_pool: Optional[str]
 ) -> Dict[str, Any]:
     """Get the highest APR yielding opportunity over given protocols using Merkl API."""
-    print(f"{apr_threshold=}")
+
     def fetch_all_pools() -> Optional[Dict[str, Any]]:
         """Fetch all pools based on allowed chains."""
         if not chains:

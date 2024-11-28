@@ -983,7 +983,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.trading_opportunities.append(opportunity)
             else:
                 self.context.logger.warning(f"No opportunity found using {next_strategy}")
-                
+
             tried_strategies.add(next_strategy)
             remaining_strategies = set(strategies) - tried_strategies
             if len(remaining_strategies) == 0:
@@ -991,7 +991,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             next_strategy = remaining_strategies.pop()
 
-        self.context.logger.info(f"available opportunities: {self.trading_opportunities}")
+        self.context.logger.info(f"All available opportunities: {self.trading_opportunities}")
         
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""

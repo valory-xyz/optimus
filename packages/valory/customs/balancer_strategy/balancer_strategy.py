@@ -49,7 +49,6 @@ def run_query(query, graphql_endpoint, variables=None):
     return result['data']
 
 def get_best_pool(chains, apr_threshold, graphql_endpoint):
-    print(f"{apr_threshold=}")
     # Ensure all chain names are uppercase
     chain_names = [chain.upper() for chain in chains]
     chain_list_str = ', '.join(chain_names)
@@ -91,7 +90,7 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint):
         if mapped_type and len(pool.get('poolTokens', [])) == 2:
             pool['type'] = mapped_type  # Update pool type to the mapped type
             filtered_pools.append(pool)
-    
+
     best_pool = None
     highest_apr = 0
     for pool in filtered_pools:
@@ -127,7 +126,6 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint):
     
     # Check for missing token information
     if any(v is None for v in pool_token_dict.values()):
-        print(f"Invalid pool tokens found: {pool_token_dict}")
         return None
     
     result = {
@@ -146,7 +144,7 @@ def get_total_apr(pool):
     apr_items = pool.get('dynamicData', {}).get('aprItems', [])
     filtered_apr_items = [
         item for item in apr_items
-        if item['type'] not in {"SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
+        if item['type'] not in {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
     ]
     return sum(item['apr'] for item in filtered_apr_items)
     

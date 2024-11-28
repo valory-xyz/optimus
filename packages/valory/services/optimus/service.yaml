@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiatod6d7j7m57umvc5lha6zkvvnqjpiqnpytkfqf4kqy2kjyjlqvu
+agent: valory/optimus:0.1.0:bafybeiegaref25odwwag2z7ulvjinx2vmbht3ugmgfehuixlir6ltmax5a
 number_of_agents: 1
 deployment: {}
 ---
@@ -84,7 +84,7 @@ models:
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
       staking_chain: ${STAKING_CHAIN:str:""}
       initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
-      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeibugdhqrvvr24n5o5lkt2kvzhmxd7mexf5a2oecsaqng5juj34znm":"lp_strategy","bafybeibhnkzoxeraqzki7hal3w5sx737sraqmi6qxhssfulwpxkiy4c7ta":"apr_based_selection","bafybeihk4h6aou2g2hgvdz77qqtwf7dny5rq2zyzlbl5rivjhiz24yfvwu":"balancer_strategy"}}
+      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeib4y6ofxmq44yzsvxgr4wk7mjooo4rrre2x5eitaem6lq3qgqc4ia":"lp_strategy","bafybeibhnkzoxeraqzki7hal3w5sx737sraqmi6qxhssfulwpxkiy4c7ta":"apr_based_selection","bafybeie62q7xaihkqxktvkx7fgsj4mqf3yhtzcmbri4fip4acimedddjmy":"balancer_strategy"}}
       strategies_kwargs: ${STRATEGIES_KWARGS:str:{"lp_strategy":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"balancer_strategy":{"graphql_endpoint":"https://api-v3.balancer.fi/"}}}
       selected_strategies: ${SELECTED_STRATEGIES:list:["lp_strategy","balancer_strategy"]}
       selected_protocols: ${SELECTED_PROTOCOLS:list:["BALANCER","UNISWAP_V3"]}

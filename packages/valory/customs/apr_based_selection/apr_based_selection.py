@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains a strategy that returns the highest APR yielding liquidity pool over Balancer and Uniswap."""
+"""This module contains a strategy that selects the best yielding strategy based on APR"""
 
 from enum import Enum
 from typing import (

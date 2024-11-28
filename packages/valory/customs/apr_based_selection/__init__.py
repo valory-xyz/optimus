@@ -17,4 +17,4 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains a strategy that returns the highest APR yielding strategy"""
+"""This module contains a strategy that selects the best yielding strategy based on APR"""

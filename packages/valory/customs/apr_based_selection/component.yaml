@@ -6,8 +6,8 @@ description: A strategy that selects the best yielding strategy based on APR
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeifjsn3dek6bm3b5a2eu55acniehapedobhzvz3x5nub563v5s7vsu
-  apr_based_selection.py: bafybeihojkb2sxxdrqh3e6eyjzci7vc77xrf6oxdmlb5tozh37j34xeefu
+  __init__.py: bafybeidkb3cffdsx7yiafbkka6dhxqnwpfswqzii6wm6vtumsczgeezrk4
+  apr_based_selection.py: bafybeictwyxzvbs2eslprxjxvsbpec7o2zzhyzosnhiqcbv4evabtkkvvi
 fingerprint_ignore_patterns: []
 entry_point: apr_based_selection.py
 callable: run

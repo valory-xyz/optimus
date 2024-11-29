@@ -1,4 +1,4 @@
-name: apr_based_selection
+name: max_apr_selection
 author: valory
 version: 0.1.0
 type: custom
@@ -7,8 +7,8 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidkb3cffdsx7yiafbkka6dhxqnwpfswqzii6wm6vtumsczgeezrk4
-  apr_based_selection.py: bafybeictwyxzvbs2eslprxjxvsbpec7o2zzhyzosnhiqcbv4evabtkkvvi
+  max_apr_selection.py: bafybeictwyxzvbs2eslprxjxvsbpec7o2zzhyzosnhiqcbv4evabtkkvvi
 fingerprint_ignore_patterns: []
-entry_point: apr_based_selection.py
+entry_point: max_apr_selection.py
 callable: run
 dependencies: {}

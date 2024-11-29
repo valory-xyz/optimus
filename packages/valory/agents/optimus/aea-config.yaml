@@ -35,8 +35,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeihssusegl77tlk55yjvvi7ekrvcgaqftrnv554psevejohg5pbyna
-- valory/optimus_abci:0.1.0:bafybeierzyknw5ulidj5ok7czc5uizbozcrupv6duumqv3bvgfqicnkwee
+- valory/liquidity_trader_abci:0.1.0:bafybeie2jyc6wymlh7p6wp5eveshpgwl3rvowmkqcvcvkhxx4pi43tdity
+- valory/optimus_abci:0.1.0:bafybeicol4qo74kwr2p4y2jrnfkvxx5fzobakj54dejz7satr3l6eby7fe
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -133,7 +133,8 @@ cert_requests:
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection
 config:
-  host: 0.0.0.0
+  host: ${str:0.0.0.0}
+  port: ${int:8716}
   target_skill_id: valory/optimus_abci:0.1.0
 ---
 public_id: valory/optimus_abci:0.1.0
@@ -247,6 +248,7 @@ models:
       store_path: ${str:/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
+      gas_cost_info_filename: ${str:gas_costs.json}
       min_swap_amount_threshold: ${int:10}
       max_fee_percentage: ${float:0.02}
       max_gas_percentage: ${float:0.25}
@@ -261,3 +263,4 @@ models:
       selected_strategies: ${list:["merkl_pools_search","balancer_pools_search"]}
       selected_protocols: ${list:["BALANCER","UNISWAP_V3"]}
       selected_hyper_strategy: ${str:max_apr_selection}
+      service_endpoint_base: ${str:https://optimus.staging.autonolas.tech/}

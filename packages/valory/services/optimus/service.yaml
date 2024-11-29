@@ -6,9 +6,15 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeihqhwgzxojc7h4j4bq2fyasr3i4grgujagyttokrpcfifjosbov7u
+agent: valory/optimus:0.1.0:bafybeibubyitwrfb3zgu5zxqljtqyqwo2kmlbzz3ciun36wy7bvav6bqbu
 number_of_agents: 1
-deployment: {}
+deployment:
+  agent:
+    ports:
+      0:
+        8716: 8716
+    volumes:
+      ./data: /data
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill
@@ -75,6 +81,7 @@ models:
       store_path: ${STORE_PATH:str:/data/}
       assets_info_filename: ${ASSETS_INFO_FILENAME:str:assets.json}
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}
+      gas_cost_info_filename: ${GAS_COST_INFO_FILENAME:str:gas_costs.json}
       merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
       min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:10}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}
@@ -90,6 +97,7 @@ models:
       selected_protocols: ${SELECTED_PROTOCOLS:list:["BALANCER","UNISWAP_V3"]}
       selected_hyper_strategy: ${SELECTED_HYPER_STRATEGY:str:max_apr_selection}
       apr_threshold: ${APR_THRESHOLD:int:5}
+      service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -142,3 +150,9 @@ cert_requests:
   not_before: '2022-01-01'
   public_key: ${ACN_NODE_PUBLIC_KEY:str:02d3a830c9d6ea1ae91936951430dee11f4662f33118b02190693be835359a9d77}
   save_path: .certs/acn_cosmos_11000.txt
+---
+public_id: valory/http_server:0.22.0
+type: connection
+config:
+  host: ${HTTP_SERVER_HOST:str:0.0.0.0}
+  port: ${HTTP_SERVER_PORT:int:8716}

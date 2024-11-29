@@ -4,6 +4,7 @@ alphabet_in:
 - DONE
 - ERROR
 - NEXT_CHECKPOINT_NOT_REACHED_YET
+- NONE
 - NO_MAJORITY
 - ROUND_TIMEOUT
 - SERVICE_EVICTED
@@ -46,6 +47,7 @@ states:
 transition_func:
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
+    (CallCheckpointRound, NONE): CallCheckpointRound
     (CallCheckpointRound, NO_MAJORITY): CallCheckpointRound
     (CallCheckpointRound, ROUND_TIMEOUT): CallCheckpointRound
     (CallCheckpointRound, SERVICE_EVICTED): GetPositionsRound
@@ -53,6 +55,7 @@ transition_func:
     (CallCheckpointRound, SETTLE): FinishedCallCheckpointRound
     (CheckStakingKPIMetRound, DONE): GetPositionsRound
     (CheckStakingKPIMetRound, ERROR): GetPositionsRound
+    (CheckStakingKPIMetRound, NONE): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, NO_MAJORITY): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, SETTLE): FinishedCheckStakingKPIMetRound
@@ -60,19 +63,25 @@ transition_func:
     (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
+    (DecisionMakingRound, NONE): DecisionMakingRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
     (DecisionMakingRound, SETTLE): FinishedTxPreparationRound
     (DecisionMakingRound, UPDATE): DecisionMakingRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
+    (EvaluateStrategyRound, NONE): EvaluateStrategyRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
     (EvaluateStrategyRound, WAIT): FinishedEvaluateStrategyRound
     (GetPositionsRound, DONE): EvaluateStrategyRound
+    (GetPositionsRound, NONE): GetPositionsRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
+    (PostTxSettlementRound, DONE): PostTxSettlementRound
+    (PostTxSettlementRound, NONE): PostTxSettlementRound
+    (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound

@@ -7,8 +7,8 @@ description: A strategy that returns the highest APR yielding liquidity pool ove
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeih5ut32gpd74oj33oautjlv6sswnqwwep7hpnnjuos3mqpyyjn6zy
-  balancer_pools_search.py: bafybeifawcectaqbbmp4upykkhgkbe2igf3u3x4ak2gy3dnngvxzwnvazy
+  __init__.py: bafybeidq27qbp5awns6j4426xkcojwkhq4kbmecuojfpqh6beqmltt54xy
+  balancer_pools_search.py: bafybeicvjhqn7k3pqsnceykkliaty27ka4xqmlajos5abahk4lj34ahg4m
 fingerprint_ignore_patterns: []
 entry_point: balancer_pools_search.py
 callable: run

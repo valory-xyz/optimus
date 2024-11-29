@@ -121,7 +121,6 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
-SELECTED_OPPORTUNITY = "selected_opportunity"
 
 class DexTypes(Enum):
     """DexTypes"""
@@ -954,7 +953,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "strategy": hyper_strategy,
                 "trading_opportunities" : self.trading_opportunities
                 }
-        self.context.logger.info(f"Evaluating {hyper_strategy} hyper strategy..")
+        self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         self.selected_opportunity = self.execute_strategy(**kwargs)
         self.context.logger.info(f"Selected opportunity: {self.selected_opportunity}")
 
@@ -980,9 +979,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             opportunity = self.execute_strategy(**kwargs)
             if opportunity is not None:
-                self.trading_opportunities.append(opportunity)
+                if "error" in opportunity:
+                    self.context.logger.error(f"Error in strategy {next_strategy}: {opportunity['error']}")
+                else:
+                    self.trading_opportunities.append(opportunity)
             else:
-                self.context.logger.warning(f"No opportunity found using {next_strategy}")
+                self.context.logger.warning(f"No opportunity found using {next_strategy} strategy")
 
             tried_strategies.add(next_strategy)
             remaining_strategies = set(strategies) - tried_strategies

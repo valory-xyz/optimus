@@ -30,7 +30,7 @@ def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Remove the irrelevant fields from the given kwargs."""
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
-def run_query(query, graphql_endpoint, variables=None):
+def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     headers = {
         'Content-Type': 'application/json',
     }
@@ -40,15 +40,17 @@ def run_query(query, graphql_endpoint, variables=None):
     }
     
     response = requests.post(graphql_endpoint, json=payload, headers=headers)
-    response.raise_for_status()
+    if response.status_code != 200:
+        return {"error": f"GraphQL query failed with status code {response.status_code}"}
+    
     result = response.json()
     
     if 'errors' in result:
-        print("GraphQL Errors:", result['errors'])
-        return None
+        return {"error": f"GraphQL Errors: {result['errors']}"}
+    
     return result['data']
 
-def get_best_pool(chains, apr_threshold, graphql_endpoint):
+def get_best_pool(chains, apr_threshold, graphql_endpoint) -> Dict[str, Any]:
     # Ensure all chain names are uppercase
     chain_names = [chain.upper() for chain in chains]
     chain_list_str = ', '.join(chain_names)
@@ -77,8 +79,8 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint):
 
     # Execute the GraphQL query
     data = run_query(graphql_query, graphql_endpoint)
-    if data is None:
-        return None
+    if "error" in data:
+        return data
     
     # Extract pools from the response
     pools = data.get("poolGetPools", [])
@@ -100,7 +102,7 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint):
             best_pool = pool
 
     if best_pool is None:
-        return None
+        return {"error": "No suitable pool found."}
 
     total_apr = get_total_apr(best_pool)
     
@@ -126,7 +128,7 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint):
     
     # Check for missing token information
     if any(v is None for v in pool_token_dict.values()):
-        return None
+        return {"error": "Missing token information in the pool."}
     
     result = {
         "dex_type": dex_type,
@@ -140,7 +142,7 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint):
 
     return result
 
-def get_total_apr(pool):
+def get_total_apr(pool) -> float:
     apr_items = pool.get('dynamicData', {}).get('aprItems', [])
     filtered_apr_items = [
         item for item in apr_items

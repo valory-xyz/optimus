@@ -23,7 +23,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from time import time
-from typing import Any, Dict, List, Optional, Tuple, Callable, Iterable
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from aea.skills.base import Model, SkillContext
 
@@ -46,6 +46,7 @@ class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls = LiquidityTraderAbciApp
+
     def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
         """Initialize the state."""
         super().__init__(*args, skill_context=skill_context, **kwargs)
@@ -59,8 +60,7 @@ class SharedState(BaseSharedState):
         super().setup()
         params = self.context.params
         self.strategy_to_filehash = {
-            value: key
-            for key, value in params.file_hash_to_strategies.items()
+            value: key for key, value in params.file_hash_to_strategies.items()
         }
         strategy_exec = self.strategy_to_filehash.keys()
         for selected_strategy in params.selected_strategies:
@@ -69,6 +69,7 @@ class SharedState(BaseSharedState):
                     f"The selected trading strategy {selected_strategy} "
                     f"is not in the strategies' executables {strategy_exec}."
                 )
+
 
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
@@ -281,12 +282,22 @@ class Params(BaseParams):
         self.target_investment_chains: List[str] = self._ensure(
             "target_investment_chains", kwargs, List[str]
         )
-        self.staking_chain: Optional[str] = self._ensure("staking_chain", kwargs, Optional[str])
-        self.selected_strategies: List[str] = self._ensure("selected_strategies", kwargs, List[str])
-        self.file_hash_to_strategies = json.loads(self._ensure("file_hash_to_strategies", kwargs, str))
-        self.strategies_kwargs = json.loads(self._ensure("strategies_kwargs", kwargs, str))
-        self.selected_protocols =  self._ensure("selected_protocols", kwargs, List[str])
-        self.selected_hyper_strategy = self._ensure("selected_hyper_strategy", kwargs, str)
+        self.staking_chain: Optional[str] = self._ensure(
+            "staking_chain", kwargs, Optional[str]
+        )
+        self.selected_strategies: List[str] = self._ensure(
+            "selected_strategies", kwargs, List[str]
+        )
+        self.file_hash_to_strategies = json.loads(
+            self._ensure("file_hash_to_strategies", kwargs, str)
+        )
+        self.strategies_kwargs = json.loads(
+            self._ensure("strategies_kwargs", kwargs, str)
+        )
+        self.selected_protocols = self._ensure("selected_protocols", kwargs, List[str])
+        self.selected_hyper_strategy = self._ensure(
+            "selected_hyper_strategy", kwargs, str
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

@@ -20,17 +20,18 @@
 """This module contains the handlers for the skill of LiquidityTraderAbciApp."""
 
 from typing import cast
+
+from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
+from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )
 from packages.valory.skills.abstract_round_abci.handlers import (
     HttpHandler as BaseHttpHandler,
 )
-from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
-from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     LedgerApiHandler as BaseLedgerApiHandler,
 )
@@ -40,8 +41,8 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
-
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
+
 
 ABCIHandler = BaseABCIRoundHandler
 HttpHandler = BaseHttpHandler
@@ -49,6 +50,7 @@ SigningHandler = BaseSigningHandler
 LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
+
 
 class IpfsHandler(AbstractResponseHandler):
     """IPFS message handler."""

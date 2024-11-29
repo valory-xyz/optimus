@@ -39,13 +39,11 @@ from typing import (
 from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
+from aea.protocols.base import Message
+from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_hex
 
-from aea.protocols.base import Message
-from aea.protocols.dialogue.base import Dialogue
-from packages.valory.skills.liquidity_trader_abci.io_.loader import ComponentPackageLoader
-from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -61,11 +59,15 @@ from packages.valory.contracts.staking_activity_checker.contract import (
 )
 from packages.valory.contracts.staking_token.contract import StakingTokenContract
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
+)
+from packages.valory.skills.liquidity_trader_abci.io_.loader import (
+    ComponentPackageLoader,
 )
 from packages.valory.skills.liquidity_trader_abci.models import (
     Coingecko,
@@ -122,6 +124,7 @@ WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
 
+
 class DexTypes(Enum):
     """DexTypes"""
 
@@ -169,9 +172,7 @@ READ_MODE = "r"
 WRITE_MODE = "w"
 
 
-class LiquidityTraderBaseBehaviour(
-    BalancerPoolBehaviour, UniswapPoolBehaviour, ABC
-):
+class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -930,8 +931,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.fetch_all_trading_opportunities()
             self.execute_hyper_strategy()
             actions = []
-            if self.selected_opportunity is not None:  
-                self.context.logger.info(f"Selected opportunity: {self.selected_opportunity}")
+            if self.selected_opportunity is not None:
+                self.context.logger.info(
+                    f"Selected opportunity: {self.selected_opportunity}"
+                )
                 actions = yield from self.get_order_of_transactions()
 
             self.context.logger.info(f"Actions: {actions}")
@@ -950,9 +953,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         hyper_strategy = self.params.selected_hyper_strategy
         kwargs = {
-                "strategy": hyper_strategy,
-                "trading_opportunities" : self.trading_opportunities
-                }
+            "strategy": hyper_strategy,
+            "trading_opportunities": self.trading_opportunities,
+        }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         self.selected_opportunity = self.execute_strategy(**kwargs)
         self.context.logger.info(f"Selected opportunity: {self.selected_opportunity}")
@@ -966,25 +969,35 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         while True:
             next_strategy = strategies.pop(0)
             self.context.logger.info(f"Evaluating strategy: {next_strategy}")
-            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(next_strategy, {})
+            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
+                next_strategy, {}
+            )
             kwargs.update(
                 {
                     "strategy": next_strategy,
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "apr_threshold": self.current_pool.get('apr') if self.current_pool else self.params.apr_threshold,
-                    "current_pool": self.current_pool.get('address') if self.current_pool else ''
+                    "apr_threshold": self.current_pool.get("apr")
+                    if self.current_pool
+                    else self.params.apr_threshold,
+                    "current_pool": self.current_pool.get("address")
+                    if self.current_pool
+                    else "",
                 }
             )
             opportunity = self.execute_strategy(**kwargs)
             if opportunity is not None:
                 if "error" in opportunity:
-                    self.context.logger.error(f"Error in strategy {next_strategy}: {opportunity['error']}")
+                    self.context.logger.error(
+                        f"Error in strategy {next_strategy}: {opportunity['error']}"
+                    )
                 else:
                     self.trading_opportunities.append(opportunity)
             else:
-                self.context.logger.warning(f"No opportunity found using {next_strategy} strategy")
+                self.context.logger.warning(
+                    f"No opportunity found using {next_strategy} strategy"
+                )
 
             tried_strategies.add(next_strategy)
             remaining_strategies = set(strategies) - tried_strategies
@@ -993,8 +1006,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             next_strategy = remaining_strategies.pop()
 
-        self.context.logger.info(f"All available opportunities: {self.trading_opportunities}")
-        
+        self.context.logger.info(
+            f"All available opportunities: {self.trading_opportunities}"
+        )
+
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""
         if self._inflight_strategy_req is not None:
@@ -1015,20 +1030,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         while len(self.shared_state.strategy_to_filehash) > 0:
             self.download_next_strategy()
             yield from self.sleep(self.params.sleep_time)
-    
-    def execute_strategy(self, *args: Any, **kwargs: Any) -> Generator[None, None, Optional[Dict[str, Any]]]:
+
+    def execute_strategy(
+        self, *args: Any, **kwargs: Any
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Execute the strategy and return the results."""
-        
+
         strategy = kwargs.pop("strategy", None)
         if strategy is None:
             self.context.logger.error(f"No trading strategy was given in {kwargs=}!")
             return None
-        
+
         strategy = self.strategy_exec(strategy)
         if strategy is None:
-            self.context.logger.error(
-                f"No executable was found for {strategy=}!"
-            )
+            self.context.logger.error(f"No executable was found for {strategy=}!")
             return None
 
         strategy_exec, callable_method = strategy
@@ -1044,11 +1059,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         return method(*args, **kwargs)
-    
+
     def strategy_exec(self, strategy: str) -> Optional[Tuple[str, str]]:
         """Get the executable strategy file's content."""
         return self.shared_state.strategies_executables.get(strategy, None)
-    
+
     def send_message(
         self, msg: Message, dialogue: Dialogue, callback: Callable
     ) -> None:

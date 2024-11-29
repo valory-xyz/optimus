@@ -11,10 +11,10 @@
         "contract/valory/merkl_distributor/0.1.0": "bafybeiegvzycswa7kdimhnjvhrtbrzu3zycnianhrdizq5i53ql7jf5poa",
         "contract/valory/staking_token/0.1.0": "bafybeic4ug4p22q4hsh5z4hhjrishvnswino2fsleqsgdxlusd5h2x5hwy",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeidziyf4o763sw3fqlqjbpz3thrupuwx44barj72zj7tjnxbvkhoxa",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeic7jqif5a6q4yqotupd3unkm3jxdyldyln4ssgzttcy74yotbjn3q",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiaycyyoldjusbngojn6qzt7puq4su3thdcgj2427h2hekubslszra",
-        "agent/valory/optimus/0.1.0": "bafybeihwpmurj2sap57ju5wjxgjwovmep3b6d4xd4nqkxz364xm5vgqjma",
-        "service/valory/optimus/0.1.0": "bafybeiakuuyjjuxlveog5woreyxksjy6ad7uono2zfyjvxssgkraekrhxa"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidfg3auronrhdd6yxrkqkeop5vjh4vqzhiuhghtlvnupe26rwepre",
+        "skill/valory/optimus_abci/0.1.0": "bafybeiapa3ry65ojs7byjz2t3sqdzmclrhjgurclenofubkhyqou4mgoca",
+        "agent/valory/optimus/0.1.0": "bafybeidzci2f4vux7bmflcpvzhbh36xximi2gw2kyednhh4xb4aseec2eq",
+        "service/valory/optimus/0.1.0": "bafybeierrvod33ljm2lmuzmdc4bdyke57jlylpa3dwvnnbxsdu7z23f5um"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

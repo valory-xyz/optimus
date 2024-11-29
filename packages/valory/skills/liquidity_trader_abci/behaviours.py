@@ -172,6 +172,7 @@ POOL_FILENAME = "current_pool.json"
 READ_MODE = "r"
 WRITE_MODE = "w"
 
+
 class GasCostTracker:
     """Class to track and report gas costs."""
 

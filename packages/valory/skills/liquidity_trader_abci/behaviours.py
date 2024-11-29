@@ -39,6 +39,8 @@ from typing import (
 from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
+from aea.protocols.base import Message
+from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_hex
 
@@ -57,11 +59,15 @@ from packages.valory.contracts.staking_activity_checker.contract import (
 )
 from packages.valory.contracts.staking_token.contract import StakingTokenContract
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
+)
+from packages.valory.skills.liquidity_trader_abci.io_.loader import (
+    ComponentPackageLoader,
 )
 from packages.valory.skills.liquidity_trader_abci.models import (
     Coingecko,
@@ -90,9 +96,6 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     PostTxSettlementRound,
     StakingState,
     SynchronizedData,
-)
-from packages.valory.skills.liquidity_trader_abci.strategies.simple_strategy import (
-    SimpleStrategyBehaviour,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -169,9 +172,7 @@ READ_MODE = "r"
 WRITE_MODE = "w"
 
 
-class LiquidityTraderBaseBehaviour(
-    BalancerPoolBehaviour, UniswapPoolBehaviour, SimpleStrategyBehaviour, ABC
-):
+class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -188,7 +189,7 @@ class LiquidityTraderBaseBehaviour(
         self.pools[DexTypes.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexTypes.UNISWAP_V3.value] = UniswapPoolBehaviour
         self.service_staking_state = StakingState.UNSTAKED
-        self.strategy = SimpleStrategyBehaviour
+        self._inflight_strategy_req: Optional[str] = None
         # Read the assets and current pool
         self.read_current_pool()
         self.read_assets()
@@ -921,19 +922,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that finds the opportunity and builds actions."""
 
     matching_round: Type[AbstractRound] = EvaluateStrategyRound
-    highest_apr_pool = None
+    selected_opportunity = None
+    trading_opportunities = []
 
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self.find_highest_apr_pool()
+            yield from self.fetch_all_trading_opportunities()
+            self.execute_hyper_strategy()
             actions = []
-            if self.highest_apr_pool is not None:
-                invest_in_pool = self.strategy.get_decision(
-                    self, pool_apr=self.highest_apr_pool.get("apr")
+            if self.selected_opportunity is not None:
+                self.context.logger.info(
+                    f"Selected opportunity: {self.selected_opportunity}"
                 )
-                if invest_in_pool:
-                    actions = yield from self.get_order_of_transactions()
+                actions = yield from self.get_order_of_transactions()
 
             self.context.logger.info(f"Actions: {actions}")
             serialized_actions = json.dumps(actions)
@@ -946,329 +948,149 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def find_highest_apr_pool(self) -> Generator[None, None, None]:
-        """Find the pool with the highest APR."""
-        all_pools = yield from self._fetch_all_pools()
-        if not all_pools:
-            self.context.logger.info("No pools found.")
+    def execute_hyper_strategy(self) -> None:
+        """Executes hyper strategy"""
+
+        hyper_strategy = self.params.selected_hyper_strategy
+        kwargs = {
+            "strategy": hyper_strategy,
+            "trading_opportunities": self.trading_opportunities,
+        }
+        self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
+        self.selected_opportunity = self.execute_strategy(**kwargs)
+        self.context.logger.info(f"Selected opportunity: {self.selected_opportunity}")
+
+    def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
+        """Fetches all the trading opportunities"""
+        yield from self.download_strategies()
+        strategies = self.params.selected_strategies.copy()
+        tried_strategies: Set[str] = set()
+
+        while True:
+            next_strategy = strategies.pop(0)
+            self.context.logger.info(f"Evaluating strategy: {next_strategy}")
+            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
+                next_strategy, {}
+            )
+            kwargs.update(
+                {
+                    "strategy": next_strategy,
+                    "chains": self.params.target_investment_chains,
+                    "protocols": self.params.selected_protocols,
+                    "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
+                    "apr_threshold": self.current_pool.get("apr")
+                    if self.current_pool
+                    else self.params.apr_threshold,
+                    "current_pool": self.current_pool.get("address")
+                    if self.current_pool
+                    else "",
+                }
+            )
+            opportunity = self.execute_strategy(**kwargs)
+            if opportunity is not None:
+                if "error" in opportunity:
+                    self.context.logger.error(
+                        f"Error in strategy {next_strategy}: {opportunity['error']}"
+                    )
+                else:
+                    self.trading_opportunities.append(opportunity)
+            else:
+                self.context.logger.warning(
+                    f"No opportunity found using {next_strategy} strategy"
+                )
+
+            tried_strategies.add(next_strategy)
+            remaining_strategies = set(strategies) - tried_strategies
+            if len(remaining_strategies) == 0:
+                break
+
+            next_strategy = remaining_strategies.pop()
+
+        self.context.logger.info(
+            f"All available opportunities: {self.trading_opportunities}"
+        )
+
+    def download_next_strategy(self) -> None:
+        """Download the strategies one by one."""
+        if self._inflight_strategy_req is not None:
+            # there already is a req in flight
+            return
+        if len(self.shared_state.strategy_to_filehash) == 0:
+            # no strategies pending to be fetched
+            return
+        for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
+            self.context.logger.info(f"Fetching {strategy} strategy...")
+            ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
+            self._inflight_strategy_req = strategy
+            self.send_message(ipfs_msg, message, self._handle_get_strategy)
             return
 
-        eligible_pools = self._filter_eligible_pools(all_pools)
-        if not eligible_pools:
-            self.context.logger.info("No eligible pools found.")
+    def download_strategies(self) -> Generator:
+        """Download all the strategies, if not yet downloaded."""
+        while len(self.shared_state.strategy_to_filehash) > 0:
+            self.download_next_strategy()
+            yield from self.sleep(self.params.sleep_time)
+
+    def execute_strategy(
+        self, *args: Any, **kwargs: Any
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Execute the strategy and return the results."""
+
+        strategy = kwargs.pop("strategy", None)
+        if strategy is None:
+            self.context.logger.error(f"No trading strategy was given in {kwargs=}!")
+            return None
+
+        strategy = self.strategy_exec(strategy)
+        if strategy is None:
+            self.context.logger.error(f"No executable was found for {strategy=}!")
+            return None
+
+        strategy_exec, callable_method = strategy
+        if callable_method in globals():
+            del globals()[callable_method]
+
+        exec(strategy_exec, globals())  # pylint: disable=W0122  # nosec
+        method = globals().get(callable_method, None)
+        if method is None:
+            self.context.logger.error(
+                f"No {callable_method!r} method was found in {strategy} executable."
+            )
+            return None
+
+        return method(*args, **kwargs)
+
+    def strategy_exec(self, strategy: str) -> Optional[Tuple[str, str]]:
+        """Get the executable strategy file's content."""
+        return self.shared_state.strategies_executables.get(strategy, None)
+
+    def send_message(
+        self, msg: Message, dialogue: Dialogue, callback: Callable
+    ) -> None:
+        """Send a message."""
+        self.context.outbox.put_message(message=msg)
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        self.shared_state.req_to_callback[nonce] = callback
+        self.shared_state.in_flight_req = True
+
+    def _handle_get_strategy(self, message: IpfsMessage, _: Dialogue) -> None:
+        """Handle get strategy response."""
+        strategy_req = self._inflight_strategy_req
+        if strategy_req is None:
+            self.context.logger.error(f"No strategy request to handle for {message=}.")
             return
-        self.highest_apr_pool = yield from self._determine_highest_apr_pool(
-            eligible_pools
+
+        # store the executable and remove the hash from the mapping because we have downloaded it
+        _component_yaml, strategy_exec, callable_method = ComponentPackageLoader.load(
+            message.files
         )
 
-        if self.highest_apr_pool:
-            self.context.logger.info(f"Highest APR pool found: {self.highest_apr_pool}")
-        else:
-            self.context.logger.warning("No pools with APR found.")
-
-    def _fetch_all_pools(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Fetch all pools based on allowed chains."""
-        if not self.params.target_investment_chains:
-            self.context.logger.warning("No chain selected for investment!")
-            return None
-
-        chain_ids = ",".join(
-            str(self.params.chain_to_chain_id_mapping[chain])
-            for chain in self.params.target_investment_chains
+        self.shared_state.strategies_executables[strategy_req] = (
+            strategy_exec,
+            callable_method,
         )
-        base_url = self.params.merkl_fetch_campaigns_args.get("url")
-        creator = self.params.merkl_fetch_campaigns_args.get("creator")
-        live = self.params.merkl_fetch_campaigns_args.get("live", "true")
-
-        params = {
-            "chainIds": chain_ids,
-            "creatorTag": creator,
-            "live": live,
-            "types": CAMPAIGN_TYPES,
-        }
-        api_url = f"{base_url}?{urlencode(params, doseq=True)}"
-        self.context.logger.info(f"Fetching campaigns from {api_url}")
-
-        response = yield from self.get_http_response(
-            method="GET",
-            url=api_url,
-            headers={"accept": "application/json"},
-        )
-
-        if response.status_code not in HTTP_OK:
-            self.context.logger.error(
-                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
-            )
-            return None
-
-        try:
-            return json.loads(response.body)
-        except (ValueError, TypeError) as e:
-            self.context.logger.error(
-                f"Could not parse response from api, the following error was encountered {type(e).__name__}: {e}"
-            )
-            return None
-
-    def _filter_eligible_pools(self, all_pools: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter pools based on allowed assets and LP pools."""
-        eligible_pools = defaultdict(lambda: defaultdict(list))
-        allowed_dexs = self.params.allowed_dexs
-
-        for chain_id, campaigns in all_pools.items():
-            for campaign_list in campaigns.values():
-                for campaign in campaign_list.values():
-                    dex_type = campaign.get("type") or campaign.get("ammName")
-                    if not dex_type or dex_type not in allowed_dexs:
-                        continue
-
-                    campaign_apr = campaign.get("apr", 0)
-                    if (
-                        not campaign_apr
-                        or campaign_apr <= 0
-                        or campaign_apr <= self.current_pool.get("apr", 0)
-                    ):
-                        continue
-
-                    campaign_pool_address = campaign.get("mainParameter")
-                    if (
-                        not campaign_pool_address
-                        or campaign_pool_address == self.current_pool.get("address")
-                    ):
-                        continue
-
-                    chain = next(
-                        (
-                            k
-                            for k, v in self.params.chain_to_chain_id_mapping.items()
-                            if v == int(chain_id)
-                        ),
-                        None,
-                    )
-                    eligible_pools[dex_type][chain].append(campaign)
-
-        return eligible_pools
-
-    def _determine_highest_apr_pool(
-        self, eligible_pools: Dict[str, Any]
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Determine the pool with the highest APR from the eligible pools."""
-
-        highest_apr_pool = None
-        highest_apr_pool_info = None
-        while eligible_pools:
-            highest_apr = -float("inf")
-            for dex_type, chains in eligible_pools.items():
-                for chain, campaigns in chains.items():
-                    for campaign in campaigns:
-                        apr = campaign.get("apr", 0) or 0
-                        if apr > highest_apr:
-                            highest_apr = apr
-                            highest_apr_pool_info = (dex_type, chain, campaign)
-
-            if highest_apr_pool_info:
-                dex_type, chain, campaign = highest_apr_pool_info
-                highest_apr_pool = yield from self._extract_pool_info(
-                    dex_type, chain, highest_apr, campaign
-                )
-
-                # Check the number of tokens for the highest APR pool if it's a Balancer pool
-                if dex_type == DexTypes.BALANCER.value:
-                    pool_id = highest_apr_pool.get("pool_id")
-                    if highest_apr_pool.get("pool_type") is None:
-                        self.context.logger.error(
-                            f"Pool type not found for pool {pool_id}"
-                        )
-                        continue
-                    tokensList = yield from self._fetch_balancer_pool_info(
-                        pool_id, chain, detail="tokensList"
-                    )
-                    if not tokensList or len(tokensList) != 2:
-                        num_of_tokens = len(tokensList) if tokensList else None
-                        self.context.logger.warning(
-                            f"Balancer pool {pool_id} has {num_of_tokens} tokens, currently we support pools with only 2 tokens"
-                        )
-                        self.context.logger.info("Searching for another pool")
-                        highest_apr_pool = None
-                        highest_apr_pool_info = None
-
-                        # Remove the invalid pool from eligible pools and continue searching
-                        eligible_pools[dex_type][chain].remove(campaign)
-                        if not eligible_pools[dex_type][chain]:
-                            del eligible_pools[dex_type][chain]
-
-                        if not eligible_pools[dex_type]:
-                            del eligible_pools[dex_type]
-
-                        continue
-
-                return highest_apr_pool
-
-        self.context.logger.warning("No eligible pools found.")
-        return None
-
-    def _extract_pool_info(
-        self, dex_type, chain, apr, campaign
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Extract pool info from campaign data."""
-        pool_address = campaign.get("mainParameter")
-        if not pool_address:
-            self.context.logger.error(f"Missing pool address in campaign {campaign}")
-            return None
-
-        pool_token_dict = {}
-        pool_id = None
-        pool_type = None
-
-        if dex_type == DexTypes.BALANCER.value:
-            type_info = campaign.get("typeInfo", {})
-            pool_id = type_info.get("poolId")
-            pool_tokens = type_info.get("poolTokens", {})
-            pool_token_items = list(pool_tokens.items())
-            if len(pool_token_items) < 2 or any(
-                token.get("symbol") is None for _, token in pool_token_items
-            ):
-                self.context.logger.error(
-                    f"Invalid pool tokens found in campaign {pool_token_items}"
-                )
-                return None
-
-            pool_type = yield from self._fetch_balancer_pool_info(
-                pool_id, chain, detail="poolType"
-            )
-            pool_token_dict = {
-                "token0": pool_token_items[0][0],
-                "token1": pool_token_items[1][0],
-                "token0_symbol": pool_token_items[0][1].get("symbol"),
-                "token1_symbol": pool_token_items[1][1].get("symbol"),
-            }
-
-        elif dex_type == DexTypes.UNISWAP_V3.value:
-            pool_info = campaign.get("campaignParameters", {})
-            if not pool_info:
-                self.context.logger.error(
-                    f"No pool tokens info present in campaign {campaign}"
-                )
-                return None
-
-            pool_token_dict = {
-                "token0": pool_info.get("token0"),
-                "token1": pool_info.get("token1"),
-                "token0_symbol": pool_info.get("symbolToken0"),
-                "token1_symbol": pool_info.get("symbolToken1"),
-                "pool_fee": pool_info.get("poolFee"),
-            }
-
-        if any(v is None for v in pool_token_dict.values()):
-            self.context.logger.error(
-                f"Invalid pool tokens found in campaign {pool_token_dict}"
-            )
-            return None
-
-        return {
-            "dex_type": dex_type,
-            "chain": chain,
-            "apr": apr,
-            "pool_address": pool_address,
-            "pool_id": pool_id,
-            "pool_type": pool_type,
-            **pool_token_dict,
-        }
-
-    def _fetch_balancer_pool_info(
-        self, pool_id: str, chain: str, detail: str
-    ) -> Generator[None, None, Optional[Any]]:
-        """Fetch the pool type for a Balancer pool using a GraphQL query."""
-
-        def to_content(query: str) -> bytes:
-            """Convert the given query string to payload content."""
-            finalized_query = {"query": query}
-            encoded_query = json.dumps(finalized_query, sort_keys=True).encode("utf-8")
-            return encoded_query
-
-        query = f"""
-                    query {{
-                    pools(where: {{ id: "{pool_id}" }}) {{ # noqa: B028
-                        id
-                        {detail}
-                    }}
-                    }}
-                """
-
-        url = self.params.balancer_graphql_endpoints.get(chain)
-        if not url:
-            self.context.logger.error(f"No graphql endpoint found for chain {chain}")
-            return None
-
-        response = yield from self.get_http_response(
-            content=to_content(query),
-            method="POST",
-            url=url,
-            headers={"Content-Type": "application/json"},
-        )
-        if response.status_code not in HTTP_OK:
-            self.context.logger.error(
-                f"Received status code {response.status_code} from the API. Response: {response.body}"
-            )
-            return None
-
-        try:
-            res = json.loads(response.body)
-            if res is None:
-                self.context.logger.error(
-                    f"Could not get pool type for pool ID {pool_id}"
-                )
-                return None
-
-            pools = res.get("data", {}).get("pools", [])
-            if pools:
-                self.context.logger.info(
-                    f"{detail} for pool {pool_id}: {pools[0].get(detail)}"
-                )
-                return pools[0].get(detail)
-            return None
-        except json.JSONDecodeError as e:
-            self.context.logger.error(f"Error decoding JSON response: {str(e)}")
-            return None
-
-    def _filter_campaigns(self, chain, campaigns, filtered_pools):
-        """Filter campaigns based on allowed assets and LP pools"""
-        allowed_dexs = self.params.allowed_dexs
-
-        for campaign_list in campaigns.values():
-            for campaign in campaign_list.values():
-                dex_type = (
-                    campaign.get("type")
-                    if campaign.get("type")
-                    else campaign.get("ammName")
-                )
-                if not dex_type:
-                    continue
-
-                campaign_apr = campaign.get("apr")
-                if not campaign_apr:
-                    continue
-
-                campaign_type = campaign.get("campaignType")
-                if not campaign_type:
-                    continue
-
-                # The pool apr should be greater than the current pool apr
-                if dex_type in allowed_dexs:
-                    # type 1 and 2 stand for ERC20 and Concentrated liquidity campaigns respectively
-                    # https://docs.merkl.xyz/integrate-merkl/integrate-merkl-to-your-app#merkl-api
-                    if campaign_type in CAMPAIGN_TYPES:
-                        if not campaign_apr > self.current_pool.get("apr", 0.0):
-                            self.context.logger.info(
-                                "APR does not exceed the current pool APR"
-                            )
-                            continue
-                        campaign_pool_address = campaign.get("mainParameter")
-                        if not campaign_pool_address:
-                            continue
-                        current_pool_address = self.current_pool.get("address")
-                        # The pool should not be the current pool
-                        if campaign_pool_address != current_pool_address:
-                            filtered_pools[dex_type][chain].append(campaign)
+        self.shared_state.strategy_to_filehash.pop(strategy_req)
+        self._inflight_strategy_req = None
 
     def get_order_of_transactions(
         self,
@@ -1562,18 +1384,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
         # TO-DO: Add logic to handle swaps when there is a balance for only one token.
-        if not self.highest_apr_pool:
+        if not self.selected_opportunity:
             self.context.logger.error("No pool present.")
             return None
 
         bridge_swap_actions = []
 
         # Get the highest APR pool's tokens
-        dest_token0_address = self.highest_apr_pool.get("token0")
-        dest_token1_address = self.highest_apr_pool.get("token1")
-        dest_token0_symbol = self.highest_apr_pool.get("token0_symbol")
-        dest_token1_symbol = self.highest_apr_pool.get("token1_symbol")
-        dest_chain = self.highest_apr_pool.get("chain")
+        dest_token0_address = self.selected_opportunity.get("token0")
+        dest_token1_address = self.selected_opportunity.get("token1")
+        dest_token0_symbol = self.selected_opportunity.get("token0_symbol")
+        dest_token1_symbol = self.selected_opportunity.get("token1_symbol")
+        dest_chain = self.selected_opportunity.get("chain")
 
         if (
             not dest_token0_address
@@ -1583,7 +1405,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             or not dest_chain
         ):
             self.context.logger.error(
-                f"Incomplete data in highest APR pool {self.highest_apr_pool}"
+                f"Incomplete data in highest APR pool {self.selected_opportunity}"
             )
             return None
 
@@ -1686,21 +1508,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _build_enter_pool_action(self) -> Dict[str, Any]:
         """Build action for entering the pool with the highest APR."""
-        if not self.highest_apr_pool:
+        if not self.selected_opportunity:
             self.context.logger.error("No pool present.")
             return None
 
         return {
             "action": Action.ENTER_POOL.value,
-            "dex_type": self.highest_apr_pool.get("dex_type"),
-            "chain": self.highest_apr_pool.get("chain"),
+            "dex_type": self.selected_opportunity.get("dex_type"),
+            "chain": self.selected_opportunity.get("chain"),
             "assets": [
-                self.highest_apr_pool.get("token0"),
-                self.highest_apr_pool.get("token1"),
+                self.selected_opportunity.get("token0"),
+                self.selected_opportunity.get("token1"),
             ],
-            "pool_address": self.highest_apr_pool.get("pool_address"),
-            "apr": self.highest_apr_pool.get("apr"),
-            "pool_type": self.highest_apr_pool.get("pool_type"),
+            "pool_address": self.selected_opportunity.get("pool_address"),
+            "apr": self.selected_opportunity.get("apr"),
+            "pool_type": self.selected_opportunity.get("pool_type"),
         }
 
     def _build_claim_reward_action(

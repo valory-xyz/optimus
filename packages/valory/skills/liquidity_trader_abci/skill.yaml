@@ -7,34 +7,35 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeigjgayywhoae2uaqpm5m4nxxh4fhd7yealypeo7oeiyf6ufas4p2u
+  behaviours.py: bafybeibvh5cn42orrvzlxb2ts3f7fzwy6ovgo6cvphxexvy7rqmwyyw7yu
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeiabbiulb7k6xkjysulmy6o4ugnhxlpp5jiaeextvwj65q4ttadoeq
-  handlers.py: bafybeidxw2lvgiifmo4siobpwuwbxscuifrdo3gnkjyn6bgexotj5f7zf4
-  models.py: bafybeifo5cvwazahd77jcx76rnz73egmgt27g7tmcjji4rdh4xehixfuxy
-  payloads.py: bafybeibozjbr4sxafd6aizge3hb5vn6gowdcszsdzbhwzzcbg6gmpy4pki
+  fsm_specification.yaml: bafybeie3vom7fwl5ho6xanje3r7tab7y3a5ij5gs6qvjh2uavbpitffyzu
+  handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
+  io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
+  io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
+  models.py: bafybeigfpxggq3tkc75tihyrvjuzspbioa4oewhv4vnrguujmsmf2d2gaq
+  payloads.py: bafybeihi42vbsr2xyhzsp55tl6mqecqyy52jrhwjfw4trvrjlhfxuyaz3u
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeihsfsgt4mamb47hg5ylphydy7lcftdtbvyhxnqz3j7sfzqtzvbzje
-  strategies/simple_strategy.py: bafybeiasu2nchowx6leksjllpuum4ckezxoj4o2m4sstavblplvvutmvzm
-  strategy_behaviour.py: bafybeidk6sorg47kuuubamcccksi65x3txldyo7y2hm5opbye2ghmz2ljy
+  rounds.py: bafybeicbrta5ifua3botuebo4bocf2i5txymul63sz55ett2tpqsar7dty
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihtqcpqthb37msgqabpzcc2xc3l3yzkp5pl2sodeghqyzzzyuevgi
-- valory/balancer_weighted_pool:0.1.0:bafybeiedi74xjsrxyf7fc6pov23ol5ycd6fi7v6c6nfgwo6yij6k353cbq
-- valory/balancer_vault:0.1.0:bafybeichirxrzvxughksr3ycjlwsbdeb5rk5hvttqi46bw7djmcmtbecfm
-- valory/erc20:0.1.0:bafybeie7es6tlembjlh7h5oe4qqhsaailr5nhwshuw346bxeflfsirxrc4
+- valory/balancer_weighted_pool:0.1.0:bafybeib755ksie5yv4wn6jl7i3bpshlhscf4bzsabqrbahm6b3m5ixzmbi
+- valory/balancer_vault:0.1.0:bafybeidgdivmrm77yotgpnn567ayzhoqa6hufrijy2cj2b7w5wa63otzq4
+- valory/erc20:0.1.0:bafybeied2jjdqbcmddaop5b364brpoxatxcypj3gfvpov2ts4c4shoybee
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeihdnltmbhy7lcvqby324z4ttp4imnn3k7hctu4mwpkbpjodniudum
-- valory/uniswap_v3_pool:0.1.0:bafybeidtlsrza7ykhe5fo33pj3e3bq27b3i32igrmjyh35wnwd6tiuggcq
-- valory/merkl_distributor:0.1.0:bafybeigrnymn2g4m7yv5bah7r3mphni7cim2pg25uffbtatyvnjip7rp3e
-- valory/staking_token:0.1.0:bafybeic3odqiitp7grubfuukubml73pofxnfwh2dx5zqj4c6zrsc2uel4y
-- valory/staking_activity_checker:0.1.0:bafybeidwyuiv7ef7unrdpkzhpkkbssovfoqqti6ojlcibj4cvqkiyzypbi
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeiht7qjxkamjmq22o74f5faz3wqpb3cx2grl2t4zc2zxqjkzitc22a
+- valory/uniswap_v3_pool:0.1.0:bafybeieafb3ldbbshtbfqqwblc5gzcwq4nkxgyjz3n3vvcb3jfxzfgchya
+- valory/merkl_distributor:0.1.0:bafybeiegvzycswa7kdimhnjvhrtbrzu3zycnianhrdizq5i53ql7jf5poa
+- valory/staking_token:0.1.0:bafybeic4ug4p22q4hsh5z4hhjrishvnswino2fsleqsgdxlusd5h2x5hwy
+- valory/staking_activity_checker:0.1.0:bafybeidziyf4o763sw3fqlqjbpz3thrupuwx44barj72zj7tjnxbvkhoxa
 protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
+- valory/ipfs:0.1.0:bafybeiftxi2qhreewgsc5wevogi7yc5g6hbcbo4uiuaibauhv3nhfcdtvm
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
@@ -109,6 +110,7 @@ models:
         voting_power: '10'
       history_check_timeout: 1205
       ipfs_domain_name: null
+      ipfs_address: https://gateway.autonolas.tech/ipfs/
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
       max_attempts: 10
@@ -195,6 +197,14 @@ models:
       gas_params:
         max_fee_per_gas: 20000000
         max_priority_fee_per_gas: 3000000
+      file_hash_to_strategies: '{"bafybeiez4r4yv3so2j33opdywov6y7sbl65j5ew5n53vidqzhj2jicu3yy":"merkl_pools_search","bafybeighu2qmxopdbgk6orx45fea3ka7jwf657ihasem6jexpmg7xpe7ha":"max_apr_selection"}'
+      strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
+      selected_strategies:
+      - merkl_pools_search
+      selected_protocols:
+      - balancer
+      - uniswap
+      selected_hyper_strategy: max_apr_selection
     class_name: Params
   coingecko:
     args:
@@ -224,5 +234,7 @@ dependencies:
   eth_abi:
     version: ==4.0.0
   eth_utils: {}
+  pyyaml:
+    version: <=6.0.1,>=3.10
 is_abstract: true
 customs: []

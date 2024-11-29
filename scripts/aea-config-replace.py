@@ -84,6 +84,10 @@ def main() -> None:
             "api_key"
         ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
 
+        config[5]["models"]["params"]["args"][
+            "staking_chain"
+        ] = f"${{str:{os.getenv('STAKING_CHAIN')}}}"
+
     with open(Path("optimus", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)
 

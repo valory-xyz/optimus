@@ -10,6 +10,7 @@ packages/open_aea
 optimus
 assets.json
 current_pool.json
+gas_costs.json
 Pipfile.lock
     
 packages/valory/agents/*
@@ -24,6 +25,7 @@ packages/valory/skills/*
 
 !packages/valory/agents/optimus
 !packages/valory/services/optimus
+!packages/valory/services/optimus_pearl
 !packages/valory/skills/liquidity_trader_abci
 !packages/valory/skills/optimus_abci
 

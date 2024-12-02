@@ -50,6 +50,11 @@ def main() -> None:
                 "address"
             ] = f"${{str:{os.getenv('OPTIMISM_LEDGER_RPC')}}}"
 
+        if os.getenv("MODE_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["mode"][
+                "address"
+            ] = f"${{str:{os.getenv('MODE_LEDGER_RPC')}}}"
+
         # Params
         config[5]["models"]["params"]["args"]["setup"][
             "all_participants"
@@ -80,8 +85,8 @@ def main() -> None:
         ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
 
         config[5]["models"]["params"]["args"][
-            "allowed_chains"
-        ] = f"${{list:{os.getenv('ALLOWED_CHAINS')}}}"
+            "staking_chain"
+        ] = f"${{str:{os.getenv('STAKING_CHAIN')}}}"
 
     with open(Path("optimus", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)

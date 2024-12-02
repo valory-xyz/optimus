@@ -1,0 +1,17 @@
+name: merkl_pools_search
+author: valory
+version: 0.1.0
+type: custom
+description: A strategy that returns the highest APR yielding liquidity pool over
+  Balancer and Uniswap using Merkl
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeie7iwdt5re7i7lxal5wrzy4yxxi4v3te6tgp7j7aantyyihib7fpi
+  merkl_pools_search.py: bafybeigyqng6cbxchwdnnq6yuu34lldqsxbgzfudreg5baldfgrntl2u4q
+fingerprint_ignore_patterns: []
+entry_point: merkl_pools_search.py
+callable: run
+dependencies:
+  requests:
+    version: <2.31.2,>=2.28.1

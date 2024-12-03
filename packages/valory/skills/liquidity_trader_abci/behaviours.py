@@ -130,7 +130,7 @@ ERC20_DECIMALS = 18
 class DexType(Enum):
     """DexType"""
 
-    BALANCER = "balancer"
+    BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
 
@@ -1207,6 +1207,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(
                         f"{num_of_tokens_required} tokens required to exit pool, provided: {tokens}"
                     )
+                    return None
 
             exit_pool_action = self._build_exit_pool_action(tokens, num_of_tokens_required)
             if not exit_pool_action:

@@ -3118,6 +3118,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # we split the available amount in half, converting one half to the first asset 
         # and the other half to the second asset.
         amount = int(self._get_balance(from_chain, from_token_address, positions) * action.get("ratio_of_available_amount_to_be_used"))
+        
+        #It handles the scenario where the balance did not get reflected earlier in the safe, so we check again
+        if amount <= 0:
+            amount = yield from self._get_token_balance(from_chain, from_address, from_token_address)
+        
+        if amount <= 0:
+            self.context.logger.error(f"Not enough balance for {from_token_symbol} on chain {from_chain}")
+            return None
+        
         token_decimals = ERC20_DECIMALS
         if from_token_address != ZERO_ADDRESS:
             token_decimals = yield from self._get_token_decimals(

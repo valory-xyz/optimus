@@ -1,6 +1,7 @@
 {
     "dev": {
         "custom/valory/merkl_pools_search/0.1.0": "bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq",
+        "custom/valory/asset_lending/0.1.0": "bafybeif3ndwzuncfd6nnvy6woqynkwiloo5k6rp2jqavu62vezxan25doq",
         "custom/valory/max_apr_selection/0.1.0": "bafybeiheh23wgnrzq42epjpsuawi5cp6l4363z74slhlwkckb3gfem4w3y",
         "custom/valory/balancer_pools_search/0.1.0": "bafybeifqhttehbw4oukwbl24l5uzinzlioaq6o4wx4uh3hr3vpe6vr223i",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeib755ksie5yv4wn6jl7i3bpshlhscf4bzsabqrbahm6b3m5ixzmbi",

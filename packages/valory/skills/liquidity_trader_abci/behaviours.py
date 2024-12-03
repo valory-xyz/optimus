@@ -1074,12 +1074,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if len(self.shared_state.strategy_to_filehash) == 0:
             # no strategies pending to be fetched
             return
+        
+        strategies_to_remove = []
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
+            if strategy not in self.params.selected_strategies and strategy != self.params.selected_hyper_strategy:
+                strategies_to_remove.append(strategy)
+                continue
             self.context.logger.info(f"Fetching {strategy} strategy...")
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
             self._inflight_strategy_req = strategy
             self.send_message(ipfs_msg, message, self._handle_get_strategy)
             return
+        
+        for strategy in strategies_to_remove:
+            self.shared_state.strategy_to_filehash.pop(strategy)
 
     def download_strategies(self) -> Generator:
         """Download all the strategies, if not yet downloaded."""

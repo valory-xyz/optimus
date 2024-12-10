@@ -23,7 +23,7 @@ contracts:
 - valory/balancer_vault:0.1.0:bafybeidgdivmrm77yotgpnn567ayzhoqa6hufrijy2cj2b7w5wa63otzq4
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeiht7qjxkamjmq22o74f5faz3wqpb3cx2grl2t4zc2zxqjkzitc22a
 - valory/uniswap_v3_pool:0.1.0:bafybeieafb3ldbbshtbfqqwblc5gzcwq4nkxgyjz3n3vvcb3jfxzfgchya
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeiav3ommtappms6vat3wybsbywsjnae3tdky4fsmver4dl2mnlqeky
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeidtqimixeqixjcloote7ikuvrfmqhu4ib5uh5iyyiasflr6pktjfm
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -36,8 +36,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeig4yhgimhbng6jg7g5qz7p2tbqgcsxeoufpzev4ceyv4igwhjmcya
-- valory/optimus_abci:0.1.0:bafybeia2afzaexlimxtyuayeh42z5en5elg7ypob3l3pt6uaxu247bboe4
+- valory/liquidity_trader_abci:0.1.0:bafybeigpddx26y4oxgwhxdsnfmtxdpsudafa3blzilf3prg4g4zqmy7fvi
+- valory/optimus_abci:0.1.0:bafybeigclsaydpeyeef4imkj4x4dvx5v4xwbprcj25nq22jfehk7dzsks4
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -46,7 +46,7 @@ customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeiheh23wgnrzq42epjpsuawi5cp6l4363z74slhlwkckb3gfem4w3y
 - valory/balancer_pools_search:0.1.0:bafybeifqhttehbw4oukwbl24l5uzinzlioaq6o4wx4uh3hr3vpe6vr223i
-- valory/asset_lending:0.1.0:bafybeif3ndwzuncfd6nnvy6woqynkwiloo5k6rp2jqavu62vezxan25doq
+- valory/asset_lending:0.1.0:bafybeiawisoecfzfrtdt4orakw7zg52vdjzb5x2jnh3hikwmqd6x7okdca
 default_ledger: ethereum
 required_ledgers:
 - ethereum

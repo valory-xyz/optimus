@@ -3119,10 +3119,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # and the other half to the second asset.
         amount = int(self._get_balance(from_chain, from_token_address, positions) * action.get("ratio_of_available_amount_to_be_used"))
         
-        #It handles the scenario where the balance did not get reflected earlier in the safe, so we check again
-        if amount <= 0:
-            amount = yield from self._get_token_balance(from_chain, from_address, from_token_address)
-        
         if amount <= 0:
             self.context.logger.error(f"Not enough balance for {from_token_symbol} on chain {from_chain}")
             return None
@@ -3139,7 +3135,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "fromAddress": from_address,
             "toAddress": to_address,
             "fromChainId": from_chain_id,
-            "fromAmount": amount,
+            "fromAmount": str(amount),
             "fromTokenAddress": from_token_address,
             "toChainId": to_chain_id,
             "toTokenAddress": to_token_address,

@@ -42,7 +42,7 @@ from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
-from eth_utils import keccak, to_bytes, to_hex
+from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
 
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
@@ -1020,7 +1020,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         self.selected_opportunity = self.execute_strategy(**kwargs)
-        self.context.logger.info(f"Selected opportunity: {self.selected_opportunity}")
+        if self.selected_opportunity is not None:
+            self.context.logger.info(
+                f"Selected opportunity: {self.selected_opportunity}"
+            )
+            # Convert token addresses to checksum addresses if they are present
+            if "token0" in self.selected_opportunity:
+                self.selected_opportunity["token0"] = to_checksum_address(
+                    self.selected_opportunity["token0"]
+                )
+            if "token1" in self.selected_opportunity:
+                self.selected_opportunity["token1"] = to_checksum_address(
+                    self.selected_opportunity["token1"]
+                )
 
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities"""

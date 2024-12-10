@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeighhwgdk4m2szyxjer2qkma3pnhy2h2vcuzebmkayliyowgkiouae
+  behaviours.py: bafybeibcdmr4lqlasskjgmqzb5ovr4yerfobsuhnvjwvoyp3zsjigzmdfq
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeie3vom7fwl5ho6xanje3r7tab7y3a5ij5gs6qvjh2uavbpitffyzu
   handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
@@ -32,7 +32,7 @@ contracts:
 - valory/merkl_distributor:0.1.0:bafybeiegvzycswa7kdimhnjvhrtbrzu3zycnianhrdizq5i53ql7jf5poa
 - valory/staking_token:0.1.0:bafybeic4ug4p22q4hsh5z4hhjrishvnswino2fsleqsgdxlusd5h2x5hwy
 - valory/staking_activity_checker:0.1.0:bafybeidziyf4o763sw3fqlqjbpz3thrupuwx44barj72zj7tjnxbvkhoxa
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeiav3ommtappms6vat3wybsbywsjnae3tdky4fsmver4dl2mnlqeky
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeidtqimixeqixjcloote7ikuvrfmqhu4ib5uh5iyyiasflr6pktjfm
 protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni

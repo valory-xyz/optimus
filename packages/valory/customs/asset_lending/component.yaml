@@ -7,8 +7,8 @@ description: A strategy that returns the highest APR yielding aggregator over St
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiftte3mcrpf5a5vtkr6mpcnrau2krjjnrlsczyst3cijrkwjnn6ea
-  asset_lending.py: bafybeicppxkxzubneh65zsxc477ncpz5jw2zuut53ub72vsy7su7e3z6ja
+  __init__.py: bafybeiguqxojq5hkgi55jqdl5p3rvz62jwxxw6ygorkym7ol3ps5qhh7rq
+  asset_lending.py: bafybeibdzq36zruov6wvxox6euuodbogaj5zovnbbgk7jqfuao2qxffor4
 fingerprint_ignore_patterns: []
 entry_point: asset_lending.py
 callable: run

@@ -58,7 +58,9 @@ from packages.valory.contracts.staking_activity_checker.contract import (
     StakingActivityCheckerContract,
 )
 from packages.valory.contracts.staking_token.contract import StakingTokenContract
-from packages.valory.contracts.sturdy_yearn_v3_vault.contract import YearnV3VaultContract
+from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
+    YearnV3VaultContract,
+)
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -1078,10 +1080,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if len(self.shared_state.strategy_to_filehash) == 0:
             # no strategies pending to be fetched
             return
-        
+
         strategies_to_remove = []
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
-            if strategy not in self.params.selected_strategies and strategy != self.params.selected_hyper_strategy:
+            if (
+                strategy not in self.params.selected_strategies
+                and strategy != self.params.selected_hyper_strategy
+            ):
                 strategies_to_remove.append(strategy)
                 continue
             self.context.logger.info(f"Fetching {strategy} strategy...")
@@ -1089,7 +1094,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self._inflight_strategy_req = strategy
             self.send_message(ipfs_msg, message, self._handle_get_strategy)
             return
-        
+
         for strategy in strategies_to_remove:
             self.shared_state.strategy_to_filehash.pop(strategy)
 
@@ -1194,12 +1199,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 num_of_tokens_required = 2
 
             if self.current_pool.get("dex_type") == DexType.STURDY.value:
-                token_symbol = self._get_asset_symbol(self.current_pool['chain'], self.current_pool['assets'][0])
-                tokens = [{
-                        "chain": self.current_pool['chain'],
-                        "token": self.current_pool['assets'][0],
-                        "token_symbol": token_symbol
-                    }]
+                token_symbol = self._get_asset_symbol(
+                    self.current_pool["chain"], self.current_pool["assets"][0]
+                )
+                tokens = [
+                    {
+                        "chain": self.current_pool["chain"],
+                        "token": self.current_pool["assets"][0],
+                        "token_symbol": token_symbol,
+                    }
+                ]
             else:
                 # If there is current pool, then get the lp pool token addresses
                 tokens = yield from self._get_exit_pool_tokens()  # noqa: E800
@@ -1209,7 +1218,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     return None
 
-            exit_pool_action = self._build_exit_pool_action(tokens, num_of_tokens_required)
+            exit_pool_action = self._build_exit_pool_action(
+                tokens, num_of_tokens_required
+            )
             if not exit_pool_action:
                 self.context.logger.error("Error building exit pool action")
                 return None
@@ -1231,7 +1242,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return actions
 
-    def _get_top_tokens_by_value(self, num_of_tokens_required: int) -> Generator[None, None, Optional[List[Any]]]:
+    def _get_top_tokens_by_value(
+        self, num_of_tokens_required: int
+    ) -> Generator[None, None, Optional[List[Any]]]:
         """Get tokens over min balance"""
         token_balances = []
         eligibility_factor = 0.8
@@ -1447,15 +1460,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         exit_pool_action = {
-            "action": Action.WITHDRAW.value if self.current_pool.get("dex_type") == DexType.STURDY.value else Action.EXIT_POOL.value,
+            "action": Action.WITHDRAW.value
+            if self.current_pool.get("dex_type") == DexType.STURDY.value
+            else Action.EXIT_POOL.value,
             "dex_type": self.current_pool.get("dex_type"),
             "chain": self.current_pool.get("chain"),
             "assets": [token.get("token") for token in tokens],
             "pool_address": self.current_pool.get("address"),
             "pool_type": self.current_pool.get("pool_type"),
             "token_id": self.current_pool.get("token_id"),
-            "liquidity": self.current_pool.get("liquidity")
-        }    
+            "liquidity": self.current_pool.get("liquidity"),
+        }
 
         return exit_pool_action
 
@@ -1474,11 +1489,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         dest_token0_symbol = self.selected_opportunity.get("token0_symbol")
         dest_chain = self.selected_opportunity.get("chain")
 
-        if (
-            not dest_token0_address
-            or not dest_token0_symbol
-            or not dest_chain
-        ):
+        if not dest_token0_address or not dest_token0_symbol or not dest_chain:
             self.context.logger.error(
                 f"Incomplete data in highest APR pool {self.selected_opportunity}"
             )
@@ -1498,8 +1509,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 ):
                     self.context.logger.error(f"Incomplete data in tokens {tokens}")
                     return None
-                
-                if source_token_chain == dest_chain and source_token_address == dest_token0_address:
+
+                if (
+                    source_token_chain == dest_chain
+                    and source_token_address == dest_token0_address
+                ):
                     continue
 
                 bridge_swap_action = {
@@ -1517,10 +1531,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             dest_token1_address = self.selected_opportunity.get("token1")
             dest_token1_symbol = self.selected_opportunity.get("token1_symbol")
 
-            if (
-                not dest_token1_address
-                or not dest_token1_symbol
-            ):
+            if not dest_token1_address or not dest_token1_symbol:
                 self.context.logger.error(
                     f"Incomplete data in highest APR pool {self.selected_opportunity}"
                 )
@@ -1540,8 +1551,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if len(tokens) == 1:
                 # Only one source token, split it in half for two destination tokens
-                if source_token0_chain != dest_chain and source_token0_address != dest_token0_address:
-                    bridge_swap_action= {
+                if (
+                    source_token0_chain != dest_chain
+                    and source_token0_address != dest_token0_address
+                ):
+                    bridge_swap_action = {
                         "action": Action.FIND_BRIDGE_ROUTE.value,
                         "from_chain": source_token0_chain,
                         "to_chain": dest_chain,
@@ -1552,7 +1566,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     }
                     bridge_swap_actions.append(bridge_swap_action)
 
-                if source_token0_chain != dest_chain and source_token0_address != dest_token1_address:
+                if (
+                    source_token0_chain != dest_chain
+                    and source_token0_address != dest_token1_address
+                ):
                     bridge_swap_action = {
                         "action": Action.FIND_BRIDGE_ROUTE.value,
                         "from_chain": source_token0_chain,
@@ -1575,10 +1592,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 ):
                     self.context.logger.error(f"Incomplete data in tokens {tokens}")
                     return None
-                
-                if source_token0_chain == dest_chain or source_token1_chain == dest_chain:
+
+                if (
+                    source_token0_chain == dest_chain
+                    or source_token1_chain == dest_chain
+                ):
                     if (
-                        source_token0_address not in [dest_token0_address, dest_token1_address]
+                        source_token0_address
+                        not in [dest_token0_address, dest_token1_address]
                         or source_token0_chain != dest_chain
                     ):
                         to_token = (
@@ -1604,7 +1625,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         bridge_swap_actions.append(bridge_swap_action)
 
                     if (
-                        source_token1_address not in [dest_token0_address, dest_token1_address]
+                        source_token1_address
+                        not in [dest_token0_address, dest_token1_address]
                         or source_token1_chain != dest_chain
                     ):
                         to_token = (
@@ -1652,7 +1674,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     bridge_swap_actions.append(bridge_swap_action)
 
         return bridge_swap_actions
-    
+
     def _build_enter_pool_action(self) -> Dict[str, Any]:
         """Build action for entering the pool with the highest APR."""
         if not self.selected_opportunity:
@@ -1660,10 +1682,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         return {
-            "action": Action.DEPOSIT.value if self.selected_opportunity.get("dex_type") == DexType.STURDY.value else Action.ENTER_POOL.value,
+            "action": Action.DEPOSIT.value
+            if self.selected_opportunity.get("dex_type") == DexType.STURDY.value
+            else Action.ENTER_POOL.value,
             "dex_type": self.selected_opportunity.get("dex_type"),
             "chain": self.selected_opportunity.get("chain"),
-            "assets": [ self.selected_opportunity.get("token0"),] + ([self.selected_opportunity.get("token1")] if self.selected_opportunity.get("dex_type") != DexType.STURDY.value else []),
+            "assets": [
+                self.selected_opportunity.get("token0"),
+            ]
+            + (
+                [self.selected_opportunity.get("token1")]
+                if self.selected_opportunity.get("dex_type") != DexType.STURDY.value
+                else []
+            ),
             "pool_address": self.selected_opportunity.get("pool_address"),
             "apr": self.selected_opportunity.get("apr"),
             "pool_type": self.selected_opportunity.get("pool_type"),
@@ -1823,11 +1854,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return res
 
         if last_executed_action_index is not None:
-            if self.synchronized_data.last_action == Action.ENTER_POOL.value or self.synchronized_data.last_action == Action.DEPOSIT.value:
+            if (
+                self.synchronized_data.last_action == Action.ENTER_POOL.value
+                or self.synchronized_data.last_action == Action.DEPOSIT.value
+            ):
                 yield from self._post_execute_enter_pool(
                     actions, last_executed_action_index
                 )
-            if self.synchronized_data.last_action == Action.EXIT_POOL.value or self.synchronized_data.last_action == Action.WITHDRAW.value:
+            if (
+                self.synchronized_data.last_action == Action.EXIT_POOL.value
+                or self.synchronized_data.last_action == Action.WITHDRAW.value
+            ):
                 yield from self._post_execute_exit_pool()
             if (
                 self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
@@ -2147,11 +2184,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             last_action = Action.EXIT_POOL.value
 
         elif next_action == Action.FIND_BRIDGE_ROUTE:
-
             if (
                 current_action_index + 1 < len(actions)
-                and Action(actions[current_action_index + 1].get("action")) == Action.FIND_BRIDGE_ROUTE
-                and actions[current_action_index + 1].get("from_token") == next_action_details.get("from_token")
+                and Action(actions[current_action_index + 1].get("action"))
+                == Action.FIND_BRIDGE_ROUTE
+                and actions[current_action_index + 1].get("from_token")
+                == next_action_details.get("from_token")
             ):
                 next_action_details["ratio_of_available_amount_to_be_used"] = 0.5
             else:
@@ -2195,7 +2233,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 next_action_details
             )
             last_action = Action.CLAIM_REWARDS.value
-        
+
         elif next_action == Action.DEPOSIT:
             tx_hash, chain_id, safe_address = yield from self.get_deposit_tx_hash(
                 next_action_details
@@ -2563,11 +2601,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get deposit tx hash"""
         chain = action.get("chain")
-        asset = action['assets'][0]
+        asset = action["assets"][0]
         amount = self._get_balance(chain, asset, self.synchronized_data.positions)
         safe_address = self.params.safe_contract_addresses.get(chain)
         receiver = safe_address
-        contract_address = action.get('pool_address')
+        contract_address = action.get("pool_address")
 
         if not asset or not amount or not receiver:
             self.context.logger.error(f"Missing information in action: {action}")
@@ -2598,12 +2636,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not tx_hash:
             return None, None, None
 
-        multisend_txs = [approval_tx_payload, {
-            "operation": MultiSendOperation.CALL,
-            "to": contract_address,
-            "value": 0,
-            "data": tx_hash,
-        }]
+        multisend_txs = [
+            approval_tx_payload,
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": contract_address,
+                "value": 0,
+                "data": tx_hash,
+            },
+        ]
 
         multisend_address = self.params.multisend_contract_addresses[chain]
         multisend_tx_hash = yield from self.contract_interact(
@@ -2724,7 +2765,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
-    
+
     def prepare_bridge_swap_action(
         self,
         positions: List[Dict[str, Any]],
@@ -3114,15 +3155,20 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         from_address = self.params.safe_contract_addresses.get(from_chain)
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
-        # If there is only one asset and we need to obtain two different assets, 
-        # we split the available amount in half, converting one half to the first asset 
+        # If there is only one asset and we need to obtain two different assets,
+        # we split the available amount in half, converting one half to the first asset
         # and the other half to the second asset.
-        amount = int(self._get_balance(from_chain, from_token_address, positions) * action.get("ratio_of_available_amount_to_be_used"))
-        
+        amount = int(
+            self._get_balance(from_chain, from_token_address, positions)
+            * action.get("ratio_of_available_amount_to_be_used")
+        )
+
         if amount <= 0:
-            self.context.logger.error(f"Not enough balance for {from_token_symbol} on chain {from_chain}")
+            self.context.logger.error(
+                f"Not enough balance for {from_token_symbol} on chain {from_chain}"
+            )
             return None
-        
+
         token_decimals = ERC20_DECIMALS
         if from_token_address != ZERO_ADDRESS:
             token_decimals = yield from self._get_token_decimals(

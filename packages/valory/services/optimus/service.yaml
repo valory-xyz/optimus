@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidzci2f4vux7bmflcpvzhbh36xximi2gw2kyednhh4xb4aseec2eq
+agent: valory/optimus:0.1.0:bafybeidbtcx5jvbvr3gqvvu7lggkjktq6tpi6dbwiwrvqsqkrjy74i3fyi
 number_of_agents: 1
 deployment:
   agent:
@@ -91,8 +91,8 @@ models:
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
       staking_chain: ${STAKING_CHAIN:str:""}
       initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
-      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeiheh23wgnrzq42epjpsuawi5cp6l4363z74slhlwkckb3gfem4w3y":"max_apr_selection","bafybeifqhttehbw4oukwbl24l5uzinzlioaq6o4wx4uh3hr3vpe6vr223i":"balancer_pools_search"}}
-      strategies_kwargs: ${STRATEGIES_KWARGS:str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"}}}
+      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeiheh23wgnrzq42epjpsuawi5cp6l4363z74slhlwkckb3gfem4w3y":"max_apr_selection","bafybeiasadtsojpuwamn4gpf2ial2s2uwu7t27ubnb3rj6wjkcxp23dktm":"balancer_pools_search","bafybeif3ndwzuncfd6nnvy6woqynkwiloo5k6rp2jqavu62vezxan25doq":"asset_lending"}}
+      strategies_kwargs: ${STRATEGIES_KWARGS:str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       selected_strategies: ${SELECTED_STRATEGIES:list:["merkl_pools_search","balancer_pools_search"]}
       selected_protocols: ${SELECTED_PROTOCOLS:list:["BALANCER","UNISWAP_V3"]}
       selected_hyper_strategy: ${SELECTED_HYPER_STRATEGY:str:max_apr_selection}

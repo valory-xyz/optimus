@@ -15,7 +15,7 @@ SUPPORTED_POOL_TYPES = {
     "INVESTMENT": "Investment"
 }
 
-REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint")
+REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint", "current_pool")
 BALANCER = "balancerPool"
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
@@ -50,7 +50,7 @@ def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     
     return result['data']
 
-def get_best_pool(chains, apr_threshold, graphql_endpoint) -> Dict[str, Any]:
+def get_best_pool(chains, apr_threshold, graphql_endpoint, current_pool) -> Dict[str, Any]:
     # Ensure all chain names are uppercase
     chain_names = [chain.upper() for chain in chains]
     chain_list_str = ', '.join(chain_names)
@@ -88,8 +88,9 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint) -> Dict[str, Any]:
     filtered_pools = []
     for pool in pools:
         pool_type = pool.get('type')
+        pool_address = pool.get('address')
         mapped_type = SUPPORTED_POOL_TYPES.get(pool_type)
-        if mapped_type and len(pool.get('poolTokens', [])) == 2:
+        if mapped_type and len(pool.get('poolTokens', [])) == 2 and pool_address != current_pool:
             pool['type'] = mapped_type  # Update pool type to the mapped type
             filtered_pools.append(pool)
 

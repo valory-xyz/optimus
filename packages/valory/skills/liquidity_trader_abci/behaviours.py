@@ -1036,6 +1036,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities"""
+        self.trading_opportunities.clear()
         yield from self.download_strategies()
         strategies = self.params.selected_strategies.copy()
         tried_strategies: Set[str] = set()

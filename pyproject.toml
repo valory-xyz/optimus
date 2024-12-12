@@ -22,6 +22,7 @@ open-aea = "==1.60.0"
 open-aea-ledger-ethereum = "==1.60.0"
 typing_extensions = ">=3.10.0.2"
 toml = "==0.10.2"
+gql = "3.5.0"
 tomte = {version = "==0.2.17", extras = ["cli", "tests"]}
 black = "==24.2.0"
 isort = "==5.13.2"

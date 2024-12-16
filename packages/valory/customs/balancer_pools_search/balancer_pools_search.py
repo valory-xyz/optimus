@@ -1,22 +1,18 @@
 import requests
-from typing import (
-    Dict,
-    Union,
-    Any,
-    List
-)
-# Supported pool types and their mappings
-SUPPORTED_POOL_TYPES = {
-    "WEIGHTED": "Weighted",
-    "COMPOSABLE_STABLE": "ComposableStable",
-    "LIQUIDITY_BOOTSTRAPING": "LiquidityBootstrapping",
-    "META_STABLE": "MetaStable",
-    "STABLE": "Stable",
-    "INVESTMENT": "Investment"
-}
+from typing import Dict, Union, Any, List
+import numpy as np
 
+# Constants
+UNISWAP = "UniswapV3"
 REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint", "current_pool")
-BALANCER = "balancerPool"
+FEE_RATE_DIVISOR = 1_000_000  # Convert basis points to decimal
+DAYS_IN_YEAR = 365
+PERCENT_CONVERSION = 100
+TVL_WEIGHT = 0.7  # Weight for TVL
+APR_WEIGHT = 0.3  # Weight for APR
+TVL_PERCENTILE = 50
+APR_PERCENTILE = 50
+SCORE_PERCENTILE = 80
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
@@ -50,7 +46,73 @@ def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     
     return result['data']
 
-def get_best_pool(chains, apr_threshold, graphql_endpoint, current_pool) -> Dict[str, Any]:
+def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
+    # Filter pools by those with exactly two tokens
+    filtered_pools = []
+    tvl_list = []
+    apr_list = []
+
+    for pool in pools:
+        pool_address = pool.get('address')
+        if len(pool.get('token0', [])) == 2 and pool_address != current_pool:
+            tvl = float(pool.get("totalValueLockedUSD", 0))
+            daily_volume = float(pool.get("volumeUSD", 0))
+            fee_rate = float(pool.get("feeTier", 0)) / FEE_RATE_DIVISOR
+            apr = calculate_apr(daily_volume, tvl, fee_rate)
+            
+            if tvl == 0 or apr == 0:
+                continue
+
+            tvl_list.append(tvl)
+            apr_list.append(apr)
+            
+            pool["tvl"] = tvl
+            pool["apr"] = apr * PERCENT_CONVERSION
+            filtered_pools.append(pool)
+
+    if filtered_pools:
+        tvl_list = [float(pool.get("tvl", 0)) for pool in filtered_pools]
+        apr_list = [float(pool.get("apr", 0)) for pool in filtered_pools]
+        
+        tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
+        apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
+
+        # Prioritize pools using combined TVL and APR score
+        scored_pools = []
+        max_tvl = max(tvl_list)
+        max_apr = max(apr_list)
+
+        for pool in filtered_pools:
+            tvl = float(pool.get("tvl", 0))
+            apr = float(pool.get("apr", 0))
+                    
+            if tvl < tvl_threshold or apr < apr_threshold:
+                continue
+
+            score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
+            pool["score"] = score
+            scored_pools.append(pool)
+
+        # Apply score threshold
+        score_threshold = np.percentile([pool["score"] for pool in scored_pools], SCORE_PERCENTILE)
+        filtered_scored_pools = [pool for pool in scored_pools if pool["score"] >= score_threshold]
+
+        filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
+
+        top_pools = filtered_scored_pools
+    else:
+        top_pools = []
+
+    return top_pools
+
+def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
+    """Calculate APR using the formula: (Daily Volume / TVL) × Fee Rate × 365 × 100"""
+    if tvl == 0:
+        return 0
+    return (daily_volume / tvl) * fee_rate * DAYS_IN_YEAR * PERCENT_CONVERSION
+
+def fetch_graphql_data(chains, graphql_endpoint) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Fetch data from GraphQL endpoint for the specified chains."""
     # Ensure all chain names are uppercase
     chain_names = [chain.upper() for chain in chains]
     chain_list_str = ', '.join(chain_names)
@@ -58,20 +120,21 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint, current_pool) -> Dict
     # Build the GraphQL query with the specified chain names
     graphql_query = f"""
     {{
-      poolGetPools(where: {{chainIn: [{chain_list_str}]}}) {{
+      pools(where: {{chainIn: [{chain_list_str}]}}) {{
         id
         address
         chain
-        type
-        poolTokens {{
-          address
+        feeTier
+        liquidity
+        volumeUSD
+        totalValueLockedUSD
+        token0 {{
+          id
           symbol
         }}
-        dynamicData {{
-          aprItems {{
-            type
-            apr
-          }}
+        token1 {{
+          id
+          symbol
         }}
       }}
     }}
@@ -83,74 +146,47 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint, current_pool) -> Dict
         return data
     
     # Extract pools from the response
-    pools = data.get("poolGetPools", [])
-    # Filter pools by supported types and those with exactly two tokens
-    filtered_pools = []
-    for pool in pools:
-        pool_type = pool.get('type')
-        pool_address = pool.get('address')
-        mapped_type = SUPPORTED_POOL_TYPES.get(pool_type)
-        if mapped_type and len(pool.get('poolTokens', [])) == 2 and pool_address != current_pool:
-            pool['type'] = mapped_type  # Update pool type to the mapped type
-            filtered_pools.append(pool)
+    return data.get("pools", [])
 
-    best_pool = None
-    highest_apr = 0
-    for pool in filtered_pools:
-        total_apr = get_total_apr(pool)
-        if total_apr > (apr_threshold / 100) and total_apr > highest_apr:
-            highest_apr = total_apr
-            best_pool = pool
-
-    if best_pool is None:
-        return {"error": "No suitable pool found."}
-
-    total_apr = get_total_apr(best_pool)
+def format_pool_data(pool) -> Dict[str, Any]:
+    """Format pool data into the desired structure."""
+    dex_type = UNISWAP
+    chain = pool['chain'].lower()
+    apr = pool['apr']
+    pool_address = pool['address']
+    pool_id = pool['id']
     
-    dex_type = BALANCER
-    chain = best_pool['chain'].lower()
-    apr = total_apr * 100
-    pool_address = best_pool['address']
-    pool_id = best_pool['id']
-    pool_type = best_pool['type']
+    token0 = pool['token0']['id']
+    token1 = pool['token1']['id']
+    token0_symbol = pool['token0']['symbol']
+    token1_symbol = pool['token1']['symbol']
     
-    pool_tokens = best_pool['poolTokens']
-    token0 = pool_tokens[0].get('address')
-    token1 = pool_tokens[1].get('address')
-    token0_symbol = pool_tokens[0].get('symbol')
-    token1_symbol = pool_tokens[1].get('symbol')
-    
-    pool_token_dict = {
-        "token0": token0,
-        "token1": token1,
-        "token0_symbol": token0_symbol,
-        "token1_symbol": token1_symbol,
-    }
-    
-    # Check for missing token information
-    if any(v is None for v in pool_token_dict.values()):
-        return {"error": "Missing token information in the pool."}
-    
-    result = {
+    return {
         "dex_type": dex_type,
         "chain": chain,
         "apr": apr,
         "pool_address": pool_address,
         "pool_id": pool_id,
-        "pool_type": pool_type,
-        **pool_token_dict,
+        "token0": token0,
+        "token1": token1,
+        "token0_symbol": token0_symbol,
+        "token1_symbol": token1_symbol,
     }
 
-    return result
-
-def get_total_apr(pool) -> float:
-    apr_items = pool.get('dynamicData', {}).get('aprItems', [])
-    filtered_apr_items = [
-        item for item in apr_items
-        if item['type'] not in {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
-    ]
-    return sum(item['apr'] for item in filtered_apr_items)
+def get_best_pools(chains, apr_threshold, graphql_endpoint, current_pool) -> List[Dict[str, Any]]:
+    pools = fetch_graphql_data(chains, graphql_endpoint)
+    if isinstance(pools, dict) and "error" in pools:
+        return pools
     
+    top_pools = get_filtered_pools(pools, current_pool)
+
+    if not top_pools:
+        return {"error": "No suitable pools found"}
+    
+    formatted_pools = [format_pool_data(pool) for pool in top_pools]
+
+    return formatted_pools
+
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""
     missing = check_missing_fields(kwargs)
@@ -158,4 +194,4 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
         return {"error": f"Required kwargs {missing} were not provided."}
 
     kwargs = remove_irrelevant_fields(kwargs)
-    return get_best_pool(**kwargs)
+    return get_best_pools(**kwargs)

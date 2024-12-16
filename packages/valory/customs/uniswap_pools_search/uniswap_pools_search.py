@@ -1,180 +1,197 @@
-from typing import Dict, Union, Any, List
 import requests
-import logging
-from gql import gql, Client
-from gql.transport.requests import RequestsHTTPTransport
+from typing import Dict, Union, Any, List
+import numpy as np
 
 # Constants
 UNISWAP = "UniswapV3"
-REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoints", "current_pool")
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint", "current_pool")
+FEE_RATE_DIVISOR = 1000000
+DAYS_IN_YEAR = 365
+PERCENT_CONVERSION = 100
+TVL_WEIGHT = 0.7
+APR_WEIGHT = 0.3
+TVL_PERCENTILE = 50
+APR_PERCENTILE = 50
+SCORE_PERCENTILE = 80
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
-    logger.debug("Checking for missing fields in kwargs.")
     missing = []
     for field in REQUIRED_FIELDS:
         if kwargs.get(field, None) is None:
             missing.append(field)
-    logger.info(f"Missing fields: {missing}")
     return missing
 
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Remove the irrelevant fields from the given kwargs."""
-    logger.debug("Removing irrelevant fields from kwargs.")
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
-def run_query(query: str, graphql_endpoint: str, variables: Dict = None) -> Dict[str, Any]:
-    """Execute a GraphQL query and return the results."""
-    logger.info(f"Running GraphQL query on endpoint: {graphql_endpoint}")
-    transport = RequestsHTTPTransport(url=graphql_endpoint)
-    client = Client(transport=transport, fetch_schema_from_transport=True)
+def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
+    headers = {
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        'query': query,
+        'variables': variables or {}
+    }
     
-    try:
-        query = gql(query)
-        result = client.execute(query, variable_values=variables)
-        logger.info("GraphQL query executed successfully.")
-        return result
-    except Exception as e:
-        logger.error(f"GraphQL query failed: {str(e)}")
-        return {"error": f"GraphQL query failed: {str(e)}"}
+    response = requests.post(graphql_endpoint, json=payload, headers=headers)
+    if response.status_code != 200:
+        return {"error": f"GraphQL query failed with status code {response.status_code}"}
+    
+    result = response.json()
+    
+    if 'errors' in result:
+        return {"error": f"GraphQL Errors: {result['errors']}"}
+    
+    return result['data']
+
+def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
+    # Filter pools by those with exactly two tokens
+    filtered_pools = []
+    tvl_list = []
+    apr_list = []
+
+    for pool in pools:
+        pool_address = pool.get('address')
+        if len(pool.get('token0', [])) == 2 and pool_address != current_pool:
+            tvl = float(pool.get("totalValueLockedUSD", 0))
+            daily_volume = float(pool.get("volumeUSD", 0))
+            fee_rate = float(pool.get("feeTier", 0)) / FEE_RATE_DIVISOR
+            apr = calculate_apr(daily_volume, tvl, fee_rate)
+            
+            if tvl == 0 or apr == 0:
+                continue
+
+            tvl_list.append(tvl)
+            apr_list.append(apr)
+            
+            pool["tvl"] = tvl
+            pool["apr"] = apr * PERCENT_CONVERSION
+            filtered_pools.append(pool)
+
+    if filtered_pools:
+        tvl_list = [float(pool.get("tvl", 0)) for pool in filtered_pools]
+        apr_list = [float(pool.get("apr", 0)) for pool in filtered_pools]
+        
+        tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
+        apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
+
+        # Prioritize pools using combined TVL and APR score
+        scored_pools = []
+        max_tvl = max(tvl_list)
+        max_apr = max(apr_list)
+
+        for pool in filtered_pools:
+            tvl = float(pool.get("tvl", 0))
+            apr = float(pool.get("apr", 0))
+                    
+            if tvl < tvl_threshold or apr < apr_threshold:
+                continue
+
+            score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
+            pool["score"] = score
+            scored_pools.append(pool)
+
+        # Apply score threshold
+        score_threshold = np.percentile([pool["score"] for pool in scored_pools], SCORE_PERCENTILE)
+        filtered_scored_pools = [pool for pool in scored_pools if pool["score"] >= score_threshold]
+
+        filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
+
+        top_pools = filtered_scored_pools
+    else:
+        top_pools = []
+
+    return top_pools
+
+def fetch_graphql_data(chains, graphql_endpoint) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Fetch data from GraphQL endpoint for the specified chains."""
+    # Ensure all chain names are uppercase
+    chain_names = [chain.upper() for chain in chains]
+    chain_list_str = ', '.join(chain_names)
+    
+    # Build the GraphQL query with the specified chain names
+    graphql_query = f"""
+    {{
+      pools(where: {{chainIn: [{chain_list_str}]}}) {{
+        id
+        address
+        chain
+        feeTier
+        liquidity
+        volumeUSD
+        totalValueLockedUSD
+        token0 {{
+          id
+          symbol
+        }}
+        token1 {{
+          id
+          symbol
+        }}
+      }}
+    }}
+    """
+
+    # Execute the GraphQL query
+    data = run_query(graphql_query, graphql_endpoint)
+    if "error" in data:
+        return data
+    
+    # Extract pools from the response
+    return data.get("pools", [])
 
 def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
     """Calculate APR using the formula: (Daily Volume / TVL) × Fee Rate × 365 × 100"""
-    logger.debug(f"Calculating APR with daily_volume: {daily_volume}, tvl: {tvl}, fee_rate: {fee_rate}")
     if tvl == 0:
-        logger.warning("TVL is zero, returning APR as 0.")
         return 0
-    apr = (daily_volume / tvl) * fee_rate * 365 * 100
-    logger.info(f"Calculated APR: {apr}")
-    return apr
+    return (daily_volume / tvl) * fee_rate * DAYS_IN_YEAR * PERCENT_CONVERSION
 
-def get_pools_for_chain(chain: str, graphql_endpoint: str, current_pool: str, apr_threshold: float) -> List[Dict[str, Any]]:
-    """Get all qualifying pools for a specific chain."""
-    graphql_query = """
-    {
-        pools(
-            first: 1000,
-            orderBy: totalValueLockedUSD,
-            orderDirection: desc,
-            subgraphError: allow
-        ) {
-            id
-            feeTier
-            liquidity
-            volumeUSD
-            totalValueLockedUSD
-            token0 {
-                id
-                symbol
-                decimals
-                derivedETH
-            }
-            token1 {
-                id
-                symbol
-                decimals
-                derivedETH
-            }
-        }
-        bundles(where: {id: "1"}) {
-            ethPriceUSD
-        }
+def format_pool_data(pool) -> Dict[str, Any]:
+    """Format pool data into the desired structure."""
+    dex_type = UNISWAP
+    chain = pool['chain'].lower()
+    apr = pool['apr']
+    pool_address = pool['address']
+    pool_id = pool['id']
+    
+    token0 = pool['token0']['id']
+    token1 = pool['token1']['id']
+    token0_symbol = pool['token0']['symbol']
+    token1_symbol = pool['token1']['symbol']
+    
+    return {
+        "dex_type": dex_type,
+        "chain": chain,
+        "apr": apr,
+        "pool_address": pool_address,
+        "pool_id": pool_id,
+        "token0": token0,
+        "token1": token1,
+        "token0_symbol": token0_symbol,
+        "token1_symbol": token1_symbol,
     }
-    """
-    logger.info(f"Fetching pools for chain: {chain}")
-    # ... existing code ...
-    data = run_query(graphql_query, graphql_endpoint)
-    if "error" in data:
-        logger.error("Error in fetching pools data.")
-        return []
-    
-    qualifying_pools = []
-    pools = data.get("pools", [])
-    
-    for pool in pools:
-        if pool['id'] == current_pool:
-            continue
-            
-        # Calculate pool metrics
-        fee_rate = float(pool['feeTier']) / 1000000  # Convert basis points to decimal
-        tvl = float(pool['totalValueLockedUSD'])
-        daily_volume = float(pool['volumeUSD'])
-        
-        # Calculate APR
-        apr = calculate_apr(daily_volume, tvl, fee_rate)
-        
-        if apr > apr_threshold and pool['id'] != current_pool:
-            logger.debug(f"Pool {pool['id']} qualifies with APR: {apr}")
-            qualifying_pools.append({
-                "chain": chain.lower(),
-                "apr": apr,
-                "pool_address": pool['id'],
-                "pool_id": pool['id'],
-                "token0": pool['token0']['id'],
-                "token1": pool['token1']['id'],
-                "token0_symbol": pool['token0']['symbol'],
-                "token1_symbol": pool['token1']['symbol'],
-                "tvl": tvl,
-                "daily_volume": daily_volume
-            })
-    
-    logger.info(f"Found {len(qualifying_pools)} qualifying pools for chain: {chain}")
-    return qualifying_pools
 
-def get_best_pool(chains: List[str], apr_threshold: float, graphql_endpoints: Dict[str, str], current_pool: str) -> Dict[str, Any]:
-    """Find the best Uniswap pool across all specified chains."""
-    logger.info("Finding the best pool across all chains.")
-    all_qualifying_pools = []
+def get_best_pools(chains, apr_threshold, graphql_endpoint, current_pool) -> List[Dict[str, Any]]:
+    pools = fetch_graphql_data(chains, graphql_endpoint)
+    if isinstance(pools, dict) and "error" in pools:
+        return pools
     
-    # Collect qualifying pools from all chains
-    for chain in chains:
-        if chain not in graphql_endpoints:
-            logger.warning(f"GraphQL endpoint not found for chain: {chain}")
-            continue
-            
-        chain_pools = get_pools_for_chain(
-            chain=chain,
-            graphql_endpoint=graphql_endpoints[chain],
-            current_pool=current_pool,
-            apr_threshold=apr_threshold
-        )
-        all_qualifying_pools.extend(chain_pools)
+    top_pools = get_filtered_pools(pools, current_pool)
+
+    if not top_pools:
+        return {"error": "No suitable pools found"}
     
-    if not all_qualifying_pools:
-        logger.error("No suitable pools found across any chain.")
-        return {"error": "No suitable pools found across any chain."}
-    
-    # Find the pool with highest APR
-    best_pool = max(all_qualifying_pools, key=lambda x: x['apr'])
-    logger.info(f"Best pool found: {best_pool['pool_id']} with APR: {best_pool['apr']}")
-    
-    # Format the result
-    result = {
-        "dex_type": UNISWAP,
-        "chain": best_pool['chain'],
-        "apr": best_pool['apr'],
-        "pool_address": best_pool['pool_address'],
-        "pool_id": best_pool['pool_id'],
-        "token0": best_pool['token0'],
-        "token1": best_pool['token1'],
-        "token0_symbol": best_pool['token0_symbol'],
-        "token1_symbol": best_pool['token1_symbol'],
-    }
-    
-    return result
+    formatted_pools = [format_pool_data(pool) for pool in top_pools]
+
+    return formatted_pools
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""
-    logger.info("Running the strategy.")
-    # Validate required fields
     missing = check_missing_fields(kwargs)
     if len(missing) > 0:
-        logger.error(f"Required kwargs {missing} were not provided.")
         return {"error": f"Required kwargs {missing} were not provided."}
-    
-    # Remove irrelevant fields and execute
+
     kwargs = remove_irrelevant_fields(kwargs)
-    return get_best_pool(**kwargs)
+    return get_best_pools(**kwargs)

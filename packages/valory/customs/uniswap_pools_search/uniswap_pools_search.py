@@ -1,10 +1,12 @@
 import requests
 from typing import Dict, Union, Any, List
+from pycoingecko import CoinGeckoAPI
 import numpy as np
+from datetime import datetime, timedelta
 
 # Constants
 UNISWAP = "UniswapV3"
-REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint", "current_pool")
+REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint", "current_pool", "coingecko_api_key")
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
 PERCENT_CONVERSION = 100
@@ -155,6 +157,7 @@ def format_pool_data(pool) -> Dict[str, Any]:
     apr = pool['apr']
     pool_address = pool['address']
     pool_id = pool['id']
+    il_risk_score = pool['il_risk_score']
     
     token0 = pool['token0']['id']
     token1 = pool['token1']['id']
@@ -171,9 +174,46 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "token1": token1,
         "token0_symbol": token0_symbol,
         "token1_symbol": token1_symbol,
+        "il_risk_score": il_risk_score
     }
 
-def get_best_pools(chains, apr_threshold, graphql_endpoint, current_pool) -> List[Dict[str, Any]]:
+def calculate_il_risk_score(pool, coingecko_api_key: str) -> float:
+    """Calculate the IL Risk Score for a given pool."""
+    cg = CoinGeckoAPI(api_key=coingecko_api_key)
+    
+    token_1 = pool['token0']['id']
+    token_2 = pool['token1']['id']
+    
+    to_timestamp = int(datetime.now().timestamp())
+    from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
+    
+    # Fetch historical price data for the token pair
+    prices_1 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+    prices_2 = cg.get_coin_market_chart_range_by_id(id=token_2, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+    
+    # Extract price data
+    prices_1_data = np.array([x[1] for x in prices_1['prices']])
+    prices_2_data = np.array([x[1] for x in prices_2['prices']])
+    
+    # Price Correlation Calculation
+    price_correlation = np.corrcoef(prices_1_data, prices_2_data)[0, 1]
+    
+    # Volatility Calculation
+    volatility_1 = np.std(prices_1_data)
+    volatility_2 = np.std(prices_2_data)
+    volatility_multiplier = np.sqrt(volatility_1 * volatility_2)
+    
+    # Calculate IL Impact
+    P0 = prices_1_data[0] / prices_2_data[0]
+    P1 = prices_1_data[-1] / prices_2_data[-1]
+    il_impact = 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
+    
+    # Calculate IL Risk Score
+    il_risk_score = il_impact * price_correlation * volatility_multiplier
+    
+    return il_risk_score
+
+def get_best_pools(chains, apr_threshold, graphql_endpoint, current_pool, coingecko_api_key) -> List[Dict[str, Any]]:
     pools = fetch_graphql_data(chains, graphql_endpoint)
     if isinstance(pools, dict) and "error" in pools:
         return pools
@@ -182,6 +222,10 @@ def get_best_pools(chains, apr_threshold, graphql_endpoint, current_pool) -> Lis
 
     if not top_pools:
         return {"error": "No suitable pools found"}
+    
+    # Calculate IL Risk Score for each pool
+    for pool in top_pools:
+        pool['il_risk_score'] = calculate_il_risk_score(pool, coingecko_api_key)
     
     formatted_pools = [format_pool_data(pool) for pool in top_pools]
 

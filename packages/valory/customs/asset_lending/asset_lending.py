@@ -1,9 +1,11 @@
 import requests
 from typing import Dict, Union, Any, List
 import numpy as np
+from pycoingecko import CoinGeckoAPI
+from datetime import datetime, timedelta
 
 # Constants
-REQUIRED_FIELDS = ("chains", "apr_threshold", "endpoint", "lending_asset", "current_pool")
+REQUIRED_FIELDS = ("chains", "apr_threshold", "endpoint", "lending_asset", "current_pool", "coingecko-api-key")
 STURDY = 'Sturdy'
 TVL_WEIGHT = 0.7  # Weight for TVL
 APR_WEIGHT = 0.3  # Weight for APR
@@ -86,7 +88,55 @@ def fetch_aggregators(endpoint) -> List[Dict[str, Any]]:
     
     return result
 
-def get_best_opportunities(chains, apr_threshold, endpoint, lending_asset, current_pool) -> Dict[str, Any]:
+
+def calculate_il_risk_score_for_lending(asset_token: str, coingecko_api_key: str) -> float:
+    """Calculate the IL Risk Score for a lending asset using USDC as the default second token."""
+    cg = CoinGeckoAPI(api_key=coingecko_api_key)
+    
+    token_1 = asset_token
+    token_2 = 'usd-coin'  # USDC token ID in CoinGecko
+    
+    to_timestamp = int(datetime.now().timestamp())
+    from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
+    
+    # Fetch historical price data for the token pair
+    prices_1 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+    prices_2 = cg.get_coin_market_chart_range_by_id(id=token_2, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+    
+    # Extract price data
+    prices_1_data = np.array([x[1] for x in prices_1['prices']])
+    prices_2_data = np.array([x[1] for x in prices_2['prices']])
+    
+    # Price Correlation Calculation
+    price_correlation = np.corrcoef(prices_1_data, prices_2_data)[0, 1]
+    
+    # Volatility Calculation
+    volatility_1 = np.std(prices_1_data)
+    volatility_2 = np.std(prices_2_data)
+    volatility_multiplier = np.sqrt(volatility_1 * volatility_2)
+    
+    # Calculate IL Impact
+    P0 = prices_1_data[0] / prices_2_data[0]
+    P1 = prices_1_data[-1] / prices_2_data[-1]
+    il_impact = 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
+    
+    # Calculate IL Risk Score
+    il_risk_score = il_impact * price_correlation * volatility_multiplier
+    
+    return il_risk_score
+
+def get_coingecko_id_from_address(asset_address: str, coingecko_api_key: str) -> str:
+    """Fetch the CoinGecko ID for a given asset address."""
+    cg = CoinGeckoAPI(api_key=coingecko_api_key)
+    try:
+        # Fetch coin data using the contract address
+        coin_data = cg.get_coin_info_from_contract_address_by_id(id='ethereum', contract_address=asset_address)
+        return coin_data['id']
+    except Exception as e:
+        print(f"Error fetching CoinGecko ID: {e}")
+        return None
+    
+def get_best_opportunities(chains, apr_threshold, endpoint, lending_asset, current_pool, coingecko_api_key) -> Dict[str, Any]:
     data = fetch_aggregators(endpoint)
     if "error" in data:
         return data
@@ -95,6 +145,12 @@ def get_best_opportunities(chains, apr_threshold, endpoint, lending_asset, curre
     filtered_aggregators = filter_aggregators(chains, apr_threshold, aggregators, lending_asset, current_pool)
     if "error" in filtered_aggregators:
         return filtered_aggregators
+    
+    lending_asset_id = get_coingecko_id_from_address(lending_asset, coingecko_api_key)
+    
+    # Calculate IL Risk Score for each aggregator
+    for aggregator in filtered_aggregators:
+        aggregator['il_risk_score'] = calculate_il_risk_score_for_lending(lending_asset_id, coingecko_api_key)
 
     formatted_results = [format_aggregator(aggregator) for aggregator in filtered_aggregators]
     return formatted_results
@@ -108,7 +164,7 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
         "token0_symbol": aggregator['asset']['symbol'],
         "token0": aggregator['asset']['address'],
         "apr": aggregator['total_apr'],
-        "score": aggregator['score']
+        "il_risk_score": aggregator['il_risk_score']
     }
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:

@@ -84,7 +84,13 @@ def filter_aggregators(chains, apr_threshold, aggregators, lending_asset, curren
         logging.error("No suitable aggregator found after scoring.")
         return []
 
-    return filtered_scored_aggregators
+    if len(filtered_scored_aggregators) > 10:
+        # Take only the top 10 scored pools
+        top_pools = filtered_scored_aggregators[:10]
+    else:
+        top_pools = filtered_scored_aggregators
+
+    return top_pools
 
 def fetch_aggregators() -> List[Dict[str, Any]]:
     try:
@@ -136,7 +142,7 @@ def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, 
 
 def fetch_token_id(symbol):
     """Fetches the list of coins from the CoinGecko API."""
-    url = "https://api.coingecko.com/api/v3/coins/list"
+    url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd"
     try:
         response = requests.get(url)
         response.raise_for_status()

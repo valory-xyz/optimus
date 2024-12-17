@@ -4,6 +4,7 @@ from pycoingecko import CoinGeckoAPI
 import numpy as np
 from datetime import datetime, timedelta
 import logging
+from web3 import Web3
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +20,11 @@ APR_WEIGHT = 0.3
 TVL_PERCENTILE = 50
 APR_PERCENTILE = 50
 SCORE_PERCENTILE = 80
+CHAIN_URLS = {
+    "mode": "https://1rpc.io/mode",
+    "optimism": "https://mainnet.optimism.io",
+    "base": "https://1rpc.io/base"
+}
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
@@ -34,7 +40,7 @@ def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
 
 def fetch_coin_list():
     """Fetches the list of coins from the CoinGecko API."""
-    url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd"
+    url = "https://api.coingecko.com/api/v3/coins/list"
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -43,13 +49,66 @@ def fetch_coin_list():
         logging.error(f"Failed to fetch coin list: {e}")
         return None
 
-def get_token_id_from_symbol(symbol, coin_list):
-    for coin in coin_list:
-        if coin['symbol'] == symbol:
+def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
+    matching_coins = [coin for coin in coin_list if coin['symbol'].lower() == symbol.lower()]
+
+    if not matching_coins:
+        logging.error(f"No entries found for symbol: {symbol}")
+        return None
+
+    # If there's only one matching coin, return its ID
+    if len(matching_coins) == 1:
+        return matching_coins[0]['id']
+
+    # If multiple entries exist, fetch the token name from the contract
+    token_name = fetch_token_name_from_contract(chain_name, token_address)
+    
+    if not token_name:
+        logging.error(f"Failed to fetch token name for address: {token_address} on chain: {chain_name}")
+        return None
+
+    for coin in matching_coins:
+        if coin['name'].replace(" ", "") == token_name.replace(" ", "") or coin['name'].lower() == symbol.lower():
             return coin['id']
         
-    logging.error(f"Failed to fetch id for coin with name: {symbol}")
+    logging.error(f"Failed to fetch id for coin with symbol: {symbol} and name: {token_name}")
     return None
+
+def fetch_token_name_from_contract(chain_name, token_address):
+    ERC20_ABI = [
+        {
+            "constant": True,
+            "inputs": [],
+            "name": "name",
+            "outputs": [{"name": "", "type": "string"}],
+            "payable": False,
+            "stateMutability": "view",
+            "type": "function",
+        }
+    ]
+
+    # Get the appropriate URL for the chain
+    chain_url = CHAIN_URLS.get(chain_name)
+    if not chain_url:
+        logging.error(f"Unsupported chain: {chain_name}")
+        return None
+
+    # Connect to the blockchain
+    web3 = Web3(Web3.HTTPProvider(chain_url))
+    if not web3.is_connected():
+        logging.error(f"Failed to connect to the {chain_name} blockchain.")
+        return None
+
+    # Create a contract instance
+    contract = web3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
+
+    try:
+        # Call the 'name' function of the contract
+        token_name = contract.functions.name().call()
+        return token_name
+    except Exception as e:
+        logging.error(f"Error fetching token name from contract: {e}")
+        return None
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     headers = {
@@ -269,9 +328,9 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
     
     # Calculate IL Risk Score for each pool
     for pool in filtered_pools:
-
-        token_0_id = get_token_id_from_symbol(pool['token0']['symbol'].lower(), coin_list)
-        token_1_id = get_token_id_from_symbol(pool['token1']['symbol'].lower(), coin_list)
+        pool['chain'] = pool['chain'].lower()
+        token_0_id = get_token_id_from_symbol(pool['token0']['address'], pool['token0']['symbol'].lower(), coin_list, pool['chain'])
+        token_1_id = get_token_id_from_symbol(pool['token1']['address'], pool['token1']['symbol'].lower(), coin_list, pool['chain'])
 
         if token_0_id and token_1_id:
             pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)

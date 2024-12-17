@@ -3,10 +3,14 @@ from typing import Dict, Union, Any, List
 from pycoingecko import CoinGeckoAPI
 import numpy as np
 from datetime import datetime, timedelta
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Constants
 UNISWAP = "UniswapV3"
-REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint", "current_pool", "coingecko_api_key")
+REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoints", "current_pool", "coingecko_api_key")
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
 PERCENT_CONVERSION = 100
@@ -27,6 +31,25 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Remove the irrelevant fields from the given kwargs."""
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
+
+def fetch_coin_list():
+    """Fetches the list of coins from the CoinGecko API."""
+    url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logging.error(f"Failed to fetch coin list: {e}")
+        return None
+
+def get_token_id_from_symbol(symbol, coin_list):
+    for coin in coin_list:
+        if coin['symbol'] == symbol:
+            return coin['id']
+        
+    logging.error(f"Failed to fetch id for coin with name: {symbol}")
+    return None
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     headers = {
@@ -50,99 +73,123 @@ def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
 
 def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
     # Filter pools by those with exactly two tokens
-    filtered_pools = []
+    qualifying_pools = []
     tvl_list = []
     apr_list = []
 
     for pool in pools:
-        pool_address = pool.get('address')
-        if len(pool.get('token0', [])) == 2 and pool_address != current_pool:
-            tvl = float(pool.get("totalValueLockedUSD", 0))
-            daily_volume = float(pool.get("volumeUSD", 0))
-            fee_rate = float(pool.get("feeTier", 0)) / FEE_RATE_DIVISOR
-            apr = calculate_apr(daily_volume, tvl, fee_rate)
-            
-            if tvl == 0 or apr == 0:
-                continue
-
-            tvl_list.append(tvl)
-            apr_list.append(apr)
-            
-            pool["tvl"] = tvl
-            pool["apr"] = apr * PERCENT_CONVERSION
-            filtered_pools.append(pool)
-
-    if filtered_pools:
-        tvl_list = [float(pool.get("tvl", 0)) for pool in filtered_pools]
-        apr_list = [float(pool.get("apr", 0)) for pool in filtered_pools]
+        # Calculate pool metrics
+        fee_rate = float(pool['feeTier']) / FEE_RATE_DIVISOR  # Convert basis points to decimal
+        tvl = float(pool['totalValueLockedUSD'])
+        daily_volume = float(pool['volumeUSD'])
         
-        tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
-        apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
+        # Calculate APR
+        apr = calculate_apr(daily_volume, tvl, fee_rate)
+        pool["apr"] = apr
+        pool["tvl"] = tvl
+        if pool['id'] != current_pool:
+            qualifying_pools.append(pool)
 
-        # Prioritize pools using combined TVL and APR score
-        scored_pools = []
-        max_tvl = max(tvl_list)
-        max_apr = max(apr_list)
 
-        for pool in filtered_pools:
-            tvl = float(pool.get("tvl", 0))
-            apr = float(pool.get("apr", 0))
-                    
-            if tvl < tvl_threshold or apr < apr_threshold:
-                continue
+    if not qualifying_pools:
+        logging.error("No suitable pools found.")
+        return []
+    
+    if len(qualifying_pools) <= 5:
+        return qualifying_pools
+    
+    tvl_list = [float(pool.get("tvl", 0)) for pool in qualifying_pools]
+    apr_list = [float(pool.get("apr", 0)) for pool in qualifying_pools]
 
-            score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
-            pool["score"] = score
-            scored_pools.append(pool)
+    tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
+    apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
 
-        # Apply score threshold
-        score_threshold = np.percentile([pool["score"] for pool in scored_pools], SCORE_PERCENTILE)
-        filtered_scored_pools = [pool for pool in scored_pools if pool["score"] >= score_threshold]
+    # Prioritize pools using combined TVL and APR score
+    scored_pools = []
+    max_tvl = max(tvl_list)
+    max_apr = max(apr_list)
 
-        filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
+    for pool in qualifying_pools:
+        tvl = float(pool.get("tvl", 0))
+        apr = float(pool.get("apr", 0))
+                
+        if tvl < tvl_threshold or apr < apr_threshold:
+            continue
 
-        top_pools = filtered_scored_pools
+        score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
+        pool["score"] = score
+        scored_pools.append(pool)
+
+    # Apply score threshold
+    score_threshold = np.percentile([pool["score"] for pool in scored_pools], SCORE_PERCENTILE)
+    filtered_scored_pools = [pool for pool in scored_pools if pool["score"] >= score_threshold]
+
+    filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
+
+    if len(filtered_scored_pools) > 10:
+        # Take only the top 10 scored pools
+        top_pools = filtered_scored_pools[:10]
     else:
-        top_pools = []
+        top_pools = filtered_scored_pools
 
     return top_pools
 
-def fetch_graphql_data(chains, graphql_endpoint) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     """Fetch data from GraphQL endpoint for the specified chains."""
-    # Ensure all chain names are uppercase
-    chain_names = [chain.upper() for chain in chains]
-    chain_list_str = ', '.join(chain_names)
-    
-    # Build the GraphQL query with the specified chain names
-    graphql_query = f"""
-    {{
-      pools(where: {{chainIn: [{chain_list_str}]}}) {{
-        id
-        address
-        chain
-        feeTier
-        liquidity
-        volumeUSD
-        totalValueLockedUSD
-        token0 {{
-          id
-          symbol
-        }}
-        token1 {{
-          id
-          symbol
-        }}
-      }}
-    }}
-    """
 
-    # Execute the GraphQL query
-    data = run_query(graphql_query, graphql_endpoint)
-    if "error" in data:
-        return data
-    
-    # Extract pools from the response
-    return data.get("pools", [])
+    def get_pools_for_chain(chain: str, graphql_endpoint: str, current_pool: str, apr_threshold: float) -> List[Dict[str, Any]]:
+        """Get all qualifying pools for a specific chain."""
+        graphql_query = """
+        {
+            pools(
+                first: 1000,
+                orderBy: totalValueLockedUSD,
+                orderDirection: desc,
+                subgraphError: allow
+            ) {
+                id
+                feeTier
+                liquidity
+                volumeUSD
+                totalValueLockedUSD
+                token0 {
+                    id
+                    symbol
+                    decimals
+                    derivedETH
+                }
+                token1 {
+                    id
+                    symbol
+                    decimals
+                    derivedETH
+                }
+            }
+            bundles(where: {id: "1"}) {
+                ethPriceUSD
+            }
+        }
+        """
+        data = run_query(graphql_query, graphql_endpoint)
+        if "error" in data:
+            logging.error("Error in fetching pools data.")
+            return []
+        
+        pools = data.get("pools", [])
+        for pool in pools:
+            pool['chain'] = chain
+
+        return pools
+
+    all_pools = [] 
+    for chain in chains:
+        graphql_endpoint = graphql_endpoints.get(chain)
+        if graphql_endpoint:
+            data = get_pools_for_chain(chain, graphql_endpoint, current_pool, apr_threshold)
+            if data:
+                all_pools.extend(data)
+
+    return all_pools
 
 def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
     """Calculate APR using the formula: (Daily Volume / TVL) × Fee Rate × 365 × 100"""
@@ -155,8 +202,7 @@ def format_pool_data(pool) -> Dict[str, Any]:
     dex_type = UNISWAP
     chain = pool['chain'].lower()
     apr = pool['apr']
-    pool_address = pool['address']
-    pool_id = pool['id']
+    pool_address = pool['id']
     il_risk_score = pool['il_risk_score']
     
     token0 = pool['token0']['id']
@@ -169,7 +215,6 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "chain": chain,
         "apr": apr,
         "pool_address": pool_address,
-        "pool_id": pool_id,
         "token0": token0,
         "token1": token1,
         "token0_symbol": token0_symbol,
@@ -177,57 +222,63 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "il_risk_score": il_risk_score
     }
 
-def calculate_il_risk_score(pool, coingecko_api_key: str) -> float:
+def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
     """Calculate the IL Risk Score for a given pool."""
-    cg = CoinGeckoAPI(api_key=coingecko_api_key)
-    
-    token_1 = pool['token0']['id']
-    token_2 = pool['token1']['id']
+    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
     
-    # Fetch historical price data for the token pair
-    prices_1 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
-    prices_2 = cg.get_coin_market_chart_range_by_id(id=token_2, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+    try:
+        prices_1 = cg.get_coin_market_chart_range_by_id(id=token_0, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+        prices_2 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+    except Exception as e:
+        logging.error(f"Error fetching price data: {e}")
+        return float('nan')
     
-    # Extract price data
     prices_1_data = np.array([x[1] for x in prices_1['prices']])
     prices_2_data = np.array([x[1] for x in prices_2['prices']])
-    
-    # Price Correlation Calculation
+
+    min_length = min(len(prices_1_data), len(prices_2_data))
+    prices_1_data = prices_1_data[:min_length]
+    prices_2_data = prices_2_data[:min_length]
+ 
     price_correlation = np.corrcoef(prices_1_data, prices_2_data)[0, 1]
-    
-    # Volatility Calculation
+
     volatility_1 = np.std(prices_1_data)
     volatility_2 = np.std(prices_2_data)
     volatility_multiplier = np.sqrt(volatility_1 * volatility_2)
-    
-    # Calculate IL Impact
+
     P0 = prices_1_data[0] / prices_2_data[0]
     P1 = prices_1_data[-1] / prices_2_data[-1]
-    il_impact = 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
-    
-    # Calculate IL Risk Score
-    il_risk_score = il_impact * price_correlation * volatility_multiplier
-    
-    return il_risk_score
+    il_impact = 1 - np.sqrt(P1 / P0) * (2 / (1 + P1 / P0))
 
-def get_best_pools(chains, apr_threshold, graphql_endpoint, current_pool, coingecko_api_key) -> List[Dict[str, Any]]:
-    pools = fetch_graphql_data(chains, graphql_endpoint)
+    il_risk_score = il_impact * price_correlation * volatility_multiplier
+
+    return float(il_risk_score)
+
+def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coingecko_api_key, coin_list) -> List[Dict[str, Any]]:
+    pools = fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold)
     if isinstance(pools, dict) and "error" in pools:
         return pools
     
-    top_pools = get_filtered_pools(pools, current_pool)
+    filtered_pools = get_filtered_pools(pools, current_pool)
 
-    if not top_pools:
+    if not filtered_pools:
         return {"error": "No suitable pools found"}
     
     # Calculate IL Risk Score for each pool
-    for pool in top_pools:
-        pool['il_risk_score'] = calculate_il_risk_score(pool, coingecko_api_key)
-    
-    formatted_pools = [format_pool_data(pool) for pool in top_pools]
+    for pool in filtered_pools:
+
+        token_0_id = get_token_id_from_symbol(pool['token0']['symbol'].lower(), coin_list)
+        token_1_id = get_token_id_from_symbol(pool['token1']['symbol'].lower(), coin_list)
+
+        if token_0_id and token_1_id:
+            pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
+        else:
+            pool['il_risk_score'] = float('nan')
+            
+    formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
 
     return formatted_pools
 
@@ -238,4 +289,6 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
         return {"error": f"Required kwargs {missing} were not provided."}
 
     kwargs = remove_irrelevant_fields(kwargs)
+    coin_list = fetch_coin_list()
+    kwargs.update({"coin_list": coin_list})
     return get_best_pools(**kwargs)

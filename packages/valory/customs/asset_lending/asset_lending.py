@@ -142,7 +142,7 @@ def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, 
 
 def fetch_token_id(symbol):
     """Fetches the list of coins from the CoinGecko API."""
-    url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd"
+    url = "https://api.coingecko.com/api/v3/coins/list"
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -152,7 +152,7 @@ def fetch_token_id(symbol):
         return None
 
     for coin in coin_list:
-        if coin['symbol'] == symbol:
+        if coin['symbol'].lower() == symbol.lower():
             return coin['id']
         
     logging.error(f"Failed to fetch id for coin with symbol: {symbol}")

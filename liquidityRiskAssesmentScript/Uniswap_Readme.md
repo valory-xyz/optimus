@@ -1,10 +1,6 @@
-Here's a detailed README file for the three Python scripts designed to interact with The Graph API to analyze liquidity metrics, risk, and pool data on the Ethereum blockchain:
+# Liquidity Analysis Tools for Uniswap Ethereum DeFi Pools
 
----
-
-# Liquidity Analysis Tools for Ethereum DeFi Pools
-
-This repository contains Python scripts that leverage The Graph API to fetch and analyze data from decentralized finance (DeFi) protocols on Ethereum. These tools are critical for evaluating pool dynamics, volume, and associated risks.
+This repository contains Python scripts that leverage The Graph API to fetch and analyze data from Uniswap decentralized finance (DeFi) protocols on Ethereum. These tools are critical for evaluating pool dynamics, volume, and associated risks.
 
 ## Scripts
 

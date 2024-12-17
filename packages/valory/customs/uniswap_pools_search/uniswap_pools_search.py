@@ -124,6 +124,49 @@ def get_pools_for_chain(chain: str, graphql_endpoint: str, current_pool: str, ap
     logger.info(f"Found {len(qualifying_pools)} qualifying pools for chain: {chain}")
     return qualifying_pools
 
+def get_uniswap_pool_sharpe_ratio(pool_id: str, graphql_endpoint: str) -> float:
+    """Calculate Sharpe ratio for a Uniswap pool."""
+    query = """
+    {
+        pool(id: "%s") {
+            liquidity
+            swaps(first: 5, orderBy: timestamp, orderDirection: desc) {
+                timestamp
+                amountUSD
+            }
+        }
+    }
+    """ % pool_id
+
+    try:
+        # Get data from Uniswap subgraph
+        response = requests.post(
+            graphql_endpoint,
+            json={'query': query}
+        )
+        pool_data = response.json()['data']['pool']
+        swaps_data = pool_data['swaps']
+        liquidity = float(pool_data['liquidity'])
+        
+        # Prepare DataFrame
+        df = pd.DataFrame(swaps_data)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+        df.set_index('timestamp', inplace=True)
+        # Calculate returns
+        df['amountUSD'] = pd.to_numeric(df['amountUSD'])
+        price_returns = df['amountUSD'].pct_change()
+        # Liquidity returns
+        liquidity_returns = df['amountUSD'] / liquidity
+        # Total returns (price change + liquidity)
+        total_returns = price_returns + liquidity_returns
+        returns = total_returns.dropna()
+        # Calculate Sharpe ratio using pyfolio
+        sharpe_ratio = pf.timeseries.sharpe_ratio(returns)
+        return sharpe_ratio
+    except Exception as e:
+        logger.error(f"Error calculating Sharpe ratio: {str(e)}")
+        return None
+    
 def get_best_pool(chains: List[str], apr_threshold: float, graphql_endpoints: Dict[str, str], current_pool: str) -> Dict[str, Any]:
     """Find the best Uniswap pool across all specified chains."""
     logger.info("Finding the best pool across all chains.")

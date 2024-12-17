@@ -1,4 +1,6 @@
 import requests
+import pyfolio as pf
+import pandas as pd
 from typing import (
     Dict,
     Union,
@@ -142,6 +144,58 @@ def get_best_pool(chains, apr_threshold, graphql_endpoint, current_pool) -> Dict
     }
 
     return result
+
+def get_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
+    """
+    Calculate Sharpe ratio for a Balancer pool.
+    Parameters:
+    pool_id (str): Balancer pool ID
+    chain (str): Blockchain network (e.g., 'OPTIMISM', 'ETHEREUM')
+    timerange (str): Time range for analysis ('ONE_YEAR', 'ONE_MONTH', etc.)
+    """
+    query = """
+    {
+        poolGetSnapshots(
+            chain: %s
+            id: "%s"
+            range: %s
+        ) {
+            timestamp
+            sharePrice
+            fees24h
+            totalLiquidity
+        }
+    }
+    """ % (chain, pool_id, timerange)
+    try:
+        # Get data from Balancer API
+        response = requests.post(
+            "https://api-v3.balancer.fi/",
+            json={'query': query}
+        )
+        data = response.json()['data']['poolGetSnapshots']
+        print(data)
+        # Prepare DataFrame
+        df = pd.DataFrame(data)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+        df.set_index('timestamp', inplace=True)
+        # Calculate returns
+        df['sharePrice'] = pd.to_numeric(df['sharePrice'])
+        price_returns = df['sharePrice'].pct_change()
+        # Add fee returns
+        df['fees24h'] = pd.to_numeric(df['fees24h'])
+        df['totalLiquidity'] = pd.to_numeric(df['totalLiquidity'])
+        fee_returns = df['fees24h'] / df['totalLiquidity']
+        # Total returns (price change + fees)
+        total_returns = price_returns + fee_returns
+        returns = total_returns.dropna()
+        # Calculate Sharpe ratio using pyfolio
+        sharpe_ratio = pf.timeseries.sharpe_ratio(returns)
+        return sharpe_ratio
+    except Exception as e:
+        print(f"Error calculating Sharpe ratio: {str(e)}")
+        return None
+
 
 def get_total_apr(pool) -> float:
     apr_items = pool.get('dynamicData', {}).get('aprItems', [])

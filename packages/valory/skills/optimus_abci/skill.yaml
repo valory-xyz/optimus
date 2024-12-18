@@ -24,7 +24,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeib5kvuvbio7xvvs4bs72pmos3cce6kwyjskk2vakufecvap5bmdkm
+- valory/liquidity_trader_abci:0.1.0:bafybeibz4ksrrkhan4ppfrt6nowxaszmligvdn7xfmmrw43uyzwpvc6yqy
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -191,6 +191,7 @@ models:
       - uniswap
       selected_hyper_strategy: max_apr_selection
       service_endpoint_base: https://optimus.staging.autonolas.tech/
+      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
     class_name: Params
   coingecko:
     args:

@@ -1,5 +1,5 @@
 import requests
-from typing import Dict, Union, Any, List
+from typing import Dict, Union, Any, List, Optional
 from pycoingecko import CoinGeckoAPI
 import numpy as np
 from datetime import datetime, timedelta
@@ -62,7 +62,7 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
 
     # If multiple entries exist, fetch the token name from the contract
     token_name = fetch_token_name_from_contract(chain_name, token_address)
-    
+
     if not token_name:
         logging.error(f"Failed to fetch token name for address: {token_address} on chain: {chain_name}")
         return None
@@ -201,7 +201,7 @@ def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -
         graphql_query = """
         {
             pools(
-                first: 1000,
+                first: 100,
                 orderBy: totalValueLockedUSD,
                 orderDirection: desc,
                 subgraphError: allow
@@ -311,7 +311,7 @@ def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
     P0 = prices_1_data[0] / prices_2_data[0]
     P1 = prices_1_data[-1] / prices_2_data[-1]
     il_impact = 1 - np.sqrt(P1 / P0) * (2 / (1 + P1 / P0))
-
+    
     il_risk_score = il_impact * price_correlation * volatility_multiplier
 
     return float(il_risk_score)
@@ -322,15 +322,30 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
         return pools
     
     filtered_pools = get_filtered_pools(pools, current_pool)
-
     if not filtered_pools:
         return {"error": "No suitable pools found"}
     
+    token_id_cache = {}
     # Calculate IL Risk Score for each pool
     for pool in filtered_pools:
         pool['chain'] = pool['chain'].lower()
-        token_0_id = get_token_id_from_symbol(pool['token0']['address'], pool['token0']['symbol'].lower(), coin_list, pool['chain'])
-        token_1_id = get_token_id_from_symbol(pool['token1']['address'], pool['token1']['symbol'].lower(), coin_list, pool['chain'])
+        # Check if token0 ID is already cached
+        token_0_symbol = pool['token0']['symbol'].lower()
+        if token_0_symbol in token_id_cache:
+            token_0_id = token_id_cache[token_0_symbol]
+        else:
+            token_0_id = get_token_id_from_symbol(pool['token0']['id'], token_0_symbol, coin_list, pool['chain'])
+            if token_0_id:
+                token_id_cache[token_0_symbol] = token_0_id
+
+        # Check if token1 ID is already cached
+        token_1_symbol = pool['token1']['symbol'].lower()
+        if token_1_symbol in token_id_cache:
+            token_1_id = token_id_cache[token_1_symbol]
+        else:
+            token_1_id = get_token_id_from_symbol(pool['token1']['id'], token_1_symbol, coin_list, pool['chain'])
+            if token_1_id:
+                token_id_cache[token_1_symbol] = token_1_id
 
         if token_0_id and token_1_id:
             pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
@@ -341,13 +356,35 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
 
     return formatted_pools
 
+
+def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs) -> Optional[Dict[str, Any]]:
+    token_0_id = get_token_id_from_symbol(current_pool['token0'], current_pool['token0_symbol'], coin_list, current_pool['chain'])
+    token_1_id = get_token_id_from_symbol(current_pool['token1'], current_pool['token1_symbol'], coin_list, current_pool['chain'])
+
+    if token_0_id and token_1_id:
+        il_risk_score = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
+    else:
+        il_risk_score = float('nan')
+
+    return {
+        "il_risk_score": il_risk_score
+    }
+
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""
     missing = check_missing_fields(kwargs)
     if len(missing) > 0:
         return {"error": f"Required kwargs {missing} were not provided."}
 
+    get_metrics = kwargs.get('get_metrics', False)
     kwargs = remove_irrelevant_fields(kwargs)
     coin_list = fetch_coin_list()
     kwargs.update({"coin_list": coin_list})
-    return get_best_pools(**kwargs)
+
+    if get_metrics:        
+        return calculate_metrics(**kwargs)
+    else:
+        result = get_best_pools(**kwargs)
+        if not result:
+            return {"error": "No suitable aggregators found"}
+        return result

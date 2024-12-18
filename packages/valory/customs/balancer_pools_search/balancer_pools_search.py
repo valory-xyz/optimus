@@ -3,7 +3,8 @@ from typing import (
     Dict,
     Union,
     Any,
-    List
+    List,
+    Optional
 )
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta
@@ -115,7 +116,7 @@ def get_balancer_pools(chains, graphql_endpoint) -> Dict[str, Any]:
     # Build the GraphQL query with the specified chain names
     graphql_query = f"""
     {{
-      pools(where: {{chainIn: [{chain_list_str}]}}) {{
+      poolGetPools(where: {{chainIn: [{chain_list_str}]}}) {{
         id
         address
         chain
@@ -322,21 +323,50 @@ def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coi
 
     if not filtered_pools:
         return {"error": "No suitable pools found"}
-    
+        
+    token_id_cache = {}
     # Calculate IL Risk Score for each pool
     for pool in filtered_pools:
         pool['chain'] = pool['chain'].lower()
-        token_0_id = get_token_id_from_symbol(pool['poolTokens'][0]["address"], pool['poolTokens'][0]["symbol"].lower(), coin_list, pool['chain'])
-        token_1_id = get_token_id_from_symbol(pool['poolTokens'][1]["address"], pool['poolTokens'][1]["symbol"].lower(), coin_list, pool['chain'])
+
+        # Check if token0 ID is already cached
+        token_0_symbol = pool['poolTokens'][0]["symbol"].lower()
+        if token_0_symbol in token_id_cache:
+            token_0_id = token_id_cache[token_0_symbol]
+        else:
+            token_0_id = get_token_id_from_symbol(pool['poolTokens'][0]["address"], token_0_symbol, coin_list, pool['chain'])
+            if token_0_id:
+                token_id_cache[token_0_symbol] = token_0_id
+
+        # Check if token1 ID is already cached
+        token_1_symbol = pool['poolTokens'][1]["symbol"].lower()
+        if token_1_symbol in token_id_cache:
+            token_1_id = token_id_cache[token_1_symbol]
+        else:
+            token_1_id = get_token_id_from_symbol(pool['poolTokens'][1]["address"], token_1_symbol, coin_list, pool['chain'])
+            if token_1_id:
+                token_id_cache[token_1_symbol] = token_1_id
 
         if token_0_id and token_1_id:
             pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
         else:
             pool['il_risk_score'] = float('nan')
-            
-    formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
 
+    formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
     return formatted_pools
+
+def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs) -> Optional[Dict[str, Any]]:
+    token_0_id = get_token_id_from_symbol(current_pool['token0'], current_pool['token0_symbol'], coin_list, current_pool['chain'])
+    token_1_id = get_token_id_from_symbol(current_pool['token1'], current_pool['token1_symbol'], coin_list, current_pool['chain'])
+
+    if token_0_id and token_1_id:
+        il_risk_score = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
+    else:
+        il_risk_score = float('nan')
+        
+    return {
+        "il_risk_score": il_risk_score
+    }
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""
@@ -344,7 +374,16 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     if len(missing) > 0:
         return {"error": f"Required kwargs {missing} were not provided."}
 
+    get_metrics = kwargs.get('get_metrics', False)
     kwargs = remove_irrelevant_fields(kwargs)
     coin_list = fetch_coin_list()
     kwargs.update({"coin_list": coin_list})
-    return get_opportunities(**kwargs)
+
+    if get_metrics:        
+        return calculate_metrics(**kwargs)
+    else:
+        result = get_opportunities(**kwargs)
+        if not result:
+            return {"error": "No suitable aggregators found"}
+        
+        return result

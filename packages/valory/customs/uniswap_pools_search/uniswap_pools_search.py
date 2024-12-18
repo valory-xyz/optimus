@@ -1,12 +1,12 @@
 from typing import Dict, Union, Any, List, Optional
 import requests
 import logging
-from web3 import Web3
 import time
 import json
-from pycoingecko import CoinGeckoAPI
 import numpy as np
+from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta
+from web3 import Web3
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

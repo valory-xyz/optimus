@@ -1,57 +1,200 @@
-from typing import Dict, Union, Any, List, Optional
 import requests
+from typing import Dict, Union, Any, List
+from pycoingecko import CoinGeckoAPI
+import numpy as np
+from datetime import datetime, timedelta
 import logging
-from gql import gql, Client
-from gql.transport.requests import RequestsHTTPTransport
-import time
-import json
+from web3 import Web3
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Constants
 UNISWAP = "UniswapV3"
-REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoints", "current_pool")
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoints", "current_pool", "coingecko_api_key")
+FEE_RATE_DIVISOR = 1000000
+DAYS_IN_YEAR = 365
+PERCENT_CONVERSION = 100
+TVL_WEIGHT = 0.7
+APR_WEIGHT = 0.3
+TVL_PERCENTILE = 50
+APR_PERCENTILE = 50
+SCORE_PERCENTILE = 80
+CHAIN_URLS = {
+    "mode": "https://1rpc.io/mode",
+    "optimism": "https://mainnet.optimism.io",
+    "base": "https://1rpc.io/base"
+}
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
-    logger.debug("Checking for missing fields in kwargs.")
     missing = []
     for field in REQUIRED_FIELDS:
         if kwargs.get(field, None) is None:
             missing.append(field)
-    logger.info(f"Missing fields: {missing}")
     return missing
 
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Remove the irrelevant fields from the given kwargs."""
-    logger.debug("Removing irrelevant fields from kwargs.")
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
-def run_query(query: str, graphql_endpoint: str, variables: Dict = None) -> Dict[str, Any]:
-    """Execute a GraphQL query and return the results."""
-    logger.info(f"Running GraphQL query on endpoint: {graphql_endpoint}")
-    transport = RequestsHTTPTransport(url=graphql_endpoint)
-    client = Client(transport=transport, fetch_schema_from_transport=True)
-    
+def fetch_coin_list():
+    """Fetches the list of coins from the CoinGecko API."""
+    url = "https://api.coingecko.com/api/v3/coins/list"
     try:
-        query = gql(query)
-        result = client.execute(query, variable_values=variables)
-        logger.info("GraphQL query executed successfully.")
-        return result
-    except Exception as e:
-        logger.error(f"GraphQL query failed: {str(e)}")
-        return {"error": f"GraphQL query failed: {str(e)}"}
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logging.error(f"Failed to fetch coin list: {e}")
+        return None
 
-def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
-    """Calculate APR using the formula: (Daily Volume / TVL) × Fee Rate × 365 × 100"""
-    logger.debug(f"Calculating APR with daily_volume: {daily_volume}, tvl: {tvl}, fee_rate: {fee_rate}")
-    if tvl == 0:
-        logger.warning("TVL is zero, returning APR as 0.")
-        return 0
-    apr = (daily_volume / tvl) * fee_rate * 365 * 100
-    logger.info(f"Calculated APR: {apr}")
-    return apr
+def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
+    matching_coins = [coin for coin in coin_list if coin['symbol'].lower() == symbol.lower()]
+
+    if not matching_coins:
+        logging.error(f"No entries found for symbol: {symbol}")
+        return None
+
+    # If there's only one matching coin, return its ID
+    if len(matching_coins) == 1:
+        return matching_coins[0]['id']
+
+    # If multiple entries exist, fetch the token name from the contract
+    token_name = fetch_token_name_from_contract(chain_name, token_address)
+    
+    if not token_name:
+        logging.error(f"Failed to fetch token name for address: {token_address} on chain: {chain_name}")
+        return None
+
+    for coin in matching_coins:
+        if coin['name'].replace(" ", "") == token_name.replace(" ", "") or coin['name'].lower() == symbol.lower():
+            return coin['id']
+        
+    logging.error(f"Failed to fetch id for coin with symbol: {symbol} and name: {token_name}")
+    return None
+
+def fetch_token_name_from_contract(chain_name, token_address):
+    ERC20_ABI = [
+        {
+            "constant": True,
+            "inputs": [],
+            "name": "name",
+            "outputs": [{"name": "", "type": "string"}],
+            "payable": False,
+            "stateMutability": "view",
+            "type": "function",
+        }
+    ]
+
+    # Get the appropriate URL for the chain
+    chain_url = CHAIN_URLS.get(chain_name)
+    if not chain_url:
+        logging.error(f"Unsupported chain: {chain_name}")
+        return None
+
+    # Connect to the blockchain
+    web3 = Web3(Web3.HTTPProvider(chain_url))
+    if not web3.is_connected():
+        logging.error(f"Failed to connect to the {chain_name} blockchain.")
+        return None
+
+    # Create a contract instance
+    contract = web3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
+
+    try:
+        # Call the 'name' function of the contract
+        token_name = contract.functions.name().call()
+        return token_name
+    except Exception as e:
+        logging.error(f"Error fetching token name from contract: {e}")
+        return None
+
+def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
+    headers = {
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        'query': query,
+        'variables': variables or {}
+    }
+    
+    response = requests.post(graphql_endpoint, json=payload, headers=headers)
+    if response.status_code != 200:
+        return {"error": f"GraphQL query failed with status code {response.status_code}"}
+    
+    result = response.json()
+    
+    if 'errors' in result:
+        return {"error": f"GraphQL Errors: {result['errors']}"}
+    
+    return result['data']
+
+def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
+    # Filter pools by those with exactly two tokens
+    qualifying_pools = []
+    tvl_list = []
+    apr_list = []
+
+    for pool in pools:
+        # Calculate pool metrics
+        fee_rate = float(pool['feeTier']) / FEE_RATE_DIVISOR  # Convert basis points to decimal
+        tvl = float(pool['totalValueLockedUSD'])
+        daily_volume = float(pool['volumeUSD'])
+        
+        # Calculate APR
+        apr = calculate_apr(daily_volume, tvl, fee_rate)
+        pool["apr"] = apr
+        pool["tvl"] = tvl
+        if pool['id'] != current_pool:
+            qualifying_pools.append(pool)
+
+
+    if not qualifying_pools:
+        logging.error("No suitable pools found.")
+        return []
+    
+    if len(qualifying_pools) <= 5:
+        return qualifying_pools
+    
+    tvl_list = [float(pool.get("tvl", 0)) for pool in qualifying_pools]
+    apr_list = [float(pool.get("apr", 0)) for pool in qualifying_pools]
+
+    tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
+    apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
+
+    # Prioritize pools using combined TVL and APR score
+    scored_pools = []
+    max_tvl = max(tvl_list)
+    max_apr = max(apr_list)
+
+    for pool in qualifying_pools:
+        tvl = float(pool.get("tvl", 0))
+        apr = float(pool.get("apr", 0))
+                
+        if tvl < tvl_threshold or apr < apr_threshold:
+            continue
+
+        score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
+        pool["score"] = score
+        scored_pools.append(pool)
+
+    # Apply score threshold
+    score_threshold = np.percentile([pool["score"] for pool in scored_pools], SCORE_PERCENTILE)
+    filtered_scored_pools = [pool for pool in scored_pools if pool["score"] >= score_threshold]
+
+    filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
+
+    if len(filtered_scored_pools) > 10:
+        # Take only the top 10 scored pools
+        top_pools = filtered_scored_pools[:10]
+    else:
+        top_pools = filtered_scored_pools
+
+    return top_pools
+
+def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Fetch data from GraphQL endpoint for the specified chains."""
 
 def get_pools_for_chain(chain: str, graphql_endpoint: str, current_pool: str, apr_threshold: float) -> List[Dict[str, Any]]:
     """Get all qualifying pools for a specific chain."""
@@ -149,24 +292,20 @@ def get_best_pool(chains: List[str], apr_threshold: float, graphql_endpoints: Di
         logger.error("No suitable pools found across any chain.")
         return {"error": "No suitable pools found across any chain."}
     
-    # Find the pool with highest APR
-    best_pool = max(all_qualifying_pools, key=lambda x: x['apr'])
-    logger.info(f"Best pool found: {best_pool['pool_id']} with APR: {best_pool['apr']}")
-    
-    # Format the result
-    result = {
-        "dex_type": UNISWAP,
-        "chain": best_pool['chain'],
-        "apr": best_pool['apr'],
-        "pool_address": best_pool['pool_address'],
-        "pool_id": best_pool['pool_id'],
-        "token0": best_pool['token0'],
-        "token1": best_pool['token1'],
-        "token0_symbol": best_pool['token0_symbol'],
-        "token1_symbol": best_pool['token1_symbol'],
-    }
-    
-    return result
+    # Calculate IL Risk Score for each pool
+    for pool in filtered_pools:
+        pool['chain'] = pool['chain'].lower()
+        token_0_id = get_token_id_from_symbol(pool['token0']['address'], pool['token0']['symbol'].lower(), coin_list, pool['chain'])
+        token_1_id = get_token_id_from_symbol(pool['token1']['address'], pool['token1']['symbol'].lower(), coin_list, pool['chain'])
+
+        if token_0_id and token_1_id:
+            pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
+        else:
+            pool['il_risk_score'] = float('nan')
+            
+    formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
+
+    return formatted_pools
 
 
 # requirement to run the function successful
@@ -415,13 +554,11 @@ def assess_pool_liquidity(pool_id: str) -> Optional[Dict[str, Union[str, float]]
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""
-    logger.info("Running the strategy.")
-    # Validate required fields
     missing = check_missing_fields(kwargs)
     if len(missing) > 0:
-        logger.error(f"Required kwargs {missing} were not provided.")
         return {"error": f"Required kwargs {missing} were not provided."}
-    
-    # Remove irrelevant fields and execute
+
     kwargs = remove_irrelevant_fields(kwargs)
-    return get_best_pool(**kwargs)
+    coin_list = fetch_coin_list()
+    kwargs.update({"coin_list": coin_list})
+    return get_best_pools(**kwargs)

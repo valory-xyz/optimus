@@ -1008,6 +1008,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.fetch_all_trading_opportunities()
+            
+            if self.current_pool:
+                dex_type = self.current_pool.get("dex_type")
+                strategy = self.params.dex_type_to_strategy.get(dex_type)
+                if strategy:
+                    self.get_returns_metrics_for_opportunity(strategy)
+                else:
+                    self.context.logger.error(f"No strategy found for dex types {dex_type}")
+
             self.execute_hyper_strategy()
             actions = []
             if self.selected_opportunity is not None:
@@ -1034,6 +1043,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         kwargs = {
             "strategy": hyper_strategy,
             "trading_opportunities": self.trading_opportunities,
+            "current_pool": self.current_pool
         }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         self.selected_opportunity = self.execute_strategy(**kwargs)
@@ -1073,19 +1083,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "apr_threshold": self.current_pool.get("apr")
                     if self.current_pool
                     else self.params.apr_threshold,
-                    "current_pool": self.current_pool.get("address")
+                    "current_pool": self.current_pool.get("pool_address")
                     if self.current_pool
                     else "",
+                    "coingecko_api_key": self.coingecko.api_key,
                 }
             )
-            opportunity = self.execute_strategy(**kwargs)
-            if opportunity is not None:
-                if "error" in opportunity:
+
+            opportunities = self.execute_strategy(**kwargs)
+            if opportunities is not None:
+                if "error" in opportunities:
                     self.context.logger.error(
-                        f"Error in strategy {next_strategy}: {opportunity['error']}"
+                        f"Error in strategy {next_strategy}: {opportunities['error']}"
                     )
                 else:
-                    self.trading_opportunities.append(opportunity)
+                    self.trading_opportunities.extend(opportunities)
             else:
                 self.context.logger.warning(
                     f"No opportunity found using {next_strategy} strategy"
@@ -1127,6 +1139,36 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         for strategy in strategies_to_remove:
             self.shared_state.strategy_to_filehash.pop(strategy)
+
+    def get_returns_metrics_for_opportunity(self, strategy: str) -> None:
+        """Get and update metrics for the current pool opportunity."""
+        if not self.current_pool:
+            self.context.logger.error("No current pool to evaluate metrics for.")
+            return
+
+        kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
+                strategy, {}
+            )
+
+        kwargs.update({
+            "strategy": strategy,
+            "get_metrics": True,
+            "current_pool": self.current_pool,
+            "coingecko_api_key": self.coingecko.api_key,
+            "chains": self.params.target_investment_chains,
+            "apr_threshold": self.params.apr_threshold,
+            "protocols": self.params.selected_protocols,
+            "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
+        })
+
+        # Execute the strategy to calculate metrics
+        metrics = self.execute_strategy(**kwargs)
+
+        if metrics:
+            self.current_pool.update(metrics)
+            self.context.logger.info(f"Updated current pool metrics: {self.current_pool}")
+        else:
+            self.context.logger.error("Failed to calculate metrics for the current pool.")
 
     def download_strategies(self) -> Generator:
         """Download all the strategies, if not yet downloaded."""
@@ -1229,19 +1271,29 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 num_of_tokens_required = 2
 
             if self.current_pool.get("dex_type") == DexType.STURDY.value:
-                token_symbol = self._get_asset_symbol(
-                    self.current_pool["chain"], self.current_pool["assets"][0]
-                )
                 tokens = [
                     {
-                        "chain": self.current_pool["chain"],
-                        "token": self.current_pool["assets"][0],
-                        "token_symbol": token_symbol,
+                        "chain": self.current_pool.get("chain"),
+                        "token": self.current_pool.get("token0"),
+                        "token_symbol": self.current_pool.get("token0_symbol"),
                     }
                 ]
             else:
                 # If there is current pool, then get the lp pool token addresses
-                tokens = yield from self._get_exit_pool_tokens()  # noqa: E800
+                if self.current_pool:
+                    tokens = [{
+                        "chain": self.current_pool.get("chain"),
+                        "token": self.current_pool.get("token0"),
+                        "token_symbol": self.current_pool.get("token0_symbol"),
+                    },
+                    {
+                        "chain": self.current_pool.get("chain"),
+                        "token": self.current_pool.get("token1"),
+                        "token_symbol": self.current_pool.get("token1_symbol"),
+                    }]
+                else:
+                    self.context.logger.error("No funds found to invest!")
+                    return None
                 if not tokens or len(tokens) < num_of_tokens_required:
                     self.context.logger.error(
                         f"{num_of_tokens_required} tokens required to exit pool, provided: {tokens}"
@@ -1439,41 +1491,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.error(f"Request failed after {retries} retries.")
         return False, response_json
-
-    def _get_exit_pool_tokens(self) -> Generator[None, None, Optional[List[Any]]]:
-        """Get exit pool tokens"""
-
-        if not self.current_pool:
-            self.context.logger.error("No pool present")
-            return None
-
-        dex_type = self.current_pool.get("dex_type")
-        pool_address = self.current_pool.get("address")
-        chain = self.current_pool.get("chain")
-
-        pool = self.pools.get(dex_type)
-        if not pool:
-            self.context.logger.error(f"Unknown dex type: {dex_type}")
-            return None
-
-        # Get tokens from balancer weighted pool contract
-        tokens = yield from pool._get_tokens(self, pool_address, chain)
-        if not tokens or any(v is None for v in tokens.items()):
-            self.context.logger.error(f"Missing information in tokens: {tokens}")
-            return None
-
-        return [
-            {
-                "chain": chain,
-                "token": tokens.get("token0"),
-                "token_symbol": self._get_asset_symbol(chain, tokens.get("token0")),
-            },
-            {
-                "chain": chain,
-                "token": tokens.get("token1"),
-                "token_symbol": self._get_asset_symbol(chain, tokens.get("token1")),
-            },
-        ]
 
     def _build_exit_pool_action(
         self, tokens: List[Dict[str, Any]], num_of_tokens_required: int
@@ -1710,25 +1727,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not self.selected_opportunity:
             self.context.logger.error("No pool present.")
             return None
-
-        return {
-            "action": Action.DEPOSIT.value
-            if self.selected_opportunity.get("dex_type") == DexType.STURDY.value
-            else Action.ENTER_POOL.value,
-            "dex_type": self.selected_opportunity.get("dex_type"),
-            "chain": self.selected_opportunity.get("chain"),
-            "assets": [
-                self.selected_opportunity.get("token0"),
-            ]
-            + (
-                [self.selected_opportunity.get("token1")]
-                if self.selected_opportunity.get("dex_type") != DexType.STURDY.value
-                else []
-            ),
-            "pool_address": self.selected_opportunity.get("pool_address"),
-            "apr": self.selected_opportunity.get("apr"),
-            "pool_type": self.selected_opportunity.get("pool_type"),
+        
+        action_details = {
+            **self.selected_opportunity,
+            "action": (
+                Action.DEPOSIT.value
+                if self.selected_opportunity.get("dex_type") == DexType.STURDY.value
+                else Action.ENTER_POOL.value
+            )
         }
+        return action_details
 
     def _build_claim_reward_action(
         self, rewards: Dict[str, Any], chain: str
@@ -1989,14 +1997,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def _post_execute_enter_pool(self, actions, last_executed_action_index):
         """Handle entering a pool."""
         action = actions[last_executed_action_index]
-        current_pool = {
-            "chain": action["chain"],
-            "address": action["pool_address"],
-            "dex_type": action["dex_type"],
-            "assets": action["assets"],
-            "apr": action["apr"],
-            "pool_type": action["pool_type"],
-        }
+        keys_to_extract = [
+            "chain", "pool_address", "dex_type", "token0", "token1",
+            "token0_symbol", "token1_symbol", "apr", "pool_type", "whitelistedSilos"
+        ]
+        
+        # Create the current_pool dictionary with only the desired information
+        current_pool = {key: action[key] for key in keys_to_extract if key in action}
+
         if action.get("dex_type") == DexType.UNISWAP_V3.value:
             token_id, liquidity = yield from self._get_data_from_mint_tx_receipt(
                 self.synchronized_data.final_tx_hash, action.get("chain")
@@ -2377,7 +2385,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Get enter pool tx hash"""
         dex_type = action.get("dex_type")
         chain = action.get("chain")
-        assets = action.get("assets", {})
+        assets = [action.get("token0"), action.get("token1")]
         if not assets or len(assets) < 2:
             self.context.logger.error(f"2 assets required, provided: {assets}")
             return None, None, None

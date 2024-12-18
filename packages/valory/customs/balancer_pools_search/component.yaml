@@ -19,3 +19,5 @@ dependencies:
     version: <7.0.0,>=6.0.0
   gql:
     version: ==3.5.0
+  pycoingecko:
+    version: ==3.2.0

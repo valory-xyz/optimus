@@ -145,7 +145,7 @@ type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${str:/Users/gauravlochab/Uniswap-Optimus/optimus/logs}
+      log_dir: ${str:/mnt/e/Valory/optimus2_new/optimus/logs}
   coingecko:
     args:
       token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -248,7 +248,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/Users/gauravlochab/Uniswap-Optimus/optimus/data/}
+      store_path: ${str:/mnt/e/Valory/optimus2_new/optimus/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}

@@ -1,10 +1,10 @@
 {
     "dev": {
         "custom/valory/merkl_pools_search/0.1.0": "bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq",
-        "custom/valory/asset_lending/0.1.0": "bafybeiawisoecfzfrtdt4orakw7zg52vdjzb5x2jnh3hikwmqd6x7okdca",
+        "custom/valory/asset_lending/0.1.0": "bafybeibmxbqszkhxi57igawgnj6wlkece24y53cxfua5ecctel5oivazdm",
         "custom/valory/max_apr_selection/0.1.0": "bafybeiheh23wgnrzq42epjpsuawi5cp6l4363z74slhlwkckb3gfem4w3y",
-        "custom/valory/balancer_pools_search/0.1.0": "bafybeiasadtsojpuwamn4gpf2ial2s2uwu7t27ubnb3rj6wjkcxp23dktm",
-        "custom/valory/uniswap_pools_search/0.1.0": "bafybeibkuinm3lmyv4d5wioi25chmc4gscowure2kcerze24wzwxb3ogoa",
+        "custom/valory/balancer_pools_search/0.1.0": "bafybeialsexz5wj3nbxvgkc5fqgsxxu3hhmjyis2hetuztjnoetooqhe7m",
+        "custom/valory/uniswap_pools_search/0.1.0": "bafybeig3xwgfefl2uz37snk4fyekmvjlab3wcq5kg7drsv5ino5fo4lgta",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeib755ksie5yv4wn6jl7i3bpshlhscf4bzsabqrbahm6b3m5ixzmbi",
         "contract/valory/balancer_vault/0.1.0": "bafybeidgdivmrm77yotgpnn567ayzhoqa6hufrijy2cj2b7w5wa63otzq4",
         "contract/valory/erc20/0.1.0": "bafybeied2jjdqbcmddaop5b364brpoxatxcypj3gfvpov2ts4c4shoybee",
@@ -16,8 +16,13 @@
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeidtqimixeqixjcloote7ikuvrfmqhu4ib5uh5iyyiasflr6pktjfm",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeib5kvuvbio7xvvs4bs72pmos3cce6kwyjskk2vakufecvap5bmdkm",
         "skill/valory/optimus_abci/0.1.0": "bafybeiejmufevklxw4iez7kpcmszclalcdpuxjuh6exomemxzzulgjkm7u",
+<<<<<<< HEAD
         "agent/valory/optimus/0.1.0": "bafybeibskvejpexbbrv2k7n73shf4tvkr6szhkdhdx7b75kznaxl2x3xx4",
         "service/valory/optimus/0.1.0": "bafybeigsch4yu7q4x45nfxqdxyehpcuaoui434edoilookj2cledhtcqgm"
+=======
+        "agent/valory/optimus/0.1.0": "bafybeihiywjmvymszwzvnxgc5cevah7il3uayexapogfb3n4kc5ri5553e",
+        "service/valory/optimus/0.1.0": "bafybeihdpvrtf5vchdbuyoljpd3mta4u3j63oqn3mgrege35gobihoqsd4"
+>>>>>>> feat/il-risk-score
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

@@ -291,7 +291,7 @@ def process_vault_strategy(vault_data):
     # } 
 
 
-def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
+def run(*_args, **kwargs) -> List[Dict[str, Any]]:
     """Run the strategy."""
     missing = check_missing_fields(kwargs)
     if missing:

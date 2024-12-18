@@ -346,8 +346,8 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
 # # # # # New Liquidity Analytics functions 
 
 # API details - these value required to  run the functions 
-API_KEY = ""  # Replace with your API key
-SUBGRAPH_URL = f"https://gateway.thegraph.com/api/{API_KEY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
+EY = ""  # Replace with your API key
+SUBGRAPH_URL = f"https://gateway.thegraph.com/api/{EY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
 # 
 # Specific pool ID to analyze
 POOL_ID = "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8"

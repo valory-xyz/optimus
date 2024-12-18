@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiclushglid2nz7r5idncmbyaalixbozzu7y5q72xqnbivrqznzj3a
+agent: valory/optimus:0.1.0:bafybeig5jbrgw57fklpeuonsg4buh3xigp6ctro5eblsr2xn2kctuawacy
 number_of_agents: 1
 deployment:
   agent:

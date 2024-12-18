@@ -270,6 +270,7 @@ def process_vault_strategy(vault_data):
     for key, value in analysis['additional_metrics'].items():
         print(f"{key.replace('_', ' ').title()}: {value}")
 
+
 #example of vault_data - example_vault = {
         # "chainName": "ethereum",
         # "address": "0x7077ef67fe49ffb1260b893f2cd8475eeb72bbbb",

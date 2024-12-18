@@ -16,6 +16,7 @@ from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 

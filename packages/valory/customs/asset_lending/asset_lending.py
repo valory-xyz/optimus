@@ -1,5 +1,5 @@
 import requests
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import numpy as np
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta
@@ -19,10 +19,10 @@ SCORE_PERCENTILE = 80
 PERCENT_CONVERSION = 100
 FETCH_AGGREGATOR_ENDPOINT = "https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators"
 coingecko_name_to_id = {
-    "WETH": "weth",
-    "STONE": "stakestone-ether",
-    "EZETH": "renzo-restaked-eth",
-    "MODE": "mode",
+    "weth": "weth",
+    "stone": "stakestone-ether",
+    "ezeth": "renzo-restaked-eth",
+    "mode": "mode",
 }
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
@@ -107,7 +107,11 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
 
 def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, coingecko_api_key: str) -> float:
     """Calculate the IL Risk Score for a lending asset using two tokens."""
-    cg = CoinGeckoAPI(api_key=coingecko_api_key)
+    if not (asset_token_1 or asset_token_1):
+        logging.error("Tokens are required. Cannot calculate IL risk score without asset tokens")
+        return  float('nan')
+    
+    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
@@ -164,25 +168,17 @@ def get_best_opportunities(chains, apr_threshold, lending_asset, current_pool, c
         return []
     
     filtered_aggregators = filter_aggregators(chains, apr_threshold, data, lending_asset, current_pool)
+    print(filtered_aggregators)
+
     if not filtered_aggregators:
         return []
     
     for aggregator in filtered_aggregators:
-        token_0_id = coingecko_name_to_id.get(aggregator['asset']['symbol'].upper())
-        if not token_0_id:
-            token_0_id = fetch_token_id(aggregator['asset']['symbol'].lower())
-        
-        token_1_id = coingecko_name_to_id.get(aggregator['whitelistedSilos'][0]['collateral'].upper())
-        if not token_1_id:
-            token_1_id = fetch_token_id(aggregator['whitelistedSilos'][0]['collateral'].lower())
-
-        if token_0_id and token_1_id:
-            aggregator['il_risk_score'] = calculate_il_risk_score_for_lending(token_0_id, token_1_id, coingecko_api_key)
-        else:
-            logging.error(f"Failed to fetch token IDs for aggregator: {aggregator['name']}")
-            aggregator['il_risk_score'] = float('nan')
+        silos = aggregator.get('whitelistedSilos', [])
+        aggregator['il_risk_score'] = calculate_il_risk_score_for_silos(aggregator['asset']['symbol'], silos, coingecko_api_key)
 
     formatted_results = [format_aggregator(aggregator) for aggregator in filtered_aggregators]
+    print(formatted_results)
     return formatted_results
 
 def format_aggregator(aggregator) -> Dict[str, Any]:
@@ -194,7 +190,55 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
         "token0_symbol": aggregator['asset']['symbol'],
         "token0": aggregator['asset']['address'],
         "apr": aggregator['total_apr'] * PERCENT_CONVERSION,
-        "il_risk_score": aggregator['il_risk_score']
+        "il_risk_score": aggregator['il_risk_score'],
+        "whitelistedSilos": aggregator['whitelistedSilos']
+    }
+
+def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
+    """Calculate the IL Risk Score for multiple silos."""
+    il_risk_scores = []
+    token_id_cache = {}
+    
+    # For sturdy, the token 0 becomes the lending asset, and since the aggregator invests in multiple silos we take an average of il risk score with all the silos
+    # token 1 becomes the collateral token for each whitelisted silo
+    token_0_symbol = token0_symbol.lower()
+    if token_0_symbol in token_id_cache:
+        token_0_id = token_id_cache[token_0_symbol]
+    else:
+        token_0_id = coingecko_name_to_id.get(token_0_symbol)
+        if not token_0_id:
+            token_0_id = fetch_token_id(token_0_symbol)
+
+    for silo in silos:
+        token_1_symbol = silo['collateral'].lower()
+        if token_1_symbol in token_id_cache:
+            token_1_id = token_id_cache[token_1_symbol]
+        else:
+            token_1_id = coingecko_name_to_id.get(token_1_symbol)
+            if not token_1_id:
+                token_1_id = fetch_token_id(token_1_symbol)
+
+        if token_0_id and token_1_id:
+            token_id_cache[token_0_symbol] = token_0_id
+            token_id_cache[token_1_symbol] = token_1_id
+
+            il_risk_score = calculate_il_risk_score_for_lending(token_0_id, token_1_id, coingecko_api_key)
+            # Normalize the IL risk score to be between 0 and 1
+            normalized_il_risk_score = min(max(il_risk_score, 0), 1)
+            il_risk_scores.append(normalized_il_risk_score)
+        else:
+            logging.error(f"Failed to fetch token IDs for silo: {silo['collateral']}")
+
+    if not il_risk_scores:
+        return float('nan')
+
+    # Calculate the average IL risk score
+    return sum(il_risk_scores) / len(il_risk_scores)
+
+def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kwargs) -> Optional[Dict[str, Any]]:
+    il_risk_score = calculate_il_risk_score_for_silos(current_pool.get("token0_symbol"), current_pool.get('whitelistedSilos',[]), coingecko_api_key)
+    return {
+        "il_risk_score": il_risk_score
     }
 
 def run(*_args, **kwargs) -> List[Dict[str, Any]]:
@@ -202,11 +246,16 @@ def run(*_args, **kwargs) -> List[Dict[str, Any]]:
     missing = check_missing_fields(kwargs)
     if missing:
         return {"error": f"Required kwargs {missing} were not provided."}
-
-    kwargs = remove_irrelevant_fields(kwargs)
-    result = get_best_opportunities(**kwargs)
-
-    if not result:
-        return {"error": "No suitable aggregators found"}
     
-    return result
+    get_metrics = kwargs.get('get_metrics', False)
+    kwargs = remove_irrelevant_fields(kwargs)
+
+    if get_metrics:        
+        return calculate_metrics(**kwargs)
+    else:
+        result = get_best_opportunities(**kwargs)
+
+        if not result:
+            return {"error": "No suitable aggregators found"}
+        
+        return result

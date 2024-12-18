@@ -918,37 +918,54 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
             self.set_done()
 
     def _prepare_vanity_tx(self, chain: str) -> Generator[None, None, Optional[str]]:
-        safe_address = self.params.safe_contract_addresses.get(chain)
-        tx_data = b"0x"
-        safe_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=safe_address,
-            contract_public_id=GnosisSafeContract.contract_id,
-            contract_callable="get_raw_safe_transaction_hash",
-            data_key="tx_hash",
-            to_address=ZERO_ADDRESS,
-            value=ETHER_VALUE,
-            data=tx_data,
-            operation=SafeOperation.CALL.value,
-            safe_tx_gas=SAFE_TX_GAS,
-            chain_id=chain,
-        )
+        self.context.logger.info(f"Preparing vanity transaction for chain: {chain}")
 
-        if safe_tx_hash is None:
-            self.context.logger.info("Error preparing vanity tx")
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        self.context.logger.debug(f"Safe address for chain {chain}: {safe_address}")
+
+        tx_data = b"0x"
+        self.context.logger.debug(f"Transaction data: {tx_data}")
+
+        try:
+            safe_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=safe_address,
+                contract_public_id=GnosisSafeContract.contract_id,
+                contract_callable="get_raw_safe_transaction_hash",
+                data_key="tx_hash",
+                to_address=ZERO_ADDRESS,
+                value=ETHER_VALUE,
+                data=tx_data,
+                operation=SafeOperation.CALL.value,
+                safe_tx_gas=SAFE_TX_GAS,
+                chain_id=chain,
+            )
+        except Exception as e:
+            self.context.logger.error(f"Exception during contract interaction: {e}")
             return None
 
-        tx_hash = hash_payload_to_hex(
-            safe_tx_hash=safe_tx_hash[2:],
-            ether_value=ETHER_VALUE,
-            safe_tx_gas=SAFE_TX_GAS,
-            operation=SafeOperation.CALL.value,
-            to_address=ZERO_ADDRESS,
-            data=tx_data,
-        )
+        if safe_tx_hash is None:
+            self.context.logger.error("Error preparing vanity tx: safe_tx_hash is None")
+            return None
+
+        self.context.logger.debug(f"Safe transaction hash: {safe_tx_hash}")
+
+        try:
+            tx_hash = hash_payload_to_hex(
+                safe_tx_hash=safe_tx_hash[2:],
+                ether_value=ETHER_VALUE,
+                safe_tx_gas=SAFE_TX_GAS,
+                operation=SafeOperation.CALL.value,
+                to_address=ZERO_ADDRESS,
+                data=tx_data,
+            )
+        except Exception as e:
+            self.context.logger.error(f"Exception during hash payload conversion: {e}")
+            return None
+
+        self.context.logger.info(f"Vanity transaction hash: {tx_hash}")
 
         return tx_hash
-
 
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""

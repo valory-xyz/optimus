@@ -967,6 +967,7 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
 
         return tx_hash
 
+
 class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""
 
@@ -1008,14 +1009,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.fetch_all_trading_opportunities()
-            
+
             if self.current_pool:
                 dex_type = self.current_pool.get("dex_type")
                 strategy = self.params.dex_type_to_strategy.get(dex_type)
                 if strategy:
                     self.get_returns_metrics_for_opportunity(strategy)
                 else:
-                    self.context.logger.error(f"No strategy found for dex types {dex_type}")
+                    self.context.logger.error(
+                        f"No strategy found for dex types {dex_type}"
+                    )
 
             self.execute_hyper_strategy()
             actions = []
@@ -1043,7 +1046,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         kwargs = {
             "strategy": hyper_strategy,
             "trading_opportunities": self.trading_opportunities,
-            "current_pool": self.current_pool
+            "current_pool": self.current_pool,
         }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         self.selected_opportunity = self.execute_strategy(**kwargs)
@@ -1146,29 +1149,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("No current pool to evaluate metrics for.")
             return
 
-        kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
-                strategy, {}
-            )
+        kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
 
-        kwargs.update({
-            "strategy": strategy,
-            "get_metrics": True,
-            "current_pool": self.current_pool,
-            "coingecko_api_key": self.coingecko.api_key,
-            "chains": self.params.target_investment_chains,
-            "apr_threshold": self.params.apr_threshold,
-            "protocols": self.params.selected_protocols,
-            "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-        })
+        kwargs.update(
+            {
+                "strategy": strategy,
+                "get_metrics": True,
+                "current_pool": self.current_pool,
+                "coingecko_api_key": self.coingecko.api_key,
+                "chains": self.params.target_investment_chains,
+                "apr_threshold": self.params.apr_threshold,
+                "protocols": self.params.selected_protocols,
+                "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
+            }
+        )
 
         # Execute the strategy to calculate metrics
         metrics = self.execute_strategy(**kwargs)
 
         if metrics:
             self.current_pool.update(metrics)
-            self.context.logger.info(f"Updated current pool metrics: {self.current_pool}")
+            self.context.logger.info(
+                f"Updated current pool metrics: {self.current_pool}"
+            )
         else:
-            self.context.logger.error("Failed to calculate metrics for the current pool.")
+            self.context.logger.error(
+                "Failed to calculate metrics for the current pool."
+            )
 
     def download_strategies(self) -> Generator:
         """Download all the strategies, if not yet downloaded."""
@@ -1281,16 +1288,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 # If there is current pool, then get the lp pool token addresses
                 if self.current_pool:
-                    tokens = [{
-                        "chain": self.current_pool.get("chain"),
-                        "token": self.current_pool.get("token0"),
-                        "token_symbol": self.current_pool.get("token0_symbol"),
-                    },
-                    {
-                        "chain": self.current_pool.get("chain"),
-                        "token": self.current_pool.get("token1"),
-                        "token_symbol": self.current_pool.get("token1_symbol"),
-                    }]
+                    tokens = [
+                        {
+                            "chain": self.current_pool.get("chain"),
+                            "token": self.current_pool.get("token0"),
+                            "token_symbol": self.current_pool.get("token0_symbol"),
+                        },
+                        {
+                            "chain": self.current_pool.get("chain"),
+                            "token": self.current_pool.get("token1"),
+                            "token_symbol": self.current_pool.get("token1_symbol"),
+                        },
+                    ]
                 else:
                     self.context.logger.error("No funds found to invest!")
                     return None
@@ -1727,14 +1736,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not self.selected_opportunity:
             self.context.logger.error("No pool present.")
             return None
-        
+
         action_details = {
             **self.selected_opportunity,
             "action": (
                 Action.DEPOSIT.value
                 if self.selected_opportunity.get("dex_type") == DexType.STURDY.value
                 else Action.ENTER_POOL.value
-            )
+            ),
         }
         return action_details
 
@@ -1998,10 +2007,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Handle entering a pool."""
         action = actions[last_executed_action_index]
         keys_to_extract = [
-            "chain", "pool_address", "dex_type", "token0", "token1",
-            "token0_symbol", "token1_symbol", "apr", "pool_type", "whitelistedSilos"
+            "chain",
+            "pool_address",
+            "dex_type",
+            "token0",
+            "token1",
+            "token0_symbol",
+            "token1_symbol",
+            "apr",
+            "pool_type",
+            "whitelistedSilos",
         ]
-        
+
         # Create the current_pool dictionary with only the desired information
         current_pool = {key: action[key] for key in keys_to_extract if key in action}
 

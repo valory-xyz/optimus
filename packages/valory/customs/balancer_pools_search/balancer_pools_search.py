@@ -12,7 +12,7 @@ import numpy as np
 import logging
 from web3 import Web3
 import statistics
-from gql import Client, gql
+from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 
 # Configure logging

@@ -4,6 +4,8 @@ import numpy as np
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta
 import logging
+import pandas as pd
+import pyfolio as pf
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +26,90 @@ coingecko_name_to_id = {
     "ezeth": "renzo-restaked-eth",
     "mode": "mode",
 }
+
+def fetch_historical_data(limit: int = 4000):
+    """
+    Fetch historical data for WETH strategy.
+    
+    Args:
+        limit (int): The number of data points to fetch.
+    
+    Returns:
+        list: List of historical data entries.
+    """
+    # Calculate the timestamp for one year ago
+    current_time_ms = int(datetime.now().timestamp() * 1000)
+    one_year_ago_ms = current_time_ms - (365 * 24 * 60 * 60 * 1000)
+    
+    url = f"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/getV2AggregatorHistoricalData?last_time={one_year_ago_ms}&limit={limit}"
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception("Failed to fetch historical data from STURDY API.")
+    return response.json()
+
+def calculate_daily_returns(base_apy, reward_apy=0):
+    """
+    Convert annualized APY to daily returns.
+
+    Args:
+        base_apy (float): Base APY as a decimal (e.g., 0.01 for 1%).
+        reward_apy (float): Rewards APY as a decimal.
+
+    Returns:
+        float: Daily return as a decimal.
+    """
+    annual_return = base_apy + reward_apy
+    daily_return = (1 + annual_return) ** (1 / 365) - 1
+    return daily_return
+
+def calculate_sharpe_ratio(daily_returns):
+    """
+    Calculate Sharpe ratio using Pyfolio.
+
+    Args:
+        daily_returns (pd.Series): Series of daily returns.
+
+    Returns:
+        float: Sharpe ratio.
+    """
+    return pf.timeseries.sharpe_ratio(daily_returns)
+
+def get_sharpe_ratio_for_address(address: str) -> float:
+    """
+    Calculate the Sharpe ratio for a given aggregator address.
+
+    Args:
+        address (str): The aggregator address.
+
+    Returns:
+        float: Sharpe ratio for the given address.
+    """
+    # Fetch historical data
+    historical_data = fetch_historical_data()
+    
+    records = []
+    for entry in historical_data:
+        timestamp = entry['timestamp']
+        if address in entry['doc']:
+            data = entry['doc'][address]
+            base_apy = data.get('baseAPY', 0)
+            rewards_apy = data.get('rewardsAPY', 0)
+            records.append({
+                'timestamp': timestamp,
+                'base_apy': base_apy,
+                'rewards_apy': rewards_apy
+            })
+    
+    # Convert records to DataFrame
+    df = pd.DataFrame(records)
+    # Calculate daily returns
+    df['daily_return'] = df.apply(
+        lambda row: calculate_daily_returns(row['base_apy'], row['rewards_apy']), axis=1
+    )
+    
+    # Calculate Sharpe ratio
+    sharpe_ratio = calculate_sharpe_ratio(df['daily_return'])
+    return sharpe_ratio
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
@@ -176,9 +262,10 @@ def get_best_opportunities(chains, apr_threshold, lending_asset, current_pool, c
     for aggregator in filtered_aggregators:
         silos = aggregator.get('whitelistedSilos', [])
         aggregator['il_risk_score'] = calculate_il_risk_score_for_silos(aggregator['asset']['symbol'], silos, coingecko_api_key)
+        aggregator['sharpe_ratio'] = get_sharpe_ratio_for_address(aggregator['address'])
 
     formatted_results = [format_aggregator(aggregator) for aggregator in filtered_aggregators]
-    print(formatted_results)
+
     return formatted_results
 
 def format_aggregator(aggregator) -> Dict[str, Any]:
@@ -237,9 +324,13 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 
 def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kwargs) -> Optional[Dict[str, Any]]:
     il_risk_score = calculate_il_risk_score_for_silos(current_pool.get("token0_symbol"), current_pool.get('whitelistedSilos',[]), coingecko_api_key)
+    sharpe_ratio = get_sharpe_ratio_for_address(current_pool['pool_address'])
+
     return {
-        "il_risk_score": il_risk_score
+        "il_risk_score": il_risk_score,
+        "sharpe_ratio": sharpe_ratio
     }
+
 
 def run(*_args, **kwargs) -> List[Dict[str, Any]]:
     """Run the strategy."""

@@ -17,7 +17,7 @@ deployment:
       ./data: /data
 dependencies:
   requests_toolbelt:
-    version: '>=0.9.1'
+    version: ==1.0.0
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill

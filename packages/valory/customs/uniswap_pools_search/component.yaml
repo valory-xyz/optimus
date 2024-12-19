@@ -20,5 +20,7 @@ dependencies:
   pycoingecko:
     version: ==3.2.0
   pyfolio:
-    version: ==0.9.2  
+    version: ==0.9.2 
+  web3:
+    version: <7.0.0,>=6.0.0 
 

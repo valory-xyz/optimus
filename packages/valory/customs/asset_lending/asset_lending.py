@@ -331,6 +331,69 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kw
         "sharpe_ratio": sharpe_ratio
     }
 
+# # New Liquidity Analytics functions  
+
+def analyze_vault_liquidity(vault_data):
+    """
+    Analyze liquidity risk and key metrics for a given vault strategy.
+    
+    Parameters:
+    vault_data (dict): Comprehensive vault strategy data
+    
+    Returns:
+    dict: Detailed liquidity risk analysis
+    """
+    # Extract key data points
+    tvl = vault_data.get('tvl', 0)
+    total_assets = vault_data.get('totalAssets', 0)
+    apy_total = vault_data.get('apy', {}).get('total', 0)
+    asset_price = float(vault_data.get('asset', {}).get('price', 0))
+    
+    # Constant for price impact (standardized at 1%)
+    PRICE_IMPACT = 0.01
+    
+    # Calculate Depth Score (Sturdy Protocol variant)
+    # Formula: (TVL × Total Assets) / (Price Impact × 100)
+    depth_score = (tvl * total_assets) / (PRICE_IMPACT * 100)
+    
+    # Liquidity Risk Multiplier
+    # Formula: max(0, 1 - (1/depth_score))
+    liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
+    
+    # Maximum Position Size Calculation
+    # Formula: 50 × (TVL × Liquidity Risk Multiplier) / 100
+    max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
+    
+    # Risk Assessment
+    risk_assessment = {
+        'depth_score': depth_score,
+        'liquidity_risk_multiplier': liquidity_risk_multiplier,
+        'max_position_size': max_position_size,
+        'is_safe': depth_score > 50,
+        'additional_metrics': {
+            'tvl': tvl,
+            'total_assets': total_assets,
+            'total_apy': apy_total,
+            'asset_price': asset_price,
+            'chain': vault_data.get('chainName'),
+            'vault_name': vault_data.get('name')
+        }
+    }
+    
+    return risk_assessment
+
+# this function need to call for liquidity analytics
+def process_vault_strategy(vault_data):
+    """
+    Process and logging.info liquidity risk analysis for a vault strategy.
+    
+    Parameters:
+    vault_data (dict): Comprehensive vault strategy data
+    """
+    analysis = analyze_vault_liquidity(vault_data)
+    
+    return analysis
+        
 
 def run(*_args, **kwargs) -> List[Dict[str, Any]]:
     """Run the strategy."""

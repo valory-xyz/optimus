@@ -1104,9 +1104,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     for opportunity in opportunities:
                         # Customize the following line to include relevant details from each opportunity
                         self.context.logger.info(
-                            f"Opportunity: {opportunity.get('address', 'N/A')},"
-                            f"Chain: {opportunity.get('chain', 'N/A')},"
-                            f"Token0: {opportunity.get('token0_symbol', 'N/A')},"
+                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                            f"Chain: {opportunity.get('chain', 'N/A')}, "
+                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
                             f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
                         )
                     self.trading_opportunities.extend(opportunities)

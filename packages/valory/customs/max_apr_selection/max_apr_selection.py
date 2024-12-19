@@ -62,15 +62,33 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
     """Apply risk thresholds and select the optimal strategy based on combined metrics."""
     
     # Filter opportunities based on risk thresholds
-    filtered_opportunities = [
-        opportunity for opportunity in trading_opportunities
-        if (isinstance(opportunity.get("sharpe_ratio", 0), (int, float)) and
-            isinstance(opportunity.get("depth_score", 0), (int, float)) and
-            isinstance(opportunity.get("il_risk_score", float('inf')), (int, float)) and
-            opportunity.get("sharpe_ratio", 0) > SHARPE_RATIO_THRESHOLD and
-            opportunity.get("depth_score", 0) > DEPTH_SCORE_THRESHOLD and
-            opportunity.get("il_risk_score", float('inf')) < IL_RISK_SCORE_THRESHOLD)
-    ]
+    filtered_opportunities = []
+    for opportunity in trading_opportunities:
+        sharpe_ratio = opportunity.get("sharpe_ratio", 0)
+        depth_score = opportunity.get("depth_score", 0)
+        il_risk_score = opportunity.get("il_risk_score", float('inf'))
+
+        print(f"Evaluating opportunity: {opportunity}")
+        if not isinstance(sharpe_ratio, (int, float)) or not isinstance(depth_score, (int, float)) or not isinstance(il_risk_score, (int, float)):
+            continue
+
+        if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
+            print(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
+            continue
+
+        if depth_score <= DEPTH_SCORE_THRESHOLD:
+            print(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
+            continue
+
+        if il_risk_score >= IL_RISK_SCORE_THRESHOLD:
+            print(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
+            continue
+
+        filtered_opportunities.append(opportunity)
+
+    if not filtered_opportunities:
+        logging.error("No opportunities meet the risk thresholds.")
+        return {}
 
     if not filtered_opportunities:
         logging.error("No opportunities meet the risk thresholds.")

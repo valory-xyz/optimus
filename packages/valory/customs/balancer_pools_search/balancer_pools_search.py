@@ -552,14 +552,8 @@ def analyze_pool_liquidity(
     metrics = fetch_liquidity_metrics(pool_id, client, price_impact)
     
     if metrics is None:
-        logging.info("Could not retrieve pool metrics.")
+        logging.error("Could not retrieve pool metrics.")
         return None
-    
-    # logging.info detailed report
-    logging.info("Balancer Pool Liquidity Analysis Report")
-    logging.info("-" * 50)
-    for key, value in metrics.items():
-        logging.info(f"{key}: {value}")
     
     # Risk Assessment
     risk_assessment = []

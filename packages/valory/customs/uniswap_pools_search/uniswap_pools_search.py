@@ -423,15 +423,15 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
 # # # # # New Liquidity Analytics functions 
 
 # API details - these value required to  run the functions 
-EY = ""  # Replace with your API key
-SUBGRAPH_URL = f"https://gateway.thegraph.com/api/{EY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
+# EY = ""  # Replace with your API key
+# SUBGRAPH_URL = f"https://gateway.thegraph.com/api/{EY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
 
 # Constants
 PRICE_IMPACT = 0.01  # 1% standard price impact
 MAX_POSITION_BASE = 50  # Base for maximum position calculation
 
 
-def fetch_pool_data(pool_id: str) -> Optional[Dict[str, Any]]:
+def fetch_pool_data(pool_id: str,SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]:
     """
     Fetch pool data for a specific pool ID from The Graph.
 
@@ -467,7 +467,7 @@ def fetch_pool_data(pool_id: str) -> Optional[Dict[str, Any]]:
     try:
         logging.info(f"Fetching data for pool ID: {pool_id}")
         response = requests.post(
-            REQUIRED_FIELDS[(REQUIRED_FIELDS.index("graphql_endpoints"))],
+            SUBGRAPH_URL,
             json=query,
             headers={"Content-Type": "application/json", "Accept": "application/json"},
         )
@@ -506,7 +506,7 @@ def fetch_pool_data(pool_id: str) -> Optional[Dict[str, Any]]:
         logging.error(f"Unexpected Error: {e}")
         return None
 
-def fetch_24_hour_volume(pool_id: str) -> List[Dict[str, Union[int, float, str]]]:
+def fetch_24_hour_volume(pool_id: str,SUBGRAPH_URL:str) -> List[Dict[str, Union[int, float, str]]]:
     """
     Fetch 24-hour volume data for a specific pool from The Graph.
 
@@ -613,7 +613,7 @@ def calculate_metrics_liquidity_risk(
 
 # this function need to call for liquidity analytics 
 
-def assess_pool_liquidity(pool_id: str) -> Optional[Dict[str, Union[str, float]]]:
+def assess_pool_liquidity(pool_id: str,SUBGRAPH_URL: str) -> Optional[Dict[str, Union[str, float]]]:
     """
     Comprehensively assess the liquidity of a specific pool.
 
@@ -625,7 +625,7 @@ def assess_pool_liquidity(pool_id: str) -> Optional[Dict[str, Union[str, float]]
         or None if assessment fails.
     """
     # Fetch pool data
-    pool_data = fetch_pool_data(pool_id)
+    pool_data = fetch_pool_data(pool_id,SUBGRAPH_URL)
 
     # Add explicit check for None
     if pool_data is None:
@@ -634,7 +634,7 @@ def assess_pool_liquidity(pool_id: str) -> Optional[Dict[str, Union[str, float]]
 
     try:
         # Fetch volume data
-        volumes = fetch_24_hour_volume(pool_id)
+        volumes = fetch_24_hour_volume(pool_id,SUBGRAPH_URL)
 
         # Calculate and return metrics
         return calculate_metrics_liquidity_risk(pool_data, volumes)

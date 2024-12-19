@@ -1,3 +1,8 @@
+import warnings
+
+# Suppress all warnings
+warnings.filterwarnings("ignore")
+
 import requests
 from typing import (
     Dict,
@@ -121,7 +126,7 @@ def get_balancer_pools(chains, graphql_endpoint) -> Dict[str, Any]:
     # Build the GraphQL query with the specified chain names
     graphql_query = f"""
     {{
-      poolGetPools(where: {{chainIn: [{chain_list_str}]}}) {{
+      poolGetPools(where: {{chainIn: [{chain_list_str}]}} first: 100) {{
         id
         address
         chain
@@ -225,7 +230,6 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
     matching_coins = [coin for coin in coin_list if coin['symbol'].lower() == symbol.lower()]
 
     if not matching_coins:
-        logging.error(f"No entries found for symbol: {symbol}")
         return None
 
     # If there's only one matching coin, return its ID
@@ -236,14 +240,12 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
     token_name = fetch_token_name_from_contract(chain_name, token_address)
     
     if not token_name:
-        logging.error(f"Failed to fetch token name for address: {token_address} on chain: {chain_name}")
         return None
 
     for coin in matching_coins:
         if coin['name'].replace(" ", "") == token_name.replace(" ", "") or coin['name'].lower() == symbol.lower():
             return coin['id']
         
-    logging.error(f"Failed to fetch id for coin with symbol: {symbol} and name: {token_name}")
     return None
 
 def fetch_token_name_from_contract(chain_name, token_address):
@@ -262,13 +264,11 @@ def fetch_token_name_from_contract(chain_name, token_address):
     # Get the appropriate URL for the chain
     chain_url = CHAIN_URLS.get(chain_name)
     if not chain_url:
-        logging.error(f"Unsupported chain: {chain_name}")
         return None
 
     # Connect to the blockchain
     web3 = Web3(Web3.HTTPProvider(chain_url))
     if not web3.is_connected():
-        logging.error(f"Failed to connect to the {chain_name} blockchain.")
         return None
 
     # Create a contract instance
@@ -279,7 +279,6 @@ def fetch_token_name_from_contract(chain_name, token_address):
         token_name = contract.functions.name().call()
         return token_name
     except Exception as e:
-        logging.error(f"Error fetching token name from contract: {e}")
         return None
 
 def format_pool_data(pool) -> Dict[str, Any]:
@@ -307,7 +306,8 @@ def format_pool_data(pool) -> Dict[str, Any]:
     
     # Check for missing token information
     if any(v is None for v in pool_token_dict.values()):
-        return {"error": "Missing token information in the pool."}
+        logging.error("Missing token information in the pool.")
+        return {}
     
     return {
         "dex_type": dex_type,
@@ -317,6 +317,10 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "pool_id": pool_id,
         "pool_type": pool_type,
         **pool_token_dict,
+        "il_risk_score": pool['il_risk_score'],
+        "sharpe_ratio": pool['sharpe_ratio'],
+        "depth_score": pool['depth_score'],
+        "max_position_size": pool['max_position_size']
     }
 
 def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
@@ -348,7 +352,7 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
             json={'query': query}
         )
         data = response.json()['data']['poolGetSnapshots']
-        print(data)
+
         # Prepare DataFrame
         df = pd.DataFrame(data)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
@@ -410,7 +414,7 @@ def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coi
             pool['il_risk_score'] = float('nan')
 
         pool['sharpe_ratio'] = get_balancer_pool_sharpe_ratio(pool['id'], pool['chain'].upper())
-        (pool['depth_score'],pool['max_position_size']) =analyze_pool_liquidity(pool['id'])
+        (pool['depth_score'], pool['max_position_size']) = analyze_pool_liquidity(pool['id'], pool['chain'].upper())
 
     formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
     return formatted_pools
@@ -426,16 +430,13 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
         il_risk_score = float('nan')
 
     sharpe_ratio = get_balancer_pool_sharpe_ratio(current_pool['pool_id'], current_pool['chain'].upper())  
-    (depth_score,max_position_size) =analyze_pool_liquidity(current_pool['pool_id'])  
+    (depth_score, max_position_size) = analyze_pool_liquidity(current_pool['pool_id'], current_pool['chain'].upper())  
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
         "depth_score":depth_score,
         "max_position_size":max_position_size
     }
-
-
-# # # New Liquidity Analytics functions 
 
 def create_graphql_client(api_url='https://api-v3.balancer.fi') -> Client:
     """
@@ -447,7 +448,7 @@ def create_graphql_client(api_url='https://api-v3.balancer.fi') -> Client:
     transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)
     return Client(transport=transport, fetch_schema_from_transport=False)
 
-def create_pool_snapshots_query(pool_id: str, range: str = 'NINETY_DAYS', chain: str = 'MAINNET') -> gql:
+def create_pool_snapshots_query(pool_id: str, chain: str, range: str = 'NINETY_DAYS') -> gql:
     """
     Create GraphQL query for fetching pool snapshots
     
@@ -472,6 +473,7 @@ def create_pool_snapshots_query(pool_id: str, range: str = 'NINETY_DAYS', chain:
 
 def fetch_liquidity_metrics(
     pool_id: str, 
+    chain: str,
     client: Optional[Client] = None, 
     price_impact: float = 0.01
 ) -> Optional[Dict[str, Any]]:
@@ -496,7 +498,7 @@ def fetch_liquidity_metrics(
     
     try:
         # Create and execute query
-        query = create_pool_snapshots_query(pool_id)
+        query = create_pool_snapshots_query(pool_id, chain)
         response = client.execute(query)
         pool_snapshots = response['poolGetSnapshots']
         
@@ -533,10 +535,10 @@ def fetch_liquidity_metrics(
         logging.error(f"An error occurred while analyzing pool metrics: {e}")
         return None
 
-# this function need to call for liquidity analytics 
 
 def analyze_pool_liquidity(
     pool_id: str, 
+    chain: str,
     client: Optional[Client] = None, 
     price_impact: float = 0.01
 ) -> Optional[Dict[str, Any]]:
@@ -552,15 +554,13 @@ def analyze_pool_liquidity(
              and risk assessment
     """
     # Fetch and calculate metrics
-    metrics = fetch_liquidity_metrics(pool_id, client, price_impact)
+    metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
     
     if metrics is None:
-        logging.error("Could not retrieve pool metrics.")
-        return None
+        logging.error("Could not retrieve depth score and maximum position size.")
+        return float('nan'), float('nan')
     
-    return metrics["Depth Score"],metrics["Maximum Position Size"]
-
-
+    return metrics["Depth Score"], metrics["Maximum Position Size"]
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""

@@ -9,6 +9,8 @@ import pyfolio as pf
 import pandas as pd
 # Configure logging
 logging.basicConfig(level=logging.INFO)
+import time
+import json
 
 # Constants
 UNISWAP = "UniswapV3"
@@ -396,7 +398,10 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
         else:
             pool['il_risk_score'] = float('nan')
         # Calculate Sharpe Ratio
-        pool['sharpe_ratio'] = get_uniswap_pool_sharpe_ratio(pool['id'], pool['chain'])        
+        pool['sharpe_ratio'] = get_uniswap_pool_sharpe_ratio(pool['id'], pool['chain'])   
+        #
+        (pool['depth_score'],pool['max_position_size']) = assess_pool_liquidity(pool['id'], pool['chain'])
+
     formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
 
     return formatted_pools
@@ -412,10 +417,239 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
         il_risk_score = float('nan')
 
     sharpe_ratio = get_uniswap_pool_sharpe_ratio(current_pool['id'], graphql_endpoint)
+    (depth_score,max_position_size) = assess_pool_liquidity(current_pool['id'], graphql_endpoint)
     return {
         "il_risk_score": il_risk_score,
-        "sharpe_ratio": sharpe_ratio
+        "sharpe_ratio": sharpe_ratio,
+        "depth_score":depth_score,
+        "max_position_size":max_position_size
     }
+
+
+# # # # # New Liquidity Analytics functions 
+
+# API details - these value required to  run the functions 
+# EY = ""  # Replace with your API key
+# SUBGRAPH_URL = f"https://gateway.thegraph.com/api/{EY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
+
+# Constants
+PRICE_IMPACT = 0.01  # 1% standard price impact
+MAX_POSITION_BASE = 50  # Base for maximum position calculation
+
+
+def fetch_pool_data(pool_id: str,SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetch pool data for a specific pool ID from The Graph.
+
+    Args:
+        pool_id (str): The unique identifier of the pool to fetch data for.
+
+    Returns:
+        Optional[Dict[str, Any]]: A dictionary containing pool data, or None if retrieval fails.
+    """
+    query = {
+        "query": f"""
+        {{
+          pool(id: "{pool_id.lower()}") {{
+            id
+            token0 {{
+              id
+              symbol
+              decimals
+            }}
+            token1 {{
+              id
+              symbol
+              decimals
+            }}
+            liquidity
+            totalValueLockedUSD
+            totalValueLockedToken0
+            totalValueLockedToken1
+          }}
+        }}
+        """
+    }
+    try:
+        logging.info(f"Fetching data for pool ID: {pool_id}")
+        response = requests.post(
+            SUBGRAPH_URL,
+            json=query,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+
+        # logging.info full response for debugging
+        response_json = response.json()
+
+        if response.status_code == 200:
+            # Check for GraphQL errors
+            if "errors" in response_json:
+                logging.error("GraphQL Errors:")
+                logging.error(json.dumps(response_json["errors"], indent=2))
+                return None
+
+            # Check for valid pool data
+            data = response_json.get("data", {})
+            pool = data.get("pool")
+
+            if pool is None:
+                logging.info("No pool data found for the given ID")
+                return None
+
+            return pool
+        else:
+            logging.info(f"HTTP Error: {response.status_code}")
+            logging.info(f"Response Text: {response.text}")
+            return None
+
+    except requests.RequestException as e:
+        logging.error(f"Request Exception: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON Decode Error: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected Error: {e}")
+        return None
+
+def fetch_24_hour_volume(pool_id: str,SUBGRAPH_URL:str) -> List[Dict[str, Union[int, float, str]]]:
+    """
+    Fetch 24-hour volume data for a specific pool from The Graph.
+
+    Args:
+        pool_id (str): The unique identifier of the pool to fetch volume data for.
+
+    Returns:
+        List[Dict[str, Union[int, float, str]]]: A list of dictionaries containing volume data,
+        or an empty list if retrieval fails.
+    """
+    timestamp_24h_ago = int(time.time()) - 86400
+    query = {
+        "query": f"""
+        {{
+          poolDayDatas(first: 1, orderBy: date, orderDirection: desc, where: {{
+            pool: "{pool_id.lower()}",
+            date_gt: {timestamp_24h_ago}
+          }}) {{
+            date
+            liquidity
+            volumeUSD
+            volumeToken0
+            volumeToken1
+          }}
+        }}
+        """
+    }
+    try:
+        response = requests.post(
+            SUBGRAPH_URL,
+            json=query,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            pool_day_datas = data.get("data", {}).get("poolDayDatas", [])
+
+            if not pool_day_datas:
+                logging.info("No volume data found for the pool")
+                return []
+
+            return pool_day_datas
+        else:
+            logging.info(f"Error fetching 24-hour volume: {response.status_code}")
+            logging.info(f"Response Text: {response.text}")
+            return []
+
+    except Exception as e:
+        logging.error(f"Exception in volume fetch: {e}")
+        return []
+
+def calculate_metrics_liquidity_risk(
+    pool_data: Dict[str, Any], 
+    volume_data: List[Dict[str, Union[int, float, str]]]
+) -> Optional[Dict[str, Union[str, float]]]:
+    """
+    Calculate liquidity and risk metrics for a pool based on pool and volume data.
+
+    Args:
+        pool_data (Dict[str, Any]): Comprehensive data about the pool.
+        volume_data (List[Dict[str, Union[int, float, str]]]): 24-hour volume data.
+
+    Returns:
+        Optional[Dict[str, Union[str, float]]]: A dictionary of calculated metrics,
+        or None if calculation fails.
+    """
+    try:
+        # Default values to handle potential missing data
+        liquidity = float(pool_data.get("liquidity", 0))
+        tvl = float(pool_data.get("totalValueLockedUSD", 0))
+
+        # Use total value locked for tokens instead of reserves
+        tvl_token0 = float(pool_data.get("totalValueLockedToken0", 0))
+        tvl_token1 = float(pool_data.get("totalValueLockedToken1", 0))
+
+        volume_usd = float(volume_data[0]["volumeUSD"]) if volume_data else 0
+        token0 = pool_data.get("token0", {}).get("symbol", "Token0")
+        token1 = pool_data.get("token1", {}).get("symbol", "Token1")
+
+        # Depth Score Calculation (using TVL of tokens)
+        depth_score = (
+            (tvl_token0 * tvl_token1) / (PRICE_IMPACT * 100)
+            if tvl_token0 > 0 and tvl_token1 > 0
+            else 0
+        )
+
+        # Liquidity Risk Multiplier
+        liquidity_risk_multiplier = (
+            max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
+        )
+
+        # Maximum Position Size
+        max_position_size = MAX_POSITION_BASE * (tvl * liquidity_risk_multiplier) / 100
+
+        return {
+            "depth_score": depth_score,
+            "max_position_size": max_position_size,
+        }
+
+    except Exception as e:
+        logging.error(f"Error calculating metrics: {e}")
+        return None
+
+# this function need to call for liquidity analytics 
+
+def assess_pool_liquidity(pool_id: str,SUBGRAPH_URL: str) -> Optional[Dict[str, Union[str, float]]]:
+    """
+    Comprehensively assess the liquidity of a specific pool.
+
+    Args:
+        pool_id (str): The unique identifier of the pool to assess.
+
+    Returns:
+        Optional[Dict[str, Union[str, float]]]: A dictionary of pool liquidity metrics,
+        or None if assessment fails.
+    """
+    # Fetch pool data
+    pool_data = fetch_pool_data(pool_id,SUBGRAPH_URL)
+
+    # Add explicit check for None
+    if pool_data is None:
+        logging.info(f"Could not retrieve data for pool {pool_id}")
+        return None
+
+    try:
+        # Fetch volume data
+        volumes = fetch_24_hour_volume(pool_id,SUBGRAPH_URL)
+
+        # Calculate and return metrics
+        return calculate_metrics_liquidity_risk(pool_data, volumes)
+
+    except Exception as e:
+        logging.error(f"Error processing pool data: {e}")
+        return None
+
+
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""

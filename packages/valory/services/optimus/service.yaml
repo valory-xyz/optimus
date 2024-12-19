@@ -15,6 +15,9 @@ deployment:
         8716: 8716
     volumes:
       ./data: /data
+dependencies:
+  requests_toolbelt:
+    version: '>=0.9.1'
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill

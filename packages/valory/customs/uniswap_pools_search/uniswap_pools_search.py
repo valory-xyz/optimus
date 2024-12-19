@@ -1,3 +1,8 @@
+import warnings
+
+# Suppress all warnings
+warnings.filterwarnings("ignore")
+
 import requests
 from typing import Dict, Union, Any, List, Optional
 from pycoingecko import CoinGeckoAPI
@@ -49,14 +54,12 @@ def fetch_coin_list():
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        logging.error(f"Failed to fetch coin list: {e}")
         return None
 
 def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
     matching_coins = [coin for coin in coin_list if coin['symbol'].lower() == symbol.lower()]
 
     if not matching_coins:
-        logging.error(f"No entries found for symbol: {symbol}")
         return None
 
     # If there's only one matching coin, return its ID
@@ -67,14 +70,12 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
     token_name = fetch_token_name_from_contract(chain_name, token_address)
 
     if not token_name:
-        logging.error(f"Failed to fetch token name for address: {token_address} on chain: {chain_name}")
         return None
 
     for coin in matching_coins:
         if coin['name'].replace(" ", "") == token_name.replace(" ", "") or coin['name'].lower() == symbol.lower():
             return coin['id']
         
-    logging.error(f"Failed to fetch id for coin with symbol: {symbol} and name: {token_name}")
     return None
 
 def fetch_token_name_from_contract(chain_name, token_address):
@@ -93,13 +94,11 @@ def fetch_token_name_from_contract(chain_name, token_address):
     # Get the appropriate URL for the chain
     chain_url = CHAIN_URLS.get(chain_name)
     if not chain_url:
-        logging.error(f"Unsupported chain: {chain_name}")
         return None
 
     # Connect to the blockchain
     web3 = Web3(Web3.HTTPProvider(chain_url))
     if not web3.is_connected():
-        logging.error(f"Failed to connect to the {chain_name} blockchain.")
         return None
 
     # Create a contract instance
@@ -110,7 +109,6 @@ def fetch_token_name_from_contract(chain_name, token_address):
         token_name = contract.functions.name().call()
         return token_name
     except Exception as e:
-        logging.error(f"Error fetching token name from contract: {e}")
         return None
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
@@ -253,48 +251,58 @@ def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -
 
     return all_pools
 
-def get_uniswap_pool_sharpe_ratio(pool_id: str, graphql_endpoint: str) -> float:
-    """Calculate Sharpe ratio for a Uniswap pool."""
+def get_uniswap_pool_sharpe_ratio(pool_address, graphql_endpoint, days_back=365):
+    """
+    Calculate Sharpe ratio for a Uniswap pool
+    
+    Parameters:
+    pool_address (str): The Uniswap pool address
+    days_back (int): Number of days of historical data
+    
+    Returns:
+    float: Sharpe ratio
+    """
+    # Calculate start timestamp
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days_back)
+    start_timestamp = int(start_date.timestamp())
+    
+    # Query Uniswap subgraph
     query = """
     {
-        pool(id: "%s") {
-            liquidity
-            swaps(first: 5, orderBy: timestamp, orderDirection: desc) {
-                timestamp
-                amountUSD
-            }
+      poolDayDatas(
+        where: {
+          pool: "%s"
+          date_gt: %d
         }
+        orderBy: date
+        orderDirection: asc
+      ) {
+        date
+        tvlUSD
+        feesUSD
+      }
     }
-    """ % pool_id
-
-    try:
-        # Get data from Uniswap subgraph
-        response = requests.post(
-            graphql_endpoint,
-            json={'query': query}
-        )
-        pool_data = response.json()['data']['pool']
-        swaps_data = pool_data['swaps']
-        liquidity = float(pool_data['liquidity'])
-        
-        # Prepare DataFrame
-        df = pd.DataFrame(swaps_data)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-        df.set_index('timestamp', inplace=True)
-        # Calculate returns
-        df['amountUSD'] = pd.to_numeric(df['amountUSD'])
-        price_returns = df['amountUSD'].pct_change()
-        # Liquidity returns
-        liquidity_returns = df['amountUSD'] / liquidity
-        # Total returns (price change + liquidity)
-        total_returns = price_returns + liquidity_returns
-        returns = total_returns.dropna()
-        # Calculate Sharpe ratio using pyfolio
-        sharpe_ratio = pf.timeseries.sharpe_ratio(returns)
-        return sharpe_ratio
-    except Exception as e:
-        logging.error(f"Error calculating Sharpe ratio: {str(e)}")
-        return None
+    """ % (pool_address.lower(), start_timestamp)
+    
+    # Fetch data
+    response = requests.post(graphql_endpoint, json={'query': query})
+    pool_data = response.json()['data']['poolDayDatas']
+    
+    # Process data
+    df = pd.DataFrame(pool_data)
+    df['date'] = pd.to_datetime(df['date'].astype(int), unit='s')
+    df['tvlUSD'] = pd.to_numeric(df['tvlUSD'])
+    df['feesUSD'] = pd.to_numeric(df['feesUSD'])
+    
+    # Calculate returns
+    df['total_value'] = df['tvlUSD'] + df['feesUSD']
+    returns = df.set_index('date')['total_value'].pct_change().dropna()
+    
+    # Calculate Sharpe ratio using pyfolio
+    sharpe = pf.timeseries.sharpe_ratio(returns)
+    
+    return float(sharpe)
     
 def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
     """Calculate APR using the formula: (Daily Volume / TVL) × Fee Rate × 365 × 100"""
@@ -308,7 +316,6 @@ def format_pool_data(pool) -> Dict[str, Any]:
     chain = pool['chain'].lower()
     apr = pool['apr']
     pool_address = pool['id']
-    il_risk_score = pool['il_risk_score']
     
     token0 = pool['token0']['id']
     token1 = pool['token1']['id']
@@ -324,7 +331,10 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "token1": token1,
         "token0_symbol": token0_symbol,
         "token1_symbol": token1_symbol,
-        "il_risk_score": il_risk_score
+        "il_risk_score": pool['il_risk_score'],
+        "sharpe_ratio": pool['sharpe_ratio'],
+        "depth_score": pool['depth_score'],
+        "max_position_size": pool['max_position_size']
     }
 
 def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
@@ -397,17 +407,19 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
             pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
         else:
             pool['il_risk_score'] = float('nan')
+        
         # Calculate Sharpe Ratio
-        pool['sharpe_ratio'] = get_uniswap_pool_sharpe_ratio(pool['id'], pool['chain'])   
-        #
-        (pool['depth_score'],pool['max_position_size']) = assess_pool_liquidity(pool['id'], pool['chain'])
+        graphql_endpoint = graphql_endpoints.get(pool["chain"])
+        pool['sharpe_ratio'] = get_uniswap_pool_sharpe_ratio(pool['id'], graphql_endpoint)   
+        
+        (pool['depth_score'],pool['max_position_size']) = assess_pool_liquidity(pool['id'], graphql_endpoint)
 
     formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
 
     return formatted_pools
 
 
-def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], graphql_endpoint, **kwargs) -> Optional[Dict[str, Any]]:
+def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], graphql_endpoints, **kwargs) -> Optional[Dict[str, Any]]:
     token_0_id = get_token_id_from_symbol(current_pool['token0'], current_pool['token0_symbol'], coin_list, current_pool['chain'])
     token_1_id = get_token_id_from_symbol(current_pool['token1'], current_pool['token1_symbol'], coin_list, current_pool['chain'])
 
@@ -416,6 +428,7 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
     else:
         il_risk_score = float('nan')
 
+    graphql_endpoint = graphql_endpoints.get(current_pool["chain"])
     sharpe_ratio = get_uniswap_pool_sharpe_ratio(current_pool['id'], graphql_endpoint)
     (depth_score,max_position_size) = assess_pool_liquidity(current_pool['id'], graphql_endpoint)
     return {
@@ -426,18 +439,12 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
     }
 
 
-# # # # # New Liquidity Analytics functions 
-
-# API details - these value required to  run the functions 
-# EY = ""  # Replace with your API key
-# SUBGRAPH_URL = f"https://gateway.thegraph.com/api/{EY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
-
 # Constants
 PRICE_IMPACT = 0.01  # 1% standard price impact
 MAX_POSITION_BASE = 50  # Base for maximum position calculation
 
 
-def fetch_pool_data(pool_id: str,SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]:
+def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]:
     """
     Fetch pool data for a specific pool ID from The Graph.
 
@@ -582,16 +589,11 @@ def calculate_metrics_liquidity_risk(
     """
     try:
         # Default values to handle potential missing data
-        liquidity = float(pool_data.get("liquidity", 0))
         tvl = float(pool_data.get("totalValueLockedUSD", 0))
 
         # Use total value locked for tokens instead of reserves
         tvl_token0 = float(pool_data.get("totalValueLockedToken0", 0))
         tvl_token1 = float(pool_data.get("totalValueLockedToken1", 0))
-
-        volume_usd = float(volume_data[0]["volumeUSD"]) if volume_data else 0
-        token0 = pool_data.get("token0", {}).get("symbol", "Token0")
-        token1 = pool_data.get("token1", {}).get("symbol", "Token1")
 
         # Depth Score Calculation (using TVL of tokens)
         depth_score = (
@@ -615,7 +617,7 @@ def calculate_metrics_liquidity_risk(
 
     except Exception as e:
         logging.error(f"Error calculating metrics: {e}")
-        return None
+        return float('nan'), float('nan')
 
 # this function need to call for liquidity analytics 
 
@@ -631,23 +633,23 @@ def assess_pool_liquidity(pool_id: str,SUBGRAPH_URL: str) -> Optional[Dict[str, 
         or None if assessment fails.
     """
     # Fetch pool data
-    pool_data = fetch_pool_data(pool_id,SUBGRAPH_URL)
+    pool_data = fetch_pool_data(pool_id, SUBGRAPH_URL)
 
     # Add explicit check for None
     if pool_data is None:
         logging.info(f"Could not retrieve data for pool {pool_id}")
-        return None
+        return float('nan'), float('nan')
 
     try:
         # Fetch volume data
-        volumes = fetch_24_hour_volume(pool_id,SUBGRAPH_URL)
+        volumes = fetch_24_hour_volume(pool_id, SUBGRAPH_URL)
 
         # Calculate and return metrics
         return calculate_metrics_liquidity_risk(pool_data, volumes)
 
     except Exception as e:
         logging.error(f"Error processing pool data: {e}")
-        return None
+        return float('nan'), float('nan')
 
 
 

@@ -1,3 +1,8 @@
+import warnings
+
+# Suppress all warnings
+warnings.filterwarnings("ignore")
+
 import requests
 from typing import Dict, Any, List, Optional
 import numpy as np
@@ -20,6 +25,7 @@ TVL_PERCENTILE = 50
 APR_PERCENTILE = 50
 SCORE_PERCENTILE = 80
 PERCENT_CONVERSION = 100
+PRICE_IMPACT = 0.01
 FETCH_AGGREGATOR_ENDPOINT = "https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators"
 coingecko_name_to_id = {
     "weth": "weth",
@@ -28,7 +34,7 @@ coingecko_name_to_id = {
     "mode": "mode",
 }
 
-def fetch_historical_data(limit: int = 4000):
+def fetch_historical_data(limit: int = 2000):
     """
     Fetch historical data for WETH strategy.
     
@@ -75,7 +81,7 @@ def calculate_sharpe_ratio(daily_returns):
     """
     return pf.timeseries.sharpe_ratio(daily_returns)
 
-def get_sharpe_ratio_for_address(address: str) -> float:
+def get_sharpe_ratio_for_address(historical_data, address: str) -> float:
     """
     Calculate the Sharpe ratio for a given aggregator address.
 
@@ -85,8 +91,6 @@ def get_sharpe_ratio_for_address(address: str) -> float:
     Returns:
         float: Sharpe ratio for the given address.
     """
-    # Fetch historical data
-    historical_data = fetch_historical_data()
     
     records = []
     for entry in historical_data:
@@ -255,16 +259,18 @@ def get_best_opportunities(chains, apr_threshold, lending_asset, current_pool, c
         return []
     
     filtered_aggregators = filter_aggregators(chains, apr_threshold, data, lending_asset, current_pool)
-    print(filtered_aggregators)
 
     if not filtered_aggregators:
         return []
     
+    # Fetch historical data
+    historical_data = fetch_historical_data()
+
     for aggregator in filtered_aggregators:
         silos = aggregator.get('whitelistedSilos', [])
         aggregator['il_risk_score'] = calculate_il_risk_score_for_silos(aggregator['asset']['symbol'], silos, coingecko_api_key)
-        aggregator['sharpe_ratio'] = get_sharpe_ratio_for_address(aggregator['address'])
-        (aggregator["depth_score"],aggregator["max_position_size"]) = analyze_vault_liquidity(aggregator['address'])
+        aggregator['sharpe_ratio'] = get_sharpe_ratio_for_address(historical_data, aggregator['address'])
+        (aggregator["depth_score"],aggregator["max_position_size"]) = analyze_vault_liquidity(aggregator)
 
     formatted_results = [format_aggregator(aggregator) for aggregator in filtered_aggregators]
 
@@ -279,8 +285,11 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
         "token0_symbol": aggregator['asset']['symbol'],
         "token0": aggregator['asset']['address'],
         "apr": aggregator['total_apr'] * PERCENT_CONVERSION,
+        "whitelistedSilos": aggregator['whitelistedSilos'],
         "il_risk_score": aggregator['il_risk_score'],
-        "whitelistedSilos": aggregator['whitelistedSilos']
+        "sharpe_ratio": aggregator['sharpe_ratio'],
+        "depth_score": aggregator['depth_score'],
+        "max_position_size": aggregator['max_position_size']
     }
 
 def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
@@ -326,8 +335,10 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 
 def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kwargs) -> Optional[Dict[str, Any]]:
     il_risk_score = calculate_il_risk_score_for_silos(current_pool.get("token0_symbol"), current_pool.get('whitelistedSilos',[]), coingecko_api_key)
-    sharpe_ratio = get_sharpe_ratio_for_address(current_pool['pool_address'])
-    (depth_score,max_position_size) = analyze_vault_liquidity(current_pool['pool_address'])
+    # Fetch historical data
+    historical_data = fetch_historical_data()
+    sharpe_ratio = get_sharpe_ratio_for_address(historical_data, current_pool['pool_address'])
+    (depth_score, max_position_size) = analyze_vault_liquidity(current_pool)
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
@@ -335,9 +346,8 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kw
         "depth_score":depth_score
     }
 
-# # New Liquidity Analytics functions  
 
-def analyze_vault_liquidity(pool_id):
+def analyze_vault_liquidity(aggregator):
     """
     Analyze liquidity risk and key metrics for a given vault strategy.
     
@@ -347,63 +357,39 @@ def analyze_vault_liquidity(pool_id):
     Returns:
     dict: Detailed liquidity risk analysis
     """
-    # Calculate one year ago in milliseconds
-    one_year_ago = int((datetime.now() - timedelta(days=365)).timestamp() * 1000)
-    limit = 1  # We'll get the latest data point
+
+    # Extract key data points
+    tvl = float(aggregator.get('tvl', 0))
+    total_assets = float(aggregator.get('totalAssets', 0))
     
-    # Construct the API URL with parameters
-    api_url = f"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/getV2AggregatorHistoricalData?last_time={one_year_ago}&limit={limit}"
+    # If tvl or total_assets is missing, fetch from the endpoint
+    if not tvl or not total_assets:
+        try:
+            aggregators = fetch_aggregators()
+            if aggregators:
+                # Filter based on address
+                for item in aggregators:
+                    if item['address'] == aggregator.get('address') or item['address'] == aggregator.get('pool_address'):
+                        tvl = float(item.get('tvl', 0))
+                        total_assets = float(item.get('totalAssets', 0))
+                        break
+
+        except requests.RequestException as e:
+            return float('nan')
     
-    try:
-        # Make API request
-        response = requests.get(api_url)
-        response.raise_for_status()
-        
-        # Parse response data
-        data = response.json()
-        
-        if not data or not isinstance(data, list) or len(data) == 0:
-            raise ValueError("Invalid API response format")
-            
-        # Get the latest data point
-        latest_data = data[0]
-        
-        if 'doc' not in latest_data:
-            raise ValueError("No 'doc' field in API response")
-            
-        # Get the pool data directly from the doc object
-        pool_data = latest_data['doc'].get(pool_id)
-        
-        if not pool_data:
-            raise ValueError(f"No data found for pool_id: {pool_id}")
-        
-        # Extract key data points
-        tvl = float(pool_data.get('tvl', 0))
-        total_assets = float(pool_data.get('totalAssets', 0))
-        
-        # Constant for price impact (standardized at 1%)
-        PRICE_IMPACT = 0.01
-        
-        # Calculate Depth Score (Sturdy Protocol variant)
-        depth_score = (tvl * total_assets) / (PRICE_IMPACT * 100)
-        
-        # Liquidity Risk Multiplier
-        liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
-        
-        # Maximum Position Size Calculation
-        max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
-        
-        return depth_score,max_position_size
-        
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Error fetching data from API: {str(e)}")
-    except json.JSONDecodeError as e:
-        raise Exception(f"Error parsing API response: {str(e)}")
-    except ValueError as e:
-        raise Exception(str(e))
-    except Exception as e:
-        raise Exception(f"Unexpected error: {str(e)}")
-         
+    if not tvl or not total_assets:
+        return float('nan')
+    
+    # Calculate Depth Score (Sturdy Protocol variant)
+    depth_score = (tvl * total_assets) / (PRICE_IMPACT * 100)
+    
+    # Liquidity Risk Multiplier
+    liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
+    
+    # Maximum Position Size Calculation
+    max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
+    
+    return depth_score, max_position_size   
 
 def run(*_args, **kwargs) -> List[Dict[str, Any]]:
     """Run the strategy."""

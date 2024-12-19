@@ -555,23 +555,7 @@ def analyze_pool_liquidity(
         logging.error("Could not retrieve pool metrics.")
         return None
     
-    # Risk Assessment
-    risk_assessment = []
-    if metrics['Depth Score'] > 50:
-        risk_assessment.append("✓ Depth Score meets threshold")
-    else:
-        risk_assessment.append("✗ Depth Score below recommended threshold")
-    
-    if metrics['Liquidity Risk Multiplier'] > 0.5:
-        risk_assessment.append("✓ Low Liquidity Risk")
-    else:
-        risk_assessment.append("⚠ Moderate to High Liquidity Risk")
-    
-    logging.info("\nRisk Assessment:")
-    for assessment in risk_assessment:
-        logging.info(assessment)
-    
-    return metrics
+    return metrics["Depth Score"],metrics["Maximum Position Size"]
 
 
 

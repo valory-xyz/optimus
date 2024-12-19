@@ -414,9 +414,11 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
         il_risk_score = float('nan')
 
     sharpe_ratio = get_uniswap_pool_sharpe_ratio(current_pool['id'], graphql_endpoint)
+    liquidity_risk_metric = assess_pool_liquidity(current_pool['id'], graphql_endpoint)
     return {
         "il_risk_score": il_risk_score,
-        "sharpe_ratio": sharpe_ratio
+        "sharpe_ratio": sharpe_ratio,
+        "liquidity_risk_metric":liquidity_risk_metric
     }
 
 

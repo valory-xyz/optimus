@@ -364,36 +364,9 @@ def analyze_vault_liquidity(vault_data):
     # Formula: 50 × (TVL × Liquidity Risk Multiplier) / 100
     max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
     
-    # Risk Assessment
-    risk_assessment = {
-        'depth_score': depth_score,
-        'liquidity_risk_multiplier': liquidity_risk_multiplier,
-        'max_position_size': max_position_size,
-        'is_safe': depth_score > 50,
-        'additional_metrics': {
-            'tvl': tvl,
-            'total_assets': total_assets,
-            'total_apy': apy_total,
-            'asset_price': asset_price,
-            'chain': vault_data.get('chainName'),
-            'vault_name': vault_data.get('name')
-        }
-    }
-    
-    return risk_assessment
+    return depth_score, max_position_size
 
-# this function need to call for liquidity analytics
-def process_vault_strategy(vault_data):
-    """
-    Process and logging.info liquidity risk analysis for a vault strategy.
     
-    Parameters:
-    vault_data (dict): Comprehensive vault strategy data
-    """
-    analysis = analyze_vault_liquidity(vault_data)
-    
-    # Return the required data points
-    return analysis['depth_score'], analysis['max_position_size']
     
     
         

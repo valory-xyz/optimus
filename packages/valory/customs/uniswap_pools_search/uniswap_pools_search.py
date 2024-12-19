@@ -467,15 +467,13 @@ def fetch_pool_data(pool_id: str) -> Optional[Dict[str, Any]]:
     try:
         logging.info(f"Fetching data for pool ID: {pool_id}")
         response = requests.post(
-            SUBGRAPH_URL,
+            REQUIRED_FIELDS[(REQUIRED_FIELDS.index("graphql_endpoints"))],
             json=query,
             headers={"Content-Type": "application/json", "Accept": "application/json"},
         )
 
         # logging.info full response for debugging
         response_json = response.json()
-        logging.info("Full Response:")
-        logging.info(json.dumps(response_json, indent=2))
 
         if response.status_code == 200:
             # Check for GraphQL errors

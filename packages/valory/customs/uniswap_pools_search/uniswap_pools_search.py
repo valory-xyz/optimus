@@ -398,7 +398,10 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
         else:
             pool['il_risk_score'] = float('nan')
         # Calculate Sharpe Ratio
-        pool['sharpe_ratio'] = get_uniswap_pool_sharpe_ratio(pool['id'], pool['chain'])        
+        pool['sharpe_ratio'] = get_uniswap_pool_sharpe_ratio(pool['id'], pool['chain'])   
+        #
+        (pool['depth_score'],pool['max_position_size']) = assess_pool_liquidity(pool['id'], pool['chain'])
+
     formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
 
     return formatted_pools
@@ -414,11 +417,12 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
         il_risk_score = float('nan')
 
     sharpe_ratio = get_uniswap_pool_sharpe_ratio(current_pool['id'], graphql_endpoint)
-    liquidity_risk_metric = assess_pool_liquidity(current_pool['id'], graphql_endpoint)
+    (depth_score,max_position_size) = assess_pool_liquidity(current_pool['id'], graphql_endpoint)
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
-        "liquidity_risk_metric":liquidity_risk_metric
+        "depth_score":depth_score,
+        "max_position_size":max_position_size
     }
 
 

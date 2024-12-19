@@ -425,10 +425,11 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
         il_risk_score = float('nan')
 
     sharpe_ratio = get_balancer_pool_sharpe_ratio(current_pool['pool_id'], current_pool['chain'].upper())  
-      
+    liquidity_risk_metric = analyze_pool_liquidity(current_pool['pool_id'])  
     return {
         "il_risk_score": il_risk_score,
-        "sharpe_ratio": sharpe_ratio
+        "sharpe_ratio": sharpe_ratio,
+        "liquidity_risk_metric":liquidity_risk_metric
     }
 
 

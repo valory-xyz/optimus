@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiej6rb7f54w4epuyvwj3fays7lo6rqqxetjdrzc52k3q5qcbckv4a
-  uniswap_pools_search.py: bafybeidupk3xsbbactazypfyvgguzr2vai4ovdxyv6niutbolqa7ukxd6y
+  uniswap_pools_search.py: bafybeibojtsfx3ws5pye7tu4uknfl6qwdzikfaampf3op5n4meljivjlcu
 fingerprint_ignore_patterns: []
 entry_point: uniswap_pools_search.py
 callable: run

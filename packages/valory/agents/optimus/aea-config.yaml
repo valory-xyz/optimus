@@ -45,9 +45,9 @@ skills:
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeiga5zy6jpdmodndo5l2zfcbhumiff7l6uhdedr5f35ol4uq7ciega
-- valory/balancer_pools_search:0.1.0:bafybeibjkadepfqij72rpaufxfdl4rhx4yn5ctjdkj277ieas2vsigkita
-- valory/uniswap_pools_search:0.1.0:bafybeibifc3ihrvmebkrwtynipyiwc4wjlvfi6xvtzpasjl4cppv7z4mlm
-- valory/asset_lending:0.1.0:bafybeihftexueef2ua2urvfnsmmpkh4ss4kskqrkic7eldt5swyq5ug7su
+- valory/balancer_pools_search:0.1.0:bafybeibpzagywq2rc5ucuwseo7an4nmkh3p7zvg3xvdzkhrwcimkp5fypi
+- valory/uniswap_pools_search:0.1.0:bafybeialnpp4d3nka7andrv4c32tc4jfmdthqrojedlgxvokkf5clufbau
+- valory/asset_lending:0.1.0:bafybeifc2jjeaoo6yshxhxrgsrfl7sdtby6aa7l5rgka5xnwgf7aozt4aq
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -145,7 +145,7 @@ type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${str:/Users/gauravlochab/Uniswap-Optimus/optimus/logs}
+      log_dir: ${str:/mnt/e/Valory/optimus_2/optimus/logs}
   coingecko:
     args:
       token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -248,7 +248,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/home/divya/Olas-Projects/superfest-agent/data/}
+      store_path: ${str:/mnt/e/Valory/optimus_2/optimus/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}

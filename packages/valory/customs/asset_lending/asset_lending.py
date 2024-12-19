@@ -168,7 +168,7 @@ def get_best_opportunities(chains, apr_threshold, lending_asset, current_pool, c
         return []
     
     filtered_aggregators = filter_aggregators(chains, apr_threshold, data, lending_asset, current_pool)
-    print(filtered_aggregators)
+    logging.info(filtered_aggregators)
 
     if not filtered_aggregators:
         return []
@@ -178,7 +178,7 @@ def get_best_opportunities(chains, apr_threshold, lending_asset, current_pool, c
         aggregator['il_risk_score'] = calculate_il_risk_score_for_silos(aggregator['asset']['symbol'], silos, coingecko_api_key)
 
     formatted_results = [format_aggregator(aggregator) for aggregator in filtered_aggregators]
-    print(formatted_results)
+    logging.info(formatted_results)
     return formatted_results
 
 def format_aggregator(aggregator) -> Dict[str, Any]:
@@ -240,6 +240,79 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kw
     return {
         "il_risk_score": il_risk_score
     }
+
+# # New Liquidity Analytics functions  
+
+def analyze_vault_liquidity(vault_data):
+    """
+    Analyze liquidity risk and key metrics for a given vault strategy.
+    
+    Parameters:
+    vault_data (dict): Comprehensive vault strategy data
+    
+    Returns:
+    dict: Detailed liquidity risk analysis
+    """
+    # Extract key data points
+    tvl = vault_data.get('tvl', 0)
+    total_assets = vault_data.get('totalAssets', 0)
+    apy_total = vault_data.get('apy', {}).get('total', 0)
+    asset_price = float(vault_data.get('asset', {}).get('price', 0))
+    
+    # Constant for price impact (standardized at 1%)
+    PRICE_IMPACT = 0.01
+    
+    # Calculate Depth Score (Sturdy Protocol variant)
+    # Formula: (TVL × Total Assets) / (Price Impact × 100)
+    depth_score = (tvl * total_assets) / (PRICE_IMPACT * 100)
+    
+    # Liquidity Risk Multiplier
+    # Formula: max(0, 1 - (1/depth_score))
+    liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
+    
+    # Maximum Position Size Calculation
+    # Formula: 50 × (TVL × Liquidity Risk Multiplier) / 100
+    max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
+    
+    # Risk Assessment
+    risk_assessment = {
+        'depth_score': depth_score,
+        'liquidity_risk_multiplier': liquidity_risk_multiplier,
+        'max_position_size': max_position_size,
+        'is_safe': depth_score > 50,
+        'additional_metrics': {
+            'tvl': tvl,
+            'total_assets': total_assets,
+            'total_apy': apy_total,
+            'asset_price': asset_price,
+            'chain': vault_data.get('chainName'),
+            'vault_name': vault_data.get('name')
+        }
+    }
+    
+    return risk_assessment
+
+# this function need to call for liquidity analytics
+def process_vault_strategy(vault_data):
+    """
+    Process and logging.info liquidity risk analysis for a vault strategy.
+    
+    Parameters:
+    vault_data (dict): Comprehensive vault strategy data
+    """
+    analysis = analyze_vault_liquidity(vault_data)
+    
+    logging.info("Vault Liquidity Risk Analysis")
+    logging.info("-" * 30)
+    logging.info(f"Vault: {analysis['additional_metrics']['vault_name']}")
+    logging.info(f"Chain: {analysis['additional_metrics']['chain']}")
+    logging.info(f"Depth Score: {analysis['depth_score']:.2f}")
+    logging.info(f"Liquidity Risk Multiplier: {analysis['liquidity_risk_multiplier']:.4f}")
+    logging.info(f"Maximum Position Size: ${analysis['max_position_size']:.2f}")
+    logging.info(f"Investment Safety: {'Safe' if analysis['is_safe'] else 'Risky'}")
+    logging.info("\nAdditional Metrics:")
+    for key, value in analysis['additional_metrics'].items():
+        logging.info(f"{key.replace('_', ' ').title()}: {value}")
 
 def run(*_args, **kwargs) -> List[Dict[str, Any]]:
     """Run the strategy."""

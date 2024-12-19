@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeievwo2yoa6vekod333ttto66vpc27lm6wepspnhwyrqxtjx7djzw4
-  balancer_pools_search.py: bafybeihfptgmhcmwp3gtuycli5jied5jmfyj6qhbaykp76s2mmsyrzpzgi
+  balancer_pools_search.py: bafybeibm7zstylvxvorwvazytvnxw67lzxq7bg6aia6n4u34gakybsp44q
 fingerprint_ignore_patterns: []
 entry_point: balancer_pools_search.py
 callable: run
@@ -17,3 +17,7 @@ dependencies:
     version: <2.31.2,>=2.28.1
   pycoingecko:
     version: ==3.2.0
+  web3:
+    version: <7.0.0,>=6.0.0
+  gql:
+    version: ==3.5.0

@@ -11,6 +11,9 @@ from datetime import datetime, timedelta
 import numpy as np
 import logging
 from web3 import Web3
+import statistics
+from gql import gql, Client
+from gql.transport.requests import RequestsHTTPTransport
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -367,6 +370,154 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
     return {
         "il_risk_score": il_risk_score
     }
+
+
+# # # New Liquidity Analytics functions 
+
+def create_graphql_client(api_url='https://api-v3.balancer.fi') -> Client:
+    """
+    Create a GraphQL client for Balancer API
+    
+    :param api_url: GraphQL API endpoint
+    :return: A configured GraphQL client ready for executing queries
+    """
+    transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)
+    return Client(transport=transport, fetch_schema_from_transport=False)
+
+def create_pool_snapshots_query(pool_id: str, range: str = 'NINETY_DAYS', chain: str = 'MAINNET') -> gql:
+    """
+    Create GraphQL query for fetching pool snapshots
+    
+    :param pool_id: Balancer pool ID
+    :param range: Time range for snapshots
+    :param chain: Blockchain network
+    :return: A GraphQL query object for retrieving pool snapshots
+    """
+    return gql(f'''
+    query GetLiquidityMetrics {{
+      poolGetSnapshots(
+        id: "{pool_id}",
+        range: {range},
+        chain: {chain}
+      ) {{
+        totalLiquidity
+        volume24h
+        timestamp
+      }}
+    }}
+    ''')
+
+def fetch_liquidity_metrics(
+    pool_id: str, 
+    client: Optional[Client] = None, 
+    price_impact: float = 0.01
+) -> Optional[Dict[str, Any]]:
+    """
+    Fetch and analyze liquidity metrics for a specific pool
+    
+    :param pool_id: Balancer pool ID
+    :param client: Optional GraphQL client (will create one if not provided)
+    :param price_impact: Standardized price impact (default 1%)
+    :return: A dictionary containing calculated liquidity metrics, or None if retrieval fails
+             Returned dictionary includes:
+             - 'Average TVL': Total Value Locked average
+             - 'Average Daily Volume': Average 24h trading volume
+             - 'Depth Score': Liquidity depth calculation
+             - 'Liquidity Risk Multiplier': Risk assessment factor
+             - 'Maximum Position Size': Recommended max investment
+             - 'Meets Depth Score Threshold': Boolean indicating liquidity quality
+    """
+    # Use provided client or create a new one
+    if client is None:
+        client = create_graphql_client()
+    
+    try:
+        # Create and execute query
+        query = create_pool_snapshots_query(pool_id)
+        response = client.execute(query)
+        pool_snapshots = response['poolGetSnapshots']
+        
+        # Validate snapshots
+        if not pool_snapshots:
+            raise ValueError("No pool snapshots retrieved")
+        
+        # Calculate average metrics
+        avg_tvl = statistics.mean(float(snapshot['totalLiquidity']) for snapshot in pool_snapshots)
+        avg_volume = statistics.mean(float(snapshot.get('volume24h', 0)) for snapshot in pool_snapshots)
+        
+        # Depth Score Calculation
+        depth_score = (avg_tvl * avg_volume) / (price_impact * 100)
+        
+        # Liquidity Risk Multiplier
+        liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score != 0 else 0
+        
+        # Maximum Position Size
+        max_position_size = 50 * (avg_tvl * liquidity_risk_multiplier) / 100
+        
+        # Prepare results
+        metrics = {
+            'Average TVL': avg_tvl,
+            'Average Daily Volume': avg_volume,
+            'Depth Score': depth_score,
+            'Liquidity Risk Multiplier': liquidity_risk_multiplier,
+            'Maximum Position Size': max_position_size,
+            'Meets Depth Score Threshold': depth_score > 50
+        }
+        
+        return metrics
+    
+    except Exception as e:
+        logging.error(f"An error occurred while analyzing pool metrics: {e}")
+        return None
+
+# this function need to call for liquidity analytics 
+
+def analyze_pool_liquidity(
+    pool_id: str, 
+    client: Optional[Client] = None, 
+    price_impact: float = 0.01
+) -> Optional[Dict[str, Any]]:
+    """
+    Comprehensive analysis of pool liquidity with risk assessment
+    
+    :param pool_id: Balancer pool ID
+    :param client: Optional GraphQL client
+    :param price_impact: Standardized price impact
+    :return: Detailed analysis metrics dictionary if successful, None otherwise
+             Returns the same dictionary as fetch_liquidity_metrics()
+             When called, also logging.infos a detailed console report of liquidity metrics
+             and risk assessment
+    """
+    # Fetch and calculate metrics
+    metrics = fetch_liquidity_metrics(pool_id, client, price_impact)
+    
+    if metrics is None:
+        logging.info("Could not retrieve pool metrics.")
+        return None
+    
+    # logging.info detailed report
+    logging.info("Balancer Pool Liquidity Analysis Report")
+    logging.info("-" * 50)
+    for key, value in metrics.items():
+        logging.info(f"{key}: {value}")
+    
+    # Risk Assessment
+    risk_assessment = []
+    if metrics['Depth Score'] > 50:
+        risk_assessment.append("✓ Depth Score meets threshold")
+    else:
+        risk_assessment.append("✗ Depth Score below recommended threshold")
+    
+    if metrics['Liquidity Risk Multiplier'] > 0.5:
+        risk_assessment.append("✓ Low Liquidity Risk")
+    else:
+        risk_assessment.append("⚠ Moderate to High Liquidity Risk")
+    
+    logging.info("\nRisk Assessment:")
+    for assessment in risk_assessment:
+        logging.info(assessment)
+    
+    return metrics
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""

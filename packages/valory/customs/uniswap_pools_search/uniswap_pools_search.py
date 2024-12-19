@@ -5,7 +5,8 @@ import numpy as np
 from datetime import datetime, timedelta
 import logging
 from web3 import Web3
-
+import pyfolio as pf
+import pandas as pd
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
@@ -250,6 +251,49 @@ def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -
 
     return all_pools
 
+def get_uniswap_pool_sharpe_ratio(pool_id: str, graphql_endpoint: str) -> float:
+    """Calculate Sharpe ratio for a Uniswap pool."""
+    query = """
+    {
+        pool(id: "%s") {
+            liquidity
+            swaps(first: 5, orderBy: timestamp, orderDirection: desc) {
+                timestamp
+                amountUSD
+            }
+        }
+    }
+    """ % pool_id
+
+    try:
+        # Get data from Uniswap subgraph
+        response = requests.post(
+            graphql_endpoint,
+            json={'query': query}
+        )
+        pool_data = response.json()['data']['pool']
+        swaps_data = pool_data['swaps']
+        liquidity = float(pool_data['liquidity'])
+        
+        # Prepare DataFrame
+        df = pd.DataFrame(swaps_data)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+        df.set_index('timestamp', inplace=True)
+        # Calculate returns
+        df['amountUSD'] = pd.to_numeric(df['amountUSD'])
+        price_returns = df['amountUSD'].pct_change()
+        # Liquidity returns
+        liquidity_returns = df['amountUSD'] / liquidity
+        # Total returns (price change + liquidity)
+        total_returns = price_returns + liquidity_returns
+        returns = total_returns.dropna()
+        # Calculate Sharpe ratio using pyfolio
+        sharpe_ratio = pf.timeseries.sharpe_ratio(returns)
+        return sharpe_ratio
+    except Exception as e:
+        logging.error(f"Error calculating Sharpe ratio: {str(e)}")
+        return None
+    
 def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
     """Calculate APR using the formula: (Daily Volume / TVL) × Fee Rate × 365 × 100"""
     if tvl == 0:
@@ -351,13 +395,14 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
             pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
         else:
             pool['il_risk_score'] = float('nan')
-            
+        # Calculate Sharpe Ratio
+        pool['sharpe_ratio'] = get_uniswap_pool_sharpe_ratio(pool['id'], pool['chain'])        
     formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
 
     return formatted_pools
 
 
-def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs) -> Optional[Dict[str, Any]]:
+def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], graphql_endpoint, **kwargs) -> Optional[Dict[str, Any]]:
     token_0_id = get_token_id_from_symbol(current_pool['token0'], current_pool['token0_symbol'], coin_list, current_pool['chain'])
     token_1_id = get_token_id_from_symbol(current_pool['token1'], current_pool['token1_symbol'], coin_list, current_pool['chain'])
 
@@ -366,8 +411,10 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
     else:
         il_risk_score = float('nan')
 
+    sharpe_ratio = get_uniswap_pool_sharpe_ratio(current_pool['id'], graphql_endpoint)
     return {
-        "il_risk_score": il_risk_score
+        "il_risk_score": il_risk_score,
+        "sharpe_ratio": sharpe_ratio
     }
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:

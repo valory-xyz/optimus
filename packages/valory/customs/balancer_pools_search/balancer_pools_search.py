@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 import numpy as np
 import logging
 from web3 import Web3
+import pandas as pd
+import pyfolio as pf
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -314,6 +316,57 @@ def format_pool_data(pool) -> Dict[str, Any]:
         **pool_token_dict,
     }
 
+def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
+    """
+    Calculate Sharpe ratio for a Balancer pool.
+    Parameters:
+    pool_id (str): Balancer pool ID
+    chain (str): Blockchain network (e.g., 'OPTIMISM', 'ETHEREUM')
+    timerange (str): Time range for analysis ('ONE_YEAR', 'ONE_MONTH', etc.)
+    """
+    query = """
+    {
+        poolGetSnapshots(
+            chain: %s
+            id: "%s"
+            range: %s
+        ) {
+            timestamp
+            sharePrice
+            fees24h
+            totalLiquidity
+        }
+    }
+    """ % (chain, pool_id, timerange)
+    try:
+        # Get data from Balancer API
+        response = requests.post(
+            "https://api-v3.balancer.fi/",
+            json={'query': query}
+        )
+        data = response.json()['data']['poolGetSnapshots']
+        print(data)
+        # Prepare DataFrame
+        df = pd.DataFrame(data)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+        df.set_index('timestamp', inplace=True)
+        # Calculate returns
+        df['sharePrice'] = pd.to_numeric(df['sharePrice'])
+        price_returns = df['sharePrice'].pct_change()
+        # Add fee returns
+        df['fees24h'] = pd.to_numeric(df['fees24h'])
+        df['totalLiquidity'] = pd.to_numeric(df['totalLiquidity'])
+        fee_returns = df['fees24h'] / df['totalLiquidity']
+        # Total returns (price change + fees)
+        total_returns = price_returns + fee_returns
+        returns = total_returns.dropna()
+        # Calculate Sharpe ratio using pyfolio
+        sharpe_ratio = pf.timeseries.sharpe_ratio(returns)
+        return sharpe_ratio
+    except Exception as e:
+        logging.error(f"Error calculating Sharpe ratio: {str(e)}")
+        return None
+    
 def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coingecko_api_key, coin_list):
     pools = get_balancer_pools(chains, graphql_endpoint)
     if isinstance(pools, dict) and "error" in pools:
@@ -344,6 +397,7 @@ def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coi
             token_1_id = token_id_cache[token_1_symbol]
         else:
             token_1_id = get_token_id_from_symbol(pool['poolTokens'][1]["address"], token_1_symbol, coin_list, pool['chain'])
+
             if token_1_id:
                 token_id_cache[token_1_symbol] = token_1_id
 
@@ -352,20 +406,26 @@ def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coi
         else:
             pool['il_risk_score'] = float('nan')
 
+        pool['sharpe_ratio'] = get_balancer_pool_sharpe_ratio(pool['id'], pool['chain'].upper())
+
     formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
     return formatted_pools
 
 def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs) -> Optional[Dict[str, Any]]:
     token_0_id = get_token_id_from_symbol(current_pool['token0'], current_pool['token0_symbol'], coin_list, current_pool['chain'])
     token_1_id = get_token_id_from_symbol(current_pool['token1'], current_pool['token1_symbol'], coin_list, current_pool['chain'])
-
+    
     if token_0_id and token_1_id:
         il_risk_score = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
+
     else:
         il_risk_score = float('nan')
-        
+
+    sharpe_ratio = get_balancer_pool_sharpe_ratio(current_pool['pool_id'], current_pool['chain'].upper())  
+      
     return {
-        "il_risk_score": il_risk_score
+        "il_risk_score": il_risk_score,
+        "sharpe_ratio": sharpe_ratio
     }
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:

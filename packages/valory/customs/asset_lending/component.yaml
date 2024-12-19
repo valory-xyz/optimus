@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiguqxojq5hkgi55jqdl5p3rvz62jwxxw6ygorkym7ol3ps5qhh7rq
-  asset_lending.py: bafybeichgdouvmiwrzra7wpv7zifhnaduylpkjymioaszpapgfaerlk5we
+  asset_lending.py: bafybeien6nstbuchmjqkbxnsf3ppl5dkmerlwznc2k5sr7y6fch3h4ulba
 fingerprint_ignore_patterns: []
 entry_point: asset_lending.py
 callable: run
@@ -19,3 +19,7 @@ dependencies:
     version: ==3.2.0
   pyfolio:
     version: ==0.9.2
+  numpy:
+    version: ==2.2.0
+  pandas:
+    version: '>=2.2.3'

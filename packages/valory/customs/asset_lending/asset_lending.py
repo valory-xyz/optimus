@@ -392,7 +392,10 @@ def process_vault_strategy(vault_data):
     """
     analysis = analyze_vault_liquidity(vault_data)
     
-    return analysis
+    # Return the required data points
+    return analysis['depth_score'], analysis['max_position_size']
+    
+    
         
 
 def run(*_args, **kwargs) -> List[Dict[str, Any]]:

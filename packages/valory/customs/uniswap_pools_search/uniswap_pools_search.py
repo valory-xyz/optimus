@@ -425,10 +425,7 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
 # API details - these value required to  run the functions 
 EY = ""  # Replace with your API key
 SUBGRAPH_URL = f"https://gateway.thegraph.com/api/{EY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
-# 
-# Specific pool ID to analyze
-POOL_ID = "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8"
-# 
+
 # Constants
 PRICE_IMPACT = 0.01  # 1% standard price impact
 MAX_POSITION_BASE = 50  # Base for maximum position calculation
@@ -475,8 +472,6 @@ def fetch_pool_data(pool_id: str) -> Optional[Dict[str, Any]]:
             headers={"Content-Type": "application/json", "Accept": "application/json"},
         )
 
-        logging.info(f"Response Status Code: {response.status_code}")
-
         # logging.info full response for debugging
         response_json = response.json()
         logging.info("Full Response:")
@@ -485,8 +480,8 @@ def fetch_pool_data(pool_id: str) -> Optional[Dict[str, Any]]:
         if response.status_code == 200:
             # Check for GraphQL errors
             if "errors" in response_json:
-                logging.info("GraphQL Errors:")
-                logging.info(json.dumps(response_json["errors"], indent=2))
+                logging.error("GraphQL Errors:")
+                logging.error(json.dumps(response_json["errors"], indent=2))
                 return None
 
             # Check for valid pool data
@@ -609,24 +604,8 @@ def calculate_metrics_liquidity_risk(
         # Maximum Position Size
         max_position_size = MAX_POSITION_BASE * (tvl * liquidity_risk_multiplier) / 100
 
-        # logging.info Detailed Metrics
-        logging.info(f"\n===== Pool Analysis: {token0}-{token1} =====")
-        logging.info(f"Total Value Locked: ${tvl:,.2f}")
-        logging.info(f"Total Value Locked Token0: {tvl_token0:,.4f} {token0}")
-        logging.info(f"Total Value Locked Token1: {tvl_token1:,.4f} {token1}")
-        logging.info(f"24h Volume: ${volume_usd:,.2f}")
-        logging.info(f"\nDepth Score: {depth_score:,.4f}")
-        logging.info(f"Liquidity Risk Multiplier: {liquidity_risk_multiplier:.4f}")
-        logging.info(f"Maximum Position Size: ${max_position_size:,.2f}")
-
         return {
-            "token_pair": f"{token0}-{token1}",
-            "tvl": tvl,
-            "tvl_token0": tvl_token0,
-            "tvl_token1": tvl_token1,
-            "volume_24h": volume_usd,
             "depth_score": depth_score,
-            "liquidity_risk_multiplier": liquidity_risk_multiplier,
             "max_position_size": max_position_size,
         }
 

@@ -566,7 +566,7 @@ def fetch_24_hour_volume(pool_id: str) -> List[Dict[str, Union[int, float, str]]
         logging.error(f"Exception in volume fetch: {e}")
         return []
 
-def calculate_metrics(
+def calculate_metrics_liquidity_risk(
     pool_data: Dict[str, Any], 
     volume_data: List[Dict[str, Union[int, float, str]]]
 ) -> Optional[Dict[str, Union[str, float]]]:
@@ -660,7 +660,7 @@ def assess_pool_liquidity(pool_id: str) -> Optional[Dict[str, Union[str, float]]
         volumes = fetch_24_hour_volume(pool_id)
 
         # Calculate and return metrics
-        return calculate_metrics(pool_data, volumes)
+        return calculate_metrics_liquidity_risk(pool_data, volumes)
 
     except Exception as e:
         logging.error(f"Error processing pool data: {e}")

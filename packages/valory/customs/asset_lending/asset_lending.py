@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import logging
 import pandas as pd
 import pyfolio as pf
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -325,48 +326,82 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kwargs) -> Optional[Dict[str, Any]]:
     il_risk_score = calculate_il_risk_score_for_silos(current_pool.get("token0_symbol"), current_pool.get('whitelistedSilos',[]), coingecko_api_key)
     sharpe_ratio = get_sharpe_ratio_for_address(current_pool['pool_address'])
-
+    liquidity_risk_metric = analyze_vault_liquidity(current_pool['pool_address'])
     return {
         "il_risk_score": il_risk_score,
-        "sharpe_ratio": sharpe_ratio
+        "sharpe_ratio": sharpe_ratio,
+        "liquidity_risk_metric":liquidity_risk_metric
     }
 
 # # New Liquidity Analytics functions  
 
-def analyze_vault_liquidity(vault_data):
+def analyze_vault_liquidity(pool_id):
     """
     Analyze liquidity risk and key metrics for a given vault strategy.
     
     Parameters:
-    vault_data (dict): Comprehensive vault strategy data
+    pool_id (str): Identifier for the vault pool
     
     Returns:
     dict: Detailed liquidity risk analysis
     """
-    # Extract key data points
-    tvl = vault_data.get('tvl', 0)
-    total_assets = vault_data.get('totalAssets', 0)
-    apy_total = vault_data.get('apy', {}).get('total', 0)
-    asset_price = float(vault_data.get('asset', {}).get('price', 0))
+    # Calculate one year ago in milliseconds
+    one_year_ago = int((datetime.now() - timedelta(days=365)).timestamp() * 1000)
+    limit = 1  # We'll get the latest data point
     
-    # Constant for price impact (standardized at 1%)
-    PRICE_IMPACT = 0.01
+    # Construct the API URL with parameters
+    api_url = f"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/getV2AggregatorHistoricalData?last_time={one_year_ago}&limit={limit}"
     
-    # Calculate Depth Score (Sturdy Protocol variant)
-    # Formula: (TVL × Total Assets) / (Price Impact × 100)
-    depth_score = (tvl * total_assets) / (PRICE_IMPACT * 100)
-    
-    # Liquidity Risk Multiplier
-    # Formula: max(0, 1 - (1/depth_score))
-    liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
-    
-    # Maximum Position Size Calculation
-    # Formula: 50 × (TVL × Liquidity Risk Multiplier) / 100
-    max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
-    
-    return depth_score, max_position_size
-
-    
+    try:
+        # Make API request
+        response = requests.get(api_url)
+        response.raise_for_status()
+        
+        # Parse response data
+        data = response.json()
+        
+        if not data or not isinstance(data, list) or len(data) == 0:
+            raise ValueError("Invalid API response format")
+            
+        # Get the latest data point
+        latest_data = data[0]
+        
+        if 'doc' not in latest_data:
+            raise ValueError("No 'doc' field in API response")
+            
+        # Get the pool data directly from the doc object
+        pool_data = latest_data['doc'].get(pool_id)
+        
+        if not pool_data:
+            raise ValueError(f"No data found for pool_id: {pool_id}")
+        
+        # Extract key data points
+        tvl = float(pool_data.get('tvl', 0))
+        total_assets = float(pool_data.get('totalAssets', 0))
+        
+        # Constant for price impact (standardized at 1%)
+        PRICE_IMPACT = 0.01
+        
+        # Calculate Depth Score (Sturdy Protocol variant)
+        depth_score = (tvl * total_assets) / (PRICE_IMPACT * 100)
+        
+        # Liquidity Risk Multiplier
+        liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
+        
+        # Maximum Position Size Calculation
+        max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
+        
+        return depth_score,max_position_size
+        
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Error fetching data from API: {str(e)}")
+    except json.JSONDecodeError as e:
+        raise Exception(f"Error parsing API response: {str(e)}")
+    except ValueError as e:
+        raise Exception(str(e))
+    except Exception as e:
+        raise Exception(f"Unexpected error: {str(e)}")
+ 
     
     
         

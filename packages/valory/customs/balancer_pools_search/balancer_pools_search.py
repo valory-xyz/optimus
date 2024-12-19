@@ -410,6 +410,7 @@ def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coi
             pool['il_risk_score'] = float('nan')
 
         pool['sharpe_ratio'] = get_balancer_pool_sharpe_ratio(pool['id'], pool['chain'].upper())
+        (pool['depth_score'],pool['max_position_size']) =analyze_pool_liquidity(pool['id'])
 
     formatted_pools = [format_pool_data(pool) for pool in filtered_pools]
     return formatted_pools
@@ -425,11 +426,12 @@ def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin
         il_risk_score = float('nan')
 
     sharpe_ratio = get_balancer_pool_sharpe_ratio(current_pool['pool_id'], current_pool['chain'].upper())  
-    liquidity_risk_metric = analyze_pool_liquidity(current_pool['pool_id'])  
+    (depth_score,max_position_size) =analyze_pool_liquidity(current_pool['pool_id'])  
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
-        "liquidity_risk_metric":liquidity_risk_metric
+        "depth_score":depth_score,
+        "max_position_size":max_position_size
     }
 
 

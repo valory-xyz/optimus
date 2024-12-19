@@ -264,6 +264,7 @@ def get_best_opportunities(chains, apr_threshold, lending_asset, current_pool, c
         silos = aggregator.get('whitelistedSilos', [])
         aggregator['il_risk_score'] = calculate_il_risk_score_for_silos(aggregator['asset']['symbol'], silos, coingecko_api_key)
         aggregator['sharpe_ratio'] = get_sharpe_ratio_for_address(aggregator['address'])
+        (aggregator["depth_score"],aggregator["max_position_size"]) = analyze_vault_liquidity(aggregator['address'])
 
     formatted_results = [format_aggregator(aggregator) for aggregator in filtered_aggregators]
 
@@ -326,11 +327,12 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kwargs) -> Optional[Dict[str, Any]]:
     il_risk_score = calculate_il_risk_score_for_silos(current_pool.get("token0_symbol"), current_pool.get('whitelistedSilos',[]), coingecko_api_key)
     sharpe_ratio = get_sharpe_ratio_for_address(current_pool['pool_address'])
-    liquidity_risk_metric = analyze_vault_liquidity(current_pool['pool_address'])
+    (depth_score,max_position_size) = analyze_vault_liquidity(current_pool['pool_address'])
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
-        "liquidity_risk_metric":liquidity_risk_metric
+        "max_position_size":max_position_size,
+        "depth_score":depth_score
     }
 
 # # New Liquidity Analytics functions  
@@ -401,10 +403,7 @@ def analyze_vault_liquidity(pool_id):
         raise Exception(str(e))
     except Exception as e:
         raise Exception(f"Unexpected error: {str(e)}")
- 
-    
-    
-        
+         
 
 def run(*_args, **kwargs) -> List[Dict[str, Any]]:
     """Run the strategy."""

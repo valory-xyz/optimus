@@ -69,14 +69,14 @@ def fetch_token_id(symbol):
     return None
 
 
-def fetch_historical_data(limit: int = 500):
+def fetch_historical_data(limit: int = 720):
     global _historical_data_cache
     if _historical_data_cache is not None:
         return _historical_data_cache
 
     current_time_ms = int(datetime.now().timestamp() * 1000)
-    one_year_ago_ms = current_time_ms - (365 * 24 * 60 * 60 * 1000)
-    url = f"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/getV2AggregatorHistoricalData?last_time={one_year_ago_ms}&limit={limit}"
+    one_month_ago_ms = current_time_ms - (30 * 24 * 60 * 60 * 1000)
+    url = f"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/getV2AggregatorHistoricalData?last_time={one_month_ago_ms}&limit={limit}"
     response = requests.get(url)
     if response.status_code != 200:
         raise Exception("Failed to fetch historical data from STURDY API.")
@@ -89,18 +89,34 @@ def calculate_daily_returns(base_apy, reward_apy=0):
     return (1 + annual_return) ** (1 / 365) - 1
 
 
-def calculate_sharpe_ratio(daily_returns):
-    return pf.timeseries.sharpe_ratio(daily_returns)
-
+def calculate_sharpe_ratio(returns, risk_free_rate=0.0003):
+    """
+    Calculate the Sharpe Ratio without pyfolio.
+    Sharpe = (mean(returns) - risk_free_rate) / std(returns)
+    """
+    if len(returns) < 2:
+        return np.nan  # Not enough data
+    
+    excess_returns = returns - risk_free_rate
+    return excess_returns.mean() / excess_returns.std(ddof=1)
 
 def get_sharpe_ratio_for_address(historical_data, address: str) -> float:
     records = []
-    for entry in historical_data:
+    for _, entry in enumerate(historical_data):
         timestamp = entry['timestamp']
-        data = entry['doc'].get(address, {})
-        base_apy = data.get('baseAPY', 0)
-        rewards_apy = data.get('rewardsAPY', 0)
-        if base_apy or rewards_apy:
+        mapping = {}
+        for ent in entry['doc']:
+            if len(ent.split("_")) < 2:
+                continue
+            addr = ent.split("_")[1]
+            mapping[addr] = ent
+        if address not in mapping:
+            continue
+        address_key = mapping[address]
+        if address_key in entry['doc']:
+            data = entry['doc'][address_key]
+            base_apy = data.get('baseAPY', 0)
+            rewards_apy = data.get('rewardsAPY', 0)
             records.append({
                 'timestamp': timestamp,
                 'base_apy': base_apy,
@@ -111,8 +127,11 @@ def get_sharpe_ratio_for_address(historical_data, address: str) -> float:
         return float('nan')
 
     df = pd.DataFrame(records)
-    df['daily_return'] = df.apply(lambda row: calculate_daily_returns(row['base_apy'], row['rewards_apy']), axis=1)
-    return calculate_sharpe_ratio(df['daily_return'])
+    df['date'] = pd.to_datetime(df['timestamp'], unit='ms').dt.date
+    daily_df = df.groupby('date').median().reset_index()  
+    
+    daily_df['daily_return'] = daily_df.apply(lambda row: calculate_daily_returns(row['base_apy'], row['rewards_apy']), axis=1)
+    return calculate_sharpe_ratio(daily_df['daily_return'])
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
@@ -297,7 +316,7 @@ def analyze_vault_liquidity(aggregator):
     if not tvl or not total_assets:
         return float('nan'), float('nan')
 
-    depth_score = (tvl * total_assets) / (PRICE_IMPACT * 100)
+    depth_score = (np.log1p(tvl) * np.log1p(total_assets)) / (PRICE_IMPACT * 1000) if tvl and total_assets else 0
     liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
     max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
 

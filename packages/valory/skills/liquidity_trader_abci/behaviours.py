@@ -1100,7 +1100,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         f"Error in strategy {next_strategy}: {opportunities['error']}"
                     )
                 else:
-                    self.context.logger.info("Opportunities found:")
+                    self.context.logger.info(f"Opportunities found using {next_strategy} strategy")
                     for opportunity in opportunities:
                         # Customize the following line to include relevant details from each opportunity
                         self.context.logger.info(

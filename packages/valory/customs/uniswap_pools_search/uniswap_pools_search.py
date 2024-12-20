@@ -203,7 +203,7 @@ def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -
         all_pools.extend(pools)
     return all_pools
 
-def get_uniswap_pool_sharpe_ratio(pool_address, graphql_endpoint, days_back=365) -> float:
+def get_uniswap_pool_sharpe_ratio(pool_address, graphql_endpoint, days_back=30) -> float:
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days_back)
     start_timestamp = int(start_date.timestamp())
@@ -230,11 +230,13 @@ def get_uniswap_pool_sharpe_ratio(pool_address, graphql_endpoint, days_back=365)
         return float('nan')
 
     df = pd.DataFrame(data)
+
     df['date'] = pd.to_datetime(df['date'].astype(int), unit='s')
     df['tvlUSD'] = pd.to_numeric(df['tvlUSD'])
     df['feesUSD'] = pd.to_numeric(df['feesUSD'])
     df['total_value'] = df['tvlUSD'] + df['feesUSD']
     returns = df.set_index('date')['total_value'].pct_change().dropna()
+    
     return float(pf.timeseries.sharpe_ratio(returns))
 
 def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
@@ -306,7 +308,7 @@ def calculate_metrics_liquidity_risk(pool_data: Dict[str, Any]) -> Tuple[float, 
         tvl_token0 = float(pool_data.get("totalValueLockedToken0", 0))
         tvl_token1 = float(pool_data.get("totalValueLockedToken1", 0))
 
-        depth_score = (tvl_token0 * tvl_token1 / (PRICE_IMPACT * 100)) if tvl_token0 > 0 and tvl_token1 > 0 else 0
+        depth_score = (np.log1p(tvl_token0) * np.log1p(tvl_token1)) / (PRICE_IMPACT * 100) if tvl_token0 > 0 and tvl_token1 > 0 else 0
         liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
         max_position_size = MAX_POSITION_BASE * (tvl * liquidity_risk_multiplier) / 100
         return depth_score, max_position_size

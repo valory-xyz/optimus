@@ -269,7 +269,7 @@ def fetch_liquidity_metrics(pool_id: str, chain: str, client: Optional[Client] =
         avg_tvl = statistics.mean(float(s['totalLiquidity']) for s in pool_snapshots)
         avg_volume = statistics.mean(float(s.get('volume24h', 0)) for s in pool_snapshots)
 
-        depth_score = (avg_tvl * avg_volume) / (price_impact * 100) if avg_tvl and avg_volume else 0
+        depth_score = (np.log1p(avg_tvl) * np.log1p(avg_volume)) / (price_impact * 100) if avg_tvl and avg_volume else 0
         liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score != 0 else 0
         max_position_size = 50 * (avg_tvl * liquidity_risk_multiplier) / 100
 
@@ -313,15 +313,22 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
         data = response.json()['data']['poolGetSnapshots']
         if not data:
             return None
+        
         df = pd.DataFrame(data)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
         df.set_index('timestamp', inplace=True)
+
+        last_30_days = pd.to_datetime('now') - pd.Timedelta(days=30)
+        df = df[df.index >= last_30_days]
+
         df['sharePrice'] = pd.to_numeric(df['sharePrice'])
         price_returns = df['sharePrice'].pct_change()
+
         df['fees24h'] = pd.to_numeric(df['fees24h'])
         df['totalLiquidity'] = pd.to_numeric(df['totalLiquidity'])
         fee_returns = df['fees24h'] / df['totalLiquidity']
         total_returns = (price_returns + fee_returns).dropna()
+
         sharpe_ratio = pf.timeseries.sharpe_ratio(total_returns)
         return sharpe_ratio
     except Exception as e:

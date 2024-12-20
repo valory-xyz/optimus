@@ -71,24 +71,24 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
         depth_score = opportunity.get("depth_score", 0)
         il_risk_score = opportunity.get("il_risk_score", float('inf'))
 
-        logging.info(f"Evaluating opportunity: {opportunity}")
+        print(f"Evaluating opportunity: {opportunity}")
         if not isinstance(sharpe_ratio, (int, float)) or not isinstance(depth_score, (int, float)) or not isinstance(il_risk_score, (int, float)):
-            logging.info(f"Invalid values for risk metrics")
+            print(f"Invalid values for risk metrics")
             continue
 
         if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
-            logging.info(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
+            print(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
             continue
 
         if depth_score <= DEPTH_SCORE_THRESHOLD:
-            logging.info(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
+            print(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
             continue
 
         if il_risk_score >= IL_RISK_SCORE_THRESHOLD:
-            logging.info(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
+            print(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
             continue
 
-        logging.info("Opportunity meets all risk thresholds")
+        print("Opportunity meets all risk thresholds")
         filtered_opportunities.append(opportunity)
 
     if not filtered_opportunities:

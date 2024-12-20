@@ -203,7 +203,7 @@ def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -
         all_pools.extend(pools)
     return all_pools
 
-def get_uniswap_pool_sharpe_ratio(pool_address, graphql_endpoint, days_back=30) -> float:
+def get_uniswap_pool_sharpe_ratio(pool_address, graphql_endpoint, days_back=365) -> float:
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days_back)
     start_timestamp = int(start_date.timestamp())

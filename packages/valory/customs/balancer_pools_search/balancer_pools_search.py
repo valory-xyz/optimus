@@ -318,9 +318,6 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
         df.set_index('timestamp', inplace=True)
 
-        last_30_days = pd.to_datetime('now') - pd.Timedelta(days=30)
-        df = df[df.index >= last_30_days]
-
         df['sharePrice'] = pd.to_numeric(df['sharePrice'])
         price_returns = df['sharePrice'].pct_change()
 

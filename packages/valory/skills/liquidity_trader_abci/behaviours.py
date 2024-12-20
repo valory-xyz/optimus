@@ -1090,6 +1090,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     if self.current_pool
                     else "",
                     "coingecko_api_key": self.coingecko.api_key,
+                    "get_metrics": False
                 }
             )
 

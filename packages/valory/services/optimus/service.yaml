@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeigk2fhyqvvipt5ihevzqrmouvpcuzva5zprkbm7ovmh3kmmgp7eka
+agent: valory/optimus:0.1.0:bafybeifip76janxxbupwys7bdr6cb2pc6qwldyru7okdpe6e7b6ybsv5yy
 number_of_agents: 1
 deployment:
   agent:
@@ -94,9 +94,9 @@ models:
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
       staking_chain: ${STAKING_CHAIN:str:""}
       initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
-      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeifq4g7eplawoahfsnmmgiqdbtwaeklw32kbydnvbzjt42wcf3kdem":"max_apr_selection","bafybeiej7wmir7c757d6arndygz3hwaa4yf2if3ywvwcyetq2y5jrq5czm":"balancer_pools_search","bafybeienykfempsv334o5xpy3v2vx5627dxgvf5h777pphe5ip6tfejyh4":"uniswap_pools_search","bafybeicfpyxkegjcfgo7bskngov3xkaaonasxelnagw42pvqecbycbq6vm":"asset_lending"}}
+      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeiflcybrqhvykk3jfexzgx7nx7gumrl554zg5kgq5yarf2dqzb3fuq":"max_apr_selection","bafybeigqdguy5n5kuypepeprtn3xohv6xzyaffmdwkmycveg2gzba4oody":"balancer_pools_search","bafybeicnk3tklmougbjie7lnvw744jsjuqs2s4w4ow27myja37uevmtljy":"uniswap_pools_search","bafybeibmhcuoxj6qoid7ryffkhlcwkxemzd4pw77buatltmw3cfmtvs2ki":"asset_lending"}}
       strategies_kwargs: ${STRATEGIES_KWARGS:str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
-      selected_strategies: ${SELECTED_STRATEGIES:list:["merkl_pools_search","balancer_pools_search","uniswap_pools_search"]}
+      selected_strategies: ${SELECTED_STRATEGIES:list:["asset_lending","balancer_pools_search","uniswap_pools_search"]}
       selected_protocols: ${SELECTED_PROTOCOLS:list:["BALANCER","UNISWAP_V3"]}
       selected_hyper_strategy: ${SELECTED_HYPER_STRATEGY:str:max_apr_selection}
       apr_threshold: ${APR_THRESHOLD:int:5}

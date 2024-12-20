@@ -2024,6 +2024,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "apr",
             "pool_type",
             "whitelistedSilos",
+            "pool_id"
         ]
 
         # Create the current_pool dictionary with only the desired information

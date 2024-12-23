@@ -3,8 +3,8 @@
         "custom/valory/merkl_pools_search/0.1.0": "bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq",
         "custom/valory/asset_lending/0.1.0": "bafybeibmhcuoxj6qoid7ryffkhlcwkxemzd4pw77buatltmw3cfmtvs2ki",
         "custom/valory/max_apr_selection/0.1.0": "bafybeiczs2b7akeidsrwos2gbhkneupyi5b57sszy7fjbjoaexumziemrm",
-        "custom/valory/balancer_pools_search/0.1.0": "bafybeieo3uzsfhzvjeiys77zj43upn5ltrhqj73kmgd2y72ckf3ltfim24",
-        "custom/valory/uniswap_pools_search/0.1.0": "bafybeibdlttsop7gibdkmm4awzlijrjvrib4vpjcnxlnousnsvky7ayjjm",
+        "custom/valory/balancer_pools_search/0.1.0": "bafybeiagkmmktcpgb763fqnzfnavc35uzxonrdwburpq7nq2atob42hmgi",
+        "custom/valory/uniswap_pools_search/0.1.0": "bafybeibxgmsbfsgltrjfu5u7ru4f4mhl43z6hg2lhv5ulvl6772p6eunhq",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeib755ksie5yv4wn6jl7i3bpshlhscf4bzsabqrbahm6b3m5ixzmbi",
         "contract/valory/balancer_vault/0.1.0": "bafybeidgdivmrm77yotgpnn567ayzhoqa6hufrijy2cj2b7w5wa63otzq4",
         "contract/valory/erc20/0.1.0": "bafybeied2jjdqbcmddaop5b364brpoxatxcypj3gfvpov2ts4c4shoybee",
@@ -16,8 +16,8 @@
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeidtqimixeqixjcloote7ikuvrfmqhu4ib5uh5iyyiasflr6pktjfm",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeieccqgd3omu6c25oe2zlece6w6crlcsewneq3kejk3z746ext3ufu",
         "skill/valory/optimus_abci/0.1.0": "bafybeihyesxjjtpnnf4vddiwchi7trnh3yjwkj4jdkfapn7hb5fjv46glq",
-        "agent/valory/optimus/0.1.0": "bafybeiaxv77by2rmtidnhrgc3jf75osybmxubx53hd57deitgryivu6kdi",
-        "service/valory/optimus/0.1.0": "bafybeias4woazmeyihuojumr6d5o7iohmmyxpnkjeq4bytytd7wwjmofeu"
+        "agent/valory/optimus/0.1.0": "bafybeifhwhxndoeil6odqbr6ezwy3elchijoiy4k3ve6mal2ojffa4awga",
+        "service/valory/optimus/0.1.0": "bafybeiebkfa75cf7uzeycn3vqbljtf7oefp3qkyywymrijnfpjbecejlwe"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

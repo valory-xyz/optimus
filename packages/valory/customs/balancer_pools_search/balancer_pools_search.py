@@ -325,7 +325,7 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
         df['totalLiquidity'] = pd.to_numeric(df['totalLiquidity'])
         fee_returns = df['fees24h'] / df['totalLiquidity']
         total_returns = (price_returns + fee_returns).dropna()
-
+        total_returns = total_returns.replace([np.inf, -np.inf], np.nan)
         sharpe_ratio = pf.timeseries.sharpe_ratio(total_returns)
         return sharpe_ratio
     except Exception as e:

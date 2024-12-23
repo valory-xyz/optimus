@@ -1090,7 +1090,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     if self.current_pool
                     else "",
                     "coingecko_api_key": self.coingecko.api_key,
-                    "get_metrics": False
+                    "get_metrics": False,
                 }
             )
 
@@ -2025,7 +2025,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "apr",
             "pool_type",
             "whitelistedSilos",
-            "pool_id"
+            "pool_id",
         ]
 
         # Create the current_pool dictionary with only the desired information

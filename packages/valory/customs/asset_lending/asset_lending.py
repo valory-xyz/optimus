@@ -260,8 +260,8 @@ def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, 
 
     P0 = prices_1_data[0] / prices_2_data[0]
     P1 = prices_1_data[-1] / prices_2_data[-1]
-    il_impact = 1 - np.sqrt(P1 / P0) * (2 / (1 + P1 / P0))
-    il_risk_score = il_impact * price_correlation * volatility_multiplier
+    il_impact = 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
+    il_risk_score = il_impact * abs(price_correlation) * volatility_multiplier
 
     return float(il_risk_score)
 
@@ -288,9 +288,7 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 
         if token_1_id:
             il_risk_score = calculate_il_risk_score_for_lending(token_0_id, token_1_id, coingecko_api_key)
-            # Normalize between 0 and 1
-            normalized_il_risk_score = max(0, min(il_risk_score, 1))
-            il_risk_scores.append(normalized_il_risk_score)
+            il_risk_scores.append(il_risk_score)
         else:
             logging.error(f"Failed to fetch token IDs for silo: {silo['collateral']}")
 

@@ -205,7 +205,7 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
 
 def calculate_il_impact(P0, P1):
     # Impermanent Loss impact calculation
-    return 1 - np.sqrt(P1 / P0) * (2 / (1 + P1 / P0))
+    return 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
 
 def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
     cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
@@ -235,7 +235,7 @@ def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
     P1 = prices_1_data[-1] / prices_2_data[-1]
     il_impact = calculate_il_impact(P0, P1)
 
-    return float(il_impact * price_correlation * volatility_multiplier)
+    return float(il_impact * abs(price_correlation) * volatility_multiplier)
 
 def create_graphql_client(api_url='https://api-v3.balancer.fi') -> Client:
     transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)

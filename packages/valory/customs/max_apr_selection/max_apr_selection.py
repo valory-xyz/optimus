@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Union
 REQUIRED_FIELDS = ("trading_opportunities","current_pool")
 SHARPE_RATIO_THRESHOLD = 1
 DEPTH_SCORE_THRESHOLD = 50
-IL_RISK_SCORE_THRESHOLD = 0.5
+IL_RISK_SCORE_THRESHOLD = -0.05
 
 # Weights for each metric
 SHARPE_RATIO_WEIGHT = 0.4
@@ -44,7 +44,7 @@ def calculate_composite_score(pool, max_values):
     # Normalize metrics
     normalized_sharpe_ratio = sharpe_ratio / max_values['sharpe_ratio']
     normalized_depth_score = depth_score / max_values['depth_score']
-    normalized_il_risk_score = 1 - (il_risk_score / max_values['il_risk_score'])  # Lower is better
+    normalized_il_risk_score = (max_values['il_risk_score'] - il_risk_score) / max_values['il_risk_score']
 
     # Calculate composite score
     return (
@@ -84,7 +84,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
             print(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
             continue
 
-        if il_risk_score >= IL_RISK_SCORE_THRESHOLD:
+        if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
             print(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
             continue
 

@@ -266,9 +266,9 @@ def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
 
     P0 = prices_1_data[0] / prices_2_data[0]
     P1 = prices_1_data[-1] / prices_2_data[-1]
-    il_impact = 1 - np.sqrt(P1 / P0) * (2 / (1 + P1 / P0))
+    il_impact = 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
 
-    return float(il_impact * price_correlation * volatility_multiplier)
+    return float(il_impact * abs(price_correlation) * volatility_multiplier)
 
 def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]:
     query = {

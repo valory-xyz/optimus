@@ -154,6 +154,7 @@ def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
     score_threshold = np.percentile([p["score"] for p in scored_pools], SCORE_PERCENTILE)
     filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
     filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
+    
     return filtered_scored_pools[:10] if len(filtered_scored_pools) > 10 else filtered_scored_pools
 
 def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
@@ -235,7 +236,7 @@ def get_uniswap_pool_sharpe_ratio(pool_address, graphql_endpoint, days_back=365)
     df['tvlUSD'] = pd.to_numeric(df['tvlUSD'])
     df['feesUSD'] = pd.to_numeric(df['feesUSD'])
     df['total_value'] = df['tvlUSD'] + df['feesUSD']
-    returns = df.set_index('date')['total_value'].pct_change().dropna()
+    returns = df.set_index('date')['total_value'].pct_change().replace([np.inf, -np.inf], np.nan).dropna()
     
     return float(pf.timeseries.sharpe_ratio(returns))
 

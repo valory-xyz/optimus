@@ -30,16 +30,12 @@ def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
 
 def calculate_composite_score(pool, max_values):
     """Calculate the composite score for a given pool."""
-    sharpe_ratio = pool.get("sharpe_ratio", 0)
-    depth_score = pool.get("depth_score", 0)
-    il_risk_score = pool.get("il_risk_score", float('inf'))
+    sharpe_ratio = pool.get("sharpe_ratio", math.nan)
+    depth_score = pool.get("depth_score", math.nan)
+    il_risk_score = pool.get("il_risk_score", math.nan)
 
-    if not isinstance(sharpe_ratio, (int, float)):
-        sharpe_ratio = 0
-    if not isinstance(depth_score, (int, float)):
-        depth_score = 0
-    if not isinstance(il_risk_score, (int, float)):
-        il_risk_score = float('inf')
+    if math.isnan(sharpe_ratio) or math.isnan(sharpe_ratio) or math.isnan(sharpe_ratio):
+        return 0
 
     # Normalize metrics
     normalized_sharpe_ratio = sharpe_ratio / max_values['sharpe_ratio']

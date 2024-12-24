@@ -225,14 +225,14 @@ def filter_aggregators(chains, apr_threshold, aggregators, lending_asset, curren
         return filtered_scored_aggregators
 
 
-def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, coingecko_api_key: str) -> float:
+def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, coingecko_api_key: str, time_period: int = 90) -> float:
     if not asset_token_1 or not asset_token_2:
         logging.error("Tokens are required. Cannot calculate IL risk score without asset tokens")
         return float('nan')
 
     cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     to_timestamp = int(datetime.now().timestamp())
-    from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
+    from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
 
     try:
         prices_1 = cg.get_coin_market_chart_range_by_id(id=asset_token_1, vs_currency='usd',

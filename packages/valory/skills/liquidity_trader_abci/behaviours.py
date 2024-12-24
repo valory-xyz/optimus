@@ -1530,7 +1530,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "dex_type": self.current_pool.get("dex_type"),
             "chain": self.current_pool.get("chain"),
             "assets": [token.get("token") for token in tokens],
-            "pool_address": self.current_pool.get("address"),
+            "pool_address": self.current_pool.get("pool_address"),
             "pool_type": self.current_pool.get("pool_type"),
             "token_id": self.current_pool.get("token_id"),
             "liquidity": self.current_pool.get("liquidity"),

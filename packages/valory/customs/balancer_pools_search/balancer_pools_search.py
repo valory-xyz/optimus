@@ -1,423 +1,516 @@
 import warnings
-warnings.filterwarnings("ignore")  # Suppress all warnings
-
+import time
 import requests
-from typing import Dict, Union, Any, List, Optional
-from pycoingecko import CoinGeckoAPI
-from datetime import datetime, timedelta
 import numpy as np
 import logging
-from web3 import Web3
 import pandas as pd
 import pyfolio as pf
-import statistics
-from gql import gql, Client
-from gql.transport.requests import RequestsHTTPTransport
+from web3 import Web3
+from typing import Dict, Union, Any, List, Optional, Tuple
+from datetime import datetime, timedelta
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+from pycoingecko import CoinGeckoAPI
+import json
+import statistics
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# Constants and mappings
-SUPPORTED_POOL_TYPES = {
-    "WEIGHTED": "Weighted",
-    "COMPOSABLE_STABLE": "ComposableStable",
-    "LIQUIDITY_BOOTSTRAPING": "LiquidityBootstrapping",
-    "META_STABLE": "MetaStable",
-    "STABLE": "Stable",
-    "INVESTMENT": "Investment"
-}
-REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint", "current_pool", "coingecko_api_key")
-BALANCER = "balancerPool"
-FEE_RATE_DIVISOR = 1000000
-DAYS_IN_YEAR = 365
-PERCENT_CONVERSION = 100
-TVL_WEIGHT = 0.7
-APR_WEIGHT = 0.3
-TVL_PERCENTILE = 50
-APR_PERCENTILE = 50
-SCORE_PERCENTILE = 80
-CHAIN_URLS = {
-    "mode": "https://1rpc.io/mode",
-    "optimism": "https://mainnet.optimism.io",
-    "base": "https://1rpc.io/base"
-}
+# Constants
+@dataclass
+class Constants:
+    SUPPORTED_POOL_TYPES = {
+        "WEIGHTED": "Weighted",
+        "COMPOSABLE_STABLE": "ComposableStable",
+        "LIQUIDITY_BOOTSTRAPING": "LiquidityBootstrapping",
+        "META_STABLE": "MetaStable",
+        "STABLE": "Stable",
+        "INVESTMENT": "Investment"
+    }
+    REQUIRED_FIELDS = frozenset({"chains", "apr_threshold", "graphql_endpoint", "current_pool", "coingecko_api_key"})
+    EXCLUDED_APR_TYPES = frozenset({"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"})
+    CHAIN_URLS = {
+        "mode": "https://1rpc.io/mode",
+        "optimism": "https://mainnet.optimism.io",
+        "base": "https://1rpc.io/base"
+    }
+    METRICS = {
+        'TVL_WEIGHT': 0.7,
+        'APR_WEIGHT': 0.3,
+        'TVL_PERCENTILE': 50,
+        'APR_PERCENTILE': 50,
+        'SCORE_PERCENTILE': 80
+    }
 
-EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
+# Session management
+def create_session():
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
 
-@lru_cache(None)
-def fetch_coin_list():
-    """Fetches the list of coins from CoinGecko API only once."""
-    url = "https://api.coingecko.com/api/v3/coins/list"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        logging.error(f"Failed to fetch coin list: {e}")
-        return None
+class Cache:
+    def __init__(self):
+        self.coin_list = None
+        self.web3_connections = {}
+        self.token_names = {}
+        self.session = create_session()
 
-def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
-    return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
+    def fetch_coin_list(self):
+        if not self.coin_list:
+            try:
+                response = self.session.get("https://api.coingecko.com/api/v3/coins/list")
+                response.raise_for_status()
+                self.coin_list = response.json()
+            except Exception as e:
+                logger.error(f"Failed to fetch coin list: {e}")
+                self.coin_list = []
+        return self.coin_list
 
-def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
+    @lru_cache(maxsize=1000)
+    def get_token_name(self, chain_name: str, token_address: str) -> Optional[str]:
+        if not Web3.is_address(token_address):
+            return None
+            
+        web3 = self.get_web3_connection(chain_name)
+        if not web3:
+            return None
 
-def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
-    headers = {'Content-Type': 'application/json'}
-    payload = {'query': query, 'variables': variables or {}}
-    response = requests.post(graphql_endpoint, json=payload, headers=headers)
-    if response.status_code != 200:
-        return {"error": f"GraphQL query failed with status code {response.status_code}"}
-    result = response.json()
-    if 'errors' in result:
-        return {"error": f"GraphQL Errors: {result['errors']}"}
-    return result['data']
+        try:
+            contract = web3.eth.contract(
+                address=Web3.to_checksum_address(token_address),
+                abi=[{
+                    "constant": True,
+                    "inputs": [],
+                    "name": "name",
+                    "outputs": [{"name": "", "type": "string"}],
+                    "type": "function"
+                }]
+            )
+            return contract.functions.name().call()
+        except Exception as e:
+            logger.debug(f"Error fetching token name: {e}")
+            return None
 
-def get_total_apr(pool) -> float:
-    apr_items = pool.get('dynamicData', {}).get('aprItems', [])
-    return sum(item['apr'] for item in apr_items if item['type'] not in EXCLUDED_APR_TYPES)
+    def get_web3_connection(self, chain_name: str) -> Optional[Web3]:
+        if chain_name not in self.web3_connections:
+            chain_url = Constants.CHAIN_URLS.get(chain_name)
+            if not chain_url:
+                return None
+            web3 = Web3(Web3.HTTPProvider(chain_url))
+            if web3.is_connected():
+                self.web3_connections[chain_name] = web3
+            else:
+                return None
+        return self.web3_connections[chain_name]
 
-@lru_cache(None)
-def create_web3_connection(chain_name: str):
-    chain_url = CHAIN_URLS.get(chain_name)
-    if not chain_url:
-        return None
-    web3 = Web3(Web3.HTTPProvider(chain_url))
-    return web3 if web3.is_connected() else None
+class BalancerAnalyzer:
+    def __init__(self, cache: Cache):
+        self.cache = cache
+        self.coingecko = None
+        self.constants = Constants()
 
-@lru_cache(None)
-def fetch_token_name_from_contract(chain_name, token_address):
-    ERC20_ABI = [
-        {
-            "constant": True,
-            "inputs": [],
-            "name": "name",
-            "outputs": [{"name": "", "type": "string"}],
-            "payable": False,
-            "stateMutability": "view",
-            "type": "function",
-        }
-    ]
-    web3 = create_web3_connection(chain_name)
-    if not web3:
-        return None
-    contract = web3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
-    try:
-        return contract.functions.name().call()
-    except:
-        return None
+    def initialize_coingecko(self, api_key: str):
+        if not self.coingecko:
+            self.coingecko = CoinGeckoAPI(demo_api_key=api_key)
 
-def get_balancer_pools(chains, graphql_endpoint) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-    chain_list_str = ', '.join(chain.upper() for chain in chains)
-    graphql_query = f"""
-    {{
-      poolGetPools(where: {{chainIn: [{chain_list_str}]}} first: 100) {{
-        id
-        address
-        chain
-        type
-        poolTokens {{
-          address
-          symbol
-        }}
-        dynamicData {{
-          totalLiquidity
-          aprItems {{
+    def run(self, **kwargs) -> Dict[str, Any]:
+        missing_fields = self._check_missing_fields(kwargs)
+        if missing_fields:
+            return {"error": f"Required fields missing: {missing_fields}"}
+
+        try:
+            self.initialize_coingecko(kwargs["coingecko_api_key"])
+            self.cache.fetch_coin_list()
+
+            if kwargs.get('get_metrics', False):
+                return self.calculate_metrics(kwargs["current_pool"])
+            else:
+                return self.get_opportunities(**kwargs)
+        except Exception as e:
+            logger.error(f"Error in run: {e}")
+            return {"error": str(e)}
+
+    def _check_missing_fields(self, kwargs: Dict[str, Any]) -> List[str]:
+        return [field for field in self.constants.REQUIRED_FIELDS if field not in kwargs]
+
+    def get_opportunities(self, chains: List[str], apr_threshold: float, graphql_endpoint: str, 
+                         current_pool: str, **kwargs) -> List[Dict[str, Any]]:
+        pools = self._fetch_balancer_pools(chains, graphql_endpoint)
+        if isinstance(pools, dict) and "error" in pools:
+            return pools
+
+        filtered_pools = self._filter_pools(pools, current_pool, apr_threshold)
+        if not filtered_pools:
+            return {"error": "No suitable pools found"}
+
+        return self._process_pools(filtered_pools)
+
+    def _fetch_balancer_pools(self, chains: List[str], graphql_endpoint: str) -> List[Dict[str, Any]]:
+        chain_list = ', '.join(chain.upper() for chain in chains)
+        query = f"""
+        {{
+          poolGetPools(where: {{chainIn: [{chain_list}]}} first: 100) {{
+            id
+            address
+            chain
             type
-            apr
+            poolTokens {{
+              address
+              symbol
+            }}
+            dynamicData {{
+              totalLiquidity
+              aprItems {{
+                type
+                apr
+              }}
+            }}
           }}
         }}
-      }}
-    }}
-    """
-    data = run_query(graphql_query, graphql_endpoint)
-    if "error" in data:
-        return data
-    return data.get("poolGetPools", [])
+        """
+        try:
+            response = self.cache.session.post(graphql_endpoint, json={"query": query})
+            response.raise_for_status()
+            data = response.json()
+            return data.get("data", {}).get("poolGetPools", [])
+        except Exception as e:
+            logger.error(f"Error fetching pools: {e}")
+            return {"error": str(e)}
 
-def get_filtered_pools(pools, current_pool):
-    # Filter by type and token count
-    qualifying_pools = []
-    for pool in pools:
-        mapped_type = SUPPORTED_POOL_TYPES.get(pool.get('type'))
-        if mapped_type and len(pool.get('poolTokens', [])) == 2 and pool.get('address') != current_pool:
-            pool['type'] = mapped_type
-            pool['apr'] = get_total_apr(pool)
-            pool['tvl'] = pool.get('dynamicData', {}).get('totalLiquidity', 0)
-            qualifying_pools.append(pool)
+    def _filter_pools(self, pools: List[Dict[str, Any]], current_pool: str, 
+                 apr_threshold: float) -> List[Dict[str, Any]]:
+    # First pass: collect all eligible pools
+        qualifying_pools = []
+        for pool in pools:
+            if (pool.get('address') != current_pool and 
+                len(pool.get('poolTokens', [])) == 2 and 
+                self.constants.SUPPORTED_POOL_TYPES.get(pool.get('type'))):
+                
+                pool['type'] = self.constants.SUPPORTED_POOL_TYPES[pool['type']]
+                pool['apr'] = self._calculate_total_apr(pool)
+                pool['tvl'] = float(pool.get('dynamicData', {}).get('totalLiquidity', 0))
+                qualifying_pools.append(pool)
+    
+        if len(qualifying_pools) <= 5:
+            return qualifying_pools
+    
+        # Calculate thresholds
+        tvl_list = [p['tvl'] for p in qualifying_pools]
+        apr_list = [p['apr'] for p in qualifying_pools]
+    
+        tvl_threshold = np.percentile(tvl_list, self.constants.METRICS['TVL_PERCENTILE'])
+        apr_threshold = max(np.percentile(apr_list, self.constants.METRICS['APR_PERCENTILE']), 
+                           apr_threshold / 100)  # Convert input threshold to decimal
+        max_tvl = max(tvl_list)
+        max_apr = max(apr_list)
+    
+        # Score and filter pools
+        scored_pools = []
+        for pool in qualifying_pools:
+            if pool['tvl'] >= tvl_threshold:  # Remove APR threshold here for initial scoring
+                score = (
+                    self.constants.METRICS['TVL_WEIGHT'] * (pool['tvl'] / max_tvl) +
+                    self.constants.METRICS['APR_WEIGHT'] * (pool['apr'] / max_apr)
+                )
+                pool['score'] = score
+                scored_pools.append(pool)
+    
+        if not scored_pools:
+            return []
+    
+        # Sort by score and return top 10
+        scored_pools.sort(key=lambda x: x['score'], reverse=True)
+        return scored_pools[:10]
 
-    if len(qualifying_pools) <= 5:
-        return qualifying_pools
+    def _calculate_total_apr(self, pool: Dict[str, Any]) -> float:
+        apr_items = pool.get('dynamicData', {}).get('aprItems', [])
+        return sum(
+            item['apr'] for item in apr_items 
+            if item['type'] not in self.constants.EXCLUDED_APR_TYPES
+        )
 
-    tvl_list = [float(p.get("tvl", 0)) for p in qualifying_pools]
-    apr_list = [float(p.get("apr", 0)) for p in qualifying_pools]
+    def _apply_scoring(self, pools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not pools:
+            return []
 
-    tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
-    apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
-    max_tvl = max(tvl_list) if tvl_list else 1
-    max_apr = max(apr_list) if apr_list else 1
+        tvl_list = [p['tvl'] for p in pools]
+        apr_list = [p['apr'] for p in pools]
 
-    # Score and filter
-    scored_pools = []
-    for p in qualifying_pools:
-        tvl = float(p["tvl"])
-        apr = float(p["apr"])
-        if tvl >= tvl_threshold and apr >= apr_threshold:
-            score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
-            p["score"] = score
-            scored_pools.append(p)
+        tvl_threshold = np.percentile(tvl_list, self.constants.METRICS['TVL_PERCENTILE'])
+        apr_threshold = np.percentile(apr_list, self.constants.METRICS['APR_PERCENTILE'])
 
-    if not scored_pools:
-        return []
+        max_tvl = max(tvl_list)
+        max_apr = max(apr_list)
 
-    score_threshold = np.percentile([p["score"] for p in scored_pools], SCORE_PERCENTILE)
-    filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
-    filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
+        scored_pools = []
+        for pool in pools:
+            if pool['tvl'] >= tvl_threshold and pool['apr'] >= apr_threshold:
+                score = (
+                    self.constants.METRICS['TVL_WEIGHT'] * (pool['tvl'] / max_tvl) +
+                    self.constants.METRICS['APR_WEIGHT'] * (pool['apr'] / max_apr)
+                )
+                pool['score'] = score
+                scored_pools.append(pool)
 
-    return filtered_scored_pools[:10]
+        scored_pools.sort(key=lambda x: x['score'], reverse=True)
+        return scored_pools[:10]
 
-def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
-    # Try to find a coin matching symbol first.
-    candidates = [coin for coin in coin_list if coin['symbol'].lower() == symbol.lower()]
-    if not candidates:
-        return None
+    def _process_pools(self, pools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        processed_pools = []
+        for pool in pools:
+            try:
+                metrics = self.calculate_metrics(pool)
+                processed_pool = {
+                    "dex_type": "balancerPool",
+                    "chain": pool['chain'].lower(),
+                    "apr": pool['apr'] * 100,
+                    "pool_address": pool['address'],
+                    "pool_id": pool['id'],
+                    "pool_type": pool['type'],
+                    "token0": pool['poolTokens'][0]['address'],
+                    "token1": pool['poolTokens'][1]['address'],
+                    "token0_symbol": pool['poolTokens'][0]['symbol'],
+                    "token1_symbol": pool['poolTokens'][1]['symbol'],
+                    **metrics
+                }
+                processed_pools.append(processed_pool)
+            except Exception as e:
+                logger.error(f"Error processing pool {pool.get('id')}: {e}")
+                continue
 
-    # If single candidate, return it
-    if len(candidates) == 1:
-        return candidates[0]['id']
+        return processed_pools
 
-    # If multiple candidates, match by name if possible
-    normalized_token_name = token_name.replace(" ", "").lower()
-    for coin in candidates:
-        coin_name = coin['name'].replace(" ", "").lower()
-        if coin_name == normalized_token_name or coin_name == symbol.lower():
-            return coin['id']
-    return None
+    def calculate_metrics(self, pool_data: Dict[str, Any]) -> Dict[str, float]:
+        try:
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                futures = {
+                    executor.submit(self._calculate_il_risk, pool_data): "il_risk_score",
+                    executor.submit(self._calculate_sharpe_ratio, pool_data): "sharpe_ratio",
+                    executor.submit(self._calculate_liquidity_metrics, pool_data): "liquidity_metrics"
+                }
+                
+                results = {}
+                for future in futures.keys():
+                    metric_name = futures[future]
+                    try:
+                        results[metric_name] = future.result()
+                    except Exception as e:
+                        logger.error(f"Error calculating {metric_name}: {e}")
+                        results[metric_name] = float('nan')
+                
+                return results
+        except Exception as e:
+            logger.error(f"Error in calculate_metrics: {e}")
+            return {
+                "il_risk_score": float('nan'),
+                "sharpe_ratio": float('nan'),
+                "liquidity_metrics": {
+                    "depth_score": float('nan'),
+                    "max_position_size": float('nan')
+                }
+            }
 
-def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
-    token_name = fetch_token_name_from_contract(chain_name, token_address)
-    if not token_name:
-        matching_coins = [coin for coin in coin_list if coin['symbol'].lower() == symbol.lower()]
-        return matching_coins[0]['id'] if len(matching_coins) == 1 else None
-
-    return get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-
-def calculate_il_impact(P0, P1):
-    # Impermanent Loss impact calculation
-    return 1 - np.sqrt(P1 / P0) * (2 / (1 + P1 / P0))
-
-def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
-    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
-    to_timestamp = int(datetime.now().timestamp())
-    from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
-    try:
-        prices_1 = cg.get_coin_market_chart_range_by_id(id=token_0, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
-        prices_2 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
-    except Exception as e:
-        logging.error(f"Error fetching price data: {e}")
-        return float('nan')
-
-    prices_1_data = np.array([x[1] for x in prices_1['prices']])
-    prices_2_data = np.array([x[1] for x in prices_2['prices']])
-    min_length = min(len(prices_1_data), len(prices_2_data))
-    prices_1_data = prices_1_data[:min_length]
-    prices_2_data = prices_2_data[:min_length]
-
-    if min_length < 2:
-        return float('nan')
-
-    price_correlation = np.corrcoef(prices_1_data, prices_2_data)[0, 1]
-    volatility_1 = np.std(prices_1_data)
-    volatility_2 = np.std(prices_2_data)
-    volatility_multiplier = np.sqrt(volatility_1 * volatility_2)
-    P0 = prices_1_data[0] / prices_2_data[0]
-    P1 = prices_1_data[-1] / prices_2_data[-1]
-    il_impact = calculate_il_impact(P0, P1)
-
-    return float(il_impact * price_correlation * volatility_multiplier)
-
-def create_graphql_client(api_url='https://api-v3.balancer.fi') -> Client:
-    transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)
-    return Client(transport=transport, fetch_schema_from_transport=False)
-
-def create_pool_snapshots_query(pool_id: str, chain: str, range: str = 'NINETY_DAYS') -> gql:
-    return gql(f'''
-    query GetLiquidityMetrics {{
-      poolGetSnapshots(
-        id: "{pool_id}",
-        range: {range},
-        chain: {chain}
-      ) {{
-        totalLiquidity
-        volume24h
-        timestamp
-      }}
-    }}
-    ''')
-
-def fetch_liquidity_metrics(pool_id: str, chain: str, client: Optional[Client] = None, price_impact: float = 0.01) -> Optional[Dict[str, Any]]:
-    if client is None:
-        client = create_graphql_client()
-    try:
-        query = create_pool_snapshots_query(pool_id, chain)
-        response = client.execute(query)
-        pool_snapshots = response['poolGetSnapshots']
-        if not pool_snapshots:
-            return None
-
-        avg_tvl = statistics.mean(float(s['totalLiquidity']) for s in pool_snapshots)
-        avg_volume = statistics.mean(float(s.get('volume24h', 0)) for s in pool_snapshots)
-
-        depth_score = (np.log1p(avg_tvl) * np.log1p(avg_volume)) / (price_impact * 100) if avg_tvl and avg_volume else 0
-        liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score != 0 else 0
-        max_position_size = 50 * (avg_tvl * liquidity_risk_multiplier) / 100
-
-        return {
-            'Average TVL': avg_tvl,
-            'Average Daily Volume': avg_volume,
-            'Depth Score': depth_score,
-            'Liquidity Risk Multiplier': liquidity_risk_multiplier,
-            'Maximum Position Size': max_position_size,
-            'Meets Depth Score Threshold': depth_score > 50
-        }
-
-    except Exception as e:
-        logging.error(f"An error occurred while analyzing pool metrics: {e}")
-        return None
-
-def analyze_pool_liquidity(pool_id: str, chain: str, client: Optional[Client] = None, price_impact: float = 0.01):
-    metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
-    if metrics is None:
-        logging.error("Could not retrieve depth score and maximum position size.")
-        return float('nan'), float('nan')
-    return metrics["Depth Score"], metrics["Maximum Position Size"]
-
-def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
-    query = """
-    {
-        poolGetSnapshots(
-            chain: %s
-            id: "%s"
-            range: %s
-        ) {
-            timestamp
-            sharePrice
-            fees24h
-            totalLiquidity
-        }
-    }
-    """ % (chain, pool_id, timerange)
-    try:
-        response = requests.post("https://api-v3.balancer.fi/", json={'query': query})
-        data = response.json()['data']['poolGetSnapshots']
-        if not data:
-            return None
+    def _calculate_il_risk(self, pool_data: Dict[str, Any]) -> float:
+        token0_id = self.get_token_id(pool_data['token0'], pool_data['token0_symbol'], pool_data['chain'])
+        token1_id = self.get_token_id(pool_data['token1'], pool_data['token1_symbol'], pool_data['chain'])
         
-        df = pd.DataFrame(data)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-        df.set_index('timestamp', inplace=True)
+        if not (token0_id and token1_id):
+            return float('nan')
 
-        df['sharePrice'] = pd.to_numeric(df['sharePrice'])
-        price_returns = df['sharePrice'].pct_change()
+        to_timestamp = int(datetime.now().timestamp())
+        from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
+        
+        try:
+            prices = self._fetch_price_data(token0_id, token1_id, from_timestamp, to_timestamp)
+            if not prices:
+                return float('nan')
+            
+            return self._compute_il_risk_score(*prices)
+        except Exception as e:
+            # logger.error(f"Error calculating IL risk: {e}")
+            return float('nan')
 
-        df['fees24h'] = pd.to_numeric(df['fees24h'])
-        df['totalLiquidity'] = pd.to_numeric(df['totalLiquidity'])
-        fee_returns = df['fees24h'] / df['totalLiquidity']
-        total_returns = (price_returns + fee_returns).dropna()
-        total_returns = total_returns.replace([np.inf, -np.inf], np.nan)
-        sharpe_ratio = pf.timeseries.sharpe_ratio(total_returns)
-        return sharpe_ratio
-    except Exception as e:
-        logging.error(f"Error calculating Sharpe ratio: {e}")
+    def _calculate_sharpe_ratio(self, pool_data: Dict[str, Any]) -> float:
+        try:
+            query = f"""
+            {{
+                poolGetSnapshots(
+                    chain: {pool_data['chain'].upper()}
+                    id: "{pool_data['id']}"
+                    range: ONE_YEAR
+                ) {{
+                    timestamp
+                    sharePrice
+                    fees24h
+                    totalLiquidity
+                }}
+            }}
+            """
+            response = self.cache.session.post("https://api-v3.balancer.fi/", json={'query': query})
+            data = response.json()['data']['poolGetSnapshots']
+            
+            if not data:
+                return float('nan')
+
+            df = pd.DataFrame(data)
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+            df.set_index('timestamp', inplace=True)
+            
+            df['sharePrice'] = pd.to_numeric(df['sharePrice'])
+            price_returns = df['sharePrice'].pct_change()
+            
+            df['fees24h'] = pd.to_numeric(df['fees24h'])
+            df['totalLiquidity'] = pd.to_numeric(df['totalLiquidity'])
+            fee_returns = df['fees24h'] / df['totalLiquidity']
+            
+            total_returns = (price_returns + fee_returns).dropna()
+            total_returns = total_returns.replace([np.inf, -np.inf], np.nan)
+            
+            return pf.timeseries.sharpe_ratio(total_returns)
+        except Exception as e:
+            logger.error(f"Error calculating Sharpe ratio: {e}")
+            return float('nan')
+
+    def _calculate_liquidity_metrics(self, pool_data: Dict[str, Any]) -> Dict[str, float]:
+        try:
+            query = f"""
+            {{
+                poolGetSnapshots(
+                    id: "{pool_data['id']}"
+                    chain: {pool_data['chain'].upper()}
+                    range: NINETY_DAYS
+                ) {{
+                    totalLiquidity
+                    volume24h
+                    timestamp
+                }}
+            }}
+            """
+            response = self.cache.session.post("https://api-v3.balancer.fi/", json={'query': query})
+            snapshots = response.json()['data']['poolGetSnapshots']
+            
+            if not snapshots:
+                return {"depth_score": float('nan'), "max_position_size": float('nan')}
+
+            avg_tvl = statistics.mean(float(s['totalLiquidity']) for s in snapshots)
+            avg_volume = statistics.mean(float(s.get('volume24h', 0)) for s in snapshots)
+
+            price_impact = 0.01  # 1% price impact
+            depth_score = (np.log1p(avg_tvl) * np.log1p(avg_volume)) / (price_impact * 100) if avg_tvl and avg_volume else 0
+            liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score != 0 else 0
+            max_position_size = 50 * (avg_tvl * liquidity_risk_multiplier) / 100
+
+            return {
+                "depth_score": depth_score,
+                "max_position_size": max_position_size
+            }
+        except Exception as e:
+            logger.error(f"Error calculating liquidity metrics: {e}")
+            return {"depth_score": float('nan'), "max_position_size": float('nan')}
+
+    def _fetch_price_data(self, token0_id: str, token1_id: str, 
+                         from_timestamp: int, to_timestamp: int) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        try:
+            prices1 = self.coingecko.get_coin_market_chart_range_by_id(
+                id=token0_id,
+                vs_currency='usd',
+                from_timestamp=from_timestamp,
+                to_timestamp=to_timestamp
+            )
+            prices2 = self.coingecko.get_coin_market_chart_range_by_id(
+                id=token1_id,
+                vs_currency='usd',
+                from_timestamp=from_timestamp,
+                to_timestamp=to_timestamp
+            )
+            
+            return (
+                np.array([x[1] for x in prices1['prices']]),
+                np.array([x[1] for x in prices2['prices']])
+            )
+        except Exception as e:
+            logger.error(f"Error fetching price data: {e}")
+            return None
+
+    def _compute_il_risk_score(self, prices1: np.ndarray, prices2: np.ndarray) -> float:
+        min_length = min(len(prices1), len(prices2))
+        if min_length < 2:
+            return float('nan')
+            
+        prices1 = prices1[:min_length]
+        prices2 = prices2[:min_length]
+        
+        correlation = np.corrcoef(prices1, prices2)[0, 1]
+        volatility = np.sqrt(np.std(prices1) * np.std(prices2))
+        price_ratio_start = prices1[0] / prices2[0]
+        price_ratio_end = prices1[-1] / prices2[-1]
+        
+        il_impact = self.calculate_il_impact(price_ratio_start, price_ratio_end)
+        return float(il_impact * correlation * volatility)
+
+    def calculate_il_impact(self, price_ratio_start: float, price_ratio_end: float) -> float:
+        return 1 - np.sqrt(price_ratio_end / price_ratio_start) * (2 / (1 + price_ratio_end / price_ratio_start))
+
+    def get_token_id(self, token_address: str, symbol: str, chain_name: str) -> Optional[str]:
+        symbol = symbol.lower()
+        matching_coins = [
+            coin for coin in self.cache.coin_list 
+            if coin['symbol'].lower() == symbol
+        ]
+
+        if len(matching_coins) == 1:
+            return matching_coins[0]['id']
+
+        token_name = self.cache.get_token_name(chain_name, token_address)
+        if not token_name:
+            return None
+
+        normalized_name = token_name.lower().replace(" ", "")
+        for coin in matching_coins:
+            if coin['name'].lower().replace(" ", "") == normalized_name:
+                return coin['id']
         return None
 
-def format_pool_data(pool) -> Dict[str, Any]:
-    dex_type = BALANCER
-    return {
-        "dex_type": dex_type,
-        "chain": pool['chain'].lower(),
-        "apr": pool['apr'] * 100,
-        "pool_address": pool['address'],
-        "pool_id": pool['id'],
-        "pool_type": pool['type'],
-        "token0": pool['poolTokens'][0]['address'],
-        "token1": pool['poolTokens'][1]['address'],
-        "token0_symbol": pool['poolTokens'][0]['symbol'],
-        "token1_symbol": pool['poolTokens'][1]['symbol'],
-        "il_risk_score": pool['il_risk_score'],
-        "sharpe_ratio": pool['sharpe_ratio'],
-        "depth_score": pool['depth_score'],
-        "max_position_size": pool['max_position_size']
+def main():
+    # Initialize cache and analyzer
+    cache = Cache()
+    analyzer = BalancerAnalyzer(cache)
+    
+    # Configuration
+    config = {
+        "chains": ["MAINNET"],
+        "apr_threshold": 5,
+        "graphql_endpoint": "https://api-v3.balancer.fi",
+        "current_pool": "0x5c6ee304399dbdb9c8ef030ab642b10820db8f56000200000000000000000014",
+        "coingecko_api_key": "CG-mf5xZnGELpSXeSqmHDLY2nNU"
     }
-
-def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coingecko_api_key, coin_list):
-    pools = get_balancer_pools(chains, graphql_endpoint)
-    if isinstance(pools, dict) and "error" in pools:
-        return pools
-    filtered_pools = get_filtered_pools(pools, current_pool)
-    if not filtered_pools:
-        return {"error": "No suitable pools found"}
-
-    token_id_cache = {}
-    for pool in filtered_pools:
-        pool['chain'] = pool['chain'].lower()
-
-        # Token 0
-        t0_sym = pool['poolTokens'][0]["symbol"].lower()
-        if t0_sym not in token_id_cache:
-            token_0_id = get_token_id_from_symbol(pool['poolTokens'][0]["address"], t0_sym, coin_list, pool['chain'])
-            if token_0_id:
-                token_id_cache[t0_sym] = token_0_id
-        else:
-            token_0_id = token_id_cache[t0_sym]
-
-        # Token 1
-        t1_sym = pool['poolTokens'][1]["symbol"].lower()
-        if t1_sym not in token_id_cache:
-            token_1_id = get_token_id_from_symbol(pool['poolTokens'][1]["address"], t1_sym, coin_list, pool['chain'])
-            if token_1_id:
-                token_id_cache[t1_sym] = token_1_id
-        else:
-            token_1_id = token_id_cache[t1_sym]
-
-        if token_0_id and token_1_id:
-            pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
-        else:
-            pool['il_risk_score'] = float('nan')
-
-        pool['sharpe_ratio'] = get_balancer_pool_sharpe_ratio(pool['id'], pool['chain'].upper())
-        pool['depth_score'], pool['max_position_size'] = analyze_pool_liquidity(pool['id'], pool['chain'].upper())
-
-    return [format_pool_data(pool) for pool in filtered_pools]
-
-def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs) -> Optional[Dict[str, Any]]:
-    token_0_id = get_token_id_from_symbol(current_pool['token0'], current_pool['token0_symbol'], coin_list, current_pool['chain'])
-    token_1_id = get_token_id_from_symbol(current_pool['token1'], current_pool['token1_symbol'], coin_list, current_pool['chain'])
-    il_risk_score = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key) if token_0_id and token_1_id else float('nan')
-    sharpe_ratio = get_balancer_pool_sharpe_ratio(current_pool['pool_id'], current_pool['chain'].upper())
-    depth_score, max_position_size = analyze_pool_liquidity(current_pool['pool_id'], current_pool['chain'].upper())
-    return {
-        "il_risk_score": il_risk_score,
-        "sharpe_ratio": sharpe_ratio,
-        "depth_score": depth_score,
-        "max_position_size": max_position_size
-    }
-
-def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
-    missing = check_missing_fields(kwargs)
-    if missing:
-        return {"error": f"Required kwargs {missing} were not provided."}
-
-    get_metrics = kwargs.get('get_metrics', False)
-    kwargs = remove_irrelevant_fields(kwargs)
-    coin_list = fetch_coin_list()
-    kwargs.update({"coin_list": coin_list})
-
-    if get_metrics:
-        return calculate_metrics(**kwargs)
-    else:
-        result = get_opportunities(**kwargs)
-        if not result:
-            return {"error": "No suitable aggregators found"}
-        return result
+    
+    # Run analysis
+    start_time = time.time()
+    try:
+        result = analyzer.run(**config)
+        print(f"Analysis completed successfully:")
+        print(json.dumps(result, indent=2))
+    except Exception as e:
+        logger.error(f"Error during analysis: {e}")
+    finally:
+        execution_time = time.time() - start_time
+        print(f"Script executed in {execution_time:.4f} seconds")

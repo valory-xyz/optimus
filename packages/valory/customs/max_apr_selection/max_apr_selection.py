@@ -1,6 +1,9 @@
 import math
-import logging
 from typing import Any, Dict, List, Union
+from aea.helpers.logging import setup_logger
+
+# Configure logging
+_logger = setup_logger(__name__)
 
 # Constants
 REQUIRED_FIELDS = ("trading_opportunities","current_pool")
@@ -12,9 +15,6 @@ IL_RISK_SCORE_THRESHOLD = -0.05
 SHARPE_RATIO_WEIGHT = 0.4
 DEPTH_SCORE_WEIGHT = 0.3
 IL_RISK_SCORE_WEIGHT = 0.3
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
@@ -71,32 +71,28 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
         depth_score = opportunity.get("depth_score", 0)
         il_risk_score = opportunity.get("il_risk_score", float('inf'))
 
-        print(f"Evaluating opportunity: {opportunity}")
+        _logger.info(f"Evaluating opportunity: {opportunity}")
         if not isinstance(sharpe_ratio, (int, float)) or not isinstance(depth_score, (int, float)) or not isinstance(il_risk_score, (int, float)):
-            print(f"Invalid values for risk metrics")
+            _logger.info("Invalid values for risk metrics")
             continue
 
         if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
-            print(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
+            _logger.info(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
             continue
 
         if depth_score <= DEPTH_SCORE_THRESHOLD:
-            print(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
+            _logger.info(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
             continue
 
         if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
-            print(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
+            _logger.info(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
             continue
 
-        print("Opportunity meets all risk thresholds")
+        _logger.info("Opportunity meets all risk thresholds")
         filtered_opportunities.append(opportunity)
 
     if not filtered_opportunities:
-        logging.error("No opportunities meet the risk thresholds.")
-        return {}
-
-    if not filtered_opportunities:
-        logging.error("No opportunities meet the risk thresholds.")
+        _logger.warning("No opportunities meet the risk thresholds.")
         return {}
 
     # Calculate max values for normalization
@@ -109,6 +105,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
     if current_pool:
         # Calculate composite score for the current pool
         current_composite_score = calculate_composite_score(current_pool, max_values)
+
         # Compare each opportunity with the current pool
         better_opportunities = [
             opportunity for opportunity in filtered_opportunities
@@ -118,8 +115,9 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
         if better_opportunities:
             # Select the best opportunity
             optimal_opportunity = max(better_opportunities, key=lambda x: x["composite_score"])
+            _logger.info(f"Better opportunity found with composite score: {optimal_opportunity['composite_score']}")
         else:
-            logging.error("No opportunities significantly better than the current pool.")
+            _logger.warning(f"No opportunities significantly better than the current opportunity with composite score: {current_composite_score}")
             return {}
     else:
         # Select the optimal opportunity (e.g., top opportunity by highest composite score)

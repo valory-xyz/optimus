@@ -6,13 +6,14 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta
-import logging
 import pandas as pd
 import pyfolio as pf
 import json
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+from aea.helpers.logging import setup_logger
+
+# Configure _logger
+_logger = setup_logger(__name__)
 
 # Constants
 REQUIRED_FIELDS = ("chains", "apr_threshold", "lending_asset", "current_pool", "coingecko_api_key")
@@ -49,7 +50,7 @@ def get_coin_list():
             response.raise_for_status()
             _coin_list_cache = response.json()
         except requests.RequestException as e:
-            logging.error(f"Failed to fetch coin list: {e}")
+            _logger.error(f"Failed to fetch coin list: {e}")
             _coin_list_cache = []
     return _coin_list_cache
 
@@ -65,7 +66,7 @@ def fetch_token_id(symbol):
         if coin['symbol'].lower() == symbol:
             return coin['id']
 
-    logging.error(f"Failed to fetch id for coin with symbol: {symbol}")
+    _logger.error(f"Failed to fetch id for coin with symbol: {symbol}")
     return None
 
 
@@ -152,12 +153,12 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
         response.raise_for_status()
         result = response.json()
         if 'errors' in result:
-            logging.error(f"REST API Errors: {result['errors']}")
+            _logger.error(f"REST API Errors: {result['errors']}")
             _aggregators_cache = []
         else:
             _aggregators_cache = result
     except requests.RequestException as e:
-        logging.error(f"REST API request failed: {e}")
+        _logger.error(f"REST API request failed: {e}")
         _aggregators_cache = []
     return _aggregators_cache
 
@@ -180,7 +181,7 @@ def filter_aggregators(chains, apr_threshold, aggregators, lending_asset, curren
                 filtered_aggregators.append(aggregator)
 
     if not filtered_aggregators:
-        logging.error("No suitable aggregator found.")
+        _logger.error("No suitable aggregator found.")
         return []
 
     # If very few aggregators, return them directly
@@ -206,7 +207,7 @@ def filter_aggregators(chains, apr_threshold, aggregators, lending_asset, curren
         scored_aggregators.append(aggregator)
 
     if not scored_aggregators:
-        logging.error("No suitable aggregator found after scoring.")
+        _logger.error("No suitable aggregator found after scoring.")
         return []
 
     score_threshold = np.percentile([agg["score"] for agg in scored_aggregators], SCORE_PERCENTILE)
@@ -215,7 +216,7 @@ def filter_aggregators(chains, apr_threshold, aggregators, lending_asset, curren
     filtered_scored_aggregators.sort(key=lambda x: x["score"], reverse=True)
 
     if not filtered_scored_aggregators:
-        logging.error("No suitable aggregator found after score threshold.")
+        _logger.error("No suitable aggregator found after score threshold.")
         return []
 
     # Limit to top 10 scored pools if more than 10
@@ -227,7 +228,7 @@ def filter_aggregators(chains, apr_threshold, aggregators, lending_asset, curren
 
 def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, coingecko_api_key: str, time_period: int = 90) -> float:
     if not asset_token_1 or not asset_token_2:
-        logging.error("Tokens are required. Cannot calculate IL risk score without asset tokens")
+        _logger.error("Tokens are required. Cannot calculate IL risk score without asset tokens")
         return float('nan')
 
     cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
@@ -240,7 +241,7 @@ def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, 
         prices_2 = cg.get_coin_market_chart_range_by_id(id=asset_token_2, vs_currency='usd',
                                                         from_timestamp=from_timestamp, to_timestamp=to_timestamp)
     except Exception as e:
-        logging.error(f"Error fetching price data: {e}")
+        _logger.error(f"Error fetching price data: {e}")
         return float('nan')
 
     prices_1_data = np.array([x[1] for x in prices_1['prices']])
@@ -290,7 +291,7 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
             il_risk_score = calculate_il_risk_score_for_lending(token_0_id, token_1_id, coingecko_api_key)
             il_risk_scores.append(il_risk_score)
         else:
-            logging.error(f"Failed to fetch token IDs for silo: {silo['collateral']}")
+            _logger.error(f"Failed to fetch token IDs for silo: {silo['collateral']}")
 
     if not il_risk_scores:
         return float('nan')

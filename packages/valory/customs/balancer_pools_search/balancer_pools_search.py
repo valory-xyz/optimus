@@ -207,10 +207,10 @@ def calculate_il_impact(P0, P1):
     # Impermanent Loss impact calculation
     return 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
 
-def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str) -> float:
+def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str, time_period: int = 90) -> float:
     cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     to_timestamp = int(datetime.now().timestamp())
-    from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
+    from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
     try:
         prices_1 = cg.get_coin_market_chart_range_by_id(id=token_0, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
         prices_2 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)

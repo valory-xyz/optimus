@@ -1615,9 +1615,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if len(tokens) == 1:
                 # Only one source token, split it in half for two destination tokens
-                if (
-                    source_token0_chain != dest_chain
-                    and source_token0_address != dest_token0_address
+                if (source_token0_address != dest_token0_address) or (
+                    source_token0_address == dest_token0_address
+                    and source_token0_chain != dest_chain
                 ):
                     bridge_swap_action = {
                         "action": Action.FIND_BRIDGE_ROUTE.value,
@@ -1630,9 +1630,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     }
                     bridge_swap_actions.append(bridge_swap_action)
 
-                if (
-                    source_token0_chain != dest_chain
-                    and source_token0_address != dest_token1_address
+                if (source_token0_address != dest_token1_address) or (
+                    source_token0_address == dest_token1_address
+                    and source_token0_chain != dest_chain
                 ):
                     bridge_swap_action = {
                         "action": Action.FIND_BRIDGE_ROUTE.value,

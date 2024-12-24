@@ -6,7 +6,6 @@ from typing import Dict, Union, Any, List, Optional
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta
 import numpy as np
-import logging
 from web3 import Web3
 import pandas as pd
 import pyfolio as pf
@@ -14,9 +13,10 @@ import statistics
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 from functools import lru_cache
+from aea.helpers.logging import setup_logger
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure _logger
+_logger = setup_logger(__name__)
 
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {
@@ -54,7 +54,7 @@ def fetch_coin_list():
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        logging.error(f"Failed to fetch coin list: {e}")
+        _logger.error(f"Failed to fetch coin list: {e}")
         return None
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
@@ -215,7 +215,7 @@ def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str, time_perio
         prices_1 = cg.get_coin_market_chart_range_by_id(id=token_0, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
         prices_2 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
     except Exception as e:
-        logging.error(f"Error fetching price data: {e}")
+        _logger.error(f"Error fetching price data: {e}")
         return float('nan')
 
     prices_1_data = np.array([x[1] for x in prices_1['prices']])
@@ -283,13 +283,13 @@ def fetch_liquidity_metrics(pool_id: str, chain: str, client: Optional[Client] =
         }
 
     except Exception as e:
-        logging.error(f"An error occurred while analyzing pool metrics: {e}")
+        _logger.error(f"An error occurred while analyzing pool metrics: {e}")
         return None
 
 def analyze_pool_liquidity(pool_id: str, chain: str, client: Optional[Client] = None, price_impact: float = 0.01):
     metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
     if metrics is None:
-        logging.error("Could not retrieve depth score and maximum position size.")
+        _logger.error("Could not retrieve depth score and maximum position size.")
         return float('nan'), float('nan')
     return metrics["Depth Score"], metrics["Maximum Position Size"]
 
@@ -329,7 +329,7 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
         sharpe_ratio = pf.timeseries.sharpe_ratio(total_returns)
         return sharpe_ratio
     except Exception as e:
-        logging.error(f"Error calculating Sharpe ratio: {e}")
+        _logger.error(f"Error calculating Sharpe ratio: {e}")
         return None
 
 def format_pool_data(pool) -> Dict[str, Any]:

@@ -6,15 +6,16 @@ from typing import Dict, Union, Any, List, Optional, Tuple
 from pycoingecko import CoinGeckoAPI
 import numpy as np
 from datetime import datetime, timedelta
-import logging
 from web3 import Web3
 import pyfolio as pf
 import pandas as pd
 import time
 import json
 from functools import lru_cache
+from aea.helpers.logging import setup_logger
 
-logging.basicConfig(level=logging.INFO)
+# Configure _logger
+_logger = setup_logger(__name__)
 
 # Constants
 UNISWAP = "UniswapV3"
@@ -123,7 +124,7 @@ def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
             qualifying_pools.append(pool)
 
     if not qualifying_pools:
-        logging.error("No suitable pools found.")
+        _logger.error("No suitable pools found.")
         return []
 
     if len(qualifying_pools) <= 5:
@@ -196,7 +197,7 @@ def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -
             continue
         data = run_query(graphql_query, graphql_endpoint)
         if "error" in data:
-            logging.error("Error in fetching pools data.")
+            _logger.error("Error in fetching pools data.")
             continue
         pools = data.get("pools", [])
         for p in pools:
@@ -249,7 +250,7 @@ def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str, time_perio
         prices_1 = cg.get_coin_market_chart_range_by_id(id=token_0, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
         prices_2 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
     except Exception as e:
-        logging.error(f"Error fetching price data: {e}")
+        _logger.error(f"Error fetching price data: {e}")
         return float('nan')
 
     prices_1_data = np.array([x[1] for x in prices_1['prices']])
@@ -300,7 +301,7 @@ def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]
         if response.status_code == 200 and "data" in response_json:
             return response_json["data"].get("pool")
     except Exception as e:
-        logging.error(f"Error fetching pool data: {e}")
+        _logger.error(f"Error fetching pool data: {e}")
     return None
 
 def calculate_metrics_liquidity_risk(pool_data: Dict[str, Any]) -> Tuple[float, float]:
@@ -314,7 +315,7 @@ def calculate_metrics_liquidity_risk(pool_data: Dict[str, Any]) -> Tuple[float, 
         max_position_size = MAX_POSITION_BASE * (tvl * liquidity_risk_multiplier) / 100
         return depth_score, max_position_size
     except Exception as e:
-        logging.error(f"Error calculating metrics: {e}")
+        _logger.error(f"Error calculating metrics: {e}")
         return float('nan'), float('nan')
 
 def assess_pool_liquidity(pool_id: str, SUBGRAPH_URL: str) -> Tuple[float, float]:

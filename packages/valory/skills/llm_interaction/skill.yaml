@@ -6,10 +6,11 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  behaviours.py: bafybeiglozbntfit6rrxda5dhfpm5itklpy7vv4shui2uw33zqiv6tcf3a
-  dialogues.py: bafybeielgrbffqefvpqn2tm4unkumpdo3zoazamr7pdhimwqvgkdgcxcsa
-  handlers.py: bafybeifz5ke2g4okff2umzt43tohdtpuvtzzpmvt47tlekra47mv3xdwjm
-  models.py: bafybeiggbyio4gmf4e4iyvtipukzbbtmiixaeiqjskgy34zu3nordfxuma
+  __init__.py: bafybeiezggbhs7cwj2nbh24r7g4krb7heyt53rux4swx3ng5rnkyspp6um
+  behaviours.py: bafybeih2sgqfh66uwbxku6xzcgqabgzucsei2m7aesxgsi6qg74er2ghea
+  dialogues.py: bafybeibxiznajx6uas3syce2vsii4gzlsswo65irzvr6kdwvo3fj2birli
+  handlers.py: bafybeie3riday7wmr7luhtfmaeva5tjnp5qv3y6fy7uvvnxvidfpe2ptfa
+  models.py: bafybeibakiwad5iojlzgz2vo637nateqrovlyckisfyx5iguvb6eyo2y6a
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
@@ -17,10 +18,8 @@ connections:
 contracts: []
 protocols:
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
-- valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
-- valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
-- valory/ipfs:0.1.0:bafybeiftxi2qhreewgsc5wevogi7yc5g6hbcbo4uiuaibauhv3nhfcdtvm
 - valory/llm:1.0.0:bafybeihj2orqapokafg7co3wlogwgf6cckaaj2bz3nuv4rm3opkoyhrlp4
+- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/liquidity_trader_abci:0.1.0:bafybeighdp65jcww7fj324hwbucu6pshtnioi2rorv7fva3iwxjc45ubza
@@ -30,10 +29,19 @@ behaviours:
     args: {}
     class_name: LlmInteractionBehaviour
 handlers:
-  http:
+  http_handler:
     args: {}
     class_name: HttpHandler
+  kv_store:
+    args: {}
+    class_name: KvStoreHandler
 models:
+  kv_store_dialogues:
+    args: {}
+    class_name: KvStoreDialogues
+  llm_dialogues:
+    args: {}
+    class_name: LlmDialogues
   params:
     args:
       llm_prompt: xyz

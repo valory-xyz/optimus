@@ -45,7 +45,7 @@ skills:
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
-- valory/llm_interaction:0.1.0:bafybeifyhymb2uz2piroglf3aelkksmaggqg2xsmetyvrb3kpzdts6z3li
+- valory/llm_interaction:0.1.0:bafybeiecospkoicktxqvgcpanvcmsrqlqxufmx4b2rc7nq3i2awj3s7mdm
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeieoarajqdutk3fx7kkfkqso7spc5hzqwvr65gih63qggmippt3cxy
@@ -85,6 +85,11 @@ dependencies:
   open-aea-ledger-ethereum:
     version: ==1.60.0
 default_connection: null
+---
+public_id: dvilela/kv_store:0.1.0
+type: connection
+config:
+  db_path: ${str:/tmp/strategies.db}
 ---
 public_id: valory/abci:0.1.0
 type: connection
@@ -142,7 +147,7 @@ type: connection
 config:
   engine: ${str:text-davinci-003}
   max_tokens: ${int:500}
-  openai_api_key: ${str:null}
+  openai_api_key: ${str:}
   temperature: ${float:0.7}
   use_openai_staging_api: ${bool:false}
   openai_staging_api: ${str:http://host.docker.internal:5000/openai}

@@ -6,10 +6,10 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  behaviours.py: bafybeih2sgqfh66uwbxku6xzcgqabgzucsei2m7aesxgsi6qg74er2ghea
-  dialogues.py: bafybeicblyk5v7c6phgqdopks3qilesagjrskf7xjkwaexm3xt755ldoze
-  handlers.py: bafybeifin7cxpmsgrsgr5ib6bt27pbhpyhf2hygoza5so3yahxum5ch3m4
-  models.py: bafybeibakiwad5iojlzgz2vo637nateqrovlyckisfyx5iguvb6eyo2y6a
+  behaviours.py: bafybeiglozbntfit6rrxda5dhfpm5itklpy7vv4shui2uw33zqiv6tcf3a
+  dialogues.py: bafybeielgrbffqefvpqn2tm4unkumpdo3zoazamr7pdhimwqvgkdgcxcsa
+  handlers.py: bafybeifz5ke2g4okff2umzt43tohdtpuvtzzpmvt47tlekra47mv3xdwjm
+  models.py: bafybeiggbyio4gmf4e4iyvtipukzbbtmiixaeiqjskgy34zu3nordfxuma
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m

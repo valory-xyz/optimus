@@ -6,72 +6,39 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeifa2mdpfg3blrqpwlvnw3hdacy6m2dgahr3iovbjbdhjn2yhillim
-  dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
-  models.py: bafybeigcov6egvmcotomwr2tl6yl6i3pfdt6e5x5prb5mmddpdodlniiii
+  behaviours.py: bafybeih24alu67ucpbnmpipchvss7w7oahiddohl6iioewxq2ihpd3ghzy
+  dialogues.py: bafybeibhgscdocxetyyqf5bsz7rvr2so5ditfzicot4udhsklx4xdprgcu
+  handlers.py: bafybeicz3feolqjpzxmwkx36chfasp25wbruxslq3tsk5t74ikd2nymu5m
+  models.py: bafybeibakiwad5iojlzgz2vo637nateqrovlyckisfyx5iguvb6eyo2y6a
 fingerprint_ignore_patterns: []
 connections:
-- valory/openai:0.1.0:bafybeiaryip2lbiluf7vjsdq6r5qiqdesmhqevrzekfrxpugfypqja6gae
-- dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
+- dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
+- valory/openai:0.1.0:bafybeiaryip2lbiluf7vjsdq6r5qiqdesmhqevrzekfrxpugfypqja6gae
 contracts: []
 protocols:
-- valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
-- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
-
+- valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
+- valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
+- valory/ipfs:0.1.0:bafybeiftxi2qhreewgsc5wevogi7yc5g6hbcbo4uiuaibauhv3nhfcdtvm
+- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
+- valory/liquidity_trader_abci:0.1.0:bafybeies6g6vmde5v32hcjindy6yumwd72fcd2aoikjn67wlqbc7p45zki
+- valory/optimus_abci:0.1.0:bafybeid6nd3yzipsdh6zgngnpllylwzxaviqjom75xyizro4p44fbv4lf4
 behaviours:
   llm_interaction:
     args: {}
     class_name: LlmInteractionBehaviour
 handlers:
-  abci:
-    args: {}
-    class_name: ABCIHandler
-  contract_api:
-    args: {}
-    class_name: ContractApiHandler
   http:
     args: {}
     class_name: HttpHandler
-  ipfs:
-    args: {}
-    class_name: IpfsHandler
-  ledger_api:
-    args: {}
-    class_name: LedgerApiHandler
-  signing:
-    args: {}
-    class_name: SigningHandler
-  tendermint:
-    args: {}
-    class_name: TendermintHandler
 models:
-  abci_dialogues:
-    args: {}
-    class_name: AbciDialogues
-  benchmark_tool:
-    args:
-      log_dir: /logs
-    class_name: BenchmarkTool
-  contract_api_dialogues:
-    args: {}
-    class_name: ContractApiDialogues
-  http_dialogues:
-    args: {}
-    class_name: HttpDialogues
-  ipfs_dialogues:
-    args: {}
-    class_name: IpfsDialogues
-  ledger_api_dialogues:
-    args: {}
-    class_name: LedgerApiDialogues
   params:
-    args: {}
+    args:
+      llm_prompt: xyz
+      service_endpoint_base: https://optimus.staging.autonolas.tech/
     class_name: Params
 dependencies:
   pyyaml:

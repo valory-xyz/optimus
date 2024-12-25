@@ -37,13 +37,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/liquidity_trader_abci:0.1.0:bafybeies6g6vmde5v32hcjindy6yumwd72fcd2aoikjn67wlqbc7p45zki
-- valory/optimus_abci:0.1.0:bafybeifdgaq5hcv3ldwjf7hu3eis27aup5uj3crrryi6jfe4hsnsx6vmfe
+- valory/optimus_abci:0.1.0:bafybeid6nd3yzipsdh6zgngnpllylwzxaviqjom75xyizro4p44fbv4lf4
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
-- valory/llm_interaction:0.1.0:bafybeif7fcwctweilpbcv5pue2hzsm6pvl3i5dwektydz7cd4shpb52zsk
-
+- valory/llm_interaction:0.1.0:bafybeiarovxlljadt2x2wx3lcqzo4imnobalxq4hum7rjo4ro4xrpsorbm
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeieoarajqdutk3fx7kkfkqso7spc5hzqwvr65gih63qggmippt3cxy

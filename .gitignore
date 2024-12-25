@@ -15,6 +15,7 @@ Pipfile.lock
     
 packages/valory/agents/*
 packages/valory/connections/*
+packages/dvilela/*
 packages/valory/contracts/gnosis_safe
 packages/valory/contracts/gnosis_safe_proxy_factory
 packages/valory/contracts/multisend
@@ -28,6 +29,7 @@ packages/valory/skills/*
 !packages/valory/services/optimus_pearl
 !packages/valory/skills/liquidity_trader_abci
 !packages/valory/skills/optimus_abci
+!packages/valory/skills/llm_interaction
 
 leak_report
 /Pipfile.lock

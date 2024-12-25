@@ -23,7 +23,7 @@ import json
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Callable, Dict, List, Optional, Tuple, Union, cast, Generator
 from urllib.parse import urlparse
 
 from aea.protocols.base import Message
@@ -38,6 +38,12 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.optimus_abci.dialogues import HttpDialogue, HttpDialogues
 from packages.valory.skills.optimus_abci.models import SharedState
+from packages.valory.skills.abstract_round_abci.models import Requests
+from packages.valory.skills.llm_interaction.dialogues import LlmDialogue, LlmDialogues
+from packages.valory.protocols.llm.message import LlmMessage
+from packages.valory.connections.openai.connection import (
+    PUBLIC_ID as LLM_CONNECTION_PUBLIC_ID,
+)
 
 class HttpCode(Enum):
     """Http codes"""
@@ -79,15 +85,80 @@ class HttpHandler(BaseHttpHandler):
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
 
-        # Routes
         self.routes = {
-            (HttpMethod.POST.value,): [],
+            (HttpMethod.POST.value,): [
+                (rf"{hostname_regex}\/process_prompt", self._handle_post_process_prompt),
+            ],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
             ],
         }
 
         self.json_content_header = "Content-Type: application/json\n"
+
+    def _handle_post_process_prompt(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a POST request to process a user prompt using OpenAI.
+
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+        try:
+            self.context.logger.info("INSIDE PROCESS PROMPT..................")
+            # Parse the request body
+            request_data = json.loads(http_msg.body.decode("utf-8"))
+            user_prompt = request_data.get("prompt", "")
+
+            if not user_prompt:
+                raise ValueError("Prompt is required.")
+
+            # Create LLM request message
+            llm_dialogues = cast(LlmDialogues, self.context.llm_dialogues)
+            request_llm_message, llm_dialogue = llm_dialogues.create(
+                counterparty=str(LLM_CONNECTION_PUBLIC_ID),
+                performative=LlmMessage.Performative.REQUEST,
+                prompt_template=user_prompt,
+                prompt_values={},
+            )
+
+            # Send request and wait for response
+            llm_response_message = yield from self._do_request(
+                request_llm_message, llm_dialogue
+            )
+            response_data = llm_response_message.value
+
+            # Send OK response with the LLM response
+            self._send_ok_response(http_msg, http_dialogue, {"response": response_data})
+
+        except Exception as e:
+            self.context.logger.error(f"Error processing prompt: {str(e)}")
+            self._handle_bad_request(http_msg, http_dialogue)
+    
+    def _do_request(
+        self,
+        llm_message: LlmMessage,
+        llm_dialogue: LlmDialogue,
+        timeout: Optional[float] = None,
+    ) -> Generator[None, None, LlmMessage]:
+        """
+        Do a request and wait the response, asynchronously.
+
+        :param llm_message: The request message
+        :param llm_dialogue: the HTTP dialogue associated to the request
+        :param timeout: seconds to wait for the reply.
+        :yield: LLMMessage object
+        :return: the response message
+        """
+        self.context.outbox.put_message(message=llm_message)
+        request_nonce = self._get_request_nonce_from_dialogue(llm_dialogue)
+        cast(Requests, self.context.requests).request_id_to_callback[
+            request_nonce
+        ] = self.get_callback_request()
+        # notify caller by propagating potential timeout exception.
+        response = yield from self.wait_for_message(timeout=timeout)
+        return response
 
     @property
     def synchronized_data(self) -> SynchronizedData:

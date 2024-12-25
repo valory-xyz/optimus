@@ -6,14 +6,13 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  behaviours.py: bafybeih24alu67ucpbnmpipchvss7w7oahiddohl6iioewxq2ihpd3ghzy
-  dialogues.py: bafybeibhgscdocxetyyqf5bsz7rvr2so5ditfzicot4udhsklx4xdprgcu
-  handlers.py: bafybeicz3feolqjpzxmwkx36chfasp25wbruxslq3tsk5t74ikd2nymu5m
+  behaviours.py: bafybeih2sgqfh66uwbxku6xzcgqabgzucsei2m7aesxgsi6qg74er2ghea
+  dialogues.py: bafybeicblyk5v7c6phgqdopks3qilesagjrskf7xjkwaexm3xt755ldoze
+  handlers.py: bafybeifin7cxpmsgrsgr5ib6bt27pbhpyhf2hygoza5so3yahxum5ch3m4
   models.py: bafybeibakiwad5iojlzgz2vo637nateqrovlyckisfyx5iguvb6eyo2y6a
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
-- dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
 - valory/openai:0.1.0:bafybeiaryip2lbiluf7vjsdq6r5qiqdesmhqevrzekfrxpugfypqja6gae
 contracts: []
 protocols:
@@ -21,11 +20,11 @@ protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
 - valory/ipfs:0.1.0:bafybeiftxi2qhreewgsc5wevogi7yc5g6hbcbo4uiuaibauhv3nhfcdtvm
-- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
+- valory/llm:1.0.0:bafybeihj2orqapokafg7co3wlogwgf6cckaaj2bz3nuv4rm3opkoyhrlp4
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeies6g6vmde5v32hcjindy6yumwd72fcd2aoikjn67wlqbc7p45zki
-- valory/optimus_abci:0.1.0:bafybeid6nd3yzipsdh6zgngnpllylwzxaviqjom75xyizro4p44fbv4lf4
+- valory/liquidity_trader_abci:0.1.0:bafybeighdp65jcww7fj324hwbucu6pshtnioi2rorv7fva3iwxjc45ubza
+- valory/optimus_abci:0.1.0:bafybeigbc3nbcbvwmnfts4ulk22tnzc6dmymxdmasgi3mlzj2s3zretpte
 behaviours:
   llm_interaction:
     args: {}

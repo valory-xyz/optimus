@@ -21,6 +21,7 @@
 from aea.skills.behaviours import SimpleBehaviour
 
 class LlmInteractionBehaviour(SimpleBehaviour):
+
     def act(self) -> None:
         """Implement the act."""
-        self.context.logger.info("INSIDE NON ABCI SKILL LLM INTERACTION")
+        return

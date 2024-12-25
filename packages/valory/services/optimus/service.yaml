@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeicoabd2bocbozel3q7cjhy5dkmqhrwjfgaqrvxlylspghiehfi5ru
+agent: valory/optimus:0.1.0:bafybeigy3saqe3qfpijm5ivskh5wuibx5fphjdnnjpd4cdnjw3j53tlnzm
 number_of_agents: 1
 deployment:
   agent:
@@ -18,6 +18,14 @@ deployment:
 dependencies:
   requests_toolbelt:
     version: ==1.0.0
+---
+public_id: valory/llm_interaction:0.1.0:bafybeiby5ajjc7a3m2uq73d2pprx6enqt4ghfcq2gkmrtsr75e4d4napi4
+type: skill
+models:
+  params:
+    args:
+      llm_prompt: ${LLM_PROMPT:str:""}
+      service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:""}
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill
@@ -153,6 +161,16 @@ cert_requests:
   not_before: '2022-01-01'
   public_key: ${ACN_NODE_PUBLIC_KEY:str:02d3a830c9d6ea1ae91936951430dee11f4662f33118b02190693be835359a9d77}
   save_path: .certs/acn_cosmos_11000.txt
+---
+public_id: valory/openai:0.1.0
+type: connection
+config:
+  engine: ${ENGINE:str:gpt-4o}
+  max_tokens: ${MAX_TOKENS:int:1000}
+  openai_api_key: ${OPENAI_API_KEY_0:str:null}
+  temperature: ${TEMPERATURE:float:0.7}
+  use_openai_staging_api: ${USE_OPENAI_STAGING_API:bool:false}
+  openai_staging_api: ${OPENAI_STAGING_API:str:http://host.docker.internal:5000/openai}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

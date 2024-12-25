@@ -204,7 +204,6 @@ models:
       - balancer
       - uniswap
       selected_hyper_strategy: max_apr_selection
-      service_endpoint_base: https://optimus.staging.autonolas.tech/
       dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
     class_name: Params
   coingecko:

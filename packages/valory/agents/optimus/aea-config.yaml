@@ -39,13 +39,13 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeighdp65jcww7fj324hwbucu6pshtnioi2rorv7fva3iwxjc45ubza
-- valory/optimus_abci:0.1.0:bafybeigbc3nbcbvwmnfts4ulk22tnzc6dmymxdmasgi3mlzj2s3zretpte
+- valory/liquidity_trader_abci:0.1.0:bafybeifkujwavcbosa224pcs2duxqsgcryuq55hp64oki2j2q4r3xihy3u
+- valory/optimus_abci:0.1.0:bafybeiet2bwvqu5ydrabsrn5u7djubxvh2pclgqse3u54bylsnwduopdpa
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
-- valory/llm_interaction:0.1.0:bafybeiegdgvhc6nllourutgkd7hxbu7lp6ssdcxdwtytvsx2e7uicyql5q
+- valory/llm_interaction:0.1.0:bafybeicwcjgq5suubzrjpqqewj3ha3ggfis7fshzbd6uasbnasvwctdn54
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeieoarajqdutk3fx7kkfkqso7spc5hzqwvr65gih63qggmippt3cxy
@@ -172,7 +172,7 @@ type: skill
 models:
   benchmark_tool:
     args:
-      log_dir: ${str:/logs}
+      log_dir: ${str:/Users/gauravlochab/Desktop/optimus-pools/optimus/logs}
   coingecko:
     args:
       token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -275,7 +275,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/home/divya/Olas-Projects/superfest-agent/data/}
+      store_path: ${str:/Users/gauravlochab/Desktop/optimus-pools/optimus/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}

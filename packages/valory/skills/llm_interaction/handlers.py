@@ -37,6 +37,13 @@ from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     HttpHandler as BaseHttpHandler,
 )
+from packages.dvilela.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
+)
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
 from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.llm_interaction.dialogues import HttpDialogue, HttpDialogues
@@ -147,6 +154,31 @@ class HttpHandler(BaseHttpHandler):
 
         self.json_content_header = "Content-Type: application/json\n"
 
+    def _write_kv(
+        self,
+        data: Dict[str, str],
+    ) -> Generator[None, None, bool]:
+        """Send a request message from the skill context."""
+        self.context.logger.info(f"Preparing to write data to KV store: {data}")
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            data=data,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        self.context.logger.info("Sending KV store request message.")
+        response = yield from self._do_connection_request(
+            kv_store_message, kv_store_dialogue  # type: ignore
+        )
+        success = response == KvStoreMessage.Performative.SUCCESS
+        if success:
+            self.context.logger.info("KV store update successful.")
+        else:
+            self.context.logger.error("KV store update failed.")
+        return success
+
     def _handle_post_process_prompt(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) ->  None:
@@ -157,38 +189,39 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the http dialogue
         """
         try:
-            prompt_template = self.context.params.llm_prompt
+            # prompt_template = self.context.params.llm_prompt
             
-            # # Parse the request body
-            request_data = json.loads(http_msg.body.decode("utf-8"))
-            user_prompt = request_data.get("prompt", "")
-            formatted_str = prompt_template.format(user_prompt=user_prompt)
-            self.context.logger.info(f"{formatted_str=}")
+            # # # Parse the request body
+            # request_data = json.loads(http_msg.body.decode("utf-8"))
+            # user_prompt = request_data.get("prompt", "")
+            # formatted_str = prompt_template.format(user_prompt=user_prompt)
+            # self.context.logger.info(f"{formatted_str=}")
             
-            if not user_prompt:
-                raise ValueError("Prompt is required.")
+            # if not user_prompt:
+            #     raise ValueError("Prompt is required.")
 
-            # # Create LLM request message
-            llm_dialogues = cast(LlmDialogues, self.context.llm_dialogues)
-            request_llm_message, llm_dialogue = llm_dialogues.create(
-                counterparty=str(LLM_CONNECTION_PUBLIC_ID),
-                performative=LlmMessage.Performative.REQUEST,
-                prompt_template=formatted_str,
-                prompt_values={},
-            )
-            self.context.logger.info(f"LLM request message created. {request_llm_message} {llm_dialogue}")
+            # # # Create LLM request message
+            # llm_dialogues = cast(LlmDialogues, self.context.llm_dialogues)
+            # request_llm_message, llm_dialogue = llm_dialogues.create(
+            #     counterparty=str(LLM_CONNECTION_PUBLIC_ID),
+            #     performative=LlmMessage.Performative.REQUEST,
+            #     prompt_template=formatted_str,
+            #     prompt_values={},
+            # )
+            # self.context.logger.info(f"LLM request message created. {request_llm_message} {llm_dialogue}")
 
-            # # Send request and wait for response
-            llm_response_message = self._do_request(
-                request_llm_message, llm_dialogue
-            )
-            self.context.logger.info("Received LLM response message.")
+            # # # Send request and wait for response
+            # llm_response_message = self._do_request(
+            #     request_llm_message, llm_dialogue
+            # )
+            # self.context.logger.info("Received LLM response message.")
 
-            response_data = llm_response_message.value
-            self.context.logger.info(f"LLM response data: {response_data}")
-
+            # response_data = llm_response_message.value
+            # self.context.logger.info(f"LLM response data: {response_data}")
             # Send OK response with the LLM response
-            self._send_ok_response(http_msg, http_dialogue, {"response": response_data})
+            strategies = ['HODL', 'BUY', 'SELL']
+            yield from self._write_kv({"strategies": json.dumps(strategies, sort_keys=True)})
+            self._send_ok_response(http_msg, http_dialogue, {"response": "OK REPORT H EKDUM"})
             self.context.logger.info("Sent OK response with LLM data.")
 
         except Exception as e:

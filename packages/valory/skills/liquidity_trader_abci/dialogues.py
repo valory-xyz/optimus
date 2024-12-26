@@ -61,6 +61,17 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
 from packages.valory.skills.abstract_round_abci.dialogues import (
     TendermintDialogues as BaseTendermintDialogues,
 )
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue as BaseKvStoreDialogue,
+)
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogues as BaseKvStoreDialogues,
+)
+
+from typing import Any
+from aea.protocols.base import Address, Message
+from aea.protocols.dialogue.base import Dialogue as BaseDialogue
+from aea.skills.base import Model
 
 
 AbciDialogue = BaseAbciDialogue
@@ -89,3 +100,34 @@ TendermintDialogues = BaseTendermintDialogues
 
 IpfsDialogue = BaseIpfsDialogue
 IpfsDialogues = BaseIpfsDialogues
+
+KvStoreDialogue = BaseKvStoreDialogue
+
+
+class KvStoreDialogues(Model, BaseKvStoreDialogues):
+    """The dialogues class keeps track of all dialogues."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """
+        Initialize dialogues.
+
+        :param kwargs: keyword arguments
+        """
+        Model.__init__(self, **kwargs)
+
+        def role_from_first_message(  # pylint: disable=unused-argument
+            message: Message, receiver_address: Address
+        ) -> BaseDialogue.Role:
+            """Infer the role of the agent from an incoming/outgoing first message
+
+            :param message: an incoming/outgoing first message
+            :param receiver_address: the address of the receiving agent
+            :return: The role of the agent
+            """
+            return KvStoreDialogue.Role.SKILL
+
+        BaseKvStoreDialogues.__init__(
+            self,
+            self_address=str(self.skill_id),
+            role_from_first_message=role_from_first_message,
+        )

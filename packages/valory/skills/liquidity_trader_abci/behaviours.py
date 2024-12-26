@@ -49,6 +49,16 @@ from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
+
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
+from packages.dvilela.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
+)
+
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.contracts.merkl_distributor.contract import DistributorContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
@@ -100,7 +110,10 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     PostTxSettlementRound,
     StakingState,
     SynchronizedData,
+    FetchStrategiesRound,
+    FetchStrategiesPayload,
 )
+from packages.valory.skills.abstract_round_abci.models import Requests
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -732,6 +745,7 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            self.context.logger.info(f"self.syncronized_data: {self.synchronized_data.strategies}")
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
 
@@ -3620,7 +3634,69 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
                 "Gas used or effective gas price not found in the response."
             )
 
+class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that gets the balances of the assets of agent safes."""
 
+    matching_round: Type[AbstractRound] = FetchStrategiesRound
+    strategies = None
+
+    def async_act(self) -> Generator:
+        """Async act"""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+
+            sender = self.context.agent_address
+            db_data = yield from self._read_kv(keys=("strategies",))
+            self.context.logger.info(f"DB data: {db_data}")
+            strategies = db_data.get("strategies", [])
+            serialized_strategies = json.dumps(strategies, sort_keys=True)
+            payload = FetchStrategiesPayload(sender=sender, strategies=serialized_strategies)
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+
+        self.set_done()
+
+    def _do_connection_request(
+        self,
+        message: Message,
+        dialogue: Message,
+        timeout: Optional[float] = None,
+    ) -> Generator[None, None, Message]:
+        """Do a request and wait the response, asynchronously."""
+
+        self.context.outbox.put_message(message=message)
+        request_nonce = self._get_request_nonce_from_dialogue(dialogue)  # type: ignore
+        cast(Requests, self.context.requests).request_id_to_callback[
+            request_nonce
+        ] = self.get_callback_request()
+        response = yield from self.wait_for_message(timeout=timeout)
+        return response
+    
+    def _read_kv(
+        self,
+        keys: Tuple[str, ...],
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Send a request message from the skill context."""
+        self.context.logger.info(f"Reading keys from db: {keys}")
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.READ_REQUEST,
+            keys=keys,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        response = yield from self._do_connection_request(
+            kv_store_message, kv_store_dialogue  # type: ignore
+        )
+        if response.performative != KvStoreMessage.Performative.READ_RESPONSE:
+            return None
+
+        data = {key: response.data.get(key, None) for key in keys}  # type: ignore
+
+        return data
+    
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
 
@@ -3633,4 +3709,5 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
         PostTxSettlementBehaviour,
+        FetchStrategiesBehaviour,
     ]

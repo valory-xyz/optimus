@@ -8,10 +8,10 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
-  composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
-  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
+  composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
+  dialogues.py: bafybeigl6xg3up3mw533q3l3whkj2wytspunwt3aigu6t3lbrkawtt4pli
   fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
-  handlers.py: bafybeifwxvuf7rpk3dk2lclz4dngw3hrtdlpv2j55kefjyvlzwgcnpy3me
+  handlers.py: bafybeihqzas5c5ipn73yo442plq4efzwkhkxuplxc5xrwdbhpizwzck2ri
   models.py: bafybeif6xl2iuip6rduy4ve5yf6oaibdnfpex3arbrnxsdzvhtkb3wuj4m
 fingerprint_ignore_patterns: []
 connections: []
@@ -22,7 +22,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeighdp65jcww7fj324hwbucu6pshtnioi2rorv7fva3iwxjc45ubza
+- valory/liquidity_trader_abci:0.1.0:bafybeifkujwavcbosa224pcs2duxqsgcryuq55hp64oki2j2q4r3xihy3u
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -35,6 +35,9 @@ handlers:
   contract_api:
     args: {}
     class_name: ContractApiHandler
+  kv_store:
+    args: {}
+    class_name: KvStoreHandler
   http:
     args: {}
     class_name: HttpHandler
@@ -224,6 +227,9 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
+  kv_store_dialogues:
+    args: {}
+    class_name: KvStoreDialogues
 dependencies: {}
 is_abstract: false
 customs: []

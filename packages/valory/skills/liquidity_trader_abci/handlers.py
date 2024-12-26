@@ -20,7 +20,10 @@
 """This module contains the handlers for the skill of LiquidityTraderAbciApp."""
 
 from typing import cast
+from typing import Optional
+from aea.configurations.data_types import PublicId
 
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
@@ -51,7 +54,6 @@ LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 
-
 class IpfsHandler(AbstractResponseHandler):
     """IPFS message handler."""
 
@@ -81,3 +83,17 @@ class IpfsHandler(AbstractResponseHandler):
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         callback = self.shared_state.req_to_callback.pop(nonce)
         callback(message, dialogue)
+
+class KvStoreHandler(AbstractResponseHandler):
+    """A class for handling KeyValue messages."""
+
+    SUPPORTED_PROTOCOL: Optional[PublicId] = KvStoreMessage.protocol_id
+    allowed_response_performatives = frozenset(
+        {
+            KvStoreMessage.Performative.READ_REQUEST,
+            KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            KvStoreMessage.Performative.READ_RESPONSE,
+            KvStoreMessage.Performative.SUCCESS,
+            KvStoreMessage.Performative.ERROR,
+        }
+    )

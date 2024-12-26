@@ -45,7 +45,7 @@ skills:
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
-- valory/llm_interaction:0.1.0:bafybeiecospkoicktxqvgcpanvcmsrqlqxufmx4b2rc7nq3i2awj3s7mdm
+- valory/llm_interaction:0.1.0:bafybeiegdgvhc6nllourutgkd7hxbu7lp6ssdcxdwtytvsx2e7uicyql5q
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeieoarajqdutk3fx7kkfkqso7spc5hzqwvr65gih63qggmippt3cxy
@@ -145,9 +145,9 @@ cert_requests:
 public_id: valory/openai:0.1.0
 type: connection
 config:
-  engine: ${str:text-davinci-003}
+  engine: ${str:gpt-4}
   max_tokens: ${int:500}
-  openai_api_key: ${str:}
+  openai_api_key: ${str:""}
   temperature: ${float:0.7}
   use_openai_staging_api: ${bool:false}
   openai_staging_api: ${str:http://host.docker.internal:5000/openai}
@@ -164,8 +164,8 @@ type: skill
 models:
   params:
     args:
-      llm_prompt: ${str:""}
-      service_endpoint_base: ${str:""}
+      llm_prompt: ${str:respond to my message - {user_prompt}}
+      service_endpoint_base: ${str:"https://optimus.staging.autonolas.tech/"}
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill
@@ -285,7 +285,7 @@ models:
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["optimism","mode"]}
       staking_chain: ${str:""}
-      file_hash_to_strategies: ${str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeiczs2b7akeidsrwos2gbhkneupyi5b57sszy7fjbjoaexumziemrm":"max_apr_selection","bafybeigqdguy5n5kuypepeprtn3xohv6xzyaffmdwkmycveg2gzba4oody":"balancer_pools_search","bafybeicnk3tklmougbjie7lnvw744jsjuqs2s4w4ow27myja37uevmtljy":"uniswap_pools_search","bafybeigpp7ozwu57rrjzjinrosq2ldr5rcnnzhccrcuk5vivs5iu52jdre":"asset_lending"}}
+      file_hash_to_strategies: ${str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeiczs2b7akeidsrwos2gbhkneupyi5b57sszy7fjbjoaexumziemrm":"max_apr_selection","bafybeigqdguy5n5kuypepeprtn3xohv6xzyaffmdwkmycveg2gzba4oody":"balancer_pools_search","bafybeicnk3tklmougbjie7lnvw744jsjuqs2s4w4ow27myja37uevmtljy":"uniswap_pools_search","bafybeif7fcwctweilpbcv3pue2hzsm6pvl3i5dwektydz7cd4shpb52kzu":"asset_lending"}}
       strategies_kwargs: ${str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       selected_strategies: ${list:["asset_lending"]}
       selected_protocols: ${list:["BALANCER","UNISWAP_V3","STURDY"]}

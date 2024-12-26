@@ -147,61 +147,60 @@ class HttpHandler(BaseHttpHandler):
 
         self.json_content_header = "Content-Type: application/json\n"
 
-    def _handle_post_process_prompt(self, http_msg: HttpMessage, http_dialogue: HttpDialogue) -> None:
-        self.context.logger.info(f"INSIDE PROCESS PROMPT.................. {http_msg}")
-        self._send_ok_response(http_msg, http_dialogue, {"response": "ok"})
+    def _handle_post_process_prompt(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) ->  None:
+        """
+        Handle a POST request to process a user prompt using OpenAI.
 
-    # def _handle_post_process_prompt(
-    #     self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    # ) ->  Generator[None, None, list]:
-    #     """
-    #     Handle a POST request to process a user prompt using OpenAI.
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+        try:
+            prompt_template = self.context.params.llm_prompt
+            
+            # # Parse the request body
+            request_data = json.loads(http_msg.body.decode("utf-8"))
+            user_prompt = request_data.get("prompt", "")
+            formatted_str = prompt_template.format(user_prompt=user_prompt)
+            self.context.logger.info(f"{formatted_str=}")
+            
+            if not user_prompt:
+                raise ValueError("Prompt is required.")
 
-    #     :param http_msg: the http message
-    #     :param http_dialogue: the http dialogue
-    #     """
-    #     try:
-    #         self.context.logger.info(f"INSIDE PROCESS PROMPT.................. {http_msg}")
-    #         # Parse the request body
-    #         request_data = json.loads(http_msg.body.decode("utf-8"))
-    #         user_prompt = request_data.get("prompt", "")
-    #         self.context.logger.info(f"Received user prompt: {user_prompt}")
-    #         if not user_prompt:
-    #             raise ValueError("Prompt is required.")
+            # # Create LLM request message
+            llm_dialogues = cast(LlmDialogues, self.context.llm_dialogues)
+            request_llm_message, llm_dialogue = llm_dialogues.create(
+                counterparty=str(LLM_CONNECTION_PUBLIC_ID),
+                performative=LlmMessage.Performative.REQUEST,
+                prompt_template=formatted_str,
+                prompt_values={},
+            )
+            self.context.logger.info(f"LLM request message created. {request_llm_message} {llm_dialogue}")
 
-    #         # Create LLM request message
-    #         llm_dialogues = cast(LlmDialogues, self.context.llm_dialogues)
-    #         request_llm_message, llm_dialogue = llm_dialogues.create(
-    #             counterparty=str(LLM_CONNECTION_PUBLIC_ID),
-    #             performative=LlmMessage.Performative.REQUEST,
-    #             prompt_template=user_prompt,
-    #             prompt_values={},
-    #         )
-    #         self.context.logger.info("LLM request message created.")
+            # # Send request and wait for response
+            llm_response_message = self._do_request(
+                request_llm_message, llm_dialogue
+            )
+            self.context.logger.info("Received LLM response message.")
 
-    #         # Send request and wait for response
-    #         llm_response_message = yield from self._do_request(
-    #             request_llm_message, llm_dialogue
-    #         )
-    #         self.context.logger.info("Received LLM response message.")
+            response_data = llm_response_message.value
+            self.context.logger.info(f"LLM response data: {response_data}")
 
-    #         response_data = llm_response_message.value
-    #         self.context.logger.info(f"LLM response data: {response_data}")
+            # Send OK response with the LLM response
+            self._send_ok_response(http_msg, http_dialogue, {"response": response_data})
+            self.context.logger.info("Sent OK response with LLM data.")
 
-    #         # Send OK response with the LLM response
-    #         self._send_ok_response(http_msg, http_dialogue, {"response": response_data})
-    #         self.context.logger.info("Sent OK response with LLM data.")
-
-    #     except Exception as e:
-    #         self.context.logger.error(f"Error processing prompt: {str(e)}")
-    #         self._handle_bad_request(http_msg, http_dialogue)
+        except Exception as e:
+            self.context.logger.error(f"Error processing prompt: {str(e)}")
+            self._handle_bad_request(http_msg, http_dialogue)
     
     def _do_request(
         self,
         llm_message: LlmMessage,
         llm_dialogue: LlmDialogue,
         timeout: Optional[float] = None,
-    ) -> Generator[None, None, LlmMessage]:
+    ) -> LlmMessage:
         """
         Do a request and wait the response, asynchronously.
 
@@ -213,16 +212,21 @@ class HttpHandler(BaseHttpHandler):
         """
         self.context.logger.info("Sending LLM request message.")
         self.context.outbox.put_message(message=llm_message)
-        request_nonce = self._get_request_nonce_from_dialogue(llm_dialogue)
-        self.context.logger.info(f"Request nonce: {request_nonce}")
+        self.context.logger.info("Handling incoming message.")
 
-        cast(Requests, self.context.requests).request_id_to_callback[
-            request_nonce
-        ] = self.get_callback_request()
-        self.context.logger.info("Callback request registered.")
+        # Process the response message
+        self.context.logger.info("Processing LLM response message.")
+
+        # request_nonce = llm_dialogue.dialogue_label.dialogue_reference[0]
+        # self.context.logger.info(f"Request nonce: {request_nonce}")
+
+        # cast(Requests, self.context.requests).request_id_to_callback[
+        #     request_nonce
+        # ] = self.context.get_callback_request()
+        # self.context.logger.info("Callback request registered.")
 
         # notify caller by propagating potential timeout exception.
-        response = yield from self.wait_for_message(timeout=timeout)
+        response = self.wait_for_message(timeout=timeout)
         self.context.logger.info("Received response message.")
         return response
 
@@ -273,14 +277,9 @@ class HttpHandler(BaseHttpHandler):
         return self._handle_bad_request, {}
 
     def handle(self, message: Message) -> None:
-        """
-        Implement the reaction to an envelope.
-
-        :param message: the message
-        """
+        """Implement the reaction to an envelope."""
         http_msg = cast(HttpMessage, message)
 
-        # Check if this is a request sent from the http_server skill
         if (
             http_msg.performative != HttpMessage.Performative.REQUEST
             or message.sender != str(HTTP_SERVER_PUBLIC_ID.without_hash())
@@ -288,33 +287,18 @@ class HttpHandler(BaseHttpHandler):
             super().handle(message)
             return
 
-        # Check if this message is for this skill. If not, send to super()
         handler, kwargs = self._get_handler(http_msg.url, http_msg.method)
+
         if not handler:
             super().handle(message)
             return
 
-        # Retrieve dialogues
         http_dialogues = cast(HttpDialogues, self.context.http_dialogues)
         http_dialogue = cast(HttpDialogue, http_dialogues.update(http_msg))
 
-        # Invalid message
         if http_dialogue is None:
-            self.context.logger.info(
-                "Received invalid http message={}, unidentified dialogue.".format(
-                    http_msg
-                )
-            )
             return
 
-        # Handle message
-        self.context.logger.info(
-            "Received http request with method={}, url={} and body={!r}".format(
-                http_msg.method,
-                http_msg.url,
-                http_msg.body,
-            )
-        )
         handler(http_msg, http_dialogue, **kwargs)
 
     def _handle_bad_request(
@@ -411,3 +395,14 @@ class HttpHandler(BaseHttpHandler):
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
+
+class LlmHandler(AbstractResponseHandler):
+    """A class for handling LLLM messages."""
+
+    SUPPORTED_PROTOCOL: Optional[PublicId] = LlmMessage.protocol_id
+    allowed_response_performatives = frozenset(
+        {
+            LlmMessage.Performative.REQUEST,
+            LlmMessage.Performative.RESPONSE,
+        }
+    )

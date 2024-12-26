@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the skill of LlmInteraction."""
-from typing import Any, Dict
+from typing import Any, Dict, Callable, Tuple
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
@@ -30,8 +30,15 @@ class Params(Model):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Init"""
+        self.in_flight_req: bool = False
+        self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
+        self.request_count: int = 0
+        self.cleanup_freq = kwargs.get("cleanup_freq", 50)
         self.llm_prompt = self._ensure_get(
             "llm_prompt", kwargs, str
+        )
+        self.waiting_time = self._ensure_get(
+            "waiting_time", kwargs, int
         )
         self.service_endpoint_base = self._ensure_get("service_endpoint_base", kwargs, str)
         super().__init__(*args, **kwargs)

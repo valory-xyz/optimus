@@ -20,6 +20,8 @@
 """This module contains the handlers for the skill of LlmInteraction."""
 
 import json
+import threading
+import time
 import re
 from datetime import datetime
 from enum import Enum
@@ -56,6 +58,7 @@ from packages.valory.skills.abstract_round_abci.handlers import AbstractResponse
 from packages.valory.connections.openai.connection import (
     PUBLIC_ID as LLM_CONNECTION_PUBLIC_ID,
 )
+from aea.protocols.dialogue.base import Dialogue
 
 class BaseHandler(Handler):
     """Base Handler"""
@@ -89,7 +92,7 @@ class BaseHandler(Handler):
             )
             self.cleanup_dialogues()
 
-class KvStoreHandler(AbstractResponseHandler):
+class KvStoreHandler(BaseHandler):
     """A class for handling KeyValue messages."""
 
     SUPPORTED_PROTOCOL: Optional[PublicId] = KvStoreMessage.protocol_id
@@ -102,6 +105,29 @@ class KvStoreHandler(AbstractResponseHandler):
             KvStoreMessage.Performative.ERROR,
         }
     )
+
+    def handle(self, message: Message) -> None:
+        """
+        Implement the reaction to an KVStore message.
+
+        :param message: the message
+        """
+        self.context.logger.info(f"Received message: {message}")
+        kv_store_msg = cast(KvStoreMessage, message)
+
+        if kv_store_msg.performative not in self.allowed_response_performatives:
+            self.context.logger.warning(
+                f"KV Store Message performative not recognized: {kv_store_msg.performative}"
+            )
+            self.params.in_flight_req = False
+            return
+
+        dialogue = self.context.kv_store_dialogues.update(kv_store_msg)
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        callback, kwargs = self.params.req_to_callback.pop(nonce)
+        callback(kv_store_msg, dialogue, **kwargs)
+        self.params.in_flight_req = False
+        self.on_message_handled(message)
 
 class HttpCode(Enum):
     """Http codes"""
@@ -124,6 +150,13 @@ class HttpHandler(BaseHttpHandler):
     """This implements the HTTP handler."""
 
     SUPPORTED_PROTOCOL = HttpMessage.protocol_id
+
+    @property
+    def synchronized_data(self) -> SynchronizedData:
+        """Return the synchronized data."""
+        return SynchronizedData(
+            db=self.context.state.round_sequence.latest_synchronized_data.db
+        )
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -154,34 +187,9 @@ class HttpHandler(BaseHttpHandler):
 
         self.json_content_header = "Content-Type: application/json\n"
 
-    def _write_kv(
-        self,
-        data: Dict[str, str],
-    ) -> Generator[None, None, bool]:
-        """Send a request message from the skill context."""
-        self.context.logger.info(f"Preparing to write data to KV store: {data}")
-        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
-        kv_store_message, srr_dialogue = kv_store_dialogues.create(
-            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
-            performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
-            data=data,
-        )
-        kv_store_message = cast(KvStoreMessage, kv_store_message)
-        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
-        self.context.logger.info("Sending KV store request message.")
-        response = yield from self._do_connection_request(
-            kv_store_message, kv_store_dialogue  # type: ignore
-        )
-        success = response == KvStoreMessage.Performative.SUCCESS
-        if success:
-            self.context.logger.info("KV store update successful.")
-        else:
-            self.context.logger.error("KV store update failed.")
-        return success
-
     def _handle_post_process_prompt(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) ->  None:
+    ) ->  Generator[None, None, None]:
         """
         Handle a POST request to process a user prompt using OpenAI.
 
@@ -189,86 +197,59 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the http dialogue
         """
         try:
-            # prompt_template = self.context.params.llm_prompt
+            prompt_template = self.context.params.llm_prompt
             
-            # # # Parse the request body
-            # request_data = json.loads(http_msg.body.decode("utf-8"))
-            # user_prompt = request_data.get("prompt", "")
+            # Parse the request body
+            request_data = json.loads(http_msg.body.decode("utf-8"))
+            user_prompt = request_data.get("prompt", "")
             # formatted_str = prompt_template.format(user_prompt=user_prompt)
             # self.context.logger.info(f"{formatted_str=}")
             
-            # if not user_prompt:
-            #     raise ValueError("Prompt is required.")
+            if not user_prompt:
+                raise ValueError("Prompt is required.")
 
-            # # # Create LLM request message
-            # llm_dialogues = cast(LlmDialogues, self.context.llm_dialogues)
-            # request_llm_message, llm_dialogue = llm_dialogues.create(
-            #     counterparty=str(LLM_CONNECTION_PUBLIC_ID),
-            #     performative=LlmMessage.Performative.REQUEST,
-            #     prompt_template=formatted_str,
-            #     prompt_values={},
-            # )
-            # self.context.logger.info(f"LLM request message created. {request_llm_message} {llm_dialogue}")
-
-            # # # Send request and wait for response
-            # llm_response_message = self._do_request(
-            #     request_llm_message, llm_dialogue
-            # )
-            # self.context.logger.info("Received LLM response message.")
-
-            # response_data = llm_response_message.value
-            # self.context.logger.info(f"LLM response data: {response_data}")
-            # Send OK response with the LLM response
-            strategies = ['HODL', 'BUY', 'SELL']
-            yield from self._write_kv({"strategies": json.dumps(strategies, sort_keys=True)})
-            self._send_ok_response(http_msg, http_dialogue, {"response": "OK REPORT H EKDUM"})
-            self.context.logger.info("Sent OK response with LLM data.")
+            # Create LLM request message
+            llm_dialogues = cast(LlmDialogues, self.context.llm_dialogues)
+            request_llm_message, llm_dialogue = llm_dialogues.create(
+                counterparty=str(LLM_CONNECTION_PUBLIC_ID),
+                performative=LlmMessage.Performative.REQUEST,
+                prompt_template=prompt_template,
+                prompt_values={},
+            )
+            self.context.logger.info(f"LLM request message created. {request_llm_message} {llm_dialogue}")
+            kwargs = {
+                "http_msg": http_msg,
+                "http_dialogue": http_dialogue
+            }
+            self.send_message(request_llm_message, llm_dialogue, self._handle_llm_response, kwargs)
 
         except Exception as e:
             self.context.logger.error(f"Error processing prompt: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
     
-    def _do_request(
-        self,
-        llm_message: LlmMessage,
-        llm_dialogue: LlmDialogue,
-        timeout: Optional[float] = None,
-    ) -> LlmMessage:
-        """
-        Do a request and wait the response, asynchronously.
+    def send_message(
+        self, msg: Message, dialogue: Dialogue, callback: Callable, kwargs = {}
+    ) -> None:
+        """Send message."""
+        self.context.outbox.put_message(message=msg)
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        self.context.params.req_to_callback[nonce] = (callback, kwargs)
+        self.context.params.in_flight_req = True
 
-        :param llm_message: The request message
-        :param llm_dialogue: the HTTP dialogue associated to the request
-        :param timeout: seconds to wait for the reply.
-        :yield: LLMMessage object
-        :return: the response message
-        """
-        self.context.logger.info("Sending LLM request message.")
-        self.context.outbox.put_message(message=llm_message)
-        self.context.logger.info("Handling incoming message.")
+    def _handle_llm_response(self, llm_response_message: LlmMessage, dialogue: Dialogue, http_msg: HttpMessage, http_dialogue: HttpDialogue) -> None:
+        """Handle get tool response"""
+        self.context.logger.info(f"{llm_response_message=} {dialogue=}")
+        response_data = json.loads(llm_response_message.value)
+        strategies = response_data.get("words", [])
+        self._send_ok_response(http_msg, http_dialogue, {"response": strategies})
+        
+        # Use threading to avoid blocking
+        threading.Thread(target=self._delayed_write_kv, args=(strategies,)).start()
 
-        # Process the response message
-        self.context.logger.info("Processing LLM response message.")
-
-        # request_nonce = llm_dialogue.dialogue_label.dialogue_reference[0]
-        # self.context.logger.info(f"Request nonce: {request_nonce}")
-
-        # cast(Requests, self.context.requests).request_id_to_callback[
-        #     request_nonce
-        # ] = self.context.get_callback_request()
-        # self.context.logger.info("Callback request registered.")
-
-        # notify caller by propagating potential timeout exception.
-        response = self.wait_for_message(timeout=timeout)
-        self.context.logger.info("Received response message.")
-        return response
-
-    @property
-    def synchronized_data(self) -> SynchronizedData:
-        """Return the synchronized data."""
-        return SynchronizedData(
-            db=self.context.state.round_sequence.latest_synchronized_data.db
-        )
+    def _delayed_write_kv(self, strategies: List[str]) -> None:
+        """Write to KV store after a delay."""
+        time.sleep(self.context.params.waiting_time)
+        self._write_kv({"strategies": json.dumps(strategies, sort_keys=True)})
 
     def _get_handler(self, url: str, method: str) -> Tuple[Optional[Callable], Dict]:
         """Check if an url is meant to be handled in this handler
@@ -428,8 +409,34 @@ class HttpHandler(BaseHttpHandler):
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
+    
+    def _write_kv(
+        self,
+        data: Dict[str, List[str]],
+    ) -> Generator[None, None, bool]:
+        """Send a request message from the skill context."""
+        self.context.logger.info(f"Preparing to write data to KV store: {data}")
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            data=data,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        self.context.logger.info("Sending KV store request message.")
+        self.send_message(kv_store_message, kv_store_dialogue, self._handle_kv_store_response)
 
-class LlmHandler(AbstractResponseHandler):
+    def _handle_kv_store_response(self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue) -> None:
+        """Handle get tool response"""
+        self.context.logger.info(f"{kv_store_response_message=} {dialogue=}")
+        success = kv_store_response_message.performative == KvStoreMessage.Performative.SUCCESS
+        if success:
+            self.context.logger.info("KV store update successful.")
+        else:
+            self.context.logger.error("KV store update failed.")
+
+class LlmHandler(BaseHandler):
     """A class for handling LLLM messages."""
 
     SUPPORTED_PROTOCOL: Optional[PublicId] = LlmMessage.protocol_id
@@ -439,3 +446,26 @@ class LlmHandler(AbstractResponseHandler):
             LlmMessage.Performative.RESPONSE,
         }
     )
+
+    def handle(self, message: Message) -> None:
+        """
+        Implement the reaction to an LLM message.
+
+        :param message: the message
+        """
+        self.context.logger.info(f"Received message: {message}")
+        llm_msg = cast(LlmMessage, message)
+
+        if llm_msg.performative not in self.allowed_response_performatives:
+            self.context.logger.warning(
+                f"LLM Message performative not recognized: {llm_msg.performative}"
+            )
+            self.params.in_flight_req = False
+            return
+
+        dialogue = self.context.llm_dialogues.update(llm_msg)
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        callback, kwargs = self.params.req_to_callback.pop(nonce)
+        callback(llm_msg, dialogue, **kwargs)
+        self.params.in_flight_req = False
+        self.on_message_handled(message)

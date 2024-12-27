@@ -37,11 +37,17 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
 from packages.valory.skills.abstract_round_abci.dialogues import (
     ContractApiDialogues as BaseContractApiDialogues,
 )
-from packages.valory.skills.abstract_round_abci.dialogues import (
+from packages.valory.skills.llm_interact.dialogues import (
     HttpDialogue as BaseHttpDialogue,
 )
-from packages.valory.skills.abstract_round_abci.dialogues import (
+from packages.valory.skills.llm_interact.dialogues import (
     HttpDialogues as BaseHttpDialogues,
+)
+from packages.valory.skills.llm_interact.dialogues import (
+    LlmDialogue as BaseLlmDialogue,
+)
+from packages.valory.skills.llm_interact.dialogues import (
+    LlmDialogues as BaseLlmDialogues,
 )
 from packages.valory.skills.abstract_round_abci.dialogues import (
     IpfsDialogue as BaseIpfsDialogue,
@@ -98,3 +104,6 @@ IpfsDialogues = BaseIpfsDialogues
 
 KvStoreDialogue = BaseKvStoreDialogue
 KvStoreDialogues = BaseKvStoreDialogues
+
+LlmDialogue = BaseLlmDialogue
+LlmDialogues = BaseLlmDialogues

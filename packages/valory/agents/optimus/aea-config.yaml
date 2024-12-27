@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/liquidity_trader_abci:0.1.0:bafybeiewpc5nldkonsh44h32konxuald27nc2h4wbrk6t27tqbzpw3mg5u
-- valory/optimus_abci:0.1.0:bafybeigidfyd2zu6y3x5bgs2zm25pto5fbwsloa4cvvoia2ohxy6ykwz6m
+- valory/optimus_abci:0.1.0:bafybeiatu2kwi52cr36lef5icpsco7dug7cyqkchopkhfamodqs6kk5d5i
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
-- valory/llm_interaction:0.1.0:bafybeia4v22aau3jqmcdadjwx72re3jugb4q7sqz7bez7yqckuctqiytha
+- valory/llm_interaction:0.1.0:bafybeiba2lsaqpqbgvcfirgzmndtzpindgceb5oj2vqesgvzrrg3umxehe
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeieoarajqdutk3fx7kkfkqso7spc5hzqwvr65gih63qggmippt3cxy

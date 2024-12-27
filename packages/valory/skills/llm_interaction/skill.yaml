@@ -6,11 +6,11 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiezggbhs7cwj2nbh24r7g4krb7heyt53rux4swx3ng5rnkyspp6um
-  behaviours.py: bafybeih2sgqfh66uwbxku6xzcgqabgzucsei2m7aesxgsi6qg74er2ghea
-  dialogues.py: bafybeibxiznajx6uas3syce2vsii4gzlsswo65irzvr6kdwvo3fj2birli
-  handlers.py: bafybeigadsvjowhbfgps3bnrive7t54hqryw7bhv5hg2eh63y57zamuvxm
-  models.py: bafybeiedwocnfnqc6g3goxrhj7dfp267wfqxf4p2usvot5p7lgyd25kwpa
+  __init__.py: bafybeicbyraccd47itwp26ziznnuejnd532kqdjq7cbkf46u5fzyynwy4i
+  behaviours.py: bafybeiglozbntfit6rrxda5dhfpm5itklpy7vv4shui2uw33zqiv6tcf3a
+  dialogues.py: bafybeiduwarr6zlueylecydixshj2uqdojjbke3oqlocmyoajn3qurtyyq
+  handlers.py: bafybeigfbdyvp3sgw54o3xoxe3l7ufkadqlqppzqf4wmnynq4glaor4yee
+  models.py: bafybeihqstvhpdl7itlm4wde7zgpeqojfgkjmqdrl4gzhhji3dzz3lgqdq
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
@@ -23,8 +23,8 @@ protocols:
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeiewpc5nldkonsh44h32konxuald27nc2h4wbrk6t27tqbzpw3mg5u
-- valory/optimus_abci:0.1.0:bafybeigidfyd2zu6y3x5bgs2zm25pto5fbwsloa4cvvoia2ohxy6ykwz6m
+- valory/liquidity_trader_abci:0.1.0:bafybeiaoijikx4jx6jhxfmxnmyzfiervhycyn4vzcvsp6x4t5uvzgyo6je
+- valory/optimus_abci:0.1.0:bafybeibwxldpzc6bbt6wltx6vwtj5qane62ifxtm3skaco2vv7uzxsev3q
 behaviours:
   llm_interaction:
     args: {}

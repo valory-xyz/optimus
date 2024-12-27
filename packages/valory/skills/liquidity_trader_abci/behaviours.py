@@ -745,7 +745,6 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            self.context.logger.info(f"self.syncronized_data: {self.synchronized_data.strategies}")
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
 
@@ -2659,7 +2658,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get deposit tx hash"""
         chain = action.get("chain")
-        asset = action["assets"][0]
+        asset = action["token0"]
         amount = self._get_balance(chain, asset, self.synchronized_data.positions)
         safe_address = self.params.safe_contract_addresses.get(chain)
         receiver = safe_address

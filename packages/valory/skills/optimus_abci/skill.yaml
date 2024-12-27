@@ -9,9 +9,9 @@ fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
   composition.py: bafybeiacev4w54ulcp6eyrvf7zv4ixf4kasiro7aksuucfzgmq6grb76bi
-  dialogues.py: bafybeiba3mc2w23cbx7j2ledf4t6nh4ydoh24u3gq6altfiykgyfzpa4vi
+  dialogues.py: bafybeigri3puoebutgbmczehi4lm23jrqowhtbwdrmbsxwphodozq2dnbm
   fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
-  handlers.py: bafybeiabhjkge5yuc3slyqe7w6b73e23mexeree23dh7hmcitlomeydkou
+  handlers.py: bafybeidm5rwikdtmkdmkyufdadbt5tbtm55xtjfft2s52ryb5mt7n6ddkm
   models.py: bafybeif6xl2iuip6rduy4ve5yf6oaibdnfpex3arbrnxsdzvhtkb3wuj4m
 fingerprint_ignore_patterns: []
 connections: []
@@ -53,9 +53,6 @@ handlers:
   tendermint:
     args: {}
     class_name: TendermintHandler
-  llm_handler:
-    args: {}
-    class_name: LlmHandler
 models:
   abci_dialogues:
     args: {}
@@ -233,9 +230,6 @@ models:
   kv_store_dialogues:
     args: {}
     class_name: KvStoreDialogues
-  llm_dialogues:
-    args: {}
-    class_name: LlmDialogues
 dependencies: {}
 is_abstract: false
 customs: []

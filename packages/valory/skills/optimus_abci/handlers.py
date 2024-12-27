@@ -23,11 +23,8 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )
-from packages.valory.skills.llm_interaction.handlers import (
+from packages.valory.skills.abstract_round_abci.handlers import (
     HttpHandler as BaseHttpHandler,
-)
-from packages.valory.skills.llm_interaction.handlers import (
-    LlmHandler as BaseLlmHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     KvStoreHandler as BaseKvStoreHandler,
@@ -54,4 +51,3 @@ ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
 KvStoreHandler = BaseKvStoreHandler
-LlmHandler = BaseLlmHandler

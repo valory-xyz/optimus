@@ -24,7 +24,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/liquidity_trader_abci:0.1.0:bafybeiewpc5nldkonsh44h32konxuald27nc2h4wbrk6t27tqbzpw3mg5u
-- valory/optimus_abci:0.1.0:bafybeiatu2kwi52cr36lef5icpsco7dug7cyqkchopkhfamodqs6kk5d5i
+- valory/optimus_abci:0.1.0:bafybeigidfyd2zu6y3x5bgs2zm25pto5fbwsloa4cvvoia2ohxy6ykwz6m
 behaviours:
   llm_interaction:
     args: {}

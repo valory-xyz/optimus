@@ -1036,7 +1036,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             self.execute_hyper_strategy()
             actions = []
-            if self.selected_opportunity is not None:
+            if self.selected_opportunity:
                 self.context.logger.info(
                     f"Selected opportunity: {self.selected_opportunity}"
                 )
@@ -1082,8 +1082,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches all the trading opportunities"""
         self.trading_opportunities.clear()
         yield from self.download_strategies()
-        strategies = self.params.selected_strategies.copy()
+        strategies = self.synchronized_data.strategies.copy()
         tried_strategies: Set[str] = set()
+        self.context.logger.info(f"Selected Strategies: {strategies}")
 
         while True:
             next_strategy = strategies.pop(0)
@@ -1148,22 +1149,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # no strategies pending to be fetched
             return
 
-        strategies_to_remove = []
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
-            if (
-                strategy not in self.params.selected_strategies
-                and strategy != self.params.selected_hyper_strategy
-            ):
-                strategies_to_remove.append(strategy)
-                continue
-            self.context.logger.info(f"Fetching {strategy} strategy...")
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
             self._inflight_strategy_req = strategy
             self.send_message(ipfs_msg, message, self._handle_get_strategy)
             return
-
-        for strategy in strategies_to_remove:
-            self.shared_state.strategy_to_filehash.pop(strategy)
 
     def get_returns_metrics_for_opportunity(self, strategy: str) -> None:
         """Get and update metrics for the current pool opportunity."""
@@ -1360,7 +1350,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[List[Any]]]:
         """Get tokens over min balance"""
         token_balances = []
-        eligibility_factor = 0.8
+
         for position in self.synchronized_data.positions:
             chain = position.get("chain")
             for asset in position.get("assets", {}):
@@ -1378,6 +1368,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         }
                     )
 
+        if len(token_balances) < num_of_tokens_required:
+            self.context.logger.error(
+                f"Insufficient tokens!! Required at least {num_of_tokens_required}, available: {token_balances}"
+            )
+            return None
+        
         # Fetch prices for tokens with balance greater than zero
         token_prices = yield from self._fetch_token_prices(token_balances)
 
@@ -1395,27 +1391,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             ) * token_price
 
         # Sort tokens by value in descending order and add the highest ones
-        token_balances.sort(key=lambda x: x["value"], reverse=True)
-
-        tokens = []
-        for token_data in token_balances:
-            if (
-                token_data["value"]
-                >= eligibility_factor * self.params.min_swap_amount_threshold
-            ):
-                tokens.append(token_data)
-            if len(tokens) == 2:
-                self.context.logger.info(
-                    f"Tokens selected for bridging/swapping: {tokens}"
-                )
-                break
-
-        if len(tokens) < num_of_tokens_required:
-            self.context.logger.error(
-                f"Insufficient tokens with value over minimum threshold i.e. ${self.params.min_swap_amount_threshold}. Required at least {num_of_tokens_required}, available: {token_balances}"
-            )
-            return None
-
+        token_balances.sort(key=lambda x: x["value"], reverse=True)       
+        tokens = token_balances[:2]
+        self.context.logger.info(
+            f"Tokens selected for bridging/swapping: {tokens}"
+        )
         return tokens
 
     def _fetch_token_prices(
@@ -3643,11 +3623,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-
             sender = self.context.agent_address
             db_data = yield from self._read_kv(keys=("strategies",))
-            self.context.logger.info(f"DB data: {db_data}")
             strategies = db_data.get("strategies", [])
+            if strategies:
+                strategies = json.loads(strategies)
             serialized_strategies = json.dumps(strategies, sort_keys=True)
             payload = FetchStrategiesPayload(sender=sender, strategies=serialized_strategies)
 

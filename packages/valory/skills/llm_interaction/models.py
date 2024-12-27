@@ -33,12 +33,16 @@ class Params(Model):
         self.in_flight_req: bool = False
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.request_count: int = 0
+        self.request_queue = []
         self.cleanup_freq = kwargs.get("cleanup_freq", 50)
         self.llm_prompt = self._ensure_get(
             "llm_prompt", kwargs, str
         )
         self.waiting_time = self._ensure_get(
             "waiting_time", kwargs, int
+        )
+        self.available_strategies = self._ensure_get(
+            "available_strategies", kwargs, list
         )
         self.service_endpoint_base = self._ensure_get("service_endpoint_base", kwargs, str)
         super().__init__(*args, **kwargs)

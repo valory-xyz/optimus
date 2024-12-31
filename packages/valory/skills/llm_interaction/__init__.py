@@ -18,3 +18,8 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the llm interaction non-abci skill."""
+
+from aea.configurations.base import PublicId
+
+
+PUBLIC_ID = PublicId.from_str("valory/llm_interaction:0.1.0")

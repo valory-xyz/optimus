@@ -77,8 +77,9 @@ class PostTxSettlementPayload(BaseTxPayload):
 
     content: str
 
+
 @dataclass(frozen=True)
 class FetchStrategiesPayload(BaseTxPayload):
     """Represent a transaction payload for the FetchStrategiesRound."""
-    
-    strategies: Optional[list]   
+
+    strategies: Optional[list]

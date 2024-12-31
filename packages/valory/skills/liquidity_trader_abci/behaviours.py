@@ -44,21 +44,19 @@ from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
 
+from packages.dvilela.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
+)
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
-
-from packages.dvilela.protocols.kv_store.dialogues import (
-    KvStoreDialogue,
-    KvStoreDialogues,
-)
-from packages.dvilela.connections.kv_store.connection import (
-    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
-)
-
-from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.contracts.merkl_distributor.contract import DistributorContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
@@ -79,6 +77,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
+from packages.valory.skills.abstract_round_abci.models import Requests
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
 )
@@ -103,6 +102,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     EvaluateStrategyPayload,
     EvaluateStrategyRound,
     Event,
+    FetchStrategiesPayload,
+    FetchStrategiesRound,
     GetPositionsPayload,
     GetPositionsRound,
     LiquidityTraderAbciApp,
@@ -110,10 +111,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     PostTxSettlementRound,
     StakingState,
     SynchronizedData,
-    FetchStrategiesRound,
-    FetchStrategiesPayload,
 )
-from packages.valory.skills.abstract_round_abci.models import Requests
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -1372,7 +1370,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"Insufficient tokens!! Required at least {num_of_tokens_required}, available: {token_balances}"
             )
             return None
-        
+
         # Fetch prices for tokens with balance greater than zero
         token_prices = yield from self._fetch_token_prices(token_balances)
 
@@ -1390,11 +1388,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             ) * token_price
 
         # Sort tokens by value in descending order and add the highest ones
-        token_balances.sort(key=lambda x: x["value"], reverse=True)       
+        token_balances.sort(key=lambda x: x["value"], reverse=True)
         tokens = token_balances[:2]
-        self.context.logger.info(
-            f"Tokens selected for bridging/swapping: {tokens}"
-        )
+        self.context.logger.info(f"Tokens selected for bridging/swapping: {tokens}")
         return tokens
 
     def _fetch_token_prices(
@@ -3613,6 +3609,7 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
                 "Gas used or effective gas price not found in the response."
             )
 
+
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""
 
@@ -3628,7 +3625,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if strategies:
                 strategies = json.loads(strategies)
             serialized_strategies = json.dumps(strategies, sort_keys=True)
-            payload = FetchStrategiesPayload(sender=sender, strategies=serialized_strategies)
+            payload = FetchStrategiesPayload(
+                sender=sender, strategies=serialized_strategies
+            )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -3651,7 +3650,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ] = self.get_callback_request()
         response = yield from self.wait_for_message(timeout=timeout)
         return response
-    
+
     def _read_kv(
         self,
         keys: Tuple[str, ...],
@@ -3675,7 +3674,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         data = {key: response.data.get(key, None) for key in keys}  # type: ignore
 
         return data
-    
+
+
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
 

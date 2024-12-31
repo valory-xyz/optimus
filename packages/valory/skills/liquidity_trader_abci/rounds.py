@@ -39,9 +39,9 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     CheckStakingKPIMetPayload,
     DecisionMakingPayload,
     EvaluateStrategyPayload,
+    FetchStrategiesPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
-    FetchStrategiesPayload,
 )
 
 
@@ -111,7 +111,7 @@ class SynchronizedData(BaseSynchronizedData):
     def participant_to_strategies_round(self) -> DeserializedCollection:
         """Get the participants to the strategies round."""
         return self._get_deserialized("participant_to_strategies_round")
-    
+
     @property
     def positions(self) -> List[Dict[str, Any]]:
         """Get the positions."""
@@ -120,7 +120,7 @@ class SynchronizedData(BaseSynchronizedData):
             serialized = "[]"
         positions = json.loads(serialized)
         return positions
-        
+
     @property
     def strategies(self) -> List[Dict[str, Any]]:
         """Get the strategies."""
@@ -129,7 +129,7 @@ class SynchronizedData(BaseSynchronizedData):
             serialized = "[]"
         strategies = json.loads(serialized)
         return strategies
-    
+
     @property
     def participant_to_actions_round(self) -> DeserializedCollection:
         """Get the participants to actions rounds"""
@@ -461,6 +461,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
             return synced_data, event
 
+
 class FetchStrategiesRound(CollectSameUntilThresholdRound):
     """FetchStrategiesRound"""
 
@@ -487,6 +488,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
         return synced_data, Event.DONE
 
     # Event.ROUND_TIMEOUT
+
 
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""

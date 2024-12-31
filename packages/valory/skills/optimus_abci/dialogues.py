@@ -19,12 +19,6 @@
 
 """This module contains the dialogues of the OptimusAbciApp."""
 
-from packages.valory.skills.liquidity_trader_abci.dialogues import (
-    KvStoreDialogue as BaseKvStoreDialogue,
-)
-from packages.valory.skills.liquidity_trader_abci.dialogues import (
-    KvStoreDialogues as BaseKvStoreDialogues,
-)
 from packages.valory.skills.abstract_round_abci.dialogues import (
     AbciDialogue as BaseAbciDialogue,
 )
@@ -66,6 +60,12 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
 )
 from packages.valory.skills.abstract_round_abci.dialogues import (
     TendermintDialogues as BaseTendermintDialogues,
+)
+from packages.valory.skills.liquidity_trader_abci.dialogues import (
+    KvStoreDialogue as BaseKvStoreDialogue,
+)
+from packages.valory.skills.liquidity_trader_abci.dialogues import (
+    KvStoreDialogues as BaseKvStoreDialogues,
 )
 
 

@@ -121,6 +121,7 @@ models:
       selected_hyper_strategy: ${SELECTED_HYPER_STRATEGY:str:max_apr_selection}
       apr_threshold: ${APR_THRESHOLD:int:5}
       service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
+      max_pools: ${MAX_POOLS:int:2}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

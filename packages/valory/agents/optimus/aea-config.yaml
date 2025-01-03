@@ -303,3 +303,4 @@ models:
       selected_protocols: ${list:["BALANCER","UNISWAP_V3","STURDY"]}
       selected_hyper_strategy: ${str:max_apr_selection}
       service_endpoint_base: ${str:https://optimus.staging.autonolas.tech/}
+      max_pools: ${int:2}

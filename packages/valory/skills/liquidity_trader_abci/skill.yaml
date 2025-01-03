@@ -213,6 +213,7 @@ models:
       - uniswap
       selected_hyper_strategy: max_apr_selection
       dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
+      max_pools: 2
     class_name: Params
   coingecko:
     args:

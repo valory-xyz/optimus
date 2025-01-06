@@ -2388,13 +2388,24 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"Enter pool was successful! Updating current pool to {current_position}"
         )
 
-    def _post_execute_exit_pool(self):
-        """Handle exiting a pool."""
-        self.current_pool = {}
-        self.store_current_pool()
-        self.context.logger.info("Exit was successful! Removing current pool")
-        # when we exit the pool, it may take time to reflect the balance of our assets in safe
-        yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
+    def _post_execute_exit_pool(self, actions, last_executed_action_index):
+            """Handle exiting a pool."""
+            action = actions[last_executed_action_index]
+            pool_address = action.get("pool_address")
+
+            # Find the position with the matching pool address and update its status
+            for position in self.current_positions:
+                if position.get("pool_address") == pool_address:
+                    position["status"] = PositionStatus.CLOSED.value
+                    self.context.logger.info(f"Closing position: {position}")
+                    break
+            else:
+                self.context.logger.warning(f"No position found for pool_address: {pool_address}")
+
+            self.store_current_positions()
+            self.context.logger.info("Exit was successful! Updated positions.")
+            # When we exit the pool, it may take time to reflect the balance of our assets in the safe
+            yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
 
     def _post_execute_claim_rewards(
         self, actions, last_executed_action_index

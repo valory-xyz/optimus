@@ -301,6 +301,9 @@ class Params(BaseParams):
         self.selected_hyper_strategy = self._ensure(
             "selected_hyper_strategy", kwargs, str
         )
+        self.dex_type_to_strategy = json.loads(
+            self._ensure("dex_type_to_strategy", kwargs, str)
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

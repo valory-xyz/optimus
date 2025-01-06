@@ -23,6 +23,7 @@ import json
 import math
 from abc import ABC
 from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from typing import (
     Any,
@@ -41,9 +42,12 @@ from urllib.parse import urlencode
 from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
-from eth_abi import decode
+from eth_abi import decode, decode_abi
 from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
 
+from packages.valory.contracts.balancer_weighted_pool.contract import (
+    WeightedPoolContract,
+)
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -61,6 +65,7 @@ from packages.valory.contracts.staking_token.contract import StakingTokenContrac
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
+from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -172,10 +177,13 @@ class Decision(Enum):
     WAIT = "wait"
     EXIT = "exit"
 
+
 class PositionStatus(Enum):
     """PositionStatus"""
+
     OPEN = "open"
     CLOSED = "closed"
+
 
 ASSETS_FILENAME = "assets.json"
 POOL_FILENAME = "current_pool.json"
@@ -463,7 +471,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self, attribute: str, filepath: str, class_object: bool = False
     ) -> None:
         """Generic method to read data from a JSON file"""
-        
+
         try:
             with open(filepath, READ_MODE) as file:
                 try:
@@ -482,7 +490,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                 except (json.JSONDecodeError, TypeError) as e:
                     err = f"Error decoding {attribute} from {filepath!r}: {str(e)}"
         except FileNotFoundError:
-        # Create the file if it doesn't exist
+            # Create the file if it doesn't exist
             initial_data = [] if attribute == "current_positions" else {}
             with open(filepath, WRITE_MODE) as file:
                 json.dump(initial_data, file)
@@ -502,7 +510,9 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
     def store_current_positions(self) -> None:
         """Store the current pool as JSON."""
-        self._store_data(self.current_positions, "current_positions", self.current_positions_filepath)
+        self._store_data(
+            self.current_positions, "current_positions", self.current_positions_filepath
+        )
 
     def read_current_positions(self) -> None:
         """Read the current pool as JSON."""
@@ -1022,9 +1032,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     dex_type = position.get("dex_type")
                     strategy = self.params.dex_type_to_strategy.get(dex_type)
                     if strategy:
-                        metrics = self.get_returns_metrics_for_opportunity(position,strategy)
+                        metrics = self.get_returns_metrics_for_opportunity(
+                            position, strategy
+                        )
                         if metrics:
-                        # Update the position dictionary with the metrics
+                            # Update the position dictionary with the metrics
                             position.update(metrics)
                     else:
                         self.context.logger.error(
@@ -1074,8 +1086,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         reserves_and_balances = reserves_and_balances.state.get("data", {})
-        reserve0 = int(reserves_and_balances.get("reserve0", 0))
-        reserve1 = int(reserves_and_balances.get("reserve1", 0))
         current_token0_qty = float(reserves_and_balances.get("current_token0_qty", 0))
         current_token1_qty = float(reserves_and_balances.get("current_token1_qty", 0))
 
@@ -1091,8 +1101,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Adjust quantities for decimals
-        adjusted_token0_qty = current_token0_qty / (10 ** token0_decimals)
-        adjusted_token1_qty = current_token1_qty / (10 ** token1_decimals)
+        adjusted_token0_qty = current_token0_qty / (10**token0_decimals)
+        adjusted_token1_qty = current_token1_qty / (10**token1_decimals)
 
         # Prepare token data for price fetching
         token_balances = [
@@ -1117,7 +1127,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Calculate current position value
-        V_current = (adjusted_token0_qty * token0_price) + (adjusted_token1_qty * token1_price)
+        V_current = (adjusted_token0_qty * token0_price) + (
+            adjusted_token1_qty * token1_price
+        )
 
         # Calculate initial investment value
         V_initial = yield from self.calculate_initial_investment_value(position)
@@ -1150,7 +1162,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pool_info = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=pool_address,
-            contract_id=str(BalancerPoolContract.contract_id),
+            contract_id=str(WeightedPoolContract.contract_id),
             contract_callable="get_pool_tokens",
             data_key="data",
             chain_id=chain,
@@ -1168,7 +1180,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=str(ERC20.contract_id),
             contract_callable="get_total_supply",
             data_key="data",
-            chain_id=chain
+            chain_id=chain,
         )
 
         # Get balances of tokens in the pool
@@ -1196,7 +1208,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         user_share = bpt_balance / total_supply
 
         # Prepare token data for price fetching
-        token_addresses = tokens
         token_balances = []
 
         # Adjust quantities for decimals and calculate user's amounts
@@ -1205,10 +1216,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Get token decimals
             decimals = yield from self._get_token_decimals(chain, token_address)
             if decimals is None:
-                self.context.logger.error(f"Failed to get decimals for token {token_address}")
+                self.context.logger.error(
+                    f"Failed to get decimals for token {token_address}"
+                )
                 return None
 
-            adjusted_balance = balance / (10 ** decimals)
+            adjusted_balance = balance / (10**decimals)
 
             # Calculate user's amount for this token
             user_amount = adjusted_balance * user_share
@@ -1229,7 +1242,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         for token_address, user_amount in zip(tokens, user_amounts):
             token_price = token_prices.get(token_address)
             if token_price is None:
-                self.context.logger.error(f"Current price not found for token {token_address}.")
+                self.context.logger.error(
+                    f"Current price not found for token {token_address}."
+                )
                 return None
             V_current += user_amount * token_price
 
@@ -1269,7 +1284,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=YearnV3VaultContract.contract_id,
             contract_callable="balance_of",
             data_key="amount",
-            owner=self.params.safe_contract_addresses.get(chain),
+            owner=safe_address,
             chain_id=chain,
         )
 
@@ -1288,7 +1303,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Adjust balance for decimals
-        adjusted_token_qty = user_balance / (10 ** token_decimals)
+        adjusted_token_qty = user_balance / (10**token_decimals)
 
         # Fetch current token price
         token_balance = [{"token": token_address, "chain": chain}]
@@ -1302,9 +1317,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         token_price = token_prices.get(token_address)
 
         if token_price is None:
-            self.context.logger.error(
-                "Current price not found for token."
-            )
+            self.context.logger.error("Current price not found for token.")
             return None
 
         # Calculate current position value
@@ -1340,7 +1353,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         initial_amount1 = position.get("amount1")
         timestamp = position.get("timestamp")
 
-        date_str = datetime.utcfromtimestamp(timestamp).strftime('%d-%m-%Y')
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
         # Fetch historical prices
         token_addresses = [position.get("token0")]
@@ -1387,9 +1400,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             headers["x-cg-api-key"] = self.coingecko.api_key
 
         for token_address in token_addresses:
-            coingecko_id = self.params.token_address_to_coingecko_id.get(token_address.lower())
+            coingecko_id = self.params.token_address_to_coingecko_id.get(
+                token_address.lower()
+            )
             if not coingecko_id:
-                self.context.logger.error(f"Coingecko ID not found for token {token_address}")
+                self.context.logger.error(
+                    f"Coingecko ID not found for token {token_address}"
+                )
                 continue
 
             endpoint = self.coingecko.historical_price_endpoint.format(
@@ -1406,13 +1423,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if success:
-                price = response_json.get("market_data", {}).get("current_price", {}).get("usd")
+                price = (
+                    response_json.get("market_data", {})
+                    .get("current_price", {})
+                    .get("usd")
+                )
                 if price:
                     historical_prices[token_address] = price
                 else:
-                    self.context.logger.error(f"No price in response for token {token_address}")
+                    self.context.logger.error(
+                        f"No price in response for token {token_address}"
+                    )
             else:
-                self.context.logger.error(f"Failed to fetch historical price for {token_address}")
+                self.context.logger.error(
+                    f"Failed to fetch historical price for {token_address}"
+                )
 
         return historical_prices
 
@@ -1465,7 +1490,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "current_positions": [pos.get("pool_address") for pos in self.current_positions] if self.current_positions else [],
+                    "current_positions": [
+                        pos.get("pool_address") for pos in self.current_positions
+                    ]
+                    if self.current_positions
+                    else [],
                     "coingecko_api_key": self.coingecko.api_key,
                     "get_metrics": False,
                 }
@@ -1528,7 +1557,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         for strategy in strategies_to_remove:
             self.shared_state.strategy_to_filehash.pop(strategy)
 
-    def get_returns_metrics_for_opportunity(self, position:Dict[str,Any], strategy: str) -> Optional[Dict[str, Any]]:
+    def get_returns_metrics_for_opportunity(
+        self, position: Dict[str, Any], strategy: str
+    ) -> Optional[Dict[str, Any]]:
         """Get and update metrics for the current pool ."""
 
         kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
@@ -1555,11 +1586,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
         else:
-            self.context.logger.info(
-                f"Calculated position metrics: {metrics}"
-            )
+            self.context.logger.info(f"Calculated position metrics: {metrics}")
             return metrics
-
 
     def download_strategies(self) -> Generator:
         """Download all the strategies, if not yet downloaded."""
@@ -1695,7 +1723,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             num_tokens = tokens_required.get(dex_type)
 
             if not pnl_function or num_tokens is None:
-                self.context.logger.error(f"No PnL calculation function for dex_type {dex_type}")
+                self.context.logger.error(
+                    f"No PnL calculation function for dex_type {dex_type}"
+                )
                 continue
 
             pnl_data = yield from pnl_function(position)
@@ -1703,7 +1733,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             position.update(pnl_data)
-            pnl = pnl_data.get('pnl')
+            pnl = pnl_data.get("pnl")
             if pnl is None:
                 continue
 
@@ -1715,7 +1745,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     continue
 
-                exit_pool_action = self._build_exit_pool_action(tokens, num_of_tokens_required=num_tokens)
+                exit_pool_action = self._build_exit_pool_action(
+                    tokens, num_of_tokens_required=num_tokens
+                )
                 if not exit_pool_action:
                     self.context.logger.error("Error building exit pool action")
                     continue
@@ -1724,7 +1756,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"PnL {pnl:.2f}% is beyond threshold, deciding to exit the pool."
                 )
 
-    def _prepare_tokens_for_exit_or_investment(self, actions: List[Dict[str, Any]]) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+    def _prepare_tokens_for_exit_or_investment(
+        self, actions: List[Dict[str, Any]]
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Prepare tokens for exit or investment, and append exit actions if needed."""
         if not self.position_to_exit:
             num_of_tokens_required = 2
@@ -1734,14 +1768,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         else:
             dex_type = self.position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
-            tokens = self._build_tokens_from_position(self.position_to_exit, num_of_tokens_required)
+            tokens = self._build_tokens_from_position(
+                self.position_to_exit, num_of_tokens_required
+            )
             if not tokens or len(tokens) < num_of_tokens_required:
                 self.context.logger.error(
                     f"{num_of_tokens_required} tokens required to exit pool, provided: {tokens}"
                 )
                 return None
 
-            exit_pool_action = self._build_exit_pool_action(tokens, num_of_tokens_required)
+            exit_pool_action = self._build_exit_pool_action(
+                tokens, num_of_tokens_required
+            )
             if not exit_pool_action:
                 self.context.logger.error("Error building exit pool action")
                 return None
@@ -1749,15 +1787,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return tokens
 
-    def _build_tokens_from_position(self, position: Dict[str, Any], num_tokens: int) -> Optional[List[Dict[str, Any]]]:
+    def _build_tokens_from_position(
+        self, position: Dict[str, Any], num_tokens: int
+    ) -> Optional[List[Dict[str, Any]]]:
         """Build token entries from position based on number of tokens required."""
         chain = position.get("chain")
         if num_tokens == 1:
-            return [{
-                "chain": chain,
-                "token": position.get("token0"),
-                "token_symbol": position.get("token0_symbol"),
-            }]
+            return [
+                {
+                    "chain": chain,
+                    "token": position.get("token0"),
+                    "token_symbol": position.get("token0_symbol"),
+                }
+            ]
         elif num_tokens == 2:
             return [
                 {
@@ -1972,7 +2014,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         return exit_pool_action
 
     def _build_bridge_swap_actions(
-        self, opportunity: List[Dict[str, Any]],tokens: List[Dict[str, Any]]
+        self, opportunity: List[Dict[str, Any]], tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
         if not opportunity:
@@ -1999,7 +2041,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Handle STURDY dex type
             for token in tokens:
                 self._add_bridge_swap_action(
-                    bridge_swap_actions, token, dest_chain, dest_token0_address, dest_token0_symbol,relative_funds_percentage
+                    bridge_swap_actions,
+                    token,
+                    dest_chain,
+                    dest_token0_address,
+                    dest_token0_symbol,
+                    relative_funds_percentage,
                 )
         else:
             # Handle other dex types
@@ -2015,25 +2062,50 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if len(tokens) == 1:
                 # Only one source token, split it in half for two destination tokens
                 self._add_bridge_swap_action(
-                    bridge_swap_actions, tokens[0], dest_chain, dest_token0_address, dest_token0_symbol,relative_funds_percentage/2
+                    bridge_swap_actions,
+                    tokens[0],
+                    dest_chain,
+                    dest_token0_address,
+                    dest_token0_symbol,
+                    relative_funds_percentage / 2,
                 )
                 self._add_bridge_swap_action(
-                    bridge_swap_actions, tokens[0], dest_chain, dest_token1_address, dest_token1_symbol,relative_funds_percentage
+                    bridge_swap_actions,
+                    tokens[0],
+                    dest_chain,
+                    dest_token1_address,
+                    dest_token1_symbol,
+                    relative_funds_percentage,
                 )
-                
+
             else:
                 for token in tokens:
                     self._add_bridge_swap_action(
-                        bridge_swap_actions, token, dest_chain, dest_token0_address, dest_token0_symbol,relative_funds_percentage
+                        bridge_swap_actions,
+                        token,
+                        dest_chain,
+                        dest_token0_address,
+                        dest_token0_symbol,
+                        relative_funds_percentage,
                     )
                     self._add_bridge_swap_action(
-                        bridge_swap_actions, token, dest_chain, dest_token1_address, dest_token1_symbol,relative_funds_percentage
+                        bridge_swap_actions,
+                        token,
+                        dest_chain,
+                        dest_token1_address,
+                        dest_token1_symbol,
+                        relative_funds_percentage,
                     )
                 return bridge_swap_actions
-            
-            
+
     def _add_bridge_swap_action(
-        self, actions: List[Dict[str, Any]], token: Dict[str, Any], dest_chain: str, dest_token_address: str, dest_token_symbol: str, relative_funds_percentage: float
+        self,
+        actions: List[Dict[str, Any]],
+        token: Dict[str, Any],
+        dest_chain: str,
+        dest_token_address: str,
+        dest_token_symbol: str,
+        relative_funds_percentage: float,
     ) -> None:
         """Helper function to add a bridge swap action."""
         source_token_chain = token.get("chain")
@@ -2052,19 +2124,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             source_token_chain != dest_chain
             or source_token_address != dest_token_address
         ):
-            actions.append({
-                "action": Action.FIND_BRIDGE_ROUTE.value,
-                "from_chain": source_token_chain,
-                "to_chain": dest_chain,
-                "from_token": source_token_address,
-                "from_token_symbol": source_token_symbol,
-                "to_token": dest_token_address,
-                "to_token_symbol": dest_token_symbol,
-                "funds_percentage": relative_funds_percentage
-    
-            })
+            actions.append(
+                {
+                    "action": Action.FIND_BRIDGE_ROUTE.value,
+                    "from_chain": source_token_chain,
+                    "to_chain": dest_chain,
+                    "from_token": source_token_address,
+                    "from_token_symbol": source_token_symbol,
+                    "to_token": dest_token_address,
+                    "to_token_symbol": dest_token_symbol,
+                    "funds_percentage": relative_funds_percentage,
+                }
+            )
 
-    def _build_enter_pool_action(self,opportunity) -> Dict[str, Any]:
+    def _build_enter_pool_action(self, opportunity) -> Dict[str, Any]:
         """Build action for entering the pool with the highest APR."""
         if not opportunity:
             self.context.logger.error("No pool present.")
@@ -2354,10 +2427,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         ]
 
         # Create the current_position dictionary with only the desired information
-        current_position = {key: action[key] for key in keys_to_extract if key in action}
+        current_position = {
+            key: action[key] for key in keys_to_extract if key in action
+        }
 
         if action.get("dex_type") == DexType.UNISWAP_V3.value:
-            token_id, liquidity, amount0, amount1, timestamp = yield from self._get_data_from_mint_tx_receipt(
+            (
+                token_id,
+                liquidity,
+                amount0,
+                amount1,
+                timestamp,
+            ) = yield from self._get_data_from_mint_tx_receipt(
                 self.synchronized_data.final_tx_hash, action.get("chain")
             )
             current_position["token_id"] = token_id
@@ -2367,15 +2448,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["timestamp"] = timestamp
 
         if action.get("dex_type") == DexType.BALANCER.value:
-            amount0, amount1, timestamp = yield from self._get_data_from_join_pool_tx_receipt(
+            (
+                amount0,
+                amount1,
+                timestamp,
+            ) = yield from self._get_data_from_join_pool_tx_receipt(
                 self.synchronized_data.final_tx_hash, action.get("chain")
             )
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
-        
+
         if action.get("dex_type") == DexType.STURDY.value:
-            amount, shares, timestamp = yield from self._get_data_from_deposit_tx_receipt(
+            (
+                amount,
+                shares,
+                timestamp,
+            ) = yield from self._get_data_from_deposit_tx_receipt(
                 self.synchronized_data.final_tx_hash, action.get("chain")
             )
             current_position["amount0"] = amount
@@ -2389,23 +2478,25 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
     def _post_execute_exit_pool(self, actions, last_executed_action_index):
-            """Handle exiting a pool."""
-            action = actions[last_executed_action_index]
-            pool_address = action.get("pool_address")
+        """Handle exiting a pool."""
+        action = actions[last_executed_action_index]
+        pool_address = action.get("pool_address")
 
-            # Find the position with the matching pool address and update its status
-            for position in self.current_positions:
-                if position.get("pool_address") == pool_address:
-                    position["status"] = PositionStatus.CLOSED.value
-                    self.context.logger.info(f"Closing position: {position}")
-                    break
-            else:
-                self.context.logger.warning(f"No position found for pool_address: {pool_address}")
+        # Find the position with the matching pool address and update its status
+        for position in self.current_positions:
+            if position.get("pool_address") == pool_address:
+                position["status"] = PositionStatus.CLOSED.value
+                self.context.logger.info(f"Closing position: {position}")
+                break
+        else:
+            self.context.logger.warning(
+                f"No position found for pool_address: {pool_address}"
+            )
 
-            self.store_current_positions()
-            self.context.logger.info("Exit was successful! Updated positions.")
-            # When we exit the pool, it may take time to reflect the balance of our assets in the safe
-            yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
+        self.store_current_positions()
+        self.context.logger.info("Exit was successful! Updated positions.")
+        # When we exit the pool, it may take time to reflect the balance of our assets in the safe
+        yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
 
     def _post_execute_claim_rewards(
         self, actions, last_executed_action_index
@@ -2604,7 +2695,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             last_action = Action.EXIT_POOL.value
 
         elif next_action == Action.FIND_BRIDGE_ROUTE:
-
             routes = yield from self.fetch_routes(positions, next_action_details)
             if not routes:
                 self.context.logger.error("Error fetching routes")
@@ -3794,10 +3884,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-    
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str
-    ) -> Generator[None, None, Tuple[Optional[int], Optional[int], Optional[int], Optional[int], Optional[int]]]:
+    ) -> Generator[
+        None,
+        None,
+        Tuple[
+            Optional[int], Optional[int], Optional[int], Optional[int], Optional[int]
+        ],
+    ]:
         """Extract data from mint transaction receipt."""
         response = yield from self.get_transaction_receipt(
             tx_hash,
@@ -3857,7 +3952,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # Get the timestamp from the block
             block_number = response.get("blockNumber")
             if block_number is None:
-                self.context.logger.error("Block number not found in transaction receipt.")
+                self.context.logger.error(
+                    "Block number not found in transaction receipt."
+                )
                 return None, None, None, None, None
 
             block = yield from self.get_block(
@@ -3880,7 +3977,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error decoding data from mint event: {e}")
             return None, None, None, None, None
 
-    
     def _get_data_from_join_pool_tx_receipt(
         self, tx_hash: str, chain: str
     ) -> Generator[None, None, Tuple[Optional[int], Optional[int], Optional[int]]]:
@@ -3896,7 +3992,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None
 
         # Define the event signature and calculate its hash
-        event_signature = "PoolBalanceChanged(bytes32,address,address[],int256[],uint256[])"
+        event_signature = (
+            "PoolBalanceChanged(bytes32,address,address[],int256[],uint256[])"
+        )
         event_signature_hash = keccak(text=event_signature).hex()
 
         # Extract logs from the response
@@ -3913,16 +4011,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             # Check if the first topic matches the event signature hash
-            if topics[0].lower() == '0x' + event_signature_hash.lower():
+            if topics[0].lower() == "0x" + event_signature_hash.lower():
                 # Decode the event data manually
                 try:
-                    # Decode indexed parameters (poolId and liquidityProvider)
-                    pool_id_topic = topics[1]
-                    liquidity_provider_topic = topics[2]
-
-                    pool_id = '0x' + pool_id_topic[2:]
-                    liquidity_provider = '0x' + liquidity_provider_topic[-40:]
-
                     # Decode non-indexed parameters (tokens, deltas, protocolFeeAmounts)
                     data_hex = log.get("data")
                     if not data_hex:
@@ -3933,16 +4024,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Define the types of the non-indexed parameters
                     data_types = [
-                        'address[]',   # tokens
-                        'int256[]',    # deltas
-                        'uint256[]'    # protocolFeeAmounts
+                        "address[]",  # tokens
+                        "int256[]",  # deltas
+                        "uint256[]",  # protocolFeeAmounts
                     ]
 
                     decoded_data = decode_abi(data_types, data_bytes)
 
                     tokens = decoded_data[0]
                     deltas = decoded_data[1]
-                    # protocol_fee_amounts = decoded_data[2]  # We don't need this for now
 
                     # Assuming the pool has two tokens
                     if len(tokens) >= 2 and len(deltas) >= 2:
@@ -3950,13 +4040,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                         amount0 = abs(deltas[0])
                         amount1 = abs(deltas[1])
                     else:
-                        self.context.logger.error("Unexpected number of tokens/deltas in event")
+                        self.context.logger.error(
+                            "Unexpected number of tokens/deltas in event"
+                        )
                         continue
 
                     # Break after finding the first matching event
                     break
                 except Exception as e:
-                    self.context.logger.error(f"Error decoding PoolBalanceChanged event: {e}")
+                    self.context.logger.error(
+                        f"Error decoding PoolBalanceChanged event: {e}"
+                    )
                     continue
 
         if amount0 is None or amount1 is None:
@@ -3985,46 +4079,45 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return amount0, amount1, timestamp
 
+    def _add_token_to_assets(self, chain, token, symbol):
+        # Read current assets
+        self.read_assets()
+        current_assets = self.assets
 
-        def _add_token_to_assets(self, chain, token, symbol):
-            # Read current assets
-            self.read_assets()
-            current_assets = self.assets
+        # Initialize assets if empty
+        if not current_assets:
+            current_assets = self.params.initial_assets
 
-            # Initialize assets if empty
-            if not current_assets:
-                current_assets = self.params.initial_assets
+        # Ensure the chain key exists in assets
+        if chain not in current_assets:
+            current_assets[chain] = {}
 
-            # Ensure the chain key exists in assets
-            if chain not in current_assets:
-                current_assets[chain] = {}
+        # Add token to the specified chain if it doesn't exist
+        if token not in current_assets[chain]:
+            current_assets[chain][token] = symbol
 
-            # Add token to the specified chain if it doesn't exist
-            if token not in current_assets[chain]:
-                current_assets[chain][token] = symbol
+        # Store updated assets
+        self.assets = current_assets
+        self.store_assets()
 
-            # Store updated assets
-            self.assets = current_assets
-            self.store_assets()
+        self.context.logger.info(f"Updated assets: {self.assets}")
 
-            self.context.logger.info(f"Updated assets: {self.assets}")
+    def _get_signature(self, owner: str) -> str:
+        signatures = b""
+        # Convert address to bytes and ensure it is 32 bytes long (left-padded with zeros)
+        r_bytes = to_bytes(hexstr=owner[2:].rjust(64, "0"))
 
-        def _get_signature(self, owner: str) -> str:
-            signatures = b""
-            # Convert address to bytes and ensure it is 32 bytes long (left-padded with zeros)
-            r_bytes = to_bytes(hexstr=owner[2:].rjust(64, "0"))
+        # `s` as 32 zero bytes
+        s_bytes = b"\x00" * 32
 
-            # `s` as 32 zero bytes
-            s_bytes = b"\x00" * 32
+        # `v` as a single byte
+        v_bytes = to_bytes(1)
 
-            # `v` as a single byte
-            v_bytes = to_bytes(1)
+        # Concatenate r, s, and v to form the packed signature
+        packed_signature = r_bytes + s_bytes + v_bytes
+        signatures += packed_signature
 
-            # Concatenate r, s, and v to form the packed signature
-            packed_signature = r_bytes + s_bytes + v_bytes
-            signatures += packed_signature
-
-            return signatures.hex()
+        return signatures.hex()
 
     def _get_data_from_deposit_tx_receipt(
         self, tx_hash: str, chain: str
@@ -4034,29 +4127,55 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # Fetch the transaction receipt
         receipt = yield from self._get_transaction_receipt(tx_hash, chain)
         if receipt is None:
-            self.context.logger.error(f"Failed to fetch transaction receipt for {tx_hash}")
+            self.context.logger.error(
+                f"Failed to fetch transaction receipt for {tx_hash}"
+            )
             return None, None, None
 
-        # Define the event signature for Deposit
         event_signature = "Deposit(address,address,uint256,uint256)"
-        event_signature_hash = keccak256(event_signature.encode()).hex()
+        event_signature_hash = keccak(event_signature.encode()).hex()
 
-        # Filter logs for the Deposit event
         for log in receipt["logs"]:
-            if log["topics"][0] == "0x" + event_signature_hash:
-                # Decode the event data
-                decoded_event = self._decode_event(log, event_signature)
-                if decoded_event is None:
+            if log["topics"][0].lower() == "0x" + event_signature_hash.lower():
+                # Decode non-indexed parameters (uint256 values) from the data field
+                data_hex = log["data"]
+                if len(data_hex) != 2 + 64 * 2:
+                    self.context.logger.error("Unexpected data length in log")
                     continue
 
-                amount = int(decoded_event["assets"])
-                shares = int(decoded_event["shares"])
-                timestamp = receipt["blockTimestamp"]
-                return amount, shares, timestamp
+                assets_hex = data_hex[2:66]
+                shares_hex = data_hex[66:130]
+
+                assets = int(assets_hex, 16)
+                shares = int(shares_hex, 16)
+
+                # Get the timestamp from the block
+                block_number = receipt.get("blockNumber")
+                if block_number is None:
+                    self.context.logger.error(
+                        "Block number not found in transaction receipt."
+                    )
+                    return None, None, None
+
+                block = yield from self.get_block(
+                    block_number=block_number,
+                    chain_id=chain,
+                )
+
+                if block is None:
+                    self.context.logger.error(f"Failed to fetch block {block_number}")
+                    return None, None, None
+
+                timestamp = block.get("timestamp")
+                if timestamp is None:
+                    self.context.logger.error("Timestamp not found in block data.")
+                    return None, None, None
+
+                return assets, shares, timestamp
 
         self.context.logger.error("Deposit event not found in transaction receipt")
         return None, None, None
-    
+
     def _get_transaction_receipt(
         self, tx_hash: str, chain: str
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
@@ -4074,32 +4193,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return response
 
-    def _decode_event(self, log: Dict[str, Any], event_signature: str) -> Optional[Dict[str, Any]]:
-        """Decode a log entry for a given event signature."""
 
-        abi = [
-            {
-                "anonymous": False,
-                "inputs": [
-                    {"indexed": True, "internalType": "address", "name": "sender", "type": "address"},
-                    {"indexed": True, "internalType": "address", "name": "owner", "type": "address"},
-                    {"indexed": False, "internalType": "uint256", "name": "assets", "type": "uint256"},
-                    {"indexed": False, "internalType": "uint256", "name": "shares", "type": "uint256"},
-                ],
-                "name": "Deposit",
-                "type": "event",
-            }
-        ]
-
-        try:
-            event_abi = abi[0]
-            decoded_log = get_event_data(
-                get_web3().coder, event_abi, log
-            )
-            return decoded_log["args"]
-        except Exception as e:
-            self.context.logger.error(f"Failed to decode event: {e}")
-            return None
 class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that is executed after a tx is settled via the transaction_settlement_abci."""
 

@@ -207,6 +207,8 @@ models:
       service_endpoint_base: https://optimus.staging.autonolas.tech/
       dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
+      profit_threshold: 30
+      loss_threshold: 5
     class_name: Params
   coingecko:
     args:

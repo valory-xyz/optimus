@@ -8,23 +8,21 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
-  composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
-  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
-  fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
-  handlers.py: bafybeicyu4bsubv2rnrhnx76wjt23oqbhaqihjaulrlshxygwicv4ml5la
-  models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
+  composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
+  dialogues.py: bafybeihuayabnubriylso5vlvj2qgncfb66ecaizzoxiob3r5airi7mexa
+  fsm_specification.yaml: bafybeicbqp4idp4ndsh2ffmmfjbn7e3b7dizt2dyrwiupzosg2d4drsupm
+  handlers.py: bafybeihwk4gfdhzpsexwllt6ujzf67t4pmqzl353piiuepqjgakeij3ob4
+  models.py: bafybeif6xl2iuip6rduy4ve5yf6oaibdnfpex3arbrnxsdzvhtkb3wuj4m
 fingerprint_ignore_patterns: []
-connections:
-- valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
+connections: []
 contracts: []
-protocols:
-- valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
+protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeies6g6vmde5v32hcjindy6yumwd72fcd2aoikjn67wlqbc7p45zki
+- valory/liquidity_trader_abci:0.1.0:bafybeigmsp7wybejqs3g223nyydpkwhq7oy4eto66sjrcylogycymvymm4
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -37,6 +35,9 @@ handlers:
   contract_api:
     args: {}
     class_name: ContractApiHandler
+  kv_store:
+    args: {}
+    class_name: KvStoreHandler
   http:
     args: {}
     class_name: HttpHandler
@@ -226,6 +227,9 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
+  kv_store_dialogues:
+    args: {}
+    class_name: KvStoreDialogues
 dependencies: {}
 is_abstract: false
 customs: []

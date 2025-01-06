@@ -44,6 +44,14 @@ from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
 
+from packages.dvilela.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
+)
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -69,6 +77,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
+from packages.valory.skills.abstract_round_abci.models import Requests
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
 )
@@ -93,6 +102,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     EvaluateStrategyPayload,
     EvaluateStrategyRound,
     Event,
+    FetchStrategiesPayload,
+    FetchStrategiesRound,
     GetPositionsPayload,
     GetPositionsRound,
     LiquidityTraderAbciApp,
@@ -1022,7 +1033,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             self.execute_hyper_strategy()
             actions = []
-            if self.selected_opportunity is not None:
+            if self.selected_opportunity:
                 self.context.logger.info(
                     f"Selected opportunity: {self.selected_opportunity}"
                 )
@@ -1068,8 +1079,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches all the trading opportunities"""
         self.trading_opportunities.clear()
         yield from self.download_strategies()
-        strategies = self.params.selected_strategies.copy()
+        strategies = self.synchronized_data.strategies.copy()
         tried_strategies: Set[str] = set()
+        self.context.logger.info(f"Selected Strategies: {strategies}")
 
         while True:
             next_strategy = strategies.pop(0)
@@ -1134,22 +1146,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # no strategies pending to be fetched
             return
 
-        strategies_to_remove = []
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
-            if (
-                strategy not in self.params.selected_strategies
-                and strategy != self.params.selected_hyper_strategy
-            ):
-                strategies_to_remove.append(strategy)
-                continue
-            self.context.logger.info(f"Fetching {strategy} strategy...")
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
             self._inflight_strategy_req = strategy
             self.send_message(ipfs_msg, message, self._handle_get_strategy)
             return
-
-        for strategy in strategies_to_remove:
-            self.shared_state.strategy_to_filehash.pop(strategy)
 
     def get_returns_metrics_for_opportunity(self, strategy: str) -> None:
         """Get and update metrics for the current pool opportunity."""
@@ -1346,7 +1347,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[List[Any]]]:
         """Get tokens over min balance"""
         token_balances = []
-        eligibility_factor = 0.8
+
         for position in self.synchronized_data.positions:
             chain = position.get("chain")
             for asset in position.get("assets", {}):
@@ -1363,6 +1364,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             "balance": balance,
                         }
                     )
+
+        if len(token_balances) < num_of_tokens_required:
+            self.context.logger.error(
+                f"Insufficient tokens!! Required at least {num_of_tokens_required}, available: {token_balances}"
+            )
+            return None
 
         # Fetch prices for tokens with balance greater than zero
         token_prices = yield from self._fetch_token_prices(token_balances)
@@ -1382,26 +1389,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Sort tokens by value in descending order and add the highest ones
         token_balances.sort(key=lambda x: x["value"], reverse=True)
-
-        tokens = []
-        for token_data in token_balances:
-            if (
-                token_data["value"]
-                >= eligibility_factor * self.params.min_swap_amount_threshold
-            ):
-                tokens.append(token_data)
-            if len(tokens) == 2:
-                self.context.logger.info(
-                    f"Tokens selected for bridging/swapping: {tokens}"
-                )
-                break
-
-        if len(tokens) < num_of_tokens_required:
-            self.context.logger.error(
-                f"Insufficient tokens with value over minimum threshold i.e. ${self.params.min_swap_amount_threshold}. Required at least {num_of_tokens_required}, available: {token_balances}"
-            )
-            return None
-
+        tokens = token_balances[:2]
+        self.context.logger.info(f"Tokens selected for bridging/swapping: {tokens}")
         return tokens
 
     def _fetch_token_prices(
@@ -2665,7 +2654,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get deposit tx hash"""
         chain = action.get("chain")
-        asset = action["assets"][0]
+        asset = action["token0"]
         amount = self._get_balance(chain, asset, self.synchronized_data.positions)
         safe_address = self.params.safe_contract_addresses.get(chain)
         receiver = safe_address
@@ -3621,6 +3610,72 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             )
 
 
+class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that gets the balances of the assets of agent safes."""
+
+    matching_round: Type[AbstractRound] = FetchStrategiesRound
+    strategies = None
+
+    def async_act(self) -> Generator:
+        """Async act"""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            sender = self.context.agent_address
+            db_data = yield from self._read_kv(keys=("strategies",))
+            strategies = db_data.get("strategies", [])
+            if strategies:
+                strategies = json.loads(strategies)
+            serialized_strategies = json.dumps(strategies, sort_keys=True)
+            payload = FetchStrategiesPayload(
+                sender=sender, strategies=serialized_strategies
+            )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+
+        self.set_done()
+
+    def _do_connection_request(
+        self,
+        message: Message,
+        dialogue: Message,
+        timeout: Optional[float] = None,
+    ) -> Generator[None, None, Message]:
+        """Do a request and wait the response, asynchronously."""
+
+        self.context.outbox.put_message(message=message)
+        request_nonce = self._get_request_nonce_from_dialogue(dialogue)  # type: ignore
+        cast(Requests, self.context.requests).request_id_to_callback[
+            request_nonce
+        ] = self.get_callback_request()
+        response = yield from self.wait_for_message(timeout=timeout)
+        return response
+
+    def _read_kv(
+        self,
+        keys: Tuple[str, ...],
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Send a request message from the skill context."""
+        self.context.logger.info(f"Reading keys from db: {keys}")
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.READ_REQUEST,
+            keys=keys,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        response = yield from self._do_connection_request(
+            kv_store_message, kv_store_dialogue  # type: ignore
+        )
+        if response.performative != KvStoreMessage.Performative.READ_RESPONSE:
+            return None
+
+        data = {key: response.data.get(key, None) for key in keys}  # type: ignore
+
+        return data
+
+
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
 
@@ -3633,4 +3688,5 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
         PostTxSettlementBehaviour,
+        FetchStrategiesBehaviour,
     ]

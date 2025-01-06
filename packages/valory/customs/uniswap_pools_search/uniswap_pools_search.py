@@ -3,6 +3,9 @@ warnings.filterwarnings("ignore")
 
 import requests
 import numpy as np
+from datetime import datetime, timedelta
+from web3 import Web3
+import pyfolio as pf
 import pandas as pd
 import pyfolio as pf
 from datetime import datetime, timedelta
@@ -10,8 +13,10 @@ from typing import Dict, List, Any, Optional, Tuple
 from functools import lru_cache
 import logging
 from pycoingecko import CoinGeckoAPI
+from aea.helpers.logging import setup_logger
 
-logging.basicConfig(level=logging.INFO)
+# Configure _logger
+_logger = setup_logger(__name__)
 
 # Constants
 DAYS_IN_YEAR = 365
@@ -53,10 +58,10 @@ class PoolAnalyzer:
                 return coin['id']
         return matching_coins[0]['id']  # Return first match if no better match found
 
-    def _calculate_il_risk_score(self, token0_id: str, token1_id: str) -> float:
+    def _calculate_il_risk_score(self, token0_id: str, token1_id: str, time_period: int = 90) -> float:
         try:
             to_timestamp = int(datetime.now().timestamp())
-            from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
+            from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
 
             # Fetch historical price data
             prices_1 = self.cg.get_coin_market_chart_range_by_id(
@@ -90,11 +95,12 @@ class PoolAnalyzer:
             # Calculate IL impact
             P0 = prices_1_data[0] / prices_2_data[0]
             P1 = prices_1_data[-1] / prices_2_data[-1]
-            il_impact = 1 - np.sqrt(P1 / P0) * (2 / (1 + P1 / P0))
+            il_impact = 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
 
-            return float(il_impact * price_correlation * volatility_multiplier)
+            return float(il_impact * abs(price_correlation) * volatility_multiplier)
+
         except Exception as e:
-            logging.error(f"Error calculating IL risk score: {e}")
+            _logger.error(f"Error calculating IL risk score: {e}")
             return float('nan')
 
     def _run_query(self, query: str, endpoint: str) -> Dict:
@@ -141,6 +147,7 @@ class PoolAnalyzer:
             "max_position_size": max_position
         }
 
+
     def calculate_single_pool_metrics(self, pool_data: Dict) -> Dict:
         """Calculate metrics for a single pool."""
         token0_id = self._get_token_id(pool_data['token0'], pool_data['token0_symbol'])
@@ -156,7 +163,7 @@ class PoolAnalyzer:
             "depth_score": depth_score,
             "max_position_size": max_position_size
         }
-
+    
     def _calculate_sharpe_ratio(self, pool_address: str, endpoint: str) -> float:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365)
@@ -183,9 +190,10 @@ class PoolAnalyzer:
         df = pd.DataFrame(data)
         df['date'] = pd.to_datetime(df['date'].astype(int), unit='s')
         df['total_value'] = pd.to_numeric(df['tvlUSD']) + pd.to_numeric(df['feesUSD'])
-        returns = df.set_index('date')['total_value'].pct_change().dropna()
+        returns = df.set_index('date')['total_value'].pct_change().replace([np.inf, -np.inf], np.nan).dropna()
         
         return float(pf.timeseries.sharpe_ratio(returns))
+
 
     def _assess_liquidity(self, pool_id: str, endpoint: str) -> Tuple[float, float]:
         query = f"""
@@ -251,37 +259,3 @@ class PoolAnalyzer:
         top_pools = all_pools[:10]
 
         return [self._get_pool_metrics(pool) for pool in top_pools]
-
-def main():
-    # Example usage
-    kwargs = {
-        "chains": ["ethereum"],
-        "apr_threshold": 0.05,
-        "graphql_endpoints": {
-            "ethereum": "https://gateway.thegraph.com/api/b8e4cf1b314c67d2a0109325046a7464/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
-        },
-        "current_pool": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
-        "coingecko_api_key": "CG-mf5xZnGELpSXeSqmHDLY2nNU",
-    }
-    
-    analyzer = PoolAnalyzer(**kwargs)
-    
-    # To get metrics for a single pool
-    current_pool_data = {
-        "chain": "ethereum",
-        "pool_address": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
-        "token0": "0x6b175474e89094c44da98b954eedeac495271d0f",
-        "token1": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-        "token0_symbol": "DAI",
-        "token1_symbol": "WETH"
-    }
-    
-    single_pool_metrics = analyzer.calculate_single_pool_metrics(current_pool_data)
-    print("\nSingle Pool Metrics:")
-    print(single_pool_metrics)
-    
-    # To get analysis of all pools
-    print("\nAll Pools Analysis:")
-    results = analyzer.analyze_pools()
-    for pool in results:
-        print(pool)

@@ -6,7 +6,6 @@ from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta
-import logging
 import pandas as pd
 from functools import lru_cache
 import aiohttp
@@ -18,8 +17,10 @@ if sys.platform.startswith('win'):
     from asyncio import WindowsSelectorEventLoopPolicy
     asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
-warnings.filterwarnings("ignore")
-logging.basicConfig(level=logging.INFO)
+from aea.helpers.logging import setup_logger
+
+# Configure _logger
+_logger = setup_logger(__name__)
 
 # Constants
 REQUIRED_FIELDS = frozenset(("chains", "apr_threshold", "lending_asset", "current_pool", "coingecko_api_key"))
@@ -57,7 +58,7 @@ async def get_coin_list():
             if response.status == 200:
                 return await response.json()
     except Exception as e:
-        logging.error(f"Failed to fetch coin list: {e}")
+        _logger.error(f"Failed to fetch coin list: {e}")
     return []
 
 @lru_cache(maxsize=128)
@@ -70,8 +71,8 @@ async def fetch_token_id(symbol: str) -> Optional[str]:
     for coin in coin_list:
         if coin['symbol'].lower() == symbol:
             return coin['id']
-    
-    logging.error(f"Failed to fetch id for coin with symbol: {symbol}")
+
+    _logger.error(f"Failed to fetch id for coin with symbol: {symbol}")
     return None
 
 @lru_cache(maxsize=1)
@@ -117,7 +118,7 @@ async def get_sharpe_ratio_for_address(historical_data: List[Dict], address: str
                     'rewards_apy': float(data.get('rewardsAPY', 0))
                 })
         except Exception as e:
-            logging.error(f"Error processing historical data entry: {e}")
+            _logger.error(f"Error processing historical data entry: {e}")
             continue
 
     if not records:
@@ -141,11 +142,11 @@ async def fetch_aggregators() -> List[Dict[str, Any]]:
             if response.status == 200:
                 result = await response.json()
                 if isinstance(result, dict) and 'errors' in result:
-                    logging.error(f"REST API Errors: {result['errors']}")
+                    _logger.error(f"REST API Errors: {result['errors']}")
                     return []
                 return result if isinstance(result, list) else []
     except Exception as e:
-        logging.error(f"REST API request failed: {e}")
+        _logger.error(f"REST API request failed: {e}")
         return []
 
 async def filter_aggregators(
@@ -173,10 +174,11 @@ async def filter_aggregators(
                 aggregator["tvl"] = tvl
                 filtered_aggregators.append(aggregator)
         except (ValueError, TypeError) as e:
-            logging.error(f"Error processing aggregator: {e}")
+            _logger.error(f"Error processing aggregator: {e}")
             continue
 
     if not filtered_aggregators:
+        _logger.error("No suitable aggregator found.")
         return []
 
     if len(filtered_aggregators) <= 5:
@@ -201,6 +203,7 @@ async def filter_aggregators(
         scored_aggregators.append(aggregator)
 
     if not scored_aggregators:
+        _logger.error("No suitable aggregator found after scoring.")
         return []
 
     scores = np.array([agg["score"] for agg in scored_aggregators])
@@ -217,13 +220,14 @@ async def filter_aggregators(
 async def calculate_il_risk_score_for_lending(
     asset_token_1: str, 
     asset_token_2: str, 
-    cg: CoinGeckoAPI
+    cg: CoinGeckoAPI,
+    time_period: int = 90
 ) -> float:
     if not asset_token_1 or not asset_token_2:
         return float('nan')
 
     to_timestamp = int(datetime.now().timestamp())
-    from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
+    from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
 
     try:
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -249,14 +253,14 @@ async def calculate_il_risk_score_for_lending(
                 return float('nan')
 
     except Exception as e:
-        logging.error(f"Error fetching price data: {e}")
+        _logger.error(f"Error fetching price data: {e}")
         return float('nan')
 
     try:
         prices_1_data = np.array([float(x[1]) for x in prices_1['prices']])
         prices_2_data = np.array([float(x[1]) for x in prices_2['prices']])
     except (ValueError, TypeError) as e:
-        logging.error(f"Error processing price data: {e}")
+        _logger.error(f"Error processing price data: {e}")
         return float('nan')
 
     min_length = min(len(prices_1_data), len(prices_2_data))
@@ -272,12 +276,14 @@ async def calculate_il_risk_score_for_lending(
 
         P0 = prices_1_data[0] / prices_2_data[0]
         P1 = prices_1_data[-1] / prices_2_data[-1]
-        il_impact = 1 - np.sqrt(P1 / P0) * (2 / (1 + P1 / P0))
+        il_impact = 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
+        il_risk_score = il_impact * abs(price_correlation) * volatility_multiplier
         
-        return float(il_impact * price_correlation * volatility_multiplier)
+        return il_risk_score
     except (ValueError, ZeroDivisionError) as e:
-        logging.error(f"Error calculating IL risk score: {e}")
+        _logger.error(f"Error calculating IL risk score: {e}")
         return float('nan')
+
 
 async def calculate_il_risk_score_for_silos(
     token0_symbol: str, 
@@ -310,10 +316,9 @@ async def calculate_il_risk_score_for_silos(
             if token_1_id:
                 il_risk_score = await calculate_il_risk_score_for_lending(token_0_id, token_1_id, cg)
                 if not np.isnan(il_risk_score):
-                    normalized_il_risk_score = max(0, min(il_risk_score, 1))
-                    il_risk_scores.append(normalized_il_risk_score)
+                    il_risk_scores.append(il_risk_score)
         except Exception as e:
-            logging.error(f"Error calculating IL risk score for silo: {e}")
+            _logger.error(f"Error calculating IL risk score for silo: {e}")
             continue
 
     return float('nan') if not il_risk_scores else sum(il_risk_scores) / len(il_risk_scores)
@@ -332,7 +337,7 @@ def analyze_vault_liquidity(aggregator: Dict) -> Tuple[float, float]:
 
         return depth_score, max_position_size
     except (ValueError, TypeError, ZeroDivisionError) as e:
-        logging.error(f"Error analyzing vault liquidity: {e}")
+        _logger.error(f"Error analyzing vault liquidity: {e}")
         return float('nan'), float('nan')
 
 def format_aggregator(aggregator: Dict) -> Dict[str, Any]:
@@ -351,7 +356,7 @@ def format_aggregator(aggregator: Dict) -> Dict[str, Any]:
             "max_position_size": aggregator.get('max_position_size', float('nan'))
         }
     except Exception as e:
-        logging.error(f"Error formatting aggregator: {e}")
+        _logger.error(f"Error formatting aggregator: {e}")
         return {}
 
 async def get_best_opportunities(
@@ -402,7 +407,7 @@ async def get_best_opportunities(
                 
                 return aggregator
             except Exception as e:
-                logging.error(f"Error processing aggregator: {e}")
+                _logger.error(f"Error processing aggregator: {e}")
                 return None
         print(4)
         processed_aggregators = await asyncio.gather(
@@ -414,7 +419,7 @@ async def get_best_opportunities(
             if agg is not None
         ]
     except Exception as e:
-        logging.error(f"Error in get_best_opportunities: {e}")
+        _logger.error(f"Error in get_best_opportunities: {e}")
         return []
 
 async def calculate_metrics(
@@ -444,7 +449,7 @@ async def calculate_metrics(
             "depth_score": depth_score
         }
     except Exception as e:
-        logging.error(f"Error calculating metrics: {e}")
+        _logger.error(f"Error calculating metrics: {e}")
         return None
 
 async def run(*_args, **kwargs) -> Any:
@@ -454,7 +459,6 @@ async def run(*_args, **kwargs) -> Any:
             return {"error": f"Required kwargs {missing} were not provided."}
 
         get_metrics = kwargs.get('get_metrics', False)
-        logging.info({get_metrics})
         kwargs = {k: v for k, v in kwargs.items() if k in REQUIRED_FIELDS}
 
         if get_metrics:
@@ -465,5 +469,5 @@ async def run(*_args, **kwargs) -> Any:
                 return {"error": "No suitable aggregators found"}
             return result
     except Exception as e:
-        logging.error(f"Error in run function: {e}")
+        _logger.error(f"Error in run function: {e}")
         return {"error": f"An unexpected error occurred: {str(e)}"}

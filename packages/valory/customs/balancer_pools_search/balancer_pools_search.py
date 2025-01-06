@@ -2,7 +2,7 @@ import warnings
 import time
 import requests
 import numpy as np
-import logging
+from web3 import Web3
 import pandas as pd
 import pyfolio as pf
 from web3 import Web3
@@ -20,12 +20,10 @@ import statistics
 # Suppress warnings
 warnings.filterwarnings("ignore")
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from aea.helpers.logging import setup_logger
+
+# Configure _logger
+_logger = setup_logger(__name__)
 
 # Constants
 @dataclass
@@ -328,7 +326,7 @@ class BalancerAnalyzer:
                 }
             }
 
-    def _calculate_il_risk(self, pool_data: Dict[str, Any]) -> float:
+    def _calculate_il_risk(self, pool_data: Dict[str, Any], time_period: int = 90) -> float:
         token0_id = self.get_token_id(pool_data['token0'], pool_data['token0_symbol'], pool_data['chain'])
         token1_id = self.get_token_id(pool_data['token1'], pool_data['token1_symbol'], pool_data['chain'])
         
@@ -336,7 +334,7 @@ class BalancerAnalyzer:
             return float('nan')
 
         to_timestamp = int(datetime.now().timestamp())
-        from_timestamp = int((datetime.now() - timedelta(days=365)).timestamp())
+        from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
         
         try:
             prices = self._fetch_price_data(token0_id, token1_id, from_timestamp, to_timestamp)
@@ -464,10 +462,10 @@ class BalancerAnalyzer:
         price_ratio_end = prices1[-1] / prices2[-1]
         
         il_impact = self.calculate_il_impact(price_ratio_start, price_ratio_end)
-        return float(il_impact * correlation * volatility)
+        return float(il_impact * abs(correlation) * volatility_multiplier)
 
     def calculate_il_impact(self, price_ratio_start: float, price_ratio_end: float) -> float:
-        return 1 - np.sqrt(price_ratio_end / price_ratio_start) * (2 / (1 + price_ratio_end / price_ratio_start))
+        return 2 * np.sqrt(price_ratio_end / price_ratio_start) / (1 + price_ratio_end / price_ratio_start) - 1
 
     def get_token_id(self, token_address: str, symbol: str, chain_name: str) -> Optional[str]:
         symbol = symbol.lower()

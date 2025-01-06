@@ -15,6 +15,7 @@ IL_RISK_SCORE_THRESHOLD = -0.05
 SHARPE_RATIO_WEIGHT = 0.4
 DEPTH_SCORE_WEIGHT = 0.3
 IL_RISK_SCORE_WEIGHT = 0.3
+MIN_COMPOSITE_SCORE_RATIO = 0.5
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
@@ -68,14 +69,19 @@ def calculate_relative_percentages(percentages):
     Returns:
         list of float: A list of relative percentages.
     """
-    relative = []
-    running_total = 0
+    total_percentage = sum(percentages)
+    dynamic_percentages = []
 
-    for p in percentages:
-        running_total += p
-        relative.append((p / running_total) * 100)
-        
-    return relative
+    if total_percentage == 0:
+        _logger.error("Total percentage cannot be zero.")
+        return []
+
+    for percentage in percentages:
+        dynamic_percentage = percentage / total_percentage
+        dynamic_percentages.append(dynamic_percentage)
+        total_percentage -= percentage   
+
+    return dynamic_percentages
 
 def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, current_positions=None, improvement_threshold=0.1, max_pools=1):
     """Apply risk thresholds and select the optimal strategy based on combined metrics."""
@@ -145,9 +151,19 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
             _logger.warning(f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}")
             return {"optimal_strategies": [], "position_to_exit": {}}
     else:
-        # Sort and select the top `max_pools` opportunities
+        # Sort opportunities based on composite score in descending order
         filtered_opportunities.sort(key=lambda x: x["composite_score"], reverse=True)
-        optimal_opportunities = filtered_opportunities[:max_pools]
+        top_composite_score = filtered_opportunities[0]["composite_score"]
+
+        # Select opportunities that meet the minimum composite score ratio
+        optimal_opportunities = [
+            opp for opp in filtered_opportunities[:max_pools]
+            if opp["composite_score"] >= MIN_COMPOSITE_SCORE_RATIO * top_composite_score
+        ]
+
+        if not optimal_opportunities:
+            _logger.warning("No opportunities meet the minimum composite score ratio.")
+            return {"optimal_strategies": [], "position_to_exit": {}}
 
         # Calculate total composite score for optimal opportunities
         total_composite_score = sum(opportunity["composite_score"] for opportunity in optimal_opportunities)

@@ -16,7 +16,7 @@ from aea.helpers.logging import setup_logger
 _logger = setup_logger(__name__)
 
 # Constants
-REQUIRED_FIELDS = ("chains", "apr_threshold", "lending_asset", "current_pool", "coingecko_api_key")
+REQUIRED_FIELDS = ("chains", "lending_asset", "current_positions", "coingecko_api_key")
 STURDY = 'Sturdy'
 TVL_WEIGHT = 0.6
 APR_WEIGHT = 0.4
@@ -163,14 +163,14 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
     return _aggregators_cache
 
 
-def filter_aggregators(chains, apr_threshold, aggregators, lending_asset, current_pool) -> List[Dict[str, Any]]:
+def filter_aggregators(chains, aggregators, lending_asset, current_positions) -> List[Dict[str, Any]]:
     filtered_aggregators = []
     tvl_list = []
     apr_list = []
 
-    # Filter by chain, asset, and exclude current_pool
+    # Filter by chain, asset, and exclude current_positions
     for aggregator in aggregators:
-        if aggregator.get("chainName") in chains and aggregator.get('address') != current_pool:
+        if aggregator.get("chainName") in chains and aggregator.get('address') not in current_positions:
             if aggregator.get("asset", {}).get("address") == lending_asset:
                 total_apr = aggregator.get('apy', {}).get('total', 0)
                 tvl = aggregator.get('tvl', 0)
@@ -338,12 +338,12 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
     }
 
 
-def get_best_opportunities(chains, apr_threshold, lending_asset, current_pool, coingecko_api_key) -> List[Dict[str, Any]]:
+def get_best_opportunities(chains, lending_asset, current_positions, coingecko_api_key) -> List[Dict[str, Any]]:
     data = fetch_aggregators()
     if not data:
         return []
 
-    filtered_aggregators = filter_aggregators(chains, apr_threshold, data, lending_asset, current_pool)
+    filtered_aggregators = filter_aggregators(chains, data, lending_asset, current_positions)
     if not filtered_aggregators:
         return []
 
@@ -362,11 +362,11 @@ def get_best_opportunities(chains, apr_threshold, lending_asset, current_pool, c
     return formatted_results
 
 
-def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, **kwargs) -> Optional[Dict[str, Any]]:
-    il_risk_score = calculate_il_risk_score_for_silos(current_pool.get("token0_symbol"), current_pool.get('whitelistedSilos', []), coingecko_api_key)
+def calculate_metrics(position: Dict[str, Any], coingecko_api_key: str, **kwargs) -> Optional[Dict[str, Any]]:
+    il_risk_score = calculate_il_risk_score_for_silos(position.get("token0_symbol"), position.get('whitelistedSilos', []), coingecko_api_key)
     historical_data = fetch_historical_data()
-    sharpe_ratio = get_sharpe_ratio_for_address(historical_data, current_pool['pool_address'])
-    depth_score, max_position_size = analyze_vault_liquidity(current_pool)
+    sharpe_ratio = get_sharpe_ratio_for_address(historical_data, position['pool_address'])
+    depth_score, max_position_size = analyze_vault_liquidity(position)
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,

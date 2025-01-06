@@ -19,7 +19,7 @@ _logger = setup_logger(__name__)
 
 # Constants
 UNISWAP = "UniswapV3"
-REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoints", "current_pool", "coingecko_api_key")
+REQUIRED_FIELDS = ("chains", "graphql_endpoints", "current_positions", "coingecko_api_key")
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
 PERCENT_CONVERSION = 100
@@ -111,7 +111,7 @@ def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
     """Calculate APR: (Daily Volume / TVL) × Fee Rate × 365 × 100"""
     return 0 if tvl == 0 else (daily_volume / tvl) * fee_rate * DAYS_IN_YEAR * PERCENT_CONVERSION
 
-def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
+def get_filtered_pools(pools, current_positions) -> List[Dict[str, Any]]:
     qualifying_pools = []
     for pool in pools:
         fee_rate = float(pool['feeTier']) / FEE_RATE_DIVISOR
@@ -120,7 +120,7 @@ def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
         apr = calculate_apr(daily_volume, tvl, fee_rate)
         pool["apr"] = apr
         pool["tvl"] = tvl
-        if pool['id'] != current_pool:
+        if pool['id'] not in current_positions:
             qualifying_pools.append(pool)
 
     if not qualifying_pools:
@@ -158,7 +158,7 @@ def get_filtered_pools(pools, current_pool) -> List[Dict[str, Any]]:
     
     return filtered_scored_pools[:10] if len(filtered_scored_pools) > 10 else filtered_scored_pools
 
-def fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+def fetch_graphql_data(chains, graphql_endpoints) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     graphql_query = """
     {
         pools(
@@ -340,12 +340,12 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "max_position_size": pool['max_position_size']
     }
 
-def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coingecko_api_key, coin_list) -> List[Dict[str, Any]]:
-    pools = fetch_graphql_data(chains, graphql_endpoints, current_pool, apr_threshold)
+def get_best_pools(chains, graphql_endpoints, current_positions, coingecko_api_key, coin_list) -> List[Dict[str, Any]]:
+    pools = fetch_graphql_data(chains, graphql_endpoints)
     if isinstance(pools, dict) and "error" in pools:
         return pools
 
-    filtered_pools = get_filtered_pools(pools, current_pool)
+    filtered_pools = get_filtered_pools(pools, current_positions)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
 
@@ -372,14 +372,14 @@ def get_best_pools(chains, apr_threshold, graphql_endpoints, current_pool, coing
 
     return [format_pool_data(pool) for pool in filtered_pools]
 
-def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], graphql_endpoints, **kwargs) -> Optional[Dict[str, Any]]:
-    token_0_id = get_token_id_from_symbol(current_pool['token0'], current_pool['token0_symbol'], coin_list, current_pool['chain'])
-    token_1_id = get_token_id_from_symbol(current_pool['token1'], current_pool['token1_symbol'], coin_list, current_pool['chain'])
+def calculate_metrics(position: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], graphql_endpoints, **kwargs) -> Optional[Dict[str, Any]]:
+    token_0_id = get_token_id_from_symbol(position['token0'], position['token0_symbol'], coin_list, position['chain'])
+    token_1_id = get_token_id_from_symbol(position['token1'], position['token1_symbol'], coin_list, position['chain'])
 
     il_risk_score = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key) if token_0_id and token_1_id else float('nan')
-    graphql_endpoint = graphql_endpoints.get(current_pool["chain"])
-    sharpe_ratio = get_uniswap_pool_sharpe_ratio(current_pool['pool_address'], graphql_endpoint)
-    depth_score, max_position_size = assess_pool_liquidity(current_pool['pool_address'], graphql_endpoint)
+    graphql_endpoint = graphql_endpoints.get(position["chain"])
+    sharpe_ratio = get_uniswap_pool_sharpe_ratio(position['pool_address'], graphql_endpoint)
+    depth_score, max_position_size = assess_pool_liquidity(position['pool_address'], graphql_endpoint)
 
     return {
         "il_risk_score": il_risk_score,

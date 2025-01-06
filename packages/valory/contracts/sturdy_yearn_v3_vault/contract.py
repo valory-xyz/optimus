@@ -78,3 +78,15 @@ class YearnV3VaultContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         max_withdraw_amount = contract_instance.functions.maxWithdraw(owner).call() 
         return {"amount": max_withdraw_amount}
+
+    @classmethod
+    def balance_of(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        owner: str,
+    ) -> JSONLike:
+        """Get the balance of a user in the vault."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        balance = contract_instance.functions.balanceOf(owner).call()
+        return {"amount": balance}

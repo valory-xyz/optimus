@@ -27,7 +27,7 @@ SUPPORTED_POOL_TYPES = {
     "STABLE": "Stable",
     "INVESTMENT": "Investment"
 }
-REQUIRED_FIELDS = ("chains", "apr_threshold", "graphql_endpoint", "current_pool", "coingecko_api_key")
+REQUIRED_FIELDS = ("chains", "graphql_endpoint", "current_positions", "coingecko_api_key")
 BALANCER = "balancerPool"
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
@@ -136,12 +136,12 @@ def get_balancer_pools(chains, graphql_endpoint) -> Union[Dict[str, Any], List[D
         return data
     return data.get("poolGetPools", [])
 
-def get_filtered_pools(pools, current_pool):
+def get_filtered_pools(pools, current_positions):
     # Filter by type and token count
     qualifying_pools = []
     for pool in pools:
         mapped_type = SUPPORTED_POOL_TYPES.get(pool.get('type'))
-        if mapped_type and len(pool.get('poolTokens', [])) == 2 and pool.get('address') != current_pool:
+        if mapped_type and len(pool.get('poolTokens', [])) == 2 and pool.get('address') not in current_positions:
             pool['type'] = mapped_type
             pool['apr'] = get_total_apr(pool)
             pool['tvl'] = pool.get('dynamicData', {}).get('totalLiquidity', 0)
@@ -351,11 +351,11 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "max_position_size": pool['max_position_size']
     }
 
-def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coingecko_api_key, coin_list):
+def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, coin_list):
     pools = get_balancer_pools(chains, graphql_endpoint)
     if isinstance(pools, dict) and "error" in pools:
         return pools
-    filtered_pools = get_filtered_pools(pools, current_pool)
+    filtered_pools = get_filtered_pools(pools, current_positions)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
 
@@ -391,12 +391,12 @@ def get_opportunities(chains, apr_threshold, graphql_endpoint, current_pool, coi
 
     return [format_pool_data(pool) for pool in filtered_pools]
 
-def calculate_metrics(current_pool: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs) -> Optional[Dict[str, Any]]:
-    token_0_id = get_token_id_from_symbol(current_pool['token0'], current_pool['token0_symbol'], coin_list, current_pool['chain'])
-    token_1_id = get_token_id_from_symbol(current_pool['token1'], current_pool['token1_symbol'], coin_list, current_pool['chain'])
+def calculate_metrics(position: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs) -> Optional[Dict[str, Any]]:
+    token_0_id = get_token_id_from_symbol(position['token0'], position['token0_symbol'], coin_list, position['chain'])
+    token_1_id = get_token_id_from_symbol(position['token1'], position['token1_symbol'], coin_list, position['chain'])
     il_risk_score = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key) if token_0_id and token_1_id else float('nan')
-    sharpe_ratio = get_balancer_pool_sharpe_ratio(current_pool['pool_id'], current_pool['chain'].upper())
-    depth_score, max_position_size = analyze_pool_liquidity(current_pool['pool_id'], current_pool['chain'].upper())
+    sharpe_ratio = get_balancer_pool_sharpe_ratio(position['pool_id'], position['chain'].upper())
+    depth_score, max_position_size = analyze_pool_liquidity(position['pool_id'], position['chain'].upper())
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,

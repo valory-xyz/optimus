@@ -64,3 +64,29 @@ class UniswapV3PoolContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tick_spacing = contract_instance.functions.tickSpacing().call()
         return dict(data=tick_spacing)
+
+    @classmethod
+    def get_reserves_and_balances(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        your_address: str,
+    ) -> JSONLike:
+        """Get reserves, total supply, and your balance."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        reserves = contract_instance.functions.getReserves().call()
+        total_supply = contract_instance.functions.totalSupply().call()
+        your_lp_balance = contract_instance.functions.balanceOf(your_address).call()
+        
+        pool_share = your_lp_balance / total_supply
+        current_token0_qty = reserves[0] * pool_share
+        current_token1_qty = reserves[1] * pool_share
+        
+        return dict(
+            reserve0=reserves[0],
+            reserve1=reserves[1],
+            total_supply=total_supply,
+            your_lp_balance=your_lp_balance,
+            current_token0_qty=current_token0_qty,
+            current_token1_qty=current_token1_qty
+        )

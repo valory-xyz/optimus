@@ -305,6 +305,9 @@ class Params(BaseParams):
             self._ensure("dex_type_to_strategy", kwargs, str)
         )
         self.max_pools = self._ensure("max_pools", kwargs, int)
+        self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
+        self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
+
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

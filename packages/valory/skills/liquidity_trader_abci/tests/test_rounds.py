@@ -92,6 +92,7 @@ def test_call_check_point_round_transition(setup_app: LiquidityTraderAbciApp) ->
     assert transition_function[Event.NO_MAJORITY] == CallCheckpointRound
 
 
+
 def test_check_staking_kpi_round_transition(setup_app: LiquidityTraderAbciApp) -> None:
     """Test transitions from CheckStakingKPIMetRound."""
     app = setup_app

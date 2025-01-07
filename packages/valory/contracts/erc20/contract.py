@@ -75,6 +75,17 @@ class ERC20(Contract):
         return dict(data=symbol)
 
     @classmethod
+    def get_total_supply(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the total supply."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        total_supply = contract_instance.functions.totalSupply().call()
+        return dict(data=total_supply)
+
+    @classmethod
     def get_token_decimals(
         cls,
         ledger_api: EthereumApi,

@@ -24,7 +24,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeih4m3ytez26sd62j7krsfmvwpnibsdam4ttvhjsyppdgo77pl7gde
+- valory/liquidity_trader_abci:0.1.0:bafybeiehsxe2cx37pxsdkj4jfwf2csv4lqlvkzkvh4cefqtdileoglybry
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -193,11 +193,14 @@ models:
       service_endpoint_base: https://optimus.staging.autonolas.tech/
       dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
+      profit_threshold: 30
+      loss_threshold: 5
     class_name: Params
   coingecko:
     args:
       token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
       coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
+      historical_price_endpoint: https://api.coingecko.com/api/v3/coins/{coin_id}/history?date={date}
       api_key: null
       requests_per_minute: 30
       credits: 10000

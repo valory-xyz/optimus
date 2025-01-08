@@ -170,6 +170,9 @@ class Coingecko(Model, TypeCheckMixin):
         self.coin_price_endpoint: str = self._ensure("coin_price_endpoint", kwargs, str)
         self.api_key: Optional[str] = self._ensure("api_key", kwargs, Optional[str])
         self.rate_limited_code: int = self._ensure("rate_limited_code", kwargs, int)
+        self.historical_price_endpoint: str = self._ensure(
+            "historical_price_endpoint", kwargs, str
+        )
         self.chain_to_platform_id_mapping: Dict[str, str] = json.loads(
             self._ensure("chain_to_platform_id_mapping", kwargs, str)
         )

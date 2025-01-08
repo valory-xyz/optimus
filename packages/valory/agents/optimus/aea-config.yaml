@@ -36,8 +36,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeictt4prad32sebgp4pdbavvvkd6fdhv7ky35lsviajesqqjf3lm5q
-- valory/optimus_abci:0.1.0:bafybeicf465cgixwlvkh7s4mmyyyyfdfgeku7tzfqjorwigbfbkj63n2mm
+- valory/liquidity_trader_abci:0.1.0:bafybeic7inxuu5fyyehmf7lecsyaxz2pg6n4mbjzhsvfy4aks4echbixva
+- valory/optimus_abci:0.1.0:bafybeib2hwgpkkl4zmetcmpc4emcbkffwd2w5uakfziqibuuksuqolxg7u
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -249,7 +249,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/mnt/d/Valory/optimus2/optimus/data/}
+      store_path: ${str:/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}

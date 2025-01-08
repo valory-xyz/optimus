@@ -298,8 +298,8 @@ class Params(BaseParams):
         self.file_hash_to_strategies = json.loads(
             self._ensure("file_hash_to_strategies", kwargs, str)
         )
-        self.strategies_kwargs = json.loads(
-            self._ensure("strategies_kwargs", kwargs, str)
+        self.trading_strategies_kwargs = json.loads(
+            self._ensure("trading_strategies_kwargs", kwargs, str)
         )
         self.selected_protocols = self._ensure("selected_protocols", kwargs, List[str])
         self.selected_hyper_strategy = self._ensure(

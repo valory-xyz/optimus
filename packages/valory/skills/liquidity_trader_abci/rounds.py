@@ -64,6 +64,7 @@ class Event(Enum):
     ERROR = "error"
     NEXT_CHECKPOINT_NOT_REACHED_YET = "next_checkpoint_not_reached_yet"
     NO_MAJORITY = "no_majority"
+    NONE = "none"
     ROUND_TIMEOUT = "round_timeout"
     SERVICE_EVICTED = "service_evicted"
     SERVICE_NOT_STAKED = "service_not_staked"
@@ -169,6 +170,16 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_staking_kpi")
 
     @property
+    def participant_to_decision_making(self) -> DeserializedCollection:
+        """Get the participants to the DecisionMaking round."""
+        return self._get_deserialized("participant_to_decision_making")
+
+    @property
+    def participant_to_post_tx_settlement(self) -> DeserializedCollection:
+        """Get the participants to the PostTxSettlement round."""
+        return self._get_deserialized("participant_to_post_tx_settlement")
+
+    @property
     def is_staking_kpi_met(self) -> Optional[bool]:
         """Get kpi met for the day."""
         return cast(int, self.db.get("is_staking_kpi_met", False))
@@ -229,6 +240,7 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
     payload_class = CallCheckpointPayload
     done_event: Enum = Event.DONE
     no_majority_event: Enum = Event.NO_MAJORITY
+    none_event: Enum = Event.NONE
     selection_key = (
         get_name(SynchronizedData.tx_submitter),
         get_name(SynchronizedData.most_voted_tx_hash),
@@ -279,6 +291,7 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
     synchronized_data_class = SynchronizedData
     done_event: Enum = Event.DONE
     no_majority_event: Enum = Event.NO_MAJORITY
+    none_event: Enum = Event.NONE
     collection_key = get_name(SynchronizedData.participant_to_staking_kpi)
     selection_key = (
         get_name(SynchronizedData.tx_submitter),
@@ -318,6 +331,7 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
     synchronized_data_class = SynchronizedData
     done_event = Event.DONE
     no_majority_event = Event.NO_MAJORITY
+    none_event: Enum = Event.NONE
     collection_key = get_name(SynchronizedData.participant_to_positions_round)
     selection_key = get_name(SynchronizedData.positions)
 
@@ -332,6 +346,8 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
     payload_class = EvaluateStrategyPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.DONE
+    none_event: Enum = Event.NONE
+    no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_actions_round)
     selection_key = get_name(SynchronizedData.actions)
 
@@ -362,6 +378,10 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
     settle_event = Event.SETTLE
     update_event = Event.UPDATE
     error_event = Event.ERROR
+    none_event: Enum = Event.NONE
+    no_majority_event = Event.NO_MAJORITY
+    collection_key = get_name(SynchronizedData.participant_to_decision_making)
+    selection_key = (get_name(SynchronizedData.chain_id),)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
@@ -420,6 +440,11 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
     payload_class = PostTxSettlementPayload
     synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    none_event: Enum = Event.NONE
+    no_majority_event = Event.NO_MAJORITY
+    collection_key = get_name(SynchronizedData.participant_to_post_tx_settlement)
+    selection_key = (get_name(SynchronizedData.chain_id),)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
@@ -496,6 +521,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.SERVICE_EVICTED: GetPositionsRound,
             Event.ROUND_TIMEOUT: CallCheckpointRound,
             Event.NO_MAJORITY: CallCheckpointRound,
+            Event.NONE: CallCheckpointRound,
         },
         CheckStakingKPIMetRound: {
             Event.DONE: GetPositionsRound,
@@ -505,17 +531,20 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: CheckStakingKPIMetRound,
             Event.STAKING_KPI_NOT_MET: GetPositionsRound,
             Event.ERROR: GetPositionsRound,
+            Event.NONE: CheckStakingKPIMetRound,
         },
         GetPositionsRound: {
             Event.DONE: EvaluateStrategyRound,
             Event.NO_MAJORITY: GetPositionsRound,
             Event.ROUND_TIMEOUT: GetPositionsRound,
+            Event.NONE: GetPositionsRound,
         },
         EvaluateStrategyRound: {
             Event.DONE: DecisionMakingRound,
             Event.NO_MAJORITY: EvaluateStrategyRound,
             Event.ROUND_TIMEOUT: EvaluateStrategyRound,
             Event.WAIT: FinishedEvaluateStrategyRound,
+            Event.NONE: EvaluateStrategyRound,
         },
         DecisionMakingRound: {
             Event.DONE: FinishedDecisionMakingRound,
@@ -524,6 +553,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ROUND_TIMEOUT: DecisionMakingRound,
             Event.SETTLE: FinishedTxPreparationRound,
             Event.UPDATE: DecisionMakingRound,
+            Event.NONE: DecisionMakingRound,
         },
         DecideAgentStartingRound: {
             Event.DONT_MOVE_TO_NEXT_AGENT: CallCheckpointRound,
@@ -543,6 +573,9 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
             Event.UNRECOGNIZED: FailedMultiplexerRound,
+            Event.DONE: PostTxSettlementRound,
+            Event.NONE: PostTxSettlementRound,
+            Event.NO_MAJORITY: PostTxSettlementRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},

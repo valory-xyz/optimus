@@ -10,6 +10,7 @@ packages/open_aea
 optimus
 assets.json
 current_pool.json
+gas_costs.json
 Pipfile.lock
     
 packages/valory/agents/*

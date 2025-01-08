@@ -104,6 +104,7 @@ transition_func:
     (BacktestRound, ROUND_TIMEOUT): BacktestRound
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
+    (CallCheckpointRound, NONE): CallCheckpointRound
     (CallCheckpointRound, NO_MAJORITY): CallCheckpointRound
     (CallCheckpointRound, ROUND_TIMEOUT): CallCheckpointRound
     (CallCheckpointRound, SERVICE_EVICTED): GetPositionsRound
@@ -117,6 +118,7 @@ transition_func:
     (CheckLateTxHashesRound, NO_MAJORITY): ResetAndPauseRound
     (CheckStakingKPIMetRound, DONE): GetPositionsRound
     (CheckStakingKPIMetRound, ERROR): GetPositionsRound
+    (CheckStakingKPIMetRound, NONE): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, NO_MAJORITY): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, ROUND_TIMEOUT): CheckStakingKPIMetRound
     (CheckStakingKPIMetRound, SETTLE): RandomnessTransactionSubmissionRound
@@ -141,11 +143,13 @@ transition_func:
     (DecideAgentStartingRound, ROUND_TIMEOUT): DecideAgentStartingRound
     (DecisionMakingRound, DONE): ResetAndPauseRound
     (DecisionMakingRound, ERROR): ResetAndPauseRound
+    (DecisionMakingRound, NONE): DecisionMakingRound
     (DecisionMakingRound, NO_MAJORITY): DecisionMakingRound
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
     (DecisionMakingRound, SETTLE): RandomnessTransactionSubmissionRound
     (DecisionMakingRound, UPDATE): DecisionMakingRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
+    (EvaluateStrategyRound, NONE): EvaluateStrategyRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
     (EvaluateStrategyRound, WAIT): ResetAndPauseRound
@@ -160,6 +164,7 @@ transition_func:
     (FinalizationRound, FINALIZE_TIMEOUT): SelectKeeperTransactionSubmissionBAfterTimeoutRound
     (FinalizationRound, INSUFFICIENT_FUNDS): SelectKeeperTransactionSubmissionBRound
     (GetPositionsRound, DONE): EvaluateStrategyRound
+    (GetPositionsRound, NONE): GetPositionsRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
     (PortfolioTrackerRound, DONE): StrategyExecRound
@@ -169,6 +174,9 @@ transition_func:
     (PortfolioTrackerRound, ROUND_TIMEOUT): PortfolioTrackerRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
+    (PostTxSettlementRound, DONE): PostTxSettlementRound
+    (PostTxSettlementRound, NONE): PostTxSettlementRound
+    (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, UNRECOGNIZED): ResetAndPauseRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
@@ -191,6 +199,7 @@ transition_func:
     (RandomnessRound, NO_MAJORITY): RandomnessRound
     (RandomnessRound, ROUND_TIMEOUT): RandomnessRound
     (RandomnessTransactionSubmissionRound, DONE): SelectKeeperTransactionSubmissionARound
+    (RandomnessTransactionSubmissionRound, NONE): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, NO_MAJORITY): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, ROUND_TIMEOUT): RandomnessTransactionSubmissionRound
     (RegistrationRound, DONE): DecideAgentStartingRound

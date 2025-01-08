@@ -51,6 +51,11 @@ def main() -> None:
                 "address"
             ] = f"${{str:{os.getenv('OPTIMISM_LEDGER_RPC')}}}"
 
+        if os.getenv("MODE_LEDGER_RPC"):
+            config[2]["config"]["ledger_apis"]["mode"][
+                "address"
+            ] = f"${{str:{os.getenv('MODE_LEDGER_RPC')}}}"
+
         # Params
         try:
             config[6]["models"]["params"]["args"]["setup"][
@@ -88,6 +93,10 @@ def main() -> None:
             config[6]["models"]["params"]["args"][
                 "allowed_chains"
             ] = f"${{list:{os.getenv('ALLOWED_CHAINS')}}}"
+
+            config[6]["models"]["params"]["args"][
+            "staking_chain"
+            ] = f"${{str:{os.getenv('STAKING_CHAIN')}}}"
 
         except KeyError as e:
             print("Error", e)

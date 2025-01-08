@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeianqz73ienvtkz5ev34z24xsa7ux7q5kqkqwpffr3avtogwnyv46i
+agent: valory/optimus:0.1.0:bafybeigyhmkkpf6adlkwuj7zz66pynopzugxehaatvchkjelyik4juzydi
 number_of_agents: 1
 deployment:
   agent:
@@ -15,6 +15,9 @@ deployment:
         8716: 8716
     volumes:
       ./data: /data
+dependencies:
+  requests_toolbelt:
+    version: ==1.0.0
 ---
 public_id: valory/ipfs_package_downloader:0.1.0
 type: skill
@@ -87,9 +90,7 @@ models:
       tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:project_slug}
       agent_transition: ${AGENT_TRANSITION:bool:False}
       tendermint_p2p_url: ${TENDERMINT_P2P_URL_0:str:optimism_tm_0:26656}
-      service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
-      multisend_batch_size: ${MULTISEND_BATCH_SIZE:int:5}
-      safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000"}}
+      safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}}
       staking_token_contract_address: ${STAKING_TOKEN_CONTRACT_ADDRESS:str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${STAKING_ACTIVITY_CHECKER_CONTRACT_ADDRESS:str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${STAKING_THRESHOLD_PERIOD:int:5}
@@ -97,12 +98,10 @@ models:
       assets_info_filename: ${ASSETS_INFO_FILENAME:str:assets.json}
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}
       gas_cost_info_filename: ${GAS_COST_INFO_FILENAME:str:gas_costs.json}
-      merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}}
+      merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
       min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:10}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}
       max_gas_percentage: ${MAX_GAS_PERCENTAGE:float:0.25}
-      balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest"}}
-      allowed_chains: ${ALLOWED_CHAINS:list:["optimism","base"]}
       tx_timeout: ${TX_TIMEOUT:float:10.0}
       use_termination: ${USE_TERMINATION:bool:false}
       validate_timeout: ${VALIDATE_TIMEOUT:int:1205}
@@ -122,6 +121,19 @@ models:
       sharpe_threshold: ${SHARPE_THRESHOLD:float:1.0}
       ledger_ids: ${LEDGER_IDS:list:["ethereum"]}
       trade_size_in_base_token: ${TRADE_SIZE_IN_BASE_TOKEN:float:0.0001}
+      balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
+      allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism","mode"]}
+      target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
+      staking_chain: ${STAKING_CHAIN:str:""}
+      initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
+      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeih255rl4tnom2gvg2b3t2glpgcgck3orrerbhmayd7cbnggglbh7e":"max_apr_selection","bafybeievabkqmmpq252giacmdlxl5kk5r3qdl6rdnh4iwkx3fzsqvkejwm":"balancer_pools_search","bafybeiaqkkpgzx7krvgu7xhbe65mgtq7vyhkx4rztny7qcczrjonxc3uwm":"uniswap_pools_search","bafybeihsq7hhdgcc5wqxbqrioxaqsrza4424wqlv3hqkemomsb337pocki":"asset_lending"}}
+      trading_strategies_kwargs: ${TRADING_STRATEGIES_KWARGS:str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}
+      selected_strategies: ${SELECTED_STRATEGIES:list:["asset_lending","balancer_pools_search","uniswap_pools_search"]}
+      selected_protocols: ${SELECTED_PROTOCOLS:list:["BALANCER","UNISWAP_V3"]}
+      selected_hyper_strategy: ${SELECTED_HYPER_STRATEGY:str:max_apr_selection}
+      apr_threshold: ${APR_THRESHOLD:int:5}
+      service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
+      max_pools: ${MAX_POOLS:int:2}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -130,7 +142,7 @@ models:
       requests_per_minute: ${COINGECKO_REQUESTS_PER_MINUTE:int:30}
       credits: ${COINGECKO_CREDITS:int:10000}
       rate_limited_code: ${COINGECKO_RATE_LIMITED_CODE:int:429}
-      chain_to_platform_id_mapping: ${COINGECKO_CHAIN_TO_PLATFORM_ID_MAPPING:str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum"}}
+      chain_to_platform_id_mapping: ${COINGECKO_CHAIN_TO_PLATFORM_ID_MAPPING:str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum","mode":"mode"}}
       prices_field: ${COINGECKO_PRICES_FIELD:str:prices}
       endpoint: ${COINGECKO_ENDPOINT:str:https://api.coingecko.com/api/v3/coins/{token_id}/market_chart?vs_currency=usd&days=1}
   tx_settlement_proxy:
@@ -139,6 +151,7 @@ models:
       response_type: ${TX_PROXY_RESPONSE_TYPE:str:dict}
       retries: ${TX_PROXY_RETRIES:int:5}
       url: ${TX_PROXY_URL:str:http://localhost:3000/tx}
+      
 ---
 public_id: valory/ledger:0.19.0
 type: connection
@@ -159,6 +172,14 @@ config:
       chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:10}
       poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
+    mode:
+      address: ${MODE_LEDGER_RPC:str:https://virtual.mode.rpc.tenderly.co/f1d63db5-da55-4383-bbed-54a6edbb0ee2}
+      chain_id: ${MODE_LEDGER_CHAIN_ID:int:34443}
+      poa_chain: ${MODE_LEDGER_IS_POA_CHAIN:bool:false}
+      default_gas_price_strategy: ${MODE_LEDGER_PRICING:str:eip1559}
+      gas_price_strategies:
+        eip1559:
+          fee_history_percentile: ${FEE_HISTORY_PERCENTILE:50}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

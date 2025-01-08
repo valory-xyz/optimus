@@ -40,38 +40,46 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
         (
             CallCheckpointPayload,
             {
-               service_staking_state: 1
-               min_num_of_safe_tx_required: 1
+                "service_staking_state": 1,
+                "min_num_of_safe_tx_required": 1,
+                "tx_submitter": "submitter",
+                "tx_hash": "txhash",
+                "safe_contract_address": "0xContractAddress",
+                "chain_id": 1,
             },
         ),
         (
             CheckStakingKPIMetPayload,
             {
-                is_staking_kpi_met: True 
+                "is_staking_kpi_met": True,
+                "tx_submitter": "submitter",
+                "tx_hash": "txhash",
+                "safe_contract_address": "0xContractAddress",
+                "chain_id": 1,
             },
         ),
         (
             DecisionMakingPayload,
             {
-               content: "content"
+               "content": "content",
             },
         ),
         (
             EvaluateStrategyPayload,
             {
-                actions: "dummy actions"
+                "actions": "dummy actions",
             },
         ),
         (
             GetPositionsPayload,
             {
-                positions: "dummy position"
+                "positions": "dummy position",
             },
         ),
         (
             PostTxSettlementPayload,
             {
-                content: "content"
+                "content": "content",
             },
         ),
     ],

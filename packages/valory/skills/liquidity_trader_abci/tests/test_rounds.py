@@ -19,12 +19,10 @@
 
 """This module contains the test for rounds of  liquidity trader"""
 import logging  # noqa: F401
-from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
 
-from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     CallCheckpointRound,
     CheckStakingKPIMetRound,
@@ -40,7 +38,6 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     GetPositionsRound,
     LiquidityTraderAbciApp,
     PostTxSettlementRound,
-    StakingState,
     SynchronizedData,
 )
 

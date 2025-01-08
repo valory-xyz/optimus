@@ -18,7 +18,6 @@
 # ------------------------------------------------------------------------------
 """This module contains the transaction payloads for the liquidity trader abci."""
 
-from datetime import datetime
 from typing import Dict, Type
 
 import pytest
@@ -61,7 +60,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
         (
             DecisionMakingPayload,
             {
-               "content": "content",
+                "content": "content",
             },
         ),
         (
@@ -84,7 +83,6 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
         ),
     ],
 )
-
 def test_payload(payload_class: Type[BaseTxPayload], payload_kwargs: Dict) -> None:
     """Test payloads."""
     payload = payload_class(sender="sender", **payload_kwargs)

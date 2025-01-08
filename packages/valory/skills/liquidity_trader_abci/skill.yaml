@@ -7,18 +7,18 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeihfm557havyo6ohljtbdtn4mj5pp7whfyyoonqt3laefowxfjmxla
+  behaviours.py: bafybeienraqlpo4jlknydj2zn76thotomqja24dgvj7ox7qixv7efrh3hi
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeie3vom7fwl5ho6xanje3r7tab7y3a5ij5gs6qvjh2uavbpitffyzu
+  fsm_specification.yaml: bafybeic6ff6aug5baj5bb5kn3a2ug7vdvicorqamviw257l5vlfkqg73x4
   handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeiafmj46andjzmaylqncnqoukhixis2o7cylnqkv655y72j3bqjx5q
-  payloads.py: bafybeie5tbx3lqcklwfqdqft5t33oluvkltnbjqavhj3ddjjblocyq62qm
+  models.py: bafybeif673o6dskeab4swoqkot5xngj4hia44bkzizjmnnodi6aln443aq
+  payloads.py: bafybeidu4rqqto2yzsqj7niuzlp5idw6ot3ohsj7gs6hjxnn66wauecsfm
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeidbh4cetttbn4nvti6ftwlrgfnfs5xtuo3i26qfphodrlcaqlibra
+  rounds.py: bafybeib7xxohod6ghz57fktp7t25w45f7pw3vrhyuf7au4wog2foq6weuy
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -147,6 +147,7 @@ models:
       tx_timeout: 10.0
       validate_timeout: 1205
       multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
+      default_chain_id: null
       allowed_dexs:
       - balancerPool
       initial_assets: '{"ethereum":{"0x0000000000000000000000000000000000000000":"eth","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"usdc"}}'
@@ -159,6 +160,7 @@ models:
       round_threshold: 5
       apr_threshold: 5
       min_balance_multiplier: 5
+      multisend_batch_size: 50
       multisend_contract_addresses: '{"ethereum":"0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa","mode":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}'
       lifi_advance_routes_url: https://li.quest/v1/advanced/routes
       lifi_fetch_step_transaction_url: https://li.quest/v1/advanced/stepTransaction
@@ -198,6 +200,9 @@ models:
       - mode
       staking_chain: optimism
       file_hash_to_strategies: '{"bafybeiez4r4yv3so2j33opdywov6y7sbl65j5ew5n53vidqzhj2jicu3yy":"merkl_pools_search","bafybeighu2qmxopdbgk6orx45fea3ka7jwf657ihasem6jexpmg7xpe7ha":"max_apr_selection"}'
+      strategies_kwargs:
+      - - ma_period
+        - 35
       trading_strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
       selected_strategies:
       - merkl_pools_search

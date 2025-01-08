@@ -19,6 +19,11 @@ fingerprint:
   pools/balancer.py: bafybeiannebar5vgqesmulamhek6kaj4m4qz2u6aj4mt4bgxhrj625mmge
   pools/uniswap.py: bafybeicvzxb3jhcbzlcvvrhuy5anyirdenygub3m2cbk2x43ikmk2j3yt4
   rounds.py: bafybeibhrwlbl2e7sa5t2ismrj5aqdj3cl5c5dqvvau3s6dd3y2zwa5aqe
+  tests/test_diaglogues.py: bafybeicsrv5ln3zbur3txsry3baswanaphacjlws6zhndcv6tlgqiu72fa
+  tests/test_handlers.py: bafybeift2et3sn64iytnz4o4fdqhbbifd37ihjcjs5vzyuit3zfkrzkity
+  tests/test_models.py: bafybeidxefeemdrae2s3o4nrl4kcmts7r5mwys6nsjxh5ojyqv6ph6ahky
+  tests/test_payloads.py: bafybeidrfigyv5n6lwqrn7xwi5n4llcm7cein56h67ri4wbckfdthysavu
+  tests/test_rounds.py: bafybeifiupgo7moc3erg65xdt6hjgmimo5xcuuk3azpguvdnk3wfdzcps4
 fingerprint_ignore_patterns: []
 connections: []
 contracts:

@@ -83,10 +83,12 @@ class UniswapV3PoolContract(Contract):
         current_token1_qty = reserves[1] * pool_share
         
         return dict(
-            reserve0=reserves[0],
-            reserve1=reserves[1],
-            total_supply=total_supply,
-            your_lp_balance=your_lp_balance,
-            current_token0_qty=current_token0_qty,
-            current_token1_qty=current_token1_qty
+            data = {
+            "reserve0": reserves[0],
+            "reserve1": reserves[1],
+            "total_supply": total_supply,
+            "lp_balance": your_lp_balance,
+            "current_token0_qty": current_token0_qty,
+            "current_token1_qty": current_token1_qty
+            }
         )

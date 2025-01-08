@@ -145,7 +145,8 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
         if better_opportunities:
             # Sort and select the top opportunity
             better_opportunities.sort(key=lambda x: x["composite_score"], reverse=True)
-            optimal_opportunities = [better_opportunities[0]]  # Return as a list
+            optimal_opportunities = [better_opportunities[0]]
+            optimal_opportunities[0]["relative_funds_percentage"] = 1.0
             _logger.info(f"Top opportunity found with composite score: {optimal_opportunities[0]['composite_score']}")
         else:
             _logger.warning(f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}")

@@ -16,8 +16,8 @@
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeih6g2vej5nlcknpaytn7psqi3xaqiu2rjwh5xaorr7gbwutsla76m",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeigrpyeupryhrk4kz4pesjt5vtsou3y2vkhn53r4tlsg7pqehn3qnq",
         "skill/valory/optimus_abci/0.1.0": "bafybeigqt2w2b2xxd7opt474wcuxaruzaejntseta3vax7ee3pq2uwjzcq",
-        "agent/valory/optimus/0.1.0": "bafybeig4zwwcf737zp3x3fmggzcki3dmwodwnt6blvliwsccommr25yyau",
-        "service/valory/optimus/0.1.0": "bafybeiawr55fjjnpifrv2j4w4av5ggdfpxhdcv6g4alvsozqwglp3pgv7q"
+        "agent/valory/optimus/0.1.0": "bafybeic6fdatrhzdymcih46bbkvisixegryvfjto7grpaegj7tciuf5dre",
+        "service/valory/optimus/0.1.0": "bafybeifconpysyumssv6trea5f6zucr7hxlmerg663kiagj2azyfzy6alq"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",

@@ -18,34 +18,32 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the test for rounds of  liquidity trader"""
+import logging  # noqa: F401
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
-import logging  # noqa: F401
-from typing import cast
 
-from packages.valory.skills.abstract_round_abci.base import (
-    AbciAppDB
-)
-
+from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     CallCheckpointRound,
     CheckStakingKPIMetRound,
     DecisionMakingRound,
     EvaluateStrategyRound,
     Event,
+    FailedMultiplexerRound,
     FinishedCallCheckpointRound,
     FinishedCheckStakingKPIMetRound,
-    FinishedEvaluateStrategyRound,
     FinishedDecisionMakingRound,
+    FinishedEvaluateStrategyRound,
     FinishedTxPreparationRound,
-    FailedMultiplexerRound,
     GetPositionsRound,
     LiquidityTraderAbciApp,
     PostTxSettlementRound,
     StakingState,
     SynchronizedData,
 )
+
 
 @pytest.fixture
 def setup_app() -> LiquidityTraderAbciApp:
@@ -72,9 +70,7 @@ def test_call_check_point_round_transition(setup_app: LiquidityTraderAbciApp) ->
     transition_function = app.transition_function[CallCheckpointRound]
 
     # Transition on done
-    assert (
-        transition_function[Event.DONE] == CheckStakingKPIMetRound
-    )
+    assert transition_function[Event.DONE] == CheckStakingKPIMetRound
 
     # Transition on next checkpoint
     assert (
@@ -84,13 +80,12 @@ def test_call_check_point_round_transition(setup_app: LiquidityTraderAbciApp) ->
 
     # Test no settle
     assert transition_function[Event.SETTLE] == FinishedCallCheckpointRound
-    
+
     # Test no service evicted
     assert transition_function[Event.SERVICE_EVICTED] == GetPositionsRound
 
     # Test no majority
     assert transition_function[Event.NO_MAJORITY] == CallCheckpointRound
-
 
 
 def test_check_staking_kpi_round_transition(setup_app: LiquidityTraderAbciApp) -> None:
@@ -119,7 +114,7 @@ def test_get_positions_round_transition(setup_app: LiquidityTraderAbciApp) -> No
 
     # Test no majority
     assert transition_function[Event.NO_MAJORITY] == GetPositionsRound
-    
+
 
 def test_evaluate_strategy_round_transition(setup_app: LiquidityTraderAbciApp) -> None:
     """Test transitions from EvaluateStrategyRound."""

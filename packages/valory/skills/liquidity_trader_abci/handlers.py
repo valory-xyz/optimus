@@ -42,7 +42,7 @@ from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
-
+from packages.valory.skills.abstract_round_abci.models import Requests
 
 ABCIHandler = BaseABCIRoundHandler
 HttpHandler = BaseHttpHandler
@@ -61,7 +61,7 @@ class IpfsHandler(AbstractResponseHandler):
 
     @property
     def shared_state(self) -> SharedState:
-        """Get the parameters."""
+        """Get the shared state."""
         return cast(SharedState, self.context.state)
 
     def handle(self, message: IpfsMessage) -> None:
@@ -78,6 +78,24 @@ class IpfsHandler(AbstractResponseHandler):
             return super().handle(message)
 
         dialogue = self.context.ipfs_dialogues.update(message)
-        nonce = dialogue.dialogue_label.dialogue_reference[0]
-        callback = self.shared_state.req_to_callback.pop(nonce)
-        callback(message, dialogue)
+        nonce = str(dialogue.dialogue_label.dialogue_reference[0])
+
+        # First, attempt to retrieve the callback from shared_state
+        if nonce in self.shared_state.req_to_callback:
+            callback = self.shared_state.req_to_callback.pop(nonce)
+            callback(message, dialogue)
+        else:
+            # If not found, attempt to retrieve from context.requests
+            request_id_to_callback = cast(Requests, self.context.requests).request_id_to_callback
+            self.context.logger.info(f"Request ID to callback: {request_id_to_callback}")
+            self.context.logger.info(f"Keys in request_id_to_callback: {[(type(k), repr(k)) for k in request_id_to_callback.keys()]}")
+            self.context.logger.info(f"request_id_to_callback: {type(request_id_to_callback)}")
+            self.context.logger.info(f"nonce: {type(nonce)}")
+            if nonce in request_id_to_callback:
+                callback = request_id_to_callback.pop(nonce)
+                self.context.logger.info(f"ILY DIVYA Callback found for nonce '{nonce}'.")
+                # Call the callback with the appropriate arguments
+                callback(message, dialogue)
+            else:
+                # Handle the case where callback is still not found
+                self.context.logger.warning(f"No callback found for nonce '{nonce}'. Message cannot be handled.")

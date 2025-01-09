@@ -9,7 +9,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeie2bc44r2ddspeg4v7minuievvjykomcukuf5ryevom6fajno25gy
-- eightballer/dcxt:0.1.0:bafybeihnaxpiki57ivphf24qpie5g6rxwnztbrymutlw4yuyjxzvj3pdry
+- eightballer/dcxt:0.1.0:bafybeiexzq2nvwi5mpgsnbfjorfd4hr5v56ocy4xshjyqcv43nwcbo6zk4
 - valory/http_client:0.23.0:bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
 - valory/ipfs:0.1.0:bafybeias6633a2337nhq6nn5ikq4jaig47v63nxv2ixkjr6qqrqaywqara
@@ -18,7 +18,7 @@ connections:
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihtqcpqthb37msgqabpzcc2xc3l3yzkp5pl2sodeghqyzzzyuevgi
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeifr4xpmzeb5hvpgd6h4nxlsu3ef2c3f6l5bgs34vym5ok6vllwhmy
-- eightballer/erc_20:0.1.0:bafybeiezbnm3f5zhuj5bsc542isnlh2fki5q4nmm2vsajzps4uuoamofo4
+- eightballer/erc_20:0.1.0:bafybeibjnyqoemr3abmsqrxkbhs7mutcthmw7aavqcafnuxuv7bi3hdh5u
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeidipx4cmchxdu5i2v67rno7muie7ckjhmasaj64tv2vtj4fveklxi
 - valory/balancer_weighted_pool:0.1.0:bafybeib755ksie5yv4wn6jl7i3bpshlhscf4bzsabqrbahm6b3m5ixzmbi
@@ -37,18 +37,18 @@ protocols:
 - valory/tendermint:0.1.0:bafybeig4mi3vmlv5zpbjbfuzcgida6j5f2nhrpedxicmrrfjweqc5r7cra
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
-- valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeih26rf7n35e37p3ooaraamectz3qa4fwb5k3nhciuo6xcbqdsvvpe
-- valory/optimus_abci:0.1.0:bafybeie75zwuvpofelsqbbwthtuvjbsbeik3nc4wxswbmx4jqmqqzmnpw4
-- valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
-- valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
-- valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
-- valory/trader_decision_maker_abci:0.1.0:bafybeie5qwimlmclxndbg6uohy2c2yxe3oztwqulqcfdjy7hhinlivel2y
+- valory/abstract_round_abci:0.1.0:bafybeibwt37xuwosm77jokbsvjn4pmep47iw5frsoko23xo4zvrfxnpb4u
+- valory/liquidity_trader_abci:0.1.0:bafybeig53mjjsd3uhwu3tybamdmxl5e6ydsmrduro7yn5pyk24neisbrfu
+- valory/optimus_abci:0.1.0:bafybeiehbmsasfjs7mkirpujsflgz3aqnv5prfgxofpaetebjt2uvffr4q
+- valory/registration_abci:0.1.0:bafybeigmodnvfr3d2bvo5pxhgznexlp22fa65v6n6buek4kwjfesftyafq
+- valory/reset_pause_abci:0.1.0:bafybeidyp7pwre2xqbvalalxxk6moclgk2notl3gb77ebqkfj3sgktjkae
+- valory/termination_abci:0.1.0:bafybeia3hfgpksgwqy7bugoab5u43u2n6mgb5mqo6hjut2lzk45jk6tetm
+- valory/transaction_settlement_abci:0.1.0:bafybeicd2lsistfnrwg4pyfp2jleai7eli2my2czkspp7fjjwc7476ukbu
+- valory/trader_decision_maker_abci:0.1.0:bafybeidbmqzchinq5ugvf3fn6utadm5bricositehx5qeagsqwxwk2bvzq
 - valory/ipfs_package_downloader:0.1.0:bafybeiagaz7zq6a7vzhqofkalpm2ufc6yamukctjgjruk27ogvm5rm7qqa
-- valory/portfolio_tracker_abci:0.1.0:bafybeichme7cif4rmnxnj7xfzporndqmwdwxxkx5k2xyviejcsmipfj2t4
-- valory/market_data_fetcher_abci:0.1.0:bafybeibdkgxy5tszwnbsktvtlus7phtgloamh42ulotqpjcj4c5tv6rgsy
-- valory/strategy_evaluator_abci:0.1.0:bafybeihax5blbq5yy5woa7yv6fgocuxyg5lw75tyfmvwux4z6ezjjsnsbe
+- valory/portfolio_tracker_abci:0.1.0:bafybeieqzlvlygrfcej5z35k6xrz6f5udukm2fqeovyhgut2dsx2lcjwsy
+- valory/market_data_fetcher_abci:0.1.0:bafybeihxadmynzrcp6jegrciit37qjmtxnfcorsgead3ye2drewzy2isdu
+- valory/strategy_evaluator_abci:0.1.0:bafybeidfi4y5i5avibqvzuvifh76podqedvuxcxkpggjtbswtsj22g4t4y
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeih255rl4tnom2gvg2b3t2glpgcgck3orrerbhmayd7cbnggglbh7e
@@ -151,7 +151,7 @@ models:
     args:
       cleanup_freq: ${int:50}
       timeout_limit: ${int:3}
-      file_hash_to_id: ${list:[["bafybeic2fpf5ozhkf5jgzmppmfsprqw5ayfx6spgl3owuws464n7mkhpqi",["sma_strategy"]]]}
+      file_hash_to_id: ${list:[["bafybeif6aje2tkvmakhhefqown654i3xr3l6erbbhntstllt7m37eenu5m",["sma_strategy"]]]}
       component_yaml_filename: ${str:component.yaml}
       entry_point_key: ${str:entry_point}
       callable_keys: ${list:["run_callable","transform_callable","evaluate_callable"]}
@@ -372,6 +372,6 @@ config:
   exchanges:
   - name: ${str:balancer}
     key_path: ${str:ethereum_private_key.txt}
-    ledger_id: ${str:optimism}
-    rpc_url: ${str:https://mainnet.base.org/}
+    ledger_id: ${str:base}
+    rpc_url: ${str:https://weathered-attentive-reel.base-mainnet.quiknode.pro/d9d86db80676649015cd7a5d33239713bcb5146e}
     etherscan_api_key: ${str:YOUR_ETHERSCAN_API_KEY}

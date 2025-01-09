@@ -501,6 +501,60 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
         self.context.logger.error(err)
 
+    def _adjust_current_positions_for_backward_compatibility(
+        self, data: Any
+    ) -> Generator[None, None, Any]:
+        """Adjust the 'current_positions' data for backward compatibility."""
+        if isinstance(data, dict):
+            # Ensure data is a list when attribute is 'current_positions'
+            data = [data]
+        if isinstance(data, list):
+            # Backward compatibility adjustments for each position
+            for position in data:
+                # 1. If 'address' in position, change it to 'pool_address'
+                if "address" in position:
+                    position["pool_address"] = position.pop("address")
+                # 2. If 'assets' in position, and it is a list
+                if "assets" in position:
+                    assets = position.pop("assets")
+                    if isinstance(assets, list):
+                        if len(assets) >= 1:
+                            position["token0"] = assets[0]
+                            # Fetch symbol for token0
+                            position[
+                                "token0_symbol"
+                            ] = yield from self._get_token_symbol(
+                                position.get("chain"), assets[0]
+                            )
+                        if len(assets) >= 2:
+                            position["token1"] = assets[1]
+                            # Fetch symbol for token1
+                            position[
+                                "token1_symbol"
+                            ] = yield from self._get_token_symbol(
+                                position.get("chain"), assets[1]
+                            )
+                # 4. If 'status' not in position, set it to 'open'
+                if "status" not in position:
+                    position["status"] = PositionStatus.OPEN.value
+        else:
+            self.context.logger.warning("Unexpected data format for current_positions.")
+        return data
+
+    def _get_token_symbol(
+        self, chain: str, address: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Fetch the token symbol from the assets data."""
+        token_symbol = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_token_symbol",
+            data_key="data",
+            chain_id=chain,
+        )
+        return token_symbol
+
     def store_assets(self) -> None:
         """Store the list of assets as JSON."""
         self._store_data(self.assets, "assets", self.assets_filepath)
@@ -999,6 +1053,12 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                 self.store_assets()
 
             positions = yield from self.get_positions()
+            self.current_positions = (
+                yield from self._adjust_current_positions_for_backward_compatibility(
+                    self.current_positions
+                )
+            )
+
             self.context.logger.info(f"POSITIONS: {positions}")
             sender = self.context.agent_address
 
@@ -1337,6 +1397,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         initial_amount0 = position.get("amount0")
         initial_amount1 = position.get("amount1")
         timestamp = position.get("timestamp")
+
+        if not initial_amount0 or initial_amount1 or timestamp:
+            self.context.logger.error(
+                "Missing initial amounts or timestamp in position data."
+            )
 
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
         tokens = []

@@ -392,6 +392,28 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     missing = check_missing_fields(kwargs)
     if missing:
         return {"error": f"Required kwargs {missing} were not provided."}
+    
+    required_fields = list(REQUIRED_FIELDS)
+    
+    get_metrics = kwargs.get('get_metrics', False)
+
+    if get_metrics:
+        required_fields.append('position')
+        coin_list = fetch_coin_list()
+        kwargs.update({"coin_list": coin_list})
+        return calculate_metrics(**kwargs)
+    else:
+        # Remove irrelevant fields when fetching opportunities
+        kwargs = remove_irrelevant_fields(kwargs)
+        coin_list = fetch_coin_list()
+        kwargs.update({"coin_list": coin_list})
+        result = get_best_pools(**kwargs)
+        if not result:
+            return {"error": "No suitable pools found"}
+        return result
+    missing = check_missing_fields(kwargs)
+    if missing:
+        return {"error": f"Required kwargs {missing} were not provided."}
 
     get_metrics = kwargs.get('get_metrics', False)
     kwargs = remove_irrelevant_fields(kwargs)

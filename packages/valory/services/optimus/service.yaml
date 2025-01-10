@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeihzmkeawdanc2hqcogxcjh33elaimlmnyggonlhmqvl2zqxzxxnqe
+agent: valory/optimus:0.1.0:bafybeigffzir4wbjmcavajwxt22i4lkt2xbpnuk63yaa7szkv5miqrncnq
 number_of_agents: 1
 deployment:
   agent:
@@ -26,7 +26,7 @@ models:
     args:
       cleanup_freq: ${CLEANUP_FREQ:int:50}
       timeout_limit: ${TIMEOUT_LIMIT:int:3}
-      file_hash_to_id: ${FILE_HASH_TO_ID:list:[["bafybeifpqcxwjjlenpa7n3nnx5ornrg7uz5d7h76ugzhiwk45bx3sx3cta",["sma_strategy"]]]}
+      file_hash_to_id: ${FILE_HASH_TO_ID:list:[["bafybeif6aje2tkvmakhhefqown654i3xr3l6erbbhntstllt7m37eenu5m",["sma_strategy"]]]}
       component_yaml_filename: ${COMPONENT_YAML_FILENAME:str:component.yaml}
       entry_point_key: ${ENTRY_POINT_KEY:str:entry_point}
       callable_keys: ${CALLABLE_KEYS:list:["run_callable","transform_callable","evaluate_callable"]}
@@ -107,7 +107,7 @@ models:
       validate_timeout: ${VALIDATE_TIMEOUT:int:1205}
       history_check_timeout: ${HISTORY_CHECK_TIMEOUT:int:1205}
       token_symbol_whitelist: ${TOKEN_SYMBOL_WHITELIST:list:["coingecko_id=solana&address=So11111111111111111111111111111111111111112"]}
-      strategies_kwargs: ${STRATEGIES_KWARGS:list:[["ma_period",20],["rsi_period",14],["rsi_overbought_threshold",70],["rsi_oversold_threshold",30]]} # change
+      strategies_kwargs: ${STRATEGIES_KWARGS:list:[["ma_period",20],["rsi_period",14],["rsi_overbought_threshold",70],["rsi_oversold_threshold",30]]}
       use_proxy_server: ${USE_PROXY_SERVER:bool:false}
       expected_swap_tx_cost: ${EXPECTED_SWAP_TX_COST:int:20000000}
       ipfs_fetch_retries: ${IPFS_FETCH_RETRIES:int:5}

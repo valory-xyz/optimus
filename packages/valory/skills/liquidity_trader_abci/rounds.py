@@ -422,10 +422,10 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
 
 class DecideAgentStartingRound(VotingRound):
     """DecideAgentStartingRound"""
-
     payload_class = DecideAgentPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.MOVE_TO_NEXT_AGENT
+    none_event = Event.NONE
     negative_event = Event.DONT_MOVE_TO_NEXT_AGENT
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_votes)
@@ -556,12 +556,14 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NONE: DecisionMakingRound,
         },
         DecideAgentStartingRound: {
+            Event.NONE: DecideAgentStartingRound,
             Event.DONT_MOVE_TO_NEXT_AGENT: CallCheckpointRound,
             Event.MOVE_TO_NEXT_AGENT: SwitchAgentStartingRound,
             Event.ROUND_TIMEOUT: DecideAgentStartingRound,
             Event.NO_MAJORITY: CallCheckpointRound,
         },
         DecideAgentEndingRound: {
+            Event.NONE: DecideAgentEndingRound,
             Event.DONT_MOVE_TO_NEXT_AGENT: PostTxSettlementRound,
             Event.MOVE_TO_NEXT_AGENT: SwitchAgentEndingRound,
             Event.ROUND_TIMEOUT: DecideAgentEndingRound,

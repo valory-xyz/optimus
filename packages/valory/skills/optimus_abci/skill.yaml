@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
-  behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
-  composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
-  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
-  fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
-  handlers.py: bafybeicyu4bsubv2rnrhnx76wjt23oqbhaqihjaulrlshxygwicv4ml5la
-  models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
+  behaviours.py: bafybeihqhdnqza5f27soi4pf3x3bxqcachbsmx7zceqcw6uv2obgynxrm4
+  composition.py: bafybeibiyxe22c5c33keuosha2t6b4zez2iqghawbtfhumqrubrtsuun4y
+  dialogues.py: bafybeihhgzlutexxt6ry74m2rlaxdhu3ldbvhugmmgxxjlfcxf4xaipisy
+  fsm_specification.yaml: bafybeib6whjprlxmcmhamqj3hljumimepykh6vytt5luvzyefcalcav5su
+  handlers.py: bafybeigqlrxgdbg4lrm3uqi7n5akth5fy5yym57zky4uwnyali6fsuxfnm
+  models.py: bafybeiamgoetd2gdm3rf33sa2rh3l36is3mdev3ghpinjfe4hprvodezqe
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
@@ -23,15 +23,15 @@ protocols:
 - eightballer/balances:0.1.0:bafybeicjxjwmr4wubghu4fa3cdg7dhwpy6b3dhvuaqbzem3jvycooyyazm
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/market_data_fetcher_abci:0.1.0:bafybeies3ib3ft3tqepogstxjarq3ku4xepnfozyvg2rur5ztq4afchgcq
-- valory/trader_decision_maker_abci:0.1.0:bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm
-- valory/strategy_evaluator_abci:0.1.0:bafybeidbib2sdjgq3354emzcc22zzgdm4z5hjdz2gbvcqabw5j4rdgcx5a
-- valory/portfolio_tracker_abci:0.1.0:bafybeihigssk7zxefcr44hpxwrnsa6ho53zyulqhepxvm3idsywzd6w5wq
+- valory/market_data_fetcher_abci:0.1.0:bafybeib7zl3eoq4e7c35alhplnuaka2dxwrhsagby2ptxdevcz35dpgfdm
+- valory/trader_decision_maker_abci:0.1.0:bafybeiahgy6ddua6bgyiponmzp76m5tkn5wndlryviczqbi2lklexsjusi
+- valory/strategy_evaluator_abci:0.1.0:bafybeic6gs6gg7vkkn4t2k4q43qmtslibztxxzl6toz6x6spkmriukhzyq
+- valory/portfolio_tracker_abci:0.1.0:bafybeicdbae3njwqjq7x4rrjy2ovixjfpy5b7ron4rmrmu4jxv4kxfwira
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeid22jt44eyikkv5c566tv22e43umfr3wtt2vv3qiemr3rlawhp5mi
+- valory/liquidity_trader_abci:0.1.0:bafybeia4gthwu4o2z746ikuivjkty6q6ciqoqshxp7rdb7c2fmxp77x46m
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -125,6 +125,7 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
+      default_chain_id: base
       service_id: optimus
       service_registry_address: null
       setup:
@@ -204,6 +205,7 @@ models:
       use_proxy_server: false
       expected_swap_tx_cost: 20000000
       ipfs_fetch_retries: 5
+      ipfs_address: https://gateway.autonolas.tech/ipfs/
       squad_vault: 39Zh4C687EXLY7CT8gjCxe2hUc3krESjUsqs7A1CKD5E
       agent_balance_threshold: 50000000
       multisig_balance_threshold: 1000000000
@@ -247,6 +249,7 @@ models:
       max_pools: 2
       profit_threshold: 30
       loss_threshold: 5
+      multisend_batch_size: 50
     class_name: Params
   coingecko:
     args:
@@ -365,5 +368,5 @@ models:
     class_name: OrdersDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.57.0
+    version: ==1.60.0
 is_abstract: false

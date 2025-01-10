@@ -89,33 +89,38 @@ class PoolBehaviour(BaseBehaviour, ABC):
         contract_id = str(contract_public_id)
 
         self.context.logger.info(
-            f"Interacting with contract {contract_id} at address {contract_address}\n"
-            f"Calling method {contract_callable} with parameters: {kwargs}"
+            f"Interacting with contract {contract_id} at address {contract_address}"
+        )
+        self.context.logger.debug(
+            f"Calling method '{contract_callable}' with parameters: {kwargs}"
         )
 
-        response_msg = yield from self.get_contract_api_response(
-            performative,
-            contract_address,
-            contract_id,
-            contract_callable,
-            **kwargs,
-        )
-
-        self.context.logger.info(f"Contract response: {response_msg}")
-
-        if response_msg.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
-            self.default_error(contract_id, contract_callable, response_msg)
-            return None
-
-        data = response_msg.raw_transaction.body.get(data_key, None)
-        if data is None:
-            self.contract_interaction_error(
-                contract_id, contract_callable, response_msg
+        try:
+            response_msg = yield from self.get_contract_api_response(
+                performative,
+                contract_address,
+                contract_id,
+                contract_callable,
+                **kwargs,
             )
+            self.context.logger.debug(f"Received response message: {response_msg}")
+
+            if response_msg.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
+                self.default_error(contract_id, contract_callable, response_msg)
+                return None
+
+            data = response_msg.raw_transaction.body.get(data_key)
+            if data is None:
+                self.contract_interaction_error(contract_id, contract_callable, response_msg)
+                return None
+
+            self.context.logger.info(f"Successfully retrieved data: {data}")
+            return data
+
+        except Exception as e:
+            self.context.logger.error(f"Exception during contract interaction: {e}")
             return None
-
-        return data
-
+        
     def async_act(self) -> Generator[Any, None, None]:
         """Async act"""
         pass

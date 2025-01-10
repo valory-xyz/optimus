@@ -108,7 +108,7 @@ config:
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     base:
-      address: ${str:https://virtual.base.rpc.tenderly.co/d87f694f-f2f5-4426-be70-e90295632cb0}
+      address: ${str:}
       chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
@@ -151,7 +151,7 @@ models:
     args:
       cleanup_freq: ${int:50}
       timeout_limit: ${int:3}
-      file_hash_to_id: ${list:[["bafybeif6aje2tkvmakhhefqown654i3xr3l6erbbhntstllt7m37eenu5m",["sma_strategy"]]]}
+      file_hash_to_id: ${list:[["bafybeif6aje2tkvmakhhefqown654i3xr3l6erbbhntstllt7m37eenu5m",["portfolio_balancer"]]]}
       component_yaml_filename: ${str:component.yaml}
       entry_point_key: ${str:entry_point}
       callable_keys: ${list:["run_callable","transform_callable","evaluate_callable"]}
@@ -180,7 +180,7 @@ models:
       response_type: ${str:int}
       error_key: ${str:error:message}
       error_type: ${str:str}
-      retries: ${int:5}
+      retries: ${int:10}
       url: ${str:https://api.mainnet-beta.solana.com}
   token_accounts:
     args:
@@ -220,7 +220,7 @@ models:
         priorityFee: ${int:5000000}
       response_key: ${str:null}
       response_type: ${str:dict}
-      retries: ${int:5}
+      retries: ${int:10}
       url: ${str:http://localhost:3000/tx}
   params:
     args:
@@ -373,5 +373,5 @@ config:
   - name: ${str:balancer}
     key_path: ${str:ethereum_private_key.txt}
     ledger_id: ${str:base}
-    rpc_url: ${str:https://weathered-attentive-reel.base-mainnet.quiknode.pro/d9d86db80676649015cd7a5d33239713bcb5146e}
+    rpc_url: ${str:""}
     etherscan_api_key: ${str:YOUR_ETHERSCAN_API_KEY}

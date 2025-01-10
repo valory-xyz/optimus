@@ -4348,22 +4348,29 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
 
 
 class DecideAgentStartingBehaviour(LiquidityTraderBaseBehaviour):
-    """Behaviour that executes all the actions."""
+    """Behaviour that decides whether the agent should start."""
 
     matching_round: Type[AbstractRound] = DecideAgentStartingRound
 
     def async_act(self) -> Generator:
-        """Async act"""
+        """Perform the asynchronous action of deciding agent start."""
+        self.context.logger.info("Starting DecideAgentStartingBehaviour...")
+
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            self.context.logger.debug("Creating DecideAgentPayload.")
             payload = DecideAgentPayload(
-                self.context.agent_address, self.params.agent_transition
+                sender=self.context.agent_address,
+                content=self.params.agent_transition,
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            self.context.logger.info("Sending A2A transaction.")
             yield from self.send_a2a_transaction(payload)
+            self.context.logger.info("Waiting until round end.")
             yield from self.wait_until_round_end()
 
         self.set_done()
+        self.context.logger.info("DecideAgentStartingBehaviour completed.")
 
 
 class DecideAgentEndingBehaviour(DecideAgentStartingBehaviour):

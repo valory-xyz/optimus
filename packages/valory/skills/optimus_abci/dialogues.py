@@ -103,9 +103,6 @@ ContractApiDialogues = BaseContractApiDialogues
 TendermintDialogue = BaseTendermintDialogue
 TendermintDialogues = BaseTendermintDialogues
 
-TickersDialogue = BaseTickersDialogue
-TickersDialogues = BaseTickersDialogues
-
 IpfsDialogue = BaseIpfsDialogue
 IpfsDialogues = BaseIpfsDialogues
 

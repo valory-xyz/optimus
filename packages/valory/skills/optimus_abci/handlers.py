@@ -260,58 +260,77 @@ class HttpHandler(BaseHttpHandler):
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
 
-    def _handle_get_health(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a Http request of verb GET.
+def _handle_get_health(
+    self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+) -> None:
+    """
+    Handle a Http request of verb GET.
 
-        :param http_msg: the http message
-        :param http_dialogue: the http dialogue
-        """
-        seconds_since_last_transition = None
-        is_tm_unhealthy = None
-        is_transitioning_fast = None
-        current_round = None
-        rounds = None
+    :param http_msg: the http message
+    :param http_dialogue: the http dialogue
+    """
+    # Log the receipt of the health check request
+    self.context.logger.info("Handling GET /healthcheck request.")
 
-        round_sequence = cast(SharedState, self.context.state).round_sequence
+    seconds_since_last_transition = None
+    is_tm_unhealthy = None
+    is_transitioning_fast = None
+    current_round = None
+    rounds = None
 
-        if round_sequence._last_round_transition_timestamp:
-            is_tm_unhealthy = cast(
-                SharedState, self.context.state
-            ).round_sequence.block_stall_deadline_expired
+    round_sequence = cast(SharedState, self.context.state).round_sequence
 
-            current_time = datetime.now().timestamp()
-            seconds_since_last_transition = current_time - datetime.timestamp(
-                round_sequence._last_round_transition_timestamp
-            )
+    if round_sequence._last_round_transition_timestamp:
+        is_tm_unhealthy = cast(
+            SharedState, self.context.state
+        ).round_sequence.block_stall_deadline_expired
 
-            is_transitioning_fast = (
-                not is_tm_unhealthy
-                and seconds_since_last_transition
-                < 2 * self.context.params.reset_pause_duration
-            )
+        current_time = datetime.now().timestamp()
+        seconds_since_last_transition = current_time - datetime.timestamp(
+            round_sequence._last_round_transition_timestamp
+        )
 
-        if round_sequence._abci_app:
-            current_round = round_sequence._abci_app.current_round.round_id
-            rounds = [
-                r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]
-            ]
-            rounds.append(current_round)
+        is_transitioning_fast = (
+            not is_tm_unhealthy
+            and seconds_since_last_transition
+            < 2 * self.context.params.reset_pause_duration
+        )
 
-        data = {
-            "seconds_since_last_transition": seconds_since_last_transition,
-            "is_tm_healthy": not is_tm_unhealthy,
-            "period": self.synchronized_data.period_count,
-            "reset_pause_duration": self.context.params.reset_pause_duration,
-            "rounds": rounds,
-            "is_transitioning_fast": is_transitioning_fast,
-        }
+        # Log the computed times and health status
+        self.context.logger.debug(
+            f"Seconds since last transition: {seconds_since_last_transition}, "
+            f"Is Tendermint unhealthy: {is_tm_unhealthy}, "
+            f"Is transitioning fast: {is_transitioning_fast}"
+        )
+    else:
+        self.context.logger.warning(
+            "No last round transition timestamp available."
+        )
 
-        self._send_ok_response(http_msg, http_dialogue, data)
+    if round_sequence._abci_app:
+        current_round = round_sequence._abci_app.current_round.round_id
+        rounds = [
+            r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]
+        ]
+        rounds.append(current_round)
 
+        # Log the current and recent rounds
+        self.context.logger.debug(
+            f"Current round: {current_round}, Recent rounds: {rounds}"
+        )
+    else:
+        self.context.logger.warning("No ABCI app instance available.")
 
-DcxtTickersHandler = BaseDcxtTickersHandler
-DcxtBalancesHandler = BaseDcxtBalancesHandler
-DcxtOrdersHandler = BaseDcxtOrdersHandler
+    data = {
+        "seconds_since_last_transition": seconds_since_last_transition,
+        "is_tm_healthy": not is_tm_unhealthy,
+        "period": self.synchronized_data.period_count,
+        "reset_pause_duration": self.context.params.reset_pause_duration,
+        "rounds": rounds,
+        "is_transitioning_fast": is_transitioning_fast,
+    }
+
+    # Log the data to be sent in the response
+    self.context.logger.info(f"Health check data: {data}")
+
+    self._send_ok_response(http_msg, http_dialogue, data)

@@ -467,6 +467,8 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
             return synced_data, event
 
+        return None
+
 
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""
@@ -571,13 +573,13 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: PostTxSettlementRound,
         },
         PostTxSettlementRound: {
+            Event.NONE: PostTxSettlementRound,
             Event.ACTION_EXECUTED: DecisionMakingRound,
             Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
             Event.UNRECOGNIZED: FailedMultiplexerRound,
             Event.DONE: PostTxSettlementRound,
-            Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
         },
         FinishedEvaluateStrategyRound: {},

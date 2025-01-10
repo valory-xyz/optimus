@@ -126,15 +126,18 @@ class CoingeckoRateLimiter:
 
     @property
     def credits_reset_timestamp(self) -> int:
-        """Get the UNIX timestamp in which the Coingecko credits reset."""
+        """Get the UNIX timestamp when the Coingecko credits reset."""
         current_date = datetime.now()
-        first_day_of_next_month = datetime(current_date.year, current_date.month + 1, 1)
+        if current_date.month == 12:
+            first_day_of_next_month = datetime(current_date.year + 1, 1, 1)
+        else:
+            first_day_of_next_month = datetime(current_date.year, current_date.month + 1, 1)
         return int(first_day_of_next_month.timestamp())
 
     @property
     def can_reset_credits(self) -> bool:
         """Check whether the Coingecko credits can be reset."""
-        return self.last_request_time >= self.credits_reset_timestamp
+        return time() >= self.credits_reset_timestamp
 
     def _update_limits(self) -> None:
         """Update the remaining limits and the credits if necessary."""
@@ -196,7 +199,7 @@ class Params(BaseParams):
     """Parameters"""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Init"""
+        """Initialize parameters."""
         self.initial_assets = json.loads(self._ensure("initial_assets", kwargs, str))
         self.safe_contract_addresses = json.loads(
             self._ensure("safe_contract_addresses", kwargs, str)
@@ -317,7 +320,7 @@ class Params(BaseParams):
     def get_store_path(self, kwargs: Dict) -> Path:
         """Get the path of the store."""
         path = self._ensure("store_path", kwargs, str)
-        # check if path exists, and we can write to it
+        # Check if path exists, and we can write to it
         if (
             not os.path.isdir(path)
             or not os.access(path, os.W_OK)

@@ -1,5 +1,6 @@
 {
     "dev": {
+<<<<<<< HEAD
         "custom/valory/merkl_pools_search/0.1.0": "bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq",
         "custom/valory/asset_lending/0.1.0": "bafybeihsq7hhdgcc5wqxbqrioxaqsrza4424wqlv3hqkemomsb337pocki",
         "custom/valory/max_apr_selection/0.1.0": "bafybeih255rl4tnom2gvg2b3t2glpgcgck3orrerbhmayd7cbnggglbh7e",
@@ -18,6 +19,20 @@
         "skill/valory/optimus_abci/0.1.0": "bafybeiehbmsasfjs7mkirpujsflgz3aqnv5prfgxofpaetebjt2uvffr4q",
         "agent/valory/optimus/0.1.0": "bafybeiaegusezm4ypk6eu3sujqkeatqdouscquytrsxjfg5hn2h3nz6xum",
         "service/valory/optimus/0.1.0": "bafybeifthcjgnrouk3jya34tjykv6ucodycwbv7nsikoozlmw2xsp66ceu"
+=======
+        "contract/valory/balancer_weighted_pool/0.1.0": "bafybeidyjlrlq3jrbackewedwt5irokhjupxgpqfgur2ri426cap2oqt7a",
+        "contract/valory/balancer_vault/0.1.0": "bafybeie6twptrkqddget7pjijzob2c4jqmrrtpkwombneh35xx56djz4ru",
+        "contract/valory/erc20/0.1.0": "bafybeiav4gh7lxfnwp4f7oorkbvjxrdsgjgyhl43rgbblaugtl76zlx7vy",
+        "contract/valory/uniswap_v3_non_fungible_position_manager/0.1.0": "bafybeigadr3nyx6tkrual7oqn2qiup35addfevromxjzzlvkiukpyhtz6y",
+        "contract/valory/uniswap_v3_pool/0.1.0": "bafybeih64nqgwlverl2tubnkymtlvewngn2pthzzfjewvxpk7dt2im6gza",
+        "contract/valory/merkl_distributor/0.1.0": "bafybeihaqsvmncuzmwv2r6iuzc5t7ur6ugdhephz7ydftypksjidpsylbq",
+        "contract/valory/staking_token/0.1.0": "bafybeifrvtkofw5c26b3irm6izqfdpik6vpjhm6hqwcdzx333h6vhdanai",
+        "contract/valory/staking_activity_checker/0.1.0": "bafybeibjzsi2r5b6xd4iwl4wbwldptnynryzsdpifym4mkv32ynswx22ou",
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidtwzdz4xzsh6km676pccg4ii57doyia25ekjz3zaqf6xybdoozla",
+        "skill/valory/optimus_abci/0.1.0": "bafybeihxoc54iyara3lssgoxz7z5gppcnqhjmhprajibq5xktphjyajyoy",
+        "agent/valory/optimus/0.1.0": "bafybeianqz73ienvtkz5ev34z24xsa7ux7q5kqkqwpffr3avtogwnyv46i",
+        "service/valory/optimus/0.1.0": "bafybeibgxsa3quhwcrhkpyz3phhsky4wb47yx6nmus3fklsbmqwcd43pje"
+>>>>>>> parent of cc5bde9 (fix: Merge remote-tracking branch 'origin/main' into feat/conc-fsm-babydegen)
     },
     "third_party": {
         "custom/eightballer/rsi_strategy/0.1.0": "bafybeigbofp2nqwcxu3rlkuugpc3w6ils3u7glse7c335rddcqg56ybh34",
@@ -43,18 +58,27 @@
         "protocol/eightballer/default/0.1.0": "bafybeib7awcnlmjil7h7egx5fisncllmtgcva3odew3crz4ufdabhwess4",
         "protocol/eightballer/markets/0.1.0": "bafybeifvgcpyqcxxptzqdd4xk23rqa5bjk3l7yggo6xo7dk5tivotmrdnm",
         "protocol/valory/tendermint/0.1.0": "bafybeig4mi3vmlv5zpbjbfuzcgida6j5f2nhrpedxicmrrfjweqc5r7cra",
-        "contract/valory/service_registry/0.1.0": "bafybeidipx4cmchxdu5i2v67rno7muie7ckjhmasaj64tv2vtj4fveklxi",
-        "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeifr4xpmzeb5hvpgd6h4nxlsu3ef2c3f6l5bgs34vym5ok6vllwhmy",
+        "contract/valory/service_registry/0.1.0": "bafybeihafe524ilngwzavkhwz4er56p7nyar26lfm7lrksfiqvvzo3kdcq",
+        "contract/eightballer/erc_20/0.1.0": "bafybeiezbnm3f5zhuj5bsc542isnlh2fki5q4nmm2vsajzps4uuoamofo4",
+        "contract/eightballer/spl_token/0.1.0": "bafybeidut74uztdcvhnw7qy6ui6e6ghsrg7hytehgeiysmcl7rkzkoyiaq",
+        "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeicpcpyurm7gxir2gnlsgzeirzomkhcbnzr5txk67zdf4mmg737rtu",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
+<<<<<<< HEAD
         "contract/valory/gnosis_safe/0.1.0": "bafybeihtqcpqthb37msgqabpzcc2xc3l3yzkp5pl2sodeghqyzzzyuevgi",
         "contract/eightballer/erc_20/0.1.0": "bafybeibjnyqoemr3abmsqrxkbhs7mutcthmw7aavqcafnuxuv7bi3hdh5u",
         "contract/eightballer/spl_token/0.1.0": "bafybeicoilkgzccqdj3tg4uqdsjtm36qmrynihxnsobjy7waicuz7hau5e",
         "connection/valory/abci/0.1.0": "bafybeie2bc44r2ddspeg4v7minuievvjykomcukuf5ryevom6fajno25gy",
+=======
+        "contract/valory/gnosis_safe/0.1.0": "bafybeib375xmvcplw7ageic2np3hq4yqeijrvd5kl7rrdnyvswats6ngmm",
+        "connection/eightballer/dcxt/0.1.0": "bafybeiexzq2nvwi5mpgsnbfjorfd4hr5v56ocy4xshjyqcv43nwcbo6zk4",
+        "connection/valory/abci/0.1.0": "bafybeiejymu4ul62zx6weoibnlsrfprfpjnplhjefz6sr6izgdr4sajlnu",
+>>>>>>> parent of cc5bde9 (fix: Merge remote-tracking branch 'origin/main' into feat/conc-fsm-babydegen)
         "connection/valory/http_client/0.23.0": "bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u",
-        "connection/valory/ipfs/0.1.0": "bafybeias6633a2337nhq6nn5ikq4jaig47v63nxv2ixkjr6qqrqaywqara",
+        "connection/valory/ipfs/0.1.0": "bafybeiegnapkvkamis47v5ioza2haerrjdzzb23rptpmcydyneas7jc2wm",
         "connection/valory/ledger/0.19.0": "bafybeigntoericenpzvwejqfuc3kqzo2pscs76qoygg5dbj6f4zxusru5e",
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e",
         "connection/valory/http_server/0.22.0": "bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m",
+<<<<<<< HEAD
         "connection/eightballer/dcxt/0.1.0": "bafybeiexzq2nvwi5mpgsnbfjorfd4hr5v56ocy4xshjyqcv43nwcbo6zk4",
         "skill/valory/abstract_abci/0.1.0": "bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq",
         "skill/valory/reset_pause_abci/0.1.0": "bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri",
@@ -67,5 +91,18 @@
         "skill/valory/portfolio_tracker_abci/0.1.0": "bafybeicdbae3njwqjq7x4rrjy2ovixjfpy5b7ron4rmrmu4jxv4kxfwira",
         "skill/valory/trader_decision_maker_abci/0.1.0": "bafybeiahgy6ddua6bgyiponmzp76m5tkn5wndlryviczqbi2lklexsjusi",
         "skill/valory/ipfs_package_downloader/0.1.0": "bafybeiagaz7zq6a7vzhqofkalpm2ufc6yamukctjgjruk27ogvm5rm7qqa"
+=======
+        "skill/valory/strategy_evaluator_abci/0.1.0": "bafybeidbib2sdjgq3354emzcc22zzgdm4z5hjdz2gbvcqabw5j4rdgcx5a",
+        "skill/valory/market_data_fetcher_abci/0.1.0": "bafybeies3ib3ft3tqepogstxjarq3ku4xepnfozyvg2rur5ztq4afchgcq",
+        "skill/valory/portfolio_tracker_abci/0.1.0": "bafybeihigssk7zxefcr44hpxwrnsa6ho53zyulqhepxvm3idsywzd6w5wq",
+        "skill/valory/trader_decision_maker_abci/0.1.0": "bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm",
+        "skill/valory/abstract_abci/0.1.0": "bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu",
+        "skill/valory/reset_pause_abci/0.1.0": "bafybeif4lgvbzsmzljesxbphycdv52ka7qnihyjrjpfaseclxadcmm6yiq",
+        "skill/valory/registration_abci/0.1.0": "bafybeiffipsowrqrkhjoexem7ern5ob4fabgif7wa6gtlszcoaop2e3oey",
+        "skill/valory/abstract_round_abci/0.1.0": "bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm",
+        "skill/valory/termination_abci/0.1.0": "bafybeiekkpo5qef5zaeagm3si6v45qxcojvtjqe4a5ceccvk4q7k3xi3bi",
+        "skill/valory/ipfs_package_downloader/0.1.0": "bafybeieokinjosnulrsee3kbj7ly4kjfx2ub6lmwkyplgs33vxgmx3fbvm",
+        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeielv6eivt2z6nforq43xewl2vmpfwpdu2s2vfogobziljnwsclmlm"
+>>>>>>> parent of cc5bde9 (fix: Merge remote-tracking branch 'origin/main' into feat/conc-fsm-babydegen)
     }
 }

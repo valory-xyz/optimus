@@ -17,4 +17,26 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains a strategy that returns the highest APR yielding aggregator over Sturdy for lending WETH"""
+"""This package contains the implemenatation of the StrategyBehaviour interface."""
+
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Generator
+
+from packages.valory.skills.abstract_round_abci.behaviours import BaseBehaviour
+
+
+class StrategyBehaviour(BaseBehaviour, ABC):
+    """StrategyBehaviour"""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize `StrategyBehaviour`."""
+        super().__init__(**kwargs)
+
+    @abstractmethod
+    def get_decision(self) -> Dict[str, str]:
+        """Get the decision on whether to enter a pool or not"""
+        pass
+
+    def async_act(self) -> Generator[Any, None, None]:
+        """Async act"""
+        pass

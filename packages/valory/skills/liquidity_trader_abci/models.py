@@ -23,9 +23,9 @@ import os
 from datetime import datetime
 from pathlib import Path
 from time import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from aea.skills.base import Model, SkillContext
+from aea.skills.base import Model
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
@@ -46,29 +46,6 @@ class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls = LiquidityTraderAbciApp
-
-    def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
-        """Initialize the state."""
-        super().__init__(*args, skill_context=skill_context, **kwargs)
-        self.strategy_to_filehash: Dict[str, str] = {}
-        self.strategies_executables: Dict[str, Tuple[str, str]] = {}
-        self.in_flight_req: bool = False
-        self.req_to_callback: Dict[str, Callable] = {}
-
-    def setup(self) -> None:
-        """Set up the model."""
-        super().setup()
-        params = self.context.params
-        self.strategy_to_filehash = {
-            value: key for key, value in params.file_hash_to_strategies.items()
-        }
-        strategy_exec = self.strategy_to_filehash.keys()
-        for selected_strategy in params.selected_strategies:
-            if selected_strategy not in strategy_exec:
-                raise ValueError(
-                    f"The selected trading strategy {selected_strategy} "
-                    f"is not in the strategies' executables {strategy_exec}."
-                )
 
 
 Requests = BaseRequests
@@ -173,9 +150,6 @@ class Coingecko(Model, TypeCheckMixin):
         self.coin_price_endpoint: str = self._ensure("coin_price_endpoint", kwargs, str)
         self.api_key: Optional[str] = self._ensure("api_key", kwargs, Optional[str])
         self.rate_limited_code: int = self._ensure("rate_limited_code", kwargs, int)
-        self.historical_price_endpoint: str = self._ensure(
-            "historical_price_endpoint", kwargs, str
-        )
         self.chain_to_platform_id_mapping: Dict[str, str] = json.loads(
             self._ensure("chain_to_platform_id_mapping", kwargs, str)
         )
@@ -289,6 +263,7 @@ class Params(BaseParams):
         self.balancer_graphql_endpoints = json.loads(
             self._ensure("balancer_graphql_endpoints", kwargs, str)
         )
+<<<<<<< HEAD
         self.target_investment_chains: List[str] = self._ensure(
             "target_investment_chains", kwargs, List[str]
         )
@@ -315,6 +290,8 @@ class Params(BaseParams):
         self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
         self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
 
+=======
+>>>>>>> parent of cc5bde9 (fix: Merge remote-tracking branch 'origin/main' into feat/conc-fsm-babydegen)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

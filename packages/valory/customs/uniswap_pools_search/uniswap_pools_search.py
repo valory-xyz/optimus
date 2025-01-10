@@ -52,8 +52,8 @@ ERC20_ABI = [
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
-def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
+def remove_irrelevant_fields(kwargs: Dict[str, Any], required_fields: Tuple) -> Dict[str, Any]:
+    return {key: value for key, value in kwargs.items() if key in required_fields}
 
 def fetch_coin_list():
     """Fetches the list of coins from the CoinGecko API."""
@@ -394,31 +394,14 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
         return {"error": f"Required kwargs {missing} were not provided."}
     
     required_fields = list(REQUIRED_FIELDS)
-    
     get_metrics = kwargs.get('get_metrics', False)
-
     if get_metrics:
         required_fields.append('position')
-        coin_list = fetch_coin_list()
-        kwargs.update({"coin_list": coin_list})
-        return calculate_metrics(**kwargs)
-    else:
-        # Remove irrelevant fields when fetching opportunities
-        kwargs = remove_irrelevant_fields(kwargs)
-        coin_list = fetch_coin_list()
-        kwargs.update({"coin_list": coin_list})
-        result = get_best_pools(**kwargs)
-        if not result:
-            return {"error": "No suitable pools found"}
-        return result
-    missing = check_missing_fields(kwargs)
-    if missing:
-        return {"error": f"Required kwargs {missing} were not provided."}
 
-    get_metrics = kwargs.get('get_metrics', False)
-    kwargs = remove_irrelevant_fields(kwargs)
+    kwargs = remove_irrelevant_fields(kwargs, required_fields)
+
     coin_list = fetch_coin_list()
-    kwargs["coin_list"] = coin_list
+    kwargs.update({"coin_list": coin_list})
 
     if get_metrics:
         return calculate_metrics(**kwargs)

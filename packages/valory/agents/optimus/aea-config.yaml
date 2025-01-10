@@ -45,9 +45,9 @@ skills:
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeig5rowqmfv6ydn7iufc2jf33pef3uxaudcxgb7whsrliwmtkgat7e
 - valory/max_apr_selection:0.1.0:bafybeiegz65orpcrbwivhshtpcr63fhv57mmb6zga4b4gy2kse7xpdtpje
-- valory/balancer_pools_search:0.1.0:bafybeigw4akktp4kohscby4zd37pkqk47bwiu5vgsm7xcnpoivir2sjs5i
-- valory/uniswap_pools_search:0.1.0:bafybeifni5bwqdsd4um5ppxur6bkitgr2f5q7tws2szxjrjclsmlis3w3a
-- valory/asset_lending:0.1.0:bafybeifeomtmaeeqoz6tfltilw3cdgnwj7octuvjewjebtt27lpfcaixie
+- valory/balancer_pools_search:0.1.0:bafybeidxvxt2ftyqbimaqtmzbhtt5cz2q7oqaevpbvtyrhl5chma37fw6e
+- valory/uniswap_pools_search:0.1.0:bafybeiduij3splkujvvjrrbhojwq7fxcl6xn5vo24kqgdlp74o5waffbme
+- valory/asset_lending:0.1.0:bafybeid23fmzki2wh3mp252yl7omx2napmgi75tljqf4ezrlwwkimwfr4y
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -259,7 +259,7 @@ models:
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["optimism","mode"]}
       staking_chain: ${str:""}
-      file_hash_to_strategies: ${str:{"bafybeig5rowqmfv6ydn7iufc2jf33pef3uxaudcxgb7whsrliwmtkgat7e":"merkl_pools_search","bafybeiegz65orpcrbwivhshtpcr63fhv57mmb6zga4b4gy2kse7xpdtpje":"max_apr_selection","bafybeigw4akktp4kohscby4zd37pkqk47bwiu5vgsm7xcnpoivir2sjs5i":"balancer_pools_search","bafybeifni5bwqdsd4um5ppxur6bkitgr2f5q7tws2szxjrjclsmlis3w3a":"uniswap_pools_search","bafybeifeomtmaeeqoz6tfltilw3cdgnwj7octuvjewjebtt27lpfcaixie":"asset_lending"}}
+      file_hash_to_strategies: ${str:{"bafybeig5rowqmfv6ydn7iufc2jf33pef3uxaudcxgb7whsrliwmtkgat7e":"merkl_pools_search","bafybeiegz65orpcrbwivhshtpcr63fhv57mmb6zga4b4gy2kse7xpdtpje":"max_apr_selection","bafybeidxvxt2ftyqbimaqtmzbhtt5cz2q7oqaevpbvtyrhl5chma37fw6e":"balancer_pools_search","bafybeiduij3splkujvvjrrbhojwq7fxcl6xn5vo24kqgdlp74o5waffbme":"uniswap_pools_search","bafybeid23fmzki2wh3mp252yl7omx2napmgi75tljqf4ezrlwwkimwfr4y":"asset_lending"}}
       strategies_kwargs: ${str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       selected_strategies: ${list:["asset_lending","balancer_pools_search"]}
       selected_protocols: ${list:["BALANCER","UNISWAP_V3","STURDY"]}

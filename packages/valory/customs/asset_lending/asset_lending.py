@@ -139,8 +139,8 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
-def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
+def remove_irrelevant_fields(kwargs: Dict[str, Any], required_fields: Tuple) -> Dict[str, Any]:
+    return {key: value for key, value in kwargs.items() if key in required_fields}
 
 
 def fetch_aggregators() -> List[Dict[str, Any]]:
@@ -380,8 +380,12 @@ def run(*_args, **kwargs) -> Any:
     if missing:
         return {"error": f"Required kwargs {missing} were not provided."}
 
+    required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get('get_metrics', False)
-    kwargs = remove_irrelevant_fields(kwargs)
+    if get_metrics:
+        required_fields.append('position')
+
+    kwargs = remove_irrelevant_fields(kwargs, required_fields)
 
     if get_metrics:
         return calculate_metrics(**kwargs)

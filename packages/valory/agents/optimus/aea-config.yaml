@@ -16,15 +16,9 @@ connections:
 - valory/ledger:0.19.0:bafybeigntoericenpzvwejqfuc3kqzo2pscs76qoygg5dbj6f4zxusru5e
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 contracts:
-<<<<<<< HEAD
-- valory/gnosis_safe:0.1.0:bafybeihtqcpqthb37msgqabpzcc2xc3l3yzkp5pl2sodeghqyzzzyuevgi
-- valory/gnosis_safe_proxy_factory:0.1.0:bafybeifr4xpmzeb5hvpgd6h4nxlsu3ef2c3f6l5bgs34vym5ok6vllwhmy
-- eightballer/erc_20:0.1.0:bafybeibjnyqoemr3abmsqrxkbhs7mutcthmw7aavqcafnuxuv7bi3hdh5u
-=======
 - eightballer/erc_20:0.1.0:bafybeiezbnm3f5zhuj5bsc542isnlh2fki5q4nmm2vsajzps4uuoamofo4
 - valory/gnosis_safe:0.1.0:bafybeib375xmvcplw7ageic2np3hq4yqeijrvd5kl7rrdnyvswats6ngmm
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeicpcpyurm7gxir2gnlsgzeirzomkhcbnzr5txk67zdf4mmg737rtu
->>>>>>> parent of cc5bde9 (fix: Merge remote-tracking branch 'origin/main' into feat/conc-fsm-babydegen)
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeihafe524ilngwzavkhwz4er56p7nyar26lfm7lrksfiqvvzo3kdcq
 - valory/balancer_weighted_pool:0.1.0:bafybeidyjlrlq3jrbackewedwt5irokhjupxgpqfgur2ri426cap2oqt7a
@@ -41,27 +35,6 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
 - valory/tendermint:0.1.0:bafybeig4mi3vmlv5zpbjbfuzcgida6j5f2nhrpedxicmrrfjweqc5r7cra
 skills:
-<<<<<<< HEAD
-- valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
-- valory/abstract_round_abci:0.1.0:bafybeibwt37xuwosm77jokbsvjn4pmep47iw5frsoko23xo4zvrfxnpb4u
-- valory/liquidity_trader_abci:0.1.0:bafybeig53mjjsd3uhwu3tybamdmxl5e6ydsmrduro7yn5pyk24neisbrfu
-- valory/optimus_abci:0.1.0:bafybeiehbmsasfjs7mkirpujsflgz3aqnv5prfgxofpaetebjt2uvffr4q
-- valory/registration_abci:0.1.0:bafybeigmodnvfr3d2bvo5pxhgznexlp22fa65v6n6buek4kwjfesftyafq
-- valory/reset_pause_abci:0.1.0:bafybeidyp7pwre2xqbvalalxxk6moclgk2notl3gb77ebqkfj3sgktjkae
-- valory/termination_abci:0.1.0:bafybeia3hfgpksgwqy7bugoab5u43u2n6mgb5mqo6hjut2lzk45jk6tetm
-- valory/transaction_settlement_abci:0.1.0:bafybeicd2lsistfnrwg4pyfp2jleai7eli2my2czkspp7fjjwc7476ukbu
-- valory/trader_decision_maker_abci:0.1.0:bafybeidbmqzchinq5ugvf3fn6utadm5bricositehx5qeagsqwxwk2bvzq
-- valory/ipfs_package_downloader:0.1.0:bafybeiagaz7zq6a7vzhqofkalpm2ufc6yamukctjgjruk27ogvm5rm7qqa
-- valory/portfolio_tracker_abci:0.1.0:bafybeieqzlvlygrfcej5z35k6xrz6f5udukm2fqeovyhgut2dsx2lcjwsy
-- valory/market_data_fetcher_abci:0.1.0:bafybeihxadmynzrcp6jegrciit37qjmtxnfcorsgead3ye2drewzy2isdu
-- valory/strategy_evaluator_abci:0.1.0:bafybeidfi4y5i5avibqvzuvifh76podqedvuxcxkpggjtbswtsj22g4t4y
-customs:
-- valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
-- valory/max_apr_selection:0.1.0:bafybeih255rl4tnom2gvg2b3t2glpgcgck3orrerbhmayd7cbnggglbh7e
-- valory/balancer_pools_search:0.1.0:bafybeievabkqmmpq252giacmdlxl5kk5r3qdl6rdnh4iwkx3fzsqvkejwm
-- valory/uniswap_pools_search:0.1.0:bafybeiaqkkpgzx7krvgu7xhbe65mgtq7vyhkx4rztny7qcczrjonxc3uwm
-- valory/asset_lending:0.1.0:bafybeihsq7hhdgcc5wqxbqrioxaqsrza4424wqlv3hqkemomsb337pocki
-=======
 - valory/abstract_abci:0.1.0:bafybeidz54kvxhbdmpruzguuzzq7bjg4pekjb5amqobkxoy4oqknnobopu
 - valory/abstract_round_abci:0.1.0:bafybeiajjzuh6vf23crp55humonknirvv2f4s3dmdlfzch6tc5ow52pcgm
 - valory/liquidity_trader_abci:0.1.0:bafybeidtwzdz4xzsh6km676pccg4ii57doyia25ekjz3zaqf6xybdoozla
@@ -75,7 +48,6 @@ customs:
 - valory/trader_decision_maker_abci:0.1.0:bafybeicskzcqr7dd4d5ulwss5u3hsx2wvcxatugtxiuja2neobbr3tqtkm
 - valory/ipfs_package_downloader:0.1.0:bafybeieokinjosnulrsee3kbj7ly4kjfx2ub6lmwkyplgs33vxgmx3fbvm
 - valory/portfolio_tracker_abci:0.1.0:bafybeihigssk7zxefcr44hpxwrnsa6ho53zyulqhepxvm3idsywzd6w5wq
->>>>>>> parent of cc5bde9 (fix: Merge remote-tracking branch 'origin/main' into feat/conc-fsm-babydegen)
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -327,13 +299,8 @@ models:
       tenderly_access_key: ${str:access_key}
       tenderly_account_slug: ${str:account_slug}
       tenderly_project_slug: ${str:project_slug}
-<<<<<<< HEAD
-      agent_transition: ${bool:false}
-      chain_to_chain_id_mapping: ${str:{"optimism":10,"base":8453,"ethereum":1,"mode":34443}}
-=======
       agent_transition: ${bool:False}
       chain_to_chain_id_mapping: ${str:{"optimism":10,"base":8453,"ethereum":1}}
->>>>>>> parent of cc5bde9 (fix: Merge remote-tracking branch 'origin/main' into feat/conc-fsm-babydegen)
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}

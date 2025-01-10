@@ -23,9 +23,9 @@ import os
 from datetime import datetime
 from pathlib import Path
 from time import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from aea.skills.base import Model
+from aea.skills.base import Model, SkillContext
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
@@ -46,6 +46,29 @@ class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls = LiquidityTraderAbciApp
+
+    def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
+        """Initialize the state."""
+        super().__init__(*args, skill_context=skill_context, **kwargs)
+        self.strategy_to_filehash: Dict[str, str] = {}
+        self.strategies_executables: Dict[str, Tuple[str, str]] = {}
+        self.in_flight_req: bool = False
+        self.req_to_callback: Dict[str, Callable] = {}
+
+    def setup(self) -> None:
+        """Set up the model."""
+        super().setup()
+        params = self.context.params
+        self.strategy_to_filehash = {
+            value: key for key, value in params.file_hash_to_strategies.items()
+        }
+        strategy_exec = self.strategy_to_filehash.keys()
+        for selected_strategy in params.selected_strategies:
+            if selected_strategy not in strategy_exec:
+                raise ValueError(
+                    f"The selected trading strategy {selected_strategy} "
+                    f"is not in the strategies' executables {strategy_exec}."
+                )
 
 
 Requests = BaseRequests
@@ -147,6 +170,9 @@ class Coingecko(Model, TypeCheckMixin):
         self.coin_price_endpoint: str = self._ensure("coin_price_endpoint", kwargs, str)
         self.api_key: Optional[str] = self._ensure("api_key", kwargs, Optional[str])
         self.rate_limited_code: int = self._ensure("rate_limited_code", kwargs, int)
+        self.historical_price_endpoint: str = self._ensure(
+            "historical_price_endpoint", kwargs, str
+        )
         self.chain_to_platform_id_mapping: Dict[str, str] = json.loads(
             self._ensure("chain_to_platform_id_mapping", kwargs, str)
         )
@@ -260,6 +286,32 @@ class Params(BaseParams):
         self.balancer_graphql_endpoints = json.loads(
             self._ensure("balancer_graphql_endpoints", kwargs, str)
         )
+        self.target_investment_chains: List[str] = self._ensure(
+            "target_investment_chains", kwargs, List[str]
+        )
+        self.staking_chain: Optional[str] = self._ensure(
+            "staking_chain", kwargs, Optional[str]
+        )
+        self.selected_strategies: List[str] = self._ensure(
+            "selected_strategies", kwargs, List[str]
+        )
+        self.file_hash_to_strategies = json.loads(
+            self._ensure("file_hash_to_strategies", kwargs, str)
+        )
+        self.strategies_kwargs = json.loads(
+            self._ensure("strategies_kwargs", kwargs, str)
+        )
+        self.selected_protocols = self._ensure("selected_protocols", kwargs, List[str])
+        self.selected_hyper_strategy = self._ensure(
+            "selected_hyper_strategy", kwargs, str
+        )
+        self.dex_type_to_strategy = json.loads(
+            self._ensure("dex_type_to_strategy", kwargs, str)
+        )
+        self.max_pools = self._ensure("max_pools", kwargs, int)
+        self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
+        self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
+
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

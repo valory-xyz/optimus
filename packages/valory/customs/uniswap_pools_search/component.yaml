@@ -1,0 +1,29 @@
+name: uniswap_pools_search
+author: valory
+version: 0.1.0
+type: custom
+description: A strategy that returns the highest APR yielding liquidity pool over
+  Uniswap
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiej6rb7f54w4epuyvwj3fays7lo6rqqxetjdrzc52k3q5qcbckv4a
+  uniswap_pools_search.py: bafybeid77ujugcuwmlvcaislww376k6xl2g7jkwuw3el26slmhbvhbtcde
+fingerprint_ignore_patterns: []
+entry_point: uniswap_pools_search.py
+callable: run
+dependencies:
+  gql:
+    version: ==3.5.0
+  requests:
+    version: <2.31.2,>=2.28.1
+  pycoingecko:
+    version: ==3.2.0
+  pyfolio:
+    version: ==0.9.2
+  web3:
+    version: <7.0.0,>=6.0.0
+  numpy:
+    version: ==2.2.0
+  pandas:
+    version: '>=2.2.3'

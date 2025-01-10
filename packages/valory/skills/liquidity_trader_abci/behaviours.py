@@ -1606,7 +1606,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         while True:
             next_strategy = strategies.pop(0)
             self.context.logger.info(f"Evaluating strategy: {next_strategy}")
-            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
+            kwargs: Dict[str, Any] = self.params.trading_strategies_kwargs.get(
                 next_strategy, {}
             )
 
@@ -1690,7 +1690,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Optional[Dict[str, Any]]:
         """Get and update metrics for the current pool ."""
 
-        kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
+        kwargs: Dict[str, Any] = self.params.trading_strategies_kwargs.get(strategy, {})
 
         kwargs.update(
             {

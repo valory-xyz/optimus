@@ -13,10 +13,14 @@ import statistics
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 from functools import lru_cache
-from aea.helpers.logging import setup_logger
+import logging
+import time
+import json
 
-# Configure _logger
-_logger = setup_logger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {
@@ -60,8 +64,8 @@ def fetch_coin_list():
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
-def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
+def remove_irrelevant_fields(kwargs: Dict[str, Any], required_fields: Tuple) -> Dict[str, Any]:
+    return {key: value for key, value in kwargs.items() if key in required_fields}
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     headers = {'Content-Type': 'application/json'}
@@ -408,9 +412,14 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     missing = check_missing_fields(kwargs)
     if missing:
         return {"error": f"Required kwargs {missing} were not provided."}
-
+    
+    required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get('get_metrics', False)
-    kwargs = remove_irrelevant_fields(kwargs)
+    if get_metrics:
+        required_fields.append('position')
+
+    kwargs = remove_irrelevant_fields(kwargs, required_fields)
+    
     coin_list = fetch_coin_list()
     kwargs.update({"coin_list": coin_list})
 

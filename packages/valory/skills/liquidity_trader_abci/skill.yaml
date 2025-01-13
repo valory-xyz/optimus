@@ -19,6 +19,7 @@ fingerprint:
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
   rounds.py: bafybeidbh4cetttbn4nvti6ftwlrgfnfs5xtuo3i26qfphodrlcaqlibra
+  rounds_info.py: bafybeihpz6ih4ixevy76cm2bwrfs4yzaigkfg3gq2gxfhy6wl5ammkyqwu
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju
   tests/test_models.py: bafybeic75ux6ulgpnf4ndrctgsw7jlbc7zs3ltxtue4o4eoij7fqvfqmfe

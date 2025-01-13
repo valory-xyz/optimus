@@ -36,8 +36,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeiealfuolj3fwxvhttvrrlhny6ml2sctlectmommyqpizozlfkwxcq
-- valory/optimus_abci:0.1.0:bafybeichq2izbqib3omrledhnrgoheyqmofduczgy4r2woyf5bhgdperoi
+- valory/liquidity_trader_abci:0.1.0:bafybeia24uiwxpszircgzys5svogaxh7ymqsdpqtkre6fvzjdtccmgpfcy
+- valory/optimus_abci:0.1.0:bafybeibksasb3z7vdi74kkcm7pqx3orjramnr3wip3y2nc4qyuvyozkd7q
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -45,7 +45,7 @@ skills:
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeih255rl4tnom2gvg2b3t2glpgcgck3orrerbhmayd7cbnggglbh7e
-- valory/balancer_pools_search:0.1.0:bafybeicflgni42o7pqwekyyoidcglhlrfxiumyjncg6b2ci6b6qqmvk5ta
+- valory/balancer_pools_search:0.1.0:bafybeid6fcwa525kbk5yl4fmvhs6yazv7nybgejlrdjltdooump7n4ng5i
 - valory/uniswap_pools_search:0.1.0:bafybeieqbjjofk375ykpwinl6wjfdpq3j7a3kbavxti7vlwws5ivrr3ecy
 - valory/asset_lending:0.1.0:bafybeigiracbkzmitjwfkw3gmz74ldqar4avpv2ycrohedtnvvay4bsn7q
 default_ledger: ethereum

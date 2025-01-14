@@ -17,10 +17,8 @@ import logging
 import time
 import json
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
+from aea.helpers.logging import setup_logger
+_logger = setup_logger(__name__)
 
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {

@@ -503,24 +503,23 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
     def _adjust_current_positions_for_backward_compatibility(
         self, data: Any
-    ) -> Generator[None, None, Any]:
-        """Adjust the 'current_positions' data for backward compatibility."""
+    ) -> Generator[None, None, None]:
+        """Adjust the 'current_positions' data for backward compatibility and update self.current_positions."""
+        adjusted_positions: List[Dict[str, Any]] = []
+
         if isinstance(data, dict):
-            # Ensure data is a list when attribute is 'current_positions'
             data = [data]
+
         if isinstance(data, list):
             # Backward compatibility adjustments for each position
             for position in data:
-                # 1. If 'address' in position, change it to 'pool_address'
                 if "address" in position:
                     position["pool_address"] = position.pop("address")
-                # 2. If 'assets' in position, and it is a list
                 if "assets" in position:
                     assets = position.pop("assets")
                     if isinstance(assets, list):
                         if len(assets) >= 1:
                             position["token0"] = assets[0]
-                            # Fetch symbol for token0
                             position[
                                 "token0_symbol"
                             ] = yield from self._get_token_symbol(
@@ -528,18 +527,20 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                             )
                         if len(assets) >= 2:
                             position["token1"] = assets[1]
-                            # Fetch symbol for token1
                             position[
                                 "token1_symbol"
                             ] = yield from self._get_token_symbol(
                                 position.get("chain"), assets[1]
                             )
-                # 4. If 'status' not in position, set it to 'open'
                 if "status" not in position:
                     position["status"] = PositionStatus.OPEN.value
+                adjusted_positions.append(position)
+
+            self.current_positions = adjusted_positions
+            self.store_current_positions()
         else:
             self.context.logger.warning("Unexpected data format for current_positions.")
-        return data
+            self.current_positions = []
 
     def _get_token_symbol(
         self, chain: str, address: str
@@ -1053,10 +1054,8 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                 self.store_assets()
 
             positions = yield from self.get_positions()
-            self.current_positions = (
-                yield from self._adjust_current_positions_for_backward_compatibility(
-                    self.current_positions
-                )
+            yield from self._adjust_current_positions_for_backward_compatibility(
+                self.current_positions
             )
 
             self.context.logger.info(f"POSITIONS: {positions}")

@@ -1760,10 +1760,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, msg: Message, dialogue: Dialogue, callback: Callable
     ) -> None:
         """Send a message."""
+        self.shared_state.in_flight_req = True
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.shared_state.req_to_callback[nonce] = callback
-        self.shared_state.in_flight_req = True
 
     def _handle_get_strategy(self, message: IpfsMessage, _: Dialogue) -> None:
         """Handle get strategy response."""

@@ -1086,7 +1086,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.fetch_all_trading_opportunities()
-
+    
             if self.current_positions:
                 for position in self.current_positions:
                     dex_type = position.get("dex_type")
@@ -1102,7 +1102,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         self.context.logger.error(
                             f"No strategy found for dex types {dex_type}"
                         )
-
+    
             self.execute_hyper_strategy()
             actions = []
             if self.selected_opportunities is not None:
@@ -1110,7 +1110,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Selected opportunity: {self.selected_opportunities}"
                 )
                 actions = yield from self.get_order_of_transactions()
-
+    
             self.context.logger.info(f"Actions: {actions}")
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
@@ -1203,7 +1203,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Calculate PnL for a Balancer position."""
         chain = position.get("chain")
         pool_address = position.get("pool_address")
-
+      
         pool_id = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
@@ -1262,7 +1262,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Calculate user's share of the pool
         user_share = bpt_balance / total_supply
-
+    
         # Adjust quantities for decimals and calculate user's amounts
         user_amounts = []
         token_prices = []
@@ -1559,10 +1559,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return token_name
-
+    
     def execute_hyper_strategy(self) -> None:
         """Executes hyper strategy"""
-
+    
         hyper_strategy = self.params.selected_hyper_strategy
         kwargs = {
             "strategy": hyper_strategy,
@@ -1576,23 +1576,31 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)
+        
+        self.context.logger.info(f"Evaluating hyper strategy result: {result}")
+
         self.selected_opportunities = result.get("optimal_strategies")
+        self.context.logger.info(f"Evaluating hyper strategy selected_opportunities: {self.selected_opportunities}")
+        
         self.position_to_exit = result.get("position_to_exit")
         if self.selected_opportunities is not None:
             self.context.logger.info(
                 f"Selected opportunities: {self.selected_opportunities}"
             )
-            for selected_opportunity in self.selected_opportunities:
-                # Convert token addresses to checksum addresses if they are present
-                if "token0" in selected_opportunity:
-                    selected_opportunity["token0"] = to_checksum_address(
-                        selected_opportunity["token0"]
-                    )
-                if "token1" in selected_opportunity:
-                    selected_opportunity["token1"] = to_checksum_address(
-                        selected_opportunity["token1"]
-                    )
-
+            for selected_opportunity in self.selected_opportunities.get("optimal_strategies", []):
+                # Dynamically handle multiple tokens
+                token_keys = [
+                    key for key in selected_opportunity.keys() 
+                    if key.startswith("token") 
+                    and not key.endswith("_symbol")
+                    and isinstance(selected_opportunity[key], str)
+                ]
+                for token_key in token_keys:
+                    selected_opportunity[token_key] = to_checksum_address(selected_opportunity[token_key])
+                    self.context.logger.info(
+                f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
+                )
+    
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities"""
         self.trading_opportunities.clear()
@@ -1632,17 +1640,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         f"Error in strategy {next_strategy}: {opportunities['error']}"
                     )
                 else:
-                    self.context.logger.info(
-                        f"Opportunities found using {next_strategy} strategy"
-                    )
+                    self.context.logger.info(f"Opportunities found using {next_strategy} strategy")
+                    self.context.logger.info(f"Opportunities found using {opportunities} strategy")
                     for opportunity in opportunities:
-                        # Customize the following line to include relevant details from each opportunity
+                        
                         self.context.logger.info(
-                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                            f"Chain: {opportunity.get('chain', 'N/A')}, "
-                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                            f"Opportunity: Pool {opportunity.get('pool_address', 'N/A')}, "
                         )
+                  
                     self.trading_opportunities.extend(opportunities)
             else:
                 self.context.logger.warning(
@@ -1653,7 +1658,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             remaining_strategies = set(strategies) - tried_strategies
             if len(remaining_strategies) == 0:
                 break
-
+    
             next_strategy = remaining_strategies.pop()
 
     def download_next_strategy(self) -> None:
@@ -1686,7 +1691,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict[str, Any], strategy: str
     ) -> Optional[Dict[str, Any]]:
         """Get and update metrics for the current pool ."""
-
+    
         kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
 
         kwargs.update(
@@ -1712,6 +1717,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
         else:
+            # Dynamically log metrics for all tokens in the pool
+            if 'tokens' in metrics:
+                for token, data in metrics['tokens'].items():
+                    self.context.logger.info(f"Token: {token}, Metrics: {data}")
             self.context.logger.info(f"Calculated position metrics: {metrics}")
             return metrics
 
@@ -1730,16 +1739,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if strategy is None:
             self.context.logger.error(f"No trading strategy was given in {kwargs=}!")
             return None
-
+    
         strategy = self.strategy_exec(strategy)
         if strategy is None:
             self.context.logger.error(f"No executable was found for {strategy=}!")
             return None
-
+    
         strategy_exec, callable_method = strategy
         if callable_method in globals():
             del globals()[callable_method]
-
+    
         exec(strategy_exec, globals())  # pylint: disable=W0122  # nosec
         method = globals().get(callable_method, None)
         if method is None:
@@ -1791,7 +1800,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Process rewards
         if self._can_claim_rewards():
             yield from self._process_rewards(actions)
-
+    
         if (
             self.synchronized_data.period_count != 0
             and self.synchronized_data.period_count % self.params.pnl_check_interval
@@ -1799,7 +1808,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             and self.current_positions
         ):
             tokens = yield from self._process_pnl(actions)
-
+    
         # Prepare tokens for exit or investment
         available_tokens = self._prepare_tokens_for_investment()
         if available_tokens is None:
@@ -1908,7 +1917,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _prepare_tokens_for_investment(self) -> Optional[List[Dict[str, Any]]]:
         """Prepare tokens for exit or investment, and append exit actions if needed."""
         tokens = []
-
+     
         if self.position_to_exit:
             dex_type = self.position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
@@ -1920,12 +1929,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"{num_of_tokens_required} tokens required to exit pool, provided: {tokens}"
                 )
                 return None
-
+    
         # Get available tokens and extend tokens list
         available_tokens = self._get_available_tokens()
         if available_tokens:
             tokens.extend(available_tokens)
-
+    
         if not tokens:
             self.context.logger.error("No tokens available for investment")
             return None  # Not enough tokens
@@ -1964,7 +1973,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _get_available_tokens(self) -> Optional[List[Dict[str, Any]]]:
         """Get tokens with the highest balances."""
         token_balances = []
-
+    
         for position in self.synchronized_data.positions:
             chain = position.get("chain")
             for asset in position.get("assets", []):
@@ -2118,13 +2127,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not self.position_to_exit:
             self.context.logger.error("No pool present")
             return None
-
+    
         if len(tokens) < num_of_tokens_required:
             self.context.logger.error(
                 f"Insufficient tokens provided for exit action. Required atleast {num_of_tokens_required}, provided: {tokens}"
             )
             return None
-
+    
         exit_pool_action = {
             "action": Action.WITHDRAW.value
             if self.position_to_exit.get("dex_type") == DexType.STURDY.value
@@ -2137,7 +2146,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "token_id": self.position_to_exit.get("token_id"),
             "liquidity": self.position_to_exit.get("liquidity"),
         }
-
+    
         return exit_pool_action
 
     def _build_bridge_swap_actions(
@@ -2147,7 +2156,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not opportunity:
             self.context.logger.error("No pool present.")
             return None
-
+    
         bridge_swap_actions = []
 
         # Get the highest APR pool's tokens
@@ -2359,11 +2368,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Check if rewards can be claimed. Rewards can be claimed if either:
         # 1. No rewards have been claimed yet (last_reward_claimed_timestamp is None), or
         # 2. The current timestamp exceeds the allowed reward claiming time period since the last claim.
-
+    
         current_timestamp = cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
-
+    
         last_claimed_timestamp = self.synchronized_data.last_reward_claimed_timestamp
         if last_claimed_timestamp is None:
             return True
@@ -2407,7 +2416,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not actions:
             self.context.logger.info("No actions to prepare")
             return Event.DONE.value, {}
-
+    
         positions = self.synchronized_data.positions
         last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
             -1

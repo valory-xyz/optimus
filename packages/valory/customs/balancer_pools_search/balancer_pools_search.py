@@ -2,7 +2,7 @@ import warnings
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import requests
-from typing import Dict, Union, Any, List, Optional
+from typing import Dict, Union, Any, List, Optional,Tuple
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta
 import numpy as np
@@ -17,8 +17,10 @@ import logging
 import time
 import json
 
-from aea.helpers.logging import setup_logger
-_logger = setup_logger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {
@@ -139,11 +141,11 @@ def get_balancer_pools(chains, graphql_endpoint) -> Union[Dict[str, Any], List[D
     return data.get("poolGetPools", [])
 
 def get_filtered_pools(pools, current_positions):
-    # Filter by type and token count
+    # Filter by type and exclude current positions
     qualifying_pools = []
     for pool in pools:
         mapped_type = SUPPORTED_POOL_TYPES.get(pool.get('type'))
-        if mapped_type and len(pool.get('poolTokens', [])) == 2 and pool.get('address') not in current_positions:
+        if mapped_type and pool.get('address') not in current_positions:
             pool['type'] = mapped_type
             pool['apr'] = get_total_apr(pool)
             pool['tvl'] = pool.get('dynamicData', {}).get('totalLiquidity', 0)
@@ -179,6 +181,7 @@ def get_filtered_pools(pools, current_positions):
 
     return filtered_scored_pools[:10]
 
+
 def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
     # Try to find a coin matching symbol first.
     candidates = [coin for coin in coin_list if coin['symbol'].lower() == symbol.lower()]
@@ -209,35 +212,76 @@ def calculate_il_impact(P0, P1):
     # Impermanent Loss impact calculation
     return 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
 
-def calculate_il_risk_score(token_0, token_1, coingecko_api_key: str, time_period: int = 90) -> float:
+def calculate_il_impact_multi(price_ratios):
+    """
+    Calculate IL impact for multiple tokens
+    price_ratios: List of price ratios for each token pair
+    """
+    total_il = 0
+    n = len(price_ratios)
+    
+    for i in range(n):
+        for j in range(i + 1, n):
+            il = calculate_il_impact(price_ratios[i], price_ratios[j])
+            total_il += abs(il)
+    
+    # Normalize by number of pairs
+    num_pairs = (n * (n - 1)) / 2
+    return total_il / num_pairs if num_pairs > 0 else 0
+
+def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90) -> float:
     cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
+    
     try:
-        prices_1 = cg.get_coin_market_chart_range_by_id(id=token_0, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
-        prices_2 = cg.get_coin_market_chart_range_by_id(id=token_1, vs_currency='usd', from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+        # Fetch price data for all tokens
+        price_data = []
+        for token_id in token_ids:
+            prices = cg.get_coin_market_chart_range_by_id(
+                id=token_id,
+                vs_currency='usd',
+                from_timestamp=from_timestamp,
+                to_timestamp=to_timestamp
+            )
+            price_data.append(np.array([x[1] for x in prices['prices']]))
+        
+        # Find minimum length across all price arrays
+        min_length = min(len(prices) for prices in price_data)
+        price_data = [prices[:min_length] for prices in price_data]
+        
+        if min_length < 2:
+            return float('nan')
+        
+        # Calculate correlation and volatility metrics
+        total_correlation = 0
+        total_volatility = 0
+        n = len(price_data)
+        
+        for i in range(n):
+            for j in range(i + 1, n):
+                correlation = np.corrcoef(price_data[i], price_data[j])[0, 1]
+                volatility_i = np.std(price_data[i])
+                volatility_j = np.std(price_data[j])
+                total_correlation += abs(correlation)
+                total_volatility += np.sqrt(volatility_i * volatility_j)
+        
+        num_pairs = (n * (n - 1)) / 2
+        avg_correlation = total_correlation / num_pairs if num_pairs > 0 else 0
+        avg_volatility = total_volatility / num_pairs if num_pairs > 0 else 0
+        
+        # Calculate price ratios for IL impact
+        initial_prices = [prices[0] for prices in price_data]
+        final_prices = [prices[-1] for prices in price_data]
+        price_ratios = [final_price / initial_price for initial_price, final_price in zip(initial_prices, final_prices)]
+        
+        il_impact = calculate_il_impact_multi(price_ratios)
+        
+        return float(il_impact * avg_correlation * avg_volatility)
+        
     except Exception as e:
-        _logger.error(f"Error fetching price data: {e}")
+        logger.error(f"Error calculating IL risk score: {e}")
         return float('nan')
-
-    prices_1_data = np.array([x[1] for x in prices_1['prices']])
-    prices_2_data = np.array([x[1] for x in prices_2['prices']])
-    min_length = min(len(prices_1_data), len(prices_2_data))
-    prices_1_data = prices_1_data[:min_length]
-    prices_2_data = prices_2_data[:min_length]
-
-    if min_length < 2:
-        return float('nan')
-
-    price_correlation = np.corrcoef(prices_1_data, prices_2_data)[0, 1]
-    volatility_1 = np.std(prices_1_data)
-    volatility_2 = np.std(prices_2_data)
-    volatility_multiplier = np.sqrt(volatility_1 * volatility_2)
-    P0 = prices_1_data[0] / prices_2_data[0]
-    P1 = prices_1_data[-1] / prices_2_data[-1]
-    il_impact = calculate_il_impact(P0, P1)
-
-    return float(il_impact * abs(price_correlation) * volatility_multiplier)
 
 def create_graphql_client(api_url='https://api-v3.balancer.fi') -> Client:
     transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)
@@ -336,75 +380,85 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
 
 def format_pool_data(pool) -> Dict[str, Any]:
     dex_type = BALANCER
-    return {
+    formatted_data = {
         "dex_type": dex_type,
         "chain": pool['chain'].lower(),
         "apr": pool['apr'] * 100,
         "pool_address": pool['address'],
         "pool_id": pool['id'],
         "pool_type": pool['type'],
-        "token0": pool['poolTokens'][0]['address'],
-        "token1": pool['poolTokens'][1]['address'],
-        "token0_symbol": pool['poolTokens'][0]['symbol'],
-        "token1_symbol": pool['poolTokens'][1]['symbol'],
         "il_risk_score": pool['il_risk_score'],
         "sharpe_ratio": pool['sharpe_ratio'],
         "depth_score": pool['depth_score'],
         "max_position_size": pool['max_position_size']
     }
+    
+    # Add dynamic number of tokens
+    for i, token in enumerate(pool['poolTokens']):
+        formatted_data[f"token{i}"] = token['address']
+        formatted_data[f"token{i}_symbol"] = token['symbol']
+    
+    return formatted_data
 
 def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, coin_list):
     pools = get_balancer_pools(chains, graphql_endpoint)
     if isinstance(pools, dict) and "error" in pools:
         return pools
+    
     filtered_pools = get_filtered_pools(pools, current_positions)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
-
+    
     token_id_cache = {}
     for pool in filtered_pools:
         pool['chain'] = pool['chain'].lower()
-
-        # Token 0
-        t0_sym = pool['poolTokens'][0]["symbol"].lower()
-        if t0_sym not in token_id_cache:
-            token_0_id = get_token_id_from_symbol(pool['poolTokens'][0]["address"], t0_sym, coin_list, pool['chain'])
-            if token_0_id:
-                token_id_cache[t0_sym] = token_0_id
-        else:
-            token_0_id = token_id_cache[t0_sym]
-
-        # Token 1
-        t1_sym = pool['poolTokens'][1]["symbol"].lower()
-        if t1_sym not in token_id_cache:
-            token_1_id = get_token_id_from_symbol(pool['poolTokens'][1]["address"], t1_sym, coin_list, pool['chain'])
-            if token_1_id:
-                token_id_cache[t1_sym] = token_1_id
-        else:
-            token_1_id = token_id_cache[t1_sym]
-
-        if token_0_id and token_1_id:
-            pool['il_risk_score'] = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
+        token_ids = []
+        
+        # Get token IDs for all tokens in the pool
+        for token in pool['poolTokens']:
+            symbol = token["symbol"].lower()
+            if symbol not in token_id_cache:
+                token_id = get_token_id_from_symbol(token["address"], symbol, coin_list, pool['chain'])
+                if token_id:
+                    token_id_cache[symbol] = token_id
+            token_ids.append(token_id_cache.get(symbol))
+        
+        # Calculate metrics if we have all token IDs
+        if all(token_ids):
+            pool['il_risk_score'] = calculate_il_risk_score_multi(token_ids, coingecko_api_key)
         else:
             pool['il_risk_score'] = float('nan')
-
+        
         pool['sharpe_ratio'] = get_balancer_pool_sharpe_ratio(pool['id'], pool['chain'].upper())
         pool['depth_score'], pool['max_position_size'] = analyze_pool_liquidity(pool['id'], pool['chain'].upper())
-
+    
     return [format_pool_data(pool) for pool in filtered_pools]
 
 def calculate_metrics(position: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs) -> Optional[Dict[str, Any]]:
-    token_0_id = get_token_id_from_symbol(position['token0'], position['token0_symbol'], coin_list, position['chain'])
-    token_1_id = get_token_id_from_symbol(position['token1'], position['token1_symbol'], coin_list, position['chain'])
-    il_risk_score = calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key) if token_0_id and token_1_id else float('nan')
+    # Get all token IDs from the position
+    token_ids = []
+    i = 0
+    while True:
+        token_key = f'token{i}'
+        symbol_key = f'token{i}_symbol'
+        if token_key not in position or symbol_key not in position:
+            break
+        token_id = get_token_id_from_symbol(position[token_key], position[symbol_key], coin_list, position['chain'])
+        if token_id:
+            token_ids.append(token_id)
+        i += 1
+    
+    il_risk_score = calculate_il_risk_score_multi(token_ids, coingecko_api_key) if token_ids else float('nan')
     sharpe_ratio = get_balancer_pool_sharpe_ratio(position['pool_id'], position['chain'].upper())
     depth_score, max_position_size = analyze_pool_liquidity(position['pool_id'], position['chain'].upper())
+    
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
         "depth_score": depth_score,
         "max_position_size": max_position_size
     }
+
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     missing = check_missing_fields(kwargs)

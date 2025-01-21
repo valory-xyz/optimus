@@ -107,7 +107,6 @@ models:
       validate_timeout: ${VALIDATE_TIMEOUT:int:1205}
       history_check_timeout: ${HISTORY_CHECK_TIMEOUT:int:1205}
       token_symbol_whitelist: ${TOKEN_SYMBOL_WHITELIST:list:["coingecko_id=solana&address=So11111111111111111111111111111111111111112"]}
-      strategies_kwargs: ${STRATEGIES_KWARGS:str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       use_proxy_server: ${USE_PROXY_SERVER:bool:false}
       expected_swap_tx_cost: ${EXPECTED_SWAP_TX_COST:int:20000000}
       ipfs_fetch_retries: ${IPFS_FETCH_RETRIES:int:5}

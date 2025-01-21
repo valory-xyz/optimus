@@ -250,6 +250,7 @@ models:
       profit_threshold: 50
       loss_threshold: 30
       pnl_check_interval: 10
+      multisend_batch_size: 50
     class_name: Params
   coingecko:
     args:

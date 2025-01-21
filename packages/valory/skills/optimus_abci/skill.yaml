@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
-  behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
-  composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
-  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
-  fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
-  handlers.py: bafybeictzus2vvpzg62iq753xntzbslsisug2ezqg6qygzbtysojhe252m
-  models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
+  behaviours.py: bafybeihqhdnqza5f27soi4pf3x3bxqcachbsmx7zceqcw6uv2obgynxrm4
+  composition.py: bafybeibiyxe22c5c33keuosha2t6b4zez2iqghawbtfhumqrubrtsuun4y
+  dialogues.py: bafybeihhgzlutexxt6ry74m2rlaxdhu3ldbvhugmmgxxjlfcxf4xaipisy
+  fsm_specification.yaml: bafybeib6whjprlxmcmhamqj3hljumimepykh6vytt5luvzyefcalcav5su
+  handlers.py: bafybeiek5x2uqw2nwjmkwcqrc255fmrexpmm5snh45h7ysm3mgcbnd2mii
+  models.py: bafybeiamgoetd2gdm3rf33sa2rh3l36is3mdev3ghpinjfe4hprvodezqe
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
@@ -31,7 +31,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeia4ljfsnhpzpix7synqvycazr3bndyyfptoakazjvteuak24xxhsy
+- valory/liquidity_trader_abci:0.1.0:bafybeiahfgyxizmm6xe7ugtnp5r4fbfro66u62s7c5nrxqqaifub2yonvy
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:

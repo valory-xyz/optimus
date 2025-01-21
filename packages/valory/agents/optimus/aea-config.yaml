@@ -43,8 +43,8 @@ skills:
 - valory/portfolio_tracker_abci:0.1.0:bafybeicdbae3njwqjq7x4rrjy2ovixjfpy5b7ron4rmrmu4jxv4kxfwira
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeia4gthwu4o2z746ikuivjkty6q6ciqoqshxp7rdb7c2fmxp77x46m
-- valory/optimus_abci:0.1.0:bafybeiaclzmrhzszimh26q7bhebw3zmmksiscej2ejwk6ltmvsitbduwum
+- valory/liquidity_trader_abci:0.1.0:bafybeicvbc3d4kzmsk77hpggcrnh2xnglv5w6n7y6iqydmw3vfkgskmsqe
+- valory/optimus_abci:0.1.0:bafybeih5ihagg4csufpj42u34ertcvhniwwincr2ze5ql3rckznpebgyxi
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -151,7 +151,7 @@ models:
     args:
       cleanup_freq: ${int:50}
       timeout_limit: ${int:3}
-      file_hash_to_id: ${list:[["bafybeif6aje2tkvmakhhefqown654i3xr3l6erbbhntstllt7m37eenu5m",["sma_strategy"]]]}
+      file_hash_to_id: ${list:[["bafybeic2fpf5ozhkf5jgzmppmfsprqw5ayfx6spgl3owuws464n7mkhpqi",["always_buy"]]]}
       component_yaml_filename: ${str:component.yaml}
       entry_point_key: ${str:entry_point}
       callable_keys: ${list:["run_callable","transform_callable","evaluate_callable"]}
@@ -320,7 +320,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/Users/gauravlochab/Desktop/Optimus-Babydegen/optimus/data/}
+      store_path: ${str:/data/}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}

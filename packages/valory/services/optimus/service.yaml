@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeigffzir4wbjmcavajwxt22i4lkt2xbpnuk63yaa7szkv5miqrncnq
+agent: valory/optimus:0.1.0:bafybeifu7omvdugywhx4sasjwp74l7zvgv3i7r273v6w4jrbbwhnsin6ce
 number_of_agents: 1
 deployment:
   agent:
@@ -26,7 +26,7 @@ models:
     args:
       cleanup_freq: ${CLEANUP_FREQ:int:50}
       timeout_limit: ${TIMEOUT_LIMIT:int:3}
-      file_hash_to_id: ${FILE_HASH_TO_ID:list:[["bafybeif6aje2tkvmakhhefqown654i3xr3l6erbbhntstllt7m37eenu5m",["sma_strategy"]]]}
+      file_hash_to_id: ${FILE_HASH_TO_ID:list:[["bafybeic2fpf5ozhkf5jgzmppmfsprqw5ayfx6spgl3owuws464n7mkhpqi",["always_buy"]]]}
       component_yaml_filename: ${COMPONENT_YAML_FILENAME:str:component.yaml}
       entry_point_key: ${ENTRY_POINT_KEY:str:entry_point}
       callable_keys: ${CALLABLE_KEYS:list:["run_callable","transform_callable","evaluate_callable"]}
@@ -216,5 +216,5 @@ config:
   - name: ${DCXT_EXCHANGE_NAME:str:balancer}
     key_path: ${DCXT_KEY_PATH:str:ethereum_private_key.txt}
     ledger_id: ${DCXT_LEDGER_ID:str:base}
-    rpc_url: ${DCXT_RPC_URL:str:https://virtual.base.rpc.tenderly.co/70dfa32a-6f92-4dd8-ba44-45bc16760de9}
+    rpc_url: ${DCXT_RPC_URL:str:https://weathered-attentive-reel.base-mainnet.quiknode.pro/d9d86db80676649015cd7a5d33239713bcb5146e}
     etherscan_api_key: ${DCXT_ETHERSCAN_API_KEY:str:YOUR_ETHERSCAN_API_KEY}

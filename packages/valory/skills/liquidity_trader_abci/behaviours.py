@@ -506,24 +506,23 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
     def _adjust_current_positions_for_backward_compatibility(
         self, data: Any
-    ) -> Generator[None, None, Any]:
-        """Adjust the 'current_positions' data for backward compatibility."""
+    ) -> Generator[None, None, None]:
+        """Adjust the 'current_positions' data for backward compatibility and update self.current_positions."""
+        adjusted_positions: List[Dict[str, Any]] = []
+
         if isinstance(data, dict):
-            # Ensure data is a list when attribute is 'current_positions'
             data = [data]
+
         if isinstance(data, list):
             # Backward compatibility adjustments for each position
             for position in data:
-                # 1. If 'address' in position, change it to 'pool_address'
                 if "address" in position:
                     position["pool_address"] = position.pop("address")
-                # 2. If 'assets' in position, and it is a list
                 if "assets" in position:
                     assets = position.pop("assets")
                     if isinstance(assets, list):
                         if len(assets) >= 1:
                             position["token0"] = assets[0]
-                            # Fetch symbol for token0
                             position[
                                 "token0_symbol"
                             ] = yield from self._get_token_symbol(
@@ -531,18 +530,20 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                             )
                         if len(assets) >= 2:
                             position["token1"] = assets[1]
-                            # Fetch symbol for token1
                             position[
                                 "token1_symbol"
                             ] = yield from self._get_token_symbol(
                                 position.get("chain"), assets[1]
                             )
-                # 4. If 'status' not in position, set it to 'open'
                 if "status" not in position:
                     position["status"] = PositionStatus.OPEN.value
+                adjusted_positions.append(position)
+
+            self.current_positions = adjusted_positions
+            self.store_current_positions()
         else:
             self.context.logger.warning("Unexpected data format for current_positions.")
-        return data
+            self.current_positions = []
 
     def _get_token_symbol(
         self, chain: str, address: str
@@ -1056,10 +1057,8 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                 self.store_assets()
 
             positions = yield from self.get_positions()
-            self.current_positions = (
-                yield from self._adjust_current_positions_for_backward_compatibility(
-                    self.current_positions
-                )
+            yield from self._adjust_current_positions_for_backward_compatibility(
+                self.current_positions
             )
 
             self.context.logger.info(f"POSITIONS: {positions}")
@@ -1336,7 +1335,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Get user's balance in the vault
         balance_data = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_STATE,
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=vault_address,
             contract_public_id=YearnV3VaultContract.contract_id,
             contract_callable="balance_of",
@@ -1401,10 +1400,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         initial_amount1 = position.get("amount1")
         timestamp = position.get("timestamp")
 
-        if not initial_amount0 or initial_amount1 or timestamp:
+        if None in (initial_amount0, initial_amount1, timestamp):
             self.context.logger.error(
                 "Missing initial amounts or timestamp in position data."
             )
+            return None
 
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
         tokens = []
@@ -1707,8 +1707,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Execute the strategy to calculate metrics
         metrics = self.execute_strategy(**kwargs)
-
-        if "error" in metrics:
+        if not metrics:
+            return None
+        elif "error" in metrics:
             self.context.logger.error(
                 f"Failed to calculate metrics for the current positions. {metrics.get('error')}"
             )
@@ -1794,18 +1795,29 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if self._can_claim_rewards():
             yield from self._process_rewards(actions)
 
-        # Check PnL and decide if we need to exit any positions
-        if self.synchronized_data.period_count % 10 == 0 and self.current_positions:
+        if (
+            self.synchronized_data.period_count != 0
+            and self.synchronized_data.period_count % self.params.pnl_check_interval
+            == 0
+            and self.current_positions
+        ):
             tokens = yield from self._process_pnl(actions)
 
         # Prepare tokens for exit or investment
-        available_tokens = yield from self._prepare_tokens_for_exit_or_investment(
-            actions
-        )
+        available_tokens = self._prepare_tokens_for_investment()
         if available_tokens is None:
             return actions
         tokens.extend(available_tokens)
-
+        if self.position_to_exit:
+            dex_type = self.position_to_exit.get("dex_type")
+            num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
+            exit_pool_action = self._build_exit_pool_action(
+                tokens, num_of_tokens_required
+            )
+            if not exit_pool_action:
+                self.context.logger.error("Error building exit pool action")
+                return None
+            actions.append(exit_pool_action)
         # Build actions based on selected opportunities
         for opportunity in self.selected_opportunities:
             bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
@@ -1896,16 +1908,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return exited_tokens
 
-    def _prepare_tokens_for_exit_or_investment(
-        self, actions: List[Dict[str, Any]]
-    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+    def _prepare_tokens_for_investment(self) -> Optional[List[Dict[str, Any]]]:
         """Prepare tokens for exit or investment, and append exit actions if needed."""
-        if not self.position_to_exit:
-            num_of_tokens_required = 2
-            tokens = yield from self._get_top_tokens_by_value(num_of_tokens_required)
-            if not tokens or len(tokens) < num_of_tokens_required:
-                return None  # Not enough tokens
-        else:
+        tokens = []
+
+        if self.position_to_exit:
             dex_type = self.position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
             tokens = self._build_tokens_from_position(
@@ -1917,13 +1924,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-            exit_pool_action = self._build_exit_pool_action(
-                tokens, num_of_tokens_required
-            )
-            if not exit_pool_action:
-                self.context.logger.error("Error building exit pool action")
-                return None
-            actions.append(exit_pool_action)
+        # Get available tokens and extend tokens list
+        available_tokens = self._get_available_tokens()
+        if available_tokens:
+            tokens.extend(available_tokens)
+
+        if not tokens:
+            self.context.logger.error("No tokens available for investment")
+            return None  # Not enough tokens
 
         return tokens
 
@@ -1956,20 +1964,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         else:
             return None
 
-    def _get_top_tokens_by_value(
-        self, num_of_tokens_required: int
-    ) -> Generator[None, None, Optional[List[Any]]]:
-        """Get tokens over min balance"""
+    def _get_available_tokens(self) -> Optional[List[Dict[str, Any]]]:
+        """Get tokens with the highest balances."""
         token_balances = []
 
         for position in self.synchronized_data.positions:
             chain = position.get("chain")
-            for asset in position.get("assets", {}):
+            for asset in position.get("assets", []):
                 asset_address = asset.get("address")
-                if not chain or not asset_address:
-                    continue
                 balance = asset.get("balance", 0)
-                if balance and balance > 0:
+                if chain and asset_address and balance > 0:
                     token_balances.append(
                         {
                             "chain": chain,
@@ -1979,33 +1983,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         }
                     )
 
-        if len(token_balances) < num_of_tokens_required:
-            self.context.logger.error(
-                f"Insufficient tokens!! Required at least {num_of_tokens_required}, available: {token_balances}"
-            )
-            return None
+        # Sort tokens by balance in descending order
+        token_balances.sort(key=lambda x: x["balance"], reverse=True)
 
-        # Fetch prices for tokens with balance greater than zero
-        token_prices = yield from self._fetch_token_prices(token_balances)
-
-        # Calculate the relative value of each token
-        for token_data in token_balances:
-            token_address = token_data["token"]
-            chain = token_data["chain"]
-            token_price = token_prices.get(token_address, 0)
-            if token_address == ZERO_ADDRESS:
-                decimals = 18
-            else:
-                decimals = yield from self._get_token_decimals(chain, token_address)
-            token_data["value"] = (
-                token_data["balance"] / (10**decimals)
-            ) * token_price
-
-        # Sort tokens by value in descending order and add the highest ones
-        token_balances.sort(key=lambda x: x["value"], reverse=True)
-        tokens = token_balances[:2]
-        self.context.logger.info(f"Tokens selected for bridging/swapping: {tokens}")
-        return tokens
+        self.context.logger.info(
+            f"Tokens selected for bridging/swapping: {token_balances}"
+        )
+        return token_balances
 
     def _fetch_token_prices(
         self, token_balances: List[Dict[str, Any]]
@@ -2224,7 +2208,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     relative_funds_percentage,
                 )
             else:
-                self.context.logger.info("Multiple source tokens, processing each")
                 dest_tokens = [
                     (dest_token0_address, dest_token0_symbol),
                     (dest_token1_address, dest_token1_symbol),

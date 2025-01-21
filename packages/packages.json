@@ -1,10 +1,10 @@
 {
     "dev": {
         "custom/valory/merkl_pools_search/0.1.0": "bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq",
-        "custom/valory/asset_lending/0.1.0": "bafybeihsq7hhdgcc5wqxbqrioxaqsrza4424wqlv3hqkemomsb337pocki",
+        "custom/valory/asset_lending/0.1.0": "bafybeigiracbkzmitjwfkw3gmz74ldqar4avpv2ycrohedtnvvay4bsn7q",
         "custom/valory/max_apr_selection/0.1.0": "bafybeih255rl4tnom2gvg2b3t2glpgcgck3orrerbhmayd7cbnggglbh7e",
-        "custom/valory/balancer_pools_search/0.1.0": "bafybeievabkqmmpq252giacmdlxl5kk5r3qdl6rdnh4iwkx3fzsqvkejwm",
-        "custom/valory/uniswap_pools_search/0.1.0": "bafybeiaqkkpgzx7krvgu7xhbe65mgtq7vyhkx4rztny7qcczrjonxc3uwm",
+        "custom/valory/balancer_pools_search/0.1.0": "bafybeid6fcwa525kbk5yl4fmvhs6yazv7nybgejlrdjltdooump7n4ng5i",
+        "custom/valory/uniswap_pools_search/0.1.0": "bafybeieqbjjofk375ykpwinl6wjfdpq3j7a3kbavxti7vlwws5ivrr3ecy",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeib755ksie5yv4wn6jl7i3bpshlhscf4bzsabqrbahm6b3m5ixzmbi",
         "contract/valory/balancer_vault/0.1.0": "bafybeidgdivmrm77yotgpnn567ayzhoqa6hufrijy2cj2b7w5wa63otzq4",
         "contract/valory/erc20/0.1.0": "bafybeifl3yoh66uwdyfzz65ed4dnc7gyhvvgcmzxjm4exhkupvurhjcb6m",

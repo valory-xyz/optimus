@@ -36,15 +36,15 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeiel5jeipn2sowbuaqe5wefpjfct4ufauurjwgm7gp6tf3ws3v5oru
-- valory/liquidity_trader_abci:0.1.0:bafybeig7xanpjjnaayoj667n3jrpd2qq3e4uliqnpaldcmuvl3yhrwcemq
-- valory/optimus_abci:0.1.0:bafybeiback5j33toypzp3g6qrapvsroweunb42m2tqrb6u3lm36yywduv4
+- valory/liquidity_trader_abci:0.1.0:bafybeicggthdccqkih3nwxz5jdsmduh6ior7j53lk7ewoou36xyskzq5ha
+- valory/optimus_abci:0.1.0:bafybeig4tt7d34sq622g7v3qyic3dpixchqkgn5tkskkzspcqpzmqkesku
 - valory/registration_abci:0.1.0:bafybeia25qhft6urkkgh4jkfm3nnq5bcod5xvp7dvljyzepurhvceoggni
 - valory/reset_pause_abci:0.1.0:bafybeidntwkambprkva7iz36awhpj4eclgyt4ngd3zjaahylu6yc2oqase
 - valory/termination_abci:0.1.0:bafybeidvc4imgmhlszj32g63twgdjjq4s6g2mpc6upimfto3e44kyzbw4m
 - valory/transaction_settlement_abci:0.1.0:bafybeigjgwgkpirbttphos34gbzcm5q6cdjzo6jaqblzvlokng7cyo5dii
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeig5rowqmfv6ydn7iufc2jf33pef3uxaudcxgb7whsrliwmtkgat7e
-- valory/max_apr_selection:0.1.0:bafybeiexwshyt52atni7cltw36vjdw7jjut7assasimrqlfqudlxqvsuku
+- valory/max_apr_selection:0.1.0:bafybeiegz65orpcrbwivhshtpcr63fhv57mmb6zga4b4gy2kse7xpdtpje
 - valory/balancer_pools_search:0.1.0:bafybeihwum4cgygv4wpmbwpxkjad23gks72kbsxw7ldp4vh7fvkz7bkisy
 - valory/uniswap_pools_search:0.1.0:bafybeiduij3splkujvvjrrbhojwq7fxcl6xn5vo24kqgdlp74o5waffbme
 - valory/asset_lending:0.1.0:bafybeid23fmzki2wh3mp252yl7omx2napmgi75tljqf4ezrlwwkimwfr4y

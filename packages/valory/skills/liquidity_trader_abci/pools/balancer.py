@@ -107,6 +107,48 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         """Initialize the balancer pool behaviour."""
         super().__init__(**kwargs)
 
+    def update_value(self, **kwargs: Any) :
+        """Fetch and flatten pool token addresses."""
+        pool_id = kwargs.get("pool_id")
+        chain = kwargs.get("chain")
+
+        max_amounts_in = kwargs.get("max_amounts_in")
+        assets = kwargs.get("assets")
+         
+    
+        if not pool_id or not chain:
+            self.context.logger.error("Missing required parameters: 'pool_id' or 'chain'")
+            return []
+    
+        try:
+            pool_info = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=self.params.balancer_vault_contract_addresses.get(chain),
+                contract_public_id=VaultContract.contract_id,
+                contract_callable="get_pool_tokens",
+                pool_id=pool_id,
+                data_key="tokens",
+                chain_id=chain,
+            )
+    
+            if not pool_info or not isinstance(pool_info, list) or not pool_info[0]:
+                self.context.logger.error("Invalid pool_info data received from contract interaction.")
+                return []
+    
+            # Safely extract and flatten token addresses
+            tokens_nested = pool_info[0]
+            tokens = [token[0] for token in tokens_nested if token and len(token) > 0]
+    
+            self.context.logger.info(f"Flattened token addresses: {tokens}")
+            return tokens
+    
+        except Exception as e:
+            self.context.logger.error(f"Error fetching pool tokens: {str(e)}")
+            return []
+    
+
+       
+     
     def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Enter a Balancer pool."""
         pool_address = kwargs.get("pool_address")

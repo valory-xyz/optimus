@@ -1110,7 +1110,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Selected opportunity: {self.selected_opportunities}"
                 )
                 actions = yield from self.get_order_of_transactions()
-    
+        
             self.context.logger.info(f"Actions: {actions}")
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
@@ -1201,6 +1201,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Calculate PnL for a Balancer position."""
+        
+        self.context.logger.info("calculate_pnl_for_balancer")
+
         chain = position.get("chain")
         pool_address = position.get("pool_address")
       
@@ -1223,6 +1226,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             data_key="tokens",
             chain_id=chain,
         )
+
+        self.context.logger.info("pool pool_info information:{pool_info}")
 
         if pool_info is None:
             self.context.logger.error(
@@ -1795,6 +1800,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Get the order of transactions to perform based on the current pool status and token balances."""
+        
         actions = []
         tokens = []
         # Process rewards
@@ -2148,7 +2154,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
     
         return exit_pool_action
-
+    
     def _build_bridge_swap_actions(
         self, opportunity: List[Dict[str, Any]], tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:

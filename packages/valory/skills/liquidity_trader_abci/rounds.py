@@ -422,6 +422,7 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
 
 class DecideAgentStartingRound(VotingRound):
     """DecideAgentStartingRound"""
+
     payload_class = DecideAgentPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.MOVE_TO_NEXT_AGENT

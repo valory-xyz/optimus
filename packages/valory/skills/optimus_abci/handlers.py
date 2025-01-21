@@ -56,10 +56,10 @@ from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
+from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.market_data_fetcher_abci.handlers import (
     DcxtTickersHandler as BaseDcxtTickersHandler,
 )
-from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.optimus_abci.dialogues import HttpDialogue, HttpDialogues
 from packages.valory.skills.optimus_abci.models import SharedState
 from packages.valory.skills.portfolio_tracker_abci.handlers import (

@@ -127,9 +127,9 @@ ROUNDS_INFO = {
         "transitions": {},
     },
     "BacktestRound": {
-    "name": "Backtest",
-    "description": "Runs a backtest of the trading strategy",
-    "transitions": {},
+        "name": "Backtest",
+        "description": "Runs a backtest of the trading strategy",
+        "transitions": {},
     },
     "DecideAgentEndingRound": {
         "name": "Deciding agent ending",
@@ -190,9 +190,5 @@ ROUNDS_INFO = {
         "name": "Transforming market data",
         "description": "Transforms the fetched market data into a format suitable for the trading strategy",
         "transitions": {},
-    }
+    },
 }
-
-
-
-

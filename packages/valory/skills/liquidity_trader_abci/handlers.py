@@ -23,13 +23,16 @@ from typing import cast
 
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
-    ABCIRoundHandler as BaseABCIRoundHandler, IpfsHandler as BaseIpfsHandler
+    ABCIRoundHandler as BaseABCIRoundHandler,
 )
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )
 from packages.valory.skills.abstract_round_abci.handlers import (
     HttpHandler as BaseHttpHandler,
+)
+from packages.valory.skills.abstract_round_abci.handlers import (
+    IpfsHandler as BaseIpfsHandler,
 )
 from packages.valory.skills.abstract_round_abci.handlers import (
     LedgerApiHandler as BaseLedgerApiHandler,
@@ -41,6 +44,7 @@ from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
+
 
 ABCIHandler = BaseABCIRoundHandler
 HttpHandler = BaseHttpHandler
@@ -70,7 +74,10 @@ class IpfsHandler(BaseIpfsHandler):
         """
         self.context.logger.debug(f"Received message: {message}")
 
-        if message.performative != self.custom_support_performative or not self.shared_state.in_flight_req:
+        if (
+            message.performative != self.custom_support_performative
+            or not self.shared_state.in_flight_req
+        ):
             return super().handle(message)
 
         self.shared_state.in_flight_req = False

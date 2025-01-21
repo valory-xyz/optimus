@@ -101,7 +101,6 @@ def main() -> None:
         except KeyError as e:
             print("Error", e)
 
-
     with open(Path("optimus", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)
 

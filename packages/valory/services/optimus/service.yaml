@@ -118,7 +118,7 @@ models:
       rpc_polling_interval: ${RPC_POLLING_INTERVAL:int:5}
       epsilon: ${EPSILON:float:0.1}
       sharpe_threshold: ${SHARPE_THRESHOLD:float:1.0}
-      ledger_ids: ${LEDGER_IDS:list:["ethereum"]}
+      ledger_ids: ${LEDGER_IDS:list:["base"]}
       trade_size_in_base_token: ${TRADE_SIZE_IN_BASE_TOKEN:float:0.0001}
       balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism","mode"]}

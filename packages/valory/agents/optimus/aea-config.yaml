@@ -37,14 +37,14 @@ protocols:
 - valory/tendermint:0.1.0:bafybeig4mi3vmlv5zpbjbfuzcgida6j5f2nhrpedxicmrrfjweqc5r7cra
 skills:
 - valory/market_data_fetcher_abci:0.1.0:bafybeib7zl3eoq4e7c35alhplnuaka2dxwrhsagby2ptxdevcz35dpgfdm
-- valory/strategy_evaluator_abci:0.1.0:bafybeic6gs6gg7vkkn4t2k4q43qmtslibztxxzl6toz6x6spkmriukhzyq
-- valory/trader_decision_maker_abci:0.1.0:bafybeiahgy6ddua6bgyiponmzp76m5tkn5wndlryviczqbi2lklexsjusi
+- valory/strategy_evaluator_abci:0.1.0:bafybeidouj2lm5prsegkhxcpxcd3v3suews3a62sikko63syaoyvz5qf4y
+- valory/trader_decision_maker_abci:0.1.0:bafybeifpxxaep6jxxc7ueeubtzbfyckivtsvhqwi4cntum6bukylwbfajy
 - valory/ipfs_package_downloader:0.1.0:bafybeiagaz7zq6a7vzhqofkalpm2ufc6yamukctjgjruk27ogvm5rm7qqa
-- valory/portfolio_tracker_abci:0.1.0:bafybeicdbae3njwqjq7x4rrjy2ovixjfpy5b7ron4rmrmu4jxv4kxfwira
+- valory/portfolio_tracker_abci:0.1.0:bafybeibxuystq5svpmh7y3h5df6yrs6g3lvyqb5nlvaqrrdi5c2iqh4k2a
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/liquidity_trader_abci:0.1.0:bafybeibnldxy2gnaeewwvolnz5jyxxg755qvmcj3glfjerpe7fnuu2d4hi
-- valory/optimus_abci:0.1.0:bafybeic7ti6k5dkvb6767ew7gcbyg2hlozm7zmz222vnwf6z5w6fogq5vm
+- valory/optimus_abci:0.1.0:bafybeihv5a2avecfywjhxixph5zfodtte2ql2cvzguoebc7kdotrv6zlbu
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq

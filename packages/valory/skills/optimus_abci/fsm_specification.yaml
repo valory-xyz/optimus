@@ -1,7 +1,6 @@
 alphabet_in:
 - ACTION_EXECUTED
 - BACKTEST_FAILED
-- BACKTEST_NEGATIVE
 - BACKTEST_POSITIVE
 - BACKTEST_POSITIVE_EVM
 - BACKTEST_POSITIVE_PROXY_SERVER
@@ -13,9 +12,6 @@ alphabet_in:
 - DONT_MOVE_TO_NEXT_AGENT
 - ERROR
 - ERROR_BACKTESTING
-- ERROR_PREPARING_INSTRUCTIONS
-- ERROR_PREPARING_SWAPS
-- FAILED
 - FINALIZATION_FAILED
 - FINALIZE_TIMEOUT
 - INCOMPLETE_INSTRUCTIONS_PREPARED
@@ -33,7 +29,6 @@ alphabet_in:
 - PREPARE_INCOMPLETE_SWAP
 - PREPARE_SWAP
 - PROXY_SWAPPED
-- PROXY_SWAP_FAILED
 - PROXY_SWAP_TIMEOUT
 - RESET_AND_PAUSE_TIMEOUT
 - RESET_TIMEOUT
@@ -94,12 +89,11 @@ states:
 - ValidateTransactionRound
 transition_func:
     (BacktestRound, BACKTEST_FAILED): RandomnessRound
-    (BacktestRound, BACKTEST_NEGATIVE): RandomnessRound
     (BacktestRound, BACKTEST_POSITIVE): PrepareSwapRound
     (BacktestRound, BACKTEST_POSITIVE_EVM): PrepareEvmSwapRound
     (BacktestRound, BACKTEST_POSITIVE_PROXY_SERVER): ProxySwapQueueRound
     (BacktestRound, ERROR_BACKTESTING): RandomnessRound
-    (BacktestRound, NONE): BacktestRound
+    (BacktestRound, NONE): RandomnessRound
     (BacktestRound, NO_MAJORITY): BacktestRound
     (BacktestRound, ROUND_TIMEOUT): BacktestRound
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
@@ -170,9 +164,8 @@ transition_func:
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
     (PortfolioTrackerRound, DONE): StrategyExecRound
-    (PortfolioTrackerRound, FAILED): RandomnessRound
     (PortfolioTrackerRound, INSUFFICIENT_BALANCE): PortfolioTrackerRound
-    (PortfolioTrackerRound, NONE): PortfolioTrackerRound
+    (PortfolioTrackerRound, NONE): RandomnessRound
     (PortfolioTrackerRound, NO_MAJORITY): PortfolioTrackerRound
     (PortfolioTrackerRound, ROUND_TIMEOUT): PortfolioTrackerRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
@@ -184,21 +177,18 @@ transition_func:
     (PostTxSettlementRound, UNRECOGNIZED): ResetAndPauseRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
     (PrepareEvmSwapRound, NONE): PrepareEvmSwapRound
-    (PrepareEvmSwapRound, NO_INSTRUCTIONS): PrepareEvmSwapRound
     (PrepareEvmSwapRound, NO_MAJORITY): PrepareEvmSwapRound
     (PrepareEvmSwapRound, ROUND_TIMEOUT): PrepareEvmSwapRound
     (PrepareEvmSwapRound, TRANSACTION_PREPARED): RandomnessTransactionSubmissionRound
-    (PrepareSwapRound, ERROR_PREPARING_INSTRUCTIONS): RandomnessRound
     (PrepareSwapRound, INCOMPLETE_INSTRUCTIONS_PREPARED): SwapQueueRound
     (PrepareSwapRound, INSTRUCTIONS_PREPARED): SwapQueueRound
-    (PrepareSwapRound, NONE): PrepareSwapRound
+    (PrepareSwapRound, NONE): RandomnessRound
     (PrepareSwapRound, NO_INSTRUCTIONS): ResetAndPauseRound
     (PrepareSwapRound, NO_MAJORITY): PrepareSwapRound
     (PrepareSwapRound, ROUND_TIMEOUT): PrepareSwapRound
     (ProxySwapQueueRound, NONE): ProxySwapQueueRound
     (ProxySwapQueueRound, NO_MAJORITY): ProxySwapQueueRound
     (ProxySwapQueueRound, PROXY_SWAPPED): ProxySwapQueueRound
-    (ProxySwapQueueRound, PROXY_SWAP_FAILED): ProxySwapQueueRound
     (ProxySwapQueueRound, PROXY_SWAP_TIMEOUT): ProxySwapQueueRound
     (ProxySwapQueueRound, SWAPS_QUEUE_EMPTY): ResetAndPauseRound
     (RandomnessRound, DONE): TraderDecisionMakerRound
@@ -232,8 +222,7 @@ transition_func:
     (SelectKeeperTransactionSubmissionBRound, INCORRECT_SERIALIZATION): ResetAndPauseRound
     (SelectKeeperTransactionSubmissionBRound, NO_MAJORITY): ResetRound
     (SelectKeeperTransactionSubmissionBRound, ROUND_TIMEOUT): SelectKeeperTransactionSubmissionBRound
-    (StrategyExecRound, ERROR_PREPARING_SWAPS): RandomnessRound
-    (StrategyExecRound, NONE): StrategyExecRound
+    (StrategyExecRound, NONE): RandomnessRound
     (StrategyExecRound, NO_MAJORITY): StrategyExecRound
     (StrategyExecRound, NO_ORDERS): ResetAndPauseRound
     (StrategyExecRound, PREPARE_INCOMPLETE_SWAP): BacktestRound

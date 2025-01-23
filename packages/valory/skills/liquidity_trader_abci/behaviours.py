@@ -110,7 +110,10 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
-
+from concurrent.futures import ThreadPoolExecutor
+import threading
+import concurrent.futures
+import time
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 SAFE_TX_GAS = 0
@@ -1600,61 +1603,69 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategies = self.params.selected_strategies.copy()
         tried_strategies: Set[str] = set()
 
-        while True:
-            next_strategy = strategies.pop(0)
-            self.context.logger.info(f"Evaluating strategy: {next_strategy}")
-            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
-                next_strategy, {}
-            )
-
-            kwargs.update(
-                {
-                    "strategy": next_strategy,
-                    "chains": self.params.target_investment_chains,
-                    "protocols": self.params.selected_protocols,
-                    "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "current_positions": [
-                        pos.get("pool_address")
-                        for pos in self.current_positions
-                        if pos.get("status") == PositionStatus.OPEN.value
-                    ]
-                    if self.current_positions
-                    else [],
-                    "coingecko_api_key": self.coingecko.api_key,
-                    "get_metrics": False,
-                }
-            )
-
-            opportunities = self.execute_strategy(**kwargs)
-            if opportunities is not None:
-                if "error" in opportunities:
-                    self.context.logger.error(
-                        f"Error in strategy {next_strategy}: {opportunities['error']}"
-                    )
-                else:
-                    self.context.logger.info(
-                        f"Opportunities found using {next_strategy} strategy"
-                    )
-                    for opportunity in opportunities:
-                        # Customize the following line to include relevant details from each opportunity
-                        self.context.logger.info(
-                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                            f"Chain: {opportunity.get('chain', 'N/A')}, "
-                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
-                        )
-                    self.trading_opportunities.extend(opportunities)
-            else:
-                self.context.logger.warning(
-                    f"No opportunity found using {next_strategy} strategy"
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = []
+            while strategies:
+                next_strategy = strategies.pop(0)
+                self.context.logger.info(f"Evaluating strategy: {next_strategy}")
+                kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
+                    next_strategy, {}
                 )
 
-            tried_strategies.add(next_strategy)
-            remaining_strategies = set(strategies) - tried_strategies
-            if len(remaining_strategies) == 0:
-                break
+                kwargs.update(
+                    {
+                        "strategy": next_strategy,
+                        "chains": self.params.target_investment_chains,
+                        "protocols": self.params.selected_protocols,
+                        "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
+                        "current_positions": [
+                            pos.get("pool_address")
+                            for pos in self.current_positions
+                            if pos.get("status") == PositionStatus.OPEN.value
+                        ]
+                        if self.current_positions
+                        else [],
+                        "coingecko_api_key": self.coingecko.api_key,
+                        "get_metrics": False,
+                    }
+                )
 
-            next_strategy = remaining_strategies.pop()
+                # Submit the task to the executor
+                future = executor.submit(self.execute_strategy, **kwargs)
+                futures.append(future)
+
+                tried_strategies.add(next_strategy)
+                remaining_strategies = set(strategies) - tried_strategies
+                if len(remaining_strategies) == 0:
+                    break
+
+                next_strategy = remaining_strategies.pop()
+
+            # Wait for all tasks to complete
+            for future in concurrent.futures.as_completed(futures):
+                opportunities = future.result()
+                if opportunities is not None:
+                    if "error" in opportunities:
+                        self.context.logger.error(
+                            f"Error in strategy {next_strategy}: {opportunities['error']}"
+                        )
+                    else:
+                        self.context.logger.info(
+                            f"Opportunities found using {next_strategy} strategy"
+                        )
+                        for opportunity in opportunities:
+                            # Customize the following line to include relevant details from each opportunity
+                            self.context.logger.info(
+                                f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                                f"Chain: {opportunity.get('chain', 'N/A')}, "
+                                f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                                f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                            )
+                        self.trading_opportunities.extend(opportunities)
+                else:
+                    self.context.logger.warning(
+                        f"No opportunity found using {next_strategy} strategy"
+                    )
 
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""

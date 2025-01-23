@@ -1665,7 +1665,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 break
     
             next_strategy = remaining_strategies.pop()
-
+    
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""
         if self._inflight_strategy_req is not None:
@@ -1674,7 +1674,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if len(self.shared_state.strategy_to_filehash) == 0:
             # no strategies pending to be fetched
             return
-
+    
         strategies_to_remove = []
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
             if (
@@ -1688,10 +1688,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self._inflight_strategy_req = strategy
             self.send_message(ipfs_msg, message, self._handle_get_strategy)
             return
-
+    
         for strategy in strategies_to_remove:
             self.shared_state.strategy_to_filehash.pop(strategy)
-
+    
     def get_returns_metrics_for_opportunity(
         self, position: Dict[str, Any], strategy: str
     ) -> Optional[Dict[str, Any]]:
@@ -1711,7 +1711,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
             }
         )
-
+    
         # Execute the strategy to calculate metrics
         metrics = self.execute_strategy(**kwargs)
         if not metrics:
@@ -1734,7 +1734,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         while len(self.shared_state.strategy_to_filehash) > 0:
             self.download_next_strategy()
             yield from self.sleep(self.params.sleep_time)
-
+    
     def execute_strategy(
         self, *args: Any, **kwargs: Any
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
@@ -1831,7 +1831,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
             actions.append(exit_pool_action)
         # Build actions based on selected opportunities
-        for opportunity in self.selected_opportunities:
+        self.context.logger.info(f"selected opportunities: {self.selected_opportunities}")
+        
+        for opportunity in self.selected_opportunities['optimal_strategies']:
+
             bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
             if bridge_swap_actions is None:
                 self.context.logger.info("Error preparing bridge swap actions")
@@ -2164,7 +2167,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
     
         bridge_swap_actions = []
-
+        
+        self.context.logger.info(
+                    f"opportunity for {opportunity}"
+                )
         # Get the highest APR pool's tokens
         # Extract opportunity details
         dest_token0_address = opportunity.get("token0")

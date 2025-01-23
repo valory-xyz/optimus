@@ -183,7 +183,7 @@ models:
       max_healthcheck: 120
       multisend_address: ${str:0x0000000000000000000000000000000000000000}
       termination_sleep: ${int:900}
-      init_fallback_gas: 0
+      init_fallback_gas: ${int:0}
       keeper_allowed_retries: 3
       reset_pause_duration: ${int:10}
       on_chain_service_id: ${int:1}

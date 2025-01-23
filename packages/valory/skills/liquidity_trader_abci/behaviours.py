@@ -110,7 +110,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed, Future
 import types
 import logging 
 
@@ -1627,6 +1627,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         selected_opportunity["token1"]
                     )
 
+    def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
+        """Get the completed futures"""
+        while True:
+            if not future.done():
+                yield
+                continue
+
+            try:
+                result = future.result()
+                return result
+            except Exception as e:
+                # TODO: better handlig
+                return None
+
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities using multiprocessing"""
         self.trading_opportunities.clear()
@@ -1682,7 +1696,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 future_to_strategy[future] = strategy_name
                 futures.append(future)
 
-            for future in as_completed(futures):
+            results = []
+            for future in futures:
+                result = yield from self.get_result(future)
+                results.append(result)
+
+            # todo: fix this
+            for future in []:
                 next_strategy = future_to_strategy[future]
                 tried_strategies.add(next_strategy)
                 try:

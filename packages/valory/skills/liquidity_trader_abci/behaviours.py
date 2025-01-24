@@ -1708,9 +1708,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 next_strategy = future_to_strategy[future]
                 tried_strategies.add(next_strategy)
                 if not result:
-                    self.context.logger.error(
-                        f"Error in strategy {next_strategy}"
-                    )
+                    self.context.logger.error(f"Error in strategy {next_strategy}")
                     continue
 
                 if "error" in result:

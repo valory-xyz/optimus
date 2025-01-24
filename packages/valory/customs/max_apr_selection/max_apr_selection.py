@@ -9,7 +9,7 @@ _logger = setup_logger(__name__)
 REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools")
 SHARPE_RATIO_THRESHOLD = 1
 DEPTH_SCORE_THRESHOLD = 50
-IL_RISK_SCORE_THRESHOLD = -0.05
+IL_RISK_SCORE_THRESHOLD = -0.2
 
 # Weights for each metric
 SHARPE_RATIO_WEIGHT = 0.4
@@ -191,4 +191,4 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
 
     kwargs = remove_irrelevant_fields(kwargs)  # Default to 1 if not provided
     optimal_strategies = apply_risk_thresholds_and_select_optimal_strategy(**kwargs)
-    return {"optimal_strategies": optimal_strategies}
+    return optimal_strategies

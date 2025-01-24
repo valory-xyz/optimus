@@ -1679,7 +1679,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         strategies_executables = self.shared_state.strategies_executables
 
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=4) as executor:
             future_to_strategy = {}
             futures = []
             for kwargs in strategy_kwargs_list:
@@ -1707,9 +1707,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for future, result in zip(futures, results):
                 next_strategy = future_to_strategy[future]
                 tried_strategies.add(next_strategy)
-                if result is None:
+                if not result:
                     self.context.logger.error(
-                        f"Error in strategy {next_strategy}: result is None"
+                        f"Error in strategy {next_strategy}"
+                    )
+                    continue
+
+                if "error" in result:
+                    self.context.logger.error(
+                        f"Error in strategy {next_strategy}: {result.get('error')}"
                     )
                     continue
 

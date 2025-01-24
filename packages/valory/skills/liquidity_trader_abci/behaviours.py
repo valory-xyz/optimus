@@ -2064,7 +2064,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         }
                     )
 
-        breakpoint()
         # Sort tokens by balance in descending order
         token_balances.sort(key=lambda x: x["balance"], reverse=True)
         token_prices = yield from self._fetch_token_prices(token_balances)

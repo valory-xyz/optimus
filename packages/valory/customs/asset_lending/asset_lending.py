@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import pyfolio as pf
 import json
-
+from web3 import Web3
 from aea.helpers.logging import setup_logger
 
 # Configure _logger
@@ -170,7 +170,7 @@ def filter_aggregators(chains, aggregators, lending_asset, current_positions) ->
 
     # Filter by chain, asset, and exclude current_positions
     for aggregator in aggregators:
-        if aggregator.get("chainName") in chains and aggregator.get('address') not in current_positions:
+        if aggregator.get("chainName") in chains and Web3.to_checksum_address(aggregator.get('address')) not in current_positions:
             if aggregator.get("asset", {}).get("address") == lending_asset:
                 total_apr = aggregator.get('apy', {}).get('total', 0)
                 tvl = aggregator.get('tvl', 0)

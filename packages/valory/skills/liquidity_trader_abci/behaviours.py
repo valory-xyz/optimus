@@ -25,7 +25,7 @@ import math
 import types
 from abc import ABC
 from collections import defaultdict
-from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
 from typing import (
@@ -1679,7 +1679,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         strategies_executables = self.shared_state.strategies_executables
 
-        with ProcessPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=4) as executor:
             future_to_strategy = {}
             futures = []
             for kwargs in strategy_kwargs_list:

@@ -36,8 +36,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeiee5lqumw3ycn6vjc7ys4h5ddf4syn3tsalcssjwz6lrm3bvelkhm
-- valory/optimus_abci:0.1.0:bafybeif674amkllzfyc2ag4xbkv3fe37ukzlg5n6rmdolq47x2srh4hfam
+- valory/liquidity_trader_abci:0.1.0:bafybeifi7t3q5oan5jplsa2ftd7jemjnieom2qs3zyn4ja6bls32ctgcaa
+- valory/optimus_abci:0.1.0:bafybeihnwaockri4grafxiq5mijjjrnvioca67mewyp54kwnx6pdvlkfbi
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -218,10 +218,10 @@ models:
       serious_slash_unit_amount: ${int:8000000000000000}
       termination_from_block: ${int:34088325}
       allowed_dexs: ${list:["balancerPool", "UniswapV3"]}
-      initial_assets: ${str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
+      initial_assets: ${str:{"mode":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"}}}
       safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","optimism":"0x07e27E181Df065141ee90a4DD43cE4113bc9853C","mode":"0x0000000000000000000000000000000000000000"}}
       merkl_fetch_campaigns_args: ${str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
-      allowed_chains: ${list:["optimism","base"]}
+      allowed_chains: ${list:["optimism","base","mode"]}
       gas_reserve: ${str:{"ethereum":1000,"optimism":1000,"base":1000}}
       round_threshold: ${int:0}
       apr_threshold: ${int:5}

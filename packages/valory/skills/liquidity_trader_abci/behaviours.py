@@ -20,9 +20,12 @@
 """This package contains round behaviours of LiquidityTraderAbciApp."""
 
 import json
+import logging
 import math
+import types
 from abc import ABC
 from collections import defaultdict
+from concurrent.futures import Future, ProcessPoolExecutor
 from datetime import datetime
 from enum import Enum
 from typing import (
@@ -190,6 +193,38 @@ ASSETS_FILENAME = "assets.json"
 POOL_FILENAME = "current_pool.json"
 READ_MODE = "r"
 WRITE_MODE = "w"
+
+
+def execute_strategy(
+    strategy: str, strategies_executables: Dict[str, Tuple[str, str]], **kwargs: Any
+) -> Optional[Dict[str, Any]]:
+    """Execute the strategy and return the results."""
+    # Reconstruct the logger
+    logger = logging.getLogger(__name__)
+
+    strategy_exec_tuple = strategies_executables.get(strategy, None)
+    if strategy_exec_tuple is None:
+        logger.error(f"No executable was found for {strategy=}!")
+        return None
+
+    strategy_exec, callable_method = strategy_exec_tuple
+    if callable_method in globals():
+        del globals()[callable_method]
+
+    # Execute the strategy code
+    exec(strategy_exec, globals())  # pylint: disable=W0122  # nosec
+    method = globals().get(callable_method, None)
+    if method is None:
+        logger.error(
+            f"No {callable_method!r} method was found in {strategy} executable."
+        )
+        return None
+
+    # Call the method and collect results if it's a generator
+    result = method(**kwargs)
+    if isinstance(result, types.GeneratorType):
+        result = list(result)
+    return result
 
 
 class GasCostTracker:
@@ -1593,16 +1628,32 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         selected_opportunity["token1"]
                     )
 
+    def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
+        """Get the completed futures"""
+        while True:
+            if not future.done():
+                yield
+                continue
+            try:
+                result = future.result()
+                return result
+            except Exception as e:
+                self.context.logger.error(
+                    f"Exception occurred while executing strategy: {e}",
+                )
+                return None
+
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
-        """Fetches all the trading opportunities"""
+        """Fetches all the trading opportunities using multiprocessing"""
         self.trading_opportunities.clear()
         yield from self.download_strategies()
         strategies = self.params.selected_strategies.copy()
         tried_strategies: Set[str] = set()
 
-        while True:
-            next_strategy = strategies.pop(0)
-            self.context.logger.info(f"Evaluating strategy: {next_strategy}")
+        # Collect strategy kwargs
+        strategy_kwargs_list = []
+        for next_strategy in strategies:
+            self.context.logger.info(f"Preparing strategy: {next_strategy}")
             kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
                 next_strategy, {}
             )
@@ -1624,19 +1675,50 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "get_metrics": False,
                 }
             )
+            strategy_kwargs_list.append(kwargs)
 
-            opportunities = self.execute_strategy(**kwargs)
-            if opportunities is not None:
-                if "error" in opportunities:
+        strategies_executables = self.shared_state.strategies_executables
+
+        with ProcessPoolExecutor() as executor:
+            future_to_strategy = {}
+            futures = []
+            for kwargs in strategy_kwargs_list:
+                strategy_name = kwargs["strategy"]
+                # Remove 'strategy' from kwargs to avoid passing it twice
+                kwargs_without_strategy = {
+                    k: v for k, v in kwargs.items() if k != "strategy"
+                }
+
+                future = executor.submit(
+                    execute_strategy,
+                    strategy_name,
+                    strategies_executables,
+                    **kwargs_without_strategy,
+                )
+                future_to_strategy[future] = strategy_name
+                futures.append(future)
+
+            results = []
+
+            for future in futures:
+                result = yield from self.get_result(future)
+                results.append(result)
+
+            for future, result in zip(futures, results):
+                next_strategy = future_to_strategy[future]
+                tried_strategies.add(next_strategy)
+                if result is None:
                     self.context.logger.error(
-                        f"Error in strategy {next_strategy}: {opportunities['error']}"
+                        f"Error in strategy {next_strategy}: result is None"
                     )
-                else:
+                    continue
+
+                opportunities = result
+                if opportunities:
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"
                     )
                     for opportunity in opportunities:
-                        # Customize the following line to include relevant details from each opportunity
                         self.context.logger.info(
                             f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
                             f"Chain: {opportunity.get('chain', 'N/A')}, "
@@ -1644,17 +1726,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
                         )
                     self.trading_opportunities.extend(opportunities)
-            else:
-                self.context.logger.warning(
-                    f"No opportunity found using {next_strategy} strategy"
-                )
-
-            tried_strategies.add(next_strategy)
-            remaining_strategies = set(strategies) - tried_strategies
-            if len(remaining_strategies) == 0:
-                break
-
-            next_strategy = remaining_strategies.pop()
+                else:
+                    self.context.logger.warning(
+                        f"No opportunity found using {next_strategy} strategy"
+                    )
 
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""
@@ -1721,9 +1796,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.download_next_strategy()
             yield from self.sleep(self.params.sleep_time)
 
-    def execute_strategy(
-        self, *args: Any, **kwargs: Any
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def execute_strategy(self, *args: Any, **kwargs: Any) -> Optional[Dict[str, Any]]:
         """Execute the strategy and return the results."""
 
         strategy = kwargs.pop("strategy", None)
@@ -1799,6 +1872,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             and self.current_positions
         ):
             tokens = yield from self._process_pnl(actions)
+
+        if not self.selected_opportunities:
+            return actions
 
         # Prepare tokens for exit or investment
         available_tokens = self._prepare_tokens_for_investment()
@@ -2141,7 +2217,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         return exit_pool_action
 
     def _build_bridge_swap_actions(
-        self, opportunity: List[Dict[str, Any]], tokens: List[Dict[str, Any]]
+        self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
         if not opportunity:
@@ -3783,7 +3859,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # and the other half to the second asset.
         amount = int(
             self._get_balance(from_chain, from_token_address, positions)
-            * action.get("funds_percentage")
+            * action.get("funds_percentage", 1)
         )
 
         if amount <= 0:

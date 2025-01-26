@@ -2953,6 +2953,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if not tx_hash:
             return Event.DONE.value, {}
+        
+        result = (Event.SETTLE.value, {
+            "tx_submitter": DecisionMakingRound.auto_round_id(),
+            "most_voted_tx_hash": tx_hash,
+            "chain_id": chain_id,
+            "safe_contract_address": safe_address,
+            "positions": positions,
+            "last_executed_action_index": current_action_index,
+            "last_action": last_action,
+        })
+
+        self.context.logger.info(f"Result constructed: {result}")
 
         return Event.SETTLE.value, {
             "tx_submitter": DecisionMakingRound.auto_round_id(),
@@ -2984,7 +2996,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}"
         )
-
+    
         if status == SwapStatus.DONE.value:
             # only continue if tx is fully completed
             return Decision.CONTINUE

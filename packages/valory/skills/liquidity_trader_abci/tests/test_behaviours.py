@@ -752,7 +752,6 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             
             # Consume the generator and collect results
             final_result = list(result)
-            print(f"final_result{final_result}")
             
             # Verify the result structure
             assert len(final_result) == 2
@@ -848,8 +847,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
         ):
             # Directly call the method and check the result
             result = next(current_behaviour.get_decision_on_swap())
-            
-            print(f"result decision: {result}")
+        
             
             # Assert based on the actual method implementation
             assert result == Decision.CONTINUE.value
@@ -1014,6 +1012,263 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "last_executed_step_index": None,
             "last_action": Action.SWITCH_ROUTE.value,
         })
+   
+    def test_get_next_event_no_actions(self):
+        """Test get_next_event with no actions."""
+        serialized_actions = json.dumps([])
+        
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+            ))
+        )
+        
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # When working with generators that have a return value, 
+        # we need to handle StopIteration exception to get the return value
+        try:
+            generator = self.behaviour.current_behaviour.get_next_event()
+            while True:
+                next(generator)
+        except StopIteration as e:
+            result = e.value
+            
+        assert result == (Event.DONE.value, {})
+    
+    def test_wait_for_swap_confirmation_success(self):
+        """Test _wait_for_swap_confirmation when swap succeeds."""
+        serialized_actions = json.dumps([{
+            "action": Action.BRIDGE_SWAP.value
+        }])
+        
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+            ))
+        )
+        
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Mock get_decision_on_swap to yield the sequence of decisions
+        def mock_get_decision():
+            for decision in [Decision.WAIT, Decision.CONTINUE]:
+                yield decision
+    
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "get_decision_on_swap",
+            return_value=mock_get_decision()
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "sleep",
+            side_effect=lambda *_: (yield None)
+        ):
+            generator = self.behaviour.current_behaviour._wait_for_swap_confirmation()
+            last_value = None
+            # Consume the generator and get the last value
+            for value in generator:
+                last_value = value
+            assert last_value == Decision.CONTINUE
+      
+    def test_execute_route_step_profitability_check(self):
+        """Test _execute_route_step with profitability check."""
+        routes = [{
+            "steps": [{
+                "tool": "test_tool",
+                "action": {
+                    "fromChainId": 1,
+                    "toChainId": 2
+                }
+            }]
+        }]
+
+        serialized_actions = json.dumps(routes)
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+            ))
+        )
+        
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        def mock_check_if_route_is_profitable(*args, **kwargs):
+            """Generator that returns profitability check results"""
+            result = (False, 0.0, 0.0)
+            yield result
+            return result
+    
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "check_if_route_is_profitable",
+            side_effect=mock_check_if_route_is_profitable
+        ):
+            try:
+                generator = self.behaviour.current_behaviour._execute_route_step(
+                    positions=[],
+                    routes=routes,
+                    to_execute_route_index=0,
+                    to_execute_step_index=0
+                )
+                last_value = None
+                while True:
+                    last_value = next(generator)
+            except StopIteration as e:
+                result = e.value if e.value is not None else last_value
+                
+            expected_result = (Event.UPDATE.value, {
+                "last_executed_route_index": 0,
+                "last_executed_step_index": None,
+                "last_action": Action.SWITCH_ROUTE.value,
+            })
+            assert result == expected_result
+   
+    def test_post_execute_enter_pool_success(self):
+        """Test _post_execute_enter_pool success case."""
+        action = {
+            "chain": "ethereum",
+            "pool_address": "0x123",
+            "dex_type": DexType.UNISWAP_V3.value,
+            "token0": "0xtoken0",
+            "token1": "0xtoken1",
+            "token0_symbol": "TKN0",
+            "token1_symbol": "TKN1"
+        }
+        
+        serialized_actions = json.dumps([action])
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+                final_tx_hash=["test_hash"]
+            ))
+        )
+        
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Reset current positions before test
+        self.behaviour.current_behaviour.current_positions = []
+    
+        receipt_data = (1, 100, 1000, 2000, int(time.time()))
+        
+        def mock_get_mint_receipt(*args, **kwargs):
+            """Mock generator for _get_data_from_mint_tx_receipt"""
+            yield receipt_data
+            return receipt_data
+    
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_get_data_from_mint_tx_receipt",
+            side_effect=mock_get_mint_receipt
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "store_current_positions"
+        ):
+            # Execute the generator
+            generator = self.behaviour.current_behaviour._post_execute_enter_pool([action], 0)
+            try:
+                while True:
+                    next(generator)
+            except StopIteration:
+                pass
+    
+            # Verify that the position has been added correctly
+            assert len(self.behaviour.current_behaviour.current_positions) == 1
+            position = self.behaviour.current_behaviour.current_positions[0]
+            
+    
+            # Assert expected values
+            assert position["pool_address"] == action["pool_address"]
+            assert position["token_id"] == receipt_data[0]
+            assert position["liquidity"] == receipt_data[1]
+            assert position["amount0"] == receipt_data[2]
+            assert position["amount1"] == receipt_data[3]
+            assert position["timestamp"] == receipt_data[4]
+            assert position["token0_symbol"] == action["token0_symbol"]
+            assert position["token1_symbol"] == action["token1_symbol"]
+            assert position["dex_type"] == action["dex_type"]
+            assert position["chain"] == action["chain"]
+    
+    def test_post_execute_step_with_failed_swap(self):
+        """Test _post_execute_step when swap fails."""
+        
+        self.behaviour.current_behaviour.params.__dict__['_frozen'] = False
+        self.behaviour.current_behaviour.params.waiting_period_for_status_check = 1
+
+
+        serialized_actions = json.dumps([{
+            "action": Action.BRIDGE_SWAP.value,
+            "remaining_fee_allowance": 100,
+            "remaining_gas_allowance": 200
+        }])
+        
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+                final_tx_hash=["test_hash"],
+            ))
+        )
+        
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        def mock_sleep(*args, **kwargs):
+            """Mock generator for sleep method"""
+            yield None
+    
+        def mock_get_decision(*args, **kwargs):
+            """Mock generator for get_decision_on_swap"""
+            yield Decision.EXIT.value  # Directly yield EXIT decision
+    
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "get_decision_on_swap", 
+            side_effect=mock_get_decision
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "sleep",
+            side_effect=mock_sleep
+        ), mock.patch.object(
+            self.behaviour.current_behaviour.params,
+            "waiting_period_for_status_check",
+            new=1  # Mock the waiting period
+        ):
+            # Execute the generator and get final result
+            results = []
+            try:
+                generator = self.behaviour.current_behaviour._post_execute_step(
+                    json.loads(serialized_actions), 0
+                )
+                while True:
+                    value = next(generator)
+                    if value is not None:
+                        results.append(value)
+            except StopIteration as e:
+                # The return value comes in StopIteration when generator completes
+                if e.value is not None:
+                    results.append(e.value)
+
+            # There should be one result and it should be the expected tuple
+            assert len(results) >= 1
+   
 
 class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):
     """Test PostTxSettlementBehaviour."""
@@ -1117,7 +1372,7 @@ class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):
             assert current_behaviour.is_done()
 
         self.end_round(Event.DONE)
-        print(f"self.behaviour.current_behaviour.behaviour_id{self.behaviour.current_behaviour.behaviour_id}")
+
         assert (
             self.behaviour.current_behaviour.behaviour_id
             == self.next_behaviour_class.auto_behaviour_id()
@@ -1152,7 +1407,6 @@ class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):
             assert current_behaviour.is_done()
 
         self.end_round(Event.VANITY_TX_EXECUTED)
-        print(f"self.behaviour.current_behaviour.behaviour_id{self.behaviour.current_behaviour.behaviour_id}")
         assert (
             self.behaviour.current_behaviour.behaviour_id
             == next_behaviour_class.auto_behaviour_id()

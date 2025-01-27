@@ -644,7 +644,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
             math.ceil(
                 max(liveness_period, (current_timestamp - last_ts_checkpoint))
                 * liveness_ratio
-                // LIVENESS_RATIO_SCALE_FACTOR
+                / LIVENESS_RATIO_SCALE_FACTOR
             )
             + REQUIRED_REQUESTS_SAFETY_MARGIN
         )

@@ -36,8 +36,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeieuvvbnvjt6uvfdjzavwgh7njoy5smwaf642o2gl2sfqvyajrj6je
-- valory/optimus_abci:0.1.0:bafybeicipivklpycfysz4ocmgzedtdjs25xevut5czfor4vcpqlnukkdny
+- valory/liquidity_trader_abci:0.1.0:bafybeienfit7eqpgg4nhd7rzcfe3t3s4u3sfug7phtwnc4fuo3nxynbtsu
+- valory/optimus_abci:0.1.0:bafybeib4qc5l6mxly3hjjrjtqy4ikhxf2qf4ujzrceawioiyrhi7kivi4m
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -45,9 +45,9 @@ skills:
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq
 - valory/max_apr_selection:0.1.0:bafybeifflo6ijwr6fee6zvaj5e5sqkkzhf2j46njayhfumn4bynlalsz4i
-- valory/balancer_pools_search:0.1.0:bafybeid6fcwa525kbk5yl4fmvhs6yazv7nybgejlrdjltdooump7n4ng5i
-- valory/uniswap_pools_search:0.1.0:bafybeieqbjjofk375ykpwinl6wjfdpq3j7a3kbavxti7vlwws5ivrr3ecy
-- valory/asset_lending:0.1.0:bafybeigiracbkzmitjwfkw3gmz74ldqar4avpv2ycrohedtnvvay4bsn7q
+- valory/balancer_pools_search:0.1.0:bafybeigacfwml5k4lhar33frqgxssgqqoqckhmabhcpnrtrhwzi7mte2b4
+- valory/uniswap_pools_search:0.1.0:bafybeib6po22vum6uixlft2zqpxgsekjeccbzs75ii5xbi4rl5ggwotsky
+- valory/asset_lending:0.1.0:bafybeihmzaaidghrdvre7zkbdds3xc3jk4xqlas7kw5abb6hympzsodzp4
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -253,13 +253,13 @@ models:
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       gas_cost_info_filename: ${str:gas_costs.json}
-      min_swap_amount_threshold: ${int:10}
+      min_swap_amount_threshold: ${int:5}
       max_fee_percentage: ${float:0.02}
       max_gas_percentage: ${float:0.25}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["mode"]}
-      staking_chain: ${str:}
-      file_hash_to_strategies: ${str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeifflo6ijwr6fee6zvaj5e5sqkkzhf2j46njayhfumn4bynlalsz4i":"max_apr_selection","bafybeicflgni42o7pqwekyyoidcglhlrfxiumyjncg6b2ci6b6qqmvk5ta":"balancer_pools_search","bafybeieqbjjofk375ykpwinl6wjfdpq3j7a3kbavxti7vlwws5ivrr3ecy":"uniswap_pools_search","bafybeigiracbkzmitjwfkw3gmz74ldqar4avpv2ycrohedtnvvay4bsn7q":"asset_lending"}}
+      staking_chain: ${str:""}
+      file_hash_to_strategies: ${str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeifflo6ijwr6fee6zvaj5e5sqkkzhf2j46njayhfumn4bynlalsz4i":"max_apr_selection","bafybeigacfwml5k4lhar33frqgxssgqqoqckhmabhcpnrtrhwzi7mte2b4":"balancer_pools_search","bafybeib6po22vum6uixlft2zqpxgsekjeccbzs75ii5xbi4rl5ggwotsky":"uniswap_pools_search","bafybeihmzaaidghrdvre7zkbdds3xc3jk4xqlas7kw5abb6hympzsodzp4":"asset_lending"}}
       strategies_kwargs: ${str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       selected_strategies: ${list:["asset_lending","balancer_pools_search"]}
       selected_protocols: ${list:["BALANCER","UNISWAP_V3","STURDY"]}

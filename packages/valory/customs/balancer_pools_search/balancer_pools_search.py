@@ -143,7 +143,7 @@ def get_filtered_pools(pools, current_positions):
     qualifying_pools = []
     for pool in pools:
         mapped_type = SUPPORTED_POOL_TYPES.get(pool.get('type'))
-        if mapped_type and len(pool.get('poolTokens', [])) == 2 and pool.get('address') not in current_positions:
+        if mapped_type and len(pool.get('poolTokens', [])) == 2 and Web3.to_checksum_address(pool.get('address')) not in current_positions:
             pool['type'] = mapped_type
             pool['apr'] = get_total_apr(pool)
             pool['tvl'] = pool.get('dynamicData', {}).get('totalLiquidity', 0)

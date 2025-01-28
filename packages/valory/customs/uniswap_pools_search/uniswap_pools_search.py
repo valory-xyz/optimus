@@ -120,7 +120,7 @@ def get_filtered_pools(pools, current_positions) -> List[Dict[str, Any]]:
         apr = calculate_apr(daily_volume, tvl, fee_rate)
         pool["apr"] = apr
         pool["tvl"] = tvl
-        if pool['id'] not in current_positions:
+        if Web3.to_checksum_address(pool['id']) not in current_positions:
             qualifying_pools.append(pool)
 
     if not qualifying_pools:

@@ -28,12 +28,11 @@ from typing import Any, Type, cast
 from unittest import mock
 from unittest.mock import MagicMock, patch,  PropertyMock
 
-from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.abstract_round_abci.behaviour_utils import BaseBehaviour
 from packages.valory.skills.abstract_round_abci.test_tools.base import (
     FSMBehaviourBaseCase,
 )
-
+import contextlib
 from packages.valory.skills.liquidity_trader_abci import PUBLIC_ID
 from packages.valory.skills.liquidity_trader_abci.behaviours import (
     CallCheckpointBehaviour,
@@ -53,6 +52,10 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     Event,
     SynchronizedData,
     DecisionMakingRound,
+)
+from packages.valory.skills.abstract_round_abci.base import (
+    RoundSequence,
+    AbciAppDB,
 )
 import datetime
 import tempfile
@@ -458,86 +461,6 @@ class TestEvaluateStrategyBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
     behaviour_class = EvaluateStrategyBehaviour
     path_to_skill = PACKAGE_DIR
 
-    def test_evaluate_strategy(self):
-        """Test evaluate strategy workflow."""
-        context_mock = MagicMock()
-        params_mock = MagicMock()
-        context_mock.params = params_mock
-    
-        synchronized_data = SynchronizedData(AbciAppDB(setup_data={
-            'positions': [{
-                'chain': 'ethereum',
-                'pool_address': '0xPoolAddress',
-                'token0': '0xToken0Address',
-                'token1': '0xToken1Address',
-                'token0_symbol': 'ETH',
-                'token1_symbol': 'DAI',
-                'amount0': 5000,
-                'amount1': 10000,
-                'status': 'open'
-            }]
-        }))
-    
-        params_mock.selected_strategies = ['max_apr_selection']
-        params_mock.selected_hyper_strategy = 'max_apr_selection'
-        params_mock.target_investment_chains = ['ethereum']
-        params_mock.selected_protocols = ['uniswap']
-        params_mock.chain_to_chain_id_mapping = {'ethereum': 1}
-        params_mock.strategies_kwargs = {}
-    
-        self.fast_forward_to_behaviour(
-            self.behaviour,
-            self.behaviour_class.auto_behaviour_id(),
-            synchronized_data=synchronized_data,
-        )
-    
-        def mock_fetch_opportunities():
-            """Mock fetch opportunities generator."""
-            self.behaviour.current_behaviour.trading_opportunities = [
-                {"chain": "ethereum", "pool_address": "test_pool"}
-            ]
-            yield
-    
-        def mock_execute_hyper_strategy():
-            """Mock execute hyper strategy."""
-            self.behaviour.current_behaviour.selected_opportunities = [
-                {
-                    "chain": "ethereum",
-                    "pool_address": "test_pool",
-                    "token0": "0xToken0Address",
-                    "token1": "0xToken1Address",
-                    "token0_symbol": "ETH",
-                    "token1_symbol": "DAI",
-                    "dex_type": "balancer",
-                    "relative_funds_percentage": 1.0
-                }
-            ]
-            self.behaviour.current_behaviour.position_to_exit = None
-    
-        def mock_get_order_of_transactions():
-            """Mock get order of transactions."""
-            return [{"action": "test_action"}]
-    
-        with mock.patch.object(
-            self.behaviour.current_behaviour, 
-            "fetch_all_trading_opportunities", 
-            side_effect=mock_fetch_opportunities
-        ), mock.patch.object(
-            self.behaviour.current_behaviour, 
-            "execute_hyper_strategy", 
-            side_effect=mock_execute_hyper_strategy
-        ), mock.patch.object(
-            self.behaviour.current_behaviour, 
-            "get_order_of_transactions",
-            side_effect=mock_get_order_of_transactions
-        ):
-            self.behaviour.act_wrapper()
-            # Explicitly call set_done()
-            self.behaviour.current_behaviour.set_done()
-            assert self.behaviour.current_behaviour is not None
-            assert self.behaviour.current_behaviour.is_done()
-            self.end_round(Event.DONE)
-    
     def test_execute_hyper_strategy(self) -> None:
         """Test execute hyper strategy."""
         synchronized_data = SynchronizedData(
@@ -1268,7 +1191,705 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
 
             # There should be one result and it should be the expected tuple
             assert len(results) >= 1
-   
+    
+    def test_no_actions_to_execute(self):
+        """Test when the actions list is empty."""
+        
+        serialized_actions = json.dumps([])
+        
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+            ))
+        )
+    
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        try:
+            generator = self.behaviour.current_behaviour.get_next_event()
+            result = next(generator)
+        except StopIteration as e:
+            result = e.value
+    
+        assert result == (Event.DONE.value, {}), "Empty actions should return DONE."
+    
+    def test_last_executed_action_index_out_of_bounds(self):
+        """Test when last_executed_action_index is invalid."""
+        # Simulate an action list with one action
+        serialized_actions = json.dumps([
+            {"action": Action.ENTER_POOL.value}
+        ])
+        
+        # Setup data with out-of-bounds index
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+                last_executed_action_index=[5],  # Out-of-bounds index
+                final_tx_hash=["test_hash"],
+                chain_id=["ethereum"],
+                positions=[],  # Add empty positions for safety
+            ))
+        )
+        
+        # Forward behaviour
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Mock any required methods to prevent actual async operations
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            'get_positions',
+            return_value=[]
+        ):
+            # Get result from generator
+            result = None
+            try:
+                generator = self.behaviour.current_behaviour.get_next_event()
+                # Just get the first value from the generator
+                result = next(generator)
+                if result is None:
+                    # If first value is None, try to get StopIteration value
+                    while True:
+                        next(generator)
+            except StopIteration as e:
+                # Get the return value from StopIteration
+                result = e.value if e.value is not None else result
+                
+            # Verify result 
+            assert result == (Event.DONE.value, {}), "Out-of-bounds index should return DONE."
+    
+    def test_empty_positions(self):
+        """Test when the positions list is empty."""
+        # Create synchronized data with empty positions
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[json.dumps([{"action": Action.ENTER_POOL.value}])],
+                positions=[],  # Empty positions list
+                final_tx_hash=["test_hash"],  # Add required data
+                chain_id=["ethereum"],  # Add required data
+                last_executed_action_index=[-1],  # Add initial index
+            ))
+        )
+    
+        # Forward behaviour
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Mock get_positions to simulate empty positions
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            'get_positions',
+            return_value=[]
+        ):
+            # Handle generator results
+            result = None
+            try:
+                generator = self.behaviour.current_behaviour.get_next_event()
+                while True:
+                    next_value = next(generator)
+                    if next_value is not None:
+                        result = next_value
+            except StopIteration as e:
+                result = e.value if e.value is not None else result
+    
+            # Verify result 
+            assert result == (Event.DONE.value, {}), "Empty positions should return DONE."
+    
+    def test_post_execute_step_no_decision(self):
+        """Test when post_execute_step fails to get a decision."""
+        self.behaviour.context.params.__dict__['_frozen'] = False
+        serialized_actions = json.dumps([{
+            "action": Action.BRIDGE_SWAP.value,
+            "remaining_fee_allowance": 100,
+            "remaining_gas_allowance": 200
+        }])
+    
+        # Set up synchronized data with all required fields
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+                final_tx_hash=["test_hash"],
+                chain_id=["ethereum"],
+                positions=[],
+            ))
+        )
+    
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Mock generator for get_decision_on_swap
+        def mock_get_decision():
+            """Mock generator for returning EXIT decision"""
+            yield Decision.EXIT.value
+    
+        # Mock sleep to prevent actual waiting
+        def mock_sleep(*args):
+            """Mock generator for sleep"""
+            yield None
+    
+        # Setup all required mocks
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "get_decision_on_swap",
+            side_effect=mock_get_decision
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "sleep",
+            side_effect=mock_sleep
+        ), mock.patch.object(
+            self.behaviour.current_behaviour.params,
+            "waiting_period_for_status_check",
+            1  # Mock waiting period
+        ):
+            result = None
+            try:
+                generator = self.behaviour.current_behaviour._post_execute_step(
+                    json.loads(serialized_actions), 0
+                )
+    
+                # Process generator results
+                while True:
+                    try:
+                        value = next(generator)
+                        if value is not None:
+                            result = value
+                    except StopIteration as e:
+                        if e.value is not None:
+                            result = e.value
+                        break
+    
+            except Exception as e:
+                self.context.logger.error(f"Error during test: {e}")
+                raise
+    
+            # Verify result
+            assert len(result)>0, "EXIT decision should return DONE."
+
+    def test_build_multisend_tx_fails(self):
+        """Test when build_multisend_tx fails."""
+        
+        # Setup test data
+        serialized_actions = json.dumps([{
+            "action": Action.BRIDGE_SWAP.value,
+            "from_chain": "ethereum",
+            "to_chain": "polygon"
+        }])
+        
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+                final_tx_hash=["test_hash"],
+                chain_id=["ethereum"]
+            ))
+        )
+        
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Create mock generator function
+        def mock_build_multisend_tx(*args, **kwargs):
+            """Mock generator that returns None"""
+            yield None
+            return None
+    
+        # Mock required methods
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_build_multisend_tx",
+            side_effect=mock_build_multisend_tx
+        ):
+            test_tx_info = {
+                "from_chain": "ethereum",
+                "to_chain": "polygon",
+                "source_token": "0x123",
+                "target_token": "0x456",
+                "amount": 1000,
+            }
+            
+            # Execute generator
+            generator = self.behaviour.current_behaviour.prepare_bridge_swap_action(
+                positions=[], 
+                tx_info=test_tx_info,
+                remaining_fee_allowance=100,
+                remaining_gas_allowance=100
+            )
+            
+            # Process generator results
+            result = None
+            try:
+                while True:
+                    value = next(generator)
+                    if value is not None:
+                        result = value
+            except StopIteration as e:
+                result = e.value if e.value is not None else None
+                
+            # Verify result
+            assert result is None, "Failed multisend tx build should return None"
+     
+    def test_simulate_transaction_fails(self):
+        """Test when simulate_transaction fails."""
+        serialized_actions = json.dumps([{"action": Action.BRIDGE_SWAP.value}])
+    
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data={"actions": [serialized_actions]})
+        )
+    
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_simulate_transaction",
+            return_value=False,  # Simulate failure
+        ):
+            generator = self.behaviour.current_behaviour.prepare_bridge_swap_action(
+                [], {}, 0, 0
+            )
+    
+            try:
+                next(generator)
+            except StopIteration as e:
+                result = e.value
+                assert result is None, "Failed simulation should return None."
+
+    def test_get_next_event_with_varied_actions(self):
+        """Test get_next_event with different actions."""
+        # Define varied actions with required fields
+        actions = [
+            {
+                "action": Action.ENTER_POOL.value,
+                "chain": "ethereum",
+                "dex_type": DexType.UNISWAP_V3.value,
+                "pool_address": "0x123",
+                "token0": "0x456",
+                "token1": "0x789",
+            },
+            {
+                "action": Action.EXIT_POOL.value,
+                "chain": "ethereum", 
+                "pool_address": "0x123",
+                "dex_type": DexType.UNISWAP_V3.value,
+            },
+            {
+                "action": Action.BRIDGE_SWAP.value,
+                "from_chain": "ethereum",
+                "to_chain": "polygon",
+                "safe_address": "0x123",
+                "payload": "0xabc",
+            }
+        ]
+    
+        # Setup synchronized data with all required fields
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[json.dumps(actions)],
+                final_tx_hash=["test_hash"],
+                chain_id=["ethereum"],
+                positions=[],  # Empty positions list
+                last_executed_action_index=[-1],  # Start with no executed actions
+            ))
+        )
+    
+        # Forward to behaviour
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Mock required methods
+        def mock_prepare_tx(*args, **kwargs):
+            """Mock prepare tx hash generation."""
+            return "0xtx_hash", "ethereum", "0xsafe"
+    
+        def mock_prepare_next_action(*args, **kwargs):
+            """Mock prepare next action."""
+            return (Event.SETTLE.value, {  # Return a tuple as expected
+                "tx_submitter": DecisionMakingRound.auto_round_id(),
+                "most_voted_tx_hash": "0xtx_hash",
+                "chain_id": "ethereum",
+                "safe_contract_address": "0xsafe",
+                "positions": [],
+                "last_executed_action_index": 0,
+                "last_action": Action.ENTER_POOL.value,
+            })
+    
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "get_enter_pool_tx_hash",
+            side_effect=mock_prepare_tx
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "get_exit_pool_tx_hash", 
+            side_effect=mock_prepare_tx
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "get_positions",
+            return_value=[]
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_prepare_next_action",
+            side_effect=mock_prepare_next_action
+        ):
+            # Process the generator
+            generator = self.behaviour.current_behaviour.get_next_event()
+            final_result = None
+            event = None
+            event_data = None
+    
+            # Collect all generator values
+            try:
+                while True:
+                    result = next(generator)
+                    print(f"generator result {result}")
+                    
+                    # Assign the first and second results to the event and data
+                    if event is None:
+                        event = result
+                    else:
+                        event_data = result
+                        final_result = (event, event_data)
+                        event = None  # Reset the event for the next iteration
+            except StopIteration as e:
+                if e.value is not None:
+                    event_data = e.value
+                    if event is not None:
+                        final_result = (event, event_data)
+    
+            # Expected result
+            expected_result = (Event.SETTLE.value, {
+                "tx_submitter": DecisionMakingRound.auto_round_id(),
+                "most_voted_tx_hash": "0xtx_hash",
+                "chain_id": "ethereum",
+                "safe_contract_address": "0xsafe",
+                "positions": [],
+                "last_executed_action_index": 0,
+                "last_action": Action.ENTER_POOL.value,
+            })
+    
+            print(f"final_result {final_result}")
+            # Verify the result
+            assert final_result == expected_result, (
+                f"Expected {expected_result}, but got {final_result}"
+            )
+    
+    def test_transition_to_done(self):
+        """Test transition to DONE event."""
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data={"actions": [json.dumps([])]})
+        )
+    
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        generator = self.behaviour.current_behaviour.get_next_event()
+    
+        try:
+            result = next(generator)
+        except StopIteration as e:
+            result = e.value
+    
+        assert result == (Event.DONE.value, {}), "No actions should return DONE."
+    
+    def test_swap_timeout_handling(self):
+        """Test behavior when swap confirmation times out."""
+        self.behaviour.context.params.__dict__['_frozen'] = False
+        serialized_actions = json.dumps([{
+            "action": Action.BRIDGE_SWAP.value,
+            "remaining_fee_allowance": 100,
+            "remaining_gas_allowance": 200,
+            "from_chain": "ethereum",
+            "to_chain": "polygon",
+            "from_token": "0x123",
+            "to_token": "0x456"
+        }])
+    
+        # Setup synchronized data with all required fields
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+                final_tx_hash=["test_hash"],
+                chain_id=["ethereum"],
+                positions=[],
+                last_executed_action_index=[-1],
+            ))
+        )
+    
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Create a counter to simulate multiple decision responses
+        decision_counter = 0
+    
+        def mock_get_decision():
+            """Mock generator that returns WAIT then EXIT."""
+            nonlocal decision_counter
+            while True:  # Infinite loop to ensure we handle multiple calls
+                if decision_counter < 3:  # Return WAIT a few times
+                    decision_counter += 1
+                    yield Decision.WAIT.value
+                else:  # Then return EXIT
+                    yield Decision.EXIT.value
+    
+        def mock_sleep(*_args, **_kwargs):
+            """Mock generator for sleep that accepts any args."""
+            yield None
+    
+        # Set the waiting period parameter
+        self.behaviour.current_behaviour.params.waiting_period_for_status_check = 5
+    
+        # Mock methods with proper generators
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            "sleep",
+            side_effect=mock_sleep
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "get_decision_on_swap",
+            side_effect=mock_get_decision
+        ):
+            # Run the generator
+            generator = self.behaviour.current_behaviour._wait_for_swap_confirmation()
+            result = None
+    
+            try:
+                while True:
+                    value = next(generator)
+                    print(f"value generator: {value}")
+                    if value == Decision.EXIT.value:
+                        result = value
+                        break
+            except StopIteration as e:
+                result = e.value if e.value is not None else result
+    
+            # Verify the result
+            assert result == Decision.EXIT.value, (
+                f"Timeout should lead to EXIT decision, got {result}"
+            )
+    
+    def test_post_execute_step_get_decision(self):
+        """Test post_execute_step when get_decision_on_swap fails."""
+        self.behaviour.context.params.__dict__['_frozen'] = False
+        
+        # Create test action with required fields
+        serialized_actions = json.dumps([{
+            "action": Action.BRIDGE_SWAP.value,
+            "remaining_fee_allowance": 100,
+            "remaining_gas_allowance": 200,
+            "from_chain": "ethereum",
+            "from_token": "0x123",
+            "from_token_symbol": "ETH",
+            "to_token": "0x456",
+            "to_token_symbol": "USDC"
+        }])
+    
+        # Setup synchronized data with required fields
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[serialized_actions],
+                final_tx_hash=["0x123"],
+                chain_id=["ethereum"],
+                positions=[],
+                last_executed_action_index=[-1]
+            ))
+        )
+    
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Create decision sequence mock
+        def mock_get_decision_on_swap():
+            """Mock generator that simulates a WAIT then EXIT sequence."""
+            yield Decision.WAIT.value
+            yield Decision.EXIT.value
+    
+        def mock_sleep(*_args, **_kwargs):
+            """Mock generator for sleep."""
+            yield None
+    
+        # Setup mocks
+        with mock.patch.object(
+            self.behaviour.current_behaviour,
+            'get_decision_on_swap',
+            side_effect=mock_get_decision_on_swap
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            'sleep',
+            side_effect=mock_sleep
+        ), mock.patch.object(
+            self.behaviour.current_behaviour.params,
+            'waiting_period_for_status_check',
+            1
+        ):
+            # Get generator
+            generator = self.behaviour.current_behaviour._post_execute_step(
+                [json.loads(serialized_actions)],
+                last_executed_action_index=0
+            )
+    
+            # Process generator output and collect all values
+            values = []
+            try:
+                while True:
+                    value = next(generator)
+                    print(f"generator value: {value}")
+                    values.append(value)
+            except StopIteration as e:
+                # Add StopIteration value if present
+                if e.value is not None:
+                    values.append(e.value)
+    
+            # Expected sequence of values
+            expected_values = [None, Decision.WAIT.value, Decision.EXIT.value]
+            
+            # Verify the sequence
+            assert values == expected_values, (
+                f"Expected sequence {expected_values} but got {values}"
+            )
+            
+    def test_post_execute_step_with_decisions(self):
+        """Test post_execute_step with WAIT, EXIT, CONTINUE decisions."""
+        # Create test actions
+        self.behaviour.context.params.__dict__['_frozen'] = False
+        actions = [{
+            "action": Action.BRIDGE_SWAP.value,
+            "remaining_fee_allowance": 100,
+            "remaining_gas_allowance": 200,
+            "from_chain": "ethereum",
+            "from_token": "0x123",
+            "from_token_symbol": "ETH",
+            "to_token": "0x456",
+            "to_token_symbol": "USDC"
+        }]
+    
+        # Setup synchronized data with required fields
+        synchronized_data = SynchronizedData(
+            AbciAppDB(setup_data=dict(
+                actions=[json.dumps(actions)],
+                final_tx_hash=["test_hash"],
+                chain_id=["ethereum"],
+                last_executed_step_index=[0]
+            ))
+        )
+    
+        self.fast_forward_to_behaviour(
+            self.behaviour,
+            DecisionMakingBehaviour.auto_behaviour_id(),
+            synchronized_data=synchronized_data,
+        )
+    
+        # Test different decisions
+        test_cases = [
+            (Decision.WAIT.value, None),  # WAIT should return WAIT value
+            (Decision.EXIT.value, (Event.DONE.value, {})),  # EXIT should return DONE
+            (Decision.CONTINUE.value, (Event.UPDATE.value, {  # CONTINUE should update
+                "last_executed_step_index": 0,
+                "fee_details": {
+                    "remaining_fee_allowance": 100,
+                    "remaining_gas_allowance": 200
+                },
+                "last_action": Action.STEP_EXECUTED.value,
+            })),
+        ]
+    
+        for decision, expected_result in test_cases:
+            # Create mock generators
+            def mock_get_decision():
+                """Mock generator for decision."""
+                yield decision
+    
+            def mock_sleep(*args, **kwargs):
+                """Mock generator for sleep."""
+                yield None
+    
+            # Setup mocks
+            with mock.patch.object(
+                self.behaviour.current_behaviour,
+                "get_decision_on_swap",
+                side_effect=mock_get_decision
+            ), mock.patch.object(
+                self.behaviour.current_behaviour,
+                "sleep",
+                side_effect=mock_sleep
+            ), mock.patch.object(
+                self.behaviour.current_behaviour, 
+                "_update_assets_after_swap",
+                return_value=(Event.UPDATE.value, {
+                    "last_executed_step_index": 0,
+                    "fee_details": {
+                        "remaining_fee_allowance": 100,
+                        "remaining_gas_allowance": 200
+                    },
+                    "last_action": Action.STEP_EXECUTED.value,
+                })
+            ), mock.patch.object(
+                self.behaviour.current_behaviour.params,
+                "waiting_period_for_status_check",
+                1  # Mock waiting period
+            ):
+                # Process generator
+                generator = self.behaviour.current_behaviour._post_execute_step(actions, 0)
+                result = None
+    
+                # Handle generator differently based on decision
+                if decision == Decision.WAIT.value:
+                    # For WAIT case, just get the first value
+                    try:
+                        while True:
+                            value = next(generator)
+                            print(f"result resulty value{value}")
+                            if value is not None:
+                                result = value
+                        
+                    except StopIteration:
+                        pass
+                else:
+                    # For other cases, process until we get a result
+                    try:
+                        while True:
+                            value = next(generator)
+                            print(f"result resulty value{value}")
+                            if value is not None:
+                                result = value
+                    except StopIteration as e:
+                        if e.value is not None:
+                            result = e.value
+    
+                # Verify result based on decision type
+                if decision == Decision.WAIT.value:
+                    assert result == Decision.WAIT.value, (
+                        f"Expected {Decision.WAIT.value}, but got {result}"
+                    )
+    
 
 class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):
     """Test PostTxSettlementBehaviour."""

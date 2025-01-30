@@ -1,23 +1,27 @@
 import warnings
+
+
 warnings.filterwarnings("ignore")
 
-import requests
-from typing import Dict, Any, List, Optional
-import numpy as np
-from pycoingecko import CoinGeckoAPI
+import json
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 import pandas as pd
 import pyfolio as pf
-import json
-from web3 import Web3
+import requests
 from aea.helpers.logging import setup_logger
+from pycoingecko import CoinGeckoAPI
+from web3 import Web3
+
 
 # Configure _logger
 _logger = setup_logger(__name__)
 
 # Constants
 REQUIRED_FIELDS = ("chains", "lending_asset", "current_positions", "coingecko_api_key")
-STURDY = 'Sturdy'
+STURDY = "Sturdy"
 TVL_WEIGHT = 0.6
 APR_WEIGHT = 0.4
 TVL_PERCENTILE = 50
@@ -25,7 +29,9 @@ APR_PERCENTILE = 50
 SCORE_PERCENTILE = 80
 PERCENT_CONVERSION = 100
 PRICE_IMPACT = 0.01
-FETCH_AGGREGATOR_ENDPOINT = "https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators"
+FETCH_AGGREGATOR_ENDPOINT = (
+    "https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators"
+)
 
 # Map known token symbols to CoinGecko IDs
 coingecko_name_to_id = {
@@ -63,8 +69,8 @@ def fetch_token_id(symbol):
 
     coin_list = get_coin_list()
     for coin in coin_list:
-        if coin['symbol'].lower() == symbol:
-            return coin['id']
+        if coin["symbol"].lower() == symbol:
+            return coin["id"]
 
     _logger.error(f"Failed to fetch id for coin with symbol: {symbol}")
     return None
@@ -97,16 +103,17 @@ def calculate_sharpe_ratio(returns, risk_free_rate=0.0003):
     """
     if len(returns) < 2:
         return np.nan  # Not enough data
-    
+
     excess_returns = returns - risk_free_rate
     return excess_returns.mean() / excess_returns.std(ddof=1)
+
 
 def get_sharpe_ratio_for_address(historical_data, address: str) -> float:
     records = []
     for _, entry in enumerate(historical_data):
-        timestamp = entry['timestamp']
+        timestamp = entry["timestamp"]
         mapping = {}
-        for ent in entry['doc']:
+        for ent in entry["doc"]:
             if len(ent.split("_")) < 2:
                 continue
             addr = ent.split("_")[1]
@@ -114,32 +121,38 @@ def get_sharpe_ratio_for_address(historical_data, address: str) -> float:
         if address not in mapping:
             continue
         address_key = mapping[address]
-        if address_key in entry['doc']:
-            data = entry['doc'][address_key]
-            base_apy = data.get('baseAPY', 0)
-            rewards_apy = data.get('rewardsAPY', 0)
-            records.append({
-                'timestamp': timestamp,
-                'base_apy': base_apy,
-                'rewards_apy': rewards_apy
-            })
+        if address_key in entry["doc"]:
+            data = entry["doc"][address_key]
+            base_apy = data.get("baseAPY", 0)
+            rewards_apy = data.get("rewardsAPY", 0)
+            records.append(
+                {
+                    "timestamp": timestamp,
+                    "base_apy": base_apy,
+                    "rewards_apy": rewards_apy,
+                }
+            )
 
     if not records:
-        return float('nan')
+        return float("nan")
 
     df = pd.DataFrame(records)
-    df['date'] = pd.to_datetime(df['timestamp'], unit='ms').dt.date
-    daily_df = df.groupby('date').median().reset_index()  
-    
-    daily_df['daily_return'] = daily_df.apply(lambda row: calculate_daily_returns(row['base_apy'], row['rewards_apy']), axis=1)
-    return calculate_sharpe_ratio(daily_df['daily_return'])
+    df["date"] = pd.to_datetime(df["timestamp"], unit="ms").dt.date
+    daily_df = df.groupby("date").median().reset_index()
+
+    daily_df["daily_return"] = daily_df.apply(
+        lambda row: calculate_daily_returns(row["base_apy"], row["rewards_apy"]), axis=1
+    )
+    return calculate_sharpe_ratio(daily_df["daily_return"])
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 
 
-def remove_irrelevant_fields(kwargs: Dict[str, Any], required_fields: Tuple) -> Dict[str, Any]:
+def remove_irrelevant_fields(
+    kwargs: Dict[str, Any], required_fields: Tuple
+) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in required_fields}
 
 
@@ -152,7 +165,7 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
         response = requests.get(FETCH_AGGREGATOR_ENDPOINT)
         response.raise_for_status()
         result = response.json()
-        if 'errors' in result:
+        if "errors" in result:
             _logger.error(f"REST API Errors: {result['errors']}")
             _aggregators_cache = []
         else:
@@ -163,17 +176,23 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
     return _aggregators_cache
 
 
-def filter_aggregators(chains, aggregators, lending_asset, current_positions) -> List[Dict[str, Any]]:
+def filter_aggregators(
+    chains, aggregators, lending_asset, current_positions
+) -> List[Dict[str, Any]]:
     filtered_aggregators = []
     tvl_list = []
     apr_list = []
 
     # Filter by chain, asset, and exclude current_positions
     for aggregator in aggregators:
-        if aggregator.get("chainName") in chains and Web3.to_checksum_address(aggregator.get('address')) not in current_positions:
+        if (
+            aggregator.get("chainName") in chains
+            and Web3.to_checksum_address(aggregator.get("address"))
+            not in current_positions
+        ):
             if aggregator.get("asset", {}).get("address") == lending_asset:
-                total_apr = aggregator.get('apy', {}).get('total', 0)
-                tvl = aggregator.get('tvl', 0)
+                total_apr = aggregator.get("apy", {}).get("total", 0)
+                tvl = aggregator.get("tvl", 0)
                 tvl_list.append(tvl)
                 apr_list.append(total_apr)
                 aggregator["total_apr"] = total_apr
@@ -210,8 +229,12 @@ def filter_aggregators(chains, aggregators, lending_asset, current_positions) ->
         _logger.error("No suitable aggregator found after scoring.")
         return []
 
-    score_threshold = np.percentile([agg["score"] for agg in scored_aggregators], SCORE_PERCENTILE)
-    filtered_scored_aggregators = [agg for agg in scored_aggregators if agg["score"] >= score_threshold]
+    score_threshold = np.percentile(
+        [agg["score"] for agg in scored_aggregators], SCORE_PERCENTILE
+    )
+    filtered_scored_aggregators = [
+        agg for agg in scored_aggregators if agg["score"] >= score_threshold
+    ]
 
     filtered_scored_aggregators.sort(key=lambda x: x["score"], reverse=True)
 
@@ -226,30 +249,45 @@ def filter_aggregators(chains, aggregators, lending_asset, current_positions) ->
         return filtered_scored_aggregators
 
 
-def calculate_il_risk_score_for_lending(asset_token_1: str, asset_token_2: str, coingecko_api_key: str, time_period: int = 90) -> float:
+def calculate_il_risk_score_for_lending(
+    asset_token_1: str,
+    asset_token_2: str,
+    coingecko_api_key: str,
+    time_period: int = 90,
+) -> float:
     if not asset_token_1 or not asset_token_2:
-        _logger.error("Tokens are required. Cannot calculate IL risk score without asset tokens")
-        return float('nan')
+        _logger.error(
+            "Tokens are required. Cannot calculate IL risk score without asset tokens"
+        )
+        return float("nan")
 
     cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
 
     try:
-        prices_1 = cg.get_coin_market_chart_range_by_id(id=asset_token_1, vs_currency='usd',
-                                                        from_timestamp=from_timestamp, to_timestamp=to_timestamp)
-        prices_2 = cg.get_coin_market_chart_range_by_id(id=asset_token_2, vs_currency='usd',
-                                                        from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+        prices_1 = cg.get_coin_market_chart_range_by_id(
+            id=asset_token_1,
+            vs_currency="usd",
+            from_timestamp=from_timestamp,
+            to_timestamp=to_timestamp,
+        )
+        prices_2 = cg.get_coin_market_chart_range_by_id(
+            id=asset_token_2,
+            vs_currency="usd",
+            from_timestamp=from_timestamp,
+            to_timestamp=to_timestamp,
+        )
     except Exception as e:
         _logger.error(f"Error fetching price data: {e}")
-        return float('nan')
+        return float("nan")
 
-    prices_1_data = np.array([x[1] for x in prices_1['prices']])
-    prices_2_data = np.array([x[1] for x in prices_2['prices']])
+    prices_1_data = np.array([x[1] for x in prices_1["prices"]])
+    prices_2_data = np.array([x[1] for x in prices_2["prices"]])
 
     min_length = min(len(prices_1_data), len(prices_2_data))
     if min_length == 0:
-        return float('nan')
+        return float("nan")
 
     prices_1_data = prices_1_data[:min_length]
     prices_2_data = prices_2_data[:min_length]
@@ -281,41 +319,49 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 
     token_0_id = get_token_id(token0_symbol)
     if not token_0_id:
-        return float('nan')
+        return float("nan")
 
     for silo in silos:
-        token_1_symbol = silo['collateral'].lower()
+        token_1_symbol = silo["collateral"].lower()
         token_1_id = get_token_id(token_1_symbol)
 
         if token_1_id:
-            il_risk_score = calculate_il_risk_score_for_lending(token_0_id, token_1_id, coingecko_api_key)
+            il_risk_score = calculate_il_risk_score_for_lending(
+                token_0_id, token_1_id, coingecko_api_key
+            )
             il_risk_scores.append(il_risk_score)
         else:
             _logger.error(f"Failed to fetch token IDs for silo: {silo['collateral']}")
 
     if not il_risk_scores:
-        return float('nan')
+        return float("nan")
 
     return sum(il_risk_scores) / len(il_risk_scores)
 
 
 def analyze_vault_liquidity(aggregator):
-    tvl = float(aggregator.get('tvl', 0))
-    total_assets = float(aggregator.get('totalAssets', 0))
+    tvl = float(aggregator.get("tvl", 0))
+    total_assets = float(aggregator.get("totalAssets", 0))
 
     # If missing, try to fetch again from cached aggregators
     if not tvl or not total_assets:
         aggregators = fetch_aggregators()
         for item in aggregators:
-            if item['address'] == aggregator.get('address') or item['address'] == aggregator.get('pool_address'):
-                tvl = float(item.get('tvl', 0))
-                total_assets = float(item.get('totalAssets', 0))
+            if item["address"] == aggregator.get("address") or item[
+                "address"
+            ] == aggregator.get("pool_address"):
+                tvl = float(item.get("tvl", 0))
+                total_assets = float(item.get("totalAssets", 0))
                 break
 
     if not tvl or not total_assets:
-        return float('nan'), float('nan')
+        return float("nan"), float("nan")
 
-    depth_score = (np.log1p(tvl) * np.log1p(total_assets)) / (PRICE_IMPACT * 1000) if tvl and total_assets else 0
+    depth_score = (
+        (np.log1p(tvl) * np.log1p(total_assets)) / (PRICE_IMPACT * 1000)
+        if tvl and total_assets
+        else 0
+    )
     liquidity_risk_multiplier = max(0, 1 - (1 / depth_score)) if depth_score > 0 else 0
     max_position_size = 50 * (tvl * liquidity_risk_multiplier) / 100
 
@@ -324,54 +370,72 @@ def analyze_vault_liquidity(aggregator):
 
 def format_aggregator(aggregator) -> Dict[str, Any]:
     return {
-        "chain": aggregator['chainName'],
-        "pool_address": aggregator['address'],
+        "chain": aggregator["chainName"],
+        "pool_address": aggregator["address"],
         "dex_type": STURDY,
-        "token0_symbol": aggregator['asset']['symbol'],
-        "token0": aggregator['asset']['address'],
-        "apr": aggregator['total_apr'] * PERCENT_CONVERSION,
-        "whitelistedSilos": aggregator['whitelistedSilos'],
-        "il_risk_score": aggregator['il_risk_score'],
-        "sharpe_ratio": aggregator['sharpe_ratio'],
-        "depth_score": aggregator['depth_score'],
-        "max_position_size": aggregator['max_position_size']
+        "token0_symbol": aggregator["asset"]["symbol"],
+        "token0": aggregator["asset"]["address"],
+        "apr": aggregator["total_apr"] * PERCENT_CONVERSION,
+        "whitelistedSilos": aggregator["whitelistedSilos"],
+        "il_risk_score": aggregator["il_risk_score"],
+        "sharpe_ratio": aggregator["sharpe_ratio"],
+        "depth_score": aggregator["depth_score"],
+        "max_position_size": aggregator["max_position_size"],
     }
 
 
-def get_best_opportunities(chains, lending_asset, current_positions, coingecko_api_key) -> List[Dict[str, Any]]:
+def get_best_opportunities(
+    chains, lending_asset, current_positions, coingecko_api_key
+) -> List[Dict[str, Any]]:
     data = fetch_aggregators()
     if not data:
         return []
 
-    filtered_aggregators = filter_aggregators(chains, data, lending_asset, current_positions)
+    filtered_aggregators = filter_aggregators(
+        chains, data, lending_asset, current_positions
+    )
     if not filtered_aggregators:
         return []
 
     historical_data = fetch_historical_data()
 
     for aggregator in filtered_aggregators:
-        silos = aggregator.get('whitelistedSilos', [])
-        aggregator['il_risk_score'] = calculate_il_risk_score_for_silos(aggregator['asset']['symbol'], silos, coingecko_api_key)
-        aggregator['sharpe_ratio'] = get_sharpe_ratio_for_address(historical_data, aggregator['address'])
+        silos = aggregator.get("whitelistedSilos", [])
+        aggregator["il_risk_score"] = calculate_il_risk_score_for_silos(
+            aggregator["asset"]["symbol"], silos, coingecko_api_key
+        )
+        aggregator["sharpe_ratio"] = get_sharpe_ratio_for_address(
+            historical_data, aggregator["address"]
+        )
         depth_score, max_position_size = analyze_vault_liquidity(aggregator)
         aggregator["depth_score"] = depth_score
         aggregator["max_position_size"] = max_position_size
 
-    formatted_results = [format_aggregator(aggregator) for aggregator in filtered_aggregators]
+    formatted_results = [
+        format_aggregator(aggregator) for aggregator in filtered_aggregators
+    ]
 
     return formatted_results
 
 
-def calculate_metrics(position: Dict[str, Any], coingecko_api_key: str, **kwargs) -> Optional[Dict[str, Any]]:
-    il_risk_score = calculate_il_risk_score_for_silos(position.get("token0_symbol"), position.get('whitelistedSilos', []), coingecko_api_key)
+def calculate_metrics(
+    position: Dict[str, Any], coingecko_api_key: str, **kwargs
+) -> Optional[Dict[str, Any]]:
+    il_risk_score = calculate_il_risk_score_for_silos(
+        position.get("token0_symbol"),
+        position.get("whitelistedSilos", []),
+        coingecko_api_key,
+    )
     historical_data = fetch_historical_data()
-    sharpe_ratio = get_sharpe_ratio_for_address(historical_data, position['pool_address'])
+    sharpe_ratio = get_sharpe_ratio_for_address(
+        historical_data, position["pool_address"]
+    )
     depth_score, max_position_size = analyze_vault_liquidity(position)
     return {
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
         "max_position_size": max_position_size,
-        "depth_score": depth_score
+        "depth_score": depth_score,
     }
 
 
@@ -381,9 +445,9 @@ def run(*_args, **kwargs) -> Any:
         return {"error": f"Required kwargs {missing} were not provided."}
 
     required_fields = list(REQUIRED_FIELDS)
-    get_metrics = kwargs.get('get_metrics', False)
+    get_metrics = kwargs.get("get_metrics", False)
     if get_metrics:
-        required_fields.append('position')
+        required_fields.append("position")
 
     kwargs = remove_irrelevant_fields(kwargs, required_fields)
 

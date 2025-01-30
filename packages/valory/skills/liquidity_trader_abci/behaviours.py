@@ -555,17 +555,17 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                     if isinstance(assets, list):
                         if len(assets) >= 1:
                             position["token0"] = assets[0]
-                            position[
-                                "token0_symbol"
-                            ] = yield from self._get_token_symbol(
-                                position.get("chain"), assets[0]
+                            position["token0_symbol"] = (
+                                yield from self._get_token_symbol(
+                                    position.get("chain"), assets[0]
+                                )
                             )
                         if len(assets) >= 2:
                             position["token1"] = assets[1]
-                            position[
-                                "token1_symbol"
-                            ] = yield from self._get_token_symbol(
-                                position.get("chain"), assets[1]
+                            position["token1_symbol"] = (
+                                yield from self._get_token_symbol(
+                                    position.get("chain"), assets[1]
+                                )
                             )
                 if "status" not in position:
                     position["status"] = PositionStatus.OPEN.value
@@ -1664,13 +1664,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "current_positions": [
-                        pos.get("pool_address")
-                        for pos in self.current_positions
-                        if pos.get("status") == PositionStatus.OPEN.value
-                    ]
-                    if self.current_positions
-                    else [],
+                    "current_positions": (
+                        [
+                            pos.get("pool_address")
+                            for pos in self.current_positions
+                            if pos.get("status") == PositionStatus.OPEN.value
+                        ]
+                        if self.current_positions
+                        else []
+                    ),
                     "coingecko_api_key": self.coingecko.api_key,
                     "get_metrics": False,
                 }
@@ -2077,9 +2079,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 decimals = 18
             else:
                 decimals = yield from self._get_token_decimals(chain, token_address)
-            token_data["value"] = (
-                token_data["balance"] / (10**decimals)
-            ) * token_price
+            token_data["value"] = (token_data["balance"] / (10**decimals)) * token_price
 
         # Sort tokens by value in descending order and add the highest ones
         token_balances.sort(key=lambda x: x["value"], reverse=True)
@@ -2232,9 +2232,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         exit_pool_action = {
-            "action": Action.WITHDRAW.value
-            if self.position_to_exit.get("dex_type") == DexType.STURDY.value
-            else Action.EXIT_POOL.value,
+            "action": (
+                Action.WITHDRAW.value
+                if self.position_to_exit.get("dex_type") == DexType.STURDY.value
+                else Action.EXIT_POOL.value
+            ),
             "dex_type": self.position_to_exit.get("dex_type"),
             "chain": self.position_to_exit.get("chain"),
             "assets": [token.get("token") for token in tokens],
@@ -2983,16 +2985,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if not tx_hash:
             return Event.DONE.value, {}
-        
-        result = (Event.SETTLE.value, {
-            "tx_submitter": DecisionMakingRound.auto_round_id(),
-            "most_voted_tx_hash": tx_hash,
-            "chain_id": chain_id,
-            "safe_contract_address": safe_address,
-            "positions": positions,
-            "last_executed_action_index": current_action_index,
-            "last_action": last_action,
-        })
+
+        result = (
+            Event.SETTLE.value,
+            {
+                "tx_submitter": DecisionMakingRound.auto_round_id(),
+                "most_voted_tx_hash": tx_hash,
+                "chain_id": chain_id,
+                "safe_contract_address": safe_address,
+                "positions": positions,
+                "last_executed_action_index": current_action_index,
+                "last_action": last_action,
+            },
+        )
 
         self.context.logger.info(f"Result constructed: {result}")
 
@@ -3026,7 +3031,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"SWAP STATUS - {status}, SWAP SUBSTATUS - {sub_status}"
         )
-    
+
         if status == SwapStatus.DONE.value:
             # only continue if tx is fully completed
             return Decision.CONTINUE
@@ -4125,9 +4130,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-    def _get_data_from_mint_tx_receipt(
-        self, tx_hash: str, chain: str
-    ) -> Generator[
+    def _get_data_from_mint_tx_receipt(self, tx_hash: str, chain: str) -> Generator[
         None,
         None,
         Tuple[

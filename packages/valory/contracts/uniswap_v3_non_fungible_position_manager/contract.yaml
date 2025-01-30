@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiefxsx4zo3eefe6iyxflho4l3gx2ge7hjm7c62eiyw7zaag4ifbty
   build/NonfungiblePositionManager.json: bafybeihspdbkcgw2mo245bpblhgu3srl3ywynp7eeipzoczqlzcslu7t6y
-  contract.py: bafybeidiyhhxbpff27wmenq3tmhz6ytwkstw7zgi5jv4y6wndhlovoxvvq
+  contract.py: bafybeieg7mqwcnuol7rxsmu4o4u3qbvlxyyyeeur46cggg663apgfhblai
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: UniswapV3NonfungiblePositionManagerContract

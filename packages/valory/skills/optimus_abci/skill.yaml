@@ -15,17 +15,17 @@ fingerprint:
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
+- valory/http_server:0.22.0:bafybeihv56p7kx52gwv3oomachklzajvnxeddftp7oii5le3joyg4ccobe
 contracts: []
 protocols:
-- valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
+- valory/http:1.0.0:bafybeibhrpkqke55theyqggqj6gvg7ykvyis2zzykh6e73dzfhopcrm3pi
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
-- valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
-- valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeibbfa2xpyh5vnewzqjguzpdcubuo2x7zwbgbijxhoxzbwzmmexf7e
-- valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
+- valory/abstract_round_abci:0.1.0:bafybeidjvxyc6sp542rg5b5qq5bulnftvz3rernvla6wwf2j2dv5iayyny
+- valory/registration_abci:0.1.0:bafybeiajxxj4fdzhq7qi6x6gs2vtqv4uh62qk3h5wylh4bk3jkgmvw36xu
+- valory/reset_pause_abci:0.1.0:bafybeigcejuvup36nktcncsc4nfeljoapl6m6ar3sktjv3zrps6uwinsvq
+- valory/termination_abci:0.1.0:bafybeigwumchkrjfnpklvpwxbggexfoyq7lnyr6gyp2qxhn3nsmycasvvi
+- valory/liquidity_trader_abci:0.1.0:bafybeieomlwsu63o3ipr6tlwqp5del4h2pgejy2ieuenjwym64sqazszmy
+- valory/transaction_settlement_abci:0.1.0:bafybeifhvxjcdy7limvriand6iqmgughyqa2hnzmspbds3wncarwc2ondm
 behaviours:
   main:
     args: {}

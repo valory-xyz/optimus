@@ -25,7 +25,7 @@ import math
 import types
 from abc import ABC
 from collections import defaultdict
-from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
 from typing import (
@@ -644,7 +644,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
             math.ceil(
                 max(liveness_period, (current_timestamp - last_ts_checkpoint))
                 * liveness_ratio
-                // LIVENESS_RATIO_SCALE_FACTOR
+                / LIVENESS_RATIO_SCALE_FACTOR
             )
             + REQUIRED_REQUESTS_SAFETY_MARGIN
         )
@@ -1679,7 +1679,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         strategies_executables = self.shared_state.strategies_executables
 
-        with ProcessPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=4) as executor:
             future_to_strategy = {}
             futures = []
             for kwargs in strategy_kwargs_list:
@@ -1707,9 +1707,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for future, result in zip(futures, results):
                 next_strategy = future_to_strategy[future]
                 tried_strategies.add(next_strategy)
-                if result is None:
+                if not result:
+                    self.context.logger.error(f"Error in strategy {next_strategy}")
+                    continue
+
+                if "error" in result:
                     self.context.logger.error(
-                        f"Error in strategy {next_strategy}: result is None"
+                        f"Error in strategy {next_strategy}: {result.get('error')}"
                     )
                     continue
 
@@ -1877,7 +1881,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return actions
 
         # Prepare tokens for exit or investment
-        available_tokens = self._prepare_tokens_for_investment()
+        available_tokens = yield from self._prepare_tokens_for_investment()
         if available_tokens is None:
             return actions
         tokens.extend(available_tokens)
@@ -1981,7 +1985,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return exited_tokens
 
-    def _prepare_tokens_for_investment(self) -> Optional[List[Dict[str, Any]]]:
+    def _prepare_tokens_for_investment(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Prepare tokens for exit or investment, and append exit actions if needed."""
         tokens = []
 
@@ -1998,7 +2004,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
 
         # Get available tokens and extend tokens list
-        available_tokens = self._get_available_tokens()
+        available_tokens = yield from self._get_available_tokens()
         if available_tokens:
             tokens.extend(available_tokens)
 
@@ -2037,7 +2043,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         else:
             return None
 
-    def _get_available_tokens(self) -> Optional[List[Dict[str, Any]]]:
+    def _get_available_tokens(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Get tokens with the highest balances."""
         token_balances = []
 
@@ -2058,7 +2066,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Sort tokens by balance in descending order
         token_balances.sort(key=lambda x: x["balance"], reverse=True)
+        token_prices = yield from self._fetch_token_prices(token_balances)
 
+        # Calculate the relative value of each token
+        for token_data in token_balances:
+            token_address = token_data["token"]
+            chain = token_data["chain"]
+            token_price = token_prices.get(token_address, 0)
+            if token_address == ZERO_ADDRESS:
+                decimals = 18
+            else:
+                decimals = yield from self._get_token_decimals(chain, token_address)
+            token_data["value"] = (
+                token_data["balance"] / (10**decimals)
+            ) * token_price
+
+        # Sort tokens by value in descending order and add the highest ones
+        token_balances.sort(key=lambda x: x["value"], reverse=True)
+        token_balances = [
+            token
+            for token in token_balances
+            if token["value"] >= self.params.min_swap_amount_threshold
+        ]
         self.context.logger.info(
             f"Tokens selected for bridging/swapping: {token_balances}"
         )
@@ -2155,6 +2184,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         content = json.dumps(body).encode(UTF8) if body else None
 
         retries = 0
+
         while True:
             # Make the request
             response = yield from self.get_http_response(

@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeic3ntqr7d5i4mefv45gdgrwahg4exa7ne5bhbkpfm53k3p73kzqwi
-  behaviours.py: bafybeibskse67x3mcknighzjcsxpgnrjsjxxh67rzhynac3rhlqd3nokzi
+  behaviours.py: bafybeiebgspwpcy3twwjjun5624nqrfr7rhhyn6pwqail57ecgmokegezi
   dialogues.py: bafybeihfjd3453c4jc4pul4cnoszfq5olovefwq3futnfal2a3ecda4hry
   fsm_specification.yaml: bafybeieignzzisgfyhozxca6txqe3wkyexdzxaoctjtj2gbsn5kdxkhqji
   handlers.py: bafybeibsoowvbl5wiyy2h7rtjocmxm32zg3m2eaj7qofhqyyaa2vn7dioe
@@ -16,7 +16,7 @@ fingerprint:
   models.py: bafybeig35ep4o2f4nof65tzq7uizaoif7agjcjpghsy4mc6uocnabhaava
   payloads.py: bafybeibxnowhiejstrxdhk65l4ygbrciaew3twcmhkiyqzfifhtvvbcjra
   pool_behaviour.py: bafybeiabwfwxrmrjfjqelzlu42i5caw32a4vd4myifdkdtwp4xllxcd4om
-  pools/balancer.py: bafybeig2mdt6kf7thheusr55s22daaum2dl2ucalenrjl3d2xshcttqnj4
+  pools/balancer.py: bafybeiapgfdjhwdem2a5zzlmyacykoky6dh3alxdqvn4rsfuxcbnj6k2wm
   pools/uniswap.py: bafybeicvzxb3jhcbzlcvvrhuy5anyirdenygub3m2cbk2x43ikmk2j3yt4
   rounds.py: bafybeibhrwlbl2e7sa5t2ismrj5aqdj3cl5c5dqvvau3s6dd3y2zwa5aqe
   rounds_info.py: bafybeihynirytnwemmbaz4w5cuo2t7kph7d7x3274y6722a7n4hupeodby

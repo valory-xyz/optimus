@@ -356,26 +356,63 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
     """ % (chain, pool_id, timerange)
     try:
         response = requests.post("https://api-v3.balancer.fi/", json={'query': query})
-        data = response.json()['data']['poolGetSnapshots']
-        if not data:
+        data = response.json()
+        
+        # Add error checking for response structure
+        if not data or 'data' not in data or 'poolGetSnapshots' not in data['data']:
+            logger.error("Invalid response structure from API")
+            return None
+            
+        snapshots = data['data']['poolGetSnapshots']
+        if not snapshots:
             return None
         
-        df = pd.DataFrame(data)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+        # Convert to DataFrame with proper error handling
+        df = pd.DataFrame(snapshots)
+        
+        # Ensure timestamp conversion is safe
+        df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s', errors='coerce')
         df.set_index('timestamp', inplace=True)
-
-        df['sharePrice'] = pd.to_numeric(df['sharePrice'])
+        
+        # Convert numeric columns with error handling
+        df['sharePrice'] = pd.to_numeric(df['sharePrice'], errors='coerce')
+        df['fees24h'] = pd.to_numeric(df['fees24h'], errors='coerce')
+        df['totalLiquidity'] = pd.to_numeric(df['totalLiquidity'], errors='coerce')
+        
+        # Calculate returns with proper error handling
         price_returns = df['sharePrice'].pct_change()
-
-        df['fees24h'] = pd.to_numeric(df['fees24h'])
-        df['totalLiquidity'] = pd.to_numeric(df['totalLiquidity'])
-        fee_returns = df['fees24h'] / df['totalLiquidity']
+        fee_returns = df.apply(lambda x: float(x['fees24h']) / float(x['totalLiquidity']) 
+                             if x['totalLiquidity'] and float(x['totalLiquidity']) != 0 
+                             else np.nan, axis=1)
+        
+        # Combine returns and handle infinities/NaNs
         total_returns = (price_returns + fee_returns).dropna()
         total_returns = total_returns.replace([np.inf, -np.inf], np.nan)
-        sharpe_ratio = pf.timeseries.sharpe_ratio(total_returns)
-        return sharpe_ratio
+        
+        # Check if we have enough valid data
+        if len(total_returns) < 2:
+            logger.warning("Insufficient valid data points for Sharpe ratio calculation")
+            return None
+        
+        # Calculate Sharpe ratio with annualization
+        returns_mean = total_returns.mean() * 365  # Annualize mean
+        returns_std = total_returns.std() * np.sqrt(365)  # Annualize volatility
+        
+        if returns_std == 0:
+            logger.warning("Zero standard deviation in returns")
+            return None
+            
+        sharpe_ratio = returns_mean / returns_std
+        
+        # Validate final result
+        if not np.isfinite(sharpe_ratio):
+            logger.warning("Non-finite Sharpe ratio calculated")
+            return None
+            
+        return float(sharpe_ratio)
+        
     except Exception as e:
-        _logger.error(f"Error calculating Sharpe ratio: {e}")
+        logger.error(f"Error calculating Sharpe ratio: {str(e)}")
         return None
 
 def format_pool_data(pool) -> Dict[str, Any]:

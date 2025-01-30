@@ -30,25 +30,56 @@ def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
 def calculate_composite_score(pool, max_values):
-    """Calculate the composite score for a given pool."""
-    sharpe_ratio = pool.get("sharpe_ratio", math.nan)
-    depth_score = pool.get("depth_score", math.nan)
-    il_risk_score = pool.get("il_risk_score", math.nan)
-
-    if math.isnan(sharpe_ratio) or math.isnan(depth_score) or math.isnan(il_risk_score):
-        return 0
-
-    # Normalize metrics
-    normalized_sharpe_ratio = sharpe_ratio / max_values['sharpe_ratio']
-    normalized_depth_score = depth_score / max_values['depth_score']
-    normalized_il_risk_score = (abs(il_risk_score)) / abs(max_values['il_risk_score'])
-
-    # Calculate composite score
-    return (
-        SHARPE_RATIO_WEIGHT * normalized_sharpe_ratio +
-        DEPTH_SCORE_WEIGHT * normalized_depth_score +
-        IL_RISK_SCORE_WEIGHT * normalized_il_risk_score
+    """
+    Calculate the composite score for a given pool using normalized metrics and weights.
+    
+    Args:
+        pool (dict): Dictionary containing pool metrics (sharpe_ratio, depth_score, il_risk_score)
+        max_values (dict): Dictionary containing maximum values for normalization
+    
+    Returns:
+        float: Weighted composite score
+    """
+    # Extract metrics with default NaN values
+    metrics = {
+        'sharpe_ratio': pool.get('sharpe_ratio', math.nan),
+        'depth_score': pool.get('depth_score', math.nan),
+        'il_risk_score': pool.get('il_risk_score', math.nan)
+    }
+    
+    _logger.info(f"Raw metrics: {metrics}")
+    
+    # Replace NaN values with 0
+    for key in metrics:
+        if math.isnan(metrics[key]):
+            metrics[key] = 0
+    
+    # Calculate normalized values with zero handling
+    normalized_values = {}
+    for key in metrics:
+        if metrics[key] == 0 or max_values[key] == 0:
+            normalized_values[key] = 0
+        else:
+            value = metrics[key] / max_values[key]
+            normalized_values[key] = abs(value) if key == 'il_risk_score' else value
+            
+        _logger.info(f"Normalized {key}: {normalized_values[key]}")
+    
+    _logger.info(f"All normalized values: {normalized_values}")
+    
+    # Calculate weighted composite score
+    weights = {
+        'sharpe_ratio': SHARPE_RATIO_WEIGHT,
+        'depth_score': DEPTH_SCORE_WEIGHT,
+        'il_risk_score': IL_RISK_SCORE_WEIGHT
+    }
+    
+    composite_score = sum(
+        weights[key] * normalized_values[key]
+        for key in normalized_values
     )
+    
+    return composite_score
 
 def get_max_values(pools):
     """Get maximum values for normalization."""
@@ -93,19 +124,15 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
         depth_score = opportunity.get("depth_score", 0)
         il_risk_score = opportunity.get("il_risk_score", float('inf'))
 
-        _logger.info(f"Evaluating opportunity: {opportunity}")
         if not isinstance(sharpe_ratio, (int, float)) or not isinstance(depth_score, (int, float)) or not isinstance(il_risk_score, (int, float)):
             _logger.info("Invalid values for risk metrics")
             continue
-
         if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
             _logger.info(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
             continue
-
         if depth_score <= DEPTH_SCORE_THRESHOLD:
             _logger.info(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
             continue
-
         if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
             _logger.info(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
             continue
@@ -119,18 +146,17 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
 
     # Calculate max values for normalization
     max_values = get_max_values(filtered_opportunities)
-
     # Calculate composite scores for filtered opportunities
     for opportunity in filtered_opportunities:
         opportunity["composite_score"] = calculate_composite_score(opportunity, max_values)
 
     position_to_exit = {}
     optimal_opportunities = []
-    
+  
     if current_positions:
         # Calculate composite score for the current pool
         current_composite_scores = [calculate_composite_score(pool, max_values) for pool in current_positions]
-
+      
         # Identify the least performing current pool
         least_performing_index = current_composite_scores.index(min(current_composite_scores))
         least_performing_score = current_composite_scores[least_performing_index]
@@ -147,7 +173,6 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
             better_opportunities.sort(key=lambda x: x["composite_score"], reverse=True)
             optimal_opportunities = [better_opportunities[0]]
             optimal_opportunities[0]["relative_funds_percentage"] = 1.0
-            _logger.info(f"Top opportunity found with composite score: {optimal_opportunities[0]['composite_score']}")
         else:
             _logger.warning(f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}")
             return {"optimal_strategies": [], "position_to_exit": {}}
@@ -168,11 +193,9 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
 
         # Calculate total composite score for optimal opportunities
         total_composite_score = sum(opportunity["composite_score"] for opportunity in optimal_opportunities)
-
         # Assign percentage of funds to each optimal opportunity
         for opportunity in optimal_opportunities:
             opportunity["funds_percentage"] = (opportunity["composite_score"] / total_composite_score) * 100
-
         # Calculate relative percentages
         funds_percentages = [opportunity["funds_percentage"] for opportunity in optimal_opportunities]
         relative_percentages = calculate_relative_percentages(funds_percentages)

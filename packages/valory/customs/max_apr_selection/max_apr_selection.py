@@ -179,7 +179,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(trading_opportunities, cur
 
         # Update opportunities with relative percentages
         for opportunity, relative_percentage in zip(optimal_opportunities, relative_percentages):
-            opportunity["relative_funds_percentage"] = relative_percentage    
+            opportunity["relative_funds_percentage"] = round(relative_percentage, 10)    
     
     return {"optimal_strategies": optimal_opportunities, "position_to_exit": position_to_exit} 
 

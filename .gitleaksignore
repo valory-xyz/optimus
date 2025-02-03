@@ -518,3 +518,16 @@ d39a397849296747006ed6bdf7fbe6e573798f89:scripts/api_data.json:generic-api-key:1
 d39a397849296747006ed6bdf7fbe6e573798f89:scripts/api_data.json:generic-api-key:2006
 d39a397849296747006ed6bdf7fbe6e573798f89:scripts/api_data.json:generic-api-key:2041
 d39a397849296747006ed6bdf7fbe6e573798f89:scripts/api_data.json:generic-api-key:2057
+96cc8c2ff2bd32050e3a4194df42c1e1a82aee60:packages/valory/customs/uniswap_pools_search/uniswap_pools_search.py:generic-api-key:264
+96cc8c2ff2bd32050e3a4194df42c1e1a82aee60:packages/valory/customs/uniswap_pools_search/uniswap_pools_search.py:generic-api-key:273
+96cc8c2ff2bd32050e3a4194df42c1e1a82aee60:packages/valory/customs/uniswap_pools_search/uniswap_pools_search.py:generic-api-key:274
+228acbcce1d1bee69ccdbc73e20ed761f3b78325:packages/valory/customs/balancer_pools_search/balancer_pools_search.py:generic-api-key:503
+3864786e81915707f339c3db760054729d880860:packages/valory/agents/optimus/aea-config.yaml:generic-api-key:146
+225cf627e73e7f0784154135d4f63cca44497727:packages/valory/skills/abstract_round_abci/tests/data/dummy_abci/skill.yaml:generic-api-key:73
+225cf627e73e7f0784154135d4f63cca44497727:packages/valory/skills/market_data_fetcher_abci/skill.yaml:generic-api-key:78
+225cf627e73e7f0784154135d4f63cca44497727:packages/valory/skills/portfolio_tracker_abci/skill.yaml:generic-api-key:80
+225cf627e73e7f0784154135d4f63cca44497727:packages/valory/skills/registration_abci/skill.yaml:generic-api-key:86
+225cf627e73e7f0784154135d4f63cca44497727:packages/valory/skills/reset_pause_abci/skill.yaml:generic-api-key:80
+225cf627e73e7f0784154135d4f63cca44497727:packages/valory/skills/strategy_evaluator_abci/skill.yaml:generic-api-key:101
+225cf627e73e7f0784154135d4f63cca44497727:packages/valory/skills/trader_decision_maker_abci/skill.yaml:generic-api-key:76
+225cf627e73e7f0784154135d4f63cca44497727:packages/valory/skills/transaction_settlement_abci/skill.yaml:generic-api-key:93

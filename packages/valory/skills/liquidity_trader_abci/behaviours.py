@@ -555,17 +555,17 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                     if isinstance(assets, list):
                         if len(assets) >= 1:
                             position["token0"] = assets[0]
-                            position["token0_symbol"] = (
-                                yield from self._get_token_symbol(
-                                    position.get("chain"), assets[0]
-                                )
+                            position[
+                                "token0_symbol"
+                            ] = yield from self._get_token_symbol(
+                                position.get("chain"), assets[0]
                             )
                         if len(assets) >= 2:
                             position["token1"] = assets[1]
-                            position["token1_symbol"] = (
-                                yield from self._get_token_symbol(
-                                    position.get("chain"), assets[1]
-                                )
+                            position[
+                                "token1_symbol"
+                            ] = yield from self._get_token_symbol(
+                                position.get("chain"), assets[1]
                             )
                 if "status" not in position:
                     position["status"] = PositionStatus.OPEN.value
@@ -1620,19 +1620,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"Selected opportunities: {self.selected_opportunities}"
             )
-            for selected_opportunity in self.selected_opportunities['optimal_strategies']:
+            for selected_opportunity in self.selected_opportunities[
+                "optimal_strategies"
+            ]:
                 # Dynamically handle multiple tokens
                 token_keys = [
-                    key for key in selected_opportunity.keys() 
-                    if key.startswith("token") 
+                    key
+                    for key in selected_opportunity.keys()
+                    if key.startswith("token")
                     and not key.endswith("_symbol")
                     and isinstance(selected_opportunity[key], str)
                 ]
                 for token_key in token_keys:
-                    selected_opportunity[token_key] = to_checksum_address(selected_opportunity[token_key])
+                    selected_opportunity[token_key] = to_checksum_address(
+                        selected_opportunity[token_key]
+                    )
                     self.context.logger.info(
-                f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
-                )
+                        f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
+                    )
 
     def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
         """Get the completed futures"""
@@ -1904,8 +1909,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
             actions.append(exit_pool_action)
         # Build actions based on selected opportunities
-        self.context.logger.info(f"bridge_swap_actions self.selected_opportunities:{self.selected_opportunities,tokens}")
-        for opportunity in self.selected_opportunities['optimal_strategies']:
+        self.context.logger.info(
+            f"bridge_swap_actions self.selected_opportunities:{self.selected_opportunities,tokens}"
+        )
+        for opportunity in self.selected_opportunities["optimal_strategies"]:
             bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
             if bridge_swap_actions is None:
                 self.context.logger.info("Error preparing bridge swap actions")
@@ -2086,7 +2093,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 decimals = 18
             else:
                 decimals = yield from self._get_token_decimals(chain, token_address)
-            token_data["value"] = (token_data["balance"] / (10**decimals)) * token_price
+            token_data["value"] = (
+                token_data["balance"] / (10**decimals)
+            ) * token_price
 
         # Sort tokens by value in descending order and add the highest ones
         token_balances.sort(key=lambda x: x["value"], reverse=True)
@@ -2259,28 +2268,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
+
         if not opportunity:
             self.context.logger.error("No pool present.")
             return None
-
         bridge_swap_actions = []
-
         # Get the highest APR pool's tokens
         # Extract opportunity details
         self.context.logger.error(f" highest APR pool {opportunity}")
-        
         dest_token0_address = opportunity.get("token0")
         dest_token0_symbol = opportunity.get("token0_symbol")
         dest_chain = opportunity.get("chain")
         dex_type = opportunity.get("dex_type")
         relative_funds_percentage = opportunity.get("relative_funds_percentage")
-
         if not dest_token0_address or not dest_token0_symbol or not dest_chain:
             self.context.logger.error(
                 f"Incomplete data in highest APR pool {opportunity}"
             )
             return None
-
         if dex_type == DexType.STURDY.value:
             # Handle STURDY dex type
             for token in tokens:
@@ -2296,13 +2301,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Handle other dex types
             dest_token1_address = opportunity.get("token1")
             dest_token1_symbol = opportunity.get("token1_symbol")
-
             if not dest_token1_address or not dest_token1_symbol:
                 self.context.logger.error(
                     f"Incomplete data in highest APR pool {opportunity}"
                 )
                 return None
-
             if len(tokens) == 1:
                 # Only one source token, split it in half for two destination tokens
                 self._add_bridge_swap_action(
@@ -3978,9 +3981,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         try:
-            self.context.logger.info(
-                f"[LiFi API : {routes_response.body}"
-            )
+            self.context.logger.info(f"[LiFi API : {routes_response.body}")
             routes_response = json.loads(routes_response.body)
         except (ValueError, TypeError) as e:
             self.context.logger.error(
@@ -3988,17 +3989,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"the following error was encountered {type(e).__name__}: {e}"
             )
             return None
-        
-        self.context.logger.info(
-                f"[LiFi API routes_response : {routes_response}"
-            )
+        self.context.logger.info(f"[LiFi API routes_response : {routes_response}")
         routes = routes_response.get("routes", [])
         if not routes:
             self.context.logger.error(
-                "[LiFi API Error Message] No routes available for this pair"
+                f"[LiFi API Error Message] No routes available for this pair:{routes}"
             )
             return None
-
         return routes
 
     def _simulate_transaction(
@@ -4148,7 +4145,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-    def _get_data_from_mint_tx_receipt(self, tx_hash: str, chain: str) -> Generator[
+    def _get_data_from_mint_tx_receipt(
+        self, tx_hash: str, chain: str
+    ) -> Generator[
         None,
         None,
         Tuple[

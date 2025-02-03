@@ -41,6 +41,9 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
+    WithdrawalDecisionPayload,
+    WithdrawFundsPayload,
+    SwapFundsToWithdrawalAssetPayload
 )
 
 
@@ -72,7 +75,9 @@ class Event(Enum):
     WAIT = "wait"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
     STAKING_KPI_MET = "staking_kpi_met"  # nosec
-
+    WITHDRAW_FUNDS = "withdraw_funds"
+    SWAP_FUNDS = "swap_funds"
+    IDLE = "idle"
 
 class SynchronizedData(BaseSynchronizedData):
     """
@@ -166,8 +171,13 @@ class SynchronizedData(BaseSynchronizedData):
 
     @property
     def participant_to_decision_making(self) -> DeserializedCollection:
-        """Get the participants to the DecisionMaking round."""
+        """Get the participants to the WithdrawalDecision round."""
         return self._get_deserialized("participant_to_decision_making")
+
+    @property
+    def participant_to_withdrawal_decision(self) -> DeserializedCollection:
+        """Get the participants to the DecisionMaking round."""
+        return self._get_deserialized("participant_to_withdrawal_decision")
 
     @property
     def participant_to_post_tx_settlement(self) -> DeserializedCollection:
@@ -446,7 +456,67 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
             return synced_data, event
 
+class WithdrawalDecisionRound(CollectSameUntilThresholdRound):
+    """WithdrawalDecisionRound"""
 
+    payload_class = WithdrawalDecisionPayload
+    synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    none_event = Event.NONE
+    error_event = Event.ERROR
+    no_majority_event = Event.NO_MAJORITY
+    collection_key = get_name(SynchronizedData.participant_to_withdrawal_decision)
+    selection_key = (get_name(SynchronizedData.chain_id),)
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
+        """Process the end of the block."""
+        if self.threshold_reached:
+            # We reference all the events here to prevent the check-abciapp-specs tool from complaining
+            payload = json.loads(self.most_voted_payload)
+            event = Event(payload["event"])
+            synchronized_data = cast(SynchronizedData, self.synchronized_data)
+
+            return synchronized_data, event
+
+        if not self.is_majority_possible(
+            self.collection, self.synchronized_data.nb_participants
+        ):
+            return self.synchronized_data, Event.NO_MAJORITY
+        return None
+
+class WithdrawFundsRound(CollectSameUntilThresholdRound):
+    """Round to collect withdraw funds actions"""
+
+    payload_class = WithdrawFundsPayload
+    synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    none_event: Enum = Event.NONE
+    no_majority_event = Event.NO_MAJORITY
+    collection_key = get_name(SynchronizedData.participant_to_actions_round)
+    selection_key = get_name(SynchronizedData.actions)
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
+        """Process the end of the block."""
+        res = super().end_block()
+        if res is None:
+            return None
+
+        synced_data, event = cast(Tuple[SynchronizedData, Enum], res)
+        if event != Event.DONE:
+            return res
+
+        if not synced_data.actions:
+            return synced_data, Event.ERROR
+
+        return synced_data, Event.DONE
+    
+    
+class SwapFundsToWithdrawalAssetRound(WithdrawFundsRound):
+    """Round to collect swap funds actions"""
+
+    payload_class = SwapFundsToWithdrawalAssetPayload
+
+    
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""
 
@@ -481,6 +551,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         GetPositionsRound,
         DecisionMakingRound,
         PostTxSettlementRound,
+        WithdrawFundsRound,
     }
     transition_function: AbciAppTransitionFunction = {
         CallCheckpointRound: {
@@ -504,7 +575,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NONE: CheckStakingKPIMetRound,
         },
         GetPositionsRound: {
-            Event.DONE: EvaluateStrategyRound,
+            Event.DONE: WithdrawalDecisionRound,
             Event.NO_MAJORITY: GetPositionsRound,
             Event.ROUND_TIMEOUT: GetPositionsRound,
             Event.NONE: GetPositionsRound,
@@ -535,6 +606,30 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
         },
+        WithdrawalDecisionRound: {
+            Event.DONE: EvaluateStrategyRound,
+            Event.NO_MAJORITY: WithdrawalDecisionRound,
+            Event.ROUND_TIMEOUT: WithdrawalDecisionRound,
+            Event.WITHDRAW_FUNDS: WithdrawFundsRound,
+            Event.SWAP_FUNDS: SwapFundsToWithdrawalAssetRound,
+            Event.IDLE: EvaluateStrategyRound,
+            Event.NONE: WithdrawalDecisionRound,
+            Event.ERROR: WithdrawalDecisionRound
+        },
+        WithdrawFundsRound: {
+            Event.DONE: DecisionMakingRound,
+            Event.NO_MAJORITY: WithdrawFundsRound,
+            Event.ROUND_TIMEOUT: WithdrawFundsRound,
+            Event.NONE: WithdrawFundsRound,
+            Event.ERROR: EvaluateStrategyRound,
+        },
+        SwapFundsToWithdrawalAssetRound: {
+            Event.DONE: DecisionMakingRound,
+            Event.NO_MAJORITY: SwapFundsToWithdrawalAssetRound,
+            Event.ROUND_TIMEOUT: SwapFundsToWithdrawalAssetRound,
+            Event.NONE: SwapFundsToWithdrawalAssetRound,
+            Event.ERROR: EvaluateStrategyRound
+        },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
         FinishedDecisionMakingRound: {},
@@ -548,7 +643,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound,
         FinishedCallCheckpointRound,
         FinishedCheckStakingKPIMetRound,
-        FailedMultiplexerRound,
+        FailedMultiplexerRound
     }
     event_to_timeout: Dict[Event, float] = {
         Event.ROUND_TIMEOUT: 30.0,
@@ -567,6 +662,8 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         GetPositionsRound: set(),
         DecisionMakingRound: set(),
         PostTxSettlementRound: set(),
+        WithdrawFundsRound: set(),
+        SwapFundsToWithdrawalAssetPayload: set()
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedCallCheckpointRound: {get_name(SynchronizedData.most_voted_tx_hash)},

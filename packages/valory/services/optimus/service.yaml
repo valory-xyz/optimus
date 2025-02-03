@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeifyv2fd2k3phcplff5bdagpklclqk6eiuvh4bqr32m3n54zrwztjm
+agent: valory/optimus:0.1.0:bafybeieg364epj3qza5drptjgqe5zbqiffnsug24ffxhjdzwug3ofsdhtq
 number_of_agents: 1
 deployment:
   agent:
@@ -103,6 +103,7 @@ models:
       service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
       max_pools: ${MAX_POOLS:int:2}
       init_fallback_gas: ${INIT_FALLBACK_GAS:int:0}
+      withdrawal_asset: ${WITHDRAWAL_ASSET:str:{"optimism":{"USDC":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"base":{"USDC":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"},"mode":{"USDC":"0xd988097fb8612cc24eeC14542bC03424c656005f"}}}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

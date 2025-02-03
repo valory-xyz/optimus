@@ -7,18 +7,18 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeicfl66mturlyh3cjbup24p5j2eu5fza3szf6ntovwaeglqnqcq6wa
+  behaviours.py: bafybeid4rccu2hio6qzyltvmeckivuhlboooiodpj3vzmosxmev6ajqm7m
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeie3vom7fwl5ho6xanje3r7tab7y3a5ij5gs6qvjh2uavbpitffyzu
   handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeig35ep4o2f4nof65tzq7uizaoif7agjcjpghsy4mc6uocnabhaava
-  payloads.py: bafybeie5tbx3lqcklwfqdqft5t33oluvkltnbjqavhj3ddjjblocyq62qm
+  models.py: bafybeigf3aa7g4mr44m2sbiybucy3mjgmfplaepqi6xddzi23lsjx4qdeu
+  payloads.py: bafybeibyjo3rmchqkyfsmjp7rgqadhg5bbylgmxcu6h7qfxzbh4dylbcea
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeidbh4cetttbn4nvti6ftwlrgfnfs5xtuo3i26qfphodrlcaqlibra
+  rounds.py: bafybeic4mlnuhep4guwzkqhkckvi7dcfoplpuxd75s4bmxsmsioahxhveq
   rounds_info.py: bafybeihpz6ih4ixevy76cm2bwrfs4yzaigkfg3gq2gxfhy6wl5ammkyqwu
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju
@@ -216,6 +216,7 @@ models:
       profit_threshold: 50
       loss_threshold: 30
       pnl_check_interval: 10
+      withdrawal_asset: '{"optimism":{"USDC":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"base":{"USDC":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"},"mode":{"USDC":"0xd988097fb8612cc24eeC14542bC03424c656005f"}}'
     class_name: Params
   coingecko:
     args:

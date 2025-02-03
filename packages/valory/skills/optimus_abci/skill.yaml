@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
   dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
   fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
-  handlers.py: bafybeictzus2vvpzg62iq753xntzbslsisug2ezqg6qygzbtysojhe252m
+  handlers.py: bafybeiggwiqmtopxupcoimhdhyvhtaj2v76ihm4jpradaaiiyg27c65n5e
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
 fingerprint_ignore_patterns: []
 connections:
@@ -24,7 +24,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeienfit7eqpgg4nhd7rzcfe3t3s4u3sfug7phtwnc4fuo3nxynbtsu
+- valory/liquidity_trader_abci:0.1.0:bafybeibtsvc773u7z3jtf4gz42lurhst5uazhwilc3z7q3walvqhrnrkp4
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -196,6 +196,7 @@ models:
       profit_threshold: 50
       loss_threshold: 30
       pnl_check_interval: 10
+      withdrawal_asset: '{"optimism":{"USDC":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"base":{"USDC":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"},"mode":{"USDC":"0xd988097fb8612cc24eeC14542bC03424c656005f"}}'
     class_name: Params
   coingecko:
     args:

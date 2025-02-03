@@ -76,3 +76,18 @@ class PostTxSettlementPayload(BaseTxPayload):
     """Represent a transaction payload for the PostTxSettlementRound."""
 
     content: str
+
+
+@dataclass(frozen=True)
+class WithdrawFundsPayload(EvaluateStrategyPayload):
+    """Represent a transaction payload for the WithdrawFundsRound."""
+
+
+@dataclass(frozen=True)
+class SwapFundsToWithdrawalAssetPayload(EvaluateStrategyPayload):
+    """Represent a transaction payload for the SwapFundsToWithdrawalAssetRound."""
+
+
+@dataclass(frozen=True)
+class WithdrawalDecisionPayload(DecisionMakingPayload):
+    """Represent a transaction payload for the WithdrawalDecisionPayload."""

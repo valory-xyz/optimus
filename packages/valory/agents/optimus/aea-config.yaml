@@ -36,8 +36,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeienfit7eqpgg4nhd7rzcfe3t3s4u3sfug7phtwnc4fuo3nxynbtsu
-- valory/optimus_abci:0.1.0:bafybeib4qc5l6mxly3hjjrjtqy4ikhxf2qf4ujzrceawioiyrhi7kivi4m
+- valory/liquidity_trader_abci:0.1.0:bafybeibtsvc773u7z3jtf4gz42lurhst5uazhwilc3z7q3walvqhrnrkp4
+- valory/optimus_abci:0.1.0:bafybeidbve74ockovrcjfet7gticj5bolklhipfljkrg3bxlrxii5kuawm
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
@@ -266,3 +266,4 @@ models:
       selected_hyper_strategy: ${str:max_apr_selection}
       service_endpoint_base: ${str:https://optimus.staging.autonolas.tech/}
       max_pools: ${int:2}
+      withdrawal_asset: ${str:{"optimism":{"USDC":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},"base":{"USDC":"0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"},"mode":{"USDC":"0xd988097fb8612cc24eeC14542bC03424c656005f"}}}

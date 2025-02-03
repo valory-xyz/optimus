@@ -555,17 +555,17 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                     if isinstance(assets, list):
                         if len(assets) >= 1:
                             position["token0"] = assets[0]
-                            position["token0_symbol"] = (
-                                yield from self._get_token_symbol(
-                                    position.get("chain"), assets[0]
-                                )
+                            position[
+                                "token0_symbol"
+                            ] = yield from self._get_token_symbol(
+                                position.get("chain"), assets[0]
                             )
                         if len(assets) >= 2:
                             position["token1"] = assets[1]
-                            position["token1_symbol"] = (
-                                yield from self._get_token_symbol(
-                                    position.get("chain"), assets[1]
-                                )
+                            position[
+                                "token1_symbol"
+                            ] = yield from self._get_token_symbol(
+                                position.get("chain"), assets[1]
                             )
                 if "status" not in position:
                     position["status"] = PositionStatus.OPEN.value
@@ -2079,7 +2079,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 decimals = 18
             else:
                 decimals = yield from self._get_token_decimals(chain, token_address)
-            token_data["value"] = (token_data["balance"] / (10**decimals)) * token_price
+            token_data["value"] = (
+                token_data["balance"] / (10**decimals)
+            ) * token_price
 
         # Sort tokens by value in descending order and add the highest ones
         token_balances.sort(key=lambda x: x["value"], reverse=True)
@@ -4130,7 +4132,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
-    def _get_data_from_mint_tx_receipt(self, tx_hash: str, chain: str) -> Generator[
+    def _get_data_from_mint_tx_receipt(
+        self, tx_hash: str, chain: str
+    ) -> Generator[
         None,
         None,
         Tuple[

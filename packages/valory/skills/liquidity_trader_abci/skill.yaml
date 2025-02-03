@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeiaiwa7xl33mv432lhjf6drjsmb25dvnff44lb26mqkj4j4vfhjd2y
+  behaviours.py: bafybeihdg32pimrb2um4efxdvukeokyu6mcivld4p4aphj4mzol7k7rowy
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeie3vom7fwl5ho6xanje3r7tab7y3a5ij5gs6qvjh2uavbpitffyzu
   handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
@@ -41,12 +41,12 @@ contracts:
 - valory/staking_activity_checker:0.1.0:bafybeiajn7vzmxkiqoruknqh3heb3qxlflukibalxkm6zxdvmazdoou7ou
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeigmc3f5xqrcdjakandeang56vtzp5qcqbjk4fven5d2h6t272kmpu
 protocols:
-- valory/contract_api:1.0.0:bafybeiaeqggl7pcvo54y4b3q7qmfm77obweyrm2xqvip7wqhvq35jp2dr4
-- valory/ledger_api:1.0.0:bafybeihozowmory3p7kufoyo7r2qxzjvxrf4eaflbddtc5qzvavgf5dyhu
+- valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
+- valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
 - valory/ipfs:0.1.0:bafybeiftxi2qhreewgsc5wevogi7yc5g6hbcbo4uiuaibauhv3nhfcdtvm
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeidjvxyc6sp542rg5b5qq5bulnftvz3rernvla6wwf2j2dv5iayyny
-- valory/transaction_settlement_abci:0.1.0:bafybeifhvxjcdy7limvriand6iqmgughyqa2hnzmspbds3wncarwc2ondm
+- valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
+- valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
     args: {}

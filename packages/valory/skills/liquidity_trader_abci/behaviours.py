@@ -408,7 +408,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                         "asset_type": (
                             "native" if asset_address == ZERO_ADDRESS else "erc_20"
                         ),
-                        "address": asset_address,
+                        "address": to_checksum_address(asset_address),
                         "balance": balance,
                     }
                 )
@@ -1124,6 +1124,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if self.current_positions:
                 for position in self.current_positions:
+                    if position.get("status") == PositionStatus.CLOSED.value:
+                        continue
                     dex_type = position.get("dex_type")
                     strategy = self.params.dex_type_to_strategy.get(dex_type)
                     if strategy:
@@ -1664,13 +1666,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "current_positions": [
-                        pos.get("pool_address")
-                        for pos in self.current_positions
-                        if pos.get("status") == PositionStatus.OPEN.value
-                    ]
-                    if self.current_positions
-                    else [],
+                    "current_positions": (
+                        [
+                            pos.get("pool_address")
+                            for pos in self.current_positions
+                            if pos.get("status") == PositionStatus.OPEN.value
+                        ]
+                        if self.current_positions
+                        else []
+                    ),
                     "coingecko_api_key": self.coingecko.api_key,
                     "get_metrics": False,
                 }
@@ -2232,9 +2236,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         exit_pool_action = {
-            "action": Action.WITHDRAW.value
-            if self.position_to_exit.get("dex_type") == DexType.STURDY.value
-            else Action.EXIT_POOL.value,
+            "action": (
+                Action.WITHDRAW.value
+                if self.position_to_exit.get("dex_type") == DexType.STURDY.value
+                else Action.EXIT_POOL.value
+            ),
             "dex_type": self.position_to_exit.get("dex_type"),
             "chain": self.position_to_exit.get("chain"),
             "assets": [token.get("token") for token in tokens],
@@ -2547,7 +2553,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.synchronized_data.last_action == Action.EXIT_POOL.value
                 or self.synchronized_data.last_action == Action.WITHDRAW.value
             ):
-                yield from self._post_execute_exit_pool()
+                yield from self._post_execute_exit_pool(
+                    actions, last_executed_action_index
+                )
             if (
                 self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
                 and last_round_id != DecisionMakingRound.auto_round_id()
@@ -2983,6 +2991,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if not tx_hash:
             return Event.DONE.value, {}
+
+        result = (
+            Event.SETTLE.value,
+            {
+                "tx_submitter": DecisionMakingRound.auto_round_id(),
+                "most_voted_tx_hash": tx_hash,
+                "chain_id": chain_id,
+                "safe_contract_address": safe_address,
+                "positions": positions,
+                "last_executed_action_index": current_action_index,
+                "last_action": last_action,
+            },
+        )
+
+        self.context.logger.info(f"Result constructed: {result}")
 
         return Event.SETTLE.value, {
             "tx_submitter": DecisionMakingRound.auto_round_id(),
@@ -3887,11 +3910,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # If there is only one asset and we need to obtain two different assets,
         # we split the available amount in half, converting one half to the first asset
         # and the other half to the second asset.
-        amount = int(
-            self._get_balance(from_chain, from_token_address, positions)
-            * action.get("funds_percentage", 1)
+        available_amount = self._get_balance(from_chain, from_token_address, positions)
+        amount = min(
+            available_amount, int(available_amount * action.get("funds_percentage", 1))
         )
-
         if amount <= 0:
             self.context.logger.error(
                 f"Not enough balance for {from_token_symbol} on chain {from_chain}"
@@ -4334,6 +4356,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _add_token_to_assets(self, chain, token, symbol):
         # Read current assets
+        token = to_checksum_address(token)
         self.read_assets()
         current_assets = self.assets
 

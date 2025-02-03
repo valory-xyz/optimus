@@ -24,7 +24,9 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi, LedgerApi
 
+
 PUBLIC_ID = PublicId.from_str("valory/balancer_weighted_pool:0.1.0")
+
 
 class WeightedPoolContract(Contract):
     """The Weighted Stable Pool contract."""
@@ -42,7 +44,7 @@ class WeightedPoolContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.balanceOf(account).call()
         return dict(balance=data)
-    
+
     @classmethod
     def get_pool_id(
         cls,
@@ -52,8 +54,8 @@ class WeightedPoolContract(Contract):
         """get pool id"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.getPoolId().call()
-        return dict(pool_id="0x"+data.hex())
-    
+        return dict(pool_id="0x" + data.hex())
+
     @classmethod
     def get_vault_address(
         cls,

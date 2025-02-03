@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiguqxojq5hkgi55jqdl5p3rvz62jwxxw6ygorkym7ol3ps5qhh7rq
-  asset_lending.py: bafybeigdbjktqtjdnhdganduiq3ohmtgmsw53dmeyldebwcrmif6ts5jpu
+  asset_lending.py: bafybeibwsqmpfni353zyajddk6bhevmaq534dlhmcqli6hoqyivqvupibu
 fingerprint_ignore_patterns: []
 entry_point: asset_lending.py
 callable: run

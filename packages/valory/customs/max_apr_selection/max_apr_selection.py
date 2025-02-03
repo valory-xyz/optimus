@@ -214,16 +214,10 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         relative_percentages = calculate_relative_percentages(funds_percentages)
 
         # Update opportunities with relative percentages
-        for opportunity, relative_percentage in zip(
-            optimal_opportunities, relative_percentages
-        ):
-            opportunity["relative_funds_percentage"] = relative_percentage
-
-    return {
-        "optimal_strategies": optimal_opportunities,
-        "position_to_exit": position_to_exit,
-    }
-
+        for opportunity, relative_percentage in zip(optimal_opportunities, relative_percentages):
+            opportunity["relative_funds_percentage"] = round(relative_percentage, 10)    
+    
+    return {"optimal_strategies": optimal_opportunities, "position_to_exit": position_to_exit} 
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""

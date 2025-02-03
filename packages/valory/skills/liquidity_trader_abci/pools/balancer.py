@@ -156,13 +156,9 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             new_max_amounts_in[i] = asset_to_amount.get(asset, 0)
         
         return new_max_amounts_in   
-     
+
     def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Enter a Balancer pool."""
-    
-        self.context.logger.info(f"balancer enter pool ")
-
-        self.context.logger.info(f"data for balancer into the enter pool : {kwargs}")
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
         assets = kwargs.get("assets")
@@ -272,7 +268,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
                 f"Error fetching BPT Amount for safe {safe_address} for pool {pool_address}"
             )
             return None, None, None
-    
+
         # toInternalBalance - True if receiving internal token balances. False if receiving ERC20.
         to_internal_balance = ZERO_ADDRESS in assets
 

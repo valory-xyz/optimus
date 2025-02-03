@@ -58,7 +58,7 @@ def fetch_coin_list():
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        _logger.error(f"Failed to fetch coin list: {e}")
+        logger.error(f"Failed to fetch coin list: {e}")
         return None
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
@@ -329,13 +329,13 @@ def fetch_liquidity_metrics(pool_id: str, chain: str, client: Optional[Client] =
         }
 
     except Exception as e:
-        _logger.error(f"An error occurred while analyzing pool metrics: {e}")
+        logger.error(f"An error occurred while analyzing pool metrics: {e}")
         return None
 
 def analyze_pool_liquidity(pool_id: str, chain: str, client: Optional[Client] = None, price_impact: float = 0.01):
     metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
     if metrics is None:
-        _logger.error("Could not retrieve depth score and maximum position size.")
+        logger.error("Could not retrieve depth score and maximum position size.")
         return float('nan'), float('nan')
     return metrics["Depth Score"], metrics["Maximum Position Size"]
 

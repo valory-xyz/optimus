@@ -23,13 +23,16 @@ from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
+
+
 PUBLIC_ID = PublicId.from_str("valory/uniswap_v3_non_fungible_position_manager:0.1.0")
+
 
 class UniswapV3NonfungiblePositionManagerContract(Contract):
     """The Uniswap V3 NonfungiblePositionManager contract."""
 
     contract_id = PUBLIC_ID
-    
+
     @classmethod
     def mint(
         cls,
@@ -45,7 +48,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         amount0_min: int,
         amount1_min: int,
         recipient: str,
-        deadline: int
+        deadline: int,
     ) -> JSONLike:
         """Prepare mint position transaction"""
         mint_params = (
@@ -59,17 +62,14 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
             amount0_min,
             amount1_min,
             recipient,
-            deadline
+            deadline,
         )
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_hash = contract_instance.encodeABI(
-            "mint",
-            args=(mint_params,)
-        )
+        tx_hash = contract_instance.encodeABI("mint", args=(mint_params,))
 
         return dict(tx_hash=tx_hash)
-    
+
     @classmethod
     def decrease_liquidity(
         cls,
@@ -87,17 +87,16 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
             liquidity,
             amount0_min,
             amount1_min,
-            deadline
+            deadline,
         )
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tx_hash = contract_instance.encodeABI(
-            "decreaseLiquidity",
-            args=(decrease_liquidity_params,)
+            "decreaseLiquidity", args=(decrease_liquidity_params,)
         )
 
         return dict(tx_hash=tx_hash)
-    
+
     @classmethod
     def burn_token(
         cls,
@@ -107,12 +106,9 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
     ) -> JSONLike:
         """Prepare burn position transaction"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_hash = contract_instance.encodeABI(
-            "burn",
-            args=(token_id,)
-        )
+        tx_hash = contract_instance.encodeABI("burn", args=(token_id,))
         return dict(tx_hash=tx_hash)
-    
+
     @classmethod
     def collect_tokens(
         cls,
@@ -121,24 +117,16 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         token_id: int,
         recipient: str,
         amount0_max: int,
-        amount1_max: int
+        amount1_max: int,
     ) -> JSONLike:
         """Prepare collect transaction"""
-        collect_params = (
-            token_id,
-            recipient,
-            amount0_max,
-            amount1_max
-        )
-        
+        collect_params = (token_id, recipient, amount0_max, amount1_max)
+
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_hash = contract_instance.encodeABI(
-            "collect",
-            args=(collect_params,)
-        )
+        tx_hash = contract_instance.encodeABI("collect", args=(collect_params,))
 
         return dict(tx_hash=tx_hash)
-    
+
     @classmethod
     def get_pool_tokens(
         cls,
@@ -149,7 +137,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()
-        return dict(tokens=[token0,token1])
+        return dict(tokens=[token0, token1])
 
     @classmethod
     def get_position(

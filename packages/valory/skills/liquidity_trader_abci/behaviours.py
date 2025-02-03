@@ -408,7 +408,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                         "asset_type": (
                             "native" if asset_address == ZERO_ADDRESS else "erc_20"
                         ),
-                        "address": asset_address,
+                        "address": to_checksum_address(asset_address),
                         "balance": balance,
                     }
                 )
@@ -1124,6 +1124,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if self.current_positions:
                 for position in self.current_positions:
+                    if position.get("status") == PositionStatus.CLOSED.value:
+                        continue
                     dex_type = position.get("dex_type")
                     strategy = self.params.dex_type_to_strategy.get(dex_type)
                     if strategy:
@@ -1611,13 +1613,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)
+        self.context.logger.info(f"result Evaluating hyper strategy: {result}")
         self.selected_opportunities = result.get("optimal_strategies")
         self.position_to_exit = result.get("position_to_exit")
         if self.selected_opportunities is not None:
             self.context.logger.info(
                 f"Selected opportunities: {self.selected_opportunities}"
             )
-            for selected_opportunity in self.selected_opportunities:
+            for selected_opportunity in self.selected_opportunities['optimal_strategies']:
                 # Dynamically handle multiple tokens
                 token_keys = [
                     key for key in selected_opportunity.keys() 
@@ -1901,7 +1904,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
             actions.append(exit_pool_action)
         # Build actions based on selected opportunities
-        for opportunity in self.selected_opportunities:
+        self.context.logger.info(f"bridge_swap_actions self.selected_opportunities:{self.selected_opportunities,tokens}")
+        for opportunity in self.selected_opportunities['optimal_strategies']:
             bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
             if bridge_swap_actions is None:
                 self.context.logger.info("Error preparing bridge swap actions")
@@ -2263,6 +2267,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Get the highest APR pool's tokens
         # Extract opportunity details
+        self.context.logger.error(f" highest APR pool {opportunity}")
+        
         dest_token0_address = opportunity.get("token0")
         dest_token0_symbol = opportunity.get("token0_symbol")
         dest_chain = opportunity.get("chain")
@@ -2552,7 +2558,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.synchronized_data.last_action == Action.EXIT_POOL.value
                 or self.synchronized_data.last_action == Action.WITHDRAW.value
             ):
-                yield from self._post_execute_exit_pool()
+                yield from self._post_execute_exit_pool(
+                    actions, last_executed_action_index
+                )
             if (
                 self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
                 and last_round_id != DecisionMakingRound.auto_round_id()
@@ -3907,11 +3915,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # If there is only one asset and we need to obtain two different assets,
         # we split the available amount in half, converting one half to the first asset
         # and the other half to the second asset.
-        amount = int(
-            self._get_balance(from_chain, from_token_address, positions)
-            * action.get("funds_percentage", 1)
+        available_amount = self._get_balance(from_chain, from_token_address, positions)
+        amount = min(
+            available_amount, int(available_amount * action.get("funds_percentage", 1))
         )
-
         if amount <= 0:
             self.context.logger.error(
                 f"Not enough balance for {from_token_symbol} on chain {from_chain}"
@@ -3942,6 +3949,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             },
         }
 
+        self.context.logger.info(f"params:{params}")
+
         if any(value is None for key, value in params.items()):
             self.context.logger.error(f"Missing value in params: {params}")
             return None
@@ -3969,6 +3978,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         try:
+            self.context.logger.info(
+                f"[LiFi API : {routes_response.body}"
+            )
             routes_response = json.loads(routes_response.body)
         except (ValueError, TypeError) as e:
             self.context.logger.error(
@@ -3976,7 +3988,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"the following error was encountered {type(e).__name__}: {e}"
             )
             return None
-
+        
+        self.context.logger.info(
+                f"[LiFi API routes_response : {routes_response}"
+            )
         routes = routes_response.get("routes", [])
         if not routes:
             self.context.logger.error(
@@ -4352,6 +4367,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _add_token_to_assets(self, chain, token, symbol):
         # Read current assets
+        token = to_checksum_address(token)
         self.read_assets()
         current_assets = self.assets
 

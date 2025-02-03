@@ -1666,13 +1666,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "current_positions": [
-                        pos.get("pool_address")
-                        for pos in self.current_positions
-                        if pos.get("status") == PositionStatus.OPEN.value
-                    ]
-                    if self.current_positions
-                    else [],
+                    "current_positions": (
+                        [
+                            pos.get("pool_address")
+                            for pos in self.current_positions
+                            if pos.get("status") == PositionStatus.OPEN.value
+                        ]
+                        if self.current_positions
+                        else []
+                    ),
                     "coingecko_api_key": self.coingecko.api_key,
                     "get_metrics": False,
                 }
@@ -2234,9 +2236,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         exit_pool_action = {
-            "action": Action.WITHDRAW.value
-            if self.position_to_exit.get("dex_type") == DexType.STURDY.value
-            else Action.EXIT_POOL.value,
+            "action": (
+                Action.WITHDRAW.value
+                if self.position_to_exit.get("dex_type") == DexType.STURDY.value
+                else Action.EXIT_POOL.value
+            ),
             "dex_type": self.position_to_exit.get("dex_type"),
             "chain": self.position_to_exit.get("chain"),
             "assets": [token.get("token") for token in tokens],
@@ -2987,6 +2991,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if not tx_hash:
             return Event.DONE.value, {}
+
+        result = (
+            Event.SETTLE.value,
+            {
+                "tx_submitter": DecisionMakingRound.auto_round_id(),
+                "most_voted_tx_hash": tx_hash,
+                "chain_id": chain_id,
+                "safe_contract_address": safe_address,
+                "positions": positions,
+                "last_executed_action_index": current_action_index,
+                "last_action": last_action,
+            },
+        )
+
+        self.context.logger.info(f"Result constructed: {result}")
 
         return Event.SETTLE.value, {
             "tx_submitter": DecisionMakingRound.auto_round_id(),

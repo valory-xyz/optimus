@@ -2585,7 +2585,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.synchronized_data.last_action == Action.EXIT_POOL.value
                 or self.synchronized_data.last_action == Action.WITHDRAW.value
             ):
-                yield from self._post_execute_exit_pool()
+                yield from self._post_execute_exit_pool(actions, last_executed_action_index)
             if (
                 self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
                 and last_round_id != DecisionMakingRound.auto_round_id()
@@ -4604,13 +4604,16 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Withdraw requested, exiting all positions...")
             actions = []
 
-            if not self.current_positions:
-                self.context.logger.info("No positions found")
+            all_positions_exited = all(
+                position.get("status") == PositionStatus.CLOSED.value for position in self.current_positions
+            )
+            if not self.current_positions or all_positions_exited:
+                self.context.logger.info("No positions to exit")
                 self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.DISCARDED.value
             else:
                 for position in self.current_positions:
                     assets = []
-                    for i in range(1):
+                    for i in range(2):
                         token_key = f"token{i}"
                         token_address = position.get(token_key)
                         if token_address:

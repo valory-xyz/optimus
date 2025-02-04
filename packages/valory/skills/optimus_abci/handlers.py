@@ -348,7 +348,7 @@ class HttpHandler(BaseHttpHandler):
         """
         try:
             current_status = self.context.shared_state.get("withdrawal_status", WithdrawalStatus.NOT_REQUESTED.value)
-            if current_status not in {WithdrawalStatus.NOT_REQUESTED.value, WithdrawalStatus.COMPLETED.value}:
+            if current_status not in {WithdrawalStatus.NOT_REQUESTED.value, WithdrawalStatus.COMPLETED.value, WithdrawalStatus.DISCARDED.value }:
                 self._send_already_in_progress_response(http_msg, http_dialogue, {"message": "Withdrawal request already in progress."})
                 return 
             
@@ -370,7 +370,7 @@ class HttpHandler(BaseHttpHandler):
         """
         try:
             # Retrieve the current withdrawal status
-            withdrawal_status = self.context.shared_state.get(WITHDRAWAL_STATUS)
+            withdrawal_status = self.context.shared_state.get(WITHDRAWAL_STATUS, WithdrawalStatus.NOT_REQUESTED.value)
             self._send_ok_response(http_msg, http_dialogue, {"withdrawal_status": withdrawal_status})
 
         except Exception as e:

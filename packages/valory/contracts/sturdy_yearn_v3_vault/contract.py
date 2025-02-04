@@ -19,16 +19,20 @@
 
 """This class contains a wrapper for Sturdy's YearnV3Vault contract interface."""
 import logging
+
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
 from eth_abi import encode
 
+
 PUBLIC_ID = PublicId.from_str("valory/sturdy_yearn_v3_vault:0.1.0")
 _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
 )
+
+
 class YearnV3VaultContract(Contract):
     """The Vault contract."""
 
@@ -44,10 +48,7 @@ class YearnV3VaultContract(Contract):
     ) -> JSONLike:
         """Prepare a deposit transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            "deposit",
-            args=(assets, receiver)
-        )
+        data = contract_instance.encodeABI("deposit", args=(assets, receiver))
         return {"tx_hash": bytes.fromhex(data[2:])}
 
     @classmethod
@@ -61,12 +62,9 @@ class YearnV3VaultContract(Contract):
     ) -> JSONLike:
         """Prepare a withdraw transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            "withdraw",
-            args=(assets, receiver, owner)
-        )
+        data = contract_instance.encodeABI("withdraw", args=(assets, receiver, owner))
         return {"tx_hash": bytes.fromhex(data[2:])}
-    
+
     @classmethod
     def max_withdraw(
         cls,
@@ -76,7 +74,7 @@ class YearnV3VaultContract(Contract):
     ) -> JSONLike:
         """Get the maximum amount that can be withdrawn by the owner."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        max_withdraw_amount = contract_instance.functions.maxWithdraw(owner).call() 
+        max_withdraw_amount = contract_instance.functions.maxWithdraw(owner).call()
         return {"amount": max_withdraw_amount}
 
     @classmethod

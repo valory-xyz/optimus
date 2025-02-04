@@ -24,7 +24,7 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -51,6 +51,10 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 )
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
+)
+from packages.valory.skills.liquidity_trader_abci.behaviours import (
+    WITHDRAWAL_STATUS,
+    WithdrawalStatus,
 )
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
@@ -129,9 +133,15 @@ class HttpHandler(BaseHttpHandler):
 
         # Routes
         self.routes = {
-            (HttpMethod.POST.value,): [],
+            (HttpMethod.POST.value,): [
+                (rf"{hostname_regex}\/withdraw_funds", self._handle_withdraw_funds),
+            ],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
+                (
+                    rf"{hostname_regex}\/withdrawal_status",
+                    self._handle_get_withdrawal_status,
+                ),
             ],
         }
 
@@ -333,3 +343,79 @@ class HttpHandler(BaseHttpHandler):
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
+
+    def _handle_withdraw_funds(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> Generator[None, None, None]:
+        """
+        Handle POST requests to initiate withdrawal of invested funds.
+
+        :param http_msg: the HttpMessage instance
+        :param http_dialogue: the HttpDialogue instance
+        """
+        try:
+            current_status = self.context.shared_state.get(
+                "withdrawal_status", WithdrawalStatus.NOT_REQUESTED.value
+            )
+            if current_status not in {
+                WithdrawalStatus.NOT_REQUESTED.value,
+                WithdrawalStatus.COMPLETED.value,
+                WithdrawalStatus.DISCARDED.value,
+            }:
+                self._send_already_in_progress_response(
+                    http_msg,
+                    http_dialogue,
+                    {"message": "Withdrawal request already in progress."},
+                )
+                return
+
+            self.context.shared_state[
+                WITHDRAWAL_STATUS
+            ] = WithdrawalStatus.REQUESTED.value
+            self._send_ok_response(
+                http_msg, http_dialogue, {"message": "Withdrawal request initiated."}
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error initiating withdrawal request: {str(e)}")
+            self._handle_bad_request(http_msg, http_dialogue)
+
+    def _handle_get_withdrawal_status(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle GET requests to check the status of the withdrawal request.
+
+        :param http_msg: the HttpMessage instance
+        :param http_dialogue: the HttpDialogue instance
+        """
+        try:
+            # Retrieve the current withdrawal status
+            withdrawal_status = self.context.shared_state.get(
+                WITHDRAWAL_STATUS, WithdrawalStatus.NOT_REQUESTED.value
+            )
+            self._send_ok_response(
+                http_msg, http_dialogue, {"withdrawal_status": withdrawal_status}
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error retrieving withdrawal status: {str(e)}")
+            self._handle_bad_request(http_msg, http_dialogue)
+
+    def _send_already_in_progress_response(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, data: Dict
+    ) -> None:
+        """Send a response indicating the request is already in progress"""
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=409,  # Still using 409 as the status code
+            status_text="Already In Progress",
+            headers=f"{self.json_content_header}{http_msg.headers}",
+            body=json.dumps(data).encode("utf-8"),
+        )
+
+        # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)

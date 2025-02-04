@@ -1161,6 +1161,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 for position in self.current_positions:
                     dex_type = position.get("dex_type")
                     strategy = self.params.dex_type_to_strategy.get(dex_type)
+                    if not position.get("status", PositionStatus.CLOSED.value) == PositionStatus.OPEN.value:
+                        continue
+                    
                     if strategy:
                         metrics = self.get_returns_metrics_for_opportunity(
                             position, strategy
@@ -2288,6 +2291,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
+        
         if not opportunity:
             self.context.logger.error("No pool present.")
             return None
@@ -2349,10 +2353,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     relative_funds_percentage,
                 )
             else:
-                dest_tokens = [
-                    (dest_token0_address, dest_token0_symbol),
-                    (dest_token1_address, dest_token1_symbol),
-                ]
+                tokens.sort(key=lambda x: x["token"])
+                dest_tokens = sorted(
+                    [(dest_token0_address, dest_token0_symbol), (dest_token1_address, dest_token1_symbol)],
+                    key=lambda x: x[0],
+                )
                 for idx, token in enumerate(tokens):
                     dest_token_address, dest_token_symbol = dest_tokens[idx % 2]
                     self._add_bridge_swap_action(
@@ -2749,16 +2754,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")
 
-        # Find the position with the matching pool address and update its status
+       # Find the most recent position with the matching pool address and update its status
+        position_to_close = None
+        max_timestamp = 0
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
-                position["status"] = PositionStatus.CLOSED.value
-                self.context.logger.info(f"Closing position: {position}")
-                break
+                timestamp = position.get("timestamp", 0)
+                if timestamp > max_timestamp:
+                    position_to_close = position
+                    max_timestamp = timestamp
+
+        if position_to_close:
+            position_to_close["status"] = PositionStatus.CLOSED.value
+            self.context.logger.info(f"Closing position: {position_to_close}")
         else:
-            self.context.logger.warning(
-                f"No position found for pool_address: {pool_address}"
-            )
+            self.context.logger.warning(f"No position found for pool_address: {pool_address}")
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
@@ -2945,8 +2955,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, actions, current_action_index, last_round_id
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Prepare the next action."""
-        next_action = Action(actions[current_action_index].get("action"))
-        next_action_details = self.synchronized_data.actions[current_action_index]
+        next_action_details = actions[current_action_index]
+        action_name = next_action_details.get("action")
+
+        if not action_name:
+            self.context.logger.error(f"Invalid action: {next_action_details}")
+            return Event.DONE.value, {}
+
+        next_action = Action(action_name)
         self.context.logger.info(f"ACTION DETAILS: {next_action_details}")
 
         if next_action == Action.ENTER_POOL:
@@ -4545,11 +4561,31 @@ class WithdrawalDecisionBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             withdrawal_status = self.context.shared_state.get("withdrawal_status", WithdrawalStatus.NOT_REQUESTED.value)
             next_event = Event.IDLE.value
+            self.read_assets()
+            self.read_current_positions()
 
             if withdrawal_status == WithdrawalStatus.REQUESTED.value:
                 self.context.logger.info("Withdrawal requested...")
-                self.context.shared_state["withdrawal_status"] = WithdrawalStatus.IN_PROCESS.value
-                next_event = Event.WITHDRAW_FUNDS.value
+                all_positions_exited = all(
+                    position.get("status") == PositionStatus.CLOSED.value for position in self.current_positions
+                )
+                all_assets_converted = all(
+                    asset.get("balance", 0) == 0 or (asset.get("address") == self.params.withdrawal_asset.get(position.get("chain"), {}).get("address") and asset.get("balance", 0) > 0)
+                    for position in self.synchronized_data.positions
+                    for asset in position.get("assets", [])
+                )
+                if not self.current_positions or all_positions_exited:
+                    if not all_assets_converted:
+                        self.context.logger.info("Converting funds to withdrawal asset..")
+                        self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.CONVERTING_FUNDS.value
+                        next_event = Event.SWAP_FUNDS.value
+                    else:
+                        self.context.logger.info("No positions to exit")
+                        self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.DISCARDED.value
+                        next_event = Event.ERROR.value
+                else:
+                    self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.IN_PROCESS.value
+                    next_event = Event.WITHDRAW_FUNDS.value
 
             elif withdrawal_status == WithdrawalStatus.IN_PROCESS.value:
                 all_positions_exited = all(
@@ -4557,10 +4593,11 @@ class WithdrawalDecisionBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 if not all_positions_exited:
                     self.context.logger.warning("Error exiting all positions..")
+                    self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.DISCARDED.value
                     next_event = Event.ERROR.value
                 else:
                     self.context.logger.info("All positions exited...")
-                    self.context.shared_state["withdrawal_status"] = WithdrawalStatus.CONVERTING_FUNDS.value
+                    self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.CONVERTING_FUNDS.value
                     next_event = Event.SWAP_FUNDS.value
 
             elif withdrawal_status == WithdrawalStatus.CONVERTING_FUNDS.value:
@@ -4571,10 +4608,11 @@ class WithdrawalDecisionBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 if not all_assets_converted:
                     self.context.logger.warning("Error swaping all funds..")
+                    self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.DISCARDED.value
                     next_event = Event.ERROR.value
                 else:
                     self.context.logger.info("All assets converted...")
-                    self.context.shared_state["withdrawal_status"] = WithdrawalStatus.COMPLETED.value
+                    self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.COMPLETED.value
                     next_event = Event.IDLE.value
 
             payload = WithdrawalDecisionPayload(
@@ -4600,38 +4638,33 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            
             self.context.logger.info("Withdraw requested, exiting all positions...")
             actions = []
 
-            all_positions_exited = all(
-                position.get("status") == PositionStatus.CLOSED.value for position in self.current_positions
-            )
-            if not self.current_positions or all_positions_exited:
-                self.context.logger.info("No positions to exit")
-                self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.DISCARDED.value
-            else:
-                for position in self.current_positions:
-                    assets = []
-                    for i in range(2):
-                        token_key = f"token{i}"
-                        token_address = position.get(token_key)
-                        if token_address:
-                            assets.append(token_address)
+            for position in self.current_positions:
+                if not position.get('status', PositionStatus.CLOSED.value) == PositionStatus.OPEN.value:
+                    continue
 
-                    action = {
-                        "action": Action.WITHDRAW.value
-                        if position.get("dex_type") == DexType.STURDY.value
-                        else Action.EXIT_POOL.value,
-                        "dex_type": position.get("dex_type"),
-                        "chain": position.get("chain"),
-                        "assets": assets,
-                        "pool_address": position.get("pool_address"),
-                        "pool_type": position.get("pool_type"),
-                        "token_id": position.get("token_id"),
-                        "liquidity": position.get("liquidity"),
-                    }
-                    actions.append(action)
+                assets = []
+                for i in range(2):
+                    token_key = f"token{i}"
+                    token_address = position.get(token_key)
+                    if token_address:
+                        assets.append(token_address)
+
+                action = {
+                    "action": Action.WITHDRAW.value
+                    if position.get("dex_type") == DexType.STURDY.value
+                    else Action.EXIT_POOL.value,
+                    "dex_type": position.get("dex_type"),
+                    "chain": position.get("chain"),
+                    "assets": assets,
+                    "pool_address": position.get("pool_address"),
+                    "pool_type": position.get("pool_type"),
+                    "token_id": position.get("token_id"),
+                    "liquidity": position.get("liquidity"),
+                }
+                actions.append(action)
 
             serialized_actions = json.dumps(actions)
             sender = self.context.agent_address
@@ -4655,22 +4688,39 @@ class SwapFundsToWithdrawalAssetBehaviour(LiquidityTraderBaseBehaviour):
             actions = []
             for position in self.synchronized_data.positions:
                 chain = position.get("chain")
+                withdrawal_asset_dict = self.params.withdrawal_asset.get(chain, {})
+                if withdrawal_asset_dict:
+                    withdrawal_asset_symbol, withdrawal_asset_address = list(withdrawal_asset_dict.items())[0]
+                else:
+                    withdrawal_asset_symbol = None
+                    withdrawal_asset_address = None
+
+                if not withdrawal_asset_address or not withdrawal_asset_symbol:
+                    self.context.logger.warning(
+                        f"No withdrawal asset specified for chain: {chain}"
+                    )
+                    continue
+
                 for asset in position.get("assets", []):
                     token_address = asset.get("address")
-                    token_symbol = position.get("asset_symbol")
+                    token_symbol = asset.get("asset_symbol")
                     balance = asset.get("balance", 0)
-                    withdrawal_asset_symbol, withdrawal_asset_address = self.params.withdrawal_asset.get(chain, {})
-                    if not withdrawal_asset_address or not withdrawal_asset_symbol or not balance:
-                        action = {
-                            "type": Action.FIND_BRIDGE_ROUTE.value,
-                            "from_chain": chain,
-                            "to_chain": chain,
-                            "from_token_address": token_address,
-                            "from_token_symbol": token_symbol,
-                            "to_token_address": withdrawal_asset_address,
-                            "to_token_symbol": withdrawal_asset_symbol
-                        }
-                        actions.append(action)
+                    if not balance:
+                        continue
+
+                    if withdrawal_asset_address == token_address:
+                        continue
+                    
+                    action = {
+                        "action": Action.FIND_BRIDGE_ROUTE.value,
+                        "from_chain": chain,
+                        "to_chain": chain,
+                        "from_token_address": token_address,
+                        "from_token_symbol": token_symbol,
+                        "to_token_address": withdrawal_asset_address,
+                        "to_token_symbol": withdrawal_asset_symbol
+                    }
+                    actions.append(action)
 
             serialized_actions = json.dumps(actions)
             payload = SwapFundsToWithdrawalAssetPayload(

@@ -126,4 +126,19 @@ ROUNDS_INFO = {
         "description": "Checks that the transaction was succesful",
         "transitions": {},
     },
+    "WithdrawalDecisionRound": {
+        "name": "Deciding withdrawal steps",
+        "description": "Decides the next step in the withdrawal process.",
+        "transitions": {},
+    },
+    "WithdrawFundsRound": {
+        "name": "Withdrawing funds",
+        "description": "Withdraws funds from all current positions.",
+        "transitions": {},
+    },
+    "SwapFundsToWithdrawalAssetRound": {
+        "name": "Converting funds",
+        "description": "Converts all assets to the withdrawal asset.",
+        "transitions": {},
+    },
 }

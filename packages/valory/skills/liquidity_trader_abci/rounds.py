@@ -614,7 +614,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.SWAP_FUNDS: SwapFundsToWithdrawalAssetRound,
             Event.IDLE: EvaluateStrategyRound,
             Event.NONE: WithdrawalDecisionRound,
-            Event.ERROR: WithdrawalDecisionRound
+            Event.ERROR: EvaluateStrategyRound,
         },
         WithdrawFundsRound: {
             Event.DONE: DecisionMakingRound,

@@ -107,6 +107,60 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         """Initialize the balancer pool behaviour."""
         super().__init__(**kwargs)
 
+    def update_value(
+        self, **kwargs: Any
+    ) -> Generator[None, None, Tuple[Optional[list], Optional[list]]]:
+        """Fetch and flatten pool token addresses."""
+
+        pool_id = kwargs.get("pool_id")
+        chain = kwargs.get("chain")
+        vault_address = kwargs.get("vault_address")
+        max_amounts_in = kwargs.get("max_amounts_in")
+        assets = kwargs.get("assets")
+        if not pool_id or not chain:
+            self.context.logger.error(
+                "Missing required parameters: 'pool_id' or 'chain'"
+            )
+            return None, None
+        try:
+            pool_info = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=vault_address,
+                contract_public_id=VaultContract.contract_id,
+                contract_callable="get_pool_tokens",
+                pool_id=pool_id,
+                data_key="tokens",
+                chain_id=chain,
+            )
+            if not pool_info or not isinstance(pool_info, list) or not pool_info[0]:
+                self.context.logger.error(
+                    "Invalid pool_info data received from contract interaction."
+                )
+                return None, None
+            # Safely extract and flatten token addresses
+            tokens_nested = pool_info[0]
+            new_max_amounts_in = yield from self.adjust_amounts(
+                assets, max_amounts_in, tokens_nested
+            )
+            return tokens_nested, new_max_amounts_in
+        except Exception as e:
+            self.context.logger.error(f"Error fetching pool tokens: {str(e)}")
+            return None, None
+
+    def adjust_amounts(
+        self, assets, max_amounts_in, assets_new
+    ) -> Generator[None, None, Tuple[Optional[list]]]:
+        """Return the Max Amount"""
+
+        # Initialize the new amounts list with zeros
+        new_max_amounts_in = [0] * len(assets_new)
+        # Create a dictionary to map assets to their amounts for quick lookup
+        asset_to_amount = dict(zip(assets, max_amounts_in))
+        # Set the amounts in the new list based on the presence of the assets in assets_new
+        for i, asset in enumerate(assets_new):
+            new_max_amounts_in[i] = asset_to_amount.get(asset, 0)
+        return new_max_amounts_in
+
     def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Enter a Balancer pool."""
         pool_address = kwargs.get("pool_address")
@@ -143,6 +197,14 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         # TO-DO: calculate minimum_bpt
         minimum_bpt = 0
 
+        new_assets, new_max_amounts_in = yield from self.update_value(
+            assets=assets,
+            max_amounts_in=max_amounts_in,
+            vault_address=vault_address,
+            pool_id=pool_id,
+            chain=chain,
+        )
+
         # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
         from_internal_balance = ZERO_ADDRESS in assets
 
@@ -155,8 +217,8 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             pool_id=pool_id,
             sender=safe_address,
             recipient=safe_address,
-            assets=assets,
-            max_amounts_in=max_amounts_in,
+            assets=new_assets,
+            max_amounts_in=new_max_amounts_in,
             join_kind=join_kind,
             minimum_bpt=minimum_bpt,
             from_internal_balance=from_internal_balance,

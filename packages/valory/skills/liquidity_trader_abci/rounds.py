@@ -43,7 +43,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     PostTxSettlementPayload,
     WithdrawalDecisionPayload,
     WithdrawFundsPayload,
-    SwapFundsToWithdrawalAssetPayload
+    SwapFundsToWithdrawalAssetPayload,
 )
 
 
@@ -78,6 +78,7 @@ class Event(Enum):
     WITHDRAW_FUNDS = "withdraw_funds"
     SWAP_FUNDS = "swap_funds"
     IDLE = "idle"
+
 
 class SynchronizedData(BaseSynchronizedData):
     """
@@ -456,6 +457,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
             return synced_data, event
 
+
 class WithdrawalDecisionRound(CollectSameUntilThresholdRound):
     """WithdrawalDecisionRound"""
 
@@ -484,6 +486,7 @@ class WithdrawalDecisionRound(CollectSameUntilThresholdRound):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
 
+
 class WithdrawFundsRound(CollectSameUntilThresholdRound):
     """Round to collect withdraw funds actions"""
 
@@ -509,14 +512,14 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
             return synced_data, Event.ERROR
 
         return synced_data, Event.DONE
-    
-    
+
+
 class SwapFundsToWithdrawalAssetRound(WithdrawFundsRound):
     """Round to collect swap funds actions"""
 
     payload_class = SwapFundsToWithdrawalAssetPayload
 
-    
+
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""
 
@@ -628,7 +631,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: SwapFundsToWithdrawalAssetRound,
             Event.ROUND_TIMEOUT: SwapFundsToWithdrawalAssetRound,
             Event.NONE: SwapFundsToWithdrawalAssetRound,
-            Event.ERROR: EvaluateStrategyRound
+            Event.ERROR: EvaluateStrategyRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
@@ -643,7 +646,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         FinishedTxPreparationRound,
         FinishedCallCheckpointRound,
         FinishedCheckStakingKPIMetRound,
-        FailedMultiplexerRound
+        FailedMultiplexerRound,
     }
     event_to_timeout: Dict[Event, float] = {
         Event.ROUND_TIMEOUT: 30.0,
@@ -663,7 +666,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         DecisionMakingRound: set(),
         PostTxSettlementRound: set(),
         WithdrawFundsRound: set(),
-        SwapFundsToWithdrawalAssetPayload: set()
+        SwapFundsToWithdrawalAssetPayload: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedCallCheckpointRound: {get_name(SynchronizedData.most_voted_tx_hash)},

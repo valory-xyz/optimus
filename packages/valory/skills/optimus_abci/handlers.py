@@ -59,7 +59,10 @@ from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.optimus_abci.dialogues import HttpDialogue, HttpDialogues
 from packages.valory.skills.optimus_abci.models import SharedState
-from packages.valory.skills.liquidity_trader_abci.behaviours import WithdrawalStatus, WITHDRAWAL_STATUS
+from packages.valory.skills.liquidity_trader_abci.behaviours import (
+    WithdrawalStatus,
+    WITHDRAWAL_STATUS,
+)
 
 ABCIHandler = BaseABCIRoundHandler
 SigningHandler = BaseSigningHandler
@@ -134,8 +137,11 @@ class HttpHandler(BaseHttpHandler):
             ],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
-                (rf"{hostname_regex}\/withdrawal_status", self._handle_get_withdrawal_status),
-            ]
+                (
+                    rf"{hostname_regex}\/withdrawal_status",
+                    self._handle_get_withdrawal_status,
+                ),
+            ],
         }
 
         self.json_content_header = "Content-Type: application/json\n"
@@ -347,13 +353,27 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the HttpDialogue instance
         """
         try:
-            current_status = self.context.shared_state.get("withdrawal_status", WithdrawalStatus.NOT_REQUESTED.value)
-            if current_status not in {WithdrawalStatus.NOT_REQUESTED.value, WithdrawalStatus.COMPLETED.value, WithdrawalStatus.DISCARDED.value }:
-                self._send_already_in_progress_response(http_msg, http_dialogue, {"message": "Withdrawal request already in progress."})
-                return 
-            
-            self.context.shared_state[WITHDRAWAL_STATUS] = WithdrawalStatus.REQUESTED.value
-            self._send_ok_response(http_msg, http_dialogue, {"message": "Withdrawal request initiated."})
+            current_status = self.context.shared_state.get(
+                "withdrawal_status", WithdrawalStatus.NOT_REQUESTED.value
+            )
+            if current_status not in {
+                WithdrawalStatus.NOT_REQUESTED.value,
+                WithdrawalStatus.COMPLETED.value,
+                WithdrawalStatus.DISCARDED.value,
+            }:
+                self._send_already_in_progress_response(
+                    http_msg,
+                    http_dialogue,
+                    {"message": "Withdrawal request already in progress."},
+                )
+                return
+
+            self.context.shared_state[
+                WITHDRAWAL_STATUS
+            ] = WithdrawalStatus.REQUESTED.value
+            self._send_ok_response(
+                http_msg, http_dialogue, {"message": "Withdrawal request initiated."}
+            )
 
         except Exception as e:
             self.context.logger.error(f"Error initiating withdrawal request: {str(e)}")
@@ -370,8 +390,12 @@ class HttpHandler(BaseHttpHandler):
         """
         try:
             # Retrieve the current withdrawal status
-            withdrawal_status = self.context.shared_state.get(WITHDRAWAL_STATUS, WithdrawalStatus.NOT_REQUESTED.value)
-            self._send_ok_response(http_msg, http_dialogue, {"withdrawal_status": withdrawal_status})
+            withdrawal_status = self.context.shared_state.get(
+                WITHDRAWAL_STATUS, WithdrawalStatus.NOT_REQUESTED.value
+            )
+            self._send_ok_response(
+                http_msg, http_dialogue, {"withdrawal_status": withdrawal_status}
+            )
 
         except Exception as e:
             self.context.logger.error(f"Error retrieving withdrawal status: {str(e)}")

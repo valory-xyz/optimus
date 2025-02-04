@@ -311,7 +311,9 @@ class Params(BaseParams):
         self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
         self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
         self.pnl_check_interval = self._ensure("pnl_check_interval", kwargs, int)
-        self.withdrawal_asset = json.loads(self._ensure("withdrawal_asset", kwargs, str))
+        self.withdrawal_asset = json.loads(
+            self._ensure("withdrawal_asset", kwargs, str)
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

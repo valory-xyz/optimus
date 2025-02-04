@@ -41,9 +41,9 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
-    WithdrawalDecisionPayload,
-    WithdrawFundsPayload,
     SwapFundsToWithdrawalAssetPayload,
+    WithdrawFundsPayload,
+    WithdrawalDecisionPayload,
 )
 
 
@@ -467,6 +467,9 @@ class WithdrawalDecisionRound(CollectSameUntilThresholdRound):
     none_event = Event.NONE
     error_event = Event.ERROR
     no_majority_event = Event.NO_MAJORITY
+    swap_funds_event = Event.SWAP_FUNDS
+    idle_event = Event.IDLE
+    withdraw_funds = Event.WITHDRAW_FUNDS
     collection_key = get_name(SynchronizedData.participant_to_withdrawal_decision)
     selection_key = (get_name(SynchronizedData.chain_id),)
 

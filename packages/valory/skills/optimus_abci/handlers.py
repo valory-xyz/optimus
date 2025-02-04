@@ -24,9 +24,9 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast, Generator
+from typing import Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
-import threading
+
 import yaml
 from aea.protocols.base import Message
 
@@ -52,6 +52,10 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
+from packages.valory.skills.liquidity_trader_abci.behaviours import (
+    WITHDRAWAL_STATUS,
+    WithdrawalStatus,
+)
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
 )
@@ -59,10 +63,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.optimus_abci.dialogues import HttpDialogue, HttpDialogues
 from packages.valory.skills.optimus_abci.models import SharedState
-from packages.valory.skills.liquidity_trader_abci.behaviours import (
-    WithdrawalStatus,
-    WITHDRAWAL_STATUS,
-)
+
 
 ABCIHandler = BaseABCIRoundHandler
 SigningHandler = BaseSigningHandler

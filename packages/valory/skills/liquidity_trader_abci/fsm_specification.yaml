@@ -3,6 +3,7 @@ alphabet_in:
 - CHECKPOINT_TX_EXECUTED
 - DONE
 - ERROR
+- IDLE
 - NEXT_CHECKPOINT_NOT_REACHED_YET
 - NONE
 - NO_MAJORITY
@@ -12,10 +13,12 @@ alphabet_in:
 - SETTLE
 - STAKING_KPI_MET
 - STAKING_KPI_NOT_MET
+- SWAP_FUNDS
 - UNRECOGNIZED
 - UPDATE
 - VANITY_TX_EXECUTED
 - WAIT
+- WITHDRAW_FUNDS
 default_start_state: CallCheckpointRound
 final_states:
 - FailedMultiplexerRound
@@ -31,6 +34,7 @@ start_states:
 - DecisionMakingRound
 - GetPositionsRound
 - PostTxSettlementRound
+- WithdrawFundsRound
 states:
 - CallCheckpointRound
 - CheckStakingKPIMetRound
@@ -44,6 +48,9 @@ states:
 - FinishedTxPreparationRound
 - GetPositionsRound
 - PostTxSettlementRound
+- SwapFundsToWithdrawalAssetRound
+- WithdrawFundsRound
+- WithdrawalDecisionRound
 transition_func:
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
@@ -73,7 +80,7 @@ transition_func:
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
     (EvaluateStrategyRound, WAIT): FinishedEvaluateStrategyRound
-    (GetPositionsRound, DONE): EvaluateStrategyRound
+    (GetPositionsRound, DONE): WithdrawalDecisionRound
     (GetPositionsRound, NONE): GetPositionsRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
@@ -85,3 +92,21 @@ transition_func:
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
+    (SwapFundsToWithdrawalAssetRound, DONE): DecisionMakingRound
+    (SwapFundsToWithdrawalAssetRound, ERROR): EvaluateStrategyRound
+    (SwapFundsToWithdrawalAssetRound, NONE): SwapFundsToWithdrawalAssetRound
+    (SwapFundsToWithdrawalAssetRound, NO_MAJORITY): SwapFundsToWithdrawalAssetRound
+    (SwapFundsToWithdrawalAssetRound, ROUND_TIMEOUT): SwapFundsToWithdrawalAssetRound
+    (WithdrawFundsRound, DONE): DecisionMakingRound
+    (WithdrawFundsRound, ERROR): EvaluateStrategyRound
+    (WithdrawFundsRound, NONE): WithdrawFundsRound
+    (WithdrawFundsRound, NO_MAJORITY): WithdrawFundsRound
+    (WithdrawFundsRound, ROUND_TIMEOUT): WithdrawFundsRound
+    (WithdrawalDecisionRound, DONE): EvaluateStrategyRound
+    (WithdrawalDecisionRound, ERROR): EvaluateStrategyRound
+    (WithdrawalDecisionRound, IDLE): EvaluateStrategyRound
+    (WithdrawalDecisionRound, NONE): WithdrawalDecisionRound
+    (WithdrawalDecisionRound, NO_MAJORITY): WithdrawalDecisionRound
+    (WithdrawalDecisionRound, ROUND_TIMEOUT): WithdrawalDecisionRound
+    (WithdrawalDecisionRound, SWAP_FUNDS): SwapFundsToWithdrawalAssetRound
+    (WithdrawalDecisionRound, WITHDRAW_FUNDS): WithdrawFundsRound

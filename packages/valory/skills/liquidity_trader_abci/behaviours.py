@@ -1655,13 +1655,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     
     def _fetch_dcxt_market_data(self, ledger_id: str
     ) -> Generator[None, None, Dict[Union[str, Any], Dict[str, object]]]:
-        breakpoint()
         params = {
-            "ledger_id": 'mode', #todo: pass ledger_id from params
+            "ledger_id": "mode", #todo: pass ledger_id from params
         }
         for key, value in params.items():
             params[key] = value.encode("utf-8")  # type: ignore
-        exchanges = self.params.exchange_ids[ledger_id]
+        exchanges = self.params.exchange_ids["mode"]
 
         markets = {}
         for exchange_id in exchanges:

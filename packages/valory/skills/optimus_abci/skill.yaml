@@ -18,20 +18,20 @@ connections:
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
 contracts: []
 protocols:
-- eightballer/tickers:0.1.0:bafybeihmlyrsrztednef3p2nu42z5vnkur2jr46kbesxqujbfo3ap26jze
-- eightballer/orders:0.1.0:bafybeifhwwwwj2ygxd3k5syf3oaohhhvwlb3frspszzofyatempnhnk3la
-- eightballer/balances:0.1.0:bafybeicjxjwmr4wubghu4fa3cdg7dhwpy6b3dhvuaqbzem3jvycooyyazm
+- eightballer/tickers:0.1.0:bafybeiccdlqdnarfwjsr4qxhfv6ywun4yx5g3dlbrtupda253gtpfjnimm
+- eightballer/orders:0.1.0:bafybeic3s3pah3zdxtwq3yk2osmnwfhtv4h6f2hkbrundzkzorvlvwwaxy
+- eightballer/balances:0.1.0:bafybeicd6xekatd6xhnwt2vzgffa3pgpvbzkhkxzrjyj3kzzll5xbr22tu
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/market_data_fetcher_abci:0.1.0:bafybeib7zl3eoq4e7c35alhplnuaka2dxwrhsagby2ptxdevcz35dpgfdm
+- valory/market_data_fetcher_abci:0.1.0:bafybeiarsb75q2jcynyavnw7k7n5sscaa7oz7l35i2sv4sosyg3uwnz7uq
 - valory/trader_decision_maker_abci:0.1.0:bafybeifpxxaep6jxxc7ueeubtzbfyckivtsvhqwi4cntum6bukylwbfajy
-- valory/strategy_evaluator_abci:0.1.0:bafybeidouj2lm5prsegkhxcpxcd3v3suews3a62sikko63syaoyvz5qf4y
-- valory/portfolio_tracker_abci:0.1.0:bafybeibxuystq5svpmh7y3h5df6yrs6g3lvyqb5nlvaqrrdi5c2iqh4k2a
+- valory/strategy_evaluator_abci:0.1.0:bafybeih2x2jnv6yb25lqp7ojsystisvax5jznpouvzxk2y3wxvlcqjgwlm
+- valory/portfolio_tracker_abci:0.1.0:bafybeihnr6dskldk2livnmjbhlikyxs5jxyzb73m66xb3xdfrkrbs7leve
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeibjyykhd2nwsj5xiuclhuifbz45us3grxcwtezkm6m3bsfu3urzce
+- valory/liquidity_trader_abci:0.1.0:bafybeib7nunuzxwvjnqgkf3rhgsh6n55c36jvsad5caj5cdp4b33ws3awe
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:

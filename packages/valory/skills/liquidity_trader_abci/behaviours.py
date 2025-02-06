@@ -1615,6 +1615,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         result = self.execute_strategy(**kwargs)
         self.selected_opportunities = result.get("optimal_strategies")
         self.position_to_exit = result.get("position_to_exit")
+
+        logs = result.get("logs", [])
+        if logs:
+            for log in logs:
+                self.context.logger.info(log)
+
         if self.selected_opportunities is not None:
             self.context.logger.info(
                 f"Selected opportunities: {self.selected_opportunities}"

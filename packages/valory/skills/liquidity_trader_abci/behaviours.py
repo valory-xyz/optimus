@@ -1727,6 +1727,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     else [],
                     "coingecko_api_key": self.coingecko.api_key,
                     "get_metrics": False,
+                    "market_data": markets,
+                    "portfolio_data": {"ETH": 2000000000000000, "0xd988097fb8612cc24eec14542bc03424c656005f": 1000.0, "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9": 0.0, "0xdfc7c877a950e49d2610114102175a06c2e3167a": 6.24e-16, "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": 1000.0, "0x4200000000000000000000000000000000000006": 0.006016230367458887, "null": 0.002},
                 }
             )
 
@@ -1740,14 +1742,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"
                     )
-                    for opportunity in opportunities:
-                        # Customize the following line to include relevant details from each opportunity
-                        self.context.logger.info(
-                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                            f"Chain: {opportunity.get('chain', 'N/A')}, "
-                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
-                        )
+                    # for opportunity in opportunities:
+                    #     # Customize the following line to include relevant details from each opportunity
+                    #     self.context.logger.info(
+                    #         f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                    #         f"Chain: {opportunity.get('chain', 'N/A')}, "
+                    #         f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                    #         f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                    #     )
                     self.trading_opportunities.extend(opportunities)
             else:
                 self.context.logger.warning(

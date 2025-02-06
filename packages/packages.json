@@ -14,14 +14,14 @@
         "contract/valory/staking_token/0.1.0": "bafybeic4ug4p22q4hsh5z4hhjrishvnswino2fsleqsgdxlusd5h2x5hwy",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeidziyf4o763sw3fqlqjbpz3thrupuwx44barj72zj7tjnxbvkhoxa",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeieruhikfob2lporaysckr63y2ynvtqeqadoi2e3olddzv4rhtrwkm",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeib7nunuzxwvjnqgkf3rhgsh6n55c36jvsad5caj5cdp4b33ws3awe",
-        "skill/valory/optimus_abci/0.1.0": "bafybeibom5kxdy2hgrcbwgwir4r5ohkadknmygq4jur7mmdqkpyd5ff3fy",
-        "agent/valory/optimus/0.1.0": "bafybeidaprcy5fbap55orpag5poshfl7b5okynuaf6rwhc2qpgirrfrc3u",
-        "service/valory/optimus/0.1.0": "bafybeicu6dm6qjqnaf3yagbadiieznasbsl7eetua54adrxqm75trfwkui"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeicwimbfc652qfuvcvzhoialuo32dnncfwjwv37yyiznkg7l6xmoje",
+        "skill/valory/optimus_abci/0.1.0": "bafybeibosodynpkq27qjccb5qmrkagdlsgqsujkiwcjxz63uaw7r4mjpny",
+        "agent/valory/optimus/0.1.0": "bafybeicarrmpus3xuecbgtoqicksyjt4u2cg4x3hg7qwocubmd2wl3odgm",
+        "service/valory/optimus/0.1.0": "bafybeigemnvinjr3svvc2sfgrst42ncslw4oley4gzfdryezm65izjul4m"
     },
     "third_party": {
-        "custom/eightballer/rsi_strategy/0.1.0": "bafybeie3vxjkkq6entt4uc5fxfio6ibiu5sq5j6jageru6oar4qd6xjywq",
-        "custom/eightballer/sma_strategy/0.1.0": "bafybeianybjti5txl5r6e4hvc67delwcompanklbf3cfiagd5fab2vhejq",
+        "custom/eightballer/rsi_strategy/0.1.0": "bafybeignrsdvmjcncr663mli36y463qmwimwzdfocrzymaaxhpgbufukka",
+        "custom/eightballer/sma_strategy/0.1.0": "bafybeidjhvfvsn7o7xvfksc5lup4muu7xrf7fysl2buzglsgnp2a3ct66y",
         "custom/eightballer/vwap_momentum/0.1.0": "bafybeih2uiklkrin777kzhyk5khlnj35wapw2m5zeojrhglfosm76xjhym",
         "custom/valory/trend_following_strategy/0.1.0": "bafybeibejqrhpxpcszjjq6sqqknk6ja72zfiyebqmpyw32e5hjd5hanx7e",
         "custom/eightballer/always_buy/0.1.0": "bafybeia5hmy2gbjlopbhvowvlznmwlal2sn3qome34wa54mnmvb6kkura4",

@@ -23,7 +23,7 @@ import json
 import math
 from abc import ABC
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
     Any,
@@ -35,6 +35,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    Union,
     cast,
 )
 from urllib.parse import urlencode
@@ -49,6 +50,14 @@ from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
+from packages.eightballer.connections.dcxt.connection import (
+    PUBLIC_ID as DCXT_CONNECTION_ID,
+)
+from packages.valory.skills.market_data_fetcher_abci.models import Coingecko, Params
+
+from packages.eightballer.protocols.tickers.dialogues import TickersDialogues
+from packages.eightballer.protocols.tickers.message import TickersMessage
+
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -137,6 +146,27 @@ WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
 
+MAX_RETRIES = 3
+MARKETS_FILE_NAME = "markets.json"
+TOKEN_ID_FIELD = "coingecko_id"  # nosec: B105:hardcoded_password_string
+TOKEN_ADDRESS_FIELD = "address"  # nosec: B105:hardcoded_password_string
+STRATEGY_KEY = "trading_strategy"
+ENTRY_POINT_STORE_KEY = "entry_point"
+TRANSFORM_CALLABLE_STORE_KEY = "transform_callable"
+DEFAULT_MARKET_SEPARATOR = "/"
+DEFAULT_DATE_RANGE_SECONDS = 300
+DEFAULT_DATA_LOOKBACK_MINUTES = 60
+DEFAULT_DATA_VOLUME = 100
+SECONDS_TO_MILLISECONDS = 1000
+
+def date_range_generator(  # type: ignore
+    start, end, seconds_delta=DEFAULT_DATE_RANGE_SECONDS
+) -> Generator[int, None, None]:
+    """Generate a range of dates in the ms format. We do this as tickers are just spot prices and we dont yet retrieve historical data."""
+    current = start
+    while current < end:
+        yield current.timestamp() * SECONDS_TO_MILLISECONDS
+        current += timedelta(seconds=seconds_delta)
 
 class DexType(Enum):
     """DexType"""
@@ -1085,6 +1115,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     position_to_exit = None
     trading_opportunities = []
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._performative_to_dialogue_class = {
+            TickersMessage.Performative.GET_ALL_TICKERS: self.context.tickers_dialogues,
+        }
+
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
@@ -1595,10 +1631,77 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     selected_opportunity["token1"] = to_checksum_address(
                         selected_opportunity["token1"]
                     )
+    # adding dcxt support to support babydegen strategy
+    def get_dcxt_response(
+        self,
+        protocol_performative: TickersMessage.Performative,
+        **kwargs: Any,
+    ) -> Generator[None, None, Any]:
+        """Get a ccxt response."""
+        if protocol_performative not in self._performative_to_dialogue_class:
+            raise ValueError(
+                f"Unsupported protocol performative {protocol_performative:!r}"
+            )
+        dialogue_class = self._performative_to_dialogue_class[protocol_performative]
 
+        msg, dialogue = dialogue_class.create(
+            counterparty=str(DCXT_CONNECTION_ID),
+            performative=protocol_performative,
+            **kwargs,
+        )
+        msg._sender = str(self.context.skill_id)  # pylint: disable=protected-access
+        response = yield from self._do_request(msg, dialogue)
+        return response
+    
+    def _fetch_dcxt_market_data(self, ledger_id: str
+    ) -> Generator[None, None, Dict[Union[str, Any], Dict[str, object]]]:
+        breakpoint()
+        params = {
+            "ledger_id": 'mode', #todo: pass ledger_id from params
+        }
+        for key, value in params.items():
+            params[key] = value.encode("utf-8")  # type: ignore
+        exchanges = self.params.exchange_ids[ledger_id]
+
+        markets = {}
+        for exchange_id in exchanges:
+            msg: TickersMessage = yield from self.get_dcxt_response(
+                protocol_performative=TickersMessage.Performative.GET_ALL_TICKERS,  # type: ignore
+                exchange_id=exchange_id,
+                ledger_id=ledger_id,
+                params=params,
+            )
+            self.context.logger.info(
+                f"Received {len(msg.tickers.tickers)} tickers from {exchange_id}"
+            )
+
+            for ticker in msg.tickers.tickers:
+                token_address = ticker.symbol.split(DEFAULT_MARKET_SEPARATOR)[0]  # type: ignore
+
+                dates = list(
+                    date_range_generator(
+                        datetime.now()
+                        - timedelta(minutes=DEFAULT_DATA_LOOKBACK_MINUTES),
+                        datetime.now(),
+                    )
+                )
+                prices = [[date, ticker.ask] for date in dates]
+                volumes = [
+                    [
+                        date,
+                        DEFAULT_DATA_VOLUME,  # This is a placeholder for the volume
+                    ]
+                    for date in dates
+                ]
+                prices_volumes = {"prices": prices, "volumes": volumes}
+                markets[token_address] = prices_volumes
+        return markets
+    
+    
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities"""
         self.trading_opportunities.clear()
+        markets = yield from self._fetch_dcxt_market_data('mode') #fetch market data for babydegen strategy #todo: pass ledger_id from params
         yield from self.download_strategies()
         strategies = self.params.selected_strategies.copy()
         tried_strategies: Set[str] = set()

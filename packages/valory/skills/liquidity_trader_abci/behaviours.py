@@ -1711,17 +1711,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for future, result in zip(futures, results):
                 next_strategy = future_to_strategy[future]
                 tried_strategies.add(next_strategy)
-                if not result:
-                    self.context.logger.error(f"Error in strategy {next_strategy}")
-                    continue
-
                 if "error" in result:
-                    self.context.logger.error(
-                        f"Error in strategy {next_strategy}: {result.get('error')}"
-                    )
+                    errors = result.get("error", [])
+                    for error in errors:
+                        self.context.logger.error(
+                            f"Error in strategy {next_strategy}: {error}"
+                        )
                     continue
 
-                opportunities = result
+                opportunities = result.get("result", [])
                 if opportunities:
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"

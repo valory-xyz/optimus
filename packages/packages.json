@@ -2,7 +2,7 @@
     "dev": {
         "custom/valory/merkl_pools_search/0.1.0": "bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma",
         "custom/valory/asset_lending/0.1.0": "bafybeicre7cy2z2dmhkn7ayn4h5g2ddr6bvdfgmkhrbx6nry3ie5odfgzi",
-        "custom/valory/max_apr_selection/0.1.0": "bafybeifqert22fpcwb3ojhwoupxpp6p5nfzwhc5wmv3epikpuhxs2ce4rq",
+        "custom/valory/max_apr_selection/0.1.0": "bafybeidcuo4bigidw6dy2raq3mffmopvlqpuqdwenlk3qgvmsdk4z6gpeu",
         "custom/valory/balancer_pools_search/0.1.0": "bafybeigfw7i34kxc7cniykd3u4jo2tu2cpwz7fkwbk6z5okdkw5flb45w4",
         "custom/valory/uniswap_pools_search/0.1.0": "bafybeieuc2tnjpwr6kvdcl2eqs5mesck5szvkz2a35zumei76sbjtdficm",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeidthw5afkeswxqockblrzzgmeiwhqgukytyr4veaf4ok66qv3zjfe",
@@ -14,10 +14,10 @@
         "contract/valory/staking_token/0.1.0": "bafybeic4ug4p22q4hsh5z4hhjrishvnswino2fsleqsgdxlusd5h2x5hwy",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeiajn7vzmxkiqoruknqh3heb3qxlflukibalxkm6zxdvmazdoou7ou",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeigmc3f5xqrcdjakandeang56vtzp5qcqbjk4fven5d2h6t272kmpu",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeigxrycs4mlnib4in7czhcymg4tm3jtwehsqfj6zp5ljcxbnuqh5by",
-        "skill/valory/optimus_abci/0.1.0": "bafybeifdrszaydurtt3f56f3jg6qsw2lgkyjuqwc56cno3ccr5r2w425ae",
-        "agent/valory/optimus/0.1.0": "bafybeifpx3ovxbzf72uex7qbimanhkb6jmehmcxybmnobg7zwl2szg3joe",
-        "service/valory/optimus/0.1.0": "bafybeifyldockuvahwxar2gkvo2x6yqol3jjmn43fllgzzucfadtkh7sye"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiduzxmfmqry24nhtyscocpxddgcjah6au452uajwajpnxebvdweve",
+        "skill/valory/optimus_abci/0.1.0": "bafybeifw5tcvhkteso5rv2uougkgabsoamjacxynssv5y453ryhuo3f7jq",
+        "agent/valory/optimus/0.1.0": "bafybeihkdlg2opqiwszhtotsbgincvtrigvbiaohwwljduw5c5nqx27hsu",
+        "service/valory/optimus/0.1.0": "bafybeif3ho4dq63yvd6myycfsq5owy7he7drsbwfhuw6kqoiijovdxbtsq"
     },
     "third_party": {
         "custom/eightballer/sma_strategy/0.1.0": "bafybeifi3o3umjjfpznudbzwwkdtah3mbznvcecswpsgb32k7ayig4boga",

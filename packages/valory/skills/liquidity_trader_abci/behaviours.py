@@ -177,6 +177,7 @@ class DexType(Enum):
     BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
+    MARKET_TRADE = "MarketTrade"
 
 
 class Action(Enum):
@@ -196,6 +197,12 @@ class Action(Enum):
     WITHDRAW = "withdraw"
     DEPOSIT = "deposit"
 
+class Signal(Enum):
+    """Signal"""
+    BUY_SIGNAL = "buy"
+    SELL_SIGNAL = "sell"
+    HOLD_SIGNAL = "hold"
+    NA_SIGNAL = "insufficient_data"
 
 class SwapStatus(Enum):
     """SwapStatus"""
@@ -221,6 +228,10 @@ class PositionStatus(Enum):
     OPEN = "open"
     CLOSED = "closed"
 
+class TradingOpportunityType(Enum):
+    LP = "lp"
+    MARKET_TRADE = "market_trade"
+    LENDING = "lending"
 
 ASSETS_FILENAME = "assets.json"
 POOL_FILENAME = "current_pool.json"
@@ -1652,11 +1663,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if pos.get("status") == PositionStatus.OPEN.value
             ],
             "max_pools": self.params.max_pools,
+            #if baby-degen's strategies are included we only compare sharpe_ratio of all the strategies
+            "check_sharpe_ratio": self.params.include_babydegen_strategies
         }
+
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)
         self.selected_opportunities = result.get("optimal_strategies")
         self.position_to_exit = result.get("position_to_exit")
+
+        logs = result.get("logs", [])
+        if logs:
+            for log in logs:
+                self.context.logger.info(log)
+
         if self.selected_opportunities is not None:
             self.context.logger.info(
                 f"Selected opportunities: {self.selected_opportunities}"
@@ -1671,7 +1691,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     selected_opportunity["token1"] = to_checksum_address(
                         selected_opportunity["token1"]
                     )
-    # adding dcxt support to support babydegen strategy
+
     def get_dcxt_response(
         self,
         protocol_performative: TickersMessage.Performative,
@@ -1787,8 +1807,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.trading_opportunities.clear()
         yield from self.download_strategies()
 
-        markets = yield from self._fetch_dcxt_market_data(ledger_id='mode')
-        portfolio = yield from self._fetch_portfolio_data(markets, chain='mode')
+        if self.params.include_babydegen_strategies:
+            markets = yield from self._fetch_dcxt_market_data(ledger_id=self.params.target_investment_chains[0])
+            portfolio = yield from self._fetch_portfolio_data(markets, chain=self.params.target_investment_chains[0])
+        else:
+            markets = {}
+            portfolio = {}
 
         strategies = self.params.selected_strategies.copy()
         tried_strategies: Set[str] = set()
@@ -1854,29 +1878,42 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for future, result in zip(futures, results):
                 next_strategy = future_to_strategy[future]
                 tried_strategies.add(next_strategy)
-                if not result:
-                    self.context.logger.error(f"Error in strategy {next_strategy}")
-                    continue
-
                 if "error" in result:
-                    self.context.logger.error(
-                        f"Error in strategy {next_strategy}: {result.get('error')}"
-                    )
+                    errors = result.get("error", [])
+                    for error in errors:
+                        self.context.logger.error(
+                            f"Error in strategy {next_strategy}: {error}"
+                        )
                     continue
 
-                opportunities = result
+                opportunities = result.get("result", [])
+                self.trading_opportunities.extend(opportunities)
                 if opportunities:
-                    self.context.logger.info(
-                        f"Opportunities found using {next_strategy} strategy"
-                    )
                     for opportunity in opportunities:
-                        self.context.logger.info(
-                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                            f"Chain: {opportunity.get('chain', 'N/A')}, "
-                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
-                        )
-                    self.trading_opportunities.extend(opportunities)
+                        opportunity_type = opportunity.get("type")
+                        if opportunity_type == TradingOpportunityType.LP.value:
+                            self.context.logger.info(
+                                f"Liquidity Provider Opportunity: "
+                                f"Pool Address: {opportunity.get('pool_address', 'N/A')}, "
+                                f"Chain: {opportunity.get('chain', 'N/A')}, "
+                                f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                                f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                            )
+                        elif opportunity_type == TradingOpportunityType.MARKET_TRADE.value:
+                            self.context.logger.info(
+                                f"Market Trade Opportunity: "
+                                f"Asset: {opportunity.get('token', 'N/A')}, "
+                                f"Signal: {opportunity.get('signal', 'N/A')}, "
+                            )
+                        elif opportunity_type == TradingOpportunityType.LENDING.value:
+                            self.context.logger.info(
+                                f"Lending Opportunity: "
+                                f"Aggregator Address: {opportunity.get('pool_address', 'N/A')}, "
+                                f"Chain: {opportunity.get('chain', 'N/A')}, "
+                                f"Lending Asset: {opportunity.get('token0_symbol', 'N/A')}, "
+                            )
+                        else:
+                            self.context.logger.warning(f"Unknown Opportunity Type: {opportunity_type}")
                 else:
                     self.context.logger.warning(
                         f"No opportunity found using {next_strategy} strategy"
@@ -2012,6 +2049,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get the order of transactions to perform based on the current pool status and token balances."""
         actions = []
         tokens = []
+
         # Process rewards
         if self._can_claim_rewards():
             yield from self._process_rewards(actions)
@@ -2032,30 +2070,73 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if available_tokens is None:
             return actions
         tokens.extend(available_tokens)
+
+        # Handle exit pool action if there is a position to exit
         if self.position_to_exit:
             dex_type = self.position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
-            exit_pool_action = self._build_exit_pool_action(
-                tokens, num_of_tokens_required
-            )
-            if not exit_pool_action:
-                self.context.logger.error("Error building exit pool action")
-                return None
-            actions.append(exit_pool_action)
-        # Build actions based on selected opportunities
+            exit_pool_action = self._build_exit_pool_action(tokens, num_of_tokens_required)
+            if exit_pool_action:
+                actions.append(exit_pool_action)
+
         for opportunity in self.selected_opportunities:
-            bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
-            if bridge_swap_actions is None:
-                self.context.logger.info("Error preparing bridge swap actions")
-                return None
+            opportunity_type = opportunity.get("type")
+            if opportunity_type == TradingOpportunityType.LP.value or opportunity_type == TradingOpportunityType.LENDING.value:
+                actions = yield from self._handle_lp_opportunity(opportunity, tokens, actions)
+            elif opportunity_type == TradingOpportunityType.MARKET_TRADE.value:
+                actions = yield from self._handle_market_trade_opportunity(opportunity, tokens, actions)
+
+        return actions
+
+    def _handle_lp_opportunity(
+        self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]], actions: List[Dict[str, Any]]
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
+        if bridge_swap_actions is None:
+            self.context.logger.info("Error preparing bridge swap actions")
+            return actions
+        if bridge_swap_actions:
+            actions.extend(bridge_swap_actions)
+
+        enter_pool_action = self._build_enter_pool_action(opportunity)
+        if not enter_pool_action:
+            self.context.logger.error("Error building enter pool action")
+            return actions
+        actions.append(enter_pool_action)
+
+        return actions
+
+    def _handle_market_trade_opportunity(
+        self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]], actions: List[Dict[str, Any]]
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        signal = opportunity.get("signal")
+        chain = opportunity.get("chain")
+
+        if signal == Signal.BUY_SIGNAL.value:
+            buy_token = opportunity.get("token")
+
+            if buy_token == 'ETH':
+                buy_token = ZERO_ADDRESS
+                buy_token_symbol = 'ETH'
+            else:
+                buy_token_symbol = yield from self._get_token_symbol(chain, buy_token)
+                if not buy_token_symbol:
+                    self.context.logger.error(f"Could not find symbol for token {buy_token}")
+                    return actions
+
+            bridge_swap_actions = self._build_bridge_swap_actions(
+                {
+                    "token0": buy_token,
+                    "token0_symbol": buy_token_symbol,
+                    "chain": chain,
+                    "dex_type": DexType.MARKET_TRADE.value,
+                    "relative_funds_percentage": opportunity.get('relative_funds_percentage'),
+                },
+                tokens,
+            )
             if bridge_swap_actions:
                 actions.extend(bridge_swap_actions)
-
-            enter_pool_action = self._build_enter_pool_action(opportunity)
-            if not enter_pool_action:
-                self.context.logger.error("Error building enter pool action")
-                return None
-            actions.append(enter_pool_action)
+        # If signal is "sell" or "hold", do nothing
 
         return actions
 
@@ -2138,6 +2219,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Prepare tokens for exit or investment, and append exit actions if needed."""
         tokens = []
 
+        #if earlier we invested in market trade, we just need portfolio (position) data now
         if self.position_to_exit:
             dex_type = self.position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
@@ -2415,11 +2497,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if not dest_token0_address or not dest_token0_symbol or not dest_chain:
             self.context.logger.error(
-                f"Incomplete data in highest APR pool {opportunity}"
+                f"Incomplete data {opportunity}"
             )
             return None
 
-        if dex_type == DexType.STURDY.value:
+        if dex_type == DexType.STURDY.value or dex_type == DexType.MARKET_TRADE.value:
             # Handle STURDY dex type
             for token in tokens:
                 self._add_bridge_swap_action(
@@ -2437,7 +2519,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if not dest_token1_address or not dest_token1_symbol:
                 self.context.logger.error(
-                    f"Incomplete data in highest APR pool {opportunity}"
+                    f"Incomplete data {opportunity}"
                 )
                 return None
 

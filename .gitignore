@@ -55,8 +55,7 @@ packages/valory/skills/market_data_fetcher_abci/
 packages/valory/skills/portfolio_tracker_abci/
 packages/valory/skills/strategy_evaluator_abci/
 packages/valory/skills/trader_decision_maker_abci
-packages/valory/customs
-
+packages/valory/customs/trend_following_strategy
 
 packages/valory/protocols/*
 

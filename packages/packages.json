@@ -1,10 +1,10 @@
 {
     "dev": {
         "custom/valory/merkl_pools_search/0.1.0": "bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma",
-        "custom/valory/asset_lending/0.1.0": "bafybeiejhhvualyp7xokskpyc3ki2k3u7v42qwe3hva36pgph3d2qwn6zu",
-        "custom/valory/max_apr_selection/0.1.0": "bafybeihk4ehqcwlwlqdl2ifkyz2hfwfs232fs3n5rt64wfrobjt5ot2woy",
-        "custom/valory/balancer_pools_search/0.1.0": "bafybeihzodbkd4vatcphzu4672x5nitymhchbecvew7rpbu3hteh5rgyai",
-        "custom/valory/uniswap_pools_search/0.1.0": "bafybeib7ibbjnhycdzyd3ind2no3sn77wxnlde3etxzh65lycj6obodq2e",
+        "custom/valory/asset_lending/0.1.0": "bafybeicre7cy2z2dmhkn7ayn4h5g2ddr6bvdfgmkhrbx6nry3ie5odfgzi",
+        "custom/valory/max_apr_selection/0.1.0": "bafybeifqert22fpcwb3ojhwoupxpp6p5nfzwhc5wmv3epikpuhxs2ce4rq",
+        "custom/valory/balancer_pools_search/0.1.0": "bafybeigfw7i34kxc7cniykd3u4jo2tu2cpwz7fkwbk6z5okdkw5flb45w4",
+        "custom/valory/uniswap_pools_search/0.1.0": "bafybeieuc2tnjpwr6kvdcl2eqs5mesck5szvkz2a35zumei76sbjtdficm",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeidthw5afkeswxqockblrzzgmeiwhqgukytyr4veaf4ok66qv3zjfe",
         "contract/valory/balancer_vault/0.1.0": "bafybeibd3luq5ghhnhrkzeaytinwklnajk4urkd6ihbd26swziqfkjsfeq",
         "contract/valory/erc20/0.1.0": "bafybeidybudhhcv73fhccxyxop3in2k4ckswowajqsxnwt2oqysf6munom",
@@ -14,12 +14,14 @@
         "contract/valory/staking_token/0.1.0": "bafybeic4ug4p22q4hsh5z4hhjrishvnswino2fsleqsgdxlusd5h2x5hwy",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeiajn7vzmxkiqoruknqh3heb3qxlflukibalxkm6zxdvmazdoou7ou",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeigmc3f5xqrcdjakandeang56vtzp5qcqbjk4fven5d2h6t272kmpu",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidneasv2yf3uaujlvtnj7sphkc3bnlfzb4dmhxhivnarpavsqorle",
-        "skill/valory/optimus_abci/0.1.0": "bafybeicilmohuxn7bwzlvcdg6owii64vzyscqalswsdnxpngbqoxvbkjsq",
-        "agent/valory/optimus/0.1.0": "bafybeic53ieta7mzxkwhzobautcueb2vrsmvsdopvpigs55sgjp5lqrjnq",
-        "service/valory/optimus/0.1.0": "bafybeicio3fqqntuzj73h6r5csxt77ybvaptd7iv67qp7rpesguwdor35a"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeieovmqqbsnxqq4oavnv5o42hucfp4orinshmuflopofkfw4jejaui",
+        "skill/valory/optimus_abci/0.1.0": "bafybeidvf76qj7dgjlkpl35hxhfe4xdecpvhdiuyywf4xmuchoxwtvnyje",
+        "agent/valory/optimus/0.1.0": "bafybeif6uxytob5wdfwovsdvzr7wmbhdebxvjw63kfwbdwsd7cvn3enyqu",
+        "service/valory/optimus/0.1.0": "bafybeiaoln3dgzqb5q2xvh22tym5owzjt5rmgembapi3rkmgyn6npusnm4"
     },
     "third_party": {
+        "custom/eightballer/sma_strategy/0.1.0": "bafybeifi3o3umjjfpznudbzwwkdtah3mbznvcecswpsgb32k7ayig4boga",
+        "custom/eightballer/rsi_strategy/0.1.0": "bafybeihwe6i2lrbfqzctlqiwdj2mhe5r6di3eh3edpnaafihfwp5ae2fqa",
         "custom/eightballer/vwap_momentum/0.1.0": "bafybeih2uiklkrin777kzhyk5khlnj35wapw2m5zeojrhglfosm76xjhym",
         "custom/valory/trend_following_strategy/0.1.0": "bafybeibejqrhpxpcszjjq6sqqknk6ja72zfiyebqmpyw32e5hjd5hanx7e",
         "custom/eightballer/always_buy/0.1.0": "bafybeia5hmy2gbjlopbhvowvlznmwlal2sn3qome34wa54mnmvb6kkura4",
@@ -64,8 +66,6 @@
         "skill/valory/registration_abci/0.1.0": "bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny",
         "skill/valory/abstract_round_abci/0.1.0": "bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm",
         "skill/valory/termination_abci/0.1.0": "bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq",
-        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq",
-        "custom/eightballer/sma_strategy/0.1.0": "bafybeie342pxvmpee6u2aiqxklgjixz4j6ntnjoweb6hxh4lbvutwu2g2m",
-        "custom/eightballer/rsi_strategy/0.1.0": "bafybeidlgdl7rzsu2d2bs7qadql3rn32qe2ispsguw7sgw7tyckyj6zo6m"
+        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq"
     }
 }

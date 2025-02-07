@@ -31,7 +31,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeia56sc57sq3rjfucl3yzf7peykasbourz5beu3eyhaie4qj6gebai
+- valory/liquidity_trader_abci:0.1.0:bafybeieovmqqbsnxqq4oavnv5o42hucfp4orinshmuflopofkfw4jejaui
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -194,6 +194,7 @@ models:
       max_gas_percentage: 0.1
       proxy_round_timeout_seconds: 1200.0
       agent_transition: false
+      include_babydegen_strategies: true
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       token_symbol_whitelist: []
       trading_strategy: strategy_name

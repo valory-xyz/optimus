@@ -20,10 +20,13 @@
 """This package contains round behaviours of LiquidityTraderAbciApp."""
 
 import json
+import logging
 import math
+import types
 from abc import ABC
 from collections import defaultdict
 from datetime import datetime, timedelta
+from concurrent.futures import Future, ThreadPoolExecutor
 from enum import Enum
 from typing import (
     Any,
@@ -225,6 +228,38 @@ READ_MODE = "r"
 WRITE_MODE = "w"
 
 
+def execute_strategy(
+    strategy: str, strategies_executables: Dict[str, Tuple[str, str]], **kwargs: Any
+) -> Optional[Dict[str, Any]]:
+    """Execute the strategy and return the results."""
+    # Reconstruct the logger
+    logger = logging.getLogger(__name__)
+
+    strategy_exec_tuple = strategies_executables.get(strategy, None)
+    if strategy_exec_tuple is None:
+        logger.error(f"No executable was found for {strategy=}!")
+        return None
+
+    strategy_exec, callable_method = strategy_exec_tuple
+    if callable_method in globals():
+        del globals()[callable_method]
+
+    # Execute the strategy code
+    exec(strategy_exec, globals())  # pylint: disable=W0122  # nosec
+    method = globals().get(callable_method, None)
+    if method is None:
+        logger.error(
+            f"No {callable_method!r} method was found in {strategy} executable."
+        )
+        return None
+
+    # Call the method and collect results if it's a generator
+    result = method(**kwargs)
+    if isinstance(result, types.GeneratorType):
+        result = list(result)
+    return result
+
+
 class GasCostTracker:
     """Class to track and report gas costs."""
 
@@ -406,7 +441,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                         "asset_type": (
                             "native" if asset_address == ZERO_ADDRESS else "erc_20"
                         ),
-                        "address": asset_address,
+                        "address": to_checksum_address(asset_address),
                         "balance": balance,
                     }
                 )
@@ -645,7 +680,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
             math.ceil(
                 max(liveness_period, (current_timestamp - last_ts_checkpoint))
                 * liveness_ratio
-                // LIVENESS_RATIO_SCALE_FACTOR
+                / LIVENESS_RATIO_SCALE_FACTOR
             )
             + REQUIRED_REQUESTS_SAFETY_MARGIN
         )
@@ -1131,6 +1166,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if self.current_positions:
                 for position in self.current_positions:
+                    if position.get("status") == PositionStatus.CLOSED.value:
+                        continue
                     dex_type = position.get("dex_type")
                     strategy = self.params.dex_type_to_strategy.get(dex_type)
                     if strategy:
@@ -1730,8 +1767,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return portfolio
     
+    def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
+        """Get the completed futures"""
+        while True:
+            if not future.done():
+                yield
+                continue
+            try:
+                result = future.result()
+                return result
+            except Exception as e:
+                self.context.logger.error(
+                    f"Exception occurred while executing strategy: {e}",
+                )
+                return None
+
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
-        """Fetches all the trading opportunities"""
+        """Fetches all the trading opportunities using multiprocessing"""
         self.trading_opportunities.clear()
         yield from self.download_strategies()
 
@@ -1741,9 +1793,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategies = self.params.selected_strategies.copy()
         tried_strategies: Set[str] = set()
 
-        while True:
-            next_strategy = strategies.pop(0)
-            self.context.logger.info(f"Evaluating strategy: {next_strategy}")
+        # Collect strategy kwargs
+        strategy_kwargs_list = []
+        for next_strategy in strategies:
+            self.context.logger.info(f"Preparing strategy: {next_strategy}")
             kwargs: Dict[str, Any] = self.params.trading_strategies_kwargs.get(
                 next_strategy, {}
             )
@@ -1754,50 +1807,80 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chains": self.params.target_investment_chains,
                     "protocols": self.params.selected_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "current_positions": [
-                        pos.get("pool_address")
-                        for pos in self.current_positions
-                        if pos.get("status") == PositionStatus.OPEN.value
-                    ]
-                    if self.current_positions
-                    else [],
+                    "current_positions": (
+                        [
+                            pos.get("pool_address")
+                            for pos in self.current_positions
+                            if pos.get("status") == PositionStatus.OPEN.value
+                        ]
+                        if self.current_positions
+                        else []
+                    ),
                     "coingecko_api_key": self.coingecko.api_key,
                     "get_metrics": False,
                     "market_data": markets,
                     "portfolio_data": portfolio,
                 }
             )
+            strategy_kwargs_list.append(kwargs)
 
-            opportunities = self.execute_strategy(**kwargs)
-            if opportunities is not None:
-                if "error" in opportunities:
+        strategies_executables = self.shared_state.strategies_executables
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future_to_strategy = {}
+            futures = []
+            for kwargs in strategy_kwargs_list:
+                strategy_name = kwargs["strategy"]
+                # Remove 'strategy' from kwargs to avoid passing it twice
+                kwargs_without_strategy = {
+                    k: v for k, v in kwargs.items() if k != "strategy"
+                }
+
+                future = executor.submit(
+                    execute_strategy,
+                    strategy_name,
+                    strategies_executables,
+                    **kwargs_without_strategy,
+                )
+                future_to_strategy[future] = strategy_name
+                futures.append(future)
+
+            results = []
+
+            for future in futures:
+                result = yield from self.get_result(future)
+                results.append(result)
+
+            for future, result in zip(futures, results):
+                next_strategy = future_to_strategy[future]
+                tried_strategies.add(next_strategy)
+                if not result:
+                    self.context.logger.error(f"Error in strategy {next_strategy}")
+                    continue
+
+                if "error" in result:
                     self.context.logger.error(
-                        f"Error in strategy {next_strategy}: {opportunities['error']}"
+                        f"Error in strategy {next_strategy}: {result.get('error')}"
                     )
-                else:
+                    continue
+
+                opportunities = result
+                if opportunities:
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"
                     )
-                    # for opportunity in opportunities:
-                    #     # Customize the following line to include relevant details from each opportunity
-                    #     self.context.logger.info(
-                    #         f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                    #         f"Chain: {opportunity.get('chain', 'N/A')}, "
-                    #         f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                    #         f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
-                    #     )
+                    for opportunity in opportunities:
+                        self.context.logger.info(
+                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                            f"Chain: {opportunity.get('chain', 'N/A')}, "
+                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                        )
                     self.trading_opportunities.extend(opportunities)
-            else:
-                self.context.logger.warning(
-                    f"No opportunity found using {next_strategy} strategy"
-                )
-
-            tried_strategies.add(next_strategy)
-            remaining_strategies = set(strategies) - tried_strategies
-            if len(remaining_strategies) == 0:
-                break
-
-            next_strategy = remaining_strategies.pop()
+                else:
+                    self.context.logger.warning(
+                        f"No opportunity found using {next_strategy} strategy"
+                    )
 
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""
@@ -1864,9 +1947,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.download_next_strategy()
             yield from self.sleep(self.params.sleep_time)
 
-    def execute_strategy(
-        self, *args: Any, **kwargs: Any
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def execute_strategy(self, *args: Any, **kwargs: Any) -> Optional[Dict[str, Any]]:
         """Execute the strategy and return the results."""
 
         strategy = kwargs.pop("strategy", None)
@@ -1943,8 +2024,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         ):
             tokens = yield from self._process_pnl(actions)
 
+        if not self.selected_opportunities:
+            return actions
+
         # Prepare tokens for exit or investment
-        available_tokens = self._prepare_tokens_for_investment()
+        available_tokens = yield from self._prepare_tokens_for_investment()
         if available_tokens is None:
             return actions
         tokens.extend(available_tokens)
@@ -2048,7 +2132,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return exited_tokens
 
-    def _prepare_tokens_for_investment(self) -> Optional[List[Dict[str, Any]]]:
+    def _prepare_tokens_for_investment(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Prepare tokens for exit or investment, and append exit actions if needed."""
         tokens = []
 
@@ -2065,7 +2151,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
 
         # Get available tokens and extend tokens list
-        available_tokens = self._get_available_tokens()
+        available_tokens = yield from self._get_available_tokens()
         if available_tokens:
             tokens.extend(available_tokens)
 
@@ -2104,7 +2190,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         else:
             return None
 
-    def _get_available_tokens(self) -> Optional[List[Dict[str, Any]]]:
+    def _get_available_tokens(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Get tokens with the highest balances."""
         token_balances = []
 
@@ -2125,7 +2213,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Sort tokens by balance in descending order
         token_balances.sort(key=lambda x: x["balance"], reverse=True)
+        token_prices = yield from self._fetch_token_prices(token_balances)
 
+        # Calculate the relative value of each token
+        for token_data in token_balances:
+            token_address = token_data["token"]
+            chain = token_data["chain"]
+            token_price = token_prices.get(token_address, 0)
+            if token_address == ZERO_ADDRESS:
+                decimals = 18
+            else:
+                decimals = yield from self._get_token_decimals(chain, token_address)
+            token_data["value"] = (
+                token_data["balance"] / (10**decimals)
+            ) * token_price
+
+        # Sort tokens by value in descending order and add the highest ones
+        token_balances.sort(key=lambda x: x["value"], reverse=True)
+        token_balances = [
+            token
+            for token in token_balances
+            if token["value"] >= self.params.min_swap_amount_threshold
+        ]
         self.context.logger.info(
             f"Tokens selected for bridging/swapping: {token_balances}"
         )
@@ -2222,6 +2331,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         content = json.dumps(body).encode(UTF8) if body else None
 
         retries = 0
+
         while True:
             # Make the request
             response = yield from self.get_http_response(
@@ -2269,9 +2379,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         exit_pool_action = {
-            "action": Action.WITHDRAW.value
-            if self.position_to_exit.get("dex_type") == DexType.STURDY.value
-            else Action.EXIT_POOL.value,
+            "action": (
+                Action.WITHDRAW.value
+                if self.position_to_exit.get("dex_type") == DexType.STURDY.value
+                else Action.EXIT_POOL.value
+            ),
             "dex_type": self.position_to_exit.get("dex_type"),
             "chain": self.position_to_exit.get("chain"),
             "assets": [token.get("token") for token in tokens],
@@ -2284,7 +2396,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         return exit_pool_action
 
     def _build_bridge_swap_actions(
-        self, opportunity: List[Dict[str, Any]], tokens: List[Dict[str, Any]]
+        self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
         if not opportunity:
@@ -2584,7 +2696,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.synchronized_data.last_action == Action.EXIT_POOL.value
                 or self.synchronized_data.last_action == Action.WITHDRAW.value
             ):
-                yield from self._post_execute_exit_pool()
+                yield from self._post_execute_exit_pool(
+                    actions, last_executed_action_index
+                )
             if (
                 self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
                 and last_round_id != DecisionMakingRound.auto_round_id()
@@ -3020,6 +3134,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if not tx_hash:
             return Event.DONE.value, {}
+
+        result = (
+            Event.SETTLE.value,
+            {
+                "tx_submitter": DecisionMakingRound.auto_round_id(),
+                "most_voted_tx_hash": tx_hash,
+                "chain_id": chain_id,
+                "safe_contract_address": safe_address,
+                "positions": positions,
+                "last_executed_action_index": current_action_index,
+                "last_action": last_action,
+            },
+        )
+
+        self.context.logger.info(f"Result constructed: {result}")
 
         return Event.SETTLE.value, {
             "tx_submitter": DecisionMakingRound.auto_round_id(),
@@ -3924,11 +4053,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # If there is only one asset and we need to obtain two different assets,
         # we split the available amount in half, converting one half to the first asset
         # and the other half to the second asset.
-        amount = int(
-            self._get_balance(from_chain, from_token_address, positions)
-            * action.get("funds_percentage")
+        available_amount = self._get_balance(from_chain, from_token_address, positions)
+        amount = min(
+            available_amount, int(available_amount * action.get("funds_percentage", 1))
         )
-
         if amount <= 0:
             self.context.logger.error(
                 f"Not enough balance for {from_token_symbol} on chain {from_chain}"
@@ -4371,6 +4499,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _add_token_to_assets(self, chain, token, symbol):
         # Read current assets
+        token = to_checksum_address(token)
         self.read_assets()
         current_assets = self.assets
 

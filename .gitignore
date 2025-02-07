@@ -22,12 +22,6 @@ packages/valory/contracts/service_registry
 packages/valory/services/*
 packages/valory/protocols/*
 
-!packages/valory/agents/optimus
-!packages/valory/services/optimus
-!packages/valory/services/optimus_pearl
-!packages/valory/skills/liquidity_trader_abci
-!packages/valory/skills/optimus_abci
-
 leak_report
 /Pipfile.lock
 keys.json
@@ -86,3 +80,4 @@ node_modules/
 
 packages/open_aea/protocols/signing
 packages/eightballer/*
+test_gas_costs.json

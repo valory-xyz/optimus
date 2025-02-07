@@ -19,6 +19,7 @@
 
 """This class contains a wrapper for distributor contract interface."""
 import logging
+
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
@@ -26,6 +27,8 @@ from aea_ledger_ethereum import EthereumApi
 
 
 PUBLIC_ID = PublicId.from_str("valory/merkl_distributor:0.1.0")
+
+
 class DistributorContract(Contract):
     """The Distributor contract."""
 
@@ -39,22 +42,17 @@ class DistributorContract(Contract):
         users: list,
         tokens: list,
         amounts: list,
-        proofs: list[list[str]]
+        proofs: list[list[str]],
     ) -> JSONLike:
         """Prepare a claim rewards transaction."""
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
         # Convert proofs from hex strings to bytes32
-        proofs_converted = [[bytes.fromhex(proof[2:]) for proof in proof_list] for proof_list in proofs]
+        proofs_converted = [
+            [bytes.fromhex(proof[2:]) for proof in proof_list] for proof_list in proofs
+        ]
 
         data = contract_instance.encodeABI(
-            "claim",
-            args=(
-                users,
-                tokens,
-                amounts,
-                proofs_converted
-            )
+            "claim", args=(users, tokens, amounts, proofs_converted)
         )
         return {"tx_hash": bytes.fromhex(data[2:])}
-

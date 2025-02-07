@@ -62,7 +62,7 @@ class ERC20(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         allowance = contract_instance.functions.allowance(owner, spender).call()
         return dict(data=allowance)
-    
+
     @classmethod
     def get_token_symbol(
         cls,

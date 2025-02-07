@@ -1,6 +1,5 @@
 import warnings
 
-
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import json
@@ -9,20 +8,16 @@ import statistics
 import time
 from datetime import datetime, timedelta
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 import numpy as np
 import pandas as pd
 import pyfolio as pf
 import requests
-from aea.helpers.logging import setup_logger
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 from pycoingecko import CoinGeckoAPI
 from web3 import Web3
-
-
-_logger = setup_logger(__name__)
 
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {
@@ -55,7 +50,7 @@ CHAIN_URLS = {
 }
 
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
-
+errors = []
 
 @lru_cache(None)
 def fetch_coin_list():
@@ -66,7 +61,7 @@ def fetch_coin_list():
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        _logger.error(f"Failed to fetch coin list: {e}")
+        errors.append((f"Failed to fetch coin list: {e}"))
         return None
 
 
@@ -254,7 +249,11 @@ def calculate_il_impact(P0, P1):
 def calculate_il_risk_score(
     token_0, token_1, coingecko_api_key: str, time_period: int = 90
 ) -> float:
-    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+    is_pro = is_pro_api_key(coingecko_api_key)
+    if is_pro:
+        cg = CoinGeckoAPI(api_key=coingecko_api_key)
+    else:
+        cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
     try:
@@ -271,9 +270,9 @@ def calculate_il_risk_score(
             to_timestamp=to_timestamp,
         )
     except Exception as e:
-        _logger.error(f"Error fetching price data: {e}")
-        return float("nan")
-
+        errors.append(f"Error fetching price data: Incorrect Coingecko API Key")
+        return None
+    
     prices_1_data = np.array([x[1] for x in prices_1["prices"]])
     prices_2_data = np.array([x[1] for x in prices_2["prices"]])
     min_length = min(len(prices_1_data), len(prices_2_data))
@@ -281,7 +280,7 @@ def calculate_il_risk_score(
     prices_2_data = prices_2_data[:min_length]
 
     if min_length < 2:
-        return float("nan")
+        return None
 
     price_correlation = np.corrcoef(prices_1_data, prices_2_data)[0, 1]
     volatility_1 = np.std(prices_1_data)
@@ -358,8 +357,7 @@ def fetch_liquidity_metrics(
             "Meets Depth Score Threshold": depth_score > 50,
         }
 
-    except Exception as e:
-        _logger.error(f"An error occurred while analyzing pool metrics: {e}")
+    except Exception:
         return None
 
 
@@ -371,7 +369,7 @@ def analyze_pool_liquidity(
 ):
     metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
     if metrics is None:
-        _logger.error("Could not retrieve depth score and maximum position size.")
+        errors.append("Could not retrieve depth score and maximum position size.")
         return float("nan"), float("nan")
     return metrics["Depth Score"], metrics["Maximum Position Size"]
 
@@ -416,7 +414,7 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
         sharpe_ratio = pf.timeseries.sharpe_ratio(total_returns)
         return sharpe_ratio
     except Exception as e:
-        _logger.error(f"Error calculating Sharpe ratio: {e}")
+        errors.append(f"Error calculating Sharpe ratio: {e}")
         return None
 
 
@@ -481,7 +479,7 @@ def get_opportunities(
                 token_0_id, token_1_id, coingecko_api_key
             )
         else:
-            pool["il_risk_score"] = float("nan")
+            pool["il_risk_score"] = None
 
         pool["sharpe_ratio"] = get_balancer_pool_sharpe_ratio(
             pool["id"], pool["chain"].upper()
@@ -505,7 +503,7 @@ def calculate_metrics(
     il_risk_score = (
         calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
         if token_0_id and token_1_id
-        else float("nan")
+        else None
     )
     sharpe_ratio = get_balancer_pool_sharpe_ratio(
         position["pool_id"], position["chain"].upper()
@@ -520,11 +518,31 @@ def calculate_metrics(
         "max_position_size": max_position_size,
     }
 
+def is_pro_api_key(coingecko_api_key: str) -> bool:
+    """
+    Check if the provided CoinGecko API key is a pro key.
+    """
+    # Try using the key as a pro API key
+    cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
+    try:
+        response = cg_pro.get_coin_market_chart_range_by_id(
+            id="bitcoin",
+            vs_currency="usd",
+            from_timestamp=0,
+            to_timestamp=0
+        )
+        if response:
+            return True
+    except Exception:
+        return False
 
-def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
+    return False
+
+def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     missing = check_missing_fields(kwargs)
     if missing:
-        return {"error": f"Required kwargs {missing} were not provided."}
+        errors.append(f"Required kwargs {missing} were not provided.")
+        return {"error": errors}
 
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
@@ -534,12 +552,21 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     kwargs = remove_irrelevant_fields(kwargs, required_fields)
 
     coin_list = fetch_coin_list()
+    if coin_list is None:
+        errors.append("Failed to fetch coin list.")
+        return {"error": errors}
+
     kwargs.update({"coin_list": coin_list})
 
     if get_metrics:
-        return calculate_metrics(**kwargs)
+        metrics = calculate_metrics(**kwargs)
+        if metrics is None:
+            errors.append("Failed to calculate metrics.")
+        return {"error": errors} if errors else metrics
     else:
         result = get_opportunities(**kwargs)
+        if isinstance(result, dict) and "error" in result:
+            errors.append(result["error"])
         if not result:
-            return {"error": "No suitable aggregators found"}
-        return result
+            errors.append("No suitable aggregators found")
+        return {"error": errors} if errors else {"result": result}

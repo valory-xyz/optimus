@@ -1615,6 +1615,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         result = self.execute_strategy(**kwargs)
         self.selected_opportunities = result.get("optimal_strategies")
         self.position_to_exit = result.get("position_to_exit")
+
+        logs = result.get("logs", [])
+        if logs:
+            for log in logs:
+                self.context.logger.info(log)
+
         if self.selected_opportunities is not None:
             self.context.logger.info(
                 f"Selected opportunities: {self.selected_opportunities}"
@@ -1711,17 +1717,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for future, result in zip(futures, results):
                 next_strategy = future_to_strategy[future]
                 tried_strategies.add(next_strategy)
-                if not result:
-                    self.context.logger.error(f"Error in strategy {next_strategy}")
-                    continue
-
                 if "error" in result:
-                    self.context.logger.error(
-                        f"Error in strategy {next_strategy}: {result.get('error')}"
-                    )
+                    errors = result.get("error", [])
+                    for error in errors:
+                        self.context.logger.error(
+                            f"Error in strategy {next_strategy}: {error}"
+                        )
                     continue
 
-                opportunities = result
+                opportunities = result.get("result", [])
                 if opportunities:
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"

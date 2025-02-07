@@ -1,12 +1,6 @@
 import math
 from typing import Any, Dict, List, Union
 
-from aea.helpers.logging import setup_logger
-
-
-# Configure logging
-_logger = setup_logger(__name__)
-
 # Constants
 REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools")
 SHARPE_RATIO_THRESHOLD = 1
@@ -19,7 +13,7 @@ DEPTH_SCORE_WEIGHT = 0.3
 IL_RISK_SCORE_WEIGHT = 0.3
 MIN_COMPOSITE_SCORE_RATIO = 0.5
 
-
+logs = []
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
     missing = []
@@ -80,7 +74,7 @@ def calculate_relative_percentages(percentages):
     dynamic_percentages = []
 
     if total_percentage == 0:
-        _logger.error("Total percentage cannot be zero.")
+        logs.append("ERROR: Total percentage cannot be zero.")
         return []
 
     for percentage in percentages:
@@ -106,32 +100,32 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         depth_score = opportunity.get("depth_score", 0)
         il_risk_score = opportunity.get("il_risk_score", float("inf"))
 
-        _logger.info(f"Evaluating opportunity: {opportunity}")
+        logs.append(f"Evaluating opportunity: {opportunity}")
         if (
             not isinstance(sharpe_ratio, (int, float))
             or not isinstance(depth_score, (int, float))
             or not isinstance(il_risk_score, (int, float))
         ):
-            _logger.info("Invalid values for risk metrics")
+            logs.append("WARNING: Invalid values for risk metrics")
             continue
 
         if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
-            _logger.info(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
+            logs.append(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
             continue
 
         if depth_score <= DEPTH_SCORE_THRESHOLD:
-            _logger.info(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
+            logs.append(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
             continue
 
         if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
-            _logger.info(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
+            logs.append(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
             continue
 
-        _logger.info("Opportunity meets all risk thresholds")
+        logs.append("Opportunity meets all risk thresholds")
         filtered_opportunities.append(opportunity)
 
     if not filtered_opportunities:
-        _logger.warning("No opportunities meet the risk thresholds.")
+        logs.append("No opportunities meet the risk thresholds.")
         return {}
 
     # Calculate max values for normalization
@@ -172,11 +166,11 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             better_opportunities.sort(key=lambda x: x["composite_score"], reverse=True)
             optimal_opportunities = [better_opportunities[0]]
             optimal_opportunities[0]["relative_funds_percentage"] = 1.0
-            _logger.info(
+            logs.append(
                 f"Top opportunity found with composite score: {optimal_opportunities[0]['composite_score']}"
             )
         else:
-            _logger.warning(
+            logs.append.warning(
                 f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}"
             )
             return {"optimal_strategies": [], "position_to_exit": {}}
@@ -193,7 +187,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         ]
 
         if not optimal_opportunities:
-            _logger.warning("No opportunities meet the minimum composite score ratio.")
+            logs.append("No opportunities meet the minimum composite score ratio.")
             return {"optimal_strategies": [], "position_to_exit": {}}
 
         # Calculate total composite score for optimal opportunities
@@ -227,4 +221,5 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
 
     kwargs = remove_irrelevant_fields(kwargs)  # Default to 1 if not provided
     optimal_strategies = apply_risk_thresholds_and_select_optimal_strategy(**kwargs)
+    optimal_strategies['logs'] = logs
     return optimal_strategies

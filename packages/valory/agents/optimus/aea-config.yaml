@@ -43,8 +43,8 @@ skills:
 - valory/portfolio_tracker_abci:0.1.0:bafybeifzljes6ezc5yqjm3ji5u4bubbfynjhlu4cie3os3rlrf4fge362u
 - valory/abstract_abci:0.1.0:bafybeif2naoydlrqkdpnig34uejedwgurjwyvmbpcz53tif7pyukfdophq
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/liquidity_trader_abci:0.1.0:bafybeiduzxmfmqry24nhtyscocpxddgcjah6au452uajwajpnxebvdweve
-- valory/optimus_abci:0.1.0:bafybeifw5tcvhkteso5rv2uougkgabsoamjacxynssv5y453ryhuo3f7jq
+- valory/liquidity_trader_abci:0.1.0:bafybeicicdxnj4agchod3yq7ksp6sn5rho2h4shb4psfm7t2rdkmmyq244
+- valory/optimus_abci:0.1.0:bafybeiclpmycwkwoy5pprda57uo7eh5s3q6s2o3mtraxhm2epchhkzqpqu
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq

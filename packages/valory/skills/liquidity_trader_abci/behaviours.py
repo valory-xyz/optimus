@@ -1772,7 +1772,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         for original_token, _ in markets.items():
             token = original_token
-            if token == "ETH":
+            if token == "ETH": # nosec
                 token = ZERO_ADDRESS
 
             # Fetch the balance from the positions
@@ -2150,9 +2150,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if signal == Signal.BUY_SIGNAL.value:
             buy_token = opportunity.get("token")
 
-            if buy_token == "ETH":
+            if buy_token == "ETH": # nosec
                 buy_token = ZERO_ADDRESS
-                buy_token_symbol = "ETH"
+                buy_token_symbol = "ETH" # nosec
             else:
                 buy_token_symbol = yield from self._get_token_symbol(chain, buy_token)
                 if not buy_token_symbol:

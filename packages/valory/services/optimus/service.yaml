@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeicarrmpus3xuecbgtoqicksyjt4u2cg4x3hg7qwocubmd2wl3odgm
+agent: valory/optimus:0.1.0:bafybeigevelfgspdocd5gjw75t2zorbpt3wqkbyqpfm72pdqa57uz6slwq
 number_of_agents: 1
 deployment:
   agent:
@@ -99,7 +99,7 @@ models:
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}
       gas_cost_info_filename: ${GAS_COST_INFO_FILENAME:str:gas_costs.json}
       merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
-      min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:10}
+      min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:1}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}
       max_gas_percentage: ${MAX_GAS_PERCENTAGE:float:0.25}
       tx_timeout: ${TX_TIMEOUT:float:10.0}
@@ -124,7 +124,7 @@ models:
       allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism","mode"]}
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
       staking_chain: ${STAKING_CHAIN:str:""}
-      initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"USDC"}}}
+      initial_assets: ${INITIAL_ASSETS:str:{"ethereum":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"}}}
       file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeih255rl4tnom2gvg2b3t2glpgcgck3orrerbhmayd7cbnggglbh7e":"max_apr_selection","bafybeid6fcwa525kbk5yl4fmvhs6yazv7nybgejlrdjltdooump7n4ng5i":"balancer_pools_search","bafybeieqbjjofk375ykpwinl6wjfdpq3j7a3kbavxti7vlwws5ivrr3ecy":"uniswap_pools_search","bafybeigiracbkzmitjwfkw3gmz74ldqar4avpv2ycrohedtnvvay4bsn7q":"asset_lending"}}
       selected_strategies: ${SELECTED_STRATEGIES:list:["asset_lending","balancer_pools_search","uniswap_pools_search"]}
       selected_protocols: ${SELECTED_PROTOCOLS:list:["BALANCER","UNISWAP_V3"]}

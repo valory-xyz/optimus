@@ -480,6 +480,9 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
     def _convert_to_token_units(self, amount: int, token_decimal: int = 18) -> str:
         """Convert smallest unit to token's base unit."""
+        if token_decimal is None or amount is None:
+            return None
+
         value = amount / 10**token_decimal
         return f"{value:.{token_decimal}f}"
 
@@ -1696,12 +1699,45 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 markets[token_address] = prices_volumes
         return markets
     
+    def _fetch_portfolio_data(self, markets: Dict[str, Any], chain: str) -> Generator[None, None, Dict[str, str]]:
+        """Fetch portfolio data for tokens on given chain"""
+        portfolio = {}
+        safe_address = self.params.safe_contract_addresses.get(chain)
+
+        for original_token, _ in markets.items():
+            token = original_token
+            if token == 'ETH':
+                token = ZERO_ADDRESS
+
+            # Fetch the balance from the positions
+            balance = self._get_balance(chain, token, self.synchronized_data.positions)
+
+            if balance is None:
+                if token == ZERO_ADDRESS:
+                    balance = yield from self._get_native_balance(chain, safe_address)
+                else:
+                    balance = yield from self._get_token_balance(chain, safe_address, token)
+
+            if balance is not None:
+                if token == ZERO_ADDRESS:
+                    decimals = 18
+                else:
+                    decimals = yield from self._get_token_decimals(chain, token)
+                if decimals is not None:
+                    # Convert the balance to token units
+                    token_balance = float(balance/10**decimals)
+                    portfolio[original_token] = token_balance
+
+        return portfolio
     
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities"""
         self.trading_opportunities.clear()
-        markets = yield from self._fetch_dcxt_market_data('mode') #fetch market data for babydegen strategy #todo: pass ledger_id from params
         yield from self.download_strategies()
+
+        markets = yield from self._fetch_dcxt_market_data(ledger_id='mode')
+        portfolio = yield from self._fetch_portfolio_data(markets, chain='mode')
+
         strategies = self.params.selected_strategies.copy()
         tried_strategies: Set[str] = set()
 
@@ -1728,7 +1764,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "coingecko_api_key": self.coingecko.api_key,
                     "get_metrics": False,
                     "market_data": markets,
-                    "portfolio_data": {"ETH": 2000000000000000, "0xd988097fb8612cc24eec14542bc03424c656005f": 1000.0, "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9": 0.0, "0xdfc7c877a950e49d2610114102175a06c2e3167a": 6.24e-16, "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": 1000.0, "0x4200000000000000000000000000000000000006": 0.006016230367458887, "null": 0.002},
+                    "portfolio_data": portfolio,
                 }
             )
 

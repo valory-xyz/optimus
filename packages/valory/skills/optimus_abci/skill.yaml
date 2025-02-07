@@ -23,15 +23,15 @@ protocols:
 - eightballer/balances:0.1.0:bafybeicd6xekatd6xhnwt2vzgffa3pgpvbzkhkxzrjyj3kzzll5xbr22tu
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/market_data_fetcher_abci:0.1.0:bafybeiarsb75q2jcynyavnw7k7n5sscaa7oz7l35i2sv4sosyg3uwnz7uq
-- valory/trader_decision_maker_abci:0.1.0:bafybeifpxxaep6jxxc7ueeubtzbfyckivtsvhqwi4cntum6bukylwbfajy
-- valory/strategy_evaluator_abci:0.1.0:bafybeih2x2jnv6yb25lqp7ojsystisvax5jznpouvzxk2y3wxvlcqjgwlm
-- valory/portfolio_tracker_abci:0.1.0:bafybeihnr6dskldk2livnmjbhlikyxs5jxyzb73m66xb3xdfrkrbs7leve
+- valory/market_data_fetcher_abci:0.1.0:bafybeigywrpiyqjztnvjm5ey4lqh5wkln6veizb2xkvxr2py6edo7wzrp4
+- valory/trader_decision_maker_abci:0.1.0:bafybeiahgy6ddua6bgyiponmzp76m5tkn5wndlryviczqbi2lklexsjusi
+- valory/strategy_evaluator_abci:0.1.0:bafybeib4zt35fotpu5g67gyq3pnjihqgjo5wjgjq2obaqid363fwzvmemm
+- valory/portfolio_tracker_abci:0.1.0:bafybeifzljes6ezc5yqjm3ji5u4bubbfynjhlu4cie3os3rlrf4fge362u
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeicwimbfc652qfuvcvzhoialuo32dnncfwjwv37yyiznkg7l6xmoje
+- valory/liquidity_trader_abci:0.1.0:bafybeia56sc57sq3rjfucl3yzf7peykasbourz5beu3eyhaie4qj6gebai
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:

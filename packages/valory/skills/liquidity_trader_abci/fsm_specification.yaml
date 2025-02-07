@@ -2,7 +2,9 @@ alphabet_in:
 - ACTION_EXECUTED
 - CHECKPOINT_TX_EXECUTED
 - DONE
+- DONT_MOVE_TO_NEXT_AGENT
 - ERROR
+- MOVE_TO_NEXT_AGENT
 - NEXT_CHECKPOINT_NOT_REACHED_YET
 - NONE
 - NO_MAJORITY
@@ -24,16 +26,22 @@ final_states:
 - FinishedDecisionMakingRound
 - FinishedEvaluateStrategyRound
 - FinishedTxPreparationRound
+- SwitchAgentEndingRound
+- SwitchAgentStartingRound
 label: LiquidityTraderAbciApp
 start_states:
 - CallCheckpointRound
 - CheckStakingKPIMetRound
+- DecideAgentEndingRound
+- DecideAgentStartingRound
 - DecisionMakingRound
 - GetPositionsRound
 - PostTxSettlementRound
 states:
 - CallCheckpointRound
 - CheckStakingKPIMetRound
+- DecideAgentEndingRound
+- DecideAgentStartingRound
 - DecisionMakingRound
 - EvaluateStrategyRound
 - FailedMultiplexerRound
@@ -44,6 +52,8 @@ states:
 - FinishedTxPreparationRound
 - GetPositionsRound
 - PostTxSettlementRound
+- SwitchAgentEndingRound
+- SwitchAgentStartingRound
 transition_func:
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
@@ -61,6 +71,16 @@ transition_func:
     (CheckStakingKPIMetRound, SETTLE): FinishedCheckStakingKPIMetRound
     (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
     (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
+    (DecideAgentEndingRound, DONT_MOVE_TO_NEXT_AGENT): PostTxSettlementRound
+    (DecideAgentEndingRound, MOVE_TO_NEXT_AGENT): SwitchAgentEndingRound
+    (DecideAgentEndingRound, NONE): DecideAgentEndingRound
+    (DecideAgentEndingRound, NO_MAJORITY): PostTxSettlementRound
+    (DecideAgentEndingRound, ROUND_TIMEOUT): DecideAgentEndingRound
+    (DecideAgentStartingRound, DONT_MOVE_TO_NEXT_AGENT): CallCheckpointRound
+    (DecideAgentStartingRound, MOVE_TO_NEXT_AGENT): SwitchAgentStartingRound
+    (DecideAgentStartingRound, NONE): DecideAgentStartingRound
+    (DecideAgentStartingRound, NO_MAJORITY): CallCheckpointRound
+    (DecideAgentStartingRound, ROUND_TIMEOUT): DecideAgentStartingRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
     (DecisionMakingRound, NONE): DecisionMakingRound

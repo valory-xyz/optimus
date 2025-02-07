@@ -30,7 +30,7 @@ PRICE_IMPACT = 0.01
 FETCH_AGGREGATOR_ENDPOINT = (
     "https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators"
 )
-
+LENDING = "lending"
 # Map known token symbols to CoinGecko IDs
 coingecko_name_to_id = {
     "weth": "weth",
@@ -390,6 +390,7 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
         "sharpe_ratio": aggregator["sharpe_ratio"],
         "depth_score": aggregator["depth_score"],
         "max_position_size": aggregator["max_position_size"],
+        "type": aggregator["type"]
     }
 
 
@@ -422,8 +423,9 @@ def get_best_opportunities(
         )
         depth_score, max_position_size = analyze_vault_liquidity(aggregator)
         aggregator["depth_score"] = depth_score
-        aggregator["max_position_size"] = max_position_size
-
+        aggregator["max_position_size"] = max_position_size    
+        aggregator["type"] = LENDING
+        
     formatted_results = [
         format_aggregator(aggregator) for aggregator in filtered_aggregators
     ]

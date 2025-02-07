@@ -39,6 +39,7 @@ APR_PERCENTILE = 50
 SCORE_PERCENTILE = 80
 PRICE_IMPACT = 0.01  # 1% standard price impact
 MAX_POSITION_BASE = 50  # Base for maximum position calculation
+LP = "lp"
 
 CHAIN_URLS = {
     "mode": "https://1rpc.io/mode",
@@ -57,7 +58,6 @@ ERC20_ABI = [
         "type": "function",
     }
 ]
-
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
@@ -410,6 +410,7 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "sharpe_ratio": pool["sharpe_ratio"],
         "depth_score": pool["depth_score"],
         "max_position_size": pool["max_position_size"],
+        "type": pool["type"]
     }
 
 
@@ -456,7 +457,8 @@ def get_best_pools(
         )
         pool["depth_score"] = depth_score
         pool["max_position_size"] = max_position_size
-
+    
+        pool["type"] = LP
     return [format_pool_data(pool) for pool in filtered_pools]
 
 

@@ -49,6 +49,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours import (
     GasCostTracker,
     GetPositionsBehaviour,
     PostTxSettlementBehaviour,
+    PositionStatus,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import GetPositionsPayload
 from packages.valory.skills.liquidity_trader_abci.rounds import (
@@ -170,16 +171,37 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             assert self.behaviour.current_behaviour.assets == test_assets
 
     def test_store_current_positions(self):
-        """Test storing current positions."""
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
-            test_positions = [{"chain": "ethereum", "address": "0x123"}]
-            self.behaviour.current_behaviour.current_positions = test_positions
-            self.behaviour.current_behaviour.current_positions_filepath = temp_file.name
-            self.behaviour.current_behaviour.store_current_positions()
-
-            with open(temp_file.name, "r") as f:
-                loaded_positions = json.load(f)
-                assert loaded_positions == test_positions
+        """Test storing current positions safely."""
+        # Create a temporary directory to simulate the store path
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Mock the store path to use the temporary directory
+            with mock.patch.object(
+                self.behaviour.current_behaviour.params, 
+                'store_path', 
+                Path(temp_dir)
+            ):
+                # Create test positions
+                test_positions = [
+                    {
+                        "chain": "ethereum", 
+                        "pool_address": "0x123",
+                        "token0": "0xToken0",
+                        "token1": "0xToken1",
+                        "status": PositionStatus.OPEN.value
+                    }
+                ]
+                # Set current positions
+                self.behaviour.current_behaviour.current_positions = test_positions
+                # Call store method
+                self.behaviour.current_behaviour.store_current_positions()
+                # Verify the file was created and contains correct data
+                expected_filepath = Path(temp_dir) / self.behaviour.current_behaviour.params.pool_info_filename
+                # Check file exists
+                assert expected_filepath.exists(), "Positions file was not created"
+                # Read and verify file contents
+                with open(expected_filepath, "r") as f:
+                    loaded_positions = json.load(f)
+                    assert loaded_positions == test_positions, "Stored positions do not match original"
 
     def test_calculate_min_num_of_safe_tx_required(self):
         """Test minimum safe tx calculation."""
@@ -483,14 +505,34 @@ class TestGetPositionsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
     def test_get_positions_assets_file(self) -> None:
         """Test reading/writing assets file."""
-        test_assets = {"ethereum": {"0x123": "ETH"}}
-
-        behaviour = cast(GetPositionsBehaviour, self.behaviour.current_behaviour)
-        behaviour.assets = test_assets
-        behaviour.store_assets()
-        behaviour.read_assets()
-
-        assert behaviour.assets == test_assets
+        # Create a temporary directory to simulate the store path
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Mock the store path to use the temporary directory
+            with mock.patch.object(
+                self.behaviour.current_behaviour.params, 
+                'store_path', 
+                Path(temp_dir)
+            ):
+                # Create test assets
+                test_assets = {"ethereum": {"0x123": "ETH"}}
+                # Cast to the correct behaviour type
+                behaviour = cast(GetPositionsBehaviour, self.behaviour.current_behaviour)
+                # Set assets
+                behaviour.assets = test_assets
+                # Store assets
+                behaviour.store_assets()
+                # Read assets back
+                behaviour.read_assets()
+                # Verify assets match
+                assert behaviour.assets == test_assets
+                # Additional verification: check file contents
+                expected_filepath = Path(temp_dir) / behaviour.params.assets_info_filename
+                # Check file exists
+                assert expected_filepath.exists(), "Assets file was not created"    
+                # Read and verify file contents
+                with open(expected_filepath, "r") as f:
+                    loaded_assets = json.load(f)
+                    assert loaded_assets == test_assets, "Stored assets do not match original"
 
     def test_backward_compatibility(self) -> None:
         """Test backward compatibility adjustments."""

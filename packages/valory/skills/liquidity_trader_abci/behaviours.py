@@ -1595,14 +1595,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches the list of coins from CoinGecko API only once."""
         url = "https://api.coingecko.com/api/v3/coins/list"
         response = yield from self.get_http_response("GET", url, None, None)
-
+    
         try:
             response_json = json.loads(response.body)
             return response_json
         except json.decoder.JSONDecodeError as e:
             self.context.logger.error(f"Failed to fetch coin list: {e}")
             return None
-
+    
     def get_token_id_from_symbol_cached(
         self, symbol, token_name, coin_list
     ) -> Optional[str]:
@@ -1617,7 +1617,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # If single candidate, return it.
         if len(candidates) == 1:
             return candidates[0]["id"]
-
+    
         # If multiple candidates, match by name if possible.
         normalized_token_name = token_name.replace(" ", "").lower()
         for coin in candidates:
@@ -1625,7 +1625,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if coin_name == normalized_token_name or coin_name == symbol.lower():
                 return coin["id"]
         return None
-
+    
     def get_token_id_from_symbol(
         self, token_address, symbol, coin_list, chain_name
     ) -> Generator[None, None, Optional[str]]:
@@ -1638,14 +1638,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
             ]
             return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-
+     
         return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-
+    
     def _fetch_token_name_from_contract(
         self, chain: str, token_address: str
     ) -> Generator[None, None, Optional[str]]:
         """Fetch the token name from the ERC20 contract."""
-
+    
         token_name = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=token_address,
@@ -1655,10 +1655,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return token_name
-
+    
     def execute_hyper_strategy(self) -> None:
         """Executes hyper strategy"""
-
+    
         hyper_strategy = self.params.selected_hyper_strategy
         kwargs = {
             "strategy": hyper_strategy,
@@ -1675,6 +1675,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)
+        self.context.logger.info(f"result Evaluating hyper strategy: {result}")
         self.selected_opportunities = result.get("optimal_strategies")
         self.position_to_exit = result.get("position_to_exit")
 
@@ -1687,16 +1688,124 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"Selected opportunities: {self.selected_opportunities}"
             )
-            for selected_opportunity in self.selected_opportunities:
-                # Convert token addresses to checksum addresses if they are present
-                if "token0" in selected_opportunity:
-                    selected_opportunity["token0"] = to_checksum_address(
-                        selected_opportunity["token0"]
+            for selected_opportunity in self.selected_opportunities[
+                "optimal_strategies"
+            ]:
+                # Dynamically handle multiple tokens
+                token_keys = [
+                    key
+                    for key in selected_opportunity.keys()
+                    if key.startswith("token")
+                    and not key.endswith("_symbol")
+                    and isinstance(selected_opportunity[key], str)
+                ]
+                for token_key in token_keys:
+                    selected_opportunity[token_key] = to_checksum_address(
+                        selected_opportunity[token_key]
                     )
-                if "token1" in selected_opportunity:
-                    selected_opportunity["token1"] = to_checksum_address(
-                        selected_opportunity["token1"]
+                    self.context.logger.info(
+                        f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
                     )
+
+    def get_dcxt_response(
+        self,
+        protocol_performative: TickersMessage.Performative,
+        **kwargs: Any,
+    ) -> Generator[None, None, Any]:
+        """Get a ccxt response."""
+        if protocol_performative not in self._performative_to_dialogue_class:
+            raise ValueError(
+                f"Unsupported protocol performative {protocol_performative:!r}"
+            )
+        dialogue_class = self._performative_to_dialogue_class[protocol_performative]
+
+        msg, dialogue = dialogue_class.create(
+            counterparty=str(DCXT_CONNECTION_ID),
+            performative=protocol_performative,
+            **kwargs,
+        )
+        msg._sender = str(self.context.skill_id)  # pylint: disable=protected-access
+        response = yield from self._do_request(msg, dialogue)
+        return response
+
+    def _fetch_dcxt_market_data(
+        self, ledger_id: str
+    ) -> Generator[None, None, Dict[Union[str, Any], Dict[str, object]]]:
+        params = {
+            "ledger_id": "mode",  # todo: pass ledger_id from params
+        }
+        for key, value in params.items():
+            params[key] = value.encode("utf-8")  # type: ignore
+        exchanges = self.params.exchange_ids["mode"]
+
+        markets = {}
+        for exchange_id in exchanges:
+            msg: TickersMessage = yield from self.get_dcxt_response(
+                protocol_performative=TickersMessage.Performative.GET_ALL_TICKERS,  # type: ignore
+                exchange_id=exchange_id,
+                ledger_id=ledger_id,
+                params=params,
+            )
+            self.context.logger.info(
+                f"Received {len(msg.tickers.tickers)} tickers from {exchange_id}"
+            )
+
+            for ticker in msg.tickers.tickers:
+                token_address = ticker.symbol.split(DEFAULT_MARKET_SEPARATOR)[0]  # type: ignore
+
+                dates = list(
+                    date_range_generator(
+                        datetime.now()
+                        - timedelta(minutes=DEFAULT_DATA_LOOKBACK_MINUTES),
+                        datetime.now(),
+                    )
+                )
+                prices = [[date, ticker.ask] for date in dates]
+                volumes = [
+                    [
+                        date,
+                        DEFAULT_DATA_VOLUME,  # This is a placeholder for the volume
+                    ]
+                    for date in dates
+                ]
+                prices_volumes = {"prices": prices, "volumes": volumes}
+                markets[token_address] = prices_volumes
+        return markets
+
+    def _fetch_portfolio_data(
+        self, markets: Dict[str, Any], chain: str
+    ) -> Generator[None, None, Dict[str, str]]:
+        """Fetch portfolio data for tokens on given chain"""
+        portfolio = {}
+        safe_address = self.params.safe_contract_addresses.get(chain)
+
+        for original_token, _ in markets.items():
+            token = original_token
+            if token == "ETH": # nosec
+                token = ZERO_ADDRESS
+
+            # Fetch the balance from the positions
+            balance = self._get_balance(chain, token, self.synchronized_data.positions)
+
+            if balance is None:
+                if token == ZERO_ADDRESS:
+                    balance = yield from self._get_native_balance(chain, safe_address)
+                else:
+                    balance = yield from self._get_token_balance(
+                        chain, safe_address, token
+                    )
+
+            if balance is not None:
+                if token == ZERO_ADDRESS:
+                    decimals = 18
+                else:
+                    decimals = yield from self._get_token_decimals(chain, token)
+                if decimals is not None:
+                    # Convert the balance to token units
+                    token_balance = float(balance / 10**decimals)
+                    portfolio[original_token] = token_balance
+
+        return portfolio
 
     def get_dcxt_response(
         self,
@@ -2520,20 +2629,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build bridge and swap actions for the given tokens."""
+
         if not opportunity:
             self.context.logger.error("No pool present.")
             return None
-
         bridge_swap_actions = []
-
         # Get the highest APR pool's tokens
         # Extract opportunity details
+        self.context.logger.error(f" highest APR pool {opportunity}")
         dest_token0_address = opportunity.get("token0")
         dest_token0_symbol = opportunity.get("token0_symbol")
         dest_chain = opportunity.get("chain")
         dex_type = opportunity.get("dex_type")
         relative_funds_percentage = opportunity.get("relative_funds_percentage")
-
         if not dest_token0_address or not dest_token0_symbol or not dest_chain:
             self.context.logger.error(f"Incomplete data {opportunity}")
             return None
@@ -2553,11 +2661,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Handle other dex types
             dest_token1_address = opportunity.get("token1")
             dest_token1_symbol = opportunity.get("token1_symbol")
-
             if not dest_token1_address or not dest_token1_symbol:
                 self.context.logger.error(f"Incomplete data {opportunity}")
                 return None
-
             if len(tokens) == 1:
                 # Only one source token, split it in half for two destination tokens
                 self._add_bridge_swap_action(
@@ -4208,6 +4314,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             },
         }
 
+        self.context.logger.info(f"params:{params}")
+
         if any(value is None for key, value in params.items()):
             self.context.logger.error(f"Missing value in params: {params}")
             return None
@@ -4235,6 +4343,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         try:
+            self.context.logger.info(f"[LiFi API : {routes_response.body}")
             routes_response = json.loads(routes_response.body)
         except (ValueError, TypeError) as e:
             self.context.logger.error(
@@ -4242,14 +4351,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"the following error was encountered {type(e).__name__}: {e}"
             )
             return None
-
+        self.context.logger.info(f"[LiFi API routes_response : {routes_response}")
         routes = routes_response.get("routes", [])
         if not routes:
             self.context.logger.error(
-                "[LiFi API Error Message] No routes available for this pair"
+                f"[LiFi API Error Message] No routes available for this pair:{routes}"
             )
             return None
-
         return routes
 
     def _simulate_transaction(

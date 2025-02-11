@@ -1,11 +1,15 @@
 import math
 from typing import Any, Dict, List, Union
+from aea.helpers.logging import setup_logger
+
+# Configure logging
+_logger = setup_logger(__name__)
 
 # Constants
 REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools", "check_sharpe_ratio")
 SHARPE_RATIO_THRESHOLD = 1
 DEPTH_SCORE_THRESHOLD = 50
-IL_RISK_SCORE_THRESHOLD = -0.2
+IL_RISK_SCORE_THRESHOLD = -0.05
 
 # Weights for each metric
 SHARPE_RATIO_WEIGHT = 0.4
@@ -22,47 +26,69 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
             missing.append(field)
     return missing
 
-
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Remove the irrelevant fields from the given kwargs."""
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
-
-def calculate_composite_score(pool, max_values, check_sharpe_ratio):
-    """Calculate the composite score for a given pool."""
-    sharpe_ratio = pool.get("sharpe_ratio", math.nan)
-    depth_score = pool.get("depth_score", math.nan)
-    il_risk_score = pool.get("il_risk_score", math.nan)
-
-    if math.isnan(sharpe_ratio):
-        return 0
-
-    if check_sharpe_ratio:
-        return sharpe_ratio / max_values["sharpe_ratio"]
-    else:
-        if math.isnan(depth_score) or math.isnan(il_risk_score):
-            return 0
-
-        # Normalize metrics
-        normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"]
-        normalized_depth_score = depth_score / max_values["depth_score"]
-        normalized_il_risk_score = (abs(il_risk_score)) / abs(max_values["il_risk_score"])
-
-        # Calculate composite score
-        return (
-            SHARPE_RATIO_WEIGHT * normalized_sharpe_ratio
-            + DEPTH_SCORE_WEIGHT * normalized_depth_score
-            + IL_RISK_SCORE_WEIGHT * normalized_il_risk_score
-        )
+def calculate_composite_score(pool, max_values):
+    """
+    Calculate the composite score for a given pool using normalized metrics and weights.
+    
+    Args:
+        pool (dict): Dictionary containing pool metrics (sharpe_ratio, depth_score, il_risk_score)
+        max_values (dict): Dictionary containing maximum values for normalization
+    
+    Returns:
+        float: Weighted composite score
+    """
+    # Extract metrics with default NaN values
+    metrics = {
+        'sharpe_ratio': pool.get('sharpe_ratio', math.nan),
+        'depth_score': pool.get('depth_score', math.nan),
+        'il_risk_score': pool.get('il_risk_score', math.nan)
+    }
+    
+    _logger.info(f"Raw metrics: {metrics}")
+    
+    # Replace NaN values with 0
+    for key in metrics:
+        if math.isnan(metrics[key]):
+            metrics[key] = 0
+    
+    # Calculate normalized values with zero handling
+    normalized_values = {}
+    for key in metrics:
+        if metrics[key] == 0 or max_values[key] == 0:
+            normalized_values[key] = 0
+        else:
+            value = metrics[key] / max_values[key]
+            normalized_values[key] = abs(value) if key == 'il_risk_score' else value
+            
+        _logger.info(f"Normalized {key}: {normalized_values[key]}")
+    
+    _logger.info(f"All normalized values: {normalized_values}")
+    
+    # Calculate weighted composite score
+    weights = {
+        'sharpe_ratio': SHARPE_RATIO_WEIGHT,
+        'depth_score': DEPTH_SCORE_WEIGHT,
+        'il_risk_score': IL_RISK_SCORE_WEIGHT
+    }
+    
+    composite_score = sum(
+        weights[key] * normalized_values[key]
+        for key in normalized_values
+    )
+    
+    return composite_score
 
 def get_max_values(pools):
     """Get maximum values for normalization."""
     return {
-        "sharpe_ratio": max((pool.get("sharpe_ratio", 0) for pool in pools)),
-        "depth_score": max((pool.get("depth_score", 0) for pool in pools)),
-        "il_risk_score": max((pool.get("il_risk_score", 0) for pool in pools)),
+        'sharpe_ratio': max((pool.get("sharpe_ratio", 0) for pool in pools)),
+        'depth_score': max((pool.get("depth_score", 0) for pool in pools)),
+        'il_risk_score': max((pool.get("il_risk_score", 0) for pool in pools))
     }
-
 
 def calculate_relative_percentages(percentages):
     """
@@ -85,7 +111,7 @@ def calculate_relative_percentages(percentages):
     for percentage in percentages:
         dynamic_percentage = percentage / total_percentage
         dynamic_percentages.append(dynamic_percentage)
-        total_percentage -= percentage
+        total_percentage -= percentage   
 
     return dynamic_percentages
 
@@ -98,12 +124,13 @@ def apply_risk_thresholds_and_select_optimal_strategy(
     check_sharpe_ratio=False,
 ):
     """Apply risk thresholds and select the optimal strategy based on combined metrics."""
+    
     # Filter opportunities based on risk thresholds
     filtered_opportunities = []
     for opportunity in trading_opportunities:
         sharpe_ratio = opportunity.get("sharpe_ratio", 0)
         depth_score = opportunity.get("depth_score", 0)
-        il_risk_score = opportunity.get("il_risk_score", float("inf"))
+        il_risk_score = opportunity.get("il_risk_score", float('inf'))
 
         logs.append(f"Evaluating opportunity: {opportunity}")
         if (
@@ -140,7 +167,6 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
     # Calculate max values for normalization
     max_values = get_max_values(filtered_opportunities)
-
     # Calculate composite scores for filtered opportunities
     for opportunity in filtered_opportunities:
         opportunity["composite_score"] = calculate_composite_score(
@@ -149,26 +175,20 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
     position_to_exit = {}
     optimal_opportunities = []
-
+  
     if current_positions:
         # Calculate composite score for the current pool
-        current_composite_scores = [
-            calculate_composite_score(pool, max_values) for pool in current_positions
-        ]
-
+        current_composite_scores = [calculate_composite_score(pool, max_values) for pool in current_positions]
+      
         # Identify the least performing current pool
-        least_performing_index = current_composite_scores.index(
-            min(current_composite_scores)
-        )
+        least_performing_index = current_composite_scores.index(min(current_composite_scores))
         least_performing_score = current_composite_scores[least_performing_index]
         position_to_exit = current_positions[least_performing_index]
 
         # Compare each opportunity with the least performing current pool
         better_opportunities = [
-            opportunity
-            for opportunity in filtered_opportunities
-            if opportunity["composite_score"]
-            > least_performing_score * (1 + improvement_threshold)
+            opportunity for opportunity in filtered_opportunities
+            if opportunity["composite_score"] > least_performing_score * (1 + improvement_threshold)
         ]
 
         if better_opportunities:
@@ -191,8 +211,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
 
         # Select opportunities that meet the minimum composite score ratio
         optimal_opportunities = [
-            opp
-            for opp in filtered_opportunities[:max_pools]
+            opp for opp in filtered_opportunities[:max_pools]
             if opp["composite_score"] >= MIN_COMPOSITE_SCORE_RATIO * top_composite_score
         ]
 
@@ -201,25 +220,17 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             return {"optimal_strategies": [], "position_to_exit": {}}
 
         # Calculate total composite score for optimal opportunities
-        total_composite_score = sum(
-            opportunity["composite_score"] for opportunity in optimal_opportunities
-        )
-
+        total_composite_score = sum(opportunity["composite_score"] for opportunity in optimal_opportunities)
         # Assign percentage of funds to each optimal opportunity
         for opportunity in optimal_opportunities:
-            opportunity["funds_percentage"] = (
-                opportunity["composite_score"] / total_composite_score
-            ) * 100
-
+            opportunity["funds_percentage"] = (opportunity["composite_score"] / total_composite_score) * 100
         # Calculate relative percentages
-        funds_percentages = [
-            opportunity["funds_percentage"] for opportunity in optimal_opportunities
-        ]
+        funds_percentages = [opportunity["funds_percentage"] for opportunity in optimal_opportunities]
         relative_percentages = calculate_relative_percentages(funds_percentages)
 
         # Update opportunities with relative percentages
         for opportunity, relative_percentage in zip(optimal_opportunities, relative_percentages):
-            opportunity["relative_funds_percentage"] = round(relative_percentage, 10)    
+            opportunity["relative_funds_percentage"] = relative_percentage    
     
     return {"optimal_strategies": optimal_opportunities, "position_to_exit": position_to_exit} 
 

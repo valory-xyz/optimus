@@ -1,4 +1,5 @@
 import warnings
+
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import requests
@@ -48,6 +49,8 @@ CHAIN_URLS = {
 }
 
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
+LP = "lp"
+errors = []
 
 @lru_cache(None)
 def fetch_coin_list():
@@ -58,7 +61,7 @@ def fetch_coin_list():
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        logger.error(f"Failed to fetch coin list: {e}")
+        errors.append((f"Failed to fetch coin list: {e}"))
         return None
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
@@ -212,76 +215,54 @@ def calculate_il_impact(P0, P1):
     # Impermanent Loss impact calculation
     return 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
 
-def calculate_il_impact_multi(price_ratios):
-    """
-    Calculate IL impact for multiple tokens
-    price_ratios: List of price ratios for each token pair
-    """
-    total_il = 0
-    n = len(price_ratios)
-    
-    for i in range(n):
-        for j in range(i + 1, n):
-            il = calculate_il_impact(price_ratios[i], price_ratios[j])
-            total_il += abs(il)
-    
-    # Normalize by number of pairs
-    num_pairs = (n * (n - 1)) / 2
-    return total_il / num_pairs if num_pairs > 0 else 0
 
-def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90) -> float:
-    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+def calculate_il_risk_score(
+    token_0, token_1, coingecko_api_key: str, time_period: int = 90
+) -> float:
+    is_pro = is_pro_api_key(coingecko_api_key)
+    if is_pro:
+        cg = CoinGeckoAPI(api_key=coingecko_api_key)
+    else:
+        cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
     
     try:
-        # Fetch price data for all tokens
-        price_data = []
-        for token_id in token_ids:
-            prices = cg.get_coin_market_chart_range_by_id(
-                id=token_id,
-                vs_currency='usd',
-                from_timestamp=from_timestamp,
-                to_timestamp=to_timestamp
-            )
-            price_data.append(np.array([x[1] for x in prices['prices']]))
-        
-        # Find minimum length across all price arrays
-        min_length = min(len(prices) for prices in price_data)
-        price_data = [prices[:min_length] for prices in price_data]
-        
-        if min_length < 2:
-            return float('nan')
-        
-        # Calculate correlation and volatility metrics
-        total_correlation = 0
-        total_volatility = 0
-        n = len(price_data)
-        
-        for i in range(n):
-            for j in range(i + 1, n):
-                correlation = np.corrcoef(price_data[i], price_data[j])[0, 1]
-                volatility_i = np.std(price_data[i])
-                volatility_j = np.std(price_data[j])
-                total_correlation += abs(correlation)
-                total_volatility += np.sqrt(volatility_i * volatility_j)
-        
-        num_pairs = (n * (n - 1)) / 2
-        avg_correlation = total_correlation / num_pairs if num_pairs > 0 else 0
-        avg_volatility = total_volatility / num_pairs if num_pairs > 0 else 0
-        
-        # Calculate price ratios for IL impact
-        initial_prices = [prices[0] for prices in price_data]
-        final_prices = [prices[-1] for prices in price_data]
-        price_ratios = [final_price / initial_price for initial_price, final_price in zip(initial_prices, final_prices)]
-        
-        il_impact = calculate_il_impact_multi(price_ratios)
-        
-        return float(il_impact * avg_correlation * avg_volatility)
-        
+        prices_1 = cg.get_coin_market_chart_range_by_id(
+            id=token_0,
+            vs_currency="usd",
+            from_timestamp=from_timestamp,
+            to_timestamp=to_timestamp,
+        )
+        prices_2 = cg.get_coin_market_chart_range_by_id(
+            id=token_1,
+            vs_currency="usd",
+            from_timestamp=from_timestamp,
+            to_timestamp=to_timestamp,
+        )
     except Exception as e:
-        logger.error(f"Error calculating IL risk score: {e}")
-        return float('nan')
+        errors.append(f"Error fetching price data: Incorrect Coingecko API Key")
+        return None
+    
+    prices_1_data = np.array([x[1] for x in prices_1["prices"]])
+    prices_2_data = np.array([x[1] for x in prices_2["prices"]])
+    min_length = min(len(prices_1_data), len(prices_2_data))
+    prices_1_data = prices_1_data[:min_length]
+    prices_2_data = prices_2_data[:min_length]
+
+    if min_length < 2:
+        return None
+
+    price_correlation = np.corrcoef(prices_1_data, prices_2_data)[0, 1]
+    volatility_1 = np.std(prices_1_data)
+    volatility_2 = np.std(prices_2_data)
+    volatility_multiplier = np.sqrt(volatility_1 * volatility_2)
+    P0 = prices_1_data[0] / prices_2_data[0]
+    P1 = prices_1_data[-1] / prices_2_data[-1]
+    il_impact = calculate_il_impact(P0, P1)
+
+    return float(il_impact * abs(price_correlation) * volatility_multiplier)
+
 
 def create_graphql_client(api_url='https://api-v3.balancer.fi') -> Client:
     transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)
@@ -328,15 +309,14 @@ def fetch_liquidity_metrics(pool_id: str, chain: str, client: Optional[Client] =
             'Meets Depth Score Threshold': depth_score > 50
         }
 
-    except Exception as e:
-        logger.error(f"An error occurred while analyzing pool metrics: {e}")
+    except Exception:
         return None
 
 def analyze_pool_liquidity(pool_id: str, chain: str, client: Optional[Client] = None, price_impact: float = 0.01):
     metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
     if metrics is None:
-        logger.error("Could not retrieve depth score and maximum position size.")
-        return float('nan'), float('nan')
+        errors.append("Could not retrieve depth score and maximum position size.")
+        return float("nan"), float("nan")
     return metrics["Depth Score"], metrics["Maximum Position Size"]
 
 def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
@@ -412,7 +392,7 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange='ONE_YEAR'):
         return float(sharpe_ratio)
         
     except Exception as e:
-        logger.error(f"Error calculating Sharpe ratio: {str(e)}")
+        errors.append(f"Error calculating Sharpe ratio: {e}")
         return None
 
 def format_pool_data(pool) -> Dict[str, Any]:
@@ -493,15 +473,35 @@ def calculate_metrics(position: Dict[str, Any], coingecko_api_key: str, coin_lis
         "il_risk_score": il_risk_score,
         "sharpe_ratio": sharpe_ratio,
         "depth_score": depth_score,
-        "max_position_size": max_position_size
+        "max_position_size": max_position_size,
     }
 
+def is_pro_api_key(coingecko_api_key: str) -> bool:
+    """
+    Check if the provided CoinGecko API key is a pro key.
+    """
+    # Try using the key as a pro API key
+    cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
+    try:
+        response = cg_pro.get_coin_market_chart_range_by_id(
+            id="bitcoin",
+            vs_currency="usd",
+            from_timestamp=0,
+            to_timestamp=0
+        )
+        if response:
+            return True
+    except Exception:
+        return False
 
-def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
+    return False
+
+def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     missing = check_missing_fields(kwargs)
     if missing:
-        return {"error": f"Required kwargs {missing} were not provided."}
-    
+        errors.append(f"Required kwargs {missing} were not provided.")
+        return {"error": errors}
+
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get('get_metrics', False)
     if get_metrics:
@@ -510,12 +510,21 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     kwargs = remove_irrelevant_fields(kwargs, required_fields)
     
     coin_list = fetch_coin_list()
+    if coin_list is None:
+        errors.append("Failed to fetch coin list.")
+        return {"error": errors}
+
     kwargs.update({"coin_list": coin_list})
 
     if get_metrics:
-        return calculate_metrics(**kwargs)
+        metrics = calculate_metrics(**kwargs)
+        if metrics is None:
+            errors.append("Failed to calculate metrics.")
+        return {"error": errors} if errors else metrics
     else:
         result = get_opportunities(**kwargs)
+        if isinstance(result, dict) and "error" in result:
+            errors.append(result["error"])
         if not result:
-            return {"error": "No suitable aggregators found"}
-        return result
+            errors.append("No suitable aggregators found")
+        return {"error": errors} if errors else {"result": result}

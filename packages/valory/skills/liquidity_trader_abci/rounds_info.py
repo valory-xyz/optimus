@@ -126,4 +126,69 @@ ROUNDS_INFO = {
         "description": "Checks that the transaction was succesful",
         "transitions": {},
     },
+    "BacktestRound": {
+        "name": "Backtest",
+        "description": "Runs a backtest of the trading strategy",
+        "transitions": {},
+    },
+    "DecideAgentEndingRound": {
+        "name": "Deciding agent ending",
+        "description": "Decides when the agent should end its execution",
+        "transitions": {},
+    },
+    "DecideAgentStartingRound": {
+        "name": "Deciding agent starting",
+        "description": "Decides when the agent should start its execution",
+        "transitions": {},
+    },
+    "FetchMarketDataRound": {
+        "name": "Fetching market data",
+        "description": "Fetches market data from external sources",
+        "transitions": {},
+    },
+    "PortfolioTrackerRound": {
+        "name": "Tracking the portfolio",
+        "description": "Tracks the agent's portfolio and positions",
+        "transitions": {},
+    },
+    "PrepareEvmSwapRound": {
+        "name": "Preparing EVM swap",
+        "description": "Prepares the necessary data for an EVM swap transaction",
+        "transitions": {},
+    },
+    "PrepareSwapRound": {
+        "name": "Preparing swap",
+        "description": "Prepares the necessary data for a swap transaction",
+        "transitions": {},
+    },
+    "ProxySwapQueueRound": {
+        "name": "Proxy swap queue",
+        "description": "Manages the queue of swap transactions",
+        "transitions": {},
+    },
+    "RandomnessRound": {
+        "name": "Getting randomness",
+        "description": "Obtains randomness from a decentralized source",
+        "transitions": {},
+    },
+    "StrategyExecRound": {
+        "name": "Executing the strategy",
+        "description": "Executes the trading strategy",
+        "transitions": {},
+    },
+    "SwapQueueRound": {
+        "name": "Swap queue",
+        "description": "Manages the queue of swap transactions",
+        "transitions": {},
+    },
+    "TraderDecisionMakerRound": {
+        "name": "Trader decision maker",
+        "description": "Makes trading decisions based on the evaluated strategies",
+        "transitions": {},
+    },
+    "TransformMarketDataRound": {
+        "name": "Transforming market data",
+        "description": "Transforms the fetched market data into a format suitable for the trading strategy",
+        "transitions": {},
+    },
 }

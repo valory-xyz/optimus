@@ -7,27 +7,28 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeie74y2sfftbs6lkhxjb4vxkfre35qvbjd222tu3kytnelbcoj3jji
+  behaviours.py: bafybeihi2tpxre6yevtgg6e26phahaaxezi5o2r5cqgt37hhqhd7bldbd4
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
-  fsm_specification.yaml: bafybeie3vom7fwl5ho6xanje3r7tab7y3a5ij5gs6qvjh2uavbpitffyzu
-  handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
+  fsm_specification.yaml: bafybeibsmnmohywo7gxg6opkojc5qkdkmphuc2gtvbt4tffo574kqjns5a
+  handlers.py: bafybeiafuvuy7mvmolwcgfkrbrmnvvro4dele5znggyskwcuz2rtnnybku
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeig35ep4o2f4nof65tzq7uizaoif7agjcjpghsy4mc6uocnabhaava
-  payloads.py: bafybeie5tbx3lqcklwfqdqft5t33oluvkltnbjqavhj3ddjjblocyq62qm
+  models.py: bafybeih5bj2z5iqqoc7ehads5pzyfxnu6r57d253zdevov5hggbupbskt4
+  payloads.py: bafybeidu4rqqto2yzsqj7niuzlp5idw6ot3ohsj7gs6hjxnn66wauecsfm
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeignqsoxapsximb3fwpwwufowxnizdqo6l7rnlw4qv4fodmzm6qadi
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeidbh4cetttbn4nvti6ftwlrgfnfs5xtuo3i26qfphodrlcaqlibra
-  rounds_info.py: bafybeihpz6ih4ixevy76cm2bwrfs4yzaigkfg3gq2gxfhy6wl5ammkyqwu
-  tests/test_behaviours.py: bafybeihc2dlak2w3mra7pnyylu3fcgylnpqyuoc3igffupfobmfdjowxbi
+  rounds.py: bafybeib7xxohod6ghz57fktp7t25w45f7pw3vrhyuf7au4wog2foq6weuy
+  rounds_info.py: bafybeihjaawvnstho6ekp4v6zwpawiavexntt6dlrcbcfketuv62kcyrkq
+  tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju
   tests/test_models.py: bafybeic75ux6ulgpnf4ndrctgsw7jlbc7zs3ltxtue4o4eoij7fqvfqmfe
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
 fingerprint_ignore_patterns: []
-connections: []
+connections:
+- eightballer/dcxt:0.1.0:bafybeibqu2i2mcoppkgha74ftejx5l2dlnlmdlornpizg5htvcvr3zawt4
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihtqcpqthb37msgqabpzcc2xc3l3yzkp5pl2sodeghqyzzzyuevgi
 - valory/balancer_weighted_pool:0.1.0:bafybeidthw5afkeswxqockblrzzgmeiwhqgukytyr4veaf4ok66qv3zjfe
@@ -44,9 +45,11 @@ protocols:
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
 - valory/ipfs:0.1.0:bafybeiftxi2qhreewgsc5wevogi7yc5g6hbcbo4uiuaibauhv3nhfcdtvm
+- eightballer/tickers:0.1.0:bafybeiccdlqdnarfwjsr4qxhfv6ywun4yx5g3dlbrtupda253gtpfjnimm
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeiel5jeipn2sowbuaqe5wefpjfct4ufauurjwgm7gp6tf3ws3v5oru
-- valory/transaction_settlement_abci:0.1.0:bafybeigjgwgkpirbttphos34gbzcm5q6cdjzo6jaqblzvlokng7cyo5dii
+- valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
+- valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
+- valory/market_data_fetcher_abci:0.1.0:bafybeigywrpiyqjztnvjm5ey4lqh5wkln6veizb2xkvxr2py6edo7wzrp4
 behaviours:
   main:
     args: {}
@@ -131,6 +134,7 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
+      default_chain_id: base
       service_id: optimus
       service_registry_address: null
       setup:
@@ -183,6 +187,8 @@ models:
       merkl_user_rewards_url: https://api.merkl.xyz/v3/userRewards
       tenderly_bundle_simulation_url: https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle
       tenderly_access_key: access_key
+      agent_transition: false
+      include_babydegen_strategies: true
       tenderly_account_slug: account_slug
       tenderly_project_slug: project_slug
       chain_to_chain_id_mapping: '{"optimism":10,"base":8453,"ethereum":1,"mode":34443}'
@@ -197,6 +203,7 @@ models:
       min_swap_amount_threshold: 10
       max_fee_percentage: 0.02
       max_gas_percentage: 0.1
+      multisend_batch_size: 50
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}'
       target_investment_chains:
       - base
@@ -204,7 +211,7 @@ models:
       - mode
       staking_chain: optimism
       file_hash_to_strategies: '{"bafybeiez4r4yv3so2j33opdywov6y7sbl65j5ew5n53vidqzhj2jicu3yy":"merkl_pools_search","bafybeighu2qmxopdbgk6orx45fea3ka7jwf657ihasem6jexpmg7xpe7ha":"max_apr_selection"}'
-      strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
+      trading_strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
       selected_strategies:
       - merkl_pools_search
       selected_protocols:

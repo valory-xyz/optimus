@@ -25,12 +25,14 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
-from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )
 from packages.valory.skills.abstract_round_abci.handlers import (
     HttpHandler as BaseHttpHandler,
+)
+from packages.valory.skills.abstract_round_abci.handlers import (
+    IpfsHandler as BaseIpfsHandler,
 )
 from packages.valory.skills.abstract_round_abci.handlers import (
     LedgerApiHandler as BaseLedgerApiHandler,
@@ -52,11 +54,10 @@ ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 
 
-class IpfsHandler(AbstractResponseHandler):
+class IpfsHandler(BaseIpfsHandler):
     """IPFS message handler."""
 
     SUPPORTED_PROTOCOL = IpfsMessage.protocol_id
-    allowed_response_performatives = frozenset({IpfsMessage.Performative.IPFS_HASH})
     custom_support_performative = IpfsMessage.Performative.FILES
 
     @property
@@ -72,12 +73,20 @@ class IpfsHandler(AbstractResponseHandler):
         :return: None
         """
         self.context.logger.debug(f"Received message: {message}")
-        self.shared_state.in_flight_req = False
 
-        if message.performative != self.custom_support_performative:
+        if (
+            message.performative != self.custom_support_performative
+            or not self.shared_state.in_flight_req
+        ):
             return super().handle(message)
 
+        self.shared_state.in_flight_req = False
         dialogue = self.context.ipfs_dialogues.update(message)
-        nonce = dialogue.dialogue_label.dialogue_reference[0]
-        callback = self.shared_state.req_to_callback.pop(nonce)
-        callback(message, dialogue)
+        nonce = str(dialogue.dialogue_label.dialogue_reference[0])
+
+        # First, attempt to retrieve the callback from shared_state
+        if nonce in self.shared_state.req_to_callback:
+            callback = self.shared_state.req_to_callback.pop(nonce)
+            callback(message, dialogue)
+        else:
+            return super().handle(message)

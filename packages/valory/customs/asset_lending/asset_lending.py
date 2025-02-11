@@ -1,6 +1,5 @@
 import warnings
 
-
 warnings.filterwarnings("ignore")
 
 import json
@@ -14,7 +13,6 @@ import requests
 from aea.helpers.logging import setup_logger
 from pycoingecko import CoinGeckoAPI
 from web3 import Web3
-
 
 # Configure _logger
 _logger = setup_logger(__name__)
@@ -32,7 +30,7 @@ PRICE_IMPACT = 0.01
 FETCH_AGGREGATOR_ENDPOINT = (
     "https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators"
 )
-
+LENDING = "lending"
 # Map known token symbols to CoinGecko IDs
 coingecko_name_to_id = {
     "weth": "weth",
@@ -46,6 +44,8 @@ _coin_list_cache = None
 _aggregators_cache = None
 _historical_data_cache = None
 
+# Error list
+errors = []
 
 def get_coin_list():
     global _coin_list_cache
@@ -56,7 +56,7 @@ def get_coin_list():
             response.raise_for_status()
             _coin_list_cache = response.json()
         except requests.RequestException as e:
-            _logger.error(f"Failed to fetch coin list: {e}")
+            errors.append(f"Failed to fetch coin list: {e}")
             _coin_list_cache = []
     return _coin_list_cache
 
@@ -72,7 +72,7 @@ def fetch_token_id(symbol):
         if coin["symbol"].lower() == symbol:
             return coin["id"]
 
-    _logger.error(f"Failed to fetch id for coin with symbol: {symbol}")
+    errors.append(f"Failed to fetch id for coin with symbol: {symbol}")
     return None
 
 
@@ -86,7 +86,8 @@ def fetch_historical_data(limit: int = 720):
     url = f"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/getV2AggregatorHistoricalData?last_time={one_month_ago_ms}&limit={limit}"
     response = requests.get(url)
     if response.status_code != 200:
-        raise Exception("Failed to fetch historical data from STURDY API.")
+        errors.append("Failed to fetch historical data from STURDY API.")
+        return None
     _historical_data_cache = response.json()
     return _historical_data_cache
 
@@ -166,12 +167,12 @@ def fetch_aggregators() -> List[Dict[str, Any]]:
         response.raise_for_status()
         result = response.json()
         if "errors" in result:
-            _logger.error(f"REST API Errors: {result['errors']}")
+            errors.append(f"REST API Errors: {result['errors']}")
             _aggregators_cache = []
         else:
             _aggregators_cache = result
     except requests.RequestException as e:
-        _logger.error(f"REST API request failed: {e}")
+        errors.append(f"REST API request failed: {e}")
         _aggregators_cache = []
     return _aggregators_cache
 
@@ -200,7 +201,7 @@ def filter_aggregators(
                 filtered_aggregators.append(aggregator)
 
     if not filtered_aggregators:
-        _logger.error("No suitable aggregator found.")
+        errors.append("No suitable aggregator found.")
         return []
 
     # If very few aggregators, return them directly
@@ -226,7 +227,7 @@ def filter_aggregators(
         scored_aggregators.append(aggregator)
 
     if not scored_aggregators:
-        _logger.error("No suitable aggregator found after scoring.")
+        errors.append("No suitable aggregator found after scoring.")
         return []
 
     score_threshold = np.percentile(
@@ -239,7 +240,7 @@ def filter_aggregators(
     filtered_scored_aggregators.sort(key=lambda x: x["score"], reverse=True)
 
     if not filtered_scored_aggregators:
-        _logger.error("No suitable aggregator found after score threshold.")
+        errors.append("No suitable aggregator found after score threshold.")
         return []
 
     # Limit to top 10 scored pools if more than 10
@@ -256,12 +257,16 @@ def calculate_il_risk_score_for_lending(
     time_period: int = 90,
 ) -> float:
     if not asset_token_1 or not asset_token_2:
-        _logger.error(
+        errors.append(
             "Tokens are required. Cannot calculate IL risk score without asset tokens"
         )
-        return float("nan")
+        return None
 
-    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+    is_pro = is_pro_api_key(coingecko_api_key)
+    if is_pro:
+        cg = CoinGeckoAPI(api_key=coingecko_api_key)
+    else:
+        cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
 
@@ -279,15 +284,15 @@ def calculate_il_risk_score_for_lending(
             to_timestamp=to_timestamp,
         )
     except Exception as e:
-        _logger.error(f"Error fetching price data: {e}")
-        return float("nan")
-
+        errors.append(f"Error fetching price data: Incorrect Coingecko API Key")
+        return None
+    
     prices_1_data = np.array([x[1] for x in prices_1["prices"]])
     prices_2_data = np.array([x[1] for x in prices_2["prices"]])
 
     min_length = min(len(prices_1_data), len(prices_2_data))
     if min_length == 0:
-        return float("nan")
+        return None
 
     prices_1_data = prices_1_data[:min_length]
     prices_2_data = prices_2_data[:min_length]
@@ -319,7 +324,7 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 
     token_0_id = get_token_id(token0_symbol)
     if not token_0_id:
-        return float("nan")
+        return None
 
     for silo in silos:
         token_1_symbol = silo["collateral"].lower()
@@ -329,12 +334,15 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
             il_risk_score = calculate_il_risk_score_for_lending(
                 token_0_id, token_1_id, coingecko_api_key
             )
+            if not il_risk_score:
+                return None
+            
             il_risk_scores.append(il_risk_score)
         else:
-            _logger.error(f"Failed to fetch token IDs for silo: {silo['collateral']}")
+            errors.append(f"Failed to fetch token IDs for silo: {silo['collateral']}")
 
     if not il_risk_scores:
-        return float("nan")
+        return None
 
     return sum(il_risk_scores) / len(il_risk_scores)
 
@@ -355,6 +363,7 @@ def analyze_vault_liquidity(aggregator):
                 break
 
     if not tvl or not total_assets:
+        errors.append("Could not retrieve depth score and maximum position size.")
         return float("nan"), float("nan")
 
     depth_score = (
@@ -381,6 +390,7 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
         "sharpe_ratio": aggregator["sharpe_ratio"],
         "depth_score": aggregator["depth_score"],
         "max_position_size": aggregator["max_position_size"],
+        "type": aggregator["type"]
     }
 
 
@@ -389,15 +399,19 @@ def get_best_opportunities(
 ) -> List[Dict[str, Any]]:
     data = fetch_aggregators()
     if not data:
-        return []
+        errors.append("Failed to fetch aggregators.")
+        return {"error": errors}
 
     filtered_aggregators = filter_aggregators(
         chains, data, lending_asset, current_positions
     )
     if not filtered_aggregators:
-        return []
+        errors.append("No suitable aggregators found.")
+        return {"error": errors}
 
     historical_data = fetch_historical_data()
+    if historical_data is None:
+        return {"error": errors}
 
     for aggregator in filtered_aggregators:
         silos = aggregator.get("whitelistedSilos", [])
@@ -409,8 +423,9 @@ def get_best_opportunities(
         )
         depth_score, max_position_size = analyze_vault_liquidity(aggregator)
         aggregator["depth_score"] = depth_score
-        aggregator["max_position_size"] = max_position_size
-
+        aggregator["max_position_size"] = max_position_size    
+        aggregator["type"] = LENDING
+        
     formatted_results = [
         format_aggregator(aggregator) for aggregator in filtered_aggregators
     ]
@@ -427,6 +442,9 @@ def calculate_metrics(
         coingecko_api_key,
     )
     historical_data = fetch_historical_data()
+    if historical_data is None:
+        return {"error": errors}
+
     sharpe_ratio = get_sharpe_ratio_for_address(
         historical_data, position["pool_address"]
     )
@@ -439,10 +457,31 @@ def calculate_metrics(
     }
 
 
+def is_pro_api_key(coingecko_api_key: str) -> bool:
+    """
+    Check if the provided CoinGecko API key is a pro key.
+    """
+    # Try using the key as a pro API key
+    cg_pro = CoinGeckoAPI(api_key=coingecko_api_key)
+    try:
+        response = cg_pro.get_coin_market_chart_range_by_id(
+            id="bitcoin",
+            vs_currency="usd",
+            from_timestamp=0,
+            to_timestamp=0
+        )
+        if response:
+            return True
+    except Exception:
+        return False
+
+    return False
+
 def run(*_args, **kwargs) -> Any:
     missing = check_missing_fields(kwargs)
     if missing:
-        return {"error": f"Required kwargs {missing} were not provided."}
+        errors.append(f"Required kwargs {missing} were not provided.")
+        return {"error": errors}
 
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
@@ -452,9 +491,14 @@ def run(*_args, **kwargs) -> Any:
     kwargs = remove_irrelevant_fields(kwargs, required_fields)
 
     if get_metrics:
-        return calculate_metrics(**kwargs)
+        metrics = calculate_metrics(**kwargs)
+        if metrics is None:
+            errors.append("Failed to calculate metrics.")
+        return {"error": errors} if errors else metrics
     else:
         result = get_best_opportunities(**kwargs)
+        if isinstance(result, dict) and "error" in result:
+            errors.append(result["error"])
         if not result:
-            return {"error": "No suitable aggregators found"}
-        return result
+            errors.append("No suitable aggregators found")
+        return {"error": errors} if errors else {"result": result}

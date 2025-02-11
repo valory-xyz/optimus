@@ -1181,6 +1181,27 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             yield from self.fetch_all_trading_opportunities()
 
+            if not self.current_positions:
+                has_funds = False
+                for position in self.synchronized_data.positions:
+                    for asset in position.get("assets", []):
+                        balance = asset.get("balance", 0)
+                        if balance > 0:
+                            has_funds = True
+                            break
+
+                    if has_funds:
+                        break
+
+                if not has_funds:
+                    actions = []
+                    self.context.logger.info(f"Actions: {actions}")
+                    serialized_actions = json.dumps(actions)
+                    sender = self.context.agent_address
+                    payload = EvaluateStrategyPayload(
+                        sender=sender, actions=serialized_actions
+                    )
+                    
             if self.current_positions:
                 for position in self.current_positions:
                     if position.get("status") == PositionStatus.CLOSED.value:

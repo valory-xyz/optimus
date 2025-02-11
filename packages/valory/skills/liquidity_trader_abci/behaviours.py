@@ -1595,14 +1595,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches the list of coins from CoinGecko API only once."""
         url = "https://api.coingecko.com/api/v3/coins/list"
         response = yield from self.get_http_response("GET", url, None, None)
-
+    
         try:
             response_json = json.loads(response.body)
             return response_json
         except json.decoder.JSONDecodeError as e:
             self.context.logger.error(f"Failed to fetch coin list: {e}")
             return None
-
+    
     def get_token_id_from_symbol_cached(
         self, symbol, token_name, coin_list
     ) -> Optional[str]:
@@ -1617,7 +1617,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # If single candidate, return it.
         if len(candidates) == 1:
             return candidates[0]["id"]
-
+    
         # If multiple candidates, match by name if possible.
         normalized_token_name = token_name.replace(" ", "").lower()
         for coin in candidates:
@@ -1625,7 +1625,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if coin_name == normalized_token_name or coin_name == symbol.lower():
                 return coin["id"]
         return None
-
+    
     def get_token_id_from_symbol(
         self, token_address, symbol, coin_list, chain_name
     ) -> Generator[None, None, Optional[str]]:
@@ -1638,14 +1638,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
             ]
             return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-
+     
         return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-
+    
     def _fetch_token_name_from_contract(
         self, chain: str, token_address: str
     ) -> Generator[None, None, Optional[str]]:
         """Fetch the token name from the ERC20 contract."""
-
+    
         token_name = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=token_address,
@@ -1655,10 +1655,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return token_name
-
+    
     def execute_hyper_strategy(self) -> None:
         """Executes hyper strategy"""
-
+    
         hyper_strategy = self.params.selected_hyper_strategy
         kwargs = {
             "strategy": hyper_strategy,

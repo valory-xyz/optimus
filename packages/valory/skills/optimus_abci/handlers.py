@@ -135,6 +135,11 @@ class HttpHandler(BaseHttpHandler):
         hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
+
+        portfolio_url_regex = rf"{hostname_regex}\/portfolio"
+        self.routes[(HttpMethod.GET.value, HttpMethod.HEAD.value)].append(
+            (portfolio_url_regex, self._handle_get_portfolio)
+        )
         index_url_regex = rf"{hostname_regex}\/?$"
 
         # Routes
@@ -143,6 +148,7 @@ class HttpHandler(BaseHttpHandler):
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (index_url_regex, self._handle_get_index), 
+                (portfolio_url_regex, self._handle_get_portfolio)
             ],
         }
 
@@ -166,6 +172,7 @@ class HttpHandler(BaseHttpHandler):
             Path(Path(__file__).parent, "html", "index.html"), "r", encoding="utf-8"
         ) as file:
             self.index_html = file.read()
+
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -304,6 +311,31 @@ class HttpHandler(BaseHttpHandler):
         # Send response
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
+
+    def _handle_get_portfolio(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a Http request to get portfolio values.
+
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+        # Define the path to the portfolio data file
+        portfolio_data_filepath: str = (
+            self.context.params.store_path / self.context.params.portfolio_info_filename
+        )
+
+        # Read the portfolio data from the file
+        try:
+            with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
+                portfolio_data = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            self.context.logger.error(f"Error reading portfolio data: {str(e)}")
+            portfolio_data = {"error": "Could not read portfolio data"}
+
+        # Send the portfolio data as a response
+        self._send_ok_response(http_msg, http_dialogue, portfolio_data)
 
     def _handle_get_health(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

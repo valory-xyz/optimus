@@ -197,6 +197,7 @@ models:
       store_path: data
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
+      portfolio_info_filename: portfolio.json
       gas_cost_info_filename: gas_costs.json
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       min_swap_amount_threshold: 10

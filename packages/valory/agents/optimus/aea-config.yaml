@@ -323,6 +323,7 @@ models:
       store_path: ${str:/data}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
+      portfolio_info_filename: ${str:portfolio.json}
       gas_cost_info_filename: ${str:gas_costs.json}
       min_swap_amount_threshold: ${int:1}
       max_fee_percentage: ${float:0.02}

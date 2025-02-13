@@ -135,14 +135,12 @@ class HttpHandler(BaseHttpHandler):
         hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
-        index_url_regex = rf"{hostname_regex}\/?$"
 
         # Routes
         self.routes = {
             (HttpMethod.POST.value,): [],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
-                (index_url_regex, self._handle_get_index), 
             ],
         }
 
@@ -285,20 +283,17 @@ class HttpHandler(BaseHttpHandler):
         self,
         http_msg: HttpMessage,
         http_dialogue: HttpDialogue,
-        data: Union[str, Dict, List],
+        data: Union[Dict, List],
     ) -> None:
         """Send an OK response with the provided data"""
-        headers = self.json_content_header if isinstance(data, (dict, list)) else self.html_content_header
-        headers += http_msg.headers
-
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
             version=http_msg.version,
             status_code=HttpCode.OK_CODE.value,
             status_text="Success",
-            headers=headers,
-            body=data.encode("utf-8") if isinstance(data, str) else json.dumps(data).encode("utf-8"),
+            headers=f"{self.json_content_header}{http_msg.headers}",
+            body=json.dumps(data).encode("utf-8"),
         )
 
         # Send response
@@ -356,24 +351,6 @@ class HttpHandler(BaseHttpHandler):
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
-
-    def _handle_get_index(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a HTTP GET request for the index page.
-
-        :param http_msg: the HTTP message
-        :param http_dialogue: the HTTP dialogue
-        """
-        # Read the HTML file
-        with open(
-            Path(Path(__file__).parent, "html", "index.html"), "r", encoding="utf-8"
-        ) as file:
-            index_html = file.read()
-
-        # Send the HTML response
-        self._send_ok_response(http_msg, http_dialogue, index_html)
 
 DcxtTickersHandler = BaseDcxtTickersHandler
 DcxtBalancesHandler = BaseDcxtBalancesHandler

@@ -842,6 +842,7 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            self.context.logger.info(f"RESET PAUSE DURATION: {self.params.reset_pause_duration}")
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
 

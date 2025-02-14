@@ -40,6 +40,7 @@ from typing import (
     Type,
     cast,
 )
+from decimal import Decimal, getcontext
 from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId

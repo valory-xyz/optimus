@@ -11,6 +11,7 @@ optimus
 assets.json
 current_pool.json
 gas_costs.json
+portfolio.json
 Pipfile.lock
     
 packages/valory/agents/*

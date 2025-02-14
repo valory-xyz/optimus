@@ -126,16 +126,33 @@ class HttpHandler(BaseHttpHandler):
         hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
-
+        
+        portfolio_url_regex = rf"{hostname_regex}\/portfolio"
+        index_url_regex = rf"{hostname_regex}\/?$"
+        static_js_regex = rf"{hostname_regex}\/static\/js\/main\.d1485dfa\.js"  # New regex for main.js
+        static_css_regex = rf"{hostname_regex}\/static\/css\/main\.972e2d60\.css"  # New regex for main.css
+        favicon_regex = rf"{hostname_regex}\/favicon\.ico"  # New regex for favicon.ico
+        manifest_regex = rf"{hostname_regex}\/manifest\.json"  # New regex for manifest.json
+        mode_network_logo_regex = rf"{hostname_regex}\/logos\/protocols\/mode-network\.png"  # New regex for mode-network.png
+        modius_logo_regex = rf"{hostname_regex}\/logos\/modius\.png" 
         # Routes
         self.routes = {
             (HttpMethod.POST.value,): [],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
+                (index_url_regex, self._handle_get_index), 
+                (portfolio_url_regex, self._handle_get_portfolio),
+                (static_js_regex, self._handle_get_static_js),  # New route for main.js
+                (static_css_regex, self._handle_get_static_css),  # New route for main.css
+                (favicon_regex, self._handle_get_favicon),  # New route for favicon.ico
+                (manifest_regex, self._handle_get_manifest),  # New route for manifest.json
+                (mode_network_logo_regex, self._handle_get_mode_network_logo),  # New route for mode-network.png
+                (modius_logo_regex, self._handle_get_modius_logo),  # New route for modius.png
             ],
         }
 
         self.json_content_header = "Content-Type: application/json\n"
+        self.html_content_header = "Content-Type: text/html\n"
         fsm = load_fsm_spec()
 
         self.rounds_info: Dict = {  # pylint: disable=attribute-defined-outside-init
@@ -146,7 +163,8 @@ class HttpHandler(BaseHttpHandler):
             self.rounds_info[camel_to_snake(source_round)]["transitions"][
                 event.lower()
             ] = camel_to_snake(target_round)
-
+        self.json_content_header = "Content-Type: application/json\n"
+        self.html_content_header = "Content-Type: text/html\n"
     @property
     def synchronized_data(self) -> SynchronizedData:
         """Return the synchronized data."""
@@ -265,23 +283,50 @@ class HttpHandler(BaseHttpHandler):
         self,
         http_msg: HttpMessage,
         http_dialogue: HttpDialogue,
-        data: Union[Dict, List],
+        data: Union[str, Dict, List, bytes],
     ) -> None:
         """Send an OK response with the provided data"""
+        headers = self.json_content_header if isinstance(data, (dict, list)) else self.html_content_header
+        headers += http_msg.headers
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
             version=http_msg.version,
             status_code=HttpCode.OK_CODE.value,
             status_text="Success",
-            headers=f"{self.json_content_header}{http_msg.headers}",
-            body=json.dumps(data).encode("utf-8"),
+            headers=headers,
+            body=data.encode("utf-8") if isinstance(data, str) else data,
         )
 
         # Send response
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
 
+    def _handle_get_portfolio(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a Http request to get portfolio values.
+
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+        # Define the path to the portfolio data file
+        portfolio_data_filepath: str = (
+            self.context.params.store_path / self.context.params.portfolio_info_filename
+        )
+
+        # Read the portfolio data from the file
+        try:
+            with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
+                portfolio_data = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            self.context.logger.error(f"Error reading portfolio data: {str(e)}")
+            portfolio_data = {"error": "Could not read portfolio data"}
+
+        portfolio_data_json = json.dumps(portfolio_data)
+        # Send the portfolio data as a response
+        self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)
     def _handle_get_health(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -291,7 +336,6 @@ class HttpHandler(BaseHttpHandler):
         :param http_msg: the http message
         :param http_dialogue: the http dialogue
         """
-        self.context.logger.info(f"RESET PAUSE DURATION: {self.context.params.reset_pause_duration}")
         seconds_since_last_transition = None
         is_tm_unhealthy = None
         is_transitioning_fast = None
@@ -334,3 +378,169 @@ class HttpHandler(BaseHttpHandler):
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
+            def _handle_get_index(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP GET request for the index page.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        # Read the HTML file
+        with open(
+            Path(Path(__file__).parent, "modius-ui-build", "index.html"), "r", encoding="utf-8"
+        ) as file:
+            index_html = file.read()
+
+        # Send the HTML response
+        self._send_ok_response(http_msg, http_dialogue, index_html)
+    
+    def _handle_get_static_js(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP GET request for the main.js file.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        try:
+            # Read the main.js file
+            with open(
+                Path(Path(__file__).parent, "modius-ui-build", "static", "js", "main.d1485dfa.js"), "rb"
+            ) as file:
+                file_content = file.read()
+
+            # Send the file content as a response
+            self._send_ok_response(http_msg, http_dialogue, file_content)
+        except FileNotFoundError:
+            self._handle_not_found(http_msg, http_dialogue)
+
+    def _handle_get_static_css(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP GET request for the main.css file.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        try:
+            # Read the main.css file
+            with open(
+                Path(Path(__file__).parent, "modius-ui-build", "static", "css", "main.972e2d60.css"), "rb"
+            ) as file:
+                file_content = file.read()
+
+            # Send the file content as a response
+            self._send_ok_response(http_msg, http_dialogue, file_content)
+        except FileNotFoundError:
+            self._handle_not_found(http_msg, http_dialogue)
+
+    def _handle_get_manifest(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP GET request for the manifest.json file.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        try:
+            # Read the manifest.json file
+            with open(
+                Path(Path(__file__).parent, "modius-ui-build", "manifest.json"), "rb"
+            ) as file:
+                file_content = file.read()
+
+            # Send the file content as a response
+            self._send_ok_response(http_msg, http_dialogue, file_content)
+        except FileNotFoundError:
+            self._handle_not_found(http_msg, http_dialogue)
+
+    def _handle_get_favicon(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP GET request for the favicon.ico file.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        try:
+            # Read the favicon.ico file
+            with open(
+                Path(Path(__file__).parent, "modius-ui-build", "favicon.ico"), "rb"
+            ) as file:
+                favicon_content = file.read()
+
+            # Send the favicon content as a response
+            self._send_ok_response(http_msg, http_dialogue, favicon_content)
+        except FileNotFoundError:
+            self._handle_not_found(http_msg, http_dialogue)
+
+    def _handle_get_mode_network_logo(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP GET request for the mode-network.png file.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        try:
+            # Read the mode-network.png file
+            with open(
+                Path(Path(__file__).parent, "modius-ui-build", "logos", "protocols", "mode-network.png"), "rb"
+            ) as file:
+                file_content = file.read()
+
+            # Send the file content as a response
+            self._send_ok_response(http_msg, http_dialogue, file_content)
+        except FileNotFoundError:
+            self._handle_not_found(http_msg, http_dialogue)
+
+    def _handle_get_modius_logo(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP GET request for the modius.png file.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        try:
+            # Read the modius.png file
+            with open(
+                Path(Path(__file__).parent, "modius-ui-build", "logos", "modius.png"), "rb"
+            ) as file:
+                file_content = file.read()
+
+            # Send the file content as a response
+            self._send_ok_response(http_msg, http_dialogue, file_content)
+        except FileNotFoundError:
+            self._handle_not_found(http_msg, http_dialogue)
+
+    def _handle_not_found(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP request for a resource that was not found.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=HttpCode.NOT_FOUND_CODE.value,
+            status_text="Not Found",
+            headers=http_msg.headers,
+            body=b"",
+        )
+
+        # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)

@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeict3wk534vrzw73mcqxpbfnwogpriao57vp7vibx2gnqdoy5nqilm
+  behaviours.py: bafybeia7cixdvggx6unsrcsr4rc5ldmrjr25jnphommrtprrhgiddqm2xi
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeie3vom7fwl5ho6xanje3r7tab7y3a5ij5gs6qvjh2uavbpitffyzu
   handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
@@ -30,7 +30,7 @@ fingerprint_ignore_patterns: []
 connections: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeif3uivl3jjb3c2tyctu6jagp2mwizgmdnxb4x7otrxavifdk4t3je
-- valory/balancer_weighted_pool:0.1.0:bafybeiarpidfs4npbuectmuo4srv2o4agfuafvncelbywcgd5y5dtgeyke
+- valory/balancer_weighted_pool:0.1.0:bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm
 - valory/balancer_vault:0.1.0:bafybeiff3ltn6xoh3otuywk2j3yxujdlfzcvri66slnufv5t4hkj5musfa
 - valory/erc20:0.1.0:bafybeihoy4tucgqhlez564g5u3zpz45fxeolfjkgpqcbmcysrldid226su
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -39,7 +39,7 @@ contracts:
 - valory/merkl_distributor:0.1.0:bafybeidaxrbcrh6icl3cmuxfijaxsobsuonuha754jhl2cjdkhktivjfa4
 - valory/staking_token:0.1.0:bafybeic74vecd4feqqlnub2jgfisa7fnncqyag5nlrgniktre6w3l34kuq
 - valory/staking_activity_checker:0.1.0:bafybeifbzznj6snxmoetkqhmwzo4nwuski6kylydkg5td5qdslin32tpae
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeid4krjmfca3dert6tackcut2tins24kunzfwxs4gu3zgdhzrkijkm
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
@@ -192,6 +192,7 @@ models:
       store_path: data
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
+      portfolio_info_filename: portfolio.json
       gas_cost_info_filename: gas_costs.json
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       min_swap_amount_threshold: 10

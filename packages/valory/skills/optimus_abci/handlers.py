@@ -291,7 +291,6 @@ class HttpHandler(BaseHttpHandler):
         :param http_msg: the http message
         :param http_dialogue: the http dialogue
         """
-        self.context.logger.info(f"RESET PAUSE DURATION: {self.context.params.reset_pause_duration}")
         seconds_since_last_transition = None
         is_tm_unhealthy = None
         is_transitioning_fast = None

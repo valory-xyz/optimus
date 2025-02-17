@@ -1331,7 +1331,8 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
                     "ratio": float(entry["ratio"])
                 }
                 for entry in portfolio_breakdown
-            ]
+            ],
+            "address": self.params.safe_contract_addresses.get(self.params.target_investment_chains[0])
         }       
 
     def get_user_share_value_balancer(self, user_address: str, pool_id: str, chain: str) -> Generator[None, None, Tuple[Optional[Decimal], List[Decimal]]]:

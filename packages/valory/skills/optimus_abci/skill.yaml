@@ -13,9 +13,9 @@ fingerprint:
   fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
   handlers.py: bafybeial22btk7acyv6hw7r7r2nhugjmlwfg4uzfj6kilrbnpsjsagtiva
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
-  modius-ui-build/asset-manifest.json: bafybeicivt6ieypv5bvpqpd53o4a7hengp2y3f4q6eb6bjiaicklq7wgvy
+  modius-ui-build/asset-manifest.json: bafybeiek6jekiuz63vuvxrfi5p5hhfgq5hgwvhlceemttlstfdmvk55oxi
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  modius-ui-build/index.html: bafybeid6tmaeb22h6pxhyw3fx6ofcurannspbamjvd3fa3kk2vxwzjrj3i
+  modius-ui-build/index.html: bafybeic3trffnk454enry734saunq6qslgxahpzvbnyojr5pqs5qf7smya
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/protocols/balancer.png: bafybeicqmyeayxigss5t2tpbfad5dl4yfrd6d6sqndrgdnt33jwnskicnm
   modius-ui-build/logos/protocols/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -23,21 +23,25 @@ fingerprint:
   modius-ui-build/logos/tokens/bal.png: bafybeidnd5afsjcevrmyd4ucf74auemv5c7lzyurieemmdv4ht4idzp6qi
   modius-ui-build/logos/tokens/dai.png: bafybeifysdjm4t6mnzqvwrh5snqxbsiubvoa2akizyb5oiqaluxpwpqu7i
   modius-ui-build/logos/tokens/eth.png: bafybeiejj4gaj2ahgr6kavbg5rd5cnrpuxaicobfcd4ffxmlob664ouyrq
+  modius-ui-build/logos/tokens/ezeth.png: bafybeigknvkgjfidvpr2mkj7pfpt5dy2ecbn7z2kosdo2xc53crqh2bqe4
   modius-ui-build/logos/tokens/mode.png: bafybeiakyu4lwlzqgjluol6gpfbydezwh7cosj5mncpmorbwbe46c6ck3a
   modius-ui-build/logos/tokens/olas.png: bafybeiguddvyhbusz6hya4rysexr45sn2nk5yn7mlwf34qdfrknxzxgfmi
   modius-ui-build/logos/tokens/op.png: bafybeiejhf2onv6i3gjj4busavchwr2246br277bi7t5r2yugsfgkiou3e
+  modius-ui-build/logos/tokens/pxeth.png: bafybeidzbxp6eu3577tdhyjtxpezwegdi2l6norylg3lp2lzkkpd5rzoiq
   modius-ui-build/logos/tokens/reth.png: bafybeihgvupiwdhxy75id46lgd6o4kccppgsixveglymjtiefditsa2b2e
   modius-ui-build/logos/tokens/steth.png: bafybeifdxeuui5pjngbeku6rjgxewxieqcxtr2ggwmbmrn7pxhu3gt6apu
+  modius-ui-build/logos/tokens/stone.png: bafybeia255ikjhe4azvdc6d6bnndfdp3jtduzr7jwibacvvpp6o5qxx5jq
+  modius-ui-build/logos/tokens/tbtc.png: bafybeigmbnetcoo7yfacmxmzfej4aerqg4clpvabekfjdl7doaorrygley
   modius-ui-build/logos/tokens/usdc.png: bafybeiddabigc6c5ga27grotfy2bfr247eah2qs3nsjzup7z3l4r2kvggm
   modius-ui-build/logos/tokens/usdt.png: bafybeibx7p2cckrjejds6cwvu23wco5uqgnlmqmdumxytlyqarx5v4j2zy
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   modius-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
   modius-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
-  modius-ui-build/static/css/main.972e2d60.css: bafybeiejwwuio44kmhkgllnlir7mrai2pwtvznrft224zkbqtohs35jp4m
-  modius-ui-build/static/css/main.972e2d60.css.map: bafybeih5ojcx6jcv25u4q2n6fef3ut6rbplhhxnulq54jypzw6c53mxzdy
-  modius-ui-build/static/js/main.d1485dfa.js: bafybeih66ng2f5sdusqs7ohqy65fcjc7vs2wzyadfihhpb2tn4t2ddtilm
-  modius-ui-build/static/js/main.d1485dfa.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
-  modius-ui-build/static/js/main.d1485dfa.js.map: bafybeiazhtxt6qcdlaggdezldiqwuc5aygn6hi3duc7p7lv44vyxfxa2ri
+  modius-ui-build/static/css/main.58950395.css: bafybeidw5d6ojmc3tlh5rgsqfhkwpvzpp4oimdrogb52lvynh5eo2ttlkq
+  modius-ui-build/static/css/main.58950395.css.map: bafybeigghf7vj4nqczq6ms6e2rbugg2rypb2xnl5d2uvust7vzxxknwuse
+  modius-ui-build/static/js/main.1f7c5dc2.js: bafybeicvtmzgksvr3vi2qn7b2gd44hif4xvbkvoz4awbtw23bivwjtgebe
+  modius-ui-build/static/js/main.1f7c5dc2.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
+  modius-ui-build/static/js/main.1f7c5dc2.js.map: bafybeih2i7j5sm26kssl4cyhuwxixxmcj3c4utrfni6gmma7i6mmvniaxi
   modius-ui-build/static/media/inter-cyrillic-400-normal.cb04b2ee2f7d192478b8.woff2: bafybeiejhmvdxovndrh47xtwzomvplsq7v4kyjktllo3nf52k3tdsddeyy
   modius-ui-build/static/media/inter-cyrillic-400-normal.e2841352dd9512ff455b.woff: bafybeibemdecvioae5wgmn36yuvs7iurz4fo3twl5cr3dd55xmbxgqe5uy
   modius-ui-build/static/media/inter-cyrillic-ext-400-normal.e89451624c6caf35687f.woff: bafybeigkzdfnzhwlg5etqrhdo53biwtef5czg2az6zvcl6dfaqpiw4bwjy
@@ -63,7 +67,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifurpc5kko5tq5bc2bwfgdvwpbhzytk2vhj56cb2d6lhdnm7irnhu
 - valory/reset_pause_abci:0.1.0:bafybeiavtmbqziu3i55t2clj2ih242vuq2nw4xp47heaxyusddggl664ya
 - valory/termination_abci:0.1.0:bafybeigpodcqf4vtk4pwj2d3fn2hbvv6fnwgqllowxwx3e76wonxen4zu4
-- valory/liquidity_trader_abci:0.1.0:bafybeigkwqvtiguzf5r6twygf7eycqfcfi7wsgf64vktnfouu2bqpjkfdy
+- valory/liquidity_trader_abci:0.1.0:bafybeiftkzn5ccvj5ysv56ilvtckaxce6jfq3ggd3wbp466hi253mbvpo4
 - valory/transaction_settlement_abci:0.1.0:bafybeibil7cfzuuyxge5rayxwqxvq467hhv73pngj3muqo7x6zkkjzlgs4
 behaviours:
   main:

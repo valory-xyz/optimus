@@ -27,13 +27,12 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeiht3y5lzgrkl252sy2zso3lmbi2hfqdtgp5eunljy2vxramsowiuu
+- valory/liquidity_trader_abci:0.1.0:bafybeidnva7yzunui263k5dhnemdmpy7kmeyr6zsxe4fuinisq43cid4ba
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
-- valory/market_data_fetcher_abci:0.1.0:bafybeigywrpiyqjztnvjm5ey4lqh5wkln6veizb2xkvxr2py6edo7wzrp4
-- valory/trader_decision_maker_abci:0.1.0:bafybeiahgy6ddua6bgyiponmzp76m5tkn5wndlryviczqbi2lklexsjusi
-- valory/strategy_evaluator_abci:0.1.0:bafybeib4zt35fotpu5g67gyq3pnjihqgjo5wjgjq2obaqid363fwzvmemm
-- valory/portfolio_tracker_abci:0.1.0:bafybeifzljes6ezc5yqjm3ji5u4bubbfynjhlu4cie3os3rlrf4fge362u
-
+- valory/market_data_fetcher_abci:0.1.0:bafybeihp2lg2a6hlvgh7optwwkpmv556xtywwfpbkvipo3zyffxxoo2hae
+- valory/trader_decision_maker_abci:0.1.0:bafybeibapyfstafoqpv5jtm4rnoslae7liqslt7nci4mgjiz5b5j3xjfcu
+- valory/strategy_evaluator_abci:0.1.0:bafybeifhneldiqz7qafvzgceeuv4qcuwfwqi3y25mqms5qv6guf2j4j274
+- valory/portfolio_tracker_abci:0.1.0:bafybeif6hfogbnmo5advwah47fn347fwxa67gftkaydwqmvhbeubmaqdoa
 behaviours:
   main:
     args: {}
@@ -371,7 +370,7 @@ models:
     class_name: OrdersDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.60.0
+    version: ==1.64.0
   PyYAML:
     version: '>=3.10,<=6.0.1'
 is_abstract: false

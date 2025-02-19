@@ -153,7 +153,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
     if current_positions:
         # Calculate composite score for the current pool
         current_composite_scores = [
-            calculate_composite_score(pool, max_values) for pool in current_positions
+            calculate_composite_score(pool, max_values,check_sharpe_ratio) for pool in current_positions
         ]
 
         # Identify the least performing current pool

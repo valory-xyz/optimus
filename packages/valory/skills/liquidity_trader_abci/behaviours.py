@@ -2021,11 +2021,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
         elif "error" in metrics:
             self.context.logger.error(
-                f"Failed to calculate metrics for the current positions. {metrics.get('error')}"
+                f"Failed to calculate metrics for the current position {position.get('pool_address')} : {metrics.get('error')}"
             )
             return None
         else:
-            self.context.logger.info(f"Calculated position metrics: {metrics}")
+            self.context.logger.info(f"Calculated position metrics for {position.get('pool_address')} : {metrics}")
             return metrics
 
     def download_strategies(self) -> Generator:

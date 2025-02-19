@@ -15,24 +15,25 @@ fingerprint:
   models.py: bafybeiamgoetd2gdm3rf33sa2rh3l36is3mdev3ghpinjfe4hprvodezqe
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
+- valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
 contracts: []
 protocols:
+- valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
 - eightballer/tickers:0.1.0:bafybeiccdlqdnarfwjsr4qxhfv6ywun4yx5g3dlbrtupda253gtpfjnimm
 - eightballer/orders:0.1.0:bafybeic3s3pah3zdxtwq3yk2osmnwfhtv4h6f2hkbrundzkzorvlvwwaxy
 - eightballer/balances:0.1.0:bafybeicd6xekatd6xhnwt2vzgffa3pgpvbzkhkxzrjyj3kzzll5xbr22tu
-- valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
+- valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
+- valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
+- valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
+- valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
+- valory/liquidity_trader_abci:0.1.0:bafybeiht3y5lzgrkl252sy2zso3lmbi2hfqdtgp5eunljy2vxramsowiuu
+- valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 - valory/market_data_fetcher_abci:0.1.0:bafybeigywrpiyqjztnvjm5ey4lqh5wkln6veizb2xkvxr2py6edo7wzrp4
 - valory/trader_decision_maker_abci:0.1.0:bafybeiahgy6ddua6bgyiponmzp76m5tkn5wndlryviczqbi2lklexsjusi
 - valory/strategy_evaluator_abci:0.1.0:bafybeib4zt35fotpu5g67gyq3pnjihqgjo5wjgjq2obaqid363fwzvmemm
 - valory/portfolio_tracker_abci:0.1.0:bafybeifzljes6ezc5yqjm3ji5u4bubbfynjhlu4cie3os3rlrf4fge362u
-- valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
-- valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
-- valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeicicdxnj4agchod3yq7ksp6sn5rho2h4shb4psfm7t2rdkmmyq244
-- valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
+
 behaviours:
   main:
     args: {}

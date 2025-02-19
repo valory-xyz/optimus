@@ -423,9 +423,9 @@ def get_best_opportunities(
         )
         depth_score, max_position_size = analyze_vault_liquidity(aggregator)
         aggregator["depth_score"] = depth_score
-        aggregator["max_position_size"] = max_position_size    
+        aggregator["max_position_size"] = max_position_size
         aggregator["type"] = LENDING
-        
+
     formatted_results = [
         format_aggregator(aggregator) for aggregator in filtered_aggregators
     ]

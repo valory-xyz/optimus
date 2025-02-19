@@ -180,7 +180,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
                 f"Top opportunity found with composite score: {optimal_opportunities[0]['composite_score']}"
             )
         else:
-            logs.append.warning(
+            logs.append(
                 f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}"
             )
             return {"optimal_strategies": [], "position_to_exit": {}}

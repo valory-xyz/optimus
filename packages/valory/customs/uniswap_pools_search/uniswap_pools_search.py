@@ -40,7 +40,6 @@ SCORE_PERCENTILE = 80
 PRICE_IMPACT = 0.01  # 1% standard price impact
 MAX_POSITION_BASE = 50  # Base for maximum position calculation
 LP = "lp"
-
 CHAIN_URLS = {
     "mode": "https://1rpc.io/mode",
     "optimism": "https://mainnet.optimism.io",
@@ -457,8 +456,8 @@ def get_best_pools(
         )
         pool["depth_score"] = depth_score
         pool["max_position_size"] = max_position_size
-    
         pool["type"] = LP
+
     return [format_pool_data(pool) for pool in filtered_pools]
 
 

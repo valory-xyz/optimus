@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidklv235qgllghwvpjho3wdhcbmutig6w2u2ofermbnc75lhmo4ii
+agent: valory/optimus:0.1.0:bafybeid6tuawjbcjx7vv25rji6g56hjxhbwi6hmoqwsogidmwvsgyl56hq
 number_of_agents: 1
 deployment:
   agent:
@@ -93,7 +93,7 @@ models:
       tendermint_p2p_url: ${TENDERMINT_P2P_URL_0:str:optimism_tm_0:26656}
       safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}}
       staking_token_contract_address: ${STAKING_TOKEN_CONTRACT_ADDRESS:str:0x88996bbdE7f982D93214881756840cE2c77C4992}
-      staking_activity_checker_contract_address: ${STAKING_ACTIVITY_CHECKER_CONTRACT_ADDRESS:str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
+      staking_activity_checker_contract_address: ${ACTIVITY_CHECKER_CONTRACT_ADDRESS:str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${STAKING_THRESHOLD_PERIOD:int:5}
       store_path: ${STORE_PATH:str:/data/}
       assets_info_filename: ${ASSETS_INFO_FILENAME:str:assets.json}

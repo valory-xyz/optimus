@@ -1179,38 +1179,68 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self.fetch_all_trading_opportunities()
-
-            if self.current_positions:
-                for position in self.current_positions:
-                    if position.get("status") == PositionStatus.CLOSED.value:
-                        continue
-                    dex_type = position.get("dex_type")
-                    strategy = self.params.dex_type_to_strategy.get(dex_type)
-                    if strategy:
-                        metrics = self.get_returns_metrics_for_opportunity(
-                            position, strategy
-                        )
-                        if metrics:
-                            # Update the position dictionary with the metrics
-                            position.update(metrics)
-                    else:
-                        self.context.logger.error(
-                            f"No strategy found for dex types {dex_type}"
-                        )
-
-            self.execute_hyper_strategy()
-            actions = []
-            if self.selected_opportunities is not None:
-                self.context.logger.info(
-                    f"Selected opportunity: {self.selected_opportunities}"
+            has_funds = True
+            if not self.current_positions:
+                has_funds = any(
+                    asset.get("balance", 0) > 0
+                    for position in self.synchronized_data.positions
+                    for asset in position.get("assets", [])
                 )
-                actions = yield from self.get_order_of_transactions()
 
-            self.context.logger.info(f"Actions: {actions}")
-            serialized_actions = json.dumps(actions)
-            sender = self.context.agent_address
-            payload = EvaluateStrategyPayload(sender=sender, actions=serialized_actions)
+            if not has_funds:
+                actions = []
+                self.context.logger.info("No funds available.")
+                sender = self.context.agent_address
+                payload = EvaluateStrategyPayload(
+                    sender=sender, actions=json.dumps(actions)
+                )
+            else:
+                yield from self.fetch_all_trading_opportunities()
+
+                if self.current_positions:
+                    for position in (
+                        pos
+                        for pos in self.current_positions
+                        if pos.get("status") == PositionStatus.OPEN.value
+                    ):
+                        dex_type = position.get("dex_type")
+                        strategy = self.params.dex_type_to_strategy.get(dex_type)
+                        if strategy:
+                            if (
+                                not position.get("status", PositionStatus.CLOSED.value)
+                                == PositionStatus.OPEN.value
+                            ):
+                                continue
+                            metrics = self.get_returns_metrics_for_opportunity(
+                                position, strategy
+                            )
+                            if metrics:
+                                position.update(metrics)
+                        else:
+                            self.context.logger.error(
+                                f"No strategy found for dex type {dex_type}"
+                            )
+
+                self.execute_hyper_strategy()
+                actions = (
+                    yield from self.get_order_of_transactions()
+                    if self.selected_opportunities is not None
+                    else []
+                )
+
+                if actions:
+                    self.context.logger.info(f"Actions: {actions}")
+                else:
+                    self.context.logger.info("No actions prepared")
+
+                sender = self.context.agent_address
+                payload = EvaluateStrategyPayload(
+                    sender=sender, actions=json.dumps(actions)
+                )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -2983,12 +3013,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")
 
-        # Find the position with the matching pool address and update its status
+        position_to_close = None
+        max_timestamp = 0
+        # Find the most recent position with the matching pool address and update its status
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
-                position["status"] = PositionStatus.CLOSED.value
-                self.context.logger.info(f"Closing position: {position}")
-                break
+                timestamp = position.get("timestamp", 0)
+                if timestamp > max_timestamp:
+                    position_to_close = position
+                    max_timestamp = timestamp
+
+        if position_to_close:
+            position_to_close["status"] = PositionStatus.CLOSED.value
+            self.context.logger.info(f"Closing position: {position_to_close}")
         else:
             self.context.logger.warning(
                 f"No position found for pool_address: {pool_address}"
@@ -3179,10 +3216,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, actions, current_action_index, last_round_id
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Prepare the next action."""
-        next_action = Action(actions[current_action_index].get("action"))
-        next_action_details = self.synchronized_data.actions[current_action_index]
-        self.context.logger.info(f"ACTION DETAILS: {next_action_details}")
+        next_action_details = actions[current_action_index]
+        action_name = next_action_details.get("action")
 
+        if not action_name:
+            self.context.logger.error(f"Invalid action: {next_action_details}")
+            return Event.DONE.value, {}
+
+        next_action = Action(action_name)
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
@@ -3255,21 +3296,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if not tx_hash:
             return Event.DONE.value, {}
-
-        result = (
-            Event.SETTLE.value,
-            {
-                "tx_submitter": DecisionMakingRound.auto_round_id(),
-                "most_voted_tx_hash": tx_hash,
-                "chain_id": chain_id,
-                "safe_contract_address": safe_address,
-                "positions": positions,
-                "last_executed_action_index": current_action_index,
-                "last_action": last_action,
-            },
-        )
-
-        self.context.logger.info(f"Result constructed: {result}")
 
         return Event.SETTLE.value, {
             "tx_submitter": DecisionMakingRound.auto_round_id(),

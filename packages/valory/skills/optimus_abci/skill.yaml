@@ -13,9 +13,9 @@ fingerprint:
   fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
   handlers.py: bafybeial22btk7acyv6hw7r7r2nhugjmlwfg4uzfj6kilrbnpsjsagtiva
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
-  modius-ui-build/asset-manifest.json: bafybeiek6jekiuz63vuvxrfi5p5hhfgq5hgwvhlceemttlstfdmvk55oxi
+  modius-ui-build/asset-manifest.json: bafybeibf6ny4szdnqrjcg2hmsshi74nmlazixtk4lnxsodjan4kjvg5jx4
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  modius-ui-build/index.html: bafybeic3trffnk454enry734saunq6qslgxahpzvbnyojr5pqs5qf7smya
+  modius-ui-build/index.html: bafybeibxdy4j6sdkzwetytvoy4d636n2f5vhsjuejttpugz2iufev22jpa
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/protocols/balancer.png: bafybeicqmyeayxigss5t2tpbfad5dl4yfrd6d6sqndrgdnt33jwnskicnm
   modius-ui-build/logos/protocols/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -37,25 +37,11 @@ fingerprint:
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   modius-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
   modius-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
-  modius-ui-build/static/css/main.58950395.css: bafybeidw5d6ojmc3tlh5rgsqfhkwpvzpp4oimdrogb52lvynh5eo2ttlkq
-  modius-ui-build/static/css/main.58950395.css.map: bafybeigghf7vj4nqczq6ms6e2rbugg2rypb2xnl5d2uvust7vzxxknwuse
+  modius-ui-build/static/css/main.2f574fdc.css: bafybeig3jjwg72ukt2pj5br3gvqr2bq62es6mxoj24bcqmnhks322wcsum
+  modius-ui-build/static/css/main.2f574fdc.css.map: bafybeibjtnzjqaf2nmbdofv4begrb2eznpbpkf4gk43frirqdy6xiw4at4
   modius-ui-build/static/js/main.1f7c5dc2.js: bafybeicvtmzgksvr3vi2qn7b2gd44hif4xvbkvoz4awbtw23bivwjtgebe
   modius-ui-build/static/js/main.1f7c5dc2.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
   modius-ui-build/static/js/main.1f7c5dc2.js.map: bafybeih2i7j5sm26kssl4cyhuwxixxmcj3c4utrfni6gmma7i6mmvniaxi
-  modius-ui-build/static/media/inter-cyrillic-400-normal.cb04b2ee2f7d192478b8.woff2: bafybeiejhmvdxovndrh47xtwzomvplsq7v4kyjktllo3nf52k3tdsddeyy
-  modius-ui-build/static/media/inter-cyrillic-400-normal.e2841352dd9512ff455b.woff: bafybeibemdecvioae5wgmn36yuvs7iurz4fo3twl5cr3dd55xmbxgqe5uy
-  modius-ui-build/static/media/inter-cyrillic-ext-400-normal.e89451624c6caf35687f.woff: bafybeigkzdfnzhwlg5etqrhdo53biwtef5czg2az6zvcl6dfaqpiw4bwjy
-  modius-ui-build/static/media/inter-cyrillic-ext-400-normal.fd1478dcc74de00ee4c0.woff2: bafybeidf6aheu6bcvkyqtvrbksokngvbvnwqgvh7s3lo7j5ur6kslmhflq
-  modius-ui-build/static/media/inter-greek-400-normal.a42da273bb968bf2058d.woff: bafybeiawvlxhdrq3a4bw7vtzmbobp3l2xctpzoa6baug2g2moh5qj5eif4
-  modius-ui-build/static/media/inter-greek-400-normal.a8de720a6f13c66c8a4e.woff2: bafybeicn6p3lavhexsfxkavf4nmgvfa47nle4bwttz4g3hjpbmsusy42ki
-  modius-ui-build/static/media/inter-greek-ext-400-normal.b9e1e89444a313a63b91.woff: bafybeiglauzamu5b5pqpvhwmuqr35iohqyj3tzc7e2pexccfoxsc3wwodu
-  modius-ui-build/static/media/inter-greek-ext-400-normal.f2fa0d9ef98f59d4a75b.woff2: bafybeiauphujnijvkgl2rd353hoaropa4ktixj76m2puriocchaciqalrq
-  modius-ui-build/static/media/inter-latin-400-normal.9698cc7dbf147ed363b6.woff2: bafybeid4tpmxrx6radrsbcwn3drsaamhdgseq7n7rg4siihr4mfnrqrjdu
-  modius-ui-build/static/media/inter-latin-400-normal.b0c8fe9db56dd415a25a.woff: bafybeihi7tzw2lypbqglosetzsye4tehkckuf5ohtvxras7s7xz2dozv5e
-  modius-ui-build/static/media/inter-latin-ext-400-normal.1c20f7dc20d731a18fcd.woff: bafybeibzguztqnvw6ridc6xcu26hc56ascxytdq3kzmnb2ubfboofdpjbm
-  modius-ui-build/static/media/inter-latin-ext-400-normal.3d10c85fbd16969509a2.woff2: bafybeihhomw2lzyqu36se2dreshqiydl4rdu2mdlqyn64ez53vtlmw2mqq
-  modius-ui-build/static/media/inter-vietnamese-400-normal.44c9df135eec470b0ab6.woff2: bafybeih266meb5ylvgj4ucg3vjqzx7epstznbv5lhpkgfi2x3t7ox22arm
-  modius-ui-build/static/media/inter-vietnamese-400-normal.96f8adc74b63e1a3655f.woff: bafybeidpgq2iobvraaml3tn2tdfw4njop5bg3fztwhdq6tiqyfmiccdvya
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -67,7 +53,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifurpc5kko5tq5bc2bwfgdvwpbhzytk2vhj56cb2d6lhdnm7irnhu
 - valory/reset_pause_abci:0.1.0:bafybeiavtmbqziu3i55t2clj2ih242vuq2nw4xp47heaxyusddggl664ya
 - valory/termination_abci:0.1.0:bafybeigpodcqf4vtk4pwj2d3fn2hbvv6fnwgqllowxwx3e76wonxen4zu4
-- valory/liquidity_trader_abci:0.1.0:bafybeiftkzn5ccvj5ysv56ilvtckaxce6jfq3ggd3wbp466hi253mbvpo4
+- valory/liquidity_trader_abci:0.1.0:bafybeigi52ibyjf6vkvzyeegf25jv7b5u7zxjfjwucdfhvru4hnrk5njqy
 - valory/transaction_settlement_abci:0.1.0:bafybeibil7cfzuuyxge5rayxwqxvq467hhv73pngj3muqo7x6zkkjzlgs4
 behaviours:
   main:

@@ -19,6 +19,9 @@ from gql.transport.requests import RequestsHTTPTransport
 from pycoingecko import CoinGeckoAPI
 from web3 import Web3
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {
     "WEIGHTED": "Weighted",
@@ -65,16 +68,13 @@ def fetch_coin_list():
         errors.append((f"Failed to fetch coin list: {e}"))
         return None
 
-
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
-
 
 def remove_irrelevant_fields(
     kwargs: Dict[str, Any], required_fields: Tuple
 ) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in required_fields}
-
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
     headers = {"Content-Type": "application/json"}
@@ -89,13 +89,11 @@ def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
         return {"error": f"GraphQL Errors: {result['errors']}"}
     return result["data"]
 
-
 def get_total_apr(pool) -> float:
     apr_items = pool.get("dynamicData", {}).get("aprItems", [])
     return sum(
         item["apr"] for item in apr_items if item["type"] not in EXCLUDED_APR_TYPES
     )
-
 
 @lru_cache(None)
 def create_web3_connection(chain_name: str):
@@ -104,7 +102,6 @@ def create_web3_connection(chain_name: str):
         return None
     web3 = Web3(Web3.HTTPProvider(chain_url))
     return web3 if web3.is_connected() else None
-
 
 @lru_cache(None)
 def fetch_token_name_from_contract(chain_name, token_address):
@@ -129,7 +126,6 @@ def fetch_token_name_from_contract(chain_name, token_address):
         return contract.functions.name().call()
     except:
         return None
-
 
 def get_balancer_pools(
     chains, graphql_endpoint
@@ -160,7 +156,6 @@ def get_balancer_pools(
     if "error" in data:
         return data
     return data.get("poolGetPools", [])
-
 
 def get_filtered_pools(pools, current_positions):
     # Filter by type and token count
@@ -209,7 +204,6 @@ def get_filtered_pools(pools, current_positions):
 
     return filtered_scored_pools[:10]
 
-
 def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
     # Try to find a coin matching symbol first.
     candidates = [
@@ -230,7 +224,6 @@ def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
             return coin["id"]
     return None
 
-
 def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
     token_name = fetch_token_name_from_contract(chain_name, token_address)
     if not token_name:
@@ -241,11 +234,9 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
 
     return get_token_id_from_symbol_cached(symbol, token_name, coin_list)
 
-
 def calculate_il_impact(P0, P1):
     # Impermanent Loss impact calculation
     return 2 * np.sqrt(P1 / P0) / (1 + P1 / P0) - 1
-
 
 def calculate_il_risk_score(
     token_0, token_1, coingecko_api_key: str, time_period: int = 90
@@ -293,11 +284,9 @@ def calculate_il_risk_score(
 
     return float(il_impact * abs(price_correlation) * volatility_multiplier)
 
-
 def create_graphql_client(api_url="https://api-v3.balancer.fi") -> Client:
     transport = RequestsHTTPTransport(url=api_url, verify=True, retries=3)
     return Client(transport=transport, fetch_schema_from_transport=False)
-
 
 def create_pool_snapshots_query(
     pool_id: str, chain: str, range: str = "NINETY_DAYS"
@@ -317,7 +306,6 @@ def create_pool_snapshots_query(
     }}
     """
     )
-
 
 def fetch_liquidity_metrics(
     pool_id: str,
@@ -361,7 +349,6 @@ def fetch_liquidity_metrics(
     except Exception:
         return None
 
-
 def analyze_pool_liquidity(
     pool_id: str,
     chain: str,
@@ -373,7 +360,6 @@ def analyze_pool_liquidity(
         errors.append("Could not retrieve depth score and maximum position size.")
         return float("nan"), float("nan")
     return metrics["Depth Score"], metrics["Maximum Position Size"]
-
 
 def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
     query = """
@@ -419,63 +405,464 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
         return None
 
 
-def format_pool_data(pool) -> Dict[str, Any]:
-    dex_type = BALANCER
-    return {
-        "dex_type": dex_type,
-        "chain": pool["chain"].lower(),
-        "apr": pool["apr"] * 100,
-        "pool_address": pool["address"],
-        "pool_id": pool["id"],
-        "pool_type": pool["type"],
-        "token0": pool["poolTokens"][0]["address"],
-        "token1": pool["poolTokens"][1]["address"],
-        "token0_symbol": pool["poolTokens"][0]["symbol"],
-        "token1_symbol": pool["poolTokens"][1]["symbol"],
-        "il_risk_score": pool["il_risk_score"],
-        "sharpe_ratio": pool["sharpe_ratio"],
-        "depth_score": pool["depth_score"],
-        "max_position_size": pool["max_position_size"],
-        "type": pool["trading_type"]
+# def calculate_differential_investment(apr_current: float, apr_base: float, tvl: float) -> float:
+#     """Calculate investment amount based on APR differences."""
+#     if apr_base <= 0 or apr_current <= 0 or tvl <= 0:
+#         return 0.0
+#     try:
+#         ratio = apr_current / apr_base
+#         if ratio <= 1:
+#             return 0.0
+#         return (ratio - 1) * tvl
+#     except ZeroDivisionError:
+#         return 0.0
+
+
+def get_underlying_token_symbol(symbol: str) -> str:
+    """Map wrapped/synthetic tokens to their underlying asset symbols."""
+    symbol = symbol.lower()
+    
+    # Mapping of synthetic/wrapped tokens to their underlying assets
+    token_mappings = {
+        'csusdc': 'usdc',
+        'csusdl': 'usd',  # Assuming this is a USD-pegged token
+        'waethlidowsteth': 'steth',
+        'rsteth': 'steth',
+        'wsteth': 'steth',
+        'weth': 'ethereum',
+        'ausdc': 'usdc',
+        'ausdt': 'usdt',
+        'adai': 'dai',
+        'cdai': 'dai',
+        'cusdc': 'usdc',
+        'dai': 'dai'
     }
+    
+    return token_mappings.get(symbol, symbol)
+
+def normalize_token_symbol(symbol: str) -> str:
+    """Normalize token symbols for better matching."""
+    # Remove common prefixes/suffixes
+    prefixes = ['cs', 'wa', 'w', 'a', 'c', 'v', 'x']
+    for prefix in prefixes:
+        if symbol.lower().startswith(prefix):
+            return symbol[len(prefix):]
+    return symbol
+
+def get_pool_token_prices(token_symbols: List[str], coingecko_api: CoinGeckoAPI) -> Dict[str, float]:
+    """Enhanced token price fetching with support for synthetic tokens."""
+    prices = {}
+    
+    try:
+        # Add initial delay
+        time.sleep(3)
+        
+        for original_symbol in token_symbols:
+            try:
+                symbol = original_symbol.lower()
+                underlying_symbol = get_underlying_token_symbol(symbol)
+                normalized_symbol = normalize_token_symbol(symbol)
+                
+                # List of possible IDs to try
+                possible_ids = [
+                    symbol,
+                    underlying_symbol,
+                    normalized_symbol,
+                    f"{underlying_symbol}-token",
+                    f"{normalized_symbol}-token"
+                ]
+                
+                price_found = False
+                
+                # Try each possible ID
+                for token_id in possible_ids:
+                    if price_found:
+                        break
+                        
+                    time.sleep(2)  # Rate limiting
+                    try:
+                        response = coingecko_api.get_price(
+                            ids=token_id,
+                            vs_currencies='usd',
+                            timeout=30
+                        )
+                        if response and token_id in response:
+                            prices[original_symbol] = response[token_id]['usd']
+                            price_found = True
+                            break
+                    except Exception:
+                        continue
+                
+                # If still no price, try search
+                if not price_found:
+                    time.sleep(2)
+                    try:
+                        search_result = coingecko_api.search(underlying_symbol)
+                        if search_result and 'coins' in search_result and search_result['coins']:
+                            coin_id = search_result['coins'][0]['id']
+                            time.sleep(2)
+                            price_data = coingecko_api.get_price(ids=coin_id, vs_currencies='usd')
+                            if price_data and coin_id in price_data:
+                                prices[original_symbol] = price_data[coin_id]['usd']
+                                price_found = True
+                    except Exception:
+                        pass
+                
+                # Special handling for USD-pegged tokens
+                if not price_found and any(x in symbol.lower() for x in ['usd', 'dai', 'usdt', 'usdc']):
+                    prices[original_symbol] = 1.0
+                    price_found = True
+                
+                # Log warning if still no price found
+                if not price_found:
+                    logger.warning(f"Could not get price for {original_symbol}")
+                    prices[original_symbol] = 0.0
+                    
+            except Exception as e:
+                logger.error(f"Error fetching price for {original_symbol}: {str(e)}")
+                prices[original_symbol] = 0.0
+                
+        return prices
+    except Exception as e:
+        logger.error(f"Error in price fetching: {str(e)}")
+        return {symbol: 0.0 for symbol in token_symbols}
+
+def get_token_investments(diff_investment: float, token_prices: Dict[str, float]) -> List[float]:
+    """
+    Calculate how many tokens should be invested based on USD investment amount.
+    
+    Args:
+        diff_investment: Total USD amount to invest in the pool
+        token_prices: Dictionary mapping token symbols to their USD prices
+        
+    Returns:
+        List[float]: List of token amounts to invest. Returns empty list if investment
+                     is not possible.
+    
+    Example:
+        For a pool with:
+        - $10,000 investment amount
+        - Token A price: $2
+        - Token B price: $100
+        
+        Will return:
+        [2500.0, 50.0]  # Because:
+        - $5000 worth of Token A = 2500 tokens ($5000/$2)
+        - $5000 worth of Token B = 50 tokens ($5000/$100)
+    """
+    # Validate inputs
+    if diff_investment <= 0:
+        logger.debug("Zero or negative investment amount")
+        return []
+        
+    if not token_prices:
+        logger.debug("No token prices provided")
+        return []
+        
+    if not any(price > 0 for price in token_prices.values()):
+        logger.debug("No valid token prices (all zero or negative)")
+        return []
+        
+    # Calculate per-token investment amount (50/50 split)
+    per_token_investment = diff_investment / 2
+    
+    token_amounts = []
+    for token_symbol, price in token_prices.items():
+        if not price or price <= 0:
+            logger.warning(f"Invalid price for token {token_symbol}: {price}")
+            token_amounts.append(0.0)
+        else:
+            # Calculate token amount and round to 8 decimal places
+            amount = per_token_investment / price
+            token_amounts.append(round(amount, 8))
+            
+    # Return empty list if no valid investments
+    return token_amounts if any(amount > 0 for amount in token_amounts) else []
 
 
-def get_opportunities(
-    chains, graphql_endpoint, current_positions, coingecko_api_key, coin_list
-):
+
+# def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str) -> List[Dict[str, Any]]:
+#     """Enhanced pool data formatter with better investment calculations."""
+#     # Initialize CoinGecko API
+#     cg = CoinGeckoAPI(api_key=coingecko_api_key) if is_pro_api_key(coingecko_api_key) else CoinGeckoAPI(demo_api_key=coingecko_api_key)
+    
+#     # Sort pools by APR
+#     sorted_pools = sorted(pools, key=lambda x: float(x.get('apr', 0)), reverse=True)
+    
+#     formatted_pools = []
+#     max_apr = float(sorted_pools[0].get('apr', 0)) if sorted_pools else 0
+    
+#     # Pre-fetch all token prices to avoid rate limits
+#     all_token_symbols = []
+#     symbol_to_pool = {}
+#     for pool in sorted_pools:
+#         token0_symbol = pool["poolTokens"][0]["symbol"]
+#         token1_symbol = pool["poolTokens"][1]["symbol"]
+#         all_token_symbols.extend([token0_symbol, token1_symbol])
+#         symbol_to_pool[token0_symbol] = pool
+#         symbol_to_pool[token1_symbol] = pool
+    
+#     # Fetch all prices at once with a single long delay
+#     time.sleep(5)
+#     all_prices = get_pool_token_prices(list(set(all_token_symbols)), cg)
+    
+#     for i, pool in enumerate(sorted_pools):
+#         # Get TVL from dynamicData
+#         tvl = float(pool.get('dynamicData', {}).get('totalLiquidity', 0))
+        
+#         # Prepare base data
+#         base_data = {
+#             "dex_type": BALANCER,
+#             "chain": pool["chain"].lower(),
+#             "apr": pool["apr"] * 100,
+#             "pool_address": pool["address"],
+#             "pool_id": pool["id"],
+#             "pool_type": pool["type"],
+#             "token0": pool["poolTokens"][0]["address"],
+#             "token1": pool["poolTokens"][1]["address"],
+#             "token0_symbol": pool["poolTokens"][0]["symbol"],
+#             "token1_symbol": pool["poolTokens"][1]["symbol"],
+#             "il_risk_score": pool.get("il_risk_score"),
+#             "sharpe_ratio": pool.get("sharpe_ratio"),
+#             "depth_score": pool.get("depth_score"),
+#             "max_position_size": pool.get("max_position_size"),
+#             "type": pool.get("trading_type", LP),
+#             "tvl": tvl
+#         }
+        
+#         # Calculate differential investment
+#         current_apr = float(pool.get('apr', 0))
+#         if current_apr <= 0.01:
+#             base_data["max_investment_amounts"] = []
+#             base_data["max_investment_usd"] = 0.0
+#             formatted_pools.append(base_data)
+#             continue
+        
+#         # Compare against next best APR
+#         next_best_apr = 0
+#         if i < len(sorted_pools) - 1:
+#             next_best_apr = float(sorted_pools[i + 1].get('apr', 0))
+        
+#         # Calculate investment amount
+#         diff_investment = calculate_differential_investment(
+#             current_apr,
+#             next_best_apr,
+#             tvl
+#         )
+        
+#         # Get token prices from pre-fetched prices
+#         token_prices = {
+#             pool["poolTokens"][0]["symbol"]: all_prices.get(pool["poolTokens"][0]["symbol"], 0),
+#             pool["poolTokens"][1]["symbol"]: all_prices.get(pool["poolTokens"][1]["symbol"], 0)
+#         }
+        
+#         if diff_investment > 0 and any(price > 0 for price in token_prices.values()):
+#             token_amounts = get_token_investments(diff_investment, token_prices)
+#             base_data["max_investment_amounts"] = token_amounts
+#             base_data["max_investment_usd"] = diff_investment
+#         else:
+#             base_data["max_investment_amounts"] = []
+#             base_data["max_investment_usd"] = 0.0
+            
+#         formatted_pools.append(base_data)
+        
+#     return formatted_pools
+
+
+def calculate_single_pool_investment(apr: float, tvl: float) -> float:
+    """
+    Calculate investment amount for a single pool based on APR thresholds.
+    
+    Args:
+        apr: Annual Percentage Rate
+        tvl: Total Value Locked
+        
+    Returns:
+        float: Calculated investment amount
+    """
+    MIN_APR_THRESHOLD = 0.02  # 2% minimum APR
+    MAX_TVL_ALLOCATION = 0.20  # 20% maximum TVL allocation
+    
+    if apr < MIN_APR_THRESHOLD:
+        return 0.0
+        
+    # Calculate investment based on APR premium
+    apr_premium = apr / MIN_APR_THRESHOLD
+    base_investment = tvl * (apr_premium - 1) * 0.1  # 10% of the APR premium
+    
+    # Cap at maximum TVL allocation
+    max_investment = tvl * MAX_TVL_ALLOCATION
+    investment = min(base_investment, max_investment)
+    
+    # Apply minimum investment threshold
+    return investment if investment >= 100 else 0.0
+
+def calculate_differential_investment(apr_current: float, apr_base: float, tvl: float, is_single_pool: bool = False) -> float:
+    """
+    Calculate the differential investment amount based on APR differences or single pool metrics.
+    
+    Args:
+        apr_current: APR of the current pool
+        apr_base: APR of the second-best pool (or 0 for single pool)
+        tvl: Total Value Locked in the current pool
+        is_single_pool: Flag indicating if this is a single pool calculation
+        
+    Returns:
+        float: Calculated investment amount
+    """
+    try:
+        # Handle invalid inputs
+        if tvl <= 0:
+            return 0.0
+            
+        # Handle single pool case
+        if is_single_pool:
+            return calculate_single_pool_investment(apr_current, tvl)
+            
+        # Handle multiple pools case
+        if apr_base <= 0 or apr_current <= 0:
+            return 0.0
+            
+        ratio = apr_current / apr_base
+        if ratio <= 1:
+            return 0.0
+            
+        # Calculate differential investment
+        diff_investment = (ratio - 1) * tvl
+        
+        # Apply minimum investment threshold
+        return diff_investment if diff_investment >= 100 else 0.0
+        
+    except ZeroDivisionError:
+        return 0.0
+
+def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str) -> List[Dict[str, Any]]:
+    """Enhanced pool data formatter with improved investment calculations."""
+    # Initialize CoinGecko API
+    cg = CoinGeckoAPI(api_key=coingecko_api_key) if is_pro_api_key(coingecko_api_key) else CoinGeckoAPI(demo_api_key=coingecko_api_key)
+    
+    # Determine if we're dealing with a single pool
+    is_single_pool = len(pools) == 1
+    
+    # Sort pools by APR if multiple pools
+    sorted_pools = sorted(pools, key=lambda x: float(x.get('apr', 0)), reverse=True) if not is_single_pool else pools
+    
+    formatted_pools = []
+    max_apr = float(sorted_pools[0].get('apr', 0)) if sorted_pools else 0
+    
+    # Pre-fetch all token prices
+    all_token_symbols = []
+    for pool in sorted_pools:
+        token0_symbol = pool["poolTokens"][0]["symbol"]
+        token1_symbol = pool["poolTokens"][1]["symbol"]
+        all_token_symbols.extend([token0_symbol, token1_symbol])
+    
+    time.sleep(5)  # Rate limiting
+    all_prices = get_pool_token_prices(list(set(all_token_symbols)), cg)
+    
+    for i, pool in enumerate(sorted_pools):
+        # Get TVL from dynamicData
+        tvl = float(pool.get('dynamicData', {}).get('totalLiquidity', 0))
+        
+        # Prepare base data
+        base_data = {
+            "dex_type": BALANCER,
+            "chain": pool["chain"].lower(),
+            "apr": pool["apr"] * 100,
+            "pool_address": pool["address"],
+            "pool_id": pool["id"],
+            "pool_type": pool["type"],
+            "token0": pool["poolTokens"][0]["address"],
+            "token1": pool["poolTokens"][1]["address"],
+            "token0_symbol": pool["poolTokens"][0]["symbol"],
+            "token1_symbol": pool["poolTokens"][1]["symbol"],
+            "il_risk_score": pool.get("il_risk_score"),
+            "sharpe_ratio": pool.get("sharpe_ratio"),
+            "depth_score": pool.get("depth_score"),
+            "max_position_size": pool.get("max_position_size"),
+            "type": pool.get("trading_type", LP),
+            "tvl": tvl
+        }
+        
+        # Calculate differential investment
+        current_apr = float(pool.get('apr', 0))
+        if current_apr <= 0.01:  # Skip very low APR pools
+            base_data["max_investment_amounts"] = []
+            base_data["max_investment_usd"] = 0.0
+            formatted_pools.append(base_data)
+            continue
+        
+        # Get base APR for comparison (or 0 for single pool)
+        next_best_apr = 0
+        if not is_single_pool and i < len(sorted_pools) - 1:
+            next_best_apr = float(sorted_pools[i + 1].get('apr', 0))
+        
+        # Calculate investment amount
+        diff_investment = calculate_differential_investment(
+            current_apr,
+            next_best_apr,
+            tvl,
+            is_single_pool
+        )
+        
+        # Get token prices from pre-fetched prices
+        token_prices = {
+            pool["poolTokens"][0]["symbol"]: all_prices.get(pool["poolTokens"][0]["symbol"], 0),
+            pool["poolTokens"][1]["symbol"]: all_prices.get(pool["poolTokens"][1]["symbol"], 0)
+        }
+        
+        if diff_investment > 0 and any(price > 0 for price in token_prices.values()):
+            token_amounts = get_token_investments(diff_investment, token_prices)
+            base_data["max_investment_amounts"] = token_amounts
+            base_data["max_investment_usd"] = diff_investment
+        else:
+            base_data["max_investment_amounts"] = []
+            base_data["max_investment_usd"] = 0.0
+            
+        formatted_pools.append(base_data)
+        
+    return formatted_pools
+
+
+def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, coin_list):
+    """Get and format pool opportunities with investment calculations."""
+    # Get initial pools
     pools = get_balancer_pools(chains, graphql_endpoint)
     if isinstance(pools, dict) and "error" in pools:
         return pools
+
+    # Filter pools
     filtered_pools = get_filtered_pools(pools, current_positions)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
 
-    token_id_cache = {}
+    # Process basic metrics for each pool
     for pool in filtered_pools:
         pool["chain"] = pool["chain"].lower()
-
-        # Token 0
-        t0_sym = pool["poolTokens"][0]["symbol"].lower()
-        if t0_sym not in token_id_cache:
-            token_0_id = get_token_id_from_symbol(
-                pool["poolTokens"][0]["address"], t0_sym, coin_list, pool["chain"]
-            )
-            if token_0_id:
-                token_id_cache[t0_sym] = token_0_id
-        else:
-            token_0_id = token_id_cache[t0_sym]
-
-        # Token 1
-        t1_sym = pool["poolTokens"][1]["symbol"].lower()
-        if t1_sym not in token_id_cache:
-            token_1_id = get_token_id_from_symbol(
-                pool["poolTokens"][1]["address"], t1_sym, coin_list, pool["chain"]
-            )
-            if token_1_id:
-                token_id_cache[t1_sym] = token_1_id
-        else:
-            token_1_id = token_id_cache[t1_sym]
-
+        pool["trading_type"] = LP
+        
+        # Calculate metrics
+        pool["sharpe_ratio"] = get_balancer_pool_sharpe_ratio(
+            pool["id"], pool["chain"].upper()
+        )
+        pool["depth_score"], pool["max_position_size"] = analyze_pool_liquidity(
+            pool["id"], pool["chain"].upper()
+        )
+        
+        # Calculate IL risk score
+        token_0_id = get_token_id_from_symbol(
+            pool["poolTokens"][0]["address"],
+            pool["poolTokens"][0]["symbol"],
+            coin_list,
+            pool["chain"]
+        )
+        token_1_id = get_token_id_from_symbol(
+            pool["poolTokens"][1]["address"],
+            pool["poolTokens"][1]["symbol"],
+            coin_list,
+            pool["chain"]
+        )
+        
         if token_0_id and token_1_id:
             pool["il_risk_score"] = calculate_il_risk_score(
                 token_0_id, token_1_id, coingecko_api_key
@@ -483,16 +870,10 @@ def get_opportunities(
         else:
             pool["il_risk_score"] = None
 
-        pool["sharpe_ratio"] = get_balancer_pool_sharpe_ratio(
-            pool["id"], pool["chain"].upper()
-        )
-        pool["depth_score"], pool["max_position_size"] = analyze_pool_liquidity(
-            pool["id"], pool["chain"].upper()
-        )
-
-        pool["trading_type"] = LP
-    return [format_pool_data(pool) for pool in filtered_pools]
-
+    # Format pools with investment calculations
+    formatted_pools = format_pool_data(filtered_pools, coingecko_api_key)
+    
+    return formatted_pools
 
 def calculate_metrics(
     position: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs

@@ -1759,6 +1759,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 opportunities = result.get("result", [])
+
+                self.context.logger.info(
+                        f"Opportunities found strategy: {opportunities}"
+                    )
+
                 if opportunities:
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"
@@ -3137,6 +3142,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = [action.get("token0"), action.get("token1")]
+        max_investment_amounts = action.get("max_investment_amounts")
         if not assets or len(assets) < 2:
             self.context.logger.error(f"2 assets required, provided: {assets}")
             return None, None, None
@@ -3144,17 +3150,24 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_fee = action.get("pool_fee")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         pool_type = action.get("pool_type")
-
+    
         pool = self.pools.get(dex_type)
         if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
-
+        
         # Fetch the amount of tokens to send
         max_amounts_in = [
             self._get_balance(chain, assets[0], positions),
             self._get_balance(chain, assets[1], positions),
         ]
+
+        # Adjust max_amounts_in based on max_investment_amounts
+        if max_investment_amounts and (len(max_investment_amounts) == len(max_amounts_in)) and (type(max_investment_amounts) == type(max_amounts_in)):
+            max_amounts_in = [
+                min(max_amounts_in[i], max_investment_amounts[i]) for i in range(len(max_amounts_in))
+            ]
+
         if any(amount == 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error(
                 f"Insufficient balance for entering pool: {max_amounts_in}"

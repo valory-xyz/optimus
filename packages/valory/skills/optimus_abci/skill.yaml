@@ -13,9 +13,9 @@ fingerprint:
   fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
   handlers.py: bafybeial22btk7acyv6hw7r7r2nhugjmlwfg4uzfj6kilrbnpsjsagtiva
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
-  modius-ui-build/asset-manifest.json: bafybeibf6ny4szdnqrjcg2hmsshi74nmlazixtk4lnxsodjan4kjvg5jx4
+  modius-ui-build/asset-manifest.json: bafybeib5474rjjwzzrpixvuiweciu3dg5uc6bxhb3bkyjrneduxcfin7be
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  modius-ui-build/index.html: bafybeibxdy4j6sdkzwetytvoy4d636n2f5vhsjuejttpugz2iufev22jpa
+  modius-ui-build/index.html: bafybeidpmurnzv5kwcwmswzjxdzsqy54twccrx3p6gngyoa62xwvd57zgi
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/protocols/balancer.png: bafybeicqmyeayxigss5t2tpbfad5dl4yfrd6d6sqndrgdnt33jwnskicnm
   modius-ui-build/logos/protocols/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -39,9 +39,9 @@ fingerprint:
   modius-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
   modius-ui-build/static/css/main.2f574fdc.css: bafybeig3jjwg72ukt2pj5br3gvqr2bq62es6mxoj24bcqmnhks322wcsum
   modius-ui-build/static/css/main.2f574fdc.css.map: bafybeibjtnzjqaf2nmbdofv4begrb2eznpbpkf4gk43frirqdy6xiw4at4
-  modius-ui-build/static/js/main.1f7c5dc2.js: bafybeicvtmzgksvr3vi2qn7b2gd44hif4xvbkvoz4awbtw23bivwjtgebe
-  modius-ui-build/static/js/main.1f7c5dc2.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
-  modius-ui-build/static/js/main.1f7c5dc2.js.map: bafybeih2i7j5sm26kssl4cyhuwxixxmcj3c4utrfni6gmma7i6mmvniaxi
+  modius-ui-build/static/js/main.6777ffd6.js: bafybeihsudhm2tlk4j5hqvliy5qp2z5mhkgz2g7ylja36khey2jtlddmvm
+  modius-ui-build/static/js/main.6777ffd6.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
+  modius-ui-build/static/js/main.6777ffd6.js.map: bafybeigtbivqps2qn6krv72z3qzq7rtmv7yeoqpu5hltrc2kj45owmghjq
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -53,7 +53,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeiht3y5lzgrkl252sy2zso3lmbi2hfqdtgp5eunljy2vxramsowiuu
+- valory/liquidity_trader_abci:0.1.0:bafybeib7mpqndrozp26iueb7aihwaffmny6tlu4v566b72cvvj52tshuuu
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:

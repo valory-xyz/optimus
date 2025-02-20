@@ -2,8 +2,6 @@ import warnings
 
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
-import json
-import logging
 import statistics
 import time
 from datetime import datetime, timedelta
@@ -18,9 +16,6 @@ from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 from pycoingecko import CoinGeckoAPI
 from web3 import Web3
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Constants and mappings
 SUPPORTED_POOL_TYPES = {
@@ -404,20 +399,6 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
         errors.append(f"Error calculating Sharpe ratio: {e}")
         return None
 
-
-# def calculate_differential_investment(apr_current: float, apr_base: float, tvl: float) -> float:
-#     """Calculate investment amount based on APR differences."""
-#     if apr_base <= 0 or apr_current <= 0 or tvl <= 0:
-#         return 0.0
-#     try:
-#         ratio = apr_current / apr_base
-#         if ratio <= 1:
-#             return 0.0
-#         return (ratio - 1) * tvl
-#     except ZeroDivisionError:
-#         return 0.0
-
-
 def get_underlying_token_symbol(symbol: str) -> str:
     """Map wrapped/synthetic tokens to their underlying asset symbols."""
     symbol = symbol.lower()
@@ -515,16 +496,15 @@ def get_pool_token_prices(token_symbols: List[str], coingecko_api: CoinGeckoAPI)
                 
                 # Log warning if still no price found
                 if not price_found:
-                    logger.warning(f"Could not get price for {original_symbol}")
                     prices[original_symbol] = 0.0
                     
             except Exception as e:
-                logger.error(f"Error fetching price for {original_symbol}: {str(e)}")
+                errors.append(f"Error fetching price for {original_symbol}: {str(e)}")
                 prices[original_symbol] = 0.0
                 
         return prices
     except Exception as e:
-        logger.error(f"Error in price fetching: {str(e)}")
+        errors.append(f"Error in price fetching: {str(e)}")
         return {symbol: 0.0 for symbol in token_symbols}
 
 def get_token_investments(diff_investment: float, token_prices: Dict[str, float]) -> List[float]:
@@ -552,15 +532,12 @@ def get_token_investments(diff_investment: float, token_prices: Dict[str, float]
     """
     # Validate inputs
     if diff_investment <= 0:
-        logger.debug("Zero or negative investment amount")
         return []
         
     if not token_prices:
-        logger.debug("No token prices provided")
         return []
         
     if not any(price > 0 for price in token_prices.values()):
-        logger.debug("No valid token prices (all zero or negative)")
         return []
         
     # Calculate per-token investment amount (50/50 split)
@@ -569,7 +546,6 @@ def get_token_investments(diff_investment: float, token_prices: Dict[str, float]
     token_amounts = []
     for token_symbol, price in token_prices.items():
         if not price or price <= 0:
-            logger.warning(f"Invalid price for token {token_symbol}: {price}")
             token_amounts.append(0.0)
         else:
             # Calculate token amount and round to 8 decimal places
@@ -578,96 +554,6 @@ def get_token_investments(diff_investment: float, token_prices: Dict[str, float]
             
     # Return empty list if no valid investments
     return token_amounts if any(amount > 0 for amount in token_amounts) else []
-
-
-
-# def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str) -> List[Dict[str, Any]]:
-#     """Enhanced pool data formatter with better investment calculations."""
-#     # Initialize CoinGecko API
-#     cg = CoinGeckoAPI(api_key=coingecko_api_key) if is_pro_api_key(coingecko_api_key) else CoinGeckoAPI(demo_api_key=coingecko_api_key)
-    
-#     # Sort pools by APR
-#     sorted_pools = sorted(pools, key=lambda x: float(x.get('apr', 0)), reverse=True)
-    
-#     formatted_pools = []
-#     max_apr = float(sorted_pools[0].get('apr', 0)) if sorted_pools else 0
-    
-#     # Pre-fetch all token prices to avoid rate limits
-#     all_token_symbols = []
-#     symbol_to_pool = {}
-#     for pool in sorted_pools:
-#         token0_symbol = pool["poolTokens"][0]["symbol"]
-#         token1_symbol = pool["poolTokens"][1]["symbol"]
-#         all_token_symbols.extend([token0_symbol, token1_symbol])
-#         symbol_to_pool[token0_symbol] = pool
-#         symbol_to_pool[token1_symbol] = pool
-    
-#     # Fetch all prices at once with a single long delay
-#     time.sleep(5)
-#     all_prices = get_pool_token_prices(list(set(all_token_symbols)), cg)
-    
-#     for i, pool in enumerate(sorted_pools):
-#         # Get TVL from dynamicData
-#         tvl = float(pool.get('dynamicData', {}).get('totalLiquidity', 0))
-        
-#         # Prepare base data
-#         base_data = {
-#             "dex_type": BALANCER,
-#             "chain": pool["chain"].lower(),
-#             "apr": pool["apr"] * 100,
-#             "pool_address": pool["address"],
-#             "pool_id": pool["id"],
-#             "pool_type": pool["type"],
-#             "token0": pool["poolTokens"][0]["address"],
-#             "token1": pool["poolTokens"][1]["address"],
-#             "token0_symbol": pool["poolTokens"][0]["symbol"],
-#             "token1_symbol": pool["poolTokens"][1]["symbol"],
-#             "il_risk_score": pool.get("il_risk_score"),
-#             "sharpe_ratio": pool.get("sharpe_ratio"),
-#             "depth_score": pool.get("depth_score"),
-#             "max_position_size": pool.get("max_position_size"),
-#             "type": pool.get("trading_type", LP),
-#             "tvl": tvl
-#         }
-        
-#         # Calculate differential investment
-#         current_apr = float(pool.get('apr', 0))
-#         if current_apr <= 0.01:
-#             base_data["max_investment_amounts"] = []
-#             base_data["max_investment_usd"] = 0.0
-#             formatted_pools.append(base_data)
-#             continue
-        
-#         # Compare against next best APR
-#         next_best_apr = 0
-#         if i < len(sorted_pools) - 1:
-#             next_best_apr = float(sorted_pools[i + 1].get('apr', 0))
-        
-#         # Calculate investment amount
-#         diff_investment = calculate_differential_investment(
-#             current_apr,
-#             next_best_apr,
-#             tvl
-#         )
-        
-#         # Get token prices from pre-fetched prices
-#         token_prices = {
-#             pool["poolTokens"][0]["symbol"]: all_prices.get(pool["poolTokens"][0]["symbol"], 0),
-#             pool["poolTokens"][1]["symbol"]: all_prices.get(pool["poolTokens"][1]["symbol"], 0)
-#         }
-        
-#         if diff_investment > 0 and any(price > 0 for price in token_prices.values()):
-#             token_amounts = get_token_investments(diff_investment, token_prices)
-#             base_data["max_investment_amounts"] = token_amounts
-#             base_data["max_investment_usd"] = diff_investment
-#         else:
-#             base_data["max_investment_amounts"] = []
-#             base_data["max_investment_usd"] = 0.0
-            
-#         formatted_pools.append(base_data)
-        
-#     return formatted_pools
-
 
 def calculate_single_pool_investment(apr: float, tvl: float) -> float:
     """

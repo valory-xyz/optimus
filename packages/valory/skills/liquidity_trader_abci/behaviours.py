@@ -3956,7 +3956,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         slippage = self.params.slippage_for_swap
         from_address = self.params.safe_contract_addresses.get(from_chain)
         to_address = self.params.safe_contract_addresses.get(to_chain)
-
+    
         # If there is only one asset and we need to obtain two different assets,
         # we split the available amount in half, converting one half to the first asset
         # and the other half to the second asset.

@@ -1,0 +1,13 @@
+/* @import url('~@fontsource/inter/index.css'); IMPORTED VIA CDN IN public/index.html */
+
+* {
+    font-family: 'Inter', sans-serif !important;
+}
+
+body {
+    min-width: 800px;
+}
+
+.card-gradient {
+    background: linear-gradient(#F5F7FA, #FFFFFF);
+}

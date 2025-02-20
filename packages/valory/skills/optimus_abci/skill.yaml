@@ -13,9 +13,11 @@ fingerprint:
   fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
   handlers.py: bafybeial22btk7acyv6hw7r7r2nhugjmlwfg4uzfj6kilrbnpsjsagtiva
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
-  modius-ui-build/asset-manifest.json: bafybeib5474rjjwzzrpixvuiweciu3dg5uc6bxhb3bkyjrneduxcfin7be
+  modius-ui-build/antd-reset.css: bafybeifyeozf54phizmvhn5cfvvsn6vsnceqje5vlm2hwaiw5rtnmsuahe
+  modius-ui-build/asset-manifest.json: bafybeidwmfoahxhjl3sayuc7jvoe22lu2qculqbsannlvl74lcbfprku2a
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  modius-ui-build/index.html: bafybeidpmurnzv5kwcwmswzjxdzsqy54twccrx3p6gngyoa62xwvd57zgi
+  modius-ui-build/globals.css: bafybeidc6ngo76cbhkhhhcddqw4g5id6rfabp723qwqq6y362d6xc3qahy
+  modius-ui-build/index.html: bafybeidbw7bisw5wlsucra4gmnuasftams7tim3m3ke6iwq467ipbpcyjq
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/protocols/balancer.png: bafybeicqmyeayxigss5t2tpbfad5dl4yfrd6d6sqndrgdnt33jwnskicnm
   modius-ui-build/logos/protocols/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -37,11 +39,9 @@ fingerprint:
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   modius-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
   modius-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
-  modius-ui-build/static/css/main.2f574fdc.css: bafybeig3jjwg72ukt2pj5br3gvqr2bq62es6mxoj24bcqmnhks322wcsum
-  modius-ui-build/static/css/main.2f574fdc.css.map: bafybeibjtnzjqaf2nmbdofv4begrb2eznpbpkf4gk43frirqdy6xiw4at4
-  modius-ui-build/static/js/main.6777ffd6.js: bafybeihsudhm2tlk4j5hqvliy5qp2z5mhkgz2g7ylja36khey2jtlddmvm
-  modius-ui-build/static/js/main.6777ffd6.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
-  modius-ui-build/static/js/main.6777ffd6.js.map: bafybeigtbivqps2qn6krv72z3qzq7rtmv7yeoqpu5hltrc2kj45owmghjq
+  modius-ui-build/static/js/main.d1640d96.js: bafybeihfcayc4q7n6h7dvletzukoudzhfmwqtinsx4vzgnnwufr7jktvey
+  modius-ui-build/static/js/main.d1640d96.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
+  modius-ui-build/static/js/main.d1640d96.js.map: bafybeifmueqrp5566xpvehfma54wk7dbx53zf5icwwakjflxkc3y6wtn2i
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy

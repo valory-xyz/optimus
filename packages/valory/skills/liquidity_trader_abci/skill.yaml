@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeihv4bgczu4ru3sqmsffnyo3autw2oyki3dc62jkzkczr6vnx6zera
+  behaviours.py: bafybeic37mpkxtnzth2f5356n3mye7v6c7ud3qjkn4ratvx4dmtfttathm
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeibsmnmohywo7gxg6opkojc5qkdkmphuc2gtvbt4tffo574kqjns5a
   handlers.py: bafybeiafuvuy7mvmolwcgfkrbrmnvvro4dele5znggyskwcuz2rtnnybku
@@ -19,7 +19,7 @@ fingerprint:
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
   rounds.py: bafybeib7xxohod6ghz57fktp7t25w45f7pw3vrhyuf7au4wog2foq6weuy
-  rounds_info.py: bafybeihjaawvnstho6ekp4v6zwpawiavexntt6dlrcbcfketuv62kcyrkq
+  rounds_info.py: bafybeif6l4eq7ahy2yk33ocmf274shgnyj6cuycqadttw23he2xlj44rzy
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju

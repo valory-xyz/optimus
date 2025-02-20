@@ -1761,8 +1761,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 opportunities = result.get("result", [])
 
                 self.context.logger.info(
-                        f"Opportunities found strategy: {opportunities}"
-                    )
+                    f"Opportunities found strategy: {opportunities}"
+                )
 
                 if opportunities:
                     self.context.logger.info(
@@ -3150,12 +3150,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_fee = action.get("pool_fee")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         pool_type = action.get("pool_type")
-    
+
         pool = self.pools.get(dex_type)
         if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
-        
+
         # Fetch the amount of tokens to send
         max_amounts_in = [
             self._get_balance(chain, assets[0], positions),
@@ -3163,9 +3163,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         ]
 
         # Adjust max_amounts_in based on max_investment_amounts
-        if max_investment_amounts and (len(max_investment_amounts) == len(max_amounts_in)) and (type(max_investment_amounts) == type(max_amounts_in)):
+        if (
+            max_investment_amounts
+            and (len(max_investment_amounts) == len(max_amounts_in))
+            and (type(max_investment_amounts) == type(max_amounts_in))
+        ):
             max_amounts_in = [
-                min(max_amounts_in[i], max_investment_amounts[i]) for i in range(len(max_amounts_in))
+                min(max_amounts_in[i], max_investment_amounts[i])
+                for i in range(len(max_amounts_in))
             ]
 
         if any(amount == 0 or amount is None for amount in max_amounts_in):
@@ -3956,7 +3961,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         slippage = self.params.slippage_for_swap
         from_address = self.params.safe_contract_addresses.get(from_chain)
         to_address = self.params.safe_contract_addresses.get(to_chain)
-    
+
         # If there is only one asset and we need to obtain two different assets,
         # we split the available amount in half, converting one half to the first asset
         # and the other half to the second asset.

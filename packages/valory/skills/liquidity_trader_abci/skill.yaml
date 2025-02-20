@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeidvw7sb6xjk5cp566p2hyu4kw6jqmcwvcsbmxaj635ddkf7oayfty
+  behaviours.py: bafybeifpgowv2vdipv7x3abwkwrstcboxj2zpljebdyigygo5q5f7rl4aq
   dialogues.py: bafybeiay23otskx2go5xhtgdwfw2kd6rxd62sxxdu3njv7hageorl5zxzm
   fsm_specification.yaml: bafybeie3vom7fwl5ho6xanje3r7tab7y3a5ij5gs6qvjh2uavbpitffyzu
   handlers.py: bafybeih2zlmkyntlr7zx4mokqkmpcw7qczfbo47g766kndbv7zv7oqjv6e
@@ -32,13 +32,13 @@ contracts:
 - valory/gnosis_safe:0.1.0:bafybeif3uivl3jjb3c2tyctu6jagp2mwizgmdnxb4x7otrxavifdk4t3je
 - valory/balancer_weighted_pool:0.1.0:bafybeiarpidfs4npbuectmuo4srv2o4agfuafvncelbywcgd5y5dtgeyke
 - valory/balancer_vault:0.1.0:bafybeiff3ltn6xoh3otuywk2j3yxujdlfzcvri66slnufv5t4hkj5musfa
-- valory/erc20:0.1.0:bafybeihoy4tucgqhlez564g5u3zpz45fxeolfjkgpqcbmcysrldid226su
+- valory/erc20:0.1.0:bafybeie2wet3factwc6pwqvqpwqu3prtv75lmbqo5y4onda5y533ufdqhy
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeid7h7sxxoglhhqbcz4g64fwbgj6akwecv4ktolhefcsziqntnnt2e
 - valory/uniswap_v3_pool:0.1.0:bafybeiehh6y7qswdnfocoi2ku57w4k2rilambgt2bfp6co7vscghmqpjte
 - valory/merkl_distributor:0.1.0:bafybeidaxrbcrh6icl3cmuxfijaxsobsuonuha754jhl2cjdkhktivjfa4
-- valory/staking_token:0.1.0:bafybeic74vecd4feqqlnub2jgfisa7fnncqyag5nlrgniktre6w3l34kuq
-- valory/staking_activity_checker:0.1.0:bafybeifbzznj6snxmoetkqhmwzo4nwuski6kylydkg5td5qdslin32tpae
+- valory/staking_token:0.1.0:bafybeiev3fx5wg4rs5rciqdxemdvt73fwu2nylv23i7g665jzorcyyjape
+- valory/staking_activity_checker:0.1.0:bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeid4krjmfca3dert6tackcut2tins24kunzfwxs4gu3zgdhzrkijkm
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4

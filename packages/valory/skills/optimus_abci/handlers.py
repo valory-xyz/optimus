@@ -150,11 +150,13 @@ class HttpHandler(BaseHttpHandler):
         self.rounds_info: Dict = {  # pylint: disable=attribute-defined-outside-init
             camel_to_snake(k): v for k, v in ROUNDS_INFO.items()
         }
+
         for source_info, target_round in fsm["transition_func"].items():
             source_round, event = source_info[1:-1].split(", ")
             self.rounds_info[camel_to_snake(source_round)]["transitions"][
                 event.lower()
             ] = camel_to_snake(target_round)
+
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -162,6 +164,11 @@ class HttpHandler(BaseHttpHandler):
         return SynchronizedData(
             db=self.context.state.round_sequence.latest_synchronized_data.db
         )
+
+    @property
+    def shared_state(self) -> SharedState:
+        """Get the parameters."""
+        return cast(SharedState, self.context.state)
 
     def _get_handler(self, url: str, method: str) -> Tuple[Optional[Callable], Dict]:
         """Check if an url is meant to be handled in this handler
@@ -330,6 +337,15 @@ class HttpHandler(BaseHttpHandler):
                 r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]
             ]
             rounds.append(current_round)
+
+        breakpoint()    
+        # Update evaluate strategy round description with agent reasoning if available
+        agent_reasoning = getattr(self.shared_state, "agent_reasoning", None)
+        if agent_reasoning and "evaluate_strategy_round" in self.rounds_info:
+            latest_reasoning = agent_reasoning.get("latest_reasoning", "")
+            if latest_reasoning:
+                self.rounds_info["evaluate_strategy_round"]["description"] = latest_reasoning
+
 
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,

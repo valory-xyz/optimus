@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiebxffqdqb67sa4w2xmmo5q3bnjflr2xeu4xsx3ynrsepf5js2cja
-  max_apr_selection.py: bafybeibryowqjwkcuc75tzio64s6k5pfvkzeumizvm7aoq4dn35ieqrgcu
+  max_apr_selection.py: bafybeifyoa7vvtjbdqwkda7czr3l7lq2ou7jnbl7o4je4ju7c7khbf3sci
 fingerprint_ignore_patterns: []
 entry_point: max_apr_selection.py
 callable: run

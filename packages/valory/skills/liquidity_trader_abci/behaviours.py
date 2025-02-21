@@ -562,7 +562,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self, attribute: str, filepath: str, class_object: bool = False
     ) -> None:
         """Generic method to read data from a JSON file"""
-
+        self.context.logger.info(f"Reading {attribute} from {filepath!r}")
         try:
             with open(filepath, READ_MODE) as file:
                 try:
@@ -1225,11 +1225,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             )
 
                 self.execute_hyper_strategy()
-                reasoning = self.store_agent_reasoning(
-                    self.position_to_exit,
-                    self.selected_opportunities
-                )
-                self.context.logger.info(f"Agent reasoning: {reasoning}")
                 actions = (
                     yield from self.get_order_of_transactions()
                     if self.selected_opportunities is not None
@@ -1256,56 +1251,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def store_agent_reasoning(self, position_to_exit: Optional[Dict], selected_opportunities: Optional[List[Dict]]) -> str:
-        """Store agent's reasoning for switching pools or making trading decisions in ROUNDS_INFO description."""
-        reasoning = []
-        base_description = "Evaluates all strategies and decides the best course of action for the agent. "
-        
-        # Add exit reasoning if applicable
-        if position_to_exit:
-            dex_type = position_to_exit.get("dex_type", "unknown")
-            pool_address = position_to_exit.get("pool_address", "unknown")
-            pnl = position_to_exit.get("pnl", 0)
-            
-            exit_msg = f"Exiting {dex_type} pool {pool_address} with PnL: {pnl:.2f}%"
-            if pnl > self.params.profit_threshold:
-                exit_msg += f" due to profit above threshold ({self.params.profit_threshold}%)"
-            elif pnl < -self.params.loss_threshold:
-                exit_msg += f" due to loss below threshold (-{self.params.loss_threshold}%)"
-            reasoning.append(exit_msg)
-
-        # Add entry reasoning
-        if selected_opportunities:
-            for opp in selected_opportunities:
-                opp_type = opp.get("type", "unknown")
-                if opp_type == "lp":
-                    dex = opp.get("dex_type", "unknown")
-                    pool = opp.get("pool_address", "unknown")
-                    apy = opp.get("apy", 0)
-                    reasoning.append(
-                        f"Entering {dex} pool {pool} with expected APY: {apy:.2f}%"
-                    )
-                elif opp_type == "market_trade":
-                    token = opp.get("token", "unknown")
-                    signal = opp.get("signal", "unknown")
-                    reasoning.append(
-                        f"Taking {signal} position on {token}"
-                    )
-        # Combine base description with reasoning
-        reasoning_str = " | ".join(reasoning) if reasoning else "No actions taken."
-        full_description = base_description + reasoning_str
-        
-        reasoning_file_path = self.agent_reasoning_filepath
-    
-        reasoning_data = {
-            "latest_reasoning": full_description,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        with open(reasoning_file_path, 'w') as f:
-            json.dump(reasoning_data, f, indent=4)
-            
-        return reasoning_str
 
     def calculate_pnl_for_uniswap(
         self, position: Dict[str, Any]
@@ -1771,6 +1716,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if logs:
             for log in logs:
                 self.context.logger.info(log)
+
+        
+        reasoning = result.get("reasoning")
+        if reasoning:
+            self.shared_state.agent_reasoning = reasoning
+        self.context.logger.info(f"Agent Reasoning: {reasoning}")
 
         if self.selected_opportunities is not None:
             self.context.logger.info(

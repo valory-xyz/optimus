@@ -38,8 +38,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeihygdlh6v7qbd3hqy4ovi5vgz6wd2jb6qefcbz5sizvq23mwh6eby
-- valory/optimus_abci:0.1.0:bafybeifxreyavrec6vrhdaku4pfw27epeto6q65gfc3n4fv3utqmxbhsma
+- valory/liquidity_trader_abci:0.1.0:bafybeihpkzgfvvhvo6txqkjktg2kfu2p34v53jtg6neugffsricxo2wydq
+- valory/optimus_abci:0.1.0:bafybeigzcbhu2fm4m6phcpfwywhvq5os76nbeoxtx6edbxoj644qrrjj34
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -51,7 +51,7 @@ skills:
 - valory/portfolio_tracker_abci:0.1.0:bafybeif6hfogbnmo5advwah47fn347fwxa67gftkaydwqmvhbeubmaqdoa
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma
-- valory/max_apr_selection:0.1.0:bafybeiamrude3aagzx4zm7h4irprr3jyglhhlk737jqzbphyod24xhfmpe
+- valory/max_apr_selection:0.1.0:bafybeiejwa2t3xp2c37uqm3ovtvcmprs3ojfsseyen6xcthe3pmofkwsc4
 - valory/balancer_pools_search:0.1.0:bafybeiewzkxfe5aw5c7yvkv4v5dklkyclsi6bezv53v5y3fplfrbnz7ad4
 - valory/uniswap_pools_search:0.1.0:bafybeih3kabtvsfj4lkoapihayas65oviky5adslcawkbox6sejguo7iee
 - valory/asset_lending:0.1.0:bafybeibyp5bhvakvk75hvxywrajekoxsra7amvubwrz7dewcn3vml4qwo4
@@ -330,7 +330,7 @@ models:
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["mode"]}
       staking_chain: ${str:""}
-      file_hash_to_strategies: ${str:{"bafybeie3vxjkkq6entt4uc5fxfio6ibiu5sq5j6jageru6oar4qd6xjywq":"rsi_strategy","bafybeianybjti5txl5r6e4hvc67delwcompanklbf3cfiagd5fab2vhejq":"sma_strategy","bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma":"merkl_pools_search","bafybeiamrude3aagzx4zm7h4irprr3jyglhhlk737jqzbphyod24xhfmpe":"max_apr_selection","bafybeiewzkxfe5aw5c7yvkv4v5dklkyclsi6bezv53v5y3fplfrbnz7ad4":"balancer_pools_search","bafybeih3kabtvsfj4lkoapihayas65oviky5adslcawkbox6sejguo7iee":"uniswap_pools_search","bafybeibyp5bhvakvk75hvxywrajekoxsra7amvubwrz7dewcn3vml4qwo4":"asset_lending"}}
+      file_hash_to_strategies: ${str:{"bafybeie3vxjkkq6entt4uc5fxfio6ibiu5sq5j6jageru6oar4qd6xjywq":"rsi_strategy","bafybeianybjti5txl5r6e4hvc67delwcompanklbf3cfiagd5fab2vhejq":"sma_strategy","bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma":"merkl_pools_search","bafybeicrsbx5me4bzmnfdhetvnselpiaha5e4gfgdvjx2i6l3twi3f7o74":"max_apr_selection","bafybeiewzkxfe5aw5c7yvkv4v5dklkyclsi6bezv53v5y3fplfrbnz7ad4":"balancer_pools_search","bafybeih3kabtvsfj4lkoapihayas65oviky5adslcawkbox6sejguo7iee":"uniswap_pools_search","bafybeibyp5bhvakvk75hvxywrajekoxsra7amvubwrz7dewcn3vml4qwo4":"asset_lending"}}
       strategies_kwargs: ${list:[["ma_period",2]]}
       trading_strategies_kwargs: ${str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"},"rsi_strategy":{"ma_period":2},"sma_strategy":{"ma_period":2}}}
       selected_strategies: ${list:["balancer_pools_search","asset_lending"]}

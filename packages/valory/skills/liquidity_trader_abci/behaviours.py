@@ -935,7 +935,8 @@ class CallCheckpointBehaviour(
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
-
+            yield from self.calculate_user_share_values()
+            self.store_portfolio_data()
             if not self.params.staking_chain:
                 self.context.logger.warning("Service has not been staked on any chain!")
                 self.service_staking_state = StakingState.UNSTAKED
@@ -1050,159 +1051,7 @@ class CallCheckpointBehaviour(
             to_address=self.params.staking_token_contract_address,
             data=data,
         )
-
-
-class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
-    """Behaviour that checks if the staking KPI has been met and makes vanity transactions if necessary."""
-
-    # pylint-disable too-many-ancestors
-    matching_round: Type[AbstractRound] = CheckStakingKPIMetRound
-
-    def async_act(self) -> Generator:
-        """Do the action."""
-        with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            vanity_tx_hex = None
-            is_staking_kpi_met = yield from self._is_staking_kpi_met()
-            if is_staking_kpi_met is None:
-                self.context.logger.error("Error checking if staking KPI is met.")
-            elif is_staking_kpi_met is True:
-                self.context.logger.info("KPI already met for the day!")
-            else:
-                is_period_threshold_exceeded = (
-                    self.synchronized_data.period_count
-                    - self.synchronized_data.period_number_at_last_cp
-                    >= self.params.staking_threshold_period
-                )
-
-                if is_period_threshold_exceeded:
-                    min_num_of_safe_tx_required = (
-                        self.synchronized_data.min_num_of_safe_tx_required
-                    )
-                    multisig_nonces_since_last_cp = (
-                        yield from self._get_multisig_nonces_since_last_cp(
-                            chain=self.params.staking_chain,
-                            multisig=self.params.safe_contract_addresses.get(
-                                self.params.staking_chain
-                            ),
-                        )
-                    )
-                    if (
-                        multisig_nonces_since_last_cp is not None
-                        and min_num_of_safe_tx_required is not None
-                    ):
-                        num_of_tx_left_to_meet_kpi = (
-                            min_num_of_safe_tx_required - multisig_nonces_since_last_cp
-                        )
-                        if num_of_tx_left_to_meet_kpi > 0:
-                            self.context.logger.info(
-                                f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
-                            )
-                            self.context.logger.info("Preparing vanity tx..")
-                            vanity_tx_hex = yield from self._prepare_vanity_tx(
-                                chain=self.params.staking_chain
-                            )
-                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
-
-            tx_submitter = self.matching_round.auto_round_id()
-            payload = CheckStakingKPIMetPayload(
-                self.context.agent_address,
-                tx_submitter,
-                vanity_tx_hex,
-                self.params.safe_contract_addresses.get(self.params.staking_chain),
-                self.params.staking_chain,
-                is_staking_kpi_met,
-            )
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
-            yield from self.send_a2a_transaction(payload)
-            yield from self.wait_until_round_end()
-            self.set_done()
-
-    def _prepare_vanity_tx(self, chain: str) -> Generator[None, None, Optional[str]]:
-        self.context.logger.info(f"Preparing vanity transaction for chain: {chain}")
-
-        safe_address = self.params.safe_contract_addresses.get(chain)
-        self.context.logger.debug(f"Safe address for chain {chain}: {safe_address}")
-
-        tx_data = b"0x"
-        self.context.logger.debug(f"Transaction data: {tx_data}")
-
-        try:
-            safe_tx_hash = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=safe_address,
-                contract_public_id=GnosisSafeContract.contract_id,
-                contract_callable="get_raw_safe_transaction_hash",
-                data_key="tx_hash",
-                to_address=ZERO_ADDRESS,
-                value=ETHER_VALUE,
-                data=tx_data,
-                operation=SafeOperation.CALL.value,
-                safe_tx_gas=SAFE_TX_GAS,
-                chain_id=chain,
-            )
-        except Exception as e:
-            self.context.logger.error(f"Exception during contract interaction: {e}")
-            return None
-
-        if safe_tx_hash is None:
-            self.context.logger.error("Error preparing vanity tx: safe_tx_hash is None")
-            return None
-
-        self.context.logger.debug(f"Safe transaction hash: {safe_tx_hash}")
-
-        try:
-            tx_hash = hash_payload_to_hex(
-                safe_tx_hash=safe_tx_hash[2:],
-                ether_value=ETHER_VALUE,
-                safe_tx_gas=SAFE_TX_GAS,
-                operation=SafeOperation.CALL.value,
-                to_address=ZERO_ADDRESS,
-                data=tx_data,
-            )
-        except Exception as e:
-            self.context.logger.error(f"Exception during hash payload conversion: {e}")
-            return None
-
-        self.context.logger.info(f"Vanity transaction hash: {tx_hash}")
-
-        return tx_hash
-
-
-class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
-    """Behaviour that gets the balances of the assets of agent safes."""
-
-    matching_round: Type[AbstractRound] = GetPositionsRound
-    current_positions = None
-
-    def async_act(self) -> Generator:
-        """Async act"""
-        with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            if not self.assets:
-                self.assets = self.params.initial_assets
-                self.store_assets()
-
-            positions = yield from self.get_positions()
-            yield from self._adjust_current_positions_for_backward_compatibility(
-                self.current_positions
-            )
-            yield from self.calculate_user_share_values()
-            self.store_portfolio_data()
-            self.context.logger.info(f"POSITIONS: {positions}")
-            sender = self.context.agent_address
-
-            if positions is None:
-                positions = GetPositionsRound.ERROR_PAYLOAD
-
-            serialized_positions = json.dumps(positions, sort_keys=True)
-            payload = GetPositionsPayload(sender=sender, positions=serialized_positions)
-
-        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
-            yield from self.send_a2a_transaction(payload)
-            yield from self.wait_until_round_end()
-
-        self.set_done()
-
+    
     def calculate_user_share_values(self) -> Generator[None, None, None]:
         """Calculate the value of shares for the user based on open pools."""
         total_user_share_value_usd = Decimal(0)
@@ -1479,6 +1328,156 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return pool_name
+
+
+class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that checks if the staking KPI has been met and makes vanity transactions if necessary."""
+
+    # pylint-disable too-many-ancestors
+    matching_round: Type[AbstractRound] = CheckStakingKPIMetRound
+
+    def async_act(self) -> Generator:
+        """Do the action."""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            vanity_tx_hex = None
+            is_staking_kpi_met = yield from self._is_staking_kpi_met()
+            if is_staking_kpi_met is None:
+                self.context.logger.error("Error checking if staking KPI is met.")
+            elif is_staking_kpi_met is True:
+                self.context.logger.info("KPI already met for the day!")
+            else:
+                is_period_threshold_exceeded = (
+                    self.synchronized_data.period_count
+                    - self.synchronized_data.period_number_at_last_cp
+                    >= self.params.staking_threshold_period
+                )
+
+                if is_period_threshold_exceeded:
+                    min_num_of_safe_tx_required = (
+                        self.synchronized_data.min_num_of_safe_tx_required
+                    )
+                    multisig_nonces_since_last_cp = (
+                        yield from self._get_multisig_nonces_since_last_cp(
+                            chain=self.params.staking_chain,
+                            multisig=self.params.safe_contract_addresses.get(
+                                self.params.staking_chain
+                            ),
+                        )
+                    )
+                    if (
+                        multisig_nonces_since_last_cp is not None
+                        and min_num_of_safe_tx_required is not None
+                    ):
+                        num_of_tx_left_to_meet_kpi = (
+                            min_num_of_safe_tx_required - multisig_nonces_since_last_cp
+                        )
+                        if num_of_tx_left_to_meet_kpi > 0:
+                            self.context.logger.info(
+                                f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
+                            )
+                            self.context.logger.info("Preparing vanity tx..")
+                            vanity_tx_hex = yield from self._prepare_vanity_tx(
+                                chain=self.params.staking_chain
+                            )
+                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
+
+            tx_submitter = self.matching_round.auto_round_id()
+            payload = CheckStakingKPIMetPayload(
+                self.context.agent_address,
+                tx_submitter,
+                vanity_tx_hex,
+                self.params.safe_contract_addresses.get(self.params.staking_chain),
+                self.params.staking_chain,
+                is_staking_kpi_met,
+            )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+            self.set_done()
+
+    def _prepare_vanity_tx(self, chain: str) -> Generator[None, None, Optional[str]]:
+        self.context.logger.info(f"Preparing vanity transaction for chain: {chain}")
+
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        self.context.logger.debug(f"Safe address for chain {chain}: {safe_address}")
+
+        tx_data = b"0x"
+        self.context.logger.debug(f"Transaction data: {tx_data}")
+
+        try:
+            safe_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=safe_address,
+                contract_public_id=GnosisSafeContract.contract_id,
+                contract_callable="get_raw_safe_transaction_hash",
+                data_key="tx_hash",
+                to_address=ZERO_ADDRESS,
+                value=ETHER_VALUE,
+                data=tx_data,
+                operation=SafeOperation.CALL.value,
+                safe_tx_gas=SAFE_TX_GAS,
+                chain_id=chain,
+            )
+        except Exception as e:
+            self.context.logger.error(f"Exception during contract interaction: {e}")
+            return None
+
+        if safe_tx_hash is None:
+            self.context.logger.error("Error preparing vanity tx: safe_tx_hash is None")
+            return None
+
+        self.context.logger.debug(f"Safe transaction hash: {safe_tx_hash}")
+
+        try:
+            tx_hash = hash_payload_to_hex(
+                safe_tx_hash=safe_tx_hash[2:],
+                ether_value=ETHER_VALUE,
+                safe_tx_gas=SAFE_TX_GAS,
+                operation=SafeOperation.CALL.value,
+                to_address=ZERO_ADDRESS,
+                data=tx_data,
+            )
+        except Exception as e:
+            self.context.logger.error(f"Exception during hash payload conversion: {e}")
+            return None
+
+        self.context.logger.info(f"Vanity transaction hash: {tx_hash}")
+
+        return tx_hash
+
+
+class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that gets the balances of the assets of agent safes."""
+
+    matching_round: Type[AbstractRound] = GetPositionsRound
+    current_positions = None
+
+    def async_act(self) -> Generator:
+        """Async act"""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            if not self.assets:
+                self.assets = self.params.initial_assets
+                self.store_assets()
+
+            positions = yield from self.get_positions()
+            yield from self._adjust_current_positions_for_backward_compatibility(
+                self.current_positions
+            )
+            self.context.logger.info(f"POSITIONS: {positions}")
+            sender = self.context.agent_address
+
+            if positions is None:
+                positions = GetPositionsRound.ERROR_PAYLOAD
+
+            serialized_positions = json.dumps(positions, sort_keys=True)
+            payload = GetPositionsPayload(sender=sender, positions=serialized_positions)
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+
+        self.set_done()
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that finds the opportunity and builds actions."""

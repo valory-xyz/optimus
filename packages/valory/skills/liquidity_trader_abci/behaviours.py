@@ -3813,10 +3813,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if response.status_code not in HTTP_OK:
-            response = json.loads(response.body)
-            self.context.logger.error(
-                f"[LiFi API Error Message] Error encountered: {response['message']}"
-            )
+            try:
+                response_data = json.loads(response.body)
+                self.context.logger.error(
+                    f"[LiFi API Error Message] Error encountered: {response_data['message']}"
+                )
+            except (ValueError, TypeError) as e:
+                self.context.logger.error(
+                    f"Could not parse error response from API: {e}\nResponse body: {response.body}"
+                )
             return None
 
         try:

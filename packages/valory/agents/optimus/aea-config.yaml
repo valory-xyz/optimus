@@ -117,6 +117,9 @@ config:
       gas_price_strategies:
         eip1559:
           fee_history_percentile: 50
+          fallback_estimate:
+            maxFeePerGas: 200000000
+            maxPriorityFeePerGas: 30000000
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

@@ -269,8 +269,6 @@ c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/reset_pause_abci
 c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/strategy_evaluator_abci/skill.yaml:generic-api-key:101
 c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/trader_decision_maker_abci/skill.yaml:generic-api-key:76
 c022bdff65530d1dc6a037b3d173e3989a51daec:packages/valory/skills/transaction_settlement_abci/skill.yaml:generic-api-key:93
-34591764415f2fbc959e41feb4b7aaef733285aa:packages/valory/services/optimus_pearl/service.yaml:generic-api-key:44
-70f1bad61ecef39d2004e54b7ca396ebaaaa5531:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 62bdc4f7ebebea4695e415915e773fd680baeb26:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 9facfc7d521059db3121a88593230520c0108379:liquidityRiskAssesmentScript/uniswap_top1000_pool_liquidity_data.py:generic-api-key:5
 9facfc7d521059db3121a88593230520c0108379:liquidityRiskAssesmentScript/uniswap_per_pool_liquidity_data.py:generic-api-key:117
@@ -313,7 +311,6 @@ cc5bde9d62ea96c13e43eb119f7f59075b040a69:packages/valory/contracts/staking_token
 ef0373adb2f8798b63bb0c00d146fa4eaa70a579:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 fe1e5cf86d167b698b3df9d600a4c26f0cc45bae:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 f5eed62a1572bbea8452a5f50e1b65e16063c535:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
-a52f7509a88af2f6c1639af36fae9ab83fdeb6bd:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 c379f8caf26cb073b97d4e32c4e0b59cedbe0316:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 a52f7509a88af2f6c1639af36fae9ab83fdeb6bd:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
 eceac088cd3b7eec763cde770671a63b9486c246:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10

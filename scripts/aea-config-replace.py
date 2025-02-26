@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2021-2025 Valory AG
+#   Copyright 2021-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ def main() -> None:
     load_dotenv()
 
     with open(Path("optimus", "aea-config.yaml"), "r", encoding="utf-8") as file:
-        print("config path", Path("optimus", "aea-config.yaml"))
         config = list(yaml.safe_load_all(file))
 
         # Ledger RPCs
@@ -57,49 +56,37 @@ def main() -> None:
             ] = f"${{str:{os.getenv('MODE_LEDGER_RPC')}}}"
 
         # Params
-        try:
-            config[6]["models"]["params"]["args"]["setup"][
-                "all_participants"
-            ] = f"${{list:{os.getenv('ALL_PARTICIPANTS')}}}"
+        config[5]["models"]["params"]["args"]["setup"][
+            "all_participants"
+        ] = f"${{list:{os.getenv('ALL_PARTICIPANTS')}}}"
 
-            config[6]["models"]["params"]["args"][
-                "safe_contract_addresses"
-            ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
+        config[5]["models"]["params"]["args"][
+            "safe_contract_addresses"
+        ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
 
-            config[6]["models"]["params"]["args"][
-                "slippage_for_swap"
-            ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
+        config[5]["models"]["params"]["args"][
+            "slippage_for_swap"
+        ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
 
-            config[6]["models"]["params"]["args"][
-                "tenderly_access_key"
-            ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
+        config[5]["models"]["params"]["args"][
+            "tenderly_access_key"
+        ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
 
-            config[6]["models"]["params"]["args"][
-                "agent_transition"
-            ] = f"${{bool:{os.getenv('AGENT_TRANSITION', 'False') == 'True'}}}"
+        config[5]["models"]["params"]["args"][
+            "tenderly_account_slug"
+        ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
 
-            config[6]["models"]["params"]["args"][
-                "tenderly_account_slug"
-            ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
+        config[5]["models"]["params"]["args"][
+            "tenderly_project_slug"
+        ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
 
-            config[6]["models"]["params"]["args"][
-                "tenderly_project_slug"
-            ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
+        config[5]["models"]["coingecko"]["args"][
+            "api_key"
+        ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
 
-            config[6]["models"]["coingecko"]["args"][
-                "api_key"
-            ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
-
-            config[6]["models"]["params"]["args"][
-                "allowed_chains"
-            ] = f"${{list:{os.getenv('ALLOWED_CHAINS')}}}"
-
-            config[6]["models"]["params"]["args"][
-                "staking_chain"
-            ] = f"${{str:{os.getenv('STAKING_CHAIN')}}}"
-
-        except KeyError as e:
-            print("Error", e)
+        config[5]["models"]["params"]["args"][
+            "staking_chain"
+        ] = f"${{str:{os.getenv('STAKING_CHAIN')}}}"
 
     with open(Path("optimus", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)

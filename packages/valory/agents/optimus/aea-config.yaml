@@ -117,6 +117,8 @@ config:
       gas_price_strategies:
         eip1559:
           fee_history_percentile: 50
+          fee_history_blocks: 20
+          min_allowed_tip: 1
           fallback_estimate:
             maxFeePerGas: 200000000
             maxPriorityFeePerGas: 30000000

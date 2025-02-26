@@ -8,22 +8,24 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
-  composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
-  dialogues.py: bafybeihuayabnubriylso5vlvj2qgncfb66ecaizzoxiob3r5airi7mexa
-  fsm_specification.yaml: bafybeicbqp4idp4ndsh2ffmmfjbn7e3b7dizt2dyrwiupzosg2d4drsupm
-  handlers.py: bafybeihwk4gfdhzpsexwllt6ujzf67t4pmqzl353piiuepqjgakeij3ob4
-  models.py: bafybeif6xl2iuip6rduy4ve5yf6oaibdnfpex3arbrnxsdzvhtkb3wuj4m
+  composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
+  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
+  fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
+  handlers.py: bafybeictzus2vvpzg62iq753xntzbslsisug2ezqg6qygzbtysojhe252m
+  models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
 fingerprint_ignore_patterns: []
-connections: []
+connections:
+- valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
 contracts: []
-protocols: []
+protocols:
+- valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
-- valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
-- valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
-- valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeigmsp7wybejqs3g223nyydpkwhq7oy4eto66sjrcylogycymvymm4
-- valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
+- valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
+- valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
+- valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
+- valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
+- valory/liquidity_trader_abci:0.1.0:bafybeigky5zwfvigqsqhyiilxwig37ldth756lzc23uvfd4oxw7ygt37da
+- valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
     args: {}
@@ -193,11 +195,16 @@ models:
       selected_hyper_strategy: max_apr_selection
       service_endpoint_base: https://optimus.staging.autonolas.tech/
       dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
+      max_pools: 2
+      profit_threshold: 50
+      loss_threshold: 30
+      pnl_check_interval: 10
     class_name: Params
   coingecko:
     args:
       token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
       coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
+      historical_price_endpoint: https://api.coingecko.com/api/v3/coins/{coin_id}/history?date={date}
       api_key: null
       requests_per_minute: 30
       credits: 10000
@@ -230,6 +237,8 @@ models:
   kv_store_dialogues:
     args: {}
     class_name: KvStoreDialogues
-dependencies: {}
+dependencies:
+  PyYAML:
+    version: '>=3.10,<=6.0.1'
 is_abstract: false
 customs: []

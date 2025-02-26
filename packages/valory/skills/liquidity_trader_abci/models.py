@@ -170,6 +170,9 @@ class Coingecko(Model, TypeCheckMixin):
         self.coin_price_endpoint: str = self._ensure("coin_price_endpoint", kwargs, str)
         self.api_key: Optional[str] = self._ensure("api_key", kwargs, Optional[str])
         self.rate_limited_code: int = self._ensure("rate_limited_code", kwargs, int)
+        self.historical_price_endpoint: str = self._ensure(
+            "historical_price_endpoint", kwargs, str
+        )
         self.chain_to_platform_id_mapping: Dict[str, str] = json.loads(
             self._ensure("chain_to_platform_id_mapping", kwargs, str)
         )
@@ -304,6 +307,10 @@ class Params(BaseParams):
         self.dex_type_to_strategy = json.loads(
             self._ensure("dex_type_to_strategy", kwargs, str)
         )
+        self.max_pools = self._ensure("max_pools", kwargs, int)
+        self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
+        self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
+        self.pnl_check_interval = self._ensure("pnl_check_interval", kwargs, int)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

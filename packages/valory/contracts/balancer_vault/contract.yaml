@@ -6,9 +6,9 @@ description: The contract package for the balancer Vault interface.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeibily2cg2o4zkvol6amu2ewzdq5kmtzlml3qor45na3s7l5fmay2a
+  __init__.py: bafybeievq5hnl35mckaakbome2kggd6txe5eiiheg3l3c4qpb3s5yylv5q
   build/Vault.json: bafybeifbvxyx43jmtchbzerapzqeblmmsppfbvfkwrag4nsfydad6bqwje
-  contract.py: bafybeicu7xsjywccqscshsfwe23kiimvhee74s3u7vpkunglfarszdttke
+  contract.py: bafybeifevtk6o7nv4iaymqwopamskmx6qmr4b42g2u77e3jkktvsa4mmqq
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VaultContract
@@ -16,7 +16,7 @@ contract_interface_paths:
   ethereum: build/Vault.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.60.0
+    version: ==1.64.0
   web3:
     version: <7,>=6.0.0
   eth_abi:

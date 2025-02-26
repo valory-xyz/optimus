@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigqm6q7kgfzgpcse7zer5uea3s7myolry2r3teovuzqgkn43j7bei
   build/StakingActivityChecker.json: bafybeiety3kkkmdz2gdzktg54wvmhavftaw4wjnrddztt64jpknagrc6xa
-  contract.py: bafybeiagtrdo6icjnzgap23xqaij2ptsdkqka4n25qg5srutoy6bfleqae
+  contract.py: bafybeigd7kkwhhrkevu6wp5jrm2y4aam75cb63esi3e2552hkvbj4kvjqq
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: StakingActivityCheckerContract
@@ -16,8 +16,8 @@ contract_interface_paths:
   ethereum: build/StakingActivityChecker.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.60.0
+    version: ==1.64.0
   open-aea-test-autonomy:
-    version: ==0.18.3
+    version: ==0.19.4
   web3:
     version: <7,>=6.0.0

@@ -62,7 +62,7 @@ class ERC20(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         allowance = contract_instance.functions.allowance(owner, spender).call()
         return dict(data=allowance)
-    
+
     @classmethod
     def get_token_symbol(
         cls,
@@ -73,6 +73,28 @@ class ERC20(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         symbol = contract_instance.functions.symbol().call()
         return dict(data=symbol)
+
+    @classmethod
+    def get_total_supply(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the total supply."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        total_supply = contract_instance.functions.totalSupply().call()
+        return dict(data=total_supply)
+
+    @classmethod
+    def get_name(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the total supply."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        name = contract_instance.functions.name().call()
+        return dict(data=name)
 
     @classmethod
     def get_token_decimals(

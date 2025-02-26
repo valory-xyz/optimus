@@ -19,16 +19,20 @@
 
 """This class contains a wrapper for vault contract interface."""
 import logging
+
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
 from eth_abi import encode
 
+
 PUBLIC_ID = PublicId.from_str("valory/balancer_vault:0.1.0")
 _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
 )
+
+
 class VaultContract(Contract):
     """The Vault contract."""
 
@@ -47,7 +51,6 @@ class VaultContract(Contract):
         data = contract_instance.functions.getPoolTokens(pool_id_bytes).call()
         return dict(tokens=data)
 
-
     @classmethod
     def join_pool(
         cls,
@@ -65,8 +68,8 @@ class VaultContract(Contract):
         """Prepare a join pool transaction."""
 
         encoded_user_data = encode(
-            ['uint256', 'uint256[]', 'uint256'],
-            [join_kind, max_amounts_in, minimum_bpt]
+            ["uint256", "uint256[]", "uint256"],
+            [join_kind, max_amounts_in, minimum_bpt],
         )
 
         join_pool_request = (
@@ -79,12 +82,7 @@ class VaultContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(
             "joinPool",
-            args=(
-                bytes.fromhex(pool_id[2:]),
-                sender,
-                recipient,
-                join_pool_request
-            )
+            args=(bytes.fromhex(pool_id[2:]), sender, recipient, join_pool_request),
         )
         return {"tx_hash": bytes.fromhex(data[2:])}
 
@@ -104,10 +102,7 @@ class VaultContract(Contract):
     ) -> JSONLike:
         """Prepare a exit pool transaction."""
 
-        encoded_user_data = encode(
-            ['uint256', 'uint256'],
-            [exit_kind, bpt_amount_in]
-        )
+        encoded_user_data = encode(["uint256", "uint256"], [exit_kind, bpt_amount_in])
 
         exit_pool_request = (
             assets,
@@ -119,15 +114,10 @@ class VaultContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(
             "exitPool",
-            args=(
-                bytes.fromhex(pool_id[2:]),
-                sender,
-                recipient,
-                exit_pool_request
-            )
+            args=(bytes.fromhex(pool_id[2:]), sender, recipient, exit_pool_request),
         )
         return {"tx_hash": bytes.fromhex(data[2:])}
-    
+
     @classmethod
     def simulate_tx(
         cls,
@@ -135,7 +125,7 @@ class VaultContract(Contract):
         contract_address: str,
         sender_address: str,
         data: str,
-        gas_limit: int
+        gas_limit: int,
     ) -> JSONLike:
         """Simulate the transaction."""
         try:
@@ -144,7 +134,7 @@ class VaultContract(Contract):
                     "from": ledger_api.api.to_checksum_address(sender_address),
                     "to": ledger_api.api.to_checksum_address(contract_address),
                     "data": data,
-                    "gas": gas_limit
+                    "gas": gas_limit,
                 }
             )
             simulation_ok = True

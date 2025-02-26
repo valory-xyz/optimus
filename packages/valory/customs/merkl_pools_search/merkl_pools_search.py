@@ -1,17 +1,30 @@
 import json
-import requests
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlencode
 
+import requests
+
+
 CAMPAIGN_TYPES = [1, 2]
 HTTP_OK = [200, 201]
-REQUIRED_FIELDS = ("chains", "apr_threshold", "protocols", "balancer_graphql_endpoints", "merkl_fetch_campaign_args", "chain_to_chain_id_mapping", "current_pool")
+REQUIRED_FIELDS = (
+    "chains",
+    "apr_threshold",
+    "protocols",
+    "balancer_graphql_endpoints",
+    "merkl_fetch_campaign_args",
+    "chain_to_chain_id_mapping",
+    "current_pool",
+)
+
 
 class DexTypes(Enum):
     """DexTypes"""
+
     BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
+
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check for missing fields and return them, if any."""
@@ -21,19 +34,23 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
             missing.append(field)
     return missing
 
+
 def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Remove the irrelevant fields from the given kwargs."""
-    filtered_kwargs = {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
+    filtered_kwargs = {
+        key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS
+    }
     return filtered_kwargs
+
 
 def highest_apr_opportunity(
     balancer_graphql_endpoints: Dict[str, Any],
     merkl_fetch_campaign_args: Dict[str, Any],
-    chains: List[str], 
+    chains: List[str],
     protocols: List[str],
     chain_to_chain_id_mapping: Dict[str, Any],
-    apr_threshold: float, 
-    current_pool: Optional[str]
+    apr_threshold: float,
+    current_pool: Optional[str],
 ) -> Dict[str, Any]:
     """Get the highest APR yielding opportunity over given protocols using Merkl API."""
 
@@ -42,10 +59,7 @@ def highest_apr_opportunity(
         if not chains:
             return {"error": "No chain selected for investment!"}
 
-        chain_ids = ",".join(
-            str(chain_to_chain_id_mapping[chain])
-            for chain in chains
-        )
+        chain_ids = ",".join(str(chain_to_chain_id_mapping[chain]) for chain in chains)
         base_url = merkl_fetch_campaign_args.get("url")
         creator = merkl_fetch_campaign_args.get("creator")
         live = merkl_fetch_campaign_args.get("live", "true")
@@ -61,15 +75,21 @@ def highest_apr_opportunity(
         response = requests.get(api_url, headers={"accept": "application/json"})
 
         if response.status_code not in HTTP_OK:
-            return {"error": f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.text}"}
+            return {
+                "error": f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.text}"
+            }
 
         try:
             result = json.loads(response.text)
             return result
         except (ValueError, TypeError) as e:
-            return {"error": f"Could not parse response from api, the following error was encountered {type(e).__name__}: {e}"}
+            return {
+                "error": f"Could not parse response from api, the following error was encountered {type(e).__name__}: {e}"
+            }
 
-    def filter_eligible_pools(all_pools: Dict[str, Any]) -> Union[List[Dict[str, Any]], Dict[str, str]]:
+    def filter_eligible_pools(
+        all_pools: Dict[str, Any]
+    ) -> Union[List[Dict[str, Any]], Dict[str, str]]:
         """Filter pools based on allowed assets and LP pools and sort by APR."""
         eligible_pools = []
         allowed_dex_types = [DexTypes[protocol.upper()].value for protocol in protocols]
@@ -81,13 +101,20 @@ def highest_apr_opportunity(
                         continue
 
                     campaign_apr = campaign.get("apr", 0)
-                    if not campaign_apr or campaign_apr <= 0 or campaign_apr <= apr_threshold:
+                    if (
+                        not campaign_apr
+                        or campaign_apr <= 0
+                        or campaign_apr <= apr_threshold
+                    ):
                         continue
 
                     campaign_pool_address = campaign.get("mainParameter")
-                    if not campaign_pool_address or campaign_pool_address == current_pool:
+                    if (
+                        not campaign_pool_address
+                        or campaign_pool_address == current_pool
+                    ):
                         continue
-                    
+
                     chain = next(
                         (
                             k
@@ -96,12 +123,14 @@ def highest_apr_opportunity(
                         ),
                         None,
                     )
-                    eligible_pools.append({
-                        "dex_type": dex_type,
-                        "chain": chain,
-                        "campaign": campaign,
-                        "apr": campaign_apr
-                    })
+                    eligible_pools.append(
+                        {
+                            "dex_type": dex_type,
+                            "chain": chain,
+                            "campaign": campaign,
+                            "apr": campaign_apr,
+                        }
+                    )
 
         if not eligible_pools:
             return {"error": "No eligible pools found."}
@@ -110,7 +139,9 @@ def highest_apr_opportunity(
         eligible_pools.sort(key=lambda x: x["apr"], reverse=True)
         return eligible_pools
 
-    def determine_highest_apr_pool(eligible_pools: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def determine_highest_apr_pool(
+        eligible_pools: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """Determine the pool with the highest APR from the eligible pools."""
         for pool_info in eligible_pools:
             dex_type = pool_info["dex_type"]
@@ -127,7 +158,9 @@ def highest_apr_opportunity(
                 pool_id = highest_apr_pool.get("pool_id")
                 if highest_apr_pool.get("pool_type") is None:
                     continue
-                tokensList = fetch_balancer_pool_info(pool_id, chain, detail="tokensList")
+                tokensList = fetch_balancer_pool_info(
+                    pool_id, chain, detail="tokensList"
+                )
                 if "error" in tokensList or len(tokensList) != 2:
                     continue
 
@@ -189,10 +222,12 @@ def highest_apr_opportunity(
             "pool_address": pool_address,
             "pool_id": pool_id,
             "pool_type": pool_type,
-            **pool_token_dict
+            **pool_token_dict,
         }
 
-    def fetch_balancer_pool_info(pool_id: str, chain: str, detail: str) -> Dict[str, Any]:
+    def fetch_balancer_pool_info(
+        pool_id: str, chain: str, detail: str
+    ) -> Dict[str, Any]:
         """Fetch the pool type for a Balancer pool using a GraphQL query."""
         query = f"""
                     query {{
@@ -213,7 +248,9 @@ def highest_apr_opportunity(
             headers={"Content-Type": "application/json"},
         )
         if response.status_code not in HTTP_OK:
-            return {"error": f"Could not retrieve data from GraphQL endpoint. Status code {response.status_code}."}
+            return {
+                "error": f"Could not retrieve data from GraphQL endpoint. Status code {response.status_code}."
+            }
 
         try:
             res = json.loads(response.text)
@@ -237,6 +274,7 @@ def highest_apr_opportunity(
 
     highest_apr_pool = determine_highest_apr_pool(eligible_pools)
     return highest_apr_pool
+
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str]]:
     """Run the strategy."""

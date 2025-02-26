@@ -3025,7 +3025,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         elif next_action == Action.DEPOSIT:
             tx_hash, chain_id, safe_address = yield from self.get_deposit_tx_hash(
-                next_action_details
+                next_action_details, positions
             )
             last_action = Action.DEPOSIT.value
 
@@ -3150,11 +3150,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        # Fetch the amount of tokens to send
+        token0_balance = self._get_balance(chain, assets[0], positions)
+        token1_balance = self._get_balance(chain, assets[1], positions)
+        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
         max_amounts_in = [
-            self._get_balance(chain, assets[0], positions),
-            self._get_balance(chain, assets[1], positions),
+            int(token0_balance * relative_funds_percentage),
+            int(token1_balance * relative_funds_percentage),
         ]
+        max_amounts_in = [
+            min(max_amounts_in[0], token0_balance),
+            min(max_amounts_in[1], token1_balance),
+        ]
+
         if any(amount == 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error(
                 f"Insufficient balance for entering pool: {max_amounts_in}"
@@ -3386,12 +3393,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_deposit_tx_hash(
-        self, action
+        self, action, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get deposit tx hash"""
         chain = action.get("chain")
         asset = action.get("token0")
-        amount = self._get_balance(chain, asset, self.synchronized_data.positions)
+        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+        token_balance = self._get_balance(chain, asset, positions)
+        amount = int(min(token_balance * relative_funds_percentage, token_balance))
         safe_address = self.params.safe_contract_addresses.get(chain)
         receiver = safe_address
         contract_address = action.get("pool_address")

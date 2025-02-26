@@ -39,6 +39,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     CheckStakingKPIMetPayload,
     DecisionMakingPayload,
     EvaluateStrategyPayload,
+    FetchStrategiesPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
 )
@@ -107,6 +108,11 @@ class SynchronizedData(BaseSynchronizedData):
         return self._get_deserialized("participant_to_positions_round")
 
     @property
+    def participant_to_strategies_round(self) -> DeserializedCollection:
+        """Get the participants to the strategies round."""
+        return self._get_deserialized("participant_to_strategies_round")
+
+    @property
     def positions(self) -> List[Dict[str, Any]]:
         """Get the positions."""
         serialized = self.db.get("positions", "[]")
@@ -114,6 +120,15 @@ class SynchronizedData(BaseSynchronizedData):
             serialized = "[]"
         positions = json.loads(serialized)
         return positions
+
+    @property
+    def strategies(self) -> List[Dict[str, Any]]:
+        """Get the strategies."""
+        serialized = self.db.get("strategies", "[]")
+        if serialized is None:
+            serialized = "[]"
+        strategies = json.loads(serialized)
+        return strategies
 
     @property
     def participant_to_actions_round(self) -> DeserializedCollection:
@@ -447,6 +462,34 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
             return synced_data, event
 
 
+class FetchStrategiesRound(CollectSameUntilThresholdRound):
+    """FetchStrategiesRound"""
+
+    payload_class = FetchStrategiesPayload
+    synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    no_majority_event = Event.NO_MAJORITY
+    none_event: Enum = Event.NONE
+    collection_key = get_name(SynchronizedData.participant_to_strategies_round)
+    selection_key = get_name(SynchronizedData.strategies)
+
+    ERROR_PAYLOAD = {}
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
+        """Process the end of the block."""
+        res = super().end_block()
+        if res is None:
+            return None
+        synced_data, event = cast(Tuple[SynchronizedData, Enum], res)
+        if event != Event.DONE:
+            return res
+        if not synced_data.strategies:
+            return synced_data, Event.WAIT
+        return synced_data, Event.DONE
+
+    # Event.ROUND_TIMEOUT
+
+
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""
 
@@ -474,8 +517,9 @@ class FailedMultiplexerRound(DegenerateRound):
 class LiquidityTraderAbciApp(AbciApp[Event]):
     """LiquidityTraderAbciApp"""
 
-    initial_round_cls: AppState = CallCheckpointRound
+    initial_round_cls: AppState = FetchStrategiesRound
     initial_states: Set[AppState] = {
+        FetchStrategiesRound,
         CallCheckpointRound,
         CheckStakingKPIMetRound,
         GetPositionsRound,
@@ -535,6 +579,13 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
         },
+        FetchStrategiesRound: {
+            Event.DONE: CallCheckpointRound,
+            Event.WAIT: FetchStrategiesRound,
+            Event.NO_MAJORITY: FetchStrategiesRound,
+            Event.ROUND_TIMEOUT: FetchStrategiesRound,
+            Event.NONE: FetchStrategiesRound,
+        },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
         FinishedDecisionMakingRound: {},
@@ -559,9 +610,11 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             get_name(SynchronizedData.min_num_of_safe_tx_required),
             get_name(SynchronizedData.is_staking_kpi_met),
             get_name(SynchronizedData.period_number_at_last_cp),
+            get_name(SynchronizedData.strategies),
         }
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
+        FetchStrategiesRound: set(),
         CallCheckpointRound: set(),
         CheckStakingKPIMetRound: set(),
         GetPositionsRound: set(),

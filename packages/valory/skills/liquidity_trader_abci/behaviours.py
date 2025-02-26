@@ -48,6 +48,14 @@ from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
 
+from packages.dvilela.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
+)
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
@@ -78,6 +86,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
+from packages.valory.skills.abstract_round_abci.models import Requests
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
 )
@@ -102,6 +111,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     EvaluateStrategyPayload,
     EvaluateStrategyRound,
     Event,
+    FetchStrategiesPayload,
+    FetchStrategiesRound,
     GetPositionsPayload,
     GetPositionsRound,
     LiquidityTraderAbciApp,
@@ -482,6 +493,9 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
     def _convert_to_token_units(self, amount: int, token_decimal: int = 18) -> str:
         """Convert smallest unit to token's base unit."""
+        if token_decimal is None or amount is None:
+            return None
+
         value = amount / 10**token_decimal
         return f"{value:.{token_decimal}f}"
 
@@ -1120,38 +1134,68 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self.fetch_all_trading_opportunities()
-
-            if self.current_positions:
-                for position in self.current_positions:
-                    if position.get("status") == PositionStatus.CLOSED.value:
-                        continue
-                    dex_type = position.get("dex_type")
-                    strategy = self.params.dex_type_to_strategy.get(dex_type)
-                    if strategy:
-                        metrics = self.get_returns_metrics_for_opportunity(
-                            position, strategy
-                        )
-                        if metrics:
-                            # Update the position dictionary with the metrics
-                            position.update(metrics)
-                    else:
-                        self.context.logger.error(
-                            f"No strategy found for dex types {dex_type}"
-                        )
-
-            self.execute_hyper_strategy()
-            actions = []
-            if self.selected_opportunities is not None:
-                self.context.logger.info(
-                    f"Selected opportunity: {self.selected_opportunities}"
+            has_funds = True
+            if not self.current_positions:
+                has_funds = any(
+                    asset.get("balance", 0) > 0
+                    for position in self.synchronized_data.positions
+                    for asset in position.get("assets", [])
                 )
-                actions = yield from self.get_order_of_transactions()
 
-            self.context.logger.info(f"Actions: {actions}")
-            serialized_actions = json.dumps(actions)
-            sender = self.context.agent_address
-            payload = EvaluateStrategyPayload(sender=sender, actions=serialized_actions)
+            if not has_funds:
+                actions = []
+                self.context.logger.info("No funds available.")
+                sender = self.context.agent_address
+                payload = EvaluateStrategyPayload(
+                    sender=sender, actions=json.dumps(actions)
+                )
+            else:
+                yield from self.fetch_all_trading_opportunities()
+
+                if self.current_positions:
+                    for position in (
+                        pos
+                        for pos in self.current_positions
+                        if pos.get("status") == PositionStatus.OPEN.value
+                    ):
+                        dex_type = position.get("dex_type")
+                        strategy = self.params.dex_type_to_strategy.get(dex_type)
+                        if strategy:
+                            if (
+                                not position.get("status", PositionStatus.CLOSED.value)
+                                == PositionStatus.OPEN.value
+                            ):
+                                continue
+                            metrics = self.get_returns_metrics_for_opportunity(
+                                position, strategy
+                            )
+                            if metrics:
+                                position.update(metrics)
+                        else:
+                            self.context.logger.error(
+                                f"No strategy found for dex type {dex_type}"
+                            )
+
+                self.execute_hyper_strategy()
+                actions = (
+                    yield from self.get_order_of_transactions()
+                    if self.selected_opportunities is not None
+                    else []
+                )
+
+                if actions:
+                    self.context.logger.info(f"Actions: {actions}")
+                else:
+                    self.context.logger.info("No actions prepared")
+
+                sender = self.context.agent_address
+                payload = EvaluateStrategyPayload(
+                    sender=sender, actions=json.dumps(actions)
+                )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -1655,8 +1699,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches all the trading opportunities using multiprocessing"""
         self.trading_opportunities.clear()
         yield from self.download_strategies()
-        strategies = self.params.selected_strategies.copy()
+        strategies = self.synchronized_data.strategies.copy()
         tried_strategies: Set[str] = set()
+        self.context.logger.info(f"Selected Strategies: {strategies}")
 
         # Collect strategy kwargs
         strategy_kwargs_list = []
@@ -2321,10 +2366,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     relative_funds_percentage,
                 )
             else:
-                dest_tokens = [
-                    (dest_token0_address, dest_token0_symbol),
-                    (dest_token1_address, dest_token1_symbol),
-                ]
+                tokens.sort(key=lambda x: x["token"])
+                dest_tokens = sorted(
+                    [
+                        (dest_token0_address, dest_token0_symbol),
+                        (dest_token1_address, dest_token1_symbol),
+                    ],
+                    key=lambda x: x[0],
+                )
                 for idx, token in enumerate(tokens):
                     dest_token_address, dest_token_symbol = dest_tokens[idx % 2]
                     self._add_bridge_swap_action(
@@ -2723,12 +2772,19 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")
 
-        # Find the position with the matching pool address and update its status
+        position_to_close = None
+        max_timestamp = 0
+        # Find the most recent position with the matching pool address and update its status
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
-                position["status"] = PositionStatus.CLOSED.value
-                self.context.logger.info(f"Closing position: {position}")
-                break
+                timestamp = position.get("timestamp", 0)
+                if timestamp > max_timestamp:
+                    position_to_close = position
+                    max_timestamp = timestamp
+
+        if position_to_close:
+            position_to_close["status"] = PositionStatus.CLOSED.value
+            self.context.logger.info(f"Closing position: {position_to_close}")
         else:
             self.context.logger.warning(
                 f"No position found for pool_address: {pool_address}"
@@ -2919,10 +2975,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, actions, current_action_index, last_round_id
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Prepare the next action."""
-        next_action = Action(actions[current_action_index].get("action"))
-        next_action_details = self.synchronized_data.actions[current_action_index]
-        self.context.logger.info(f"ACTION DETAILS: {next_action_details}")
+        next_action_details = actions[current_action_index]
+        action_name = next_action_details.get("action")
 
+        if not action_name:
+            self.context.logger.error(f"Invalid action: {next_action_details}")
+            return Event.DONE.value, {}
+
+        next_action = Action(action_name)
         if next_action == Action.ENTER_POOL:
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
@@ -2977,7 +3037,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         elif next_action == Action.DEPOSIT:
             tx_hash, chain_id, safe_address = yield from self.get_deposit_tx_hash(
-                next_action_details
+                next_action_details, positions
             )
             last_action = Action.DEPOSIT.value
 
@@ -2995,21 +3055,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if not tx_hash:
             return Event.DONE.value, {}
-
-        result = (
-            Event.SETTLE.value,
-            {
-                "tx_submitter": DecisionMakingRound.auto_round_id(),
-                "most_voted_tx_hash": tx_hash,
-                "chain_id": chain_id,
-                "safe_contract_address": safe_address,
-                "positions": positions,
-                "last_executed_action_index": current_action_index,
-                "last_action": last_action,
-            },
-        )
-
-        self.context.logger.info(f"Result constructed: {result}")
 
         return Event.SETTLE.value, {
             "tx_submitter": DecisionMakingRound.auto_round_id(),
@@ -3117,11 +3162,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        # Fetch the amount of tokens to send
+        token0_balance = self._get_balance(chain, assets[0], positions)
+        token1_balance = self._get_balance(chain, assets[1], positions)
+        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
         max_amounts_in = [
-            self._get_balance(chain, assets[0], positions),
-            self._get_balance(chain, assets[1], positions),
+            int(token0_balance * relative_funds_percentage),
+            int(token1_balance * relative_funds_percentage),
         ]
+        max_amounts_in = [
+            min(max_amounts_in[0], token0_balance),
+            min(max_amounts_in[1], token1_balance),
+        ]
+
         if any(amount == 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error(
                 f"Insufficient balance for entering pool: {max_amounts_in}"
@@ -3353,12 +3405,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return payload_string, chain, safe_address
 
     def get_deposit_tx_hash(
-        self, action
+        self, action, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get deposit tx hash"""
         chain = action.get("chain")
-        asset = action["assets"][0]
-        amount = self._get_balance(chain, asset, self.synchronized_data.positions)
+        asset = action.get("token0")
+        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+        token_balance = self._get_balance(chain, asset, positions)
+        amount = int(min(token_balance * relative_funds_percentage, token_balance))
         safe_address = self.params.safe_contract_addresses.get(chain)
         receiver = safe_address
         contract_address = action.get("pool_address")
@@ -3780,10 +3834,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if response.status_code not in HTTP_OK:
-            response = json.loads(response.body)
-            self.context.logger.error(
-                f"[LiFi API Error Message] Error encountered: {response['message']}"
-            )
+            try:
+                response_data = json.loads(response.body)
+                self.context.logger.error(
+                    f"[LiFi API Error Message] Error encountered: {response_data['message']}"
+                )
+            except (ValueError, TypeError) as e:
+                self.context.logger.error(
+                    f"Could not parse error response from API: {e}\nResponse body: {response.body}"
+                )
             return None
 
         try:
@@ -4525,6 +4584,72 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             )
 
 
+class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that gets the balances of the assets of agent safes."""
+
+    matching_round: Type[AbstractRound] = FetchStrategiesRound
+    strategies = None
+
+    def async_act(self) -> Generator:
+        """Async act"""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            sender = self.context.agent_address
+            db_data = yield from self._read_kv(keys=("strategies",))
+            strategies = db_data.get("strategies", [])
+            if strategies:
+                strategies = json.loads(strategies)
+            serialized_strategies = json.dumps(strategies, sort_keys=True)
+            payload = FetchStrategiesPayload(
+                sender=sender, strategies=serialized_strategies
+            )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+
+        self.set_done()
+
+    def _do_connection_request(
+        self,
+        message: Message,
+        dialogue: Message,
+        timeout: Optional[float] = None,
+    ) -> Generator[None, None, Message]:
+        """Do a request and wait the response, asynchronously."""
+
+        self.context.outbox.put_message(message=message)
+        request_nonce = self._get_request_nonce_from_dialogue(dialogue)  # type: ignore
+        cast(Requests, self.context.requests).request_id_to_callback[
+            request_nonce
+        ] = self.get_callback_request()
+        response = yield from self.wait_for_message(timeout=timeout)
+        return response
+
+    def _read_kv(
+        self,
+        keys: Tuple[str, ...],
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Send a request message from the skill context."""
+        self.context.logger.info(f"Reading keys from db: {keys}")
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.READ_REQUEST,
+            keys=keys,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        response = yield from self._do_connection_request(
+            kv_store_message, kv_store_dialogue  # type: ignore
+        )
+        if response.performative != KvStoreMessage.Performative.READ_RESPONSE:
+            return None
+
+        data = {key: response.data.get(key, None) for key in keys}  # type: ignore
+
+        return data
+
+
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
 
@@ -4537,4 +4662,5 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
         PostTxSettlementBehaviour,
+        FetchStrategiesBehaviour,
     ]

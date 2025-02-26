@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module contains the handlers for the skill of OptimusAbciApp."""
 
 import json
@@ -62,6 +61,7 @@ from packages.valory.skills.optimus_abci.models import SharedState
 
 
 ABCIHandler = BaseABCIRoundHandler
+HttpHandler = BaseHttpHandler
 SigningHandler = BaseSigningHandler
 LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler

@@ -18,24 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the dialogues of the OptimusAbciApp."""
-from packages.eightballer.protocols.balances.dialogues import (
-    BalancesDialogue as BaseBalancesDialogue,
-)
-from packages.eightballer.protocols.balances.dialogues import (
-    BalancesDialogues as BaseBalancesDialogues,
-)
-from packages.eightballer.protocols.orders.dialogues import (
-    OrdersDialogue as BaseOrdersDialogue,
-)
-from packages.eightballer.protocols.orders.dialogues import (
-    OrdersDialogues as BaseOrdersDialogues,
-)
-from packages.eightballer.protocols.tickers.dialogues import (
-    TickersDialogue as BaseTickersDialogue,
-)
-from packages.eightballer.protocols.tickers.dialogues import (
-    TickersDialogues as BaseTickersDialogues,
-)
+
 from packages.valory.skills.abstract_round_abci.dialogues import (
     AbciDialogue as BaseAbciDialogue,
 )
@@ -103,14 +86,6 @@ ContractApiDialogues = BaseContractApiDialogues
 TendermintDialogue = BaseTendermintDialogue
 TendermintDialogues = BaseTendermintDialogues
 
-TickersDialogue = BaseTickersDialogue
-TickersDialogues = BaseTickersDialogues
 
 IpfsDialogue = BaseIpfsDialogue
 IpfsDialogues = BaseIpfsDialogues
-
-BalancesDialogue = BaseBalancesDialogue
-BalancesDialogues = BaseBalancesDialogues
-
-OrdersDialogue = BaseOrdersDialogue
-OrdersDialogues = BaseOrdersDialogues

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidklv235qgllghwvpjho3wdhcbmutig6w2u2ofermbnc75lhmo4ii
+agent: valory/optimus:0.1.0:bafybeigfowrc23rky2vdgfbzjhtwpz5wysxzpn7owo3xgnkjpbhe5v6z4q
 number_of_agents: 1
 deployment:
   agent:
@@ -18,18 +18,6 @@ deployment:
 dependencies:
   requests_toolbelt:
     version: ==1.0.0
----
-public_id: valory/ipfs_package_downloader:0.1.0
-type: skill
-models:
-  params:
-    args:
-      cleanup_freq: ${CLEANUP_FREQ:int:50}
-      timeout_limit: ${TIMEOUT_LIMIT:int:3}
-      file_hash_to_id: ${FILE_HASH_TO_ID:list:[["bafybeic2fpf5ozhkf5jgzmppmfsprqw5ayfx6spgl3owuws464n7mkhpqi",["always_buy"]]]}
-      component_yaml_filename: ${COMPONENT_YAML_FILENAME:str:component.yaml}
-      entry_point_key: ${ENTRY_POINT_KEY:str:entry_point}
-      callable_keys: ${CALLABLE_KEYS:list:["run_callable","transform_callable","evaluate_callable"]}
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill
@@ -88,8 +76,6 @@ models:
       tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:access_key}
       tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:account_slug}
       tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:project_slug}
-      agent_transition: ${AGENT_TRANSITION:bool:False}
-      include_babydegen_strategies: ${INCLUDE_BABYDEGEN_STRATEGIES:False}
       tendermint_p2p_url: ${TENDERMINT_P2P_URL_0:str:optimism_tm_0:26656}
       safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}}
       staking_token_contract_address: ${STAKING_TOKEN_CONTRACT_ADDRESS:str:0x88996bbdE7f982D93214881756840cE2c77C4992}
@@ -100,34 +86,16 @@ models:
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}
       gas_cost_info_filename: ${GAS_COST_INFO_FILENAME:str:gas_costs.json}
       merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
-      min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:1}
+      min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:5}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}
       max_gas_percentage: ${MAX_GAS_PERCENTAGE:float:0.25}
-      tx_timeout: ${TX_TIMEOUT:float:10.0}
-      use_termination: ${USE_TERMINATION:bool:false}
-      validate_timeout: ${VALIDATE_TIMEOUT:int:1205}
-      history_check_timeout: ${HISTORY_CHECK_TIMEOUT:int:1205}
-      token_symbol_whitelist: ${TOKEN_SYMBOL_WHITELIST:list:["coingecko_id=solana&address=So11111111111111111111111111111111111111112"]}
-      use_proxy_server: ${USE_PROXY_SERVER:bool:false}
-      expected_swap_tx_cost: ${EXPECTED_SWAP_TX_COST:int:20000000}
-      ipfs_fetch_retries: ${IPFS_FETCH_RETRIES:int:5}
-      squad_vault: ${SQUAD_VAULT:str:39Zh4C687EXLY7CT8gjCxe2hUc3krESjUsqs7A1CKD5E}
-      agent_balance_threshold: ${AGENT_BALANCE_THRESHOLD:int:50000000}
-      multisig_balance_threshold: ${MULTISIG_BALANCE_THRESHOLD:int:1000000000}
-      tracked_tokens: ${TRACKED_TOKENS:list:[]}
-      refill_action_timeout: ${REFILL_ACTION_TIMEOUT:int:10}
-      rpc_polling_interval: ${RPC_POLLING_INTERVAL:int:5}
-      epsilon: ${EPSILON:float:0.1}
-      sharpe_threshold: ${SHARPE_THRESHOLD:float:1.0}
-      ledger_ids: ${LEDGER_IDS:list:["base"]}
-      trade_size_in_base_token: ${TRADE_SIZE_IN_BASE_TOKEN:float:0.0001}
       balancer_graphql_endpoints: ${BALANCER_GRAPHQL_ENDPOINTS:str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       allowed_chains: ${ALLOWED_CHAINS:list:["base","optimism","mode"]}
       target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["base","optimism","mode"]}
       staking_chain: ${STAKING_CHAIN:str:""}
       initial_assets: ${INITIAL_ASSETS:str:{"mode":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"}}}
-      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeihwe6i2lrbfqzctlqiwdj2mhe5r6di3eh3edpnaafihfwp5ae2fqa":"rsi_strategy","bafybeifi3o3umjjfpznudbzwwkdtah3mbznvcecswpsgb32k7ayig4boga":"sma_strategy","bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeidcuo4bigidw6dy2raq3mffmopvlqpuqdwenlk3qgvmsdk4z6gpeu":"max_apr_selection","bafybeigfw7i34kxc7cniykd3u4jo2tu2cpwz7fkwbk6z5okdkw5flb45w4":"balancer_pools_search","bafybeieuc2tnjpwr6kvdcl2eqs5mesck5szvkz2a35zumei76sbjtdficm":"uniswap_pools_search","bafybeicre7cy2z2dmhkn7ayn4h5g2ddr6bvdfgmkhrbx6nry3ie5odfgzi":"asset_lending"}}
-      trading_strategies_kwargs: ${TRADING_STRATEGIES_KWARGS:str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
+      file_hash_to_strategies: ${FILE_HASH_TO_STRATEGIES:str:{"bafybeibywngxfy5e2crtkvgfvad2ciepg3qk3h54eg3vbjoxwvf2j55wzq":"merkl_pools_search","bafybeigjg64trjtccqn2ovix3r6natxbtk6ypofv42bw5cli23uh3bq2ay":"max_apr_selection","bafybeid7tyebp2cmnkclqysnhjufppf7fggbpl7sigqinuigtxaj74fc3m":"balancer_pools_search","bafybeib6po22vum6uixlft2zqpxgsekjeccbzs75ii5xbi4rl5ggwotsky":"uniswap_pools_search","bafybeigjrvck43iqoh427ziph7ov4m2kg332prbwybxkepjfv536yczxky":"asset_lending"}}
+      strategies_kwargs: ${STRATEGIES_KWARGS:str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       selected_strategies: ${SELECTED_STRATEGIES:list:["asset_lending","balancer_pools_search","uniswap_pools_search"]}
       selected_protocols: ${SELECTED_PROTOCOLS:list:["BALANCER","UNISWAP_V3"]}
       selected_hyper_strategy: ${SELECTED_HYPER_STRATEGY:str:max_apr_selection}
@@ -144,14 +112,6 @@ models:
       credits: ${COINGECKO_CREDITS:int:10000}
       rate_limited_code: ${COINGECKO_RATE_LIMITED_CODE:int:429}
       chain_to_platform_id_mapping: ${COINGECKO_CHAIN_TO_PLATFORM_ID_MAPPING:str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum","mode":"mode"}}
-      prices_field: ${COINGECKO_PRICES_FIELD:str:prices}
-      endpoint: ${COINGECKO_ENDPOINT:str:https://api.coingecko.com/api/v3/coins/{token_id}/market_chart?vs_currency=usd&days=1}
-  tx_settlement_proxy:
-    args:
-      response_key: ${TX_PROXY_RESPONSE_KEY:str:null}
-      response_type: ${TX_PROXY_RESPONSE_TYPE:str:dict}
-      retries: ${TX_PROXY_RETRIES:int:5}
-      url: ${TX_PROXY_URL:str:http://localhost:3000/tx}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
@@ -201,21 +161,3 @@ type: connection
 config:
   host: ${HTTP_SERVER_HOST:str:0.0.0.0}
   port: ${HTTP_SERVER_PORT:int:8716}
----
-public_id: valory/http_client:0.23.0
-type: connection
-config:
-  host: ${HTTP_CLIENT_HOST:str:127.0.0.1}
-  port: ${HTTP_CLIENT_PORT:int:8000}
-  timeout: ${HTTP_CLIENT_TIMEOUT:int:1200}
----
-public_id: eightballer/dcxt:0.1.0
-type: connection
-config:
-  target_skill_id: valory/trader_abci:0.1.0
-  exchanges:
-  - name: ${DCXT_EXCHANGE_NAME:str:balancer}
-    key_path: ${DCXT_KEY_PATH:str:ethereum_private_key.txt}
-    ledger_id: ${DCXT_LEDGER_ID:str:base}
-    rpc_url: ${DCXT_RPC_URL:str:https://weathered-attentive-reel.base-mainnet.quiknode.pro/d9d86db80676649015cd7a5d33239713bcb5146e}
-    etherscan_api_key: ${DCXT_ETHERSCAN_API_KEY:str:YOUR_ETHERSCAN_API_KEY}

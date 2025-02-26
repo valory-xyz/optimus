@@ -7,31 +7,24 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
-  behaviours.py: bafybeihqhdnqza5f27soi4pf3x3bxqcachbsmx7zceqcw6uv2obgynxrm4
-  composition.py: bafybeibiyxe22c5c33keuosha2t6b4zez2iqghawbtfhumqrubrtsuun4y
-  dialogues.py: bafybeihhgzlutexxt6ry74m2rlaxdhu3ldbvhugmmgxxjlfcxf4xaipisy
-  fsm_specification.yaml: bafybeibkbrvcnt4xqqxo3hwcwusyqxqmaf7foxbbnnzrv4flq5bjk7bvli
-  handlers.py: bafybeig53r7h4x2t4qdm7i6armsyyyd6aj75b7agag5twh7eglbzotulfy
-  models.py: bafybeiamgoetd2gdm3rf33sa2rh3l36is3mdev3ghpinjfe4hprvodezqe
+  behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
+  composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
+  dialogues.py: bafybeiafoomno5pn6qrx43jxf2opxkil5eg4nod6jhd5oqwwplfz4x6dke
+  fsm_specification.yaml: bafybeihzhlhigw5qcncirnnxpazcb4qbvpgk6emms4vi2wtgyzfomkr53a
+  handlers.py: bafybeictzus2vvpzg62iq753xntzbslsisug2ezqg6qygzbtysojhe252m
+  models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
 contracts: []
 protocols:
-- eightballer/tickers:0.1.0:bafybeiccdlqdnarfwjsr4qxhfv6ywun4yx5g3dlbrtupda253gtpfjnimm
-- eightballer/orders:0.1.0:bafybeic3s3pah3zdxtwq3yk2osmnwfhtv4h6f2hkbrundzkzorvlvwwaxy
-- eightballer/balances:0.1.0:bafybeicd6xekatd6xhnwt2vzgffa3pgpvbzkhkxzrjyj3kzzll5xbr22tu
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/market_data_fetcher_abci:0.1.0:bafybeigywrpiyqjztnvjm5ey4lqh5wkln6veizb2xkvxr2py6edo7wzrp4
-- valory/trader_decision_maker_abci:0.1.0:bafybeiahgy6ddua6bgyiponmzp76m5tkn5wndlryviczqbi2lklexsjusi
-- valory/strategy_evaluator_abci:0.1.0:bafybeib4zt35fotpu5g67gyq3pnjihqgjo5wjgjq2obaqid363fwzvmemm
-- valory/portfolio_tracker_abci:0.1.0:bafybeifzljes6ezc5yqjm3ji5u4bubbfynjhlu4cie3os3rlrf4fge362u
 - valory/abstract_round_abci:0.1.0:bafybeigjddhk7epta7xpnfvv426xedff5abh4xlkwi6cqgp4vkutgkvydm
 - valory/registration_abci:0.1.0:bafybeiagi6e2h7kochmlemy5c5yk6hwn37tfxiqvk2en74jhowsdwlmrny
 - valory/reset_pause_abci:0.1.0:bafybeiezfedmmseox3ce5aucxsiszdmvskrwwbtpb2a3vw3sbmc5jt7nri
 - valory/termination_abci:0.1.0:bafybeiea67epwwgngp7b3wavs6hpkaxv6etyaps6g6325bchfnf354mibq
-- valory/liquidity_trader_abci:0.1.0:bafybeicicdxnj4agchod3yq7ksp6sn5rho2h4shb4psfm7t2rdkmmyq244
+- valory/liquidity_trader_abci:0.1.0:bafybeiflqvklhp4lmbxcr7p35z3mf4nk3wist5dnou7x2xgjeldho3yjeq
 - valory/transaction_settlement_abci:0.1.0:bafybeifmgmwdkx4esemxjacjwzqkqymkuklb5nehkwqkx7v335fllgswcq
 behaviours:
   main:
@@ -59,15 +52,6 @@ handlers:
   tendermint:
     args: {}
     class_name: TendermintHandler
-  tickers:
-    args: {}
-    class_name: DcxtTickersHandler
-  balances:
-    args: {}
-    class_name: DcxtBalancesHandler
-  orders:
-    args: {}
-    class_name: DcxtOrdersHandler
 models:
   abci_dialogues:
     args: {}
@@ -125,7 +109,6 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      default_chain_id: base
       service_id: optimus
       service_registry_address: null
       setup:
@@ -192,45 +175,7 @@ models:
       min_swap_amount_threshold: 10
       max_fee_percentage: 0.02
       max_gas_percentage: 0.1
-      proxy_round_timeout_seconds: 1200.0
-      agent_transition: false
-      include_babydegen_strategies: true
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
-      token_symbol_whitelist: []
-      trading_strategy: strategy_name
-      strategies_kwargs:
-      - - extra_1
-        - value
-      - - extra_2
-        - value
-      use_proxy_server: false
-      expected_swap_tx_cost: 20000000
-      ipfs_fetch_retries: 5
-      ipfs_address: https://gateway.autonolas.tech/ipfs/
-      squad_vault: 39Zh4C687EXLY7CT8gjCxe2hUc3krESjUsqs7A1CKD5E
-      agent_balance_threshold: 50000000
-      multisig_balance_threshold: 1000000000
-      tracked_tokens: []
-      refill_action_timeout: 10
-      rpc_polling_interval: 5
-      epsilon: 0.1
-      sharpe_threshold: 1.0
-      use_solana: false
-      trade_size_in_base_token: 0.0001
-      ledger_ids:
-      - optimism
-      exchange_ids:
-        ethereum: []
-        optimism: []
-        base: []
-      base_tokens:
-        ethereum: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-        optimism: '0x0b2c639c533813f4aa9d7837caf62653d097ff85'
-        base: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
-      native_currencies:
-        ethereum: ETH
-        optimism: oETH
-        base: ETH
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}'
       target_investment_chains:
       - base
@@ -238,7 +183,7 @@ models:
       - mode
       staking_chain: optimism
       file_hash_to_strategies: '{"bafybeiez4r4yv3so2j33opdywov6y7sbl65j5ew5n53vidqzhj2jicu3yy":"merkl_pools_search","bafybeighu2qmxopdbgk6orx45fea3ka7jwf657ihasem6jexpmg7xpe7ha":"max_apr_selection"}'
-      trading_strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]],"rsi_strategy":[["ma_period",2]],"sma_strategy":[["ma_period",2]]}'
+      strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
       selected_strategies:
       - merkl_pools_search
       selected_protocols:
@@ -251,11 +196,9 @@ models:
       profit_threshold: 50
       loss_threshold: 30
       pnl_check_interval: 10
-      multisend_batch_size: 50
     class_name: Params
   coingecko:
     args:
-      endpoint: https://api.coingecko.com/api/v3/coins/{token_id}/market_chart?vs_currency=usd&days=1
       token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
       coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
       historical_price_endpoint: https://api.coingecko.com/api/v3/coins/{coin_id}/history?date={date}
@@ -276,77 +219,6 @@ models:
       retries: 5
       url: https://drand.cloudflare.com/public/latest
     class_name: RandomnessApi
-  swap_quotes:
-    args:
-      api_id: swap_quotes
-      headers:
-        Content-Type: application/json
-      method: GET
-      parameters:
-        amount: 100000000
-        slippageBps: 5
-      response_key: null
-      response_type: dict
-      retries: 5
-      url: https://quote-api.jup.ag/v6/quote
-    class_name: SwapQuotesSpecs
-  swap_instructions:
-    args:
-      api_id: swap_instructions
-      headers:
-        Content-Type: application/json
-      method: POST
-      parameters: {}
-      response_key: null
-      response_type: dict
-      retries: 5
-      url: https://quote-api.jup.ag/v6/swap-instructions
-    class_name: SwapInstructionsSpecs
-  tx_settlement_proxy:
-    args:
-      api_id: tx_settlement_proxy
-      headers:
-        Content-Type: application/json
-      method: POST
-      parameters:
-        amount: 100000000
-        slippageBps: 5
-        resendAmount: 200
-        timeoutInMs: 120000
-        priorityFee: 5000000
-      response_key: null
-      response_type: dict
-      retries: 5
-      url: http://tx_proxy:3000/tx
-    class_name: TxSettlementProxy
-  get_balance:
-    args:
-      api_id: get_balance
-      headers:
-        Content-Type: application/json
-      method: POST
-      parameters: {}
-      response_key: result:value
-      response_type: int
-      error_key: error:message
-      error_type: str
-      retries: 5
-      url: replace_with_a_rpc
-    class_name: GetBalance
-  token_accounts:
-    args:
-      api_id: token_accounts
-      headers:
-        Content-Type: application/json
-      method: POST
-      parameters: {}
-      response_key: result:value
-      response_type: list
-      error_key: error:message
-      error_type: str
-      retries: 5
-      url: replace_with_a_rpc
-    class_name: TokenAccounts
   requests:
     args: {}
     class_name: Requests
@@ -359,18 +231,8 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-  tickers_dialogues:
-    args: {}
-    class_name: TickersDialogues
-  balances_dialogues:
-    args: {}
-    class_name: BalancesDialogues
-  orders_dialogues:
-    args: {}
-    class_name: OrdersDialogues
 dependencies:
-  open-aea-cli-ipfs:
-    version: ==1.60.0
   PyYAML:
     version: '>=3.10,<=6.0.1'
 is_abstract: false
+customs: []

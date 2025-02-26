@@ -2,7 +2,7 @@ import math
 from typing import Any, Dict, List, Union
 
 # Constants
-REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools", "check_sharpe_ratio")
+REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools")
 SHARPE_RATIO_THRESHOLD = 1
 DEPTH_SCORE_THRESHOLD = 50
 IL_RISK_SCORE_THRESHOLD = -0.2
@@ -28,32 +28,27 @@ def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in REQUIRED_FIELDS}
 
 
-def calculate_composite_score(pool, max_values, check_sharpe_ratio):
+def calculate_composite_score(pool, max_values):
     """Calculate the composite score for a given pool."""
     sharpe_ratio = pool.get("sharpe_ratio", math.nan)
     depth_score = pool.get("depth_score", math.nan)
     il_risk_score = pool.get("il_risk_score", math.nan)
 
-    if math.isnan(sharpe_ratio):
+    if math.isnan(sharpe_ratio) or math.isnan(depth_score) or math.isnan(il_risk_score):
         return 0
 
-    if check_sharpe_ratio:
-        return sharpe_ratio / max_values["sharpe_ratio"]
-    else:
-        if math.isnan(depth_score) or math.isnan(il_risk_score):
-            return 0
+    # Normalize metrics
+    normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"]
+    normalized_depth_score = depth_score / max_values["depth_score"]
+    normalized_il_risk_score = (abs(il_risk_score)) / abs(max_values["il_risk_score"])
 
-        # Normalize metrics
-        normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"]
-        normalized_depth_score = depth_score / max_values["depth_score"]
-        normalized_il_risk_score = (abs(il_risk_score)) / abs(max_values["il_risk_score"])
+    # Calculate composite score
+    return (
+        SHARPE_RATIO_WEIGHT * normalized_sharpe_ratio
+        + DEPTH_SCORE_WEIGHT * normalized_depth_score
+        + IL_RISK_SCORE_WEIGHT * normalized_il_risk_score
+    )
 
-        # Calculate composite score
-        return (
-            SHARPE_RATIO_WEIGHT * normalized_sharpe_ratio
-            + DEPTH_SCORE_WEIGHT * normalized_depth_score
-            + IL_RISK_SCORE_WEIGHT * normalized_il_risk_score
-        )
 
 def get_max_values(pools):
     """Get maximum values for normalization."""
@@ -95,9 +90,9 @@ def apply_risk_thresholds_and_select_optimal_strategy(
     current_positions=None,
     improvement_threshold=0.1,
     max_pools=1,
-    check_sharpe_ratio=False,
 ):
     """Apply risk thresholds and select the optimal strategy based on combined metrics."""
+
     # Filter opportunities based on risk thresholds
     filtered_opportunities = []
     for opportunity in trading_opportunities:
@@ -114,22 +109,17 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             logs.append("WARNING: Invalid values for risk metrics")
             continue
 
-        if check_sharpe_ratio:
-            if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
-                logs.append(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
-                continue
-        else:
-            if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
-                logs.append(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
-                continue
+        if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
+            logs.append(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
+            continue
 
-            if depth_score <= DEPTH_SCORE_THRESHOLD:
-                logs.append(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
-                continue
+        if depth_score <= DEPTH_SCORE_THRESHOLD:
+            logs.append(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
+            continue
 
-            if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
-                logs.append(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
-                continue
+        if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
+            logs.append(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
+            continue
 
         logs.append("Opportunity meets all risk thresholds")
         filtered_opportunities.append(opportunity)
@@ -144,7 +134,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
     # Calculate composite scores for filtered opportunities
     for opportunity in filtered_opportunities:
         opportunity["composite_score"] = calculate_composite_score(
-            opportunity, max_values, check_sharpe_ratio
+            opportunity, max_values
         )
 
     position_to_exit = {}

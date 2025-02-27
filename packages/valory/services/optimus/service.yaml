@@ -104,6 +104,7 @@ models:
       store_path: ${STORE_PATH:str:/data/}
       assets_info_filename: ${ASSETS_INFO_FILENAME:str:assets.json}
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}
+      portfolio_info_filename: ${PORTFOLIO_INFO_FILENAME:str:portfolio.json}
       gas_cost_info_filename: ${GAS_COST_INFO_FILENAME:str:gas_costs.json}
       merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
       min_swap_amount_threshold: ${MIN_SWAP_AMOUNT_THRESHOLD:int:1}

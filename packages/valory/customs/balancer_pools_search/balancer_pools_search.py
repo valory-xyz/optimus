@@ -50,6 +50,7 @@ CHAIN_URLS = {
 }
 
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
+LP = "lp"
 errors = []
 
 @lru_cache(None)
@@ -435,6 +436,7 @@ def format_pool_data(pool) -> Dict[str, Any]:
         "sharpe_ratio": pool["sharpe_ratio"],
         "depth_score": pool["depth_score"],
         "max_position_size": pool["max_position_size"],
+        "type": pool["trading_type"]
     }
 
 
@@ -488,6 +490,7 @@ def get_opportunities(
             pool["id"], pool["chain"].upper()
         )
 
+        pool["trading_type"] = LP
     return [format_pool_data(pool) for pool in filtered_pools]
 
 

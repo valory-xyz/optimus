@@ -34,6 +34,9 @@ def calculate_composite_score(pool, max_values):
     depth_score = pool.get("depth_score", math.nan)
     il_risk_score = pool.get("il_risk_score", math.nan)
 
+    if sharpe_ratio is None or depth_score is None or il_risk_score is None:
+        return 0
+    
     if math.isnan(sharpe_ratio) or math.isnan(depth_score) or math.isnan(il_risk_score):
         return 0
 
@@ -170,7 +173,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
                 f"Top opportunity found with composite score: {optimal_opportunities[0]['composite_score']}"
             )
         else:
-            logs.append.warning(
+            logs.append(
                 f"No opportunities significantly better than the least performing current opportunity with composite score: {least_performing_score}"
             )
             return {"optimal_strategies": [], "position_to_exit": {}}

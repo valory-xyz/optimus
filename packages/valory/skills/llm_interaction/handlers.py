@@ -22,8 +22,10 @@ import json
 import re
 import threading
 import time
+import yaml
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
@@ -53,6 +55,7 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 )
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.abstract_round_abci.models import Requests
+from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.llm_interaction.dialogues import (
     HttpDialogue,
@@ -62,6 +65,24 @@ from packages.valory.skills.llm_interaction.dialogues import (
 )
 from packages.valory.skills.llm_interaction.models import Params
 from packages.valory.skills.optimus_abci.models import SharedState
+
+
+def load_fsm_spec() -> Dict:
+    """Load the chained FSM spec"""
+    with open(
+        Path(__file__).parent.parent / "optimus_abci" / "fsm_specification.yaml",
+        "r",
+        encoding="utf-8",
+    ) as spec_file:
+        return yaml.safe_load(spec_file)
+
+
+def camel_to_snake(camel_str: str) -> str:
+    """Converts from CamelCase to snake_case."""
+    import re
+
+    snake_str = re.sub(r"(?<!^)(?=[A-Z])", "_", camel_str).lower()
+    return snake_str
 
 
 class BaseHandler(Handler):
@@ -179,6 +200,8 @@ class HttpHandler(BaseHttpHandler):
             rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         )
         health_url_regex = rf"{hostname_regex}\/healthcheck"
+        portfolio_url_regex = rf"{hostname_regex}\/portfolio"
+        static_files_regex = rf"{hostname_regex}\/(.*)" 
 
         # Define routes
         self.routes = {
@@ -187,20 +210,32 @@ class HttpHandler(BaseHttpHandler):
             ],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
+                (portfolio_url_regex, self._handle_get_portfolio),
+                (static_files_regex, self._handle_get_static_file),
             ],
         }
-        self.handler_url_regex = rf"{hostname_regex}\/.*"
+        fsm = load_fsm_spec()
+
+        self.rounds_info: Dict = {  # pylint: disable=attribute-defined-outside-init
+            camel_to_snake(k): v for k, v in ROUNDS_INFO.items()
+        }
+        for source_info, target_round in fsm["transition_func"].items():
+            source_round, event = source_info[1:-1].split(", ")
+            self.rounds_info[camel_to_snake(source_round)]["transitions"][
+                event.lower()
+            ] = camel_to_snake(target_round)
         self.json_content_header = "Content-Type: application/json\n"
+        self.html_content_header = "Content-Type: text/html\n"
 
     def handle(self, message: Message) -> None:
         """
-        React to an incoming HTTP message.
+        Implement the reaction to an envelope.
 
-        :param message: the HttpMessage instance
+        :param message: the message
         """
         http_msg = cast(HttpMessage, message)
 
-        # Check if it's a request from our HTTP server
+        # Check if this is a request sent from the http_server skill
         if (
             http_msg.performative != HttpMessage.Performative.REQUEST
             or message.sender != str(HTTP_SERVER_PUBLIC_ID.without_hash())
@@ -208,47 +243,157 @@ class HttpHandler(BaseHttpHandler):
             super().handle(message)
             return
 
-        # Match handler
+        # Check if this message is for this skill. If not, send to super()
         handler, kwargs = self._get_handler(http_msg.url, http_msg.method)
         if not handler:
             super().handle(message)
             return
 
-        # Retrieve or create a dialogue
+        # Retrieve dialogues
         http_dialogues = cast(HttpDialogues, self.context.http_dialogues)
-        http_dialogue = http_dialogues.update(http_msg)
+        http_dialogue = cast(HttpDialogue, http_dialogues.update(http_msg))
+
+        # Invalid message
         if http_dialogue is None:
+            self.context.logger.info(
+                "Received invalid http message={}, unidentified dialogue.".format(
+                    http_msg
+                )
+            )
             return
 
-        # Call matched handler
+        # Handle message
+        self.context.logger.info(
+            "Received http request with method={}, url={} and body={!r}".format(
+                http_msg.method,
+                http_msg.url,
+                http_msg.body,
+            )
+        )
         handler(http_msg, http_dialogue, **kwargs)
 
-    def _get_handler(self, url: str, method: str) -> Tuple[Optional[Callable], Dict]:
+    def _handle_get_static_file(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
         """
-        Determine which route handler should be used.
+        Handle a HTTP GET request for a static file.
 
-        :param url: the request URL
-        :param method: the request method
-        :return: the route handler and regex captures
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
         """
+        try:
+            # Extract the requested path from the URL
+            requested_path = urlparse(http_msg.url).path.lstrip("/")
+
+            # Construct the file path
+            file_path = Path(Path(__file__).parent, "modius-ui-build", requested_path)
+
+            # If the file exists and is a file, send it as a response
+            if file_path.exists() and file_path.is_file():
+                with open(file_path, "rb") as file:
+                    file_content = file.read()
+
+                # Send the file content as a response
+                self._send_ok_response(http_msg, http_dialogue, file_content)
+            else:
+                # If the file doesn't exist or is not a file, return the index.html file
+                with open(
+                    Path(Path(__file__).parent, "modius-ui-build", "index.html"), "r", encoding="utf-8"
+                ) as file:
+                    index_html = file.read()
+
+                # Send the HTML response
+                self._send_ok_response(http_msg, http_dialogue, index_html)
+        except FileNotFoundError:
+            self._handle_not_found(http_msg, http_dialogue)
+    
+    def _handle_not_found(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a HTTP request for a resource that was not found.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=HttpCode.NOT_FOUND_CODE.value,
+            status_text="Not Found",
+            headers=http_msg.headers,
+            body=b"",
+        )
+
+        # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)
+
+    def _get_handler(self, url: str, method: str) -> Tuple[Optional[Callable], Dict]:
+        """Check if an url is meant to be handled in this handler
+
+        We expect url to match the pattern {hostname}/.*,
+        where hostname is allowed to be localhost, 127.0.0.1 or the token_uri_base's hostname.
+        Examples:
+            localhost:8000/0
+            127.0.0.1:8000/100
+            https://pfp.staging.autonolas.tech/45
+            http://pfp.staging.autonolas.tech/120
+
+        :param url: the url to check
+        :param method: the http method
+        :returns: the handling method if the message is intended to be handled by this handler, None otherwise, and the regex captures
+        """
+        # Check base url
         if not re.match(self.handler_url_regex, url):
             self.context.logger.info(
-                f"The URL {url} does not match the HttpHandler's pattern."
+                f"The url {url} does not match the HttpHandler's pattern"
             )
             return None, {}
 
+        # Check if there is a route for this request
         for methods, routes in self.routes.items():
             if method not in methods:
                 continue
-            for route_regex, route_handler in routes:
-                match_obj = re.match(route_regex, url)
-                if match_obj:
-                    return route_handler, match_obj.groupdict()
 
+            for route in routes:  # type: ignore
+                # Routes are tuples like (route_regex, handle_method)
+                m = re.match(route[0], url)
+                if m:
+                    return route[1], m.groupdict()
+
+        # No route found
         self.context.logger.info(
-            f"No valid route found for [{method}] {url}."
+            f"The message [{method}] {url} is intended for the HttpHandler but did not match any valid pattern"
         )
         return self._handle_bad_request, {}
+
+    def _handle_get_portfolio(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a Http request to get portfolio values.
+
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+        # Define the path to the portfolio data file
+        portfolio_data_filepath: str = (
+            self.context.params.store_path / self.context.params.portfolio_info_filename
+        )
+
+        # Read the portfolio data from the file
+        try:
+            with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
+                portfolio_data = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            self.context.logger.error(f"Error reading portfolio data: {str(e)}")
+            portfolio_data = {"error": "Could not read portfolio data"}
+
+        portfolio_data_json = json.dumps(portfolio_data)
+        # Send the portfolio data as a response
+        self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)
 
     def _handle_post_process_prompt(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -378,45 +523,56 @@ class HttpHandler(BaseHttpHandler):
         else:
             self.context.logger.error("KV store update failed.")
 
-    def _handle_get_health(self, http_msg: HttpMessage, http_dialogue: HttpDialogue) -> None:
+    def _handle_get_health(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
         """
-        Handle GET /healthcheck to provide system health information.
+        Handle a Http request of verb GET.
 
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
         """
+        seconds_since_last_transition = None
+        is_tm_unhealthy = None
+        is_transitioning_fast = None
+        current_round = None
+        rounds = None
+
         round_sequence = cast(SharedState, self.context.state).round_sequence
-        last_transition_timestamp = round_sequence._last_round_transition_timestamp
 
-        # Compute relevant health info
-        if last_transition_timestamp is not None:
+        if round_sequence._last_round_transition_timestamp:
+            is_tm_unhealthy = cast(
+                SharedState, self.context.state
+            ).round_sequence.block_stall_deadline_expired
+
             current_time = datetime.now().timestamp()
-            seconds_since_last_transition = current_time - datetime.timestamp(last_transition_timestamp)
-            is_tm_unhealthy = round_sequence.block_stall_deadline_expired
+            seconds_since_last_transition = current_time - datetime.timestamp(
+                round_sequence._last_round_transition_timestamp
+            )
+
             is_transitioning_fast = (
                 not is_tm_unhealthy
-                and seconds_since_last_transition < 2 * self.context.params.reset_pause_duration
+                and seconds_since_last_transition
+                < 2 * self.context.params.reset_pause_duration
             )
-        else:
-            seconds_since_last_transition = None
-            is_tm_unhealthy = None
-            is_transitioning_fast = None
 
-        current_round = None
-        rounds_list = None
         if round_sequence._abci_app:
             current_round = round_sequence._abci_app.current_round.round_id
-            rounds_list = [r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]]
-            rounds_list.append(current_round)
+            rounds = [
+                r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]
+            ]
+            rounds.append(current_round)
 
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,
-            "is_tm_healthy": not is_tm_unhealthy if is_tm_unhealthy is not None else None,
+            "is_tm_healthy": not is_tm_unhealthy,
             "period": self.synchronized_data.period_count,
             "reset_pause_duration": self.context.params.reset_pause_duration,
-            "rounds": rounds_list,
+            "rounds": rounds,
             "is_transitioning_fast": is_transitioning_fast,
+            "rounds_info": self.rounds_info,
         }
+
         self._send_ok_response(http_msg, http_dialogue, data)
 
     def _handle_bad_request(

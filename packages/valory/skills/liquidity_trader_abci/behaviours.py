@@ -2629,7 +2629,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             positions, actions, current_action_index, last_round_id
         )
         return res
-
+    
     def _post_execute_step(
         self, actions, last_executed_action_index
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
@@ -2639,7 +2639,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         yield from self.sleep(self.params.waiting_period_for_status_check)
         decision = yield from self.get_decision_on_swap()
         self.context.logger.info(f"Action to take {decision}")
-
+    
         # If tx is pending then we wait until it gets confirmed or refunded
         if decision == Decision.WAIT:
             decision = yield from self._wait_for_swap_confirmation()
@@ -3406,7 +3406,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
-
+    
     def get_deposit_tx_hash(
         self, action, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:

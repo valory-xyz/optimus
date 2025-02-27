@@ -148,7 +148,6 @@ class HttpHandler(BaseHttpHandler):
                 event.lower()
             ] = camel_to_snake(target_round)
 
-
     @property
     def synchronized_data(self) -> SynchronizedData:
         """Return the synchronized data."""
@@ -329,14 +328,10 @@ class HttpHandler(BaseHttpHandler):
             ]
             rounds.append(current_round)
 
-        breakpoint()    
         # Update evaluate strategy round description with agent reasoning if available
-        agent_reasoning = getattr(self.shared_state, "agent_reasoning", None)
+        agent_reasoning = cast(SharedState, self.context.state).agent_reasoning
         if agent_reasoning and "evaluate_strategy_round" in self.rounds_info:
-            latest_reasoning = agent_reasoning.get("latest_reasoning", "")
-            if latest_reasoning:
-                self.rounds_info["evaluate_strategy_round"]["description"] = latest_reasoning
-
+            self.rounds_info["evaluate_strategy_round"]["description"] = agent_reasoning
 
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,

@@ -272,9 +272,6 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.current_positions_filepath: str = (
             self.params.store_path / self.params.pool_info_filename
         )
-        self.agent_reasoning_filepath = (
-            self.params.store_path / "agent_reasoning.json"
-        )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
@@ -514,7 +511,6 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self, attribute: str, filepath: str, class_object: bool = False
     ) -> None:
         """Generic method to read data from a JSON file"""
-        self.context.logger.info(f"Reading {attribute} from {filepath!r}")
         try:
             with open(filepath, READ_MODE) as file:
                 try:
@@ -1196,7 +1192,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-
     def calculate_pnl_for_uniswap(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
@@ -1659,7 +1654,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for log in logs:
                 self.context.logger.info(log)
 
-        
         reasoning = result.get("reasoning")
         if reasoning:
             self.shared_state.agent_reasoning = reasoning
@@ -1843,7 +1837,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
         else:
-            self.context.logger.info(f"Calculated position metrics for {position.get('pool_address')} : {metrics}")
+            self.context.logger.info(
+                f"Calculated position metrics for {position.get('pool_address')} : {metrics}"
+            )
             return metrics
 
     def download_strategies(self) -> Generator:

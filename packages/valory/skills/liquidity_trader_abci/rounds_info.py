@@ -26,12 +26,18 @@ import json
 def get_latest_agent_reasoning() -> str:
     """Read the latest agent reasoning from JSON file."""
     try:
-        reasoning_file_path = os.path.join(os.path.dirname(__file__), "agent_reasoning.json")
-        with open(reasoning_file_path, 'r') as f:
+        reasoning_file_path = os.path.join(
+            os.path.dirname(__file__), "agent_reasoning.json"
+        )
+        with open(reasoning_file_path, "r") as f:
             reasoning_data = json.load(f)
-            return reasoning_data.get("latest_reasoning", "Evaluates all strategies and decides the best course of action for the agent.")
+            return reasoning_data.get(
+                "latest_reasoning",
+                "Evaluates all strategies and decides the best course of action for the agent.",
+            )
     except (FileNotFoundError, json.JSONDecodeError):
         return "Evaluates all strategies and decides the best course of action for the agent."
+
 
 ROUNDS_INFO = {
     "CallCheckpointRound": {

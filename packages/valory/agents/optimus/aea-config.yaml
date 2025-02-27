@@ -39,13 +39,13 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeigky5zwfvigqsqhyiilxwig37ldth756lzc23uvfd4oxw7ygt37da
-- valory/optimus_abci:0.1.0:bafybeigl3o5wj2bgiuhxp6sp4dteygpa2yajhp7knkqa3ta4cb55pkcxgq
+- valory/liquidity_trader_abci:0.1.0:bafybeiatl7bspcpb2hampq62ih55ymvwkvhiwuxc6l4l72f6jzs4arklpm
+- valory/optimus_abci:0.1.0:bafybeia7dylzgkqxjfyvil3ras4hjibhcyfxafv7jnnafoqhl3gyqlz3xy
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
-- valory/llm_interaction:0.1.0:bafybeibov6c2x7lmkjxcmwfszujt764rwmq6xkmxggjgjgn3ziuwwpotzu
+- valory/llm_interaction:0.1.0:bafybeig6dpq6aauqq7um4cwyhekmmc6nrm7za5nzw7exnlyy7v2evglo2e
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma
 - valory/max_apr_selection:0.1.0:bafybeig6pg6rxbgn4jp4s7aou4iwlgzwihug52fl256ysubpn3fvwysqpa

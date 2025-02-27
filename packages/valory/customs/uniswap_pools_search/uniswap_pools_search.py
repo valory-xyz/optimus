@@ -58,6 +58,7 @@ ERC20_ABI = [
     }
 ]
 
+
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
 

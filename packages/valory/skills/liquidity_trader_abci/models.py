@@ -281,10 +281,6 @@ class Params(BaseParams):
         self.min_swap_amount_threshold = self._ensure(
             "min_swap_amount_threshold", kwargs, int
         )
-        self.agent_transition = self._ensure("agent_transition", kwargs, bool)
-        self.include_babydegen_strategies = self._ensure(
-            "include_babydegen_strategies", kwargs, bool
-        )
         self.max_fee_percentage = self._ensure("max_fee_percentage", kwargs, float)
         self.max_gas_percentage = self._ensure("max_gas_percentage", kwargs, float)
         self.balancer_graphql_endpoints = json.loads(
@@ -302,8 +298,8 @@ class Params(BaseParams):
         self.file_hash_to_strategies = json.loads(
             self._ensure("file_hash_to_strategies", kwargs, str)
         )
-        self.trading_strategies_kwargs = json.loads(
-            self._ensure("trading_strategies_kwargs", kwargs, str)
+        self.strategies_kwargs = json.loads(
+            self._ensure("strategies_kwargs", kwargs, str)
         )
         self.selected_protocols = self._ensure("selected_protocols", kwargs, List[str])
         self.selected_hyper_strategy = self._ensure(

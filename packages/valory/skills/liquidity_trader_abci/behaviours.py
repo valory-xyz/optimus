@@ -1569,7 +1569,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches the list of coins from CoinGecko API only once."""
         url = "https://api.coingecko.com/api/v3/coins/list"
         response = yield from self.get_http_response("GET", url, None, None)
-
+    
         try:
             response_json = json.loads(response.body)
             return response_json
@@ -1660,14 +1660,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             for selected_opportunity in self.selected_opportunities:
                 # Convert token addresses to checksum addresses if they are present
-                if "token0" in selected_opportunity:
-                    selected_opportunity["token0"] = to_checksum_address(
-                        selected_opportunity["token0"]
-                    )
-                if "token1" in selected_opportunity:
-                    selected_opportunity["token1"] = to_checksum_address(
-                        selected_opportunity["token1"]
-                    )
+                # Dynamically handle multiple tokens
+                token_keys = [
+                    key for key in selected_opportunity.keys() 
+                    if key.startswith("token") 
+                    and not key.endswith("_symbol")
+                    and isinstance(selected_opportunity[key], str)
+                ]
+                for token_key in token_keys:
+                    selected_opportunity[token_key] = to_checksum_address(selected_opportunity[token_key])
+                    self.context.logger.info(
+                f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
+                )
 
     def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
         """Get the completed futures"""
@@ -3137,6 +3141,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = [action.get("token0"), action.get("token1")]
+        max_investment_amounts = action.get("max_investment_amounts")
         if not assets or len(assets) < 2:
             self.context.logger.error(f"2 assets required, provided: {assets}")
             return None, None, None
@@ -3161,6 +3166,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             min(max_amounts_in[0], token0_balance),
             min(max_amounts_in[1], token1_balance),
         ]
+
+        # Adjust max_amounts_in based on max_investment_amounts
+        if (
+            max_investment_amounts
+            and (type(max_investment_amounts) == type(max_amounts_in))
+        ):
+            max_amounts_in = [
+                min(max_amounts_in[i], max_investment_amounts[i])
+                for i in range(len(max_amounts_in))
+            ]
 
         if any(amount == 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error(

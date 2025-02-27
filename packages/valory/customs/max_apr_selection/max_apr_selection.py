@@ -112,17 +112,17 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             logs.append("WARNING: Invalid values for risk metrics")
             continue
 
-        if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
-            logs.append(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
-            continue
+        # if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
+        #     logs.append(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
+        #     continue
 
-        if depth_score <= DEPTH_SCORE_THRESHOLD:
-            logs.append(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
-            continue
+        # if depth_score <= DEPTH_SCORE_THRESHOLD:
+        #     logs.append(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
+        #     continue
 
-        if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
-            logs.append(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
-            continue
+        # if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
+        #     logs.append(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
+        #     continue
 
         logs.append("Opportunity meets all risk thresholds")
         filtered_opportunities.append(opportunity)

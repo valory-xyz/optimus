@@ -392,6 +392,11 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error(f"Error reading portfolio data: {str(e)}")
             portfolio_data = {"error": "Could not read portfolio data"}
 
+        shared_state = cast(SharedState, self.context.state)
+        selected_protocols = shared_state.selected_protocols
+        trading_type = shared_state.trading_type
+        portfolio_data.update({"selected_protocols": selected_protocols, "trading_type": trading_type})
+
         portfolio_data_json = json.dumps(portfolio_data)
         # Send the portfolio data as a response
         self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)

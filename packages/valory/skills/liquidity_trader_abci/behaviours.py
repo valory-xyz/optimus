@@ -1182,7 +1182,7 @@ class CallCheckpointBehaviour(
 
         # Store the calculated portfolio value and breakdown
         self.portfolio_data = {
-            "portfolio-value": float(total_user_share_value_usd),
+            "portfolio_value": float(total_user_share_value_usd),
             "allocations": [
                 {
                     "chain": allocation["chain"],
@@ -1196,7 +1196,7 @@ class CallCheckpointBehaviour(
                 }
                 for allocation in allocations
             ],
-            "portfolio-breakdown": [
+            "portfolio_breakdown": [
                 {
                     "asset": entry["asset"],
                     "address": entry["address"],
@@ -4897,6 +4897,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             serialized_thresholds = json.loads(selection_thresholds, sort_keys=True)
 
             self.shared_state.trading_type = trading_type
+            self.shared_state.selected_protocols = selected_protocols
             
             payload = FetchStrategiesPayload(
                 sender=sender, 

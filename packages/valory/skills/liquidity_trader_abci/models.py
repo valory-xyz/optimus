@@ -55,6 +55,7 @@ class SharedState(BaseSharedState):
         self.in_flight_req: bool = False
         self.req_to_callback: Dict[str, Callable] = {}
         self.trading_type: str = ""
+        self.selected_protocols: List[str] = []
 
     def setup(self) -> None:
         """Set up the model."""

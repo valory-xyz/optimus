@@ -82,4 +82,4 @@ class PostTxSettlementPayload(BaseTxPayload):
 class FetchStrategiesPayload(BaseTxPayload):
     """Represent a transaction payload for the FetchStrategiesRound."""
 
-    strategies: Optional[list]
+    content: str

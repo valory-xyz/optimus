@@ -202,11 +202,12 @@ class HttpHandler(BaseHttpHandler):
         health_url_regex = rf"{hostname_regex}\/healthcheck"
         portfolio_url_regex = rf"{hostname_regex}\/portfolio"
         static_files_regex = rf"{hostname_regex}\/(.*)" 
+        process_prompt_regex = rf"{hostname_regex}\/configure_strategies"
 
         # Define routes
         self.routes = {
             (HttpMethod.POST.value,): [
-                (rf"{hostname_regex}\/process_prompt", self._handle_post_process_prompt),
+                (process_prompt_regex, self._handle_post_process_prompt),
             ],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
@@ -415,8 +416,7 @@ class HttpHandler(BaseHttpHandler):
                 raise ValueError("Prompt is required.")
 
             # Format the prompt
-            prompt_template = self.context.params.llm_prompt
-            formatted_prompt = prompt_template.format(
+            prompt_template = self.context.params.llm_prompt.format(
                 USER_PROMPT=user_prompt,
                 STRATEGIES=self.context.params.available_strategies,
             )
@@ -426,7 +426,7 @@ class HttpHandler(BaseHttpHandler):
             request_llm_message, llm_dialogue = llm_dialogues.create(
                 counterparty=str(LLM_CONNECTION_PUBLIC_ID),
                 performative=LlmMessage.Performative.REQUEST,
-                prompt_template=formatted_prompt,
+                prompt_template=prompt_template,
                 prompt_values={},
             )
 
@@ -457,8 +457,12 @@ class HttpHandler(BaseHttpHandler):
         """
         try:
             response_data = json.loads(llm_response_message.value)
-            strategies = response_data.get("strategies", [])
-            if not strategies:
+            selected_protocols = response_data.get("selected_protocols", [])
+            trading_type = response_data.get("trading_type", "")
+            reasoning = response_data.get("reasoning", "")
+            previous_trading_type = cast(SharedState, self.context.state).trading_type
+
+            if not strategies or not trading_type or not reasoning:
                 # No suitable strategies found
                 fallback_message = {
                     "response": (
@@ -469,10 +473,16 @@ class HttpHandler(BaseHttpHandler):
                 self._send_ok_response(http_msg, http_dialogue, fallback_message)
                 strategies = self.context.params.available_strategies
             else:
-                self._send_ok_response(http_msg, http_dialogue, {"response": strategies})
+                response_data = {
+                    "selected_protocols": selected_protocols,
+                    "trading_type": trading_type,
+                    "reasoning": reasoning,
+                    "previous_trading_type": previous_trading_type
+                }
+                self._send_ok_response(http_msg, http_dialogue, response_data)
 
             # Offload KV store update to a separate thread
-            threading.Thread(target=self._delayed_write_kv, args=(strategies,)).start()
+            threading.Thread(target=self._delayed_write_kv, args=(selected_protocols, trading_type)).start()
 
         except json.JSONDecodeError as e:
             self.context.logger.error(
@@ -480,7 +490,7 @@ class HttpHandler(BaseHttpHandler):
             )
             self._handle_bad_request(http_msg, http_dialogue)
 
-    def _delayed_write_kv(self, strategies: List[str]) -> None:
+    def _delayed_write_kv(self, selected_protocols: List[str], trading_type: str) -> None:
         """
         Write to the KV store after a delay if this was the only request in queue.
 
@@ -488,7 +498,7 @@ class HttpHandler(BaseHttpHandler):
         """
         time.sleep(self.context.params.waiting_time)
         if len(self.context.params.request_queue) == 1:
-            self._write_kv({"strategies": json.dumps(strategies)})
+            self._write_kv({"selected_protocols": json.dumps(selected_protocols), "trading_type": trading_type})
         self.context.params.request_queue.pop()
 
     def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:

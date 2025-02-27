@@ -54,6 +54,7 @@ class SharedState(BaseSharedState):
         self.strategies_executables: Dict[str, Tuple[str, str]] = {}
         self.in_flight_req: bool = False
         self.req_to_callback: Dict[str, Callable] = {}
+        self.trading_type: str = ""
 
     def setup(self) -> None:
         """Set up the model."""

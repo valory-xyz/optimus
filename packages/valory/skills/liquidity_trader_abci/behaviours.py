@@ -201,6 +201,15 @@ class PositionStatus(Enum):
     CLOSED = "closed"
 
 
+class TradingType(Enum):
+    BALANCED = "balanced"
+    RISKY = "risky"
+
+THRESHOLDS = {
+    TradingType.BALANCED : {"sharpe_ratio": 1, "il_risk_score": -0.01, "depth_score": 50},
+    TradingType.RISKY: {"sharpe_ratio": 0.5, "il_risk_score": -0.05, "depth_score": 30}
+}
+
 ASSETS_FILENAME = "assets.json"
 POOL_FILENAME = "current_pool.json"
 READ_MODE = "r"
@@ -2017,6 +2026,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if pos.get("status") == PositionStatus.OPEN.value
             ],
             "max_pools": self.params.max_pools,
+            "thresholds": THRESHOLDS.get(self.synchronized_data.trading_type,{})
         }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)
@@ -2062,7 +2072,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches all the trading opportunities using multiprocessing"""
         self.trading_opportunities.clear()
         yield from self.download_strategies()
-        strategies = self.synchronized_data.strategies.copy()
+        strategies = self.synchronized_data.selected_protocols.copy()
         tried_strategies: Set[str] = set()
         self.context.logger.info(f"Selected Strategies: {strategies}")
 
@@ -4877,15 +4887,29 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-            db_data = yield from self._read_kv(keys=("strategies",))
-            strategies = db_data.get("strategies", [])
-            if strategies:
-                strategies = json.loads(strategies)
-            serialized_strategies = json.dumps(strategies, sort_keys=True)
-            payload = FetchStrategiesPayload(
-                sender=sender, strategies=serialized_strategies
-            )
+            db_data = yield from self._read_kv(keys=("selected_protocols","trading_type","selection_thresholds"))
+            
+            selected_protocols = db_data.get("selected_protocols", [])
+            serialized_protocols = json.loads(selected_protocols, sort_keys=True)
+            
+            trading_type = db_data.get("trading_type", None)
+            selection_thresholds = db_data.get("selection_thresholds", {})
+            serialized_thresholds = json.loads(selection_thresholds, sort_keys=True)
 
+            self.shared_state.trading_type = trading_type
+            
+            payload = FetchStrategiesPayload(
+                sender=sender, 
+                content=json.dumps(
+                    {
+                        "selected_protocols": serialized_protocols,
+                        "trading_type": trading_type,
+                        "selection_thresholds": serialized_thresholds
+                    },
+                    sort_keys=True,
+                ),
+            )
+            
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()

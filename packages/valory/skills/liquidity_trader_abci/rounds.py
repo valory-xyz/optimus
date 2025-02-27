@@ -122,13 +122,19 @@ class SynchronizedData(BaseSynchronizedData):
         return positions
 
     @property
-    def strategies(self) -> List[Dict[str, Any]]:
-        """Get the strategies."""
-        serialized = self.db.get("strategies", "[]")
+    def selected_protocols(self) -> List[Dict[str, Any]]:
+        """Get the selected protocols."""
+        serialized = self.db.get("selected_protocols", "[]")
         if serialized is None:
             serialized = "[]"
-        strategies = json.loads(serialized)
-        return strategies
+        selected_protocols = json.loads(serialized)
+        return selected_protocols
+    
+    @property
+    def trading_type(self) -> List[Dict[str, Any]]:
+        """Get the trading_type"""
+        trading_type = self.db.get("trading_type","")
+        return trading_type
 
     @property
     def participant_to_actions_round(self) -> DeserializedCollection:
@@ -471,21 +477,32 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
     no_majority_event = Event.NO_MAJORITY
     none_event: Enum = Event.NONE
     collection_key = get_name(SynchronizedData.participant_to_strategies_round)
-    selection_key = get_name(SynchronizedData.strategies)
 
     ERROR_PAYLOAD = {}
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
-        res = super().end_block()
-        if res is None:
-            return None
-        synced_data, event = cast(Tuple[SynchronizedData, Enum], res)
-        if event != Event.DONE:
-            return res
-        if not synced_data.strategies:
-            return synced_data, Event.WAIT
-        return synced_data, Event.DONE
+        if self.threshold_reached:
+            # We reference all the events here to prevent the check-abciapp-specs tool from complaining
+            payload = json.loads(self.most_voted_payload)
+            event = Event(payload["event"])
+            synchronized_data = cast(SynchronizedData, self.synchronized_data)
+
+            selected_strategies = payload.get("selected_strategies", [])
+            trading_type = payload.get("trading_type", "")
+
+            synchronized_data = synchronized_data.update(
+                synchronized_data_class=SynchronizedData,
+                selected_strategies=selected_strategies,
+                trading_type=trading_type
+            )
+            return synchronized_data, event
+
+        if not self.is_majority_possible(
+            self.collection, self.synchronized_data.nb_participants
+        ):
+            return self.synchronized_data, Event.NO_MAJORITY
+        return None
 
     # Event.ROUND_TIMEOUT
 

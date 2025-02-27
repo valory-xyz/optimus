@@ -19,8 +19,8 @@
 
 """This module contains the information about the rounds that is used by the Http handler."""
 
-import os
 import json
+import os
 
 
 def get_latest_agent_reasoning() -> str:

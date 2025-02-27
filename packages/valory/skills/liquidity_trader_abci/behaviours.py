@@ -19,7 +19,6 @@
 
 """This package contains round behaviours of LiquidityTraderAbciApp."""
 
-import os
 import json
 import logging
 import math

@@ -510,7 +510,6 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self, attribute: str, filepath: str, class_object: bool = False
     ) -> None:
         """Generic method to read data from a JSON file"""
-
         try:
             with open(filepath, READ_MODE) as file:
                 try:
@@ -1654,6 +1653,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for log in logs:
                 self.context.logger.info(log)
 
+        reasoning = result.get("reasoning")
+        if reasoning:
+            self.shared_state.agent_reasoning = reasoning
+        self.context.logger.info(f"Agent Reasoning: {reasoning}")
+
         if self.selected_opportunities is not None:
             self.context.logger.info(
                 f"Selected opportunities: {self.selected_opportunities}"
@@ -1828,11 +1832,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
         elif "error" in metrics:
             self.context.logger.error(
-                f"Failed to calculate metrics for the current positions. {metrics.get('error')}"
+                f"Failed to calculate metrics for the current position {position.get('pool_address')} : {metrics.get('error')}"
             )
             return None
         else:
-            self.context.logger.info(f"Calculated position metrics: {metrics}")
+            self.context.logger.info(
+                f"Calculated position metrics for {position.get('pool_address')} : {metrics}"
+            )
             return metrics
 
     def download_strategies(self) -> Generator:

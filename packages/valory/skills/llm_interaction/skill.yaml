@@ -80,7 +80,6 @@ models:
     class_name: HttpDialogues
   params:
     args:
-      llm_prompt: xyz
       service_endpoint_base: https://optimus.staging.autonolas.tech/
       waiting_time: 15
       available_strategies: null

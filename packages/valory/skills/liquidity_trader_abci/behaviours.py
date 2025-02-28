@@ -206,8 +206,8 @@ class TradingType(Enum):
     RISKY = "risky"
 
 THRESHOLDS = {
-    TradingType.BALANCED : {"sharpe_ratio": 1, "il_risk_score": -0.01, "depth_score": 50},
-    TradingType.RISKY: {"sharpe_ratio": 0.5, "il_risk_score": -0.05, "depth_score": 30}
+    TradingType.BALANCED : 0.3374,
+    TradingType.RISKY: 0.2892
 }
 
 ASSETS_FILENAME = "assets.json"
@@ -2026,7 +2026,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if pos.get("status") == PositionStatus.OPEN.value
             ],
             "max_pools": self.params.max_pools,
-            "thresholds": THRESHOLDS.get(self.synchronized_data.trading_type,{})
+            "composite_score_threshold": THRESHOLDS.get(self.synchronized_data.trading_type,{})
         }
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)

@@ -35,9 +35,6 @@ class Params(Model):
         self.request_count: int = 0
         self.request_queue = []
         self.cleanup_freq = kwargs.get("cleanup_freq", 50)
-        self.llm_prompt = self._ensure_get(
-            "llm_prompt", kwargs, str
-        )
         self.waiting_time = self._ensure_get(
             "waiting_time", kwargs, int
         )

@@ -65,7 +65,7 @@ from packages.valory.skills.llm_interaction.dialogues import (
 )
 from packages.valory.skills.llm_interaction.models import Params
 from packages.valory.skills.optimus_abci.models import SharedState
-
+from packages.valory.skills.llm_interaction.prompts import PROMPT
 
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
@@ -421,7 +421,7 @@ class HttpHandler(BaseHttpHandler):
                 raise ValueError("Prompt is required.")
 
             # Format the prompt
-            prompt_template = self.context.params.llm_prompt.format(
+            prompt_template = PROMPT.format(
                 USER_PROMPT=user_prompt,
                 STRATEGIES=self.context.params.available_strategies,
             )

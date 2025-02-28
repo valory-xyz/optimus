@@ -1568,7 +1568,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Fetches the list of coins from CoinGecko API only once."""
         url = "https://api.coingecko.com/api/v3/coins/list"
         response = yield from self.get_http_response("GET", url, None, None)
-    
+
         try:
             response_json = json.loads(response.body)
             return response_json
@@ -1666,16 +1666,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 # Convert token addresses to checksum addresses if they are present
                 # Dynamically handle multiple tokens
                 token_keys = [
-                    key for key in selected_opportunity.keys() 
-                    if key.startswith("token") 
+                    key
+                    for key in selected_opportunity.keys()
+                    if key.startswith("token")
                     and not key.endswith("_symbol")
                     and isinstance(selected_opportunity[key], str)
                 ]
                 for token_key in token_keys:
-                    selected_opportunity[token_key] = to_checksum_address(selected_opportunity[token_key])
+                    selected_opportunity[token_key] = to_checksum_address(
+                        selected_opportunity[token_key]
+                    )
                     self.context.logger.info(
-                f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
-                )
+                        f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
+                    )
 
     def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
         """Get the completed futures"""
@@ -2635,7 +2638,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             positions, actions, current_action_index, last_round_id
         )
         return res
-    
+
     def _post_execute_step(
         self, actions, last_executed_action_index
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
@@ -2645,7 +2648,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         yield from self.sleep(self.params.waiting_period_for_status_check)
         decision = yield from self.get_decision_on_swap()
         self.context.logger.info(f"Action to take {decision}")
-    
+
         # If tx is pending then we wait until it gets confirmed or refunded
         if decision == Decision.WAIT:
             decision = yield from self._wait_for_swap_confirmation()
@@ -3174,9 +3177,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         ]
 
         # Adjust max_amounts_in based on max_investment_amounts
-        if (
-            max_investment_amounts
-            and (type(max_investment_amounts) == type(max_amounts_in))
+        if max_investment_amounts and (
+            type(max_investment_amounts) == type(max_amounts_in)
         ):
             max_amounts_in = [
                 min(max_amounts_in[i], max_investment_amounts[i])
@@ -3412,7 +3414,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
-    
+
     def get_deposit_tx_hash(
         self, action, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:

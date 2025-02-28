@@ -66,7 +66,7 @@ from packages.valory.skills.llm_interaction.dialogues import (
 from packages.valory.skills.llm_interaction.models import Params
 from packages.valory.skills.optimus_abci.models import SharedState
 from packages.valory.skills.llm_interaction.prompts import PROMPT
-
+from packages.valory.skills.liquidity_trader_abci import THRESHOLDS, TradingType
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
     with open(
@@ -420,10 +420,18 @@ class HttpHandler(BaseHttpHandler):
             if not user_prompt:
                 raise ValueError("Prompt is required.")
 
+            shared_state = cast(SharedState, self.context.state)
+            previous_trading_type = shared_state.trading_type
+            
+            available_trading_types = [trading_type.value for trading_type in TradingType]
+            last_selected_threshold = THRESHOLDS.get(previous_trading_type)
             # Format the prompt
             prompt_template = PROMPT.format(
                 USER_PROMPT=user_prompt,
-                STRATEGIES=self.context.params.available_strategies,
+                PREVIOUS_TRADING_TYPE=previous_trading_type,
+                TRADING_TYPES=available_trading_types,
+                AVAILABLE_PROTOCOLS=self.context.params.available_strategies,
+                LAST_THRESHOLD=last_selected_threshold
             )
 
             # Create LLM request

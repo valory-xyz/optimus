@@ -143,10 +143,6 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
                 assets, max_amounts_in, tokens_nested
             )
 
-            self.context.logger.info(
-                f"max amount in new_max_amounts_in{new_max_amounts_in}"
-            )
-
             return tokens_nested, new_max_amounts_in
         except Exception as e:
             self.context.logger.error(f"Error fetching pool tokens: {str(e)}")
@@ -172,23 +168,13 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
         # Initialize the new amounts list with zeros
         new_max_amounts_in = [0] * len(assets_new)
-        self.context.logger.info(f"Initial new_max_amounts_in: {new_max_amounts_in}")
-
         # Create a dictionary to map assets to their amounts for quick lookup
         asset_to_amount = dict(zip(assets, max_amounts_in))
-        self.context.logger.info(f"Asset to Amount Mapping: {asset_to_amount}")
-
         # Set the amounts in the new list based on the presence of the assets in assets_new
         for i, asset in enumerate(assets_new):
             amount = asset_to_amount.get(asset, 0)
             new_max_amounts_in[i] = amount
-            self.context.logger.info(
-                f"Updated new_max_amounts_in at index {i}: {amount}"
-            )
-
         # Add final validation log
-        self.context.logger.info(f"Final new_max_amounts_in: {new_max_amounts_in}")
-
         return new_max_amounts_in
 
     def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
@@ -236,11 +222,6 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             pool_id=pool_id,
             chain=chain,
         )
-
-        self.context.logger.info(
-            f"after the update values {new_assets,new_max_amounts_in}"
-        )
-
         # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
         from_internal_balance = ZERO_ADDRESS in assets
 

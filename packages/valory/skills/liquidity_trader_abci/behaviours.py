@@ -47,6 +47,7 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
+from decimal import Decimal
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
@@ -3166,6 +3167,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         token0_balance = self._get_balance(chain, assets[0], positions)
         token1_balance = self._get_balance(chain, assets[1], positions)
+        token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+        token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+        max_investment_amounts[0] = int(Decimal(str(max_investment_amounts[0])) * (Decimal(10) ** Decimal(token0_decimals)))
+        max_investment_amounts[1] = int(Decimal(str(max_investment_amounts[1])) * (Decimal(10) ** Decimal(token1_decimals)))
+
         relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
         max_amounts_in = [
             int(token0_balance * relative_funds_percentage),

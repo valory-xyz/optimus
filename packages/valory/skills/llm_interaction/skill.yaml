@@ -9,8 +9,8 @@ fingerprint:
   __init__.py: bafybeiaokwzvrvgjvzf53ovuhew46w4soo6ydfqrmrnwdud4wr36zla4zi
   behaviours.py: bafybeiglozbntfit6rrxda5dhfpm5itklpy7vv4shui2uw33zqiv6tcf3a
   dialogues.py: bafybeiduwarr6zlueylecydixshj2uqdojjbke3oqlocmyoajn3qurtyyq
-  handlers.py: bafybeicurwuy6o4erlkgos5rpevuxf26mihtr6uk5tc42vpjk732nerztq
-  models.py: bafybeihqstvhpdl7itlm4wde7zgpeqojfgkjmqdrl4gzhhji3dzz3lgqdq
+  handlers.py: bafybeiab6ete66bdt5etbz7vpwey32tsjlfrrdf77ioghhcw2e44izex2u
+  models.py: bafybeicwifjyv5jakfmizzq6nlsymujb3dd7muv43dit73kbn3azxmt2vm
   modius-ui-build/antd-reset.css: bafybeifyeozf54phizmvhn5cfvvsn6vsnceqje5vlm2hwaiw5rtnmsuahe
   modius-ui-build/asset-manifest.json: bafybeidwmfoahxhjl3sayuc7jvoe22lu2qculqbsannlvl74lcbfprku2a
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
@@ -40,6 +40,7 @@ fingerprint:
   modius-ui-build/static/js/main.d1640d96.js: bafybeihfcayc4q7n6h7dvletzukoudzhfmwqtinsx4vzgnnwufr7jktvey
   modius-ui-build/static/js/main.d1640d96.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
   modius-ui-build/static/js/main.d1640d96.js.map: bafybeifmueqrp5566xpvehfma54wk7dbx53zf5icwwakjflxkc3y6wtn2i
+  prompts.py: bafybeifrw6iqpphfifpaujkhtvu4ggh23ikut7mdpl5zqf7kgdvoeypmsq
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -52,8 +53,8 @@ protocols:
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeiatl7bspcpb2hampq62ih55ymvwkvhiwuxc6l4l72f6jzs4arklpm
-- valory/optimus_abci:0.1.0:bafybeia7dylzgkqxjfyvil3ras4hjibhcyfxafv7jnnafoqhl3gyqlz3xy
+- valory/liquidity_trader_abci:0.1.0:bafybeif3zhnkscmacyj6n2hmnercqw2sbsxpkdprkalecraup3d53zicii
+- valory/optimus_abci:0.1.0:bafybeicjooyfktzrlpnnw6vlezyqhk4z54yq3ddkgsrrxcmqz2auyujose
 behaviours:
   llm_interaction:
     args: {}
@@ -84,6 +85,9 @@ models:
       waiting_time: 15
       available_strategies: null
     class_name: Params
+  requests:
+    args: {}
+    class_name: Requests
 dependencies:
   pyyaml:
     version: ==6.0.1

@@ -66,7 +66,8 @@ from packages.valory.skills.llm_interaction.dialogues import (
 from packages.valory.skills.llm_interaction.models import Params
 from packages.valory.skills.optimus_abci.models import SharedState
 from packages.valory.skills.llm_interaction.prompts import PROMPT
-from packages.valory.skills.liquidity_trader_abci import THRESHOLDS, TradingType
+from packages.valory.skills.liquidity_trader_abci.behaviours import THRESHOLDS, TradingType
+
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
     with open(
@@ -84,6 +85,22 @@ def camel_to_snake(camel_str: str) -> str:
     snake_str = re.sub(r"(?<!^)(?=[A-Z])", "_", camel_str).lower()
     return snake_str
 
+
+class HttpCode(Enum):
+    """HTTP status codes enumeration."""
+
+    OK_CODE = 200
+    NOT_FOUND_CODE = 404
+    BAD_REQUEST_CODE = 400
+    NOT_READY = 503
+
+
+class HttpMethod(Enum):
+    """HTTP methods enumeration."""
+
+    GET = "get"
+    HEAD = "head"
+    POST = "post"
 
 class BaseHandler(Handler):
     """Base handler providing shared utilities for all handlers."""
@@ -158,23 +175,6 @@ class KvStoreHandler(BaseHandler):
         self.on_message_handled(message)
 
 
-class HttpCode(Enum):
-    """HTTP status codes enumeration."""
-
-    OK_CODE = 200
-    NOT_FOUND_CODE = 404
-    BAD_REQUEST_CODE = 400
-    NOT_READY = 503
-
-
-class HttpMethod(Enum):
-    """HTTP methods enumeration."""
-
-    GET = "get"
-    HEAD = "head"
-    POST = "post"
-
-
 class HttpHandler(BaseHttpHandler):
     """Handler for managing incoming HTTP messages."""
 
@@ -225,6 +225,8 @@ class HttpHandler(BaseHttpHandler):
             self.rounds_info[camel_to_snake(source_round)]["transitions"][
                 event.lower()
             ] = camel_to_snake(target_round)
+
+        self.handler_url_regex = rf"{hostname_regex}\/.*"
         self.json_content_header = "Content-Type: application/json\n"
         self.html_content_header = "Content-Type: text/html\n"
 
@@ -285,27 +287,32 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Extract the requested path from the URL
             requested_path = urlparse(http_msg.url).path.lstrip("/")
+            self.context.logger.debug(f"Requested path: {requested_path}")
 
             # Construct the file path
             file_path = Path(Path(__file__).parent, "modius-ui-build", requested_path)
+            self.context.logger.debug(f"Constructed file path: {file_path}")
 
             # If the file exists and is a file, send it as a response
             if file_path.exists() and file_path.is_file():
+                self.context.logger.debug(f"File found: {file_path}")
                 with open(file_path, "rb") as file:
                     file_content = file.read()
 
                 # Send the file content as a response
                 self._send_ok_response(http_msg, http_dialogue, file_content)
             else:
+                self.context.logger.debug(f"File not found or is not a file: {file_path}")
                 # If the file doesn't exist or is not a file, return the index.html file
-                with open(
-                    Path(Path(__file__).parent, "modius-ui-build", "index.html"), "r", encoding="utf-8"
-                ) as file:
+                index_file_path = Path(Path(__file__).parent, "modius-ui-build", "index.html")
+                self.context.logger.debug(f"Returning index.html from: {index_file_path}")
+                with open(index_file_path, "r", encoding="utf-8") as file:
                     index_html = file.read()
 
                 # Send the HTML response
                 self._send_ok_response(http_msg, http_dialogue, index_html)
-        except FileNotFoundError:
+        except FileNotFoundError as e:
+            self.context.logger.error(f"FileNotFoundError: {e}")
             self._handle_not_found(http_msg, http_dialogue)
     
     def _handle_not_found(

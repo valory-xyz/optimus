@@ -56,6 +56,11 @@ ROUNDS_INFO = {
         "description": "Evaluates all strategies and decides the best course of action for the agent.",
         "transitions": {},
     },
+    "FetchStrategiesRound": {
+        "name": "Fetching the selected protocols and params",
+        "description": "Fetches the selected protocols/strategies and the relevant configurations",
+        "transitions": {},
+    },
     "FinalizationRound": {
         "name": "Sending a transaction",
         "description": "Sends a transaction for mining",

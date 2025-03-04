@@ -4889,12 +4889,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             sender = self.context.agent_address
             db_data = yield from self._read_kv(keys=("selected_protocols","trading_type","selection_thresholds"))
             
-            selected_protocols = db_data.get("selected_protocols", [])
-            serialized_protocols = json.loads(selected_protocols, sort_keys=True)
-            
+            selected_protocols = db_data.get("selected_protocols", None)
+            if selected_protocols is None:
+                serialized_protocols = []
+            else:
+                serialized_protocols = json.loads(selected_protocols, sort_keys=True)
+
             trading_type = db_data.get("trading_type", None)
-            selection_thresholds = db_data.get("selection_thresholds", {})
-            serialized_thresholds = json.loads(selection_thresholds, sort_keys=True)
+            selection_thresholds = db_data.get("selection_thresholds", None)
+            if selected_protocols is None:
+                serialized_thresholds = {}
+            else:
+                serialized_protocols = json.loads(selection_thresholds, sort_keys=True)
 
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols

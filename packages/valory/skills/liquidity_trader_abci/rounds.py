@@ -477,6 +477,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
     no_majority_event = Event.NO_MAJORITY
     none_event: Enum = Event.NONE
     collection_key = get_name(SynchronizedData.participant_to_strategies_round)
+    selection_key = (get_name(SynchronizedData.chain_id),)
 
     ERROR_PAYLOAD = {}
 
@@ -485,27 +486,26 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
         if self.threshold_reached:
             # We reference all the events here to prevent the check-abciapp-specs tool from complaining
             payload = json.loads(self.most_voted_payload)
-            event = Event(payload["event"])
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
             selected_strategies = payload.get("selected_strategies", [])
             trading_type = payload.get("trading_type", "")
-
-            synchronized_data = synchronized_data.update(
-                synchronized_data_class=SynchronizedData,
-                selected_strategies=selected_strategies,
-                trading_type=trading_type
-            )
-            return synchronized_data, event
+            
+            if not selected_strategies or not trading_type:
+                return synchronized_data, Event.WAIT
+            else:
+                synchronized_data = synchronized_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    selected_strategies=selected_strategies,
+                    trading_type=trading_type
+                )
+                return synchronized_data, Event.DONE
 
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
-
-    # Event.ROUND_TIMEOUT
-
 
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""
@@ -627,7 +627,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             get_name(SynchronizedData.min_num_of_safe_tx_required),
             get_name(SynchronizedData.is_staking_kpi_met),
             get_name(SynchronizedData.period_number_at_last_cp),
-            get_name(SynchronizedData.strategies),
+            get_name(SynchronizedData.selected_protocols),
         }
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {

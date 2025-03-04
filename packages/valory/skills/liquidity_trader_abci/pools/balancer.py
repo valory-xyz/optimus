@@ -196,6 +196,8 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info("enter into the pool")
 
         join_kind = self._determine_join_kind(pool_type)
+        self.context.logger.info(f"Determined join kind: {join_kind}")
+
         if not join_kind:
             self.context.logger.error(
                 f"Could not determine join kind for pool type {pool_type}"
@@ -203,12 +205,15 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             return None, None
         # Get vault contract address from balancer weighted pool contract
         vault_address = self.params.balancer_vault_contract_addresses.get(chain)
+        self.context.logger.info(f"Vault address retrieved: {vault_address}")
+
         if not vault_address:
             self.context.logger.error(f"No vault address found for chain {chain}")
             return None, None
 
         # Fetch the pool id
         pool_id = yield from self._get_pool_id(pool_address, chain)  # getPoolId()
+        self.context.logger.info(f"Pool ID retrieved: {pool_id}")
         if not pool_id:
             return None, None
 
@@ -224,6 +229,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         )
         # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
         from_internal_balance = ZERO_ADDRESS in assets
+        self.context.logger.info("Preparing transaction for pool join.")
 
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,

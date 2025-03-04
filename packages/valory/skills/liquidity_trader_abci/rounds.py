@@ -488,15 +488,15 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
             payload = json.loads(self.most_voted_payload)
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
-            selected_strategies = payload.get("selected_strategies", [])
+            selected_protocols = payload.get("selected_protocols", [])
             trading_type = payload.get("trading_type", "")
             
-            if not selected_strategies or not trading_type:
+            if not selected_protocols or not trading_type:
                 return synchronized_data, Event.WAIT
             else:
                 synchronized_data = synchronized_data.update(
                     synchronized_data_class=SynchronizedData,
-                    selected_strategies=selected_strategies,
+                    selected_protocols=selected_protocols,
                     trading_type=trading_type
                 )
                 return synchronized_data, Event.DONE

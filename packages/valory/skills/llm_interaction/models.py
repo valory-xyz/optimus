@@ -20,12 +20,13 @@
 """This module contains the shared state for the skill of LlmInteraction."""
 from typing import Any, Dict, Callable, Tuple
 
-from aea.exceptions import enforce
 from aea.skills.base import Model
 
 from packages.valory.skills.abstract_round_abci.utils import check_type
+from aea.exceptions import enforce
 
-class Params(Model):
+
+class LlmInteractionParams(Model):
     """Parameters"""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -35,13 +36,27 @@ class Params(Model):
         self.request_count: int = 0
         self.request_queue = []
         self.cleanup_freq = kwargs.get("cleanup_freq", 50)
-        self.waiting_time = self._ensure_get(
-            "waiting_time", kwargs, int
-        )
-        self.available_strategies = self._ensure_get(
-            "available_strategies", kwargs, list
-        )
-        self.service_endpoint_base = self._ensure_get("service_endpoint_base", kwargs, str)
+
+        store_path = kwargs.get("store_path", None)
+        enforce(store_path is not None, "store path not specified!")
+        self.store_path = store_path
+
+        service_endpoint_base = kwargs.get("service_endpoint_base", None)
+        enforce(service_endpoint_base is not None, "service_endpoint_base not specified!")
+        self.service_endpoint_base = service_endpoint_base
+
+        available_strategies = kwargs.get("available_strategies", None)
+        enforce(available_strategies is not None, "available_strategies not specified!")
+        self.available_strategies = available_strategies
+
+        portfolio_info_filename = kwargs.get("portfolio_info_filename", None)
+        enforce(portfolio_info_filename is not None, "portfolio_info_filename not specified!")
+        self.portfolio_info_filename = portfolio_info_filename
+
+        default_acceptance_time = kwargs.get("default_acceptance_time", None)
+        enforce(default_acceptance_time is not None, "default_acceptance_time not specified!")
+        self.default_acceptance_time = service_endpoint_base
+
         super().__init__(*args, **kwargs)
 
     @classmethod

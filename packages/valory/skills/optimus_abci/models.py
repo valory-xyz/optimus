@@ -32,6 +32,7 @@ from packages.valory.skills.liquidity_trader_abci.models import Coingecko
 from packages.valory.skills.liquidity_trader_abci.models import (
     Params as LiquidityTraderParams,
 )
+from packages.valory.skills.llm_interaction.models import LlmInteractionParams
 from packages.valory.skills.liquidity_trader_abci.models import (
     SharedState as BaseSharedState,
 )
@@ -67,8 +68,9 @@ MULTIPLIER = 40
 
 
 class Params(  # pylint: disable=too-many-ancestors
-    TerminationParams,
+    LlmInteractionParams,
     LiquidityTraderParams,
+    TerminationParams,
 ):
     """A model to represent params for multiple abci apps."""
 

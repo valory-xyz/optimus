@@ -2173,7 +2173,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategies_to_remove = []
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
             if (
-                strategy not in self.params.selected_strategies
+                strategy not in self.params.selected_protocols
                 and strategy != self.params.selected_hyper_strategy
             ):
                 strategies_to_remove.append(strategy)

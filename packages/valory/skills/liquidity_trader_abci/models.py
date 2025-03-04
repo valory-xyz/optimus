@@ -52,25 +52,8 @@ class SharedState(BaseSharedState):
         super().__init__(*args, skill_context=skill_context, **kwargs)
         self.strategy_to_filehash: Dict[str, str] = {}
         self.strategies_executables: Dict[str, Tuple[str, str]] = {}
-        self.in_flight_req: bool = False
-        self.req_to_callback: Dict[str, Callable] = {}
         self.trading_type: str = ""
         self.selected_protocols: List[str] = []
-
-    def setup(self) -> None:
-        """Set up the model."""
-        super().setup()
-        params = self.context.params
-        self.strategy_to_filehash = {
-            value: key for key, value in params.file_hash_to_strategies.items()
-        }
-        strategy_exec = self.strategy_to_filehash.keys()
-        for selected_strategy in params.selected_strategies:
-            if selected_strategy not in strategy_exec:
-                raise ValueError(
-                    f"The selected trading strategy {selected_strategy} "
-                    f"is not in the strategies' executables {strategy_exec}."
-                )
 
 
 Requests = BaseRequests
@@ -293,9 +276,6 @@ class Params(BaseParams):
         )
         self.staking_chain: Optional[str] = self._ensure(
             "staking_chain", kwargs, Optional[str]
-        )
-        self.selected_strategies: List[str] = self._ensure(
-            "selected_strategies", kwargs, List[str]
         )
         self.file_hash_to_strategies = json.loads(
             self._ensure("file_hash_to_strategies", kwargs, str)

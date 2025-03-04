@@ -53,7 +53,6 @@ from packages.valory.protocols.llm.message import LlmMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     HttpHandler as BaseHttpHandler,
 )
-from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.abstract_round_abci.models import Requests
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
@@ -63,8 +62,8 @@ from packages.valory.skills.llm_interaction.dialogues import (
     LlmDialogue,
     LlmDialogues,
 )
-from packages.valory.skills.llm_interaction.models import Params
-from packages.valory.skills.optimus_abci.models import SharedState
+from packages.valory.skills.llm_interaction.models import LlmInteractionParams as Params
+from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.llm_interaction.prompts import PROMPT
 from packages.valory.skills.liquidity_trader_abci.behaviours import THRESHOLDS, TradingType
 
@@ -189,10 +188,11 @@ class HttpHandler(BaseHttpHandler):
 
     def setup(self) -> None:
         """Set up the HTTP handler and define routes."""
+        breakpoint()
+        params = cast(Params, self.context.params)
         super().setup()  # Not strictly necessary if BaseHttpHandler implements no logic
-
         # Prepare hostname regex from parameters
-        service_endpoint_base = urlparse(self.context.params.service_endpoint_base).hostname
+        service_endpoint_base = urlparse(self.params.service_endpoint_base).hostname
         propel_uri_base_hostname = (
             r"https?:\/\/[a-zA-Z0-9]{16}.agent\.propel\.(staging\.)?autonolas\.tech"
         )
@@ -280,41 +280,35 @@ class HttpHandler(BaseHttpHandler):
     ) -> None:
         """
         Handle a HTTP GET request for a static file.
-
         :param http_msg: the HTTP message
         :param http_dialogue: the HTTP dialogue
         """
         try:
             # Extract the requested path from the URL
             requested_path = urlparse(http_msg.url).path.lstrip("/")
-            self.context.logger.debug(f"Requested path: {requested_path}")
 
             # Construct the file path
             file_path = Path(Path(__file__).parent, "modius-ui-build", requested_path)
-            self.context.logger.debug(f"Constructed file path: {file_path}")
 
             # If the file exists and is a file, send it as a response
             if file_path.exists() and file_path.is_file():
-                self.context.logger.debug(f"File found: {file_path}")
                 with open(file_path, "rb") as file:
                     file_content = file.read()
 
                 # Send the file content as a response
                 self._send_ok_response(http_msg, http_dialogue, file_content)
             else:
-                self.context.logger.debug(f"File not found or is not a file: {file_path}")
                 # If the file doesn't exist or is not a file, return the index.html file
-                index_file_path = Path(Path(__file__).parent, "modius-ui-build", "index.html")
-                self.context.logger.debug(f"Returning index.html from: {index_file_path}")
-                with open(index_file_path, "r", encoding="utf-8") as file:
+                with open(
+                    Path(Path(__file__).parent, "modius-ui-build", "index.html"), "r", encoding="utf-8"
+                ) as file:
                     index_html = file.read()
 
                 # Send the HTML response
                 self._send_ok_response(http_msg, http_dialogue, index_html)
-        except FileNotFoundError as e:
-            self.context.logger.error(f"FileNotFoundError: {e}")
+        except FileNotFoundError:
             self._handle_not_found(http_msg, http_dialogue)
-    
+
     def _handle_not_found(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -388,7 +382,7 @@ class HttpHandler(BaseHttpHandler):
         """
         # Define the path to the portfolio data file
         portfolio_data_filepath: str = (
-            self.context.params.store_path / self.context.params.portfolio_info_filename
+            self.params.store_path / self.params.portfolio_info_filename
         )
 
         # Read the portfolio data from the file
@@ -418,7 +412,7 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the HttpDialogue instance
         """
         request_id = http_dialogue.dialogue_label.dialogue_reference[0]
-        self.context.params.request_queue.append(request_id)
+        self.params.request_queue.append(request_id)
 
         try:
             # Parse incoming data
@@ -437,7 +431,7 @@ class HttpHandler(BaseHttpHandler):
                 USER_PROMPT=user_prompt,
                 PREVIOUS_TRADING_TYPE=previous_trading_type,
                 TRADING_TYPES=available_trading_types,
-                AVAILABLE_PROTOCOLS=self.context.params.available_strategies,
+                AVAILABLE_PROTOCOLS=self.params.available_strategies,
                 LAST_THRESHOLD=last_selected_threshold
             )
 
@@ -487,11 +481,11 @@ class HttpHandler(BaseHttpHandler):
                 fallback_message = {
                     "response": (
                         f"No suitable strategies found. "
-                        f"Falling back to default list: {self.context.params.available_strategies}"
+                        f"Falling back to default list: {self.params.available_strategies}"
                     )
                 }
                 self._send_ok_response(http_msg, http_dialogue, fallback_message)
-                strategies = self.context.params.available_strategies
+                strategies = self.params.available_strategies
             else:
                 response_data = {
                     "selected_protocols": selected_protocols,
@@ -516,10 +510,10 @@ class HttpHandler(BaseHttpHandler):
 
         :param strategies: list of chosen strategies
         """
-        time.sleep(self.context.params.waiting_time)
-        if len(self.context.params.request_queue) == 1:
+        time.sleep(self.params.default_acceptance_time)
+        if len(self.params.request_queue) == 1:
             self._write_kv({"selected_protocols": json.dumps(selected_protocols), "trading_type": trading_type})
-        self.context.params.request_queue.pop()
+        self.params.request_queue.pop()
 
     def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
         """
@@ -583,7 +577,7 @@ class HttpHandler(BaseHttpHandler):
             is_transitioning_fast = (
                 not is_tm_unhealthy
                 and seconds_since_last_transition
-                < 2 * self.context.params.reset_pause_duration
+                < 2 * self.params.reset_pause_duration
             )
 
         if round_sequence._abci_app:
@@ -597,7 +591,7 @@ class HttpHandler(BaseHttpHandler):
             "seconds_since_last_transition": seconds_since_last_transition,
             "is_tm_healthy": not is_tm_unhealthy,
             "period": self.synchronized_data.period_count,
-            "reset_pause_duration": self.context.params.reset_pause_duration,
+            "reset_pause_duration": self.params.reset_pause_duration,
             "rounds": rounds,
             "is_transitioning_fast": is_transitioning_fast,
             "rounds_info": self.rounds_info,
@@ -630,25 +624,28 @@ class HttpHandler(BaseHttpHandler):
         self,
         http_msg: HttpMessage,
         http_dialogue: HttpDialogue,
-        data: Union[Dict, List],
+        data: Union[str, Dict, List, bytes],
     ) -> None:
-        """
-        Send a 200 OK response with JSON data.
+        """Send an OK response with the provided data"""
+        headers = self.json_content_header if isinstance(data, (dict, list)) else self.html_content_header
+        headers += http_msg.headers
 
-        :param http_msg: the original HttpMessage
-        :param http_dialogue: the HttpDialogue
-        :param data: the response data
-        """
+            # Convert dictionary or list to JSON string
+        if isinstance(data, (dict, list)):
+            data = json.dumps(data)
+
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
             version=http_msg.version,
             status_code=HttpCode.OK_CODE.value,
             status_text="Success",
-            headers=f"{self.json_content_header}{http_msg.headers}",
-            body=json.dumps(data).encode("utf-8"),
+            headers=headers,
+            body=data.encode("utf-8") if isinstance(data, str) else data,
         )
-        self.context.logger.info(f"Responding with: {http_response}")
+
+        # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
 
     def _send_message(
@@ -668,8 +665,8 @@ class HttpHandler(BaseHttpHandler):
         """
         self.context.outbox.put_message(message=message)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
-        self.context.params.req_to_callback[nonce] = (callback, callback_kwargs or {})
-        self.context.params.in_flight_req = True
+        self.params.req_to_callback[nonce] = (callback, callback_kwargs or {})
+        self.params.in_flight_req = True
 
 
 class LlmHandler(BaseHandler):

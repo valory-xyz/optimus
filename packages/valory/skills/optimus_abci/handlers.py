@@ -146,6 +146,7 @@ class HttpHandler(BaseHttpHandler):
         self.rounds_info: Dict = {  # pylint: disable=attribute-defined-outside-init
             camel_to_snake(k): v for k, v in ROUNDS_INFO.items()
         }
+
         for source_info, target_round in fsm["transition_func"].items():
             source_round, event = source_info[1:-1].split(", ")
             self.rounds_info[camel_to_snake(source_round)]["transitions"][
@@ -161,6 +162,11 @@ class HttpHandler(BaseHttpHandler):
             db=self.context.state.round_sequence.latest_synchronized_data.db
         )
 
+    @property
+    def shared_state(self) -> SharedState:
+        """Get the parameters."""
+        return cast(SharedState, self.context.state)
+    
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -396,6 +402,11 @@ class HttpHandler(BaseHttpHandler):
                 r.round_id for r in round_sequence._abci_app._previous_rounds[-25:]
             ]
             rounds.append(current_round)
+
+        # Update evaluate strategy round description with agent reasoning if available
+        agent_reasoning = cast(SharedState, self.context.state).agent_reasoning
+        if agent_reasoning and "evaluate_strategy_round" in self.rounds_info:
+            self.rounds_info["evaluate_strategy_round"]["description"] = agent_reasoning
 
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,

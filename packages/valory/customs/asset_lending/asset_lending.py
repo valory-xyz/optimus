@@ -31,7 +31,6 @@ FETCH_AGGREGATOR_ENDPOINT = (
     "https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators"
 )
 LENDING = "lending"
-
 # Map known token symbols to CoinGecko IDs
 coingecko_name_to_id = {
     "weth": "weth",

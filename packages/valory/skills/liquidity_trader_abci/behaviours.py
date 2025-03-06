@@ -1246,7 +1246,7 @@ class CallCheckpointBehaviour(
 
         # Store the calculated portfolio value and breakdown
         self.portfolio_data = {
-            "portfolio-value": float(total_user_share_value_usd),
+            "portfolio_value": float(total_user_share_value_usd),
             "allocations": [
                 {
                     "chain": allocation["chain"],
@@ -1260,7 +1260,7 @@ class CallCheckpointBehaviour(
                 }
                 for allocation in allocations
             ],
-            "portfolio-breakdown": [
+            "portfolio_breakdown": [
                 {
                     "asset": entry["asset"],
                     "address": entry["address"],

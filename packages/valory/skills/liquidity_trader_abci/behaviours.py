@@ -27,6 +27,7 @@ from abc import ABC
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
+from decimal import Context, Decimal, getcontext
 from enum import Enum
 from typing import (
     Any,
@@ -40,7 +41,6 @@ from typing import (
     Type,
     cast,
 )
-from decimal import Context, Decimal, getcontext
 from urllib.parse import urlencode
 
 from aea.configurations.data_types import PublicId
@@ -1218,7 +1218,7 @@ class CallCheckpointBehaviour(
             apr,
             details,
             user_address,
-            user_balances,
+            _,
         ) in individual_shares:
             if total_user_share_value_usd > 0:
                 ratio = round(

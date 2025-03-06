@@ -127,7 +127,9 @@ class HttpHandler(BaseHttpHandler):
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
         portfolio_url_regex = rf"{hostname_regex}\/portfolio"
-        static_files_regex = rf"{hostname_regex}\/(.*)"  # New regex for serving static files
+        static_files_regex = (
+            rf"{hostname_regex}\/(.*)"  # New regex for serving static files
+        )
 
         # Routes
         self.routes = {
@@ -135,7 +137,10 @@ class HttpHandler(BaseHttpHandler):
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (portfolio_url_regex, self._handle_get_portfolio),
-                (static_files_regex, self._handle_get_static_file),  # New route for serving static files
+                (
+                    static_files_regex,
+                    self._handle_get_static_file,
+                ),  # New route for serving static files
             ],
         }
 
@@ -166,7 +171,7 @@ class HttpHandler(BaseHttpHandler):
     def shared_state(self) -> SharedState:
         """Get the parameters."""
         return cast(SharedState, self.context.state)
-    
+
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -187,16 +192,18 @@ class HttpHandler(BaseHttpHandler):
             if file_path.exists() and file_path.is_file():
                 with open(file_path, "rb") as file:
                     file_content = file.read()
-                
+
                 # Send the file content as a response
                 self._send_ok_response(http_msg, http_dialogue, file_content)
             else:
                 # If the file doesn't exist or is not a file, return the index.html file
                 with open(
-                    Path(Path(__file__).parent, "modius-ui-build", "index.html"), "r", encoding="utf-8"
+                    Path(Path(__file__).parent, "modius-ui-build", "index.html"),
+                    "r",
+                    encoding="utf-8",
                 ) as file:
                     index_html = file.read()
-                
+
                 # Send the HTML response
                 self._send_ok_response(http_msg, http_dialogue, index_html)
         except FileNotFoundError:
@@ -316,10 +323,14 @@ class HttpHandler(BaseHttpHandler):
         data: Union[str, Dict, List, bytes],
     ) -> None:
         """Send an OK response with the provided data"""
-        headers = self.json_content_header if isinstance(data, (dict, list)) else self.html_content_header
+        headers = (
+            self.json_content_header
+            if isinstance(data, (dict, list))
+            else self.html_content_header
+        )
         headers += http_msg.headers
 
-            # Convert dictionary or list to JSON string
+        # Convert dictionary or list to JSON string
         if isinstance(data, (dict, list)):
             data = json.dumps(data)
 
@@ -420,7 +431,6 @@ class HttpHandler(BaseHttpHandler):
 
         self._send_ok_response(http_msg, http_dialogue, data)
 
-    
     def _handle_get_static_js(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -433,7 +443,14 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Read the main.js file
             with open(
-                Path(Path(__file__).parent, "modius-ui-build", "static", "js", "main.d1485dfa.js"), "rb"
+                Path(
+                    Path(__file__).parent,
+                    "modius-ui-build",
+                    "static",
+                    "js",
+                    "main.d1485dfa.js",
+                ),
+                "rb",
             ) as file:
                 file_content = file.read()
 
@@ -454,7 +471,14 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Read the main.css file
             with open(
-                Path(Path(__file__).parent, "modius-ui-build", "static", "css", "main.972e2d60.css"), "rb"
+                Path(
+                    Path(__file__).parent,
+                    "modius-ui-build",
+                    "static",
+                    "css",
+                    "main.972e2d60.css",
+                ),
+                "rb",
             ) as file:
                 file_content = file.read()
 
@@ -517,7 +541,14 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Read the mode-network.png file
             with open(
-                Path(Path(__file__).parent, "modius-ui-build", "logos", "protocols", "mode-network.png"), "rb"
+                Path(
+                    Path(__file__).parent,
+                    "modius-ui-build",
+                    "logos",
+                    "protocols",
+                    "mode-network.png",
+                ),
+                "rb",
             ) as file:
                 file_content = file.read()
 
@@ -538,7 +569,8 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Read the modius.png file
             with open(
-                Path(Path(__file__).parent, "modius-ui-build", "logos", "modius.png"), "rb"
+                Path(Path(__file__).parent, "modius-ui-build", "logos", "modius.png"),
+                "rb",
             ) as file:
                 file_content = file.read()
 

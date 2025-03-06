@@ -275,7 +275,9 @@ class Params(BaseParams):
             "assets_info_filename", kwargs, str
         )
         self.pool_info_filename: str = self._ensure("pool_info_filename", kwargs, str)
-        self.portfolio_info_filename: str = self._ensure("portfolio_info_filename", kwargs, str)
+        self.portfolio_info_filename: str = self._ensure(
+            "portfolio_info_filename", kwargs, str
+        )
         self.gas_cost_info_filename: str = self._ensure(
             "gas_cost_info_filename", kwargs, str
         )

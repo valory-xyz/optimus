@@ -631,11 +631,14 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
     def store_portfolio_data(self) -> None:
         """Store the portfolio data as JSON."""
-        self._store_data(self.portfolio_data, "portfolio_data", self.portfolio_data_filepath)
+        self._store_data(
+            self.portfolio_data, "portfolio_data", self.portfolio_data_filepath
+        )
 
     def read_portfolio_data(self) -> None:
         """Read the portfolio data from JSON."""
         self._read_data("portfolio_data", self.portfolio_data_filepath)
+
     def _calculate_min_num_of_safe_tx_required(
         self, chain: str
     ) -> Generator[None, None, Optional[int]]:
@@ -872,6 +875,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
             token_data = response_json.get(token_address.lower(), {})
             return token_data.get("usd", 0)
         return None
+
     def _request_with_retries(
         self,
         endpoint: str,
@@ -921,7 +925,8 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
         self.context.logger.error(f"Request failed after {retries} retries.")
         return False, response_json
-    
+
+
 class CallCheckpointBehaviour(
     LiquidityTraderBaseBehaviour
 ):  # pylint-disable too-many-ancestors
@@ -1050,7 +1055,7 @@ class CallCheckpointBehaviour(
             to_address=self.params.staking_token_contract_address,
             data=data,
         )
-    
+
     def calculate_user_share_values(self) -> Generator[None, None, None]:
         """Calculate the value of shares for the user based on open pools."""
         total_user_share_value_usd = Decimal(0)
@@ -1062,21 +1067,37 @@ class CallCheckpointBehaviour(
             if position.get("status") == PositionStatus.OPEN.value:
                 dex_type = position.get("dex_type")
                 chain = position.get("chain")
-                pool_id = position.get("pool_id") if dex_type == DexType.BALANCER.value else position.get("pool_address")
-                assets = [position.get("token0_symbol"), position.get("token1_symbol")] if dex_type == DexType.BALANCER.value else [position.get("token0_symbol")]
+                pool_id = (
+                    position.get("pool_id")
+                    if dex_type == DexType.BALANCER.value
+                    else position.get("pool_address")
+                )
+                assets = (
+                    [position.get("token0_symbol"), position.get("token1_symbol")]
+                    if dex_type == DexType.BALANCER.value
+                    else [position.get("token0_symbol")]
+                )
                 apr = position.get("apr")
 
                 # Calculate user share value
                 user_address = self.params.safe_contract_addresses.get(chain)
                 if dex_type == DexType.BALANCER.value:
                     pool_address = position.get("pool_address")
-                    user_balances = yield from self.get_user_share_value_balancer(user_address, pool_id, chain)
-                    details = yield from self._get_balancer_pool_name(pool_address, chain)
+                    user_balances = yield from self.get_user_share_value_balancer(
+                        user_address, pool_id, chain
+                    )
+                    details = yield from self._get_balancer_pool_name(
+                        pool_address, chain
+                    )
                 elif dex_type == DexType.STURDY.value:
                     aggregator_address = position.get("pool_address")
                     asset_address = position.get("token0")
-                    user_balances = yield from self.get_user_share_value_sturdy(user_address, aggregator_address, asset_address, chain)
-                    details = yield from self._get_aggregator_name(aggregator_address, chain)
+                    user_balances = yield from self.get_user_share_value_sturdy(
+                        user_address, aggregator_address, asset_address, chain
+                    )
+                    details = yield from self._get_aggregator_name(
+                        aggregator_address, chain
+                    )
 
                 user_share = Decimal(0)
 
@@ -1094,45 +1115,87 @@ class CallCheckpointBehaviour(
 
                     asset_balance = user_balances.get(asset_address)
                     if asset_balance is None:
-                        self.context.logger.error(f"Could not find balance for asset {asset}")
+                        self.context.logger.error(
+                            f"Could not find balance for asset {asset}"
+                        )
                         continue
 
-                    asset_price = yield from self._fetch_token_price(asset_address, chain)
+                    asset_price = yield from self._fetch_token_price(
+                        asset_address, chain
+                    )
                     if asset_price is not None:
-                        asset_price = Decimal(str(asset_price))                        
+                        asset_price = Decimal(str(asset_price))
                     else:
                         continue
 
                     asset_value_usd = asset_balance * asset_price
                     user_share += asset_value_usd
                     # Check if the asset already exists in the portfolio_breakdown
-                    existing_asset = next((entry for entry in portfolio_breakdown if entry["address"] == asset_address), None)
+                    existing_asset = next(
+                        (
+                            entry
+                            for entry in portfolio_breakdown
+                            if entry["address"] == asset_address
+                        ),
+                        None,
+                    )
                     if existing_asset:
                         # Add the balance to the existing entry
                         existing_asset["balance"] = float(asset_balance)
                         existing_asset["value_usd"] = asset_value_usd
                     else:
                         # Create a new entry for the asset
-                        portfolio_breakdown.append({
-                            "asset": asset,
-                            "address": asset_address,
-                            "balance": float(asset_balance),
-                            "price": asset_price,
-                            "value_usd": asset_value_usd
-                        })
+                        portfolio_breakdown.append(
+                            {
+                                "asset": asset,
+                                "address": asset_address,
+                                "balance": float(asset_balance),
+                                "price": asset_price,
+                                "value_usd": asset_value_usd,
+                            }
+                        )
 
                 total_user_share_value_usd += user_share
-                individual_shares.append((user_share, dex_type, chain, pool_id, assets, apr, details, user_address, user_balances))
-        
-        # Remove closed positions from allocations
-        allocations = [allocation for allocation in allocations if allocation["id"] != pool_id or allocation["type"] != dex_type or allocation["status"] != PositionStatus.CLOSED.value]
+                individual_shares.append(
+                    (
+                        user_share,
+                        dex_type,
+                        chain,
+                        pool_id,
+                        assets,
+                        apr,
+                        details,
+                        user_address,
+                        user_balances,
+                    )
+                )
 
-        total_user_share_value_usd = sum(Decimal(str(entry["value_usd"])) for entry in portfolio_breakdown)
+        # Remove closed positions from allocations
+        allocations = [
+            allocation
+            for allocation in allocations
+            if allocation["id"] != pool_id
+            or allocation["type"] != dex_type
+            or allocation["status"] != PositionStatus.CLOSED.value
+        ]
+
+        total_user_share_value_usd = sum(
+            Decimal(str(entry["value_usd"])) for entry in portfolio_breakdown
+        )
         # Calculate the ratio of each asset in the portfolio
-        total_ratio = sum(Decimal(str(entry["value_usd"])) / total_user_share_value_usd for entry in portfolio_breakdown if total_user_share_value_usd > 0)
+        total_ratio = sum(
+            Decimal(str(entry["value_usd"])) / total_user_share_value_usd
+            for entry in portfolio_breakdown
+            if total_user_share_value_usd > 0
+        )
         for entry in portfolio_breakdown:
             if total_user_share_value_usd > 0:
-                entry["ratio"] = round(Decimal(str(entry["value_usd"])) / total_user_share_value_usd / total_ratio, 6)
+                entry["ratio"] = round(
+                    Decimal(str(entry["value_usd"]))
+                    / total_user_share_value_usd
+                    / total_ratio,
+                    6,
+                )
                 entry["value_usd"] = float(entry["value_usd"])
                 entry["balance"] = float(entry["balance"])
             else:
@@ -1141,23 +1204,45 @@ class CallCheckpointBehaviour(
                 entry["balance"] = float(entry["balance"])
 
         # Calculate ratios and build allocations
-        total_ratio = sum(float(user_share / total_user_share_value_usd) * 100 for user_share, _, _, _, _, _, _, _, _ in individual_shares if total_user_share_value_usd > 0)
-        for user_share, dex_type, chain, pool_id, assets, apr, details, user_address, user_balances in individual_shares:
+        total_ratio = sum(
+            float(user_share / total_user_share_value_usd) * 100
+            for user_share, _, _, _, _, _, _, _, _ in individual_shares
+            if total_user_share_value_usd > 0
+        )
+        for (
+            user_share,
+            dex_type,
+            chain,
+            pool_id,
+            assets,
+            apr,
+            details,
+            user_address,
+            user_balances,
+        ) in individual_shares:
             if total_user_share_value_usd > 0:
-                ratio = round(float(user_share / total_user_share_value_usd) * 100 * 100 / total_ratio, 2)
+                ratio = round(
+                    float(user_share / total_user_share_value_usd)
+                    * 100
+                    * 100
+                    / total_ratio,
+                    2,
+                )
             else:
                 ratio = 0.0
 
-            allocations.append({
-                "chain": chain,
-                "type": dex_type,
-                "id": pool_id,
-                "assets": assets,
-                "apr": round(apr, 2),
-                "details": details,
-                "ratio": float(ratio),
-                "address": user_address
-            })
+            allocations.append(
+                {
+                    "chain": chain,
+                    "type": dex_type,
+                    "id": pool_id,
+                    "assets": assets,
+                    "apr": round(apr, 2),
+                    "details": details,
+                    "ratio": float(ratio),
+                    "address": user_address,
+                }
+            )
 
         # Store the calculated portfolio value and breakdown
         self.portfolio_data = {
@@ -1171,7 +1256,7 @@ class CallCheckpointBehaviour(
                     "apr": float(allocation["apr"]),
                     "details": allocation["details"],
                     "ratio": float(allocation["ratio"]),
-                    "address": allocation["address"]
+                    "address": allocation["address"],
                 }
                 for allocation in allocations
             ],
@@ -1182,14 +1267,18 @@ class CallCheckpointBehaviour(
                     "balance": float(entry["balance"]),
                     "price": float(entry["price"]),
                     "value_usd": float(entry["value_usd"]),
-                    "ratio": float(entry["ratio"])
+                    "ratio": float(entry["ratio"]),
                 }
                 for entry in portfolio_breakdown
             ],
-            "address": self.params.safe_contract_addresses.get(self.params.target_investment_chains[0])
-        }       
+            "address": self.params.safe_contract_addresses.get(
+                self.params.target_investment_chains[0]
+            ),
+        }
 
-    def get_user_share_value_balancer(self, user_address: str, pool_id: str, chain: str) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
+    def get_user_share_value_balancer(
+        self, user_address: str, pool_id: str, chain: str
+    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
         """Calculate the user's share value and token balances in a Balancer pool."""
         subgraph_url = self.params.balancer_graphql_endpoints.get(chain)
         query = """
@@ -1217,39 +1306,42 @@ class CallCheckpointBehaviour(
         }
         """
 
-        variables = {
-            'poolId': pool_id.lower(),
-            'userAddress': user_address.lower()
-        }
-        body = json.dumps({'query': query, 'variables': variables}).encode('utf-8')
-        headers = {'Content-Type': 'application/json'}
-        response = yield from self.get_http_response("POST", subgraph_url, body, headers)
+        variables = {"poolId": pool_id.lower(), "userAddress": user_address.lower()}
+        body = json.dumps({"query": query, "variables": variables}).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        response = yield from self.get_http_response(
+            "POST", subgraph_url, body, headers
+        )
 
         if response.status_code != 200:
-            self.context.logger.error(f"Query failed with status code {response.status_code}: {response.body}")
+            self.context.logger.error(
+                f"Query failed with status code {response.status_code}: {response.body}"
+            )
             return {}
 
         try:
-            data = json.loads(response.body)['data']
+            data = json.loads(response.body)["data"]
         except json.decoder.JSONDecodeError as e:
             self.context.logger.error(f"Failed to parse response: {e}")
             return {}
 
-        pool = data.get('pool')
-        pool_shares = data.get('poolShares')
+        pool = data.get("pool")
+        pool_shares = data.get("poolShares")
 
         if not pool:
             self.context.logger.error("Pool not found.")
             return {}
 
         if not pool_shares:
-            user_balance = Decimal('0')
-            self.context.logger.info("No pool shares found for the specified user address and pool ID.")
+            user_balance = Decimal("0")
+            self.context.logger.info(
+                "No pool shares found for the specified user address and pool ID."
+            )
             return {}
         else:
-            user_balance = Decimal(pool_shares[0]['balance'])
+            user_balance = Decimal(pool_shares[0]["balance"])
 
-        total_shares = Decimal(pool['totalShares'])
+        total_shares = Decimal(pool["totalShares"])
 
         getcontext().prec = 50  # Increase decimal precision
         ctx = Context(prec=50)  # Use higher-precision data type
@@ -1258,15 +1350,17 @@ class CallCheckpointBehaviour(
 
         # Calculate user's token balances
         user_token_balances = {}
-        for token in pool['tokens']:
-            token_address = to_checksum_address(token['address'])
-            token_balance = Decimal(token['balance'])
+        for token in pool["tokens"]:
+            token_address = to_checksum_address(token["address"])
+            token_balance = Decimal(token["balance"])
             user_token_balance = user_share * token_balance
             user_token_balances[token_address] = user_token_balance
 
         return user_token_balances
 
-    def get_user_share_value_sturdy(self, user_address: str, aggregator_address: str, asset_address: str, chain: str) -> Generator[None, None, Optional[Dict[str, Any]]]:
+    def get_user_share_value_sturdy(
+        self, user_address: str, aggregator_address: str, asset_address: str, chain: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Calculate the user's share value and token balance in a Sturdy vault."""
         # Get user's underlying asset balance in the vault
         user_asset_balance = yield from self.contract_interact(
@@ -1281,7 +1375,7 @@ class CallCheckpointBehaviour(
         if user_asset_balance is None:
             self.context.logger.error("Failed to get user's asset balance.")
             return {}
-        
+
         user_asset_balance = Decimal(user_asset_balance)
 
         # Get decimals for proper scaling
@@ -1296,7 +1390,7 @@ class CallCheckpointBehaviour(
         if decimals is None:
             self.context.logger.error("Failed to get decimals.")
             return {}
-        
+
         scaling_factor = Decimal(10 ** int(decimals))
 
         # Adjust decimals for assets
@@ -1304,7 +1398,9 @@ class CallCheckpointBehaviour(
 
         return {asset_address: user_asset_balance}
 
-    def _get_aggregator_name(self, aggregator_address: str, chain: str) -> Generator[None, None, Optional[str]]:
+    def _get_aggregator_name(
+        self, aggregator_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
         """Get the name of the Sturdy Aggregator."""
         aggreator_name = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1315,8 +1411,10 @@ class CallCheckpointBehaviour(
             chain_id=chain,
         )
         return aggreator_name
-    
-    def _get_balancer_pool_name(self, pool_address: str, chain: str) -> Generator[None, None, Optional[str]]:
+
+    def _get_balancer_pool_name(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
         """Get the name of the Balancer Pool."""
         pool_name = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1477,6 +1575,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
+
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that finds the opportunity and builds actions."""

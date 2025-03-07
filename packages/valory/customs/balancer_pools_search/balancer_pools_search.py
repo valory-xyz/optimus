@@ -271,7 +271,7 @@ def calculate_il_risk_score(
             to_timestamp=to_timestamp,
         )
     except Exception as e:
-        errors.append(f"Error fetching price data: Incorrect Coingecko API Key")
+        errors.append(f"Error fetching price data: {e}")
         return None
     
     prices_1_data = np.array([x[1] for x in prices_1["prices"]])

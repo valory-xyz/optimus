@@ -937,6 +937,7 @@ class CallCheckpointBehaviour(
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            self.context.logger.info(f"{self.coingecko.api_key=}")
             checkpoint_tx_hex = None
             min_num_of_safe_tx_required = None
             yield from self.calculate_user_share_values()

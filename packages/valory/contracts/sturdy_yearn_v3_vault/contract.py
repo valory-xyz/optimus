@@ -88,3 +88,47 @@ class YearnV3VaultContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         balance = contract_instance.functions.balanceOf(owner).call()
         return {"amount": balance}
+
+    @classmethod
+    def name(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the name of the aggregator"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        name = contract_instance.functions.name().call()
+        return {"name": name}
+    
+    @classmethod
+    def total_supply(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the total supply of the vault."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        total_supply = contract_instance.functions.totalSupply().call()
+        return {"total_supply": total_supply}
+
+    @classmethod
+    def total_assets(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the total assets of the vault."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        total_assets = contract_instance.functions.totalAssets().call()
+        return {"total_assets": total_assets}
+
+    @classmethod
+    def decimals(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the number of decimals used by the vault."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        decimals = contract_instance.functions.decimals().call()
+        return {"decimals": decimals}

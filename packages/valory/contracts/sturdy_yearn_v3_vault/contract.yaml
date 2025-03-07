@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibax3vb3clg7vq3ldlxzbj5byecpkwkiyi3ipphb2zed5v5mofzma
   build/YearnV3Vault.json: bafybeifk34657pbpihpoxkelea2pf6ho2z56lum7bxegunclmakvypuc3m
-  contract.py: bafybeibfoi3mmf2mecnefvxahlerh6tjhj45rhhatbs4d7mget3vwszywu
+  contract.py: bafybeia6ibdvjgghk5lncyyi56czsucrmkbnkexh4zql44qumubvcubgoi
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: YearnV3VaultContract

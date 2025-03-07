@@ -46,6 +46,16 @@ class WeightedPoolContract(Contract):
         return dict(balance=data)
 
     @classmethod
+    def get_name(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """get the name of the pool."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        name = contract_instance.functions.name().call()
+        return dict(name=name)
+    @classmethod
     def get_pool_id(
         cls,
         ledger_api: EthereumApi,

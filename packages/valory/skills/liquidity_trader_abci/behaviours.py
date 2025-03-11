@@ -2576,7 +2576,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Sort tokens by balance in descending order
         token_balances.sort(key=lambda x: x["balance"], reverse=True)
         token_prices = yield from self._fetch_token_prices(token_balances)
-        self.context.logger.info(f"Current token prices :- {token_prices}")
 
         # Calculate the relative value of each token
         for token_data in token_balances:
@@ -2593,8 +2592,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Sort tokens by value in descending order and add the highest ones
         token_balances.sort(key=lambda x: x["value"], reverse=True)
-        self.context.logger.info(f"Available token balances :- {token_balances}")
+        self.context.logger.info(f"Available token balances: {token_balances}")
 
+        self.context.logger.info(
+            f"Filtering tokens with a minimum investment value of: {self.params.min_investment_amount}"
+        )
         token_balances = [
             token
             for token in token_balances

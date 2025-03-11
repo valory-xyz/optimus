@@ -93,18 +93,22 @@ jobs:
           sudo apt-get autoclean
           pip install tomte[tox,cli]==0.2.17
           pip install --user --upgrade setuptools
+
           # install Protobuf compiler
           wget https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/protoc-3.19.4-linux-x86_64.zip
           unzip protoc-3.19.4-linux-x86_64.zip -d protoc
           sudo mv protoc/bin/protoc /usr/local/bin/protoc
+
           # install IPFS
           sudo apt-get install -y wget
           wget -O ./go-ipfs.tar.gz https://dist.ipfs.io/go-ipfs/v0.6.0/go-ipfs_v0.6.0_linux-amd64.tar.gz
           tar xvfz go-ipfs.tar.gz
           sudo mv go-ipfs/ipfs /usr/local/bin/ipfs
           ipfs init
+
           # Install `mdspell` for spelling checks
           sudo npm install -g markdown-spellcheck
+
       - name: Security checks
         run: tomte check-security
       - name: Check packages
@@ -131,17 +135,9 @@ jobs:
       - run: |
           wget https://github.com/zricethezav/gitleaks/releases/download/v8.10.1/gitleaks_8.10.1_linux_x64.tar.gz && \
           tar -xzf gitleaks_8.10.1_linux_x64.tar.gz && \
-          sudo install gitleaks /usr/bin
-      - name: Scan for leaks
-        id: gitleaks
-        continue-on-error: true
-        run: |
+          sudo install gitleaks /usr/bin && \
           gitleaks detect --report-format json --report-path leak_report
-          echo "::set-output name=exit_code::$?"
-      - name: Print detected leaks
-        run: |
-          echo "Detected leaks:"
-          cat leak_report
+
   test:
     if: false
     continue-on-error: True
@@ -175,28 +171,34 @@ jobs:
           sudo apt-get autoclean
           pip install tomte[tox]==0.2.17
           pip install --upgrade setuptools==60.10.0
+
           # install Protobuf compiler
           wget https://github.com/protocolbuffers/protobuf/releases/download/v3.11.4/protoc-3.11.4-linux-x86_64.zip
           unzip protoc-3.11.4-linux-x86_64.zip -d protoc
           sudo mv protoc/bin/protoc /usr/local/bin/protoc
+
           # install IPFS
           sudo apt-get install -y wget
           wget -O ./go-ipfs.tar.gz https://dist.ipfs.io/go-ipfs/v0.6.0/go-ipfs_v0.6.0_linux-amd64.tar.gz
           tar xvfz go-ipfs.tar.gz
           sudo mv go-ipfs/ipfs /usr/local/bin/ipfs
           ipfs init
+
           # install Tendermint
           wget -O tendermint.tar.gz https://github.com/tendermint/tendermint/releases/download/v0.34.19/tendermint_0.34.19_linux_amd64.tar.gz
           tar -xf tendermint.tar.gz
           sudo mv tendermint /usr/local/bin/tendermint
+
           # pull node image needed for the integration tests
           docker pull node:16.7.0
           docker pull trufflesuite/ganache:beta
           docker pull valory/autonolas-registries:latest
+
       - if: matrix.os == 'ubuntu-latest'
         name: Unit tests (ubuntu-latest)
         run: |
           tox -e py${{ matrix.python-version }}-linux -- -m 'not e2e'
+
       - if: matrix.os == 'macos-latest'
         name: Install dependencies (macos-latest)
         run: |
@@ -209,6 +211,7 @@ jobs:
           sudo mv protoc/bin/protoc /usr/local/bin/protoc
           brew tap yoheimuta/protolint
           brew install protolint
+
           # install ipfs
           curl -O https://dist.ipfs.io/go-ipfs/v0.6.0/go-ipfs_v0.6.0_darwin-amd64.tar.gz
           tar -xvzf go-ipfs_v0.6.0_darwin-amd64.tar.gz
@@ -217,10 +220,12 @@ jobs:
           cd ..
           rm -rf go-ipfs
           ipfs init
+
       - if: matrix.os == 'macos-latest'
         name: Skills unit tests macos-latest
         run: |
           tox -e py${{ matrix.python-version }}-darwin -- -m 'not e2e'
+
       - if: matrix.os == 'windows-latest'
         name: Install dependencies (windows-latest)
         env:
@@ -238,16 +243,20 @@ jobs:
           # wget https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/protoc-3.19.4-win64.zip
           # unzip protoc-3.19.4-win64.zip -d protoc
           # sudo mv protoc/bin/protoc /usr/local/bin/protoc
+
           python scripts\update_symlinks_cross_platform.py
+
           # install ipfs
           curl https://dist.ipfs.io/go-ipfs/v0.6.0/go-ipfs_v0.6.0_windows-amd64.zip -o go-ipfs_v0.6.0.zip
           Expand-Archive -Path go-ipfs_v0.6.0.zip -DestinationPath ~\Apps\
           cp ~\Apps\go-ipfs\ipfs.exe C:\Users\runneradmin\go\bin\
           ipfs init
+
       - if: matrix.os == 'windows-latest'
         name: Skills unit tests windows-latest
         run: |
           tox -e py${{ matrix.python-version }}-win -- -m 'not e2e'
+
       - if: matrix.os == 'ubuntu-latest'
         name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1
@@ -283,22 +292,27 @@ jobs:
           sudo apt-get autoclean
           pip install tomte[tox]==0.2.17
           pip install --upgrade setuptools==60.10.0
+
           # install Protobuf compiler
           wget https://github.com/protocolbuffers/protobuf/releases/download/v3.11.4/protoc-3.11.4-linux-x86_64.zip
           unzip protoc-3.11.4-linux-x86_64.zip -d protoc
           sudo mv protoc/bin/protoc /usr/local/bin/protoc
+
           # install IPFS
           sudo apt-get install -y wget
           wget -O ./go-ipfs.tar.gz https://dist.ipfs.io/go-ipfs/v0.6.0/go-ipfs_v0.6.0_linux-amd64.tar.gz
           tar xvfz go-ipfs.tar.gz
           sudo mv go-ipfs/ipfs /usr/local/bin/ipfs
           ipfs init
+
           # install Tendermint
           wget -O tendermint.tar.gz https://github.com/tendermint/tendermint/releases/download/v0.34.19/tendermint_0.34.19_linux_amd64.tar.gz
           tar -xf tendermint.tar.gz
           sudo mv tendermint /usr/local/bin/tendermint
+
           # pull node image needed for the integration tests
           docker pull node:16.7.0
+
       - name: e2e tests
         run: |
           tox -e py${{ matrix.python-version }} -- -m 'e2e'

@@ -36,8 +36,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeigj3gkaywblodgsmemqazz3mkplsgcvs4ukvrdi3e6b46dwnwetmq
-- valory/optimus_abci:0.1.0:bafybeiara6vsfuwdkjlvnhwvlm2yn6nnnsjzuh7v4bhegmzhxcdqjivshu
+- valory/liquidity_trader_abci:0.1.0:bafybeiffubzkgtbffysvx4wbmk5kl52mghc3fdpb64j7muafk7crexmaj4
+- valory/optimus_abci:0.1.0:bafybeihihlxjuau5ny6uk7zon54ajdlgknip2zrannqn6grhvgcid6tx6u
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -259,7 +259,7 @@ models:
       pool_info_filename: ${str:current_pool.json}
       portfolio_info_filename: ${str:portfolio.json}
       gas_cost_info_filename: ${str:gas_costs.json}
-      min_swap_amount_threshold: ${int:1}
+      min_investment_amount: ${int:1}
       max_fee_percentage: ${float:0.02}
       max_gas_percentage: ${float:0.25}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}

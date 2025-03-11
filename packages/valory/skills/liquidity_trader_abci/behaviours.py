@@ -2576,7 +2576,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Sort tokens by balance in descending order
         token_balances.sort(key=lambda x: x["balance"], reverse=True)
         token_prices = yield from self._fetch_token_prices(token_balances)
-        self.context.logger.info(f"CUrrent token prices :- {token_prices}")
+        self.context.logger.info(f"Current token prices :- {token_prices}")
 
         # Calculate the relative value of each token
         for token_data in token_balances:
@@ -2598,7 +2598,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         token_balances = [
             token
             for token in token_balances
-            if token["value"] >= self.params.min_swap_amount_threshold
+            if token["value"] >= self.params.min_investment_amount
         ]
 
         self.context.logger.info(

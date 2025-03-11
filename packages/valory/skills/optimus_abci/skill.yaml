@@ -54,7 +54,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeigj3gkaywblodgsmemqazz3mkplsgcvs4ukvrdi3e6b46dwnwetmq
+- valory/liquidity_trader_abci:0.1.0:bafybeiffubzkgtbffysvx4wbmk5kl52mghc3fdpb64j7muafk7crexmaj4
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
@@ -203,7 +203,7 @@ models:
       pool_info_filename: current_pool.json
       portfolio_info_filename: portfolio.json
       gas_cost_info_filename: gas_costs.json
-      min_swap_amount_threshold: 10
+      min_investment_amount: 1
       max_fee_percentage: 0.02
       max_gas_percentage: 0.1
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'

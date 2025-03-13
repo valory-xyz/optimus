@@ -28,6 +28,7 @@ from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
+import numpy as np
 from typing import (
     Any,
     Callable,
@@ -381,7 +382,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         ]
 
         return positions
-
+    
     def _get_asset_balances(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get asset balances"""
         asset_balances_dict: Dict[str, list] = defaultdict(list)
@@ -1142,6 +1143,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.fetch_all_trading_opportunities()
 
                 if self.current_positions:
+                    self.context.logger.info(f"current_positions:{self.current_positions}")
+
                     for position in (
                         pos
                         for pos in self.current_positions
@@ -1246,7 +1249,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         V_current = (adjusted_token0_qty * token0_price) + (
             adjusted_token1_qty * token1_price
         )
-
+        
         # Calculate initial investment value
         V_initial = yield from self.calculate_initial_investment_value(position)
 
@@ -1461,7 +1464,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[float]]:
         """Calculate the initial investment value based on the initial transaction."""
-
+    
         chain = position.get("chain")
         initial_amount0 = position.get("amount0")
         initial_amount1 = position.get("amount1")
@@ -1483,11 +1486,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         historical_prices = yield from self._fetch_historical_token_prices(
             tokens, date_str, chain
         )
-
+    
         if not historical_prices:
             self.context.logger.error("Failed to fetch historical token prices.")
             return None
-
+    
         # Get the price for token0
         initial_price0 = historical_prices.get(position.get("token0"))
         if initial_price0 is None:
@@ -1495,7 +1498,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Calculate initial investment value for token0
-        V_initial = initial_amount0 * initial_price0
+        token0_decimals = yield from self._get_token_decimals(chain, (position.get("token0")))
+        V_initial = (initial_amount0 / (10**token0_decimals)) * initial_price0
 
         # If token1 exists, include it in the calculations
         if position.get("token1") is not None and initial_amount1 is not None:
@@ -1503,7 +1507,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if initial_price1 is None:
                 self.context.logger.error("Historical price not found for token1.")
                 return None
-            V_initial += initial_amount1 * initial_price1
+            token1_decimals = yield from self._get_token_decimals(chain, (position.get("token1")))
+            V_initial += (initial_amount1 / (10**token1_decimals)) * initial_price1
 
         return V_initial
 
@@ -1923,7 +1928,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Process rewards
         if self._can_claim_rewards():
             yield from self._process_rewards(actions)
-
+    
         if (
             self.synchronized_data.period_count != 0
             and self.synchronized_data.period_count % self.params.pnl_check_interval
@@ -1931,10 +1936,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             and self.current_positions
         ):
             tokens = yield from self._process_pnl(actions)
-
+            self.context.logger.info(f"tokens on pnl:{tokens}")
+        
         if not self.selected_opportunities:
             return actions
-
+    
         # Prepare tokens for exit or investment
         available_tokens = yield from self._prepare_tokens_for_investment()
         if available_tokens is None:
@@ -1964,6 +1970,45 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error("Error building enter pool action")
                 return None
             actions.append(enter_pool_action)
+        
+        if self.current_positions:
+            yield from self.sleep(20)
+            self.context.logger.info(f"self.current_positions in order transaction: {self.current_positions}")
+            invested_amount = 0
+            for position in self.current_positions:
+                if position.get('status') == 'open':
+                    retries = 3
+                    delay = 10  # initial delay in seconds
+                    V_initial = None
+                    while retries > 0:
+                        V_initial = yield from self.calculate_initial_investment_value(position)
+                        if V_initial is not None:
+                            break
+                        else:
+                            self.context.logger.warning("V_initial is None (possible rate limit). Retrying after delay...")
+                            yield from self.sleep(delay)
+                            retries -= 1
+                            delay *= 2  # exponential backoff
+        
+                    self.context.logger.info(f"V_initial amount: {V_initial}")
+                    if V_initial:
+                        invested_amount += V_initial
+                        self.context.logger.info(f"Accumulated invested_amount: {invested_amount}")
+                    yield from self.sleep(10)  # Additional sleep if needed
+        
+            self.context.logger.info(f"Final invested_amount: {invested_amount}")
+            
+            if invested_amount >= 950 or invested_amount==0:
+                exit_pool_found = False
+                for action in actions:
+                    if action.get('action') == 'ExitPool':
+                        exit_pool_found = True
+                        break
+                
+                if not exit_pool_found:
+                   actions = []  # Clear actions only if no 'ExitPool' was found and invested_amount greate than 1000 dollar
+            else:
+                actions.append({'invested_amount': invested_amount})
 
         return actions
 
@@ -2540,7 +2585,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
 
 
-class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
+class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
     """Behaviour that executes all the actions."""
 
     matching_round: Type[AbstractRound] = DecisionMakingRound
@@ -2561,7 +2606,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     sort_keys=True,
                 ),
             )
-
+    
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
@@ -2791,7 +2836,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning(
                 f"No position found for pool_address: {pool_address}"
             )
-
+    
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
         # When we exit the pool, it may take time to reflect the balance of our assets in the safe
@@ -3148,6 +3193,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
+        max_amounts_in = []
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = [action.get("token0"), action.get("token1")]
@@ -3159,14 +3205,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_fee = action.get("pool_fee")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         pool_type = action.get("pool_type")
-
         pool = self.pools.get(dex_type)
         if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
-
-        token0_balance = self._get_balance(chain, assets[0], positions)
-        token1_balance = self._get_balance(chain, assets[1], positions)
+    
         token0_decimals = yield from self._get_token_decimals(chain, assets[0])
         token1_decimals = yield from self._get_token_decimals(chain, assets[1])
         max_investment_amounts[0] = int(Decimal(str(max_investment_amounts[0])) * (Decimal(10) ** Decimal(token0_decimals)))
@@ -3174,17 +3217,80 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         
         self.context.logger.info(f"Max investment amounts according to strategy: {max_investment_amounts}.")
         
-        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
-        max_amounts_in = [
-            int(token0_balance * relative_funds_percentage),
-            int(token1_balance * relative_funds_percentage),
-        ]
-        max_amounts_in = [
-            min(max_amounts_in[0], token0_balance),
-            min(max_amounts_in[1], token1_balance),
-        ]
-        self.context.logger.info(f"Adjusted max amounts in after comparing with balances: {max_amounts_in}")
-
+        relative_funds_percentage = action.get("relative_funds_percentage")
+        if not relative_funds_percentage:
+            self.context.logger.error(f"relative_funds_percentage not define: {relative_funds_percentage}")
+            return None, None, None
+       
+        if self.current_positions:
+            invested_amount = action.get("invested_amount")
+            if not invested_amount:
+                self.context.logger.error(f"invested_amount not defined: {invested_amount}")
+                return None, None, None
+        
+            token0 = action.get("token0")
+            token1 = action.get("token1")  
+            sleep_time = 10 # Configurable sleep time 
+            retries = 3  # Number of API call retries
+        
+            # Fetch token0 price with retry handling
+            token0_price = None
+            for attempt in range(1, retries + 1):
+                try:
+                    token0_price = yield from self._fetch_token_price(token0, chain)
+                    break  # Success, break out of loop
+                except Exception as e:
+                    self.context.logger.error(f"Attempt {attempt} - Error fetching price for {token0}: {e}")
+                    if attempt < retries:
+                        yield from self.sleep(sleep_time)
+            if token0_price is None:
+                self.context.logger.error(f"Failed to fetch price for token: {token0}")
+                return None, None, None
+        
+            yield from self.sleep(sleep_time)  # Sleep to respect API rate limits
+        
+            # Fetch token1 price with retry handling
+            token1_price = None
+            for attempt in range(1, retries + 1):
+                try:
+                    token1_price = yield from self._fetch_token_price(token1, chain)
+                    break
+                except Exception as e:
+                    self.context.logger.error(f"Attempt {attempt} - Error fetching price for {token1}: {e}")
+                    if attempt < retries:
+                        yield from self.sleep(sleep_time)
+            if token1_price is None:
+                self.context.logger.error(f"Failed to fetch price for token: {token1}")
+                return None, None, None
+        
+            allocated_fund_per_strategy = invested_amount / relative_funds_percentage
+        
+            token0_amount = (allocated_fund_per_strategy / 2) / token0_price
+            token1_amount = (allocated_fund_per_strategy / 2) / token1_price
+        
+            if token0_amount <= 0 or token1_amount <= 0:
+                self.context.logger.error(f"Invalid token amounts: token0_amount={token0_amount}, token1_amount={token1_amount}")
+                return None, None, None
+        
+            max_amounts_in = [
+                int(Decimal(str(token0_amount)) * (Decimal(10) ** Decimal(token0_decimals))),
+                int(Decimal(str(token1_amount)) * (Decimal(10) ** Decimal(token1_decimals))),
+            ]
+        else:
+            token0_balance = self._get_balance(chain, assets[0], positions)
+            token1_balance = self._get_balance(chain, assets[1], positions)
+        
+            max_amounts_in = [
+                int(token0_balance * relative_funds_percentage),
+                int(token1_balance * relative_funds_percentage),
+            ]
+            # Ensure that allocated amounts do not exceed available balances.
+            max_amounts_in = [
+                min(max_amounts_in[0], token0_balance),
+                min(max_amounts_in[1], token1_balance),
+            ]
+            self.context.logger.info(f"Adjusted max amounts in after comparing with balances: {max_amounts_in}")
+        
         # Adjust max_amounts_in based on max_investment_amounts
         if max_investment_amounts and (
             type(max_investment_amounts) == type(max_amounts_in)
@@ -3272,7 +3378,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             multi_send_txs=multi_send_txs,
             chain_id=chain,
         )
-
+    
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
             contract_address=safe_address,
@@ -3426,16 +3532,57 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
-
+    
     def get_deposit_tx_hash(
         self, action, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get deposit tx hash"""
         chain = action.get("chain")
         asset = action.get("token0")
-        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
-        token_balance = self._get_balance(chain, asset, positions)
-        amount = int(min(token_balance * relative_funds_percentage, token_balance))
+        amount = 0
+        relative_funds_percentage = action.get("relative_funds_percentage")
+        if not relative_funds_percentage:
+            self.context.logger.error(f"relative_funds_percentage not define: {relative_funds_percentage}")
+            return None, None, None
+        
+        
+        if self.current_positions:
+            invested_amount = action.get("invested_amount")
+            if not invested_amount:
+                self.context.logger.error(f"invested_amount not defined: {invested_amount}")
+                return None, None, None
+        
+            token0 = action.get("token0")
+            sleep_time = 10 # Configurable sleep time 
+            retries = 3  # Number of API call retries
+        
+            # Fetch token0 price with retry handling
+            token0_price = None
+            for attempt in range(1, retries + 1):
+                try:
+                    token0_price = yield from self._fetch_token_price(token0, chain)
+                    break  # Success, break out of loop
+                except Exception as e:
+                    self.context.logger.error(f"Attempt {attempt} - Error fetching price for {token0}: {e}")
+                    if attempt < retries:
+                        yield from self.sleep(sleep_time)
+            if token0_price is None:
+                self.context.logger.error(f"Failed to fetch price for token: {token0}")
+                return None, None, None
+        
+            allocated_fund_per_strategy = invested_amount / relative_funds_percentage
+            token0_amount = allocated_fund_per_strategy / token0_price
+        
+            if token0_amount <= 0:
+                self.context.logger.error(f"Invalid token amounts: token0_amount={token0_amount}")
+                return None, None, None
+            
+            token0_decimals = yield from self._get_token_decimals(chain, token0)
+            amount = int(Decimal(str(token0_amount)) * (Decimal(10) ** Decimal(token0_decimals)))
+        else:
+            token_balance = self._get_balance(chain, asset, positions)
+            amount = int(min(token_balance * relative_funds_percentage, token_balance))
+        
         safe_address = self.params.safe_contract_addresses.get(chain)
         receiver = safe_address
         contract_address = action.get("pool_address")

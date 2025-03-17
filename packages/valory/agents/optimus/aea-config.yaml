@@ -39,8 +39,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeigq25mrf4lkfgcimgcyrqinfgrwnydbyhlxddemfheqnbwcanehvm
-- valory/optimus_abci:0.1.0:bafybeiellscd6rktkdqxoycic5q7xh2kqafh4jf3rvwkq32fbmbqgrj2ca
+- valory/liquidity_trader_abci:0.1.0:bafybeibbvglnzhblyk2kehey7jl3bjtgrkt4vwtaz7c5dhhe5ebsnihk6m
+- valory/optimus_abci:0.1.0:bafybeia74lmqsdw5h7ho2tijsuvldtpwxuu4tuajyjhvae3ivp4ldxjtdi
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -161,7 +161,7 @@ type: connection
 config:
   host: ${str:0.0.0.0}
   port: ${int:8716}
-  target_skill_id: valory/llm_interaction:0.1.0
+  target_skill_id: valory/optimus_abci:0.1.0
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill
@@ -289,5 +289,5 @@ models:
       selected_hyper_strategy: ${str:max_apr_selection}
       service_endpoint_base: ${str:https://optimus.staging.autonolas.tech/}
       max_pools: ${int:2}
-      available_strategies: ${list:["BALANCER","UNISWAP_V3","STURDY"]}
+      available_strategies: ${list:["balancer_pools_search","asset_lending"]}
       default_acceptance_time: ${int:15}

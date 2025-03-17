@@ -668,13 +668,15 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the original HttpDialogue
         """
         try:
+            self.context.logger.info(f"Received LLM response: {llm_response_message.value}-{type(llm_response_message.value)}")
             response_data = json.loads(llm_response_message.value)
+            self.context.logger.info(f"Response data: {response_data}")
             selected_protocols = response_data.get("selected_protocols", [])
             trading_type = response_data.get("trading_type", "")
             reasoning = response_data.get("reasoning", "")
             previous_trading_type = self.context.state.trading_type
 
-            if not strategies or not trading_type or not reasoning:
+            if not selected_protocols or not trading_type or not reasoning:
                 # No suitable strategies found
                 fallback_message = {
                     "response": (
@@ -683,7 +685,7 @@ class HttpHandler(BaseHttpHandler):
                     )
                 }
                 self._send_ok_response(http_msg, http_dialogue, fallback_message)
-                strategies = self.context.state.available_strategies
+                selected_protocols = self.context.state.available_strategies
             else:
                 response_data = {
                     "selected_protocols": selected_protocols,
@@ -691,6 +693,7 @@ class HttpHandler(BaseHttpHandler):
                     "reasoning": reasoning,
                     "previous_trading_type": previous_trading_type
                 }
+
                 self._send_ok_response(http_msg, http_dialogue, response_data)
 
             # Offload KV store update to a separate thread
@@ -708,9 +711,11 @@ class HttpHandler(BaseHttpHandler):
 
         :param strategies: list of chosen strategies
         """
+        self.context.logger.info("Waiting for default acceptance time...")
         time.sleep(self.context.params.default_acceptance_time)
         if len(self.context.state.request_queue) == 1:
             self._write_kv({"selected_protocols": json.dumps(selected_protocols), "trading_type": trading_type})
+        self.context.logger.info("KV store update delayed.")
         self.context.state.request_queue.pop()
 
     def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
@@ -720,17 +725,19 @@ class HttpHandler(BaseHttpHandler):
         :param data: key-value data to store
         :return: success flag
         """
+        self.context.logger.info("Writing to KV store...")
         kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
         kv_store_message, srr_dialogue = kv_store_dialogues.create(
             counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
             performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
             data=data,
         )
-
+        self.context.logger.info(f"KV store message: {kv_store_message}")
         kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
         self._send_message(
             kv_store_message, kv_store_dialogue, self._handle_kv_store_response
         )
+        self.context.logger.info(f"KV store update sent.{self.context.state.req_to_callback}")
 
     def _handle_kv_store_response(self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue) -> None:
         """
@@ -739,6 +746,7 @@ class HttpHandler(BaseHttpHandler):
         :param kv_store_response_message: the KvStoreMessage response
         :param dialogue: the KvStoreDialogue
         """
+        self.context.logger.info(f"Received KV store response: {kv_store_response_message}")
         success = kv_store_response_message.performative == KvStoreMessage.Performative.SUCCESS
         if success:
             self.context.logger.info("KV store update successful.")

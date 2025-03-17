@@ -2028,6 +2028,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "max_pools": self.params.max_pools,
             "composite_score_threshold": THRESHOLDS.get(self.synchronized_data.trading_type,{})
         }
+        self.context.logger.info(f"kwargs: {kwargs}")
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)
         self.selected_opportunities = result.get("optimal_strategies")
@@ -4893,15 +4894,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if selected_protocols is None:
                 serialized_protocols = []
             else:
-                serialized_protocols = json.loads(selected_protocols, sort_keys=True)
+                serialized_protocols = json.loads(selected_protocols)
 
             trading_type = db_data.get("trading_type", None)
             selection_thresholds = db_data.get("selection_thresholds", None)
-            if selected_protocols is None:
+            if selection_thresholds is None:
                 serialized_thresholds = {}
             else:
-                serialized_protocols = json.loads(selection_thresholds, sort_keys=True)
-
+                serialized_thresholds = json.loads(selection_thresholds)
+            self.context.logger.info(
+                f"Selected protocols: {serialized_protocols}, Trading type: {trading_type}, Selection thresholds: {serialized_thresholds}"
+            )
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
             

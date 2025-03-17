@@ -294,6 +294,7 @@ class Params(BaseParams):
         self.dex_type_to_strategy = json.loads(
             self._ensure("dex_type_to_strategy", kwargs, str)
         )
+        self.default_acceptance_time = self._ensure("default_acceptance_time", kwargs, int)
         self.max_pools = self._ensure("max_pools", kwargs, int)
         self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
         self.loss_threshold = self._ensure("loss_threshold", kwargs, int)

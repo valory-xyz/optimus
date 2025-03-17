@@ -13,7 +13,7 @@ fingerprint:
   handlers.py: bafybeicg5inqdiik24sl7jrrdlslgusf6sfwpncbkgkjpeefmq7a7ilkam
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeiddb4vdljcsc6yojnkgeui2acvw3vt6w3dwfk633ep5gxmh5enx54
+  models.py: bafybeifpnomobpmpi6tjhfzftpfabneocjlhbvozhd5q4bbvp4ynx26q7q
   payloads.py: bafybeigb5wva5xtcwgfnms743nwypc3nfj7kbnorezmzp332fyucsik53q
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
@@ -223,6 +223,9 @@ models:
       profit_threshold: 50
       loss_threshold: 30
       pnl_check_interval: 10
+      available_strategies: null
+      default_acceptance_time: null
+      cleanup_freq: 50
     class_name: Params
   coingecko:
     args:

@@ -50,10 +50,14 @@ class SharedState(BaseSharedState):
     def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
         """Initialize the state."""
         super().__init__(*args, skill_context=skill_context, **kwargs)
+        self.in_flight_req: bool = False
         self.strategy_to_filehash: Dict[str, str] = {}
         self.strategies_executables: Dict[str, Tuple[str, str]] = {}
         self.trading_type: str = ""
         self.selected_protocols: List[str] = []
+        self.request_count: int = 0
+        self.request_queue = []
+        self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
 
 
 Requests = BaseRequests
@@ -294,6 +298,8 @@ class Params(BaseParams):
         self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
         self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
         self.pnl_check_interval = self._ensure("pnl_check_interval", kwargs, int)
+        self.available_strategies = self._ensure("available_strategies", kwargs, List[str])
+        self.cleanup_freq = self._ensure("cleanup_freq",kwargs,int)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of OptimusAbciApp."""
 
-from typing import Any, Dict, Type, Union, cast
+from typing import Any, Dict, Type, Union, cast, List, Tuple, Callable
 
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
@@ -32,7 +32,6 @@ from packages.valory.skills.liquidity_trader_abci.models import Coingecko
 from packages.valory.skills.liquidity_trader_abci.models import (
     Params as LiquidityTraderParams,
 )
-from packages.valory.skills.llm_interaction.models import LlmInteractionParams
 from packages.valory.skills.liquidity_trader_abci.models import (
     SharedState as BaseSharedState,
 )
@@ -45,7 +44,7 @@ from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,
 )
-
+from aea.skills.base import Model, SkillContext
 
 EventType = Union[
     Type[LiquidityTraderEvent],
@@ -68,14 +67,14 @@ MULTIPLIER = 40
 
 
 class Params(  # pylint: disable=too-many-ancestors
-    LlmInteractionParams,
-    LiquidityTraderParams,
     TerminationParams,
+    LiquidityTraderParams,
 ):
     """A model to represent params for multiple abci apps."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Init"""
+        self.service_endpoint_base = self._ensure("service_endpoint_base", kwargs, str)
         super().__init__(*args, **kwargs)
 
 

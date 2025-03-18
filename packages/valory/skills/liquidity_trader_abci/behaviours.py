@@ -2173,9 +2173,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
                     "current_positions": (
                         [
-                            pos.get("pool_address")
+                            to_checksum_address(pos.get("address"))
                             for pos in self.current_positions
                             if pos.get("status") == PositionStatus.OPEN.value
+                            and pos.get("address")
                         ]
                         if self.current_positions
                         else []
@@ -2512,10 +2513,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-        # Get available tokens and extend tokens list
-        available_tokens = yield from self._get_available_tokens()
-        if available_tokens:
-            tokens.extend(available_tokens)
+        else:
+            # Get available tokens and extend tokens list
+            tokens = yield from self._get_available_tokens()
 
         if not tokens:
             self.context.logger.error("No tokens available for investment")
@@ -3143,6 +3143,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["shares"] = shares
             current_position["timestamp"] = timestamp
 
+        current_position["status"] = PositionStatus.OPEN.value
         self.current_positions.append(current_position)
         self.store_current_positions()
         self.context.logger.info(

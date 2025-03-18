@@ -58,6 +58,22 @@ class SharedState(BaseSharedState):
         self.request_count: int = 0
         self.request_queue = []
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
+        self.agent_reasoning: str = ""
+    
+    def setup(self) -> None:
+        """Set up the model."""
+        super().setup()
+        params = self.context.params
+        self.strategy_to_filehash = {
+            value: key for key, value in params.file_hash_to_strategies.items()
+        }
+        strategy_exec = self.strategy_to_filehash.keys()
+        for selected_strategy in params.available_strategies:
+            if selected_strategy not in strategy_exec:
+                raise ValueError(
+                    f"The selected trading strategy {selected_strategy} "
+                    f"is not in the strategies' executables {strategy_exec}."
+                )
 
 
 Requests = BaseRequests

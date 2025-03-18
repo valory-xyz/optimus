@@ -15,7 +15,7 @@ A composite score is a single numerical value that represents the overall risk l
 2. The JSON should have the following keys:
    - `'selected_protocols'`: A list (array) of protocol names relevant to the user prompt. If no relevant protocols are found, return an empty list `[]`.
    - `'trading_type'`: A string representing the chosen trading type (e.g., `'Risky'` or `'Balanced'`). If no suitable trading type is found, return an empty string `''`.
-   - `'reasoning'`: A brief explanation of why the selected trading type and protocols were chosen, based on the user's risk appetite and the chosen threshold and what it means. If no relevant protocols or trading type are found, provide an explanation for why the user's request could not be understood or addressed. **Do not include any other information in this field besides the explanation.**
+   - `'reasoning'`: A brief explanation of why the selected trading type and protocols were chosen, based on the user's risk appetite and the chosen threshold and what it means. If no relevant protocols or trading type are found, provide an explanation for why the user's request could not be understood or addressed. **The reasoning should be returned as HTML, with styling using <span> tags for emphasis and <p> tags for paragraphs.**
 
 3. **Do not include any code snippets, code fences, or markdown formatting in your response.**
 """

@@ -202,8 +202,8 @@ class PositionStatus(Enum):
 
 
 class TradingType(Enum):
-    BALANCED = "balanced"
-    RISKY = "risky"
+    BALANCED = "Balanced"
+    RISKY = "Risky"
 
 THRESHOLDS = {
     TradingType.BALANCED : 0.3374,
@@ -4888,7 +4888,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-            db_data = yield from self._read_kv(keys=("selected_protocols","trading_type","selection_thresholds"))
+            db_data = yield from self._read_kv(keys=("selected_protocols","trading_type"))
             
             selected_protocols = db_data.get("selected_protocols", None)
             if selected_protocols is None:
@@ -4897,13 +4897,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 serialized_protocols = json.loads(selected_protocols)
 
             trading_type = db_data.get("trading_type", None)
-            selection_thresholds = db_data.get("selection_thresholds", None)
-            if selection_thresholds is None:
-                serialized_thresholds = {}
-            else:
-                serialized_thresholds = json.loads(selection_thresholds)
             self.context.logger.info(
-                f"Selected protocols: {serialized_protocols}, Trading type: {trading_type}, Selection thresholds: {serialized_thresholds}"
+                f"Selected protocols: {serialized_protocols}, Trading type: {trading_type}"
             )
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
@@ -4914,7 +4909,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     {
                         "selected_protocols": serialized_protocols,
                         "trading_type": trading_type,
-                        "selection_thresholds": serialized_thresholds
                     },
                     sort_keys=True,
                 ),

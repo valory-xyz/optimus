@@ -478,7 +478,7 @@ class HttpHandler(BaseHttpHandler):
         """
         # Define the path to the portfolio data file
         portfolio_data_filepath: str = (
-            self.context.state.store_path / self.context.state.portfolio_info_filename
+            self.context.params.store_path / self.context.params.portfolio_info_filename
         )
 
         # Read the portfolio data from the file
@@ -668,42 +668,67 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the original HttpDialogue
         """
         try:
-            self.context.logger.info(f"Received LLM response: {llm_response_message.value}-{type(llm_response_message.value)}")
             response_data = json.loads(llm_response_message.value)
-            self.context.logger.info(f"Response data: {response_data}")
-            selected_protocols = response_data.get("selected_protocols", [])
-            trading_type = response_data.get("trading_type", "")
-            reasoning = response_data.get("reasoning", "")
-            previous_trading_type = self.context.state.trading_type
+        except json.JSONDecodeError as e:
+            if llm_response_message.value.strip().startswith("```json") and llm_response_message.value.strip().endswith("```"):
+                # Strip the triple backticks and attempt to parse the JSON content
+                json_content = llm_response_message.value.strip()[7:-3]
+                try:
+                    response_data = json.loads(json_content)
+                except json.JSONDecodeError as e:
+                    selected_protocols = self.context.state.selected_protocols
+                    if selected_protocols:
+                        selected_protocols = self.context.params.available_strategies
+                    trading_type = self.context.state.trading_type
+                    if not trading_type:
+                        trading_type = TradingType.BALANCED.value
 
-            if not selected_protocols or not trading_type or not reasoning:
-                # No suitable strategies found
+                    fallback_message = {
+                        "reasoning": f"Failed to parse LLM response. The response is not in valid JSON format. Falling back to previous strategies: {selected_protocols} and trading type: {trading_type}"
+                    }
+                    self._send_ok_response(http_msg, http_dialogue, fallback_message)
+                else:
+                    self.context.logger.info(f"Received LLM response: {response_data}")
+                    selected_protocols = response_data.get("selected_protocols", [])
+                    trading_type = response_data.get("trading_type", "")
+                    reasoning = response_data.get("reasoning", "")
+                    previous_trading_type = self.context.state.trading_type
+
+                    if not selected_protocols or not trading_type or not reasoning:
+                        selected_protocols = self.context.state.selected_protocols
+                        if selected_protocols:
+                            selected_protocols = self.context.params.available_strategies
+                        trading_type = self.context.state.trading_type
+                        if not trading_type:
+                            trading_type = TradingType.BALANCED.value
+                        fallback_message = {
+                            "reasoning": reasoning + (
+                                f"Falling back to previous strategies: {selected_protocols} and trading type: {trading_type}"
+                            )
+                        }
+                        self._send_ok_response(http_msg, http_dialogue, fallback_message)
+                    else:
+                        response_data = {
+                            "selected_protocols": selected_protocols,
+                            "trading_type": trading_type,
+                            "reasoning": reasoning,
+                            "previous_trading_type": previous_trading_type
+                        }
+
+                        self._send_ok_response(http_msg, http_dialogue, response_data)
+            else:
                 fallback_message = {
-                    "response": (
-                        f"No suitable strategies found. "
-                        f"Falling back to default list: {self.context.state.available_strategies}"
-                    )
+                    "reasoning": "Failed to parse LLM response. Falling back to default strategies."
                 }
                 self._send_ok_response(http_msg, http_dialogue, fallback_message)
-                selected_protocols = self.context.state.available_strategies
-            else:
-                response_data = {
-                    "selected_protocols": selected_protocols,
-                    "trading_type": trading_type,
-                    "reasoning": reasoning,
-                    "previous_trading_type": previous_trading_type
-                }
+                selected_protocols = self.context.params.available_strategies
+                trading_type = self.context.state.trading_type
+                if not trading_type:
+                    trading_type = TradingType.BALANCED.value
 
-                self._send_ok_response(http_msg, http_dialogue, response_data)
+        # Offload KV store update to a separate thread
+        threading.Thread(target=self._delayed_write_kv, args=(selected_protocols, trading_type)).start()
 
-            # Offload KV store update to a separate thread
-            threading.Thread(target=self._delayed_write_kv, args=(selected_protocols, trading_type)).start()
-
-        except json.JSONDecodeError as e:
-            self.context.logger.error(
-                f"Failed to decode LLM response: {str(e)}"
-            )
-            self._handle_bad_request(http_msg, http_dialogue)
 
     def _delayed_write_kv(self, selected_protocols: List[str], trading_type: str) -> None:
         """

@@ -1167,14 +1167,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             self.context.logger.error(
                                 f"No strategy found for dex type {dex_type}"
                             )
-
+                
                 self.execute_hyper_strategy()
                 actions = (
                     yield from self.get_order_of_transactions()
                     if self.selected_opportunities is not None
                     else []
                 )
-
+                
                 if actions:
                     self.context.logger.info(f"Actions: {actions}")
                 else:
@@ -2008,8 +2008,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if not exit_pool_found:
                    actions = []  # Clear actions only if no 'ExitPool' was found and invested_amount greate than 1000 dollar
             else:
-                actions.append({'invested_amount': invested_amount})
-
+                for action in actions:
+                    if action.get('action') == 'EnterPool':
+                        action['invested_amount'] = (1200 - invested_amount)
+    
         return actions
 
     def _process_rewards(self, actions: List[Dict[str, Any]]) -> Generator:
@@ -3271,11 +3273,15 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
             if token0_amount <= 0 or token1_amount <= 0:
                 self.context.logger.error(f"Invalid token amounts: token0_amount={token0_amount}, token1_amount={token1_amount}")
                 return None, None, None
-        
+            
+            self.context.logger.info(f"token0_amount,token1_amount:{token0_amount,token1_amount}")
+
             max_amounts_in = [
                 int(Decimal(str(token0_amount)) * (Decimal(10) ** Decimal(token0_decimals))),
                 int(Decimal(str(token1_amount)) * (Decimal(10) ** Decimal(token1_decimals))),
             ]
+
+            self.context.logger.info(f"max amounts in after calculation: {max_amounts_in}")
         else:
             token0_balance = self._get_balance(chain, assets[0], positions)
             token1_balance = self._get_balance(chain, assets[1], positions)

@@ -2010,7 +2010,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 for action in actions:
                     if action.get('action') == 'EnterPool':
-                        action['invested_amount'] = (1200 - invested_amount)
+                        action['invested_amount'] = (1000 - invested_amount)
     
         return actions
 

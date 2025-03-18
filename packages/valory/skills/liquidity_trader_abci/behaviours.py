@@ -1140,7 +1140,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     sender=sender, actions=json.dumps(actions)
                 )
             else:
-                # yield from self.fetch_all_trading_opportunities()
+                yield from self.fetch_all_trading_opportunities()
 
                 if self.current_positions:
                     self.context.logger.info(f"current_positions:{self.current_positions}")
@@ -1168,8 +1168,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                 f"No strategy found for dex type {dex_type}"
                             )
                 
-                # self.execute_hyper_strategy()
-                self.selected_opportunities = [{'dex_type': 'balancerPool', 'chain': 'mode', 'apr': 9.666696438950499, 'pool_address': '0x7c86a44778c52a0aad17860924b53bf3f35dc932', 'pool_id': '0x7c86a44778c52a0aad17860924b53bf3f35dc932000200000000000000000007', 'pool_type': 'Weighted', 'token_count': 2, 'il_risk_score': -69.03165020125523, 'sharpe_ratio': 1.2749808810720547, 'depth_score': np.float64(150.96397999473865), 'max_position_size': 77227.32858298799, 'type': 'lp', 'tvl': 124129.84, 'token0': '0x4200000000000000000000000000000000000006', 'token0_symbol': 'WETH', 'token1': '0xdfc7c877a950e49d2610114102175a06c2e3167a', 'token1_symbol': 'MODE', 'max_investment_amounts': [0.26082012, 116741.14751878], 'max_investment_usd': 1000.0, 'composite_score': np.float64(86636.30556539547), 'funds_percentage': np.float64(100.0), 'relative_funds_percentage': np.float64(1.0)}]
+                self.execute_hyper_strategy()
                 actions = (
                     yield from self.get_order_of_transactions()
                     if self.selected_opportunities is not None

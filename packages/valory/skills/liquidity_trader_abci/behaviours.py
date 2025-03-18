@@ -1140,7 +1140,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     sender=sender, actions=json.dumps(actions)
                 )
             else:
-                yield from self.fetch_all_trading_opportunities()
+                # yield from self.fetch_all_trading_opportunities()
 
                 if self.current_positions:
                     self.context.logger.info(f"current_positions:{self.current_positions}")
@@ -1168,7 +1168,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                 f"No strategy found for dex type {dex_type}"
                             )
                 
-                self.execute_hyper_strategy()
+                # self.execute_hyper_strategy()
+                self.selected_opportunities = [{'dex_type': 'balancerPool', 'chain': 'mode', 'apr': 9.666696438950499, 'pool_address': '0x7c86a44778c52a0aad17860924b53bf3f35dc932', 'pool_id': '0x7c86a44778c52a0aad17860924b53bf3f35dc932000200000000000000000007', 'pool_type': 'Weighted', 'token_count': 2, 'il_risk_score': -69.03165020125523, 'sharpe_ratio': 1.2749808810720547, 'depth_score': np.float64(150.96397999473865), 'max_position_size': 77227.32858298799, 'type': 'lp', 'tvl': 124129.84, 'token0': '0x4200000000000000000000000000000000000006', 'token0_symbol': 'WETH', 'token1': '0xdfc7c877a950e49d2610114102175a06c2e3167a', 'token1_symbol': 'MODE', 'max_investment_amounts': [0.26082012, 116741.14751878], 'max_investment_usd': 1000.0, 'composite_score': np.float64(86636.30556539547), 'funds_percentage': np.float64(100.0), 'relative_funds_percentage': np.float64(1.0)}]
                 actions = (
                     yield from self.get_order_of_transactions()
                     if self.selected_opportunities is not None
@@ -1184,7 +1185,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 payload = EvaluateStrategyPayload(
                     sender=sender, actions=json.dumps(actions)
                 )
-
+    
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
@@ -1581,29 +1582,39 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         except json.decoder.JSONDecodeError as e:
             self.context.logger.error(f"Failed to fetch coin list: {e}")
             return None
-
-    def get_token_id_from_symbol_cached(
-        self, symbol, token_name, coin_list
-    ) -> Optional[str]:
+    
+    def get_token_id_from_symbol_cached(self, symbol, token_name, coin_list) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's symbol and name."""
-        # Try to find coins matching the symbol.
+        
+        self.context.logger.info(f"Type of coin_list: {type(coin_list)}")
+        
+        # Check the type before accessing by index.
+        if isinstance(coin_list, dict):
+            self.context.logger.info(f"Coin list is a dict with keys: {list(coin_list.keys())}")
+            coin_list = list(coin_list.values())
+        elif isinstance(coin_list, list) and coin_list:
+            self.context.logger.info(f"First element of coin_list: {coin_list[0]}")
+        
+        # Build candidates ensuring that each element is a dict.
         candidates = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+            coin for coin in coin_list 
+            if isinstance(coin, dict) and coin.get("symbol", "").lower() == symbol.lower()
         ]
+        
         if not candidates:
             return None
-
+    
         # If single candidate, return it.
         if len(candidates) == 1:
             return candidates[0]["id"]
-
-        # If multiple candidates, match by name if possible.
+    
         normalized_token_name = token_name.replace(" ", "").lower()
         for coin in candidates:
             coin_name = coin["name"].replace(" ", "").lower()
             if coin_name == normalized_token_name or coin_name == symbol.lower():
                 return coin["id"]
         return None
+
 
     def get_token_id_from_symbol(
         self, token_address, symbol, coin_list, chain_name

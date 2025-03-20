@@ -141,7 +141,7 @@ jobs:
         continue-on-error: true
         run: |
           gitleaks detect --report-format json --report-path leak_report
-        echo "::set-output name=exit_code::$?"
+          echo "::set-output name=exit_code::$?"
       - name: Print detected leaks
         run: |
           echo "Detected leaks:"

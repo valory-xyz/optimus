@@ -25,6 +25,7 @@ packages/valory/protocols/*
 packages/valory/skills/*
 
 !packages/valory/agents/optimus
+!packages/valory/connections/mirror_db
 !packages/valory/services/optimus
 !packages/valory/services/optimus_pearl
 !packages/valory/skills/liquidity_trader_abci

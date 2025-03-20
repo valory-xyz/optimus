@@ -1,0 +1,27 @@
+name: mirror_db
+author: valory
+version: 0.1.0
+type: connection
+description: GenericMirrorDB connection for interacting with REST APIs.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeif7gf5bvxnwc5tpv5cts64urafayubrzcepsonl6snt55ur7b4chu
+  connection.py: bafybeifjdoqz7oepvn6ic3xgexerrnswpixuk6irdwkktak5ygcl7ipdla
+  readme.md: bafybeiafz6hnwvpbf3ydbprcirlhppjpjznjd26il7223gi3pgxdcfw3bu
+fingerprint_ignore_patterns: []
+connections: []
+protocols:
+- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
+class_name: GenericMirrorDBConnection
+config:
+  mirror_db_base_url: https://afmdb.autonolas.tech
+excluded_protocols: []
+restricted_to_protocols: []
+dependencies:
+  aiohttp:
+    version: '>=3.7.4'
+  certifi:
+    version: '>=2025.1.31'
+is_abstract: false
+cert_requests: []

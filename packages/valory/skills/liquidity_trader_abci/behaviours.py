@@ -202,8 +202,8 @@ class PositionStatus(Enum):
 
 
 class TradingType(Enum):
-    BALANCED = "Balanced"
-    RISKY = "Risky"
+    BALANCED = "balanced"
+    RISKY = "risky"
 
 
 THRESHOLDS = {TradingType.BALANCED.value: 0.3374, TradingType.RISKY.value: 0.2892}

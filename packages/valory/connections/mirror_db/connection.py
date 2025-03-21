@@ -140,7 +140,7 @@ class GenericMirrorDBConnection(Connection):
         
         # Store all configuration in a single dictionary
         self._config = {
-            "api_key": self.api_key,
+            # "api_key": self.api_key,
             "base_url": self.base_url,
             # Add other default configs here
         }

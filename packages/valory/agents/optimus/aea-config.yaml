@@ -14,7 +14,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeici34tuoym3evnzfgbnmgbdy5smshh5jx6ew6zfchmm4tmyzvpg34
 - valory/ledger:0.19.0:bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
-- valory/mirror_db:0.1.0:bafybeigu2gaevzb5mmekqpmolkdigiqd2yrjehjaefr35n7nh4ifknhhoi
+- valory/mirror_db:0.1.0:bafybeih4kaasxeli5cbl74xjok3sls5xryu4nta5bmgw7hqkif64ttxq4a
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeie3h2hpzlrie2yc5r3eypce546am5bxlgvzqgjols34yf6z523o6q
@@ -38,8 +38,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeia2nr7bapbs5h25ik4myahqppvtvrdgxl552pv6skwlltbjqy6bnm
-- valory/optimus_abci:0.1.0:bafybeicpnhfg4xnhij5ueko4ahkma345wsnj7dg4amuogdz4swga6u7omq
+- valory/liquidity_trader_abci:0.1.0:bafybeicgjci7esco2v22auxuffls6em5i5uikxtvwfmffbxiedvvrsuscm
+- valory/optimus_abci:0.1.0:bafybeiftvciwzzq7667tmsha5454rm3jm5mqvqqvwkmfy667mwucgb3kp4
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu

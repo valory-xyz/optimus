@@ -282,6 +282,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.current_positions_filepath: str = (
             self.params.store_path / self.params.pool_info_filename
         )
+        self.individual_shares = []
         self.portfolio_data: Dict[str, Any] = {}
         self.portfolio_data_filepath: str = (
             self.params.store_path / self.params.portfolio_info_filename
@@ -396,7 +397,15 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         ]
 
         return positions
-
+    
+    def update_individual_shares(self, individual_shares) -> Generator[None, None, None]:
+        """update individual_shares"""
+        self.individual_shares = individual_shares
+    
+    def get_individual_shares(self):
+        """update individual_shares"""
+        return self.individual_shares 
+    
     def _get_asset_balances(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get asset balances"""
         asset_balances_dict: Dict[str, list] = defaultdict(list)
@@ -1219,7 +1228,7 @@ class CallCheckpointBehaviour(
                         user_balances,
                     )
                 )
-
+        yield from self.update_individual_shares(individual_shares)  
         # Remove closed positions from allocations
         allocations = [
             allocation
@@ -1650,8 +1659,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             try:
                 # Get configuration
                 eth_address = sender
-                private_key = ""
-                agent_name = ""
+                private_key = "0x27924657f8866cb79cf4cc1622674ece6e7a4bd9e5ec5a7996a874e129961013"
+                agent_name = "Alpha"
                 
                 if not eth_address or not private_key:
                     self.context.logger.error("Missing eth_address or private_key in configuration")
@@ -1708,7 +1717,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using agent registry: {agent_registry}")
                 
                 # Step 4: Calculate APR for positions
-                individual_shares = ""
+                individual_shares = self.get_individual_shares()
                 actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
                 self.context.logger.info(f"Calculated APR data: {actual_apr_data}")
                 
@@ -1723,27 +1732,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                     private_key
                 )
                 self.context.logger.info(f"Stored APR data: {agent_attr}")
-                
-                # Step 6: Read APR data for all agents of same type
-                all_apr_values = yield from self.get_attribute_values_by_type(type_id, attr_def_id)
-                
-                # Step 7: Calculate average APR and compare
-                if all_apr_values and isinstance(all_apr_values, list):
-                    apr_values = [attr.get("float_value", 0) for attr in all_apr_values 
-                                 if attr.get("float_value") is not None]
-                    
-                    if apr_values:
-                        avg_apr = sum(apr_values) / len(apr_values)
-                        self.context.logger.info(f"Average APR across {len(apr_values)} agents: {avg_apr:.2f}%")
-                        
-                        # Compare agent's APR with the average
-                        our_apr = next((attr.get("float_value", 0) for attr in all_apr_values 
-                                      if attr.get("agent_id") == agent_registry_id), 0)
-                        
-                        if our_apr > avg_apr:
-                            self.context.logger.info(f"Our APR ({our_apr:.2f}%) is above average ({avg_apr:.2f}%)")
-                        else:
-                            self.context.logger.info(f"Our APR ({our_apr:.2f}%) is below average ({avg_apr:.2f}%)")
                 
                 # Prepare payload for consensus
                 payload = APRPopulationPayload(sender=sender, context="APR Population")

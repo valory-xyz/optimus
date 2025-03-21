@@ -94,9 +94,11 @@ IpfsDialogues = BaseIpfsDialogues
 
 
 from typing import Any
+
 from aea.protocols.base import Address, Message
 from aea.protocols.dialogue.base import Dialogue as BaseDialogue
 from aea.skills.base import Model
+
 from packages.dvilela.protocols.kv_store.dialogues import (
     KvStoreDialogue as BaseKvStoreDialogue,
 )
@@ -112,10 +114,12 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
     HttpDialogues as BaseHttpDialogues,
 )
 
+
 SrrDialogue = BaseSrrDialogue
 HttpDialogue = BaseHttpDialogue
 HttpDialogues = BaseHttpDialogues
 KvStoreDialogue = BaseKvStoreDialogue
+
 
 class SrrDialogues(Model, BaseSrrDialogues):
     """The dialogues class keeps track of all dialogues."""
@@ -144,6 +148,7 @@ class SrrDialogues(Model, BaseSrrDialogues):
             self_address=str(self.skill_id),
             role_from_first_message=role_from_first_message,
         )
+
 
 class KvStoreDialogues(Model, BaseKvStoreDialogues):
     """The dialogues class keeps track of all dialogues."""

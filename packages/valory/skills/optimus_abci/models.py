@@ -19,7 +19,9 @@
 
 """This module contains the shared state for the abci skill of OptimusAbciApp."""
 
-from typing import Any, Dict, Type, Union, cast, List, Tuple, Callable
+from typing import Any, Callable, Dict, List, Tuple, Type, Union, cast
+
+from aea.skills.base import Model, SkillContext
 
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
@@ -44,7 +46,7 @@ from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,
 )
-from aea.skills.base import Model, SkillContext
+
 
 EventType = Union[
     Type[LiquidityTraderEvent],

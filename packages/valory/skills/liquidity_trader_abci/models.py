@@ -59,7 +59,7 @@ class SharedState(BaseSharedState):
         self.request_queue = []
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.agent_reasoning: str = ""
-    
+
     def setup(self) -> None:
         """Set up the model."""
         super().setup()
@@ -303,20 +303,26 @@ class Params(BaseParams):
         self.strategies_kwargs = json.loads(
             self._ensure("strategies_kwargs", kwargs, str)
         )
-        self.available_protocols = self._ensure("available_protocols", kwargs, List[str])
+        self.available_protocols = self._ensure(
+            "available_protocols", kwargs, List[str]
+        )
         self.selected_hyper_strategy = self._ensure(
             "selected_hyper_strategy", kwargs, str
         )
         self.dex_type_to_strategy = json.loads(
             self._ensure("dex_type_to_strategy", kwargs, str)
         )
-        self.default_acceptance_time = self._ensure("default_acceptance_time", kwargs, int)
+        self.default_acceptance_time = self._ensure(
+            "default_acceptance_time", kwargs, int
+        )
         self.max_pools = self._ensure("max_pools", kwargs, int)
         self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
         self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
         self.pnl_check_interval = self._ensure("pnl_check_interval", kwargs, int)
-        self.available_strategies = self._ensure("available_strategies", kwargs, List[str])
-        self.cleanup_freq = self._ensure("cleanup_freq",kwargs,int)
+        self.available_strategies = self._ensure(
+            "available_strategies", kwargs, List[str]
+        )
+        self.cleanup_freq = self._ensure("cleanup_freq", kwargs, int)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

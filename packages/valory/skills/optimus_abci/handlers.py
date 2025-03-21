@@ -29,22 +29,35 @@ from urllib.parse import urlparse
 
 import yaml
 from aea.protocols.base import Message
+
+
+# Strategy to protocol name mapping
+STRATEGY_TO_PROTOCOL = {
+    "balancer_pools_search": "balancerPool",
+    "asset_lending": "sturdy",
+}
+# Reverse mapping for converting protocol names back to strategy names
+PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
+
 import json
 import re
 import threading
 import time
-import yaml
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
+import yaml
 from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.base import Handler
 
+from packages.dvilela.connections.genai.connection import (
+    PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
+)
 from packages.dvilela.connections.kv_store.connection import (
     PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
 )
@@ -56,31 +69,8 @@ from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.connections.http_server.connection import (
     PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
 )
-from packages.dvilela.connections.genai.connection import (
-    PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
-)
 from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.srr.message import SrrMessage
-from packages.valory.skills.abstract_round_abci.handlers import (
-    HttpHandler as BaseHttpHandler,
-)
-from packages.valory.skills.abstract_round_abci.models import Requests
-from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
-from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
-from packages.valory.skills.optimus_abci.dialogues import (
-    HttpDialogue,
-    HttpDialogues,
-    SrrDialogue,
-    SrrDialogues,
-)
-from packages.valory.skills.optimus_abci.models import Params
-from packages.valory.skills.optimus_abci.models import SharedState
-from packages.valory.skills.optimus_abci.prompts import PROMPT
-from packages.valory.skills.liquidity_trader_abci.behaviours import THRESHOLDS, TradingType
-from packages.valory.connections.http_server.connection import (
-    PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
-)
-from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
@@ -99,13 +89,24 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
+from packages.valory.skills.abstract_round_abci.models import Requests
+from packages.valory.skills.liquidity_trader_abci.behaviours import (
+    THRESHOLDS,
+    TradingType,
+)
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
-from packages.valory.skills.optimus_abci.dialogues import HttpDialogue, HttpDialogues
-from packages.valory.skills.optimus_abci.models import SharedState
+from packages.valory.skills.optimus_abci.dialogues import (
+    HttpDialogue,
+    HttpDialogues,
+    SrrDialogue,
+    SrrDialogues,
+)
+from packages.valory.skills.optimus_abci.models import Params, SharedState
+from packages.valory.skills.optimus_abci.prompts import PROMPT
 
 
 ABCIHandler = BaseABCIRoundHandler
@@ -149,6 +150,7 @@ class HttpMethod(Enum):
     GET = "get"
     HEAD = "head"
     POST = "post"
+
 
 class BaseHandler(Handler):
     """Base handler providing shared utilities for all handlers."""
@@ -221,6 +223,7 @@ class KvStoreHandler(BaseHandler):
 
         self.context.state.in_flight_req = False
         self.on_message_handled(message)
+
 
 class HttpHandler(BaseHttpHandler):
     """This implements the HTTP handler."""
@@ -492,6 +495,27 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error(f"Error reading portfolio data: {str(e)}")
             portfolio_data = {"error": "Could not read portfolio data"}
 
+        # Get selected protocols (strategy names) from state
+        if self.context.state.selected_protocols:
+            selected_protocols = json.loads(self.context.state.selected_protocols)
+        else:
+            selected_protocols = self.context.params.available_strategies
+
+        # Convert strategy names to protocol names
+        selected_protocol_names = [
+            STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+            for strategy in selected_protocols
+        ]
+
+        # Get trading type from state
+        trading_type = self.context.state.trading_type
+        if not trading_type:
+            trading_type = TradingType.BALANCED.value
+
+        # Add selected protocol names and trading type to portfolio data
+        portfolio_data["selected_protocols"] = selected_protocol_names
+        portfolio_data["trading_type"] = trading_type
+
         portfolio_data_json = json.dumps(portfolio_data)
         # Send the portfolio data as a response
         self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)
@@ -626,22 +650,39 @@ class HttpHandler(BaseHttpHandler):
             previous_trading_type = self.context.state.trading_type
             if not previous_trading_type:
                 previous_trading_type = TradingType.BALANCED.value
-            
-            previous_selected_protocols = self.context.state.selected_protocols
-            if not previous_selected_protocols:
+
+            if self.context.state.selected_protocols:
+                previous_selected_protocols = json.loads(
+                    self.context.state.selected_protocols
+                )
+            else:
                 previous_selected_protocols = self.context.params.available_strategies
 
-            available_trading_types = [trading_type.value for trading_type in TradingType]
+            available_trading_types = [
+                trading_type.value for trading_type in TradingType
+            ]
             last_selected_threshold = THRESHOLDS.get(previous_trading_type)
+            # Convert strategy names to protocol names for LLM
+            available_protocols_for_llm = [
+                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+                for strategy in self.context.params.available_strategies
+            ]
+
+            # Convert previous selected protocols to their protocol names
+            previous_protocols_for_llm = [
+                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+                for strategy in previous_selected_protocols
+            ]
+
             # Format the prompt
             prompt_template = PROMPT.format(
                 USER_PROMPT=user_prompt,
                 PREVIOUS_TRADING_TYPE=previous_trading_type,
                 TRADING_TYPES=available_trading_types,
-                AVAILABLE_PROTOCOLS=self.context.params.available_strategies,
+                AVAILABLE_PROTOCOLS=available_protocols_for_llm,
                 LAST_THRESHOLD=last_selected_threshold,
-                PREVIOUS_SELECTED_PROTOCOLS=previous_selected_protocols,
-                THRESHOLDS=THRESHOLDS
+                PREVIOUS_SELECTED_PROTOCOLS=previous_protocols_for_llm,
+                THRESHOLDS=THRESHOLDS,
             )
 
             # Prepare payload data
@@ -658,7 +699,10 @@ class HttpHandler(BaseHttpHandler):
             # Prepare callback args
             callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}
             self._send_message(
-                request_srr_message, srr_dialogue, self._handle_llm_response, callback_kwargs
+                request_srr_message,
+                srr_dialogue,
+                self._handle_llm_response,
+                callback_kwargs,
             )
 
         except (json.JSONDecodeError, ValueError) as e:
@@ -680,8 +724,16 @@ class HttpHandler(BaseHttpHandler):
         :param http_msg: the original HttpMessage
         :param http_dialogue: the original HttpDialogue
         """
-        selected_protocols, trading_type, reasoning, previous_trading_type = self._parse_llm_response(llm_response_message)
-
+        (
+            selected_protocol_names,
+            trading_type,
+            reasoning,
+            previous_trading_type,
+        ) = self._parse_llm_response(llm_response_message)
+        selected_protocols = [
+            PROTOCOL_TO_STRATEGY.get(protocol, protocol)
+            for protocol in selected_protocol_names
+        ]
         response_data = {
             "selected_protocols": selected_protocols,
             "trading_type": trading_type,
@@ -692,7 +744,9 @@ class HttpHandler(BaseHttpHandler):
         self._send_ok_response(http_msg, http_dialogue, response_data)
 
         # Offload KV store update to a separate thread
-        threading.Thread(target=self._delayed_write_kv, args=(selected_protocols, trading_type)).start()
+        threading.Thread(
+            target=self._delayed_write_kv, args=(selected_protocols, trading_type)
+        ).start()
 
     def _parse_llm_response(
         self,
@@ -711,14 +765,19 @@ class HttpHandler(BaseHttpHandler):
             response_data = json.loads(payload.get("response", ""))
         except json.JSONDecodeError as e:
             response = json.loads(llm_response_message.payload).get("response")
-            if response.strip().startswith("```json") and response.strip().endswith("```"):
+            if response.strip().startswith("```json") and response.strip().endswith(
+                "```"
+            ):
                 # Strip the triple backticks and attempt to parse the JSON content
                 json_content = response.strip()[7:-3]
                 try:
                     response_data = json.loads(json_content)
                 except json.JSONDecodeError:
-                    selected_protocols = self.context.state.selected_protocols
-                    if not selected_protocols:
+                    if self.context.state.selected_protocols:
+                        selected_protocols = json.loads(
+                            self.context.state.selected_protocols
+                        )
+                    else:
                         selected_protocols = self.context.params.available_strategies
                     trading_type = self.context.state.trading_type
                     if not trading_type:
@@ -727,7 +786,9 @@ class HttpHandler(BaseHttpHandler):
                     reasoning = f"Failed to parse LLM response. The response is not in valid JSON format. Falling back to previous strategies: {selected_protocols} and trading type: {trading_type}"
                     return selected_protocols, trading_type, reasoning, trading_type
             else:
-                reasoning = "Failed to parse LLM response. Falling back to default strategies."
+                reasoning = (
+                    "Failed to parse LLM response. Falling back to default strategies."
+                )
                 selected_protocols = self.context.params.available_strategies
                 trading_type = self.context.state.trading_type
                 if not trading_type:
@@ -736,14 +797,24 @@ class HttpHandler(BaseHttpHandler):
 
         self.context.logger.info(f"Received LLM response: {response_data}")
         selected_protocols = response_data.get("selected_protocols", [])
+
+        # Convert protocol names back to strategy names for backend storage
+
         trading_type = response_data.get("trading_type", "")
         reasoning = response_data.get("reasoning", "")
         previous_trading_type = self.context.state.trading_type
 
         if not selected_protocols or not trading_type or not reasoning:
-            selected_protocols = self.context.state.selected_protocols
-            if not selected_protocols:
+            if self.context.state.selected_protocols:
+                selected_protocols = json.loads(self.context.state.selected_protocols)
+            else:
                 selected_protocols = self.context.params.available_strategies
+
+            selected_protocols = [
+                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+                for strategy in selected_protocols
+            ]
+
             trading_type = self.context.state.trading_type
             if not trading_type:
                 trading_type = TradingType.BALANCED.value
@@ -751,18 +822,26 @@ class HttpHandler(BaseHttpHandler):
 
         return selected_protocols, trading_type, reasoning, previous_trading_type
 
-
-    def _delayed_write_kv(self, selected_protocols: List[str], trading_type: str) -> None:
+    def _delayed_write_kv(
+        self, selected_protocols: List[str], trading_type: str
+    ) -> None:
         """
         Write to the KV store after a delay if this was the only request in queue.
 
-        :param strategies: list of chosen strategies
+        :param selected_protocols: list of chosen strategy names (not protocol names)
+        :param trading_type: the selected trading type
         """
         self.context.logger.info("Waiting for default acceptance time...")
         time.sleep(self.context.params.default_acceptance_time)
+
         if len(self.context.state.request_queue) == 1:
-            self._write_kv({"selected_protocols": json.dumps(selected_protocols), "trading_type": trading_type})
-            
+            self._write_kv(
+                {
+                    "selected_protocols": json.dumps(selected_protocols),
+                    "trading_type": trading_type,
+                }
+            )
+
         self.context.state.request_queue.pop()
 
     def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
@@ -784,14 +863,19 @@ class HttpHandler(BaseHttpHandler):
             kv_store_message, kv_store_dialogue, self._handle_kv_store_response
         )
 
-    def _handle_kv_store_response(self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue) -> None:
+    def _handle_kv_store_response(
+        self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue
+    ) -> None:
         """
         Handle KV store response messages.
 
         :param kv_store_response_message: the KvStoreMessage response
         :param dialogue: the KvStoreDialogue
         """
-        success = kv_store_response_message.performative == KvStoreMessage.Performative.SUCCESS
+        success = (
+            kv_store_response_message.performative
+            == KvStoreMessage.Performative.SUCCESS
+        )
         if success:
             self.context.logger.info("KV store update successful.")
         else:
@@ -853,7 +937,10 @@ class SrrHandler(BaseHandler):
         self.context.state.in_flight_req = False
         self.on_message_handled(message)
 
+
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     KvStoreHandler as BaseKvStoreHandler,
 )
+
+
 KvStoreHandler = BaseKvStoreHandler

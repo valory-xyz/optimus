@@ -22,6 +22,7 @@
 from typing import Optional, cast
 
 from aea.configurations.data_types import PublicId
+from aea.protocols.base import Message
 
 from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ipfs import IpfsMessage
@@ -45,7 +46,7 @@ from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
-from aea.protocols.base import Message
+
 
 ABCIHandler = BaseABCIRoundHandler
 HttpHandler = BaseHttpHandler

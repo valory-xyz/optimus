@@ -129,11 +129,11 @@ class SynchronizedData(BaseSynchronizedData):
             serialized = "[]"
         selected_protocols = json.loads(serialized)
         return selected_protocols
-    
+
     @property
     def trading_type(self) -> List[Dict[str, Any]]:
         """Get the trading_type"""
-        trading_type = self.db.get("trading_type","")
+        trading_type = self.db.get("trading_type", "")
         return trading_type
 
     @property
@@ -490,7 +490,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
 
             selected_protocols = payload.get("selected_protocols", [])
             trading_type = payload.get("trading_type", "")
-            
+
             if not selected_protocols or not trading_type:
                 return synchronized_data, Event.WAIT
             else:
@@ -498,7 +498,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
                 synchronized_data = synchronized_data.update(
                     synchronized_data_class=SynchronizedData,
                     selected_protocols=serialized_selected_protocols,
-                    trading_type=trading_type
+                    trading_type=trading_type,
                 )
                 return synchronized_data, Event.DONE
 
@@ -507,6 +507,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
         ):
             return self.synchronized_data, Event.NO_MAJORITY
         return None
+
 
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""

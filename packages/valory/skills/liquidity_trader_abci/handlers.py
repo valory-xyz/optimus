@@ -106,7 +106,7 @@ class KvStoreHandler(AbstractResponseHandler):
 
         :param message: the KvStoreMessage instance
         """
-        self.context.logger.info(f"Received LLM message: {message}")
+        self.context.logger.info(f"Received KvStore message: {message}")
         kv_store_msg = cast(KvStoreMessage, message)
 
         if kv_store_msg.performative not in self.allowed_response_performatives:

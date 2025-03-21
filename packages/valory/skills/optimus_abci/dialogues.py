@@ -103,8 +103,8 @@ from packages.dvilela.protocols.kv_store.dialogues import (
 from packages.dvilela.protocols.kv_store.dialogues import (
     KvStoreDialogues as BaseKvStoreDialogues,
 )
-from packages.valory.protocols.llm.dialogues import LlmDialogue as BaseLlmDialogue
-from packages.valory.protocols.llm.dialogues import LlmDialogues as BaseLlmDialogues
+from packages.valory.protocols.srr.dialogues import SrrDialogue as BaseSrrDialogue
+from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
 from packages.valory.skills.abstract_round_abci.dialogues import (
     HttpDialogue as BaseHttpDialogue,
 )
@@ -112,13 +112,13 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
     HttpDialogues as BaseHttpDialogues,
 )
 
-LlmDialogue = BaseLlmDialogue
+SrrDialogue = BaseSrrDialogue
 HttpDialogue = BaseHttpDialogue
 HttpDialogues = BaseHttpDialogues
 KvStoreDialogue = BaseKvStoreDialogue
 
-class LlmDialogues(Model, BaseLlmDialogues):
-    """A class to keep track of LLM dialogues."""
+class SrrDialogues(Model, BaseSrrDialogues):
+    """The dialogues class keeps track of all dialogues."""
 
     def __init__(self, **kwargs: Any) -> None:
         """
@@ -137,9 +137,9 @@ class LlmDialogues(Model, BaseLlmDialogues):
             :param receiver_address: the address of the receiving agent
             :return: The role of the agent
             """
-            return LlmDialogue.Role.SKILL
+            return SrrDialogue.Role.SKILL
 
-        BaseLlmDialogues.__init__(
+        BaseSrrDialogues.__init__(
             self,
             self_address=str(self.skill_id),
             role_from_first_message=role_from_first_message,

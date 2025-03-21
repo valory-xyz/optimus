@@ -9,9 +9,9 @@ fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
-  dialogues.py: bafybeidyrestjlqswuwasecfwmgle5qltamlg5aiinyujisrgfp2j5qzbe
+  dialogues.py: bafybeibk2bmdk6so2rrwom23wwgw57czfd3p6cln5jiju5agyrzdqf6nmu
   fsm_specification.yaml: bafybeicbqp4idp4ndsh2ffmmfjbn7e3b7dizt2dyrwiupzosg2d4drsupm
-  handlers.py: bafybeiglzpsblqrr4jm7cjoqlbbev4hvqjpojv2f3463tc2wq6ha2aoz5y
+  handlers.py: bafybeigkxkyjsqg7fqhqktm5jpxxviwwzq22gkzyqtwpxlzqk2i3picqnq
   models.py: bafybeicpylxjha54nt36nvohc3hfx5esxi25wsupsqmma5lu7wr2wt2a4a
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
   modius-ui-build/asset-manifest.json: bafybeiebofzbh5twwawwfauhcxcmohoiibwqvhekadixf5kfsdurxjbn44
@@ -43,23 +43,23 @@ fingerprint:
   modius-ui-build/static/js/main.7294bed8.js: bafybeidi22vopxc4suvpo6sbztq762jcz44iiwojceuox5alxrobqdxpm4
   modius-ui-build/static/js/main.7294bed8.js.LICENSE.txt: bafybeid4htnvhd3rae6lhhuimibl6q3lrrbhlqsb7pl5e5p4jxjolnl7cy
   modius-ui-build/static/js/main.7294bed8.js.map: bafybeihbwqurlskloidsoldd7ducfhwvwh3xiaijtil2hevmotb54a2jrm
-  prompts.py: bafybeicqwk7voxsk6em5sbskyp4rky55rqbw6yxfblebvong7q2rac3z4m
+  prompts.py: bafybeihtyejrfped6cmezfu3h6gz6ebpc3xb4mddsebyprqni2tly7zt4m
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
-- valory/openai:0.1.0:bafybeiaryip2lbiluf7vjsdq6r5qiqdesmhqevrzekfrxpugfypqja6gae
+- dvilela/genai:0.1.0:bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty
 - dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
 contracts: []
 protocols:
 - valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
-- valory/llm:1.0.0:bafybeihj2orqapokafg7co3wlogwgf6cckaaj2bz3nuv4rm3opkoyhrlp4
+- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeiabmt65f5xhtbhyheywhukh7fua5wetmg7rynxu36qnqali63abgm
+- valory/liquidity_trader_abci:0.1.0:bafybeic34ksiovaxlekkag5zur6l7vcf25mg54tw6guqht65pdyhd3tuvy
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
@@ -90,9 +90,9 @@ handlers:
   tendermint:
     args: {}
     class_name: TendermintHandler
-  llm_handler:
+  srr_handler:
     args: {}
-    class_name: LlmHandler
+    class_name: SrrHandler
 models:
   abci_dialogues:
     args: {}
@@ -277,9 +277,9 @@ models:
   kv_store_dialogues:
     args: {}
     class_name: KvStoreDialogues
-  llm_dialogues:
+  srr_dialogues:
     args: {}
-    class_name: LlmDialogues
+    class_name: SrrDialogues
 dependencies:
   PyYAML:
     version: '>=3.10,<=6.0.1'

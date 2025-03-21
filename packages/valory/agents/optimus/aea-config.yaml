@@ -14,7 +14,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeici34tuoym3evnzfgbnmgbdy5smshh5jx6ew6zfchmm4tmyzvpg34
 - valory/ledger:0.19.0:bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
-- valory/openai:0.1.0:bafybeiaryip2lbiluf7vjsdq6r5qiqdesmhqevrzekfrxpugfypqja6gae
+- dvilela/genai:0.1.0:bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty
 - dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
@@ -39,8 +39,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeibbvglnzhblyk2kehey7jl3bjtgrkt4vwtaz7c5dhhe5ebsnihk6m
-- valory/optimus_abci:0.1.0:bafybeia74lmqsdw5h7ho2tijsuvldtpwxuu4tuajyjhvae3ivp4ldxjtdi
+- valory/liquidity_trader_abci:0.1.0:bafybeiabmt65f5xhtbhyheywhukh7fua5wetmg7rynxu36qnqali63abgm
+- valory/optimus_abci:0.1.0:bafybeidueinpoukz3zmtst7lzqker6o4alsugkwtmwicsn5eieafzc2k5q
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -146,15 +146,10 @@ cert_requests:
   public_key: ${str:02d3a830c9d6ea1ae91936951430dee11f4662f33118b02190693be835359a9d77}
   save_path: .certs/acn_cosmos_11000.txt
 ---
-public_id: valory/openai:0.1.0
+public_id: dvilela/genai:0.1.0
 type: connection
 config:
-  engine: ${str:gpt-4}
-  max_tokens: ${int:500}
-  openai_api_key: ${str:}
-  temperature: ${float:0}
-  use_openai_staging_api: ${bool:false}
-  openai_staging_api: ${str:http://host.docker.internal:5000/openai}
+  genai_api_key: ${str:}
 ---
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection

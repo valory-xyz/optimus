@@ -56,11 +56,11 @@ from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.connections.http_server.connection import (
     PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
 )
-from packages.valory.connections.openai.connection import (
-    PUBLIC_ID as LLM_CONNECTION_PUBLIC_ID,
+from packages.dvilela.connections.genai.connection import (
+    PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
 )
 from packages.valory.protocols.http.message import HttpMessage
-from packages.valory.protocols.llm.message import LlmMessage
+from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     HttpHandler as BaseHttpHandler,
 )
@@ -70,8 +70,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.optimus_abci.dialogues import (
     HttpDialogue,
     HttpDialogues,
-    LlmDialogue,
-    LlmDialogues,
+    SrrDialogue,
+    SrrDialogues,
 )
 from packages.valory.skills.optimus_abci.models import Params
 from packages.valory.skills.optimus_abci.models import SharedState
@@ -214,7 +214,6 @@ class KvStoreHandler(BaseHandler):
             self.context.state.in_flight_req = False
             return
 
-        breakpoint()
         dialogue = self.context.kv_store_dialogues.update(kv_store_msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         callback, kwargs = self.context.state.req_to_callback.pop(nonce)
@@ -278,6 +277,7 @@ class HttpHandler(BaseHttpHandler):
             ] = camel_to_snake(target_round)
         self.json_content_header = "Content-Type: application/json\n"
         self.html_content_header = "Content-Type: text/html\n"
+        self.function_entry_count = 0
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -613,6 +613,10 @@ class HttpHandler(BaseHttpHandler):
         request_id = http_dialogue.dialogue_label.dialogue_reference[0]
         self.context.state.request_queue.append(request_id)
 
+        # Increment the function entry counter
+        self.function_entry_count += 1
+        self.context.logger.info(f"------------------REQUEST NUMBER - {self.function_entry_count} TIMESTAMP - {time.time()}.")
+
         try:
             # Parse incoming data
             data = json.loads(http_msg.body.decode("utf-8"))
@@ -621,7 +625,13 @@ class HttpHandler(BaseHttpHandler):
                 raise ValueError("Prompt is required.")
 
             previous_trading_type = self.context.state.trading_type
+            if not previous_trading_type:
+                previous_trading_type = TradingType.BALANCED.value
             
+            previous_selected_protocols = self.context.state.selected_protocols
+            if not previous_selected_protocols:
+                previous_selected_protocols = self.context.params.available_strategies
+
             available_trading_types = [trading_type.value for trading_type in TradingType]
             last_selected_threshold = THRESHOLDS.get(previous_trading_type)
             # Format the prompt
@@ -630,22 +640,26 @@ class HttpHandler(BaseHttpHandler):
                 PREVIOUS_TRADING_TYPE=previous_trading_type,
                 TRADING_TYPES=available_trading_types,
                 AVAILABLE_PROTOCOLS=self.context.params.available_strategies,
-                LAST_THRESHOLD=last_selected_threshold
+                LAST_THRESHOLD=last_selected_threshold,
+                PREVIOUS_SELECTED_PROTOCOLS=previous_selected_protocols,
+                THRESHOLDS=THRESHOLDS
             )
 
+            # Prepare payload data
+            payload_data = {"prompt": prompt_template}
+
             # Create LLM request
-            llm_dialogues = cast(LlmDialogues, self.context.llm_dialogues)
-            request_llm_message, llm_dialogue = llm_dialogues.create(
-                counterparty=str(LLM_CONNECTION_PUBLIC_ID),
-                performative=LlmMessage.Performative.REQUEST,
-                prompt_template=prompt_template,
-                prompt_values={},
+            srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)
+            request_srr_message, srr_dialogue = srr_dialogues.create(
+                counterparty=str(GENAI_CONNECTION_PUBLIC_ID),
+                performative=SrrMessage.Performative.REQUEST,
+                payload=json.dumps(payload_data),
             )
 
             # Prepare callback args
             callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}
             self._send_message(
-                request_llm_message, llm_dialogue, self._handle_llm_response, callback_kwargs
+                request_srr_message, srr_dialogue, self._handle_llm_response, callback_kwargs
             )
 
         except (json.JSONDecodeError, ValueError) as e:
@@ -654,7 +668,7 @@ class HttpHandler(BaseHttpHandler):
 
     def _handle_llm_response(
         self,
-        llm_response_message: LlmMessage,
+        llm_response_message: SrrMessage,
         dialogue: Dialogue,
         http_msg: HttpMessage,
         http_dialogue: HttpDialogue,
@@ -662,72 +676,81 @@ class HttpHandler(BaseHttpHandler):
         """
         Handle the response from the LLM.
 
-        :param llm_response_message: the LlmMessage with the LLM output
-        :param dialogue: the LlmDialogue
+        :param srr_response_message: the SrrMessage with the LLM output
+        :param dialogue: the Dialogue
         :param http_msg: the original HttpMessage
         :param http_dialogue: the original HttpDialogue
         """
+        selected_protocols, trading_type, reasoning, previous_trading_type = self._parse_llm_response(llm_response_message)
+
+        response_data = {
+            "selected_protocols": selected_protocols,
+            "trading_type": trading_type,
+            "reasoning": reasoning,
+            "previous_trading_type": previous_trading_type,
+        }
+
+        self._send_ok_response(http_msg, http_dialogue, response_data)
+
+        # Offload KV store update to a separate thread
+        threading.Thread(target=self._delayed_write_kv, args=(selected_protocols, trading_type)).start()
+
+    def _parse_llm_response(
+        self,
+        llm_response_message: SrrMessage,
+    ) -> Tuple[List[str], str, str, str]:
+        """
+        Parse the LLM response and return the selected protocols, trading type, reasoning, and previous trading type.
+
+        :param llm_response_message: the SrrMessage with the LLM output
+        :param http_msg: the original HttpMessage
+        :param http_dialogue: the original HttpDialogue
+        :return: a tuple containing the selected protocols, trading type, reasoning, and previous trading type
+        """
         try:
-            response_data = json.loads(llm_response_message.value)
+            payload = json.loads(llm_response_message.payload)
+            response_data = json.loads(payload.get("response", ""))
         except json.JSONDecodeError as e:
-            if llm_response_message.value.strip().startswith("```json") and llm_response_message.value.strip().endswith("```"):
+            response = json.loads(llm_response_message.payload).get("response")
+            if response.strip().startswith("```json") and response.strip().endswith("```"):
                 # Strip the triple backticks and attempt to parse the JSON content
-                json_content = llm_response_message.value.strip()[7:-3]
+                json_content = response.strip()[7:-3]
                 try:
                     response_data = json.loads(json_content)
-                except json.JSONDecodeError as e:
+                except json.JSONDecodeError:
                     selected_protocols = self.context.state.selected_protocols
-                    if selected_protocols:
+                    if not selected_protocols:
                         selected_protocols = self.context.params.available_strategies
                     trading_type = self.context.state.trading_type
                     if not trading_type:
                         trading_type = TradingType.BALANCED.value
 
-                    fallback_message = {
-                        "reasoning": f"Failed to parse LLM response. The response is not in valid JSON format. Falling back to previous strategies: {selected_protocols} and trading type: {trading_type}"
-                    }
-                    self._send_ok_response(http_msg, http_dialogue, fallback_message)
-                else:
-                    self.context.logger.info(f"Received LLM response: {response_data}")
-                    selected_protocols = response_data.get("selected_protocols", [])
-                    trading_type = response_data.get("trading_type", "")
-                    reasoning = response_data.get("reasoning", "")
-                    previous_trading_type = self.context.state.trading_type
-
-                    if not selected_protocols or not trading_type or not reasoning:
-                        selected_protocols = self.context.state.selected_protocols
-                        if selected_protocols:
-                            selected_protocols = self.context.params.available_strategies
-                        trading_type = self.context.state.trading_type
-                        if not trading_type:
-                            trading_type = TradingType.BALANCED.value
-                        fallback_message = {
-                            "reasoning": reasoning + (
-                                f"Falling back to previous strategies: {selected_protocols} and trading type: {trading_type}"
-                            )
-                        }
-                        self._send_ok_response(http_msg, http_dialogue, fallback_message)
-                    else:
-                        response_data = {
-                            "selected_protocols": selected_protocols,
-                            "trading_type": trading_type,
-                            "reasoning": reasoning,
-                            "previous_trading_type": previous_trading_type
-                        }
-
-                        self._send_ok_response(http_msg, http_dialogue, response_data)
+                    reasoning = f"Failed to parse LLM response. The response is not in valid JSON format. Falling back to previous strategies: {selected_protocols} and trading type: {trading_type}"
+                    return selected_protocols, trading_type, reasoning, trading_type
             else:
-                fallback_message = {
-                    "reasoning": "Failed to parse LLM response. Falling back to default strategies."
-                }
-                self._send_ok_response(http_msg, http_dialogue, fallback_message)
+                reasoning = "Failed to parse LLM response. Falling back to default strategies."
                 selected_protocols = self.context.params.available_strategies
                 trading_type = self.context.state.trading_type
                 if not trading_type:
                     trading_type = TradingType.BALANCED.value
+                return selected_protocols, trading_type, reasoning, trading_type
 
-        # Offload KV store update to a separate thread
-        threading.Thread(target=self._delayed_write_kv, args=(selected_protocols, trading_type)).start()
+        self.context.logger.info(f"Received LLM response: {response_data}")
+        selected_protocols = response_data.get("selected_protocols", [])
+        trading_type = response_data.get("trading_type", "")
+        reasoning = response_data.get("reasoning", "")
+        previous_trading_type = self.context.state.trading_type
+
+        if not selected_protocols or not trading_type or not reasoning:
+            selected_protocols = self.context.state.selected_protocols
+            if not selected_protocols:
+                selected_protocols = self.context.params.available_strategies
+            trading_type = self.context.state.trading_type
+            if not trading_type:
+                trading_type = TradingType.BALANCED.value
+            reasoning = ""
+
+        return selected_protocols, trading_type, reasoning, previous_trading_type
 
 
     def _delayed_write_kv(self, selected_protocols: List[str], trading_type: str) -> None:
@@ -799,37 +822,37 @@ class HttpHandler(BaseHttpHandler):
         self.context.state.in_flight_req = True
 
 
-class LlmHandler(BaseHandler):
-    """Handler for managing LLM messages."""
+class SrrHandler(BaseHandler):
+    """Handler for managing Srr messages."""
 
-    SUPPORTED_PROTOCOL: Optional[PublicId] = LlmMessage.protocol_id
+    SUPPORTED_PROTOCOL: Optional[PublicId] = SrrMessage.protocol_id
     allowed_response_performatives = frozenset(
         {
-            LlmMessage.Performative.REQUEST,
-            LlmMessage.Performative.RESPONSE,
+            SrrMessage.Performative.REQUEST,
+            SrrMessage.Performative.RESPONSE,
         }
     )
 
     def handle(self, message: Message) -> None:
         """
-        React to an LLM message.
+        React to an SRR message.
 
-        :param message: the LlmMessage instance
+        :param message: the SrrMessage instance
         """
-        self.context.logger.info(f"Received LLM message: {message}")
-        llm_msg = cast(LlmMessage, message)
+        self.context.logger.info(f"Received Srr message: {message}")
+        srr_msg = cast(SrrMessage, message)
 
-        if llm_msg.performative not in self.allowed_response_performatives:
+        if srr_msg.performative not in self.allowed_response_performatives:
             self.context.logger.warning(
-                f"LLM performative not recognized: {llm_msg.performative}"
+                f"SRR performative not recognized: {srr_msg.performative}"
             )
             self.context.state.in_flight_req = False
             return
 
-        dialogue = self.context.llm_dialogues.update(llm_msg)
+        dialogue = self.context.srr_dialogues.update(srr_msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         callback, kwargs = self.context.state.req_to_callback.pop(nonce)
-        callback(llm_msg, dialogue, **kwargs)
+        callback(srr_msg, dialogue, **kwargs)
 
         self.context.state.in_flight_req = False
         self.on_message_handled(message)

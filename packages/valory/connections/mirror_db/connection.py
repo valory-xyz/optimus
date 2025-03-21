@@ -131,7 +131,7 @@ class GenericMirrorDBConnection(Connection):
         """
         super().__init__(*args, **kwargs)
         self.base_url = self.configuration.config.get("mirror_db_base_url")
-        self.api_key: Optional[str] = None
+        # self.api_key: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.dialogues = SrrDialogues(connection_id=PUBLIC_ID)
         self._response_envelopes: Optional[asyncio.Queue] = None
@@ -362,7 +362,7 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.post(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
-            headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(response, f"creating resource via {method_name}")
             return await response.json()
@@ -378,7 +378,7 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.get(  # type: ignore
             f"{self.base_url}/{endpoint}",
-            headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(response, f"reading resource via {method_name}")
             return await response.json()
@@ -396,7 +396,7 @@ class GenericMirrorDBConnection(Connection):
         async with self.session.put(  # type: ignore
             f"{self.base_url}/{endpoint}",
             json=data,
-            headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(response, f"updating resource via {method_name}")
             return await response.json()
@@ -412,7 +412,7 @@ class GenericMirrorDBConnection(Connection):
         """
         async with self.session.delete(  # type: ignore
             f"{self.base_url}/{endpoint}",
-            headers={"access-token": f"{self.api_key}"},
+            # headers={"access-token": f"{self.api_key}"},
         ) as response:
             await self._raise_for_response(response, f"deleting resource via {method_name}")
             return await response.json()

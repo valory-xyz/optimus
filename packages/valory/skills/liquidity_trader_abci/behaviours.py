@@ -42,6 +42,8 @@ from typing import (
     cast,
 )
 from urllib.parse import urlencode
+from eth_account import Account
+from eth_account.messages import encode_defunct
 
 from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
@@ -340,7 +342,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
                 return
 
         self.default_error(contract_id, contract_callable, response_msg)
-
+    
     def contract_interact(
         self,
         performative: ContractApiMessage.Performative,
@@ -1624,23 +1626,581 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
+
 class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
-    """"""
+    """Behavior for calculating and storing APR data in MirrorDB."""
     
-    matching_round: Type[AbstractRound] = APRPopulationRound    
+    matching_round: Type[AbstractRound] = APRPopulationRound
     
     def async_act(self) -> Generator:
-        """Async act"""
+        """
+        Execute the APR population behavior.
+        
+        This behavior:
+        1. Retrieves or creates necessary resources (agent type, agent registry, attribute definition)
+        2. Calculates APR for positions
+        3. Stores APR data in MirrorDB
+        4. Reads APR data for comparison with other agents
+        5. Completes the round
+        """
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-
-            payload = APRPopulationPayload(sender=sender, context="APR Population")
+            self.context.logger.info(f"APRPopulationBehaviour started by {sender}")
+            
+            try:
+                # Get configuration
+                eth_address = sender
+                private_key = ""
+                agent_name = ""
+                
+                if not eth_address or not private_key:
+                    self.context.logger.error("Missing eth_address or private_key in configuration")
+                    raise ValueError("Missing eth_address or private_key")
+                
+                # Step 1: Get or create agent type for "Modius"
+                agent_type = yield from self.get_agent_type_by_name("Modius")
+                if not agent_type:
+                    agent_type = yield from self.create_agent_type(
+                        "Modius", 
+                        "An agent for DeFi liquidity management and APR tracking",
+                        eth_address,
+                        private_key
+                    )
+                type_id = agent_type.get("type_id")
+                self.context.logger.info(f"Using agent type: {agent_type}")
+                
+                # Step 2: Get or create APR attribute definition
+                attr_def = yield from self.get_attribute_definition_by_name(type_id, "APR")
+                if not attr_def:
+                    attr_def = yield from self.create_attribute_definition(
+                        type_id,
+                        "APR",
+                        "float",
+                        True,
+                        "0.0",
+                        eth_address,
+                        private_key,
+                        admin_agent_id=1  # Assuming admin agent ID is 1
+                    )
+                attr_def_id = attr_def.get("attr_def_id")
+                self.context.logger.info(f"Using attribute definition: {attr_def}")
+                
+                # Step 3: Get or create agent registry entry
+                agent_registry = yield from self.get_agent_registry_by_address(eth_address)
+                if not agent_registry:
+                    # First create an agent
+                    agent = yield from self.create_agent(agent_name)
+                    agent_id = agent.get("agent_id")
+                    
+                    # Then create agent registry
+                    agent_registry = yield from self.create_agent_registry(
+                        agent_name,
+                        type_id,
+                        eth_address
+                    )
+                else:
+                    # Get agent ID from existing registry
+                    agent_registry_id = agent_registry.get("agent_id")
+                    agent = yield from self.get_agent(agent_registry_id)
+                    agent_id = agent.get("agent_id")
+                
+                agent_registry_id = agent_registry.get("agent_id")
+                self.context.logger.info(f"Using agent registry: {agent_registry}")
+                
+                # Step 4: Calculate APR for positions
+                individual_shares = ""
+                actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
+                self.context.logger.info(f"Calculated APR data: {actual_apr_data}")
+                
+                # Step 5: Store APR data in MirrorDB
+                agent_attr = yield from self.create_agent_attribute(
+                    agent_id,
+                    attr_def_id,
+                    agent_registry_id, 
+                    actual_apr_data.get("total_actual_apr", 0.0),
+                    actual_apr_data,
+                    eth_address,
+                    private_key
+                )
+                self.context.logger.info(f"Stored APR data: {agent_attr}")
+                
+                # Step 6: Read APR data for all agents of same type
+                all_apr_values = yield from self.get_attribute_values_by_type(type_id, attr_def_id)
+                
+                # Step 7: Calculate average APR and compare
+                if all_apr_values and isinstance(all_apr_values, list):
+                    apr_values = [attr.get("float_value", 0) for attr in all_apr_values 
+                                 if attr.get("float_value") is not None]
+                    
+                    if apr_values:
+                        avg_apr = sum(apr_values) / len(apr_values)
+                        self.context.logger.info(f"Average APR across {len(apr_values)} agents: {avg_apr:.2f}%")
+                        
+                        # Compare agent's APR with the average
+                        our_apr = next((attr.get("float_value", 0) for attr in all_apr_values 
+                                      if attr.get("agent_id") == agent_registry_id), 0)
+                        
+                        if our_apr > avg_apr:
+                            self.context.logger.info(f"Our APR ({our_apr:.2f}%) is above average ({avg_apr:.2f}%)")
+                        else:
+                            self.context.logger.info(f"Our APR ({our_apr:.2f}%) is below average ({avg_apr:.2f}%)")
+                
+                # Prepare payload for consensus
+                payload = APRPopulationPayload(sender=sender, context="APR Population")
+            
+            except Exception as e:
+                self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
+                # Create a payload even in case of error to continue the protocol
+                payload = APRPopulationPayload(sender=sender, context="APR Population Error")
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
         self.set_done()
+    
+    # =========================================================================
+    # Utility methods
+    # =========================================================================
+    
+    def sign_message(self, message, private_key):
+        """Sign a message with the given private key."""
+        message_hash = encode_defunct(text=message)
+        signed_message = Account.sign_message(message_hash, private_key)
+        return signed_message.signature.hex()
+
+    # =========================================================================
+    # Agent Type API methods
+    # =========================================================================
+    
+    def get_agent_types(self) -> Generator[None, None, List[Dict]]:
+        """Get all agent types."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agent_types",
+            endpoint="api/agent-types/"
+        )
+        return response
+    
+    def get_agent_type_by_name(self, type_name) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        agent_types = yield from self.get_agent_types()
+        if agent_types:
+            for agent_type in agent_types:
+                if agent_type.get("type_name") == type_name:
+                    return agent_type
+        return None
+    
+    def get_agent_type(self, type_id) -> Generator[None, None, Dict]:
+        """Get agent type by ID."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agent_type",
+            endpoint=f"api/agent-types/{type_id}"
+        )
+        return response
+    
+    def create_agent_type(
+        self, type_name, description, eth_address, private_key, admin_agent_id=1
+    ) -> Generator[None, None, Dict]:
+        """Create a new agent type."""
+        # Prepare agent type data
+        agent_type_data = {
+            "type_name": type_name,
+            "description": description
+        }
+        
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = "api/agent-types/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = self.sign_message(message, private_key)
+        
+        # Prepare authentication data
+        auth_data = {
+            "agent_id": admin_agent_id,  # Admin agent ID
+            "eth_address": eth_address,
+            "signature": signature,
+            "message": message
+        }
+        
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="post",
+            method_name="create_agent_type",
+            endpoint=endpoint,
+            data={"agent_type": agent_type_data, "auth": auth_data}
+        )
+        
+        return response
+    
+    # =========================================================================
+    # Attribute Definition API methods
+    # =========================================================================
+    
+    def get_attribute_definitions(self, type_id) -> Generator[None, None, List[Dict]]:
+        """Get all attribute definitions for a specific agent type."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_attribute_definitions",
+            endpoint=f"api/agent-types/{type_id}/attributes/"
+        )
+        return response
+    
+    def get_attribute_definition_by_name(self, type_id, attr_name) -> Generator[None, None, Optional[Dict]]:
+        """Get attribute definition by name."""
+        attr_defs = yield from self.get_attribute_definitions(type_id)
+        if attr_defs:
+            for attr_def in attr_defs:
+                if attr_def.get("attr_name") == attr_name:
+                    return attr_def
+        return None
+    
+    def get_attribute_definition(self, attr_def_id) -> Generator[None, None, Dict]:
+        """Get attribute definition by ID."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_attribute_definition",
+            endpoint=f"api/attributes/{attr_def_id}"
+        )
+        return response
+    
+    def create_attribute_definition(
+        self, type_id, attr_name, data_type, is_required, default_value, 
+        eth_address, private_key, admin_agent_id=1
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute definition for a specific agent type."""
+        # Prepare attribute definition data
+        attr_def_data = {
+            "type_id": type_id,
+            "attr_name": attr_name,
+            "data_type": data_type,
+            "is_required": is_required,
+            "default_value": default_value
+        }
+        
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agent-types/{type_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = self.sign_message(message, private_key)
+        
+        # Prepare authentication data
+        auth_data = {
+            "agent_id": admin_agent_id,  # Admin agent ID
+            "eth_address": eth_address,
+            "signature": signature,
+            "message": message
+        }
+        
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="post",
+            method_name="create_attribute_definition",
+            endpoint=endpoint,
+            data={"attr_def": attr_def_data, "auth": auth_data}
+        )
+        
+        return response
+    
+    # =========================================================================
+    # Agent Registry API methods
+    # =========================================================================
+    
+    def get_agents(self) -> Generator[None, None, List[Dict]]:
+        """Get all agents."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agents",
+            endpoint="api/agents/"
+        )
+        return response
+    
+    def get_agent(self, agent_id) -> Generator[None, None, Dict]:
+        """Get agent by ID."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agent",
+            endpoint=f"api/agents/{agent_id}"
+        )
+        return response
+    
+    def create_agent(self, agent_name) -> Generator[None, None, Dict]:
+        """Create a new agent."""
+        # Prepare agent data
+        agent_data = {
+            "agent_name": agent_name
+        }
+        
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="post",
+            method_name="create_agent",
+            endpoint="api/agents/",
+            data=agent_data
+        )
+        
+        return response
+    
+    def get_agent_registries(self) -> Generator[None, None, List[Dict]]:
+        """Get all agent registries."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agent_registries",
+            endpoint="api/agent-registry/"
+        )
+        return response
+    
+    def get_agent_registry_by_address(self, eth_address) -> Generator[None, None, Optional[Dict]]:
+        """Get agent registry by Ethereum address."""
+        agent_registries = yield from self.get_agent_registries()
+        if agent_registries:
+            for registry in agent_registries:
+                if registry.get("eth_address") == eth_address:
+                    return registry
+        return None
+    
+    def get_agent_registry(self, agent_id) -> Generator[None, None, Dict]:
+        """Get agent registry by ID."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agent_registry",
+            endpoint=f"api/agent-registry/{agent_id}"
+        )
+        return response
+    
+    def create_agent_registry(self, agent_name, type_id, eth_address) -> Generator[None, None, Dict]:
+        """Create a new agent registry."""
+        # Prepare agent registry data
+        agent_registry_data = {
+            "agent_name": agent_name,
+            "type_id": type_id,
+            "eth_address": eth_address
+        }
+        
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="post",
+            method_name="create_agent_registry",
+            endpoint="api/agent-registry/",
+            data=agent_registry_data
+        )
+        
+        return response
+    
+    def get_agents_by_type(self, type_id) -> Generator[None, None, List[Dict]]:
+        """Get all agents of a specific type."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agents_by_type",
+            endpoint=f"api/agent-types/{type_id}/agents/"
+        )
+        return response
+    
+    # =========================================================================
+    # Agent Attribute API methods
+    # =========================================================================
+    
+    def get_agent_attributes(self, agent_id) -> Generator[None, None, List[Dict]]:
+        """Get all attribute values for a specific agent."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agent_attributes",
+            endpoint=f"api/agents/{agent_id}/attributes/"
+        )
+        return response
+    
+    def get_agent_attribute(self, attribute_id) -> Generator[None, None, Dict]:
+        """Get agent attribute by ID."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_agent_attribute",
+            endpoint=f"api/agent-attributes/{attribute_id}"
+        )
+        return response
+    
+    def get_attribute_values_by_type(self, type_id, attr_def_id) -> Generator[None, None, List[Dict]]:
+        """Get all attribute values for a specific attribute definition across all agents of a specific type."""
+        response = yield from self._call_mirrordb(
+            method="get",
+            method_name="get_attribute_values_by_type",
+            endpoint=f"api/agent-types/{type_id}/attributes/{attr_def_id}/values"
+        )
+        return response
+    
+    def create_agent_attribute(
+        self, agent_id, attr_def_id, agent_registry_id, float_value=None, 
+        json_value=None, eth_address=None, private_key=None
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute value for a specific agent."""
+        # Prepare the agent attribute data with all values set to None initially
+        agent_attr_data = {
+            "agent_id": agent_id,
+            "attr_def_id": attr_def_id,
+            "string_value": None,
+            "integer_value": None,
+            "float_value": float_value,
+            "boolean_value": None,
+            "date_value": None,
+            "json_value": json_value
+        }
+        
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agents/{agent_registry_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = self.sign_message(message, private_key)
+        
+        # Prepare authentication data
+        auth_data = {
+            "agent_id": agent_registry_id,
+            "eth_address": eth_address,
+            "signature": signature,
+            "message": message
+        }
+        
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="post",
+            method_name="create_agent_attribute",
+            endpoint=endpoint,
+            data={"agent_attr": agent_attr_data, "auth": auth_data}
+        )
+        
+        return response
+    
+    def update_agent_attribute(
+        self, attribute_id, agent_id, attr_def_id, value, 
+        value_type="float", eth_address=None, private_key=None, agent_registry_id=None
+    ) -> Generator[None, None, Dict]:
+        """Update an existing agent attribute."""
+        # Prepare the agent attribute data with all values set to None initially
+        agent_attr_data = {
+            "agent_id": agent_id,
+            "attr_def_id": attr_def_id,
+            "string_value": None,
+            "integer_value": None,
+            "float_value": None,
+            "boolean_value": None,
+            "date_value": None,
+            "json_value": None
+        }
+        
+        # Set the appropriate value based on value_type
+        if value_type == "string":
+            agent_attr_data["string_value"] = value
+        elif value_type == "integer":
+            agent_attr_data["integer_value"] = value
+        elif value_type == "float":
+            agent_attr_data["float_value"] = value
+        elif value_type == "boolean":
+            agent_attr_data["boolean_value"] = value
+        elif value_type == "json":
+            agent_attr_data["json_value"] = value
+        
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agent-attributes/{attribute_id}"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = self.sign_message(message, private_key)
+        
+        # Prepare authentication data
+        auth_data = {
+            "agent_id": agent_registry_id,
+            "eth_address": eth_address,
+            "signature": signature,
+            "message": message
+        }
+        
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="put",
+            method_name="update_agent_attribute",
+            endpoint=endpoint,
+            data={"agent_attr": agent_attr_data, "auth": auth_data}
+        )
+        
+        return response
+    
+    # =========================================================================
+    # APR Calculation methods
+    # =========================================================================
+
+    def calculate_actual_apr_for_positions(
+        self, individual_shares
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Calculate the actual APR for each position based on performance over time."""
+        actual_apr_data = {}
+        total_initial_value = Decimal(0)
+        total_current_value = Decimal(0)
+        weighted_days = Decimal(0)
+        
+        for (
+            user_share,
+            dex_type,
+            chain,
+            pool_id,
+            assets,
+            _,  # apr from protocol
+            _,  # details
+            _,  # user_address
+            user_balances,
+        ) in individual_shares:
+            # Find the position in current_positions to get timestamp
+            position = next(
+                (
+                    pos
+                    for pos in self.current_positions
+                    if pos.get("pool_id") == pool_id 
+                    and pos.get("chain") == chain
+                    and pos.get("status") == PositionStatus.OPEN.value
+                ),
+                None,
+            )
+            
+            if not position:
+                continue
+                
+            # Get initial investment timestamp
+            timestamp = position.get("timestamp")
+            if not timestamp:
+                continue
+                
+            # Calculate days since investment
+            current_timestamp = int(datetime.now().timestamp())
+            days_invested = max(1, (current_timestamp - timestamp) / (60 * 60 * 24))
+            
+            # Calculate initial investment value
+            initial_value = yield from self.calculate_initial_investment_value(position)
+            if initial_value is None:
+                continue
+                
+            # Current value is the user_share calculated earlier
+            current_value = user_share
+            
+            # Calculate actual APR
+            if initial_value > 0 and days_invested > 0:
+                profit = current_value - initial_value
+                annualized_return = (profit / initial_value) * (365 / days_invested)
+                actual_apr = float(annualized_return * 100)  # Convert to percentage
+                
+                # Store the actual APR for this position
+                actual_apr_data[pool_id] = round(actual_apr, 2)
+                
+                # Accumulate for weighted average calculation
+                total_initial_value += initial_value
+                total_current_value += current_value
+                weighted_days += initial_value * Decimal(days_invested)
+        
+        # Calculate overall portfolio APR
+        if total_initial_value > 0:
+            avg_days = weighted_days / total_initial_value if total_initial_value > 0 else Decimal(1)
+            total_profit = total_current_value - total_initial_value
+            total_annualized_return = (total_profit / total_initial_value) * (Decimal(365) / avg_days)
+            total_actual_apr = float(total_annualized_return * 100)  # Convert to percentage
+            actual_apr_data["total_actual_apr"] = round(total_actual_apr, 2)
+        
+        return actual_apr_data
 
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):

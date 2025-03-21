@@ -43,7 +43,7 @@ fingerprint:
   modius-ui-build/static/js/main.7294bed8.js: bafybeidi22vopxc4suvpo6sbztq762jcz44iiwojceuox5alxrobqdxpm4
   modius-ui-build/static/js/main.7294bed8.js.LICENSE.txt: bafybeid4htnvhd3rae6lhhuimibl6q3lrrbhlqsb7pl5e5p4jxjolnl7cy
   modius-ui-build/static/js/main.7294bed8.js.map: bafybeihbwqurlskloidsoldd7ducfhwvwh3xiaijtil2hevmotb54a2jrm
-  prompts.py: bafybeihtyejrfped6cmezfu3h6gz6ebpc3xb4mddsebyprqni2tly7zt4m
+  prompts.py: bafybeig3m3meqyr6fs3vjzr6quwce5bzg4q7bm7t4gmwjxfx2e2utistle
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -59,7 +59,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeic34ksiovaxlekkag5zur6l7vcf25mg54tw6guqht65pdyhd3tuvy
+- valory/liquidity_trader_abci:0.1.0:bafybeiaiuza2rzust35su4la34pvpxowuh4fu646upqyfr3ww6e352tjam
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:

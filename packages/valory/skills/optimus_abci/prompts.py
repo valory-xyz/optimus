@@ -17,7 +17,14 @@ A composite score is a single numerical value that represents the overall risk l
 2. The JSON should have the following keys:
    - `'selected_protocols'`: A list (array) of protocol names relevant to the user prompt. If no relevant protocols are found, return an empty list `[]`.
    - `'trading_type'`: A string representing the chosen trading type (e.g., `'Risky'` or `'Balanced'`). If no suitable trading type is found, return an empty string `''`.
-   - `'reasoning'`: A brief explanation of why the selected trading type and protocols were chosen, based on the user's risk appetite and the chosen composite score threshold and what it means and how has it changed from the last chosen threshold. If no relevant protocols or trading type are found, provide an explanation for why the user's request could not be understood or addressed. Mention that explicitly and state that we would be falling back to previous strategies and trading type. **The reasoning should be returned as HTML, with styling using <span> tags for emphasis and <p> tags for paragraphs.**
+   - `'reasoning'`: An explanation in simple terms that covers:
+      * Why we selected these specific protocols and how they address the user's needs
+      * What the composite score threshold means in practical terms (e.g., "A higher threshold means we're being more cautious about which protocols to include")
+      * Why we changed the threshold from the previous value (e.g., "We increased the threshold because your request indicated a more conservative approach")
+      * How this change affects the trading strategy in everyday terms
+      * If no relevant protocols or trading type are found, explain why the request couldn't be understood and that we'll use previous strategies instead
+      
+      **The reasoning should be in plain, conversational language avoiding technical jargon where possible. It should be returned as HTML, with styling using <span> tags for emphasis and <p> tags for paragraphs.**
 
 3. **Do not include any code snippets, code fences, or markdown formatting in your response.**
 """

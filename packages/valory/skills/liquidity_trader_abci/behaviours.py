@@ -206,8 +206,8 @@ class TradingType(Enum):
     RISKY = "Risky"
 
 THRESHOLDS = {
-    TradingType.BALANCED : 0.3374,
-    TradingType.RISKY: 0.2892
+    TradingType.BALANCED.value : 0.3374,
+    TradingType.RISKY.value: 0.2892
 }
 
 ASSETS_FILENAME = "assets.json"
@@ -2015,7 +2015,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def execute_hyper_strategy(self) -> None:
         """Executes hyper strategy"""
-
         hyper_strategy = self.params.selected_hyper_strategy
         kwargs = {
             "strategy": hyper_strategy,
@@ -2174,7 +2173,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategies_to_remove = []
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
             if (
-                strategy not in self.params.selected_protocols
+                strategy not in self.synchronized_data.selected_protocols
                 and strategy != self.params.selected_hyper_strategy
             ):
                 strategies_to_remove.append(strategy)

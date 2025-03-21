@@ -214,7 +214,7 @@ models:
       pool_info_filename: current_pool.json
       portfolio_info_filename: portfolio.json
       gas_cost_info_filename: gas_costs.json
-      min_swap_amount_threshold: 10
+      min_investment_amount: 1
       max_fee_percentage: 0.02
       max_gas_percentage: 0.1
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'

@@ -279,13 +279,13 @@ class Params(BaseParams):
             "assets_info_filename", kwargs, str
         )
         self.pool_info_filename: str = self._ensure("pool_info_filename", kwargs, str)
-        self.portfolio_info_filename: str = self._ensure("portfolio_info_filename", kwargs, str)
+        self.portfolio_info_filename: str = self._ensure(
+            "portfolio_info_filename", kwargs, str
+        )
         self.gas_cost_info_filename: str = self._ensure(
             "gas_cost_info_filename", kwargs, str
         )
-        self.min_swap_amount_threshold = self._ensure(
-            "min_swap_amount_threshold", kwargs, int
-        )
+        self.min_investment_amount = self._ensure("min_investment_amount", kwargs, int)
         self.max_fee_percentage = self._ensure("max_fee_percentage", kwargs, float)
         self.max_gas_percentage = self._ensure("max_gas_percentage", kwargs, float)
         self.balancer_graphql_endpoints = json.loads(

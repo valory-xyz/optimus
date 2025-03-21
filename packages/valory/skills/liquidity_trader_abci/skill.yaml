@@ -203,7 +203,7 @@ models:
       portfolio_info_filename: portfolio.json
       gas_cost_info_filename: gas_costs.json
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
-      min_swap_amount_threshold: 10
+      min_investment_amount: 1
       max_fee_percentage: 0.02
       max_gas_percentage: 0.1
       balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}'

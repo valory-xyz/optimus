@@ -31,7 +31,6 @@ FETCH_AGGREGATOR_ENDPOINT = (
     "https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators"
 )
 LENDING = "lending"
-
 # Map known token symbols to CoinGecko IDs
 coingecko_name_to_id = {
     "weth": "weth",
@@ -285,7 +284,7 @@ def calculate_il_risk_score_for_lending(
             to_timestamp=to_timestamp,
         )
     except Exception as e:
-        errors.append(f"Error fetching price data: Incorrect Coingecko API Key")
+        errors.append(f"Error fetching price data: {e}")
         return None
     
     prices_1_data = np.array([x[1] for x in prices_1["prices"]])

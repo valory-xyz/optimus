@@ -257,7 +257,10 @@ class HttpHandler(BaseHttpHandler):
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (portfolio_url_regex, self._handle_get_portfolio),
-                (static_files_regex, self._handle_get_static_file),
+                (
+                    static_files_regex,
+                    self._handle_get_static_file,
+                ),  # New route for serving static files
             ],
         }
         fsm = load_fsm_spec()

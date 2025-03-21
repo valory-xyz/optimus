@@ -97,6 +97,8 @@ from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
     UniswapPoolBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import (
+    APRPopulationRound,
+    APRPopulationPayload,
     CallCheckpointPayload,
     CallCheckpointRound,
     CheckStakingKPIMetPayload,
@@ -1615,6 +1617,24 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
 
             serialized_positions = json.dumps(positions, sort_keys=True)
             payload = GetPositionsPayload(sender=sender, positions=serialized_positions)
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+
+        self.set_done()
+
+class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
+    """"""
+    
+    matching_round: Type[AbstractRound] = APRPopulationRound    
+    
+    def async_act(self) -> Generator:
+        """Async act"""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            sender = self.context.agent_address
+
+            payload = APRPopulationPayload(sender=sender, context="APR Population")
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -5021,6 +5041,7 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         CallCheckpointBehaviour,
         CheckStakingKPIMetBehaviour,
         GetPositionsBehaviour,
+        APRPopulationBehaviour,
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
         PostTxSettlementBehaviour,

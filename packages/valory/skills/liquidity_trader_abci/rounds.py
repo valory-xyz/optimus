@@ -35,6 +35,7 @@ from packages.valory.skills.abstract_round_abci.base import (
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import (
+    APRPopulationPayload,
     CallCheckpointPayload,
     CheckStakingKPIMetPayload,
     DecisionMakingPayload,
@@ -114,6 +115,20 @@ class SynchronizedData(BaseSynchronizedData):
             serialized = "[]"
         positions = json.loads(serialized)
         return positions
+    
+    @property
+    def participant_to_context_round(self) -> DeserializedCollection:
+        """Get the participants to actions rounds"""
+        return self._get_deserialized("participant_to_context_round")
+
+    @property
+    def context(self) -> Optional[List[Dict[str, Any]]]:
+        """Get the actions"""
+        serialized = self.db.get("context", "[]")
+        if serialized is None:
+            serialized = "[]"
+        context = json.loads(serialized)
+        return context
 
     @property
     def participant_to_actions_round(self) -> DeserializedCollection:
@@ -334,6 +349,21 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
 
     # Event.ROUND_TIMEOUT
 
+class APRPopulationRound(CollectSameUntilThresholdRound):
+    """APRPopulationRound"""
+
+    payload_class = APRPopulationPayload
+    synchronized_data_class = SynchronizedData
+    done_event = Event.DONE
+    no_majority_event = Event.NO_MAJORITY
+    none_event: Enum = Event.NONE
+    collection_key = get_name(SynchronizedData.participant_to_context_round)
+    selection_key = get_name(SynchronizedData.context)
+    
+    ERROR_PAYLOAD = {}
+
+    # Event.ROUND_TIMEOUT
+
 
 class EvaluateStrategyRound(CollectSameUntilThresholdRound):
     """EvaluateStrategyRound"""
@@ -483,6 +513,12 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         PostTxSettlementRound,
     }
     transition_function: AbciAppTransitionFunction = {
+        APRPopulationRound: {
+            Event.DONE: EvaluateStrategyRound,
+            Event.NO_MAJORITY: APRPopulationRound,
+            Event.ROUND_TIMEOUT: APRPopulationRound,
+            Event.NONE: APRPopulationRound,
+        },
         CallCheckpointRound: {
             Event.DONE: CheckStakingKPIMetRound,
             Event.NEXT_CHECKPOINT_NOT_REACHED_YET: CheckStakingKPIMetRound,
@@ -504,7 +540,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NONE: CheckStakingKPIMetRound,
         },
         GetPositionsRound: {
-            Event.DONE: EvaluateStrategyRound,
+            Event.DONE: APRPopulationRound,
             Event.NO_MAJORITY: GetPositionsRound,
             Event.ROUND_TIMEOUT: GetPositionsRound,
             Event.NONE: GetPositionsRound,

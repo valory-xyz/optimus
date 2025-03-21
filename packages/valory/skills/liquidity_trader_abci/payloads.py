@@ -56,6 +56,11 @@ class GetPositionsPayload(BaseTxPayload):
 
     positions: Optional[str]
 
+@dataclass(frozen=True)
+class APRPopulationPayload(BaseTxPayload):
+    """Represent a transaction payload for the APRPopulationPayload."""
+
+    context: str
 
 @dataclass(frozen=True)
 class EvaluateStrategyPayload(BaseTxPayload):

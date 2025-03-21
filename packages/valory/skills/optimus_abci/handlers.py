@@ -613,10 +613,6 @@ class HttpHandler(BaseHttpHandler):
         request_id = http_dialogue.dialogue_label.dialogue_reference[0]
         self.context.state.request_queue.append(request_id)
 
-        # Increment the function entry counter
-        self.function_entry_count += 1
-        self.context.logger.info(f"------------------REQUEST NUMBER - {self.function_entry_count} TIMESTAMP - {time.time()}.")
-
         try:
             # Parse incoming data
             data = json.loads(http_msg.body.decode("utf-8"))
@@ -763,7 +759,7 @@ class HttpHandler(BaseHttpHandler):
         time.sleep(self.context.params.default_acceptance_time)
         if len(self.context.state.request_queue) == 1:
             self._write_kv({"selected_protocols": json.dumps(selected_protocols), "trading_type": trading_type})
-        self.context.logger.info("KV store update delayed.")
+            
         self.context.state.request_queue.pop()
 
     def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
@@ -773,19 +769,17 @@ class HttpHandler(BaseHttpHandler):
         :param data: key-value data to store
         :return: success flag
         """
-        self.context.logger.info("Writing to KV store...")
         kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
         kv_store_message, srr_dialogue = kv_store_dialogues.create(
             counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
             performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
             data=data,
         )
-        self.context.logger.info(f"KV store message: {kv_store_message}")
+        self.context.logger.info(f"Writing to KV store... {kv_store_message}")
         kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
         self._send_message(
             kv_store_message, kv_store_dialogue, self._handle_kv_store_response
         )
-        self.context.logger.info(f"KV store update sent.{self.context.state.req_to_callback}")
 
     def _handle_kv_store_response(self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue) -> None:
         """
@@ -794,7 +788,6 @@ class HttpHandler(BaseHttpHandler):
         :param kv_store_response_message: the KvStoreMessage response
         :param dialogue: the KvStoreDialogue
         """
-        self.context.logger.info(f"Received KV store response: {kv_store_response_message}")
         success = kv_store_response_message.performative == KvStoreMessage.Performative.SUCCESS
         if success:
             self.context.logger.info("KV store update successful.")

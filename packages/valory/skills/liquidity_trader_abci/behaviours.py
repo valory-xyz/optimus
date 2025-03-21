@@ -2088,7 +2088,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 {
                     "strategy": next_strategy,
                     "chains": self.params.target_investment_chains,
-                    "protocols": self.params.selected_protocols,
+                    "protocols": self.params.available_protocols,
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
                     "current_positions": (
                         [
@@ -4897,7 +4897,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             trading_type = db_data.get("trading_type", None)
             self.context.logger.info(
-                f"Selected protocols: {serialized_protocols}, Trading type: {trading_type}"
+                f"Reading values from kv store... Selected protocols: {serialized_protocols}, Trading type: {trading_type}"
             )
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols

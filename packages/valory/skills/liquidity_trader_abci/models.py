@@ -303,7 +303,7 @@ class Params(BaseParams):
         self.strategies_kwargs = json.loads(
             self._ensure("strategies_kwargs", kwargs, str)
         )
-        self.selected_protocols = self._ensure("selected_protocols", kwargs, List[str])
+        self.available_protocols = self._ensure("available_protocols", kwargs, List[str])
         self.selected_hyper_strategy = self._ensure(
             "selected_hyper_strategy", kwargs, str
         )

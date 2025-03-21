@@ -116,7 +116,6 @@ class KvStoreHandler(AbstractResponseHandler):
             self.context.state.in_flight_req = False
             return
 
-        self.context.logger.info(f"{kv_store_msg.performative}")
         if kv_store_msg.performative == KvStoreMessage.Performative.SUCCESS:
             dialogue = self.context.kv_store_dialogues.update(kv_store_msg)
             nonce = dialogue.dialogue_label.dialogue_reference[0]

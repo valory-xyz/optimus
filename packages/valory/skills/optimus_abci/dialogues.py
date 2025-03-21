@@ -19,6 +19,12 @@
 
 """This module contains the dialogues of the OptimusAbciApp."""
 
+from packages.valory.skills.liquidity_trader_abci.dialogues import (
+    SrrDialogue as BaseSrrDialogue,
+)
+from packages.valory.skills.liquidity_trader_abci.dialogues import (
+    SrrDialogues as BaseSrrDialogues,
+)
 from packages.valory.skills.abstract_round_abci.dialogues import (
     AbciDialogue as BaseAbciDialogue,
 )
@@ -89,3 +95,7 @@ TendermintDialogues = BaseTendermintDialogues
 
 IpfsDialogue = BaseIpfsDialogue
 IpfsDialogues = BaseIpfsDialogues
+
+
+SrrDialogue = BaseSrrDialogue
+SrrDialogues = BaseSrrDialogues

@@ -49,6 +49,9 @@ from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
 
+from packages.valory.connections.mirror_db.connection import (
+    PUBLIC_ID as MIRRORDB_CONNECTION_PUBLIC_ID,
+)
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
@@ -114,6 +117,9 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
+from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
+from packages.valory.protocols.srr.message import SrrMessage
+from packages.valory.skills.abstract_round_abci.models import Requests
 
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -925,7 +931,47 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
         self.context.logger.error(f"Request failed after {retries} retries.")
         return False, response_json
+    
+    def _do_connection_request(
+        self,
+        message: Message,
+        dialogue: Message,
+        timeout: Optional[float] = None,
+    ) -> Generator[None, None, Message]:
+        """Do a request and wait the response, asynchronously."""
 
+        self.context.outbox.put_message(message=message)
+        request_nonce = self._get_request_nonce_from_dialogue(dialogue)  # type: ignore
+        cast(Requests, self.context.requests).request_id_to_callback[
+            request_nonce
+        ] = self.get_callback_request()
+        response = yield from self.wait_for_message(timeout=timeout)
+        return response
+    
+    def _call_mirrordb(self, method: str, **kwargs: Any) -> Generator[None, None, Any]:
+        """Send a request message to the MirrorDB connection."""
+        try:
+            srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)
+            srr_message, srr_dialogue = srr_dialogues.create(
+                counterparty=str(MIRRORDB_CONNECTION_PUBLIC_ID),
+                performative=SrrMessage.Performative.REQUEST,
+                payload=json.dumps({"method": method, "kwargs": kwargs}),
+            )
+            srr_message = cast(SrrMessage, srr_message)
+            srr_dialogue = cast(SrrDialogue, srr_dialogue)
+            response = yield from self._do_connection_request(srr_message, srr_dialogue)  # type: ignore
+
+            response_json = json.loads(response.payload)  # type: ignore
+
+            if "error" in response_json:
+                self.context.logger.error(response_json["error"])
+                return None
+
+            return response_json.get("response")  # type: ignore
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(f"Exception while calling MirrorDB: {e}")
+            return None
+    
 
 class CallCheckpointBehaviour(
     LiquidityTraderBaseBehaviour

@@ -30,6 +30,8 @@ from urllib.parse import urlparse
 import yaml
 from aea.protocols.base import Message
 
+from packages.valory.skills.liquidity_trader_abci.handlers import SrrHandler as BaseSrrHandler
+
 from packages.valory.connections.http_server.connection import (
     PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
 )
@@ -67,6 +69,7 @@ LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
+SrrHandler = BaseSrrHandler
 
 
 def load_fsm_spec() -> Dict:
@@ -263,7 +266,7 @@ class HttpHandler(BaseHttpHandler):
         ):
             super().handle(message)
             return
-
+   
         # Check if this message is for this skill. If not, send to super()
         handler, kwargs = self._get_handler(http_msg.url, http_msg.method)
         if not handler:

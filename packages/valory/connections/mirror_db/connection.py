@@ -113,19 +113,15 @@ class GenericMirrorDBConnection(Connection):
         r"^api/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/?$",   # Specific resource by ID
         r"^api/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/?$"  # Nested resources
     }
-
+    
     # List of allowed methods that can be called via the SRR protocol
     _ALLOWED_METHODS = {
-        "create_function",
-        "read_function",
-        "update_function",
-        "delete_function", 
-        "update_api_key",
-        "update_config",
-        "register_endpoint",
-        "get_config"
+        "create_",
+        "read_",
+        "update_",
+        "delete_", 
     }
-
+    
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize the connection.
@@ -141,7 +137,6 @@ class GenericMirrorDBConnection(Connection):
         self._response_envelopes: Optional[asyncio.Queue] = None
         self.task_to_request: Dict[asyncio.Future, Envelope] = {}
         self.ssl_context = ssl.create_default_context(cafile=certifi.where())
-        self._custom_endpoints: set = set()  # Store custom added endpoints
         
         # Store all configuration in a single dictionary
         self._config = {
@@ -274,81 +269,6 @@ class GenericMirrorDBConnection(Connection):
 
         self.response_envelopes.put_nowait(response_envelope)
 
-    def validate_endpoint(self, endpoint: str) -> bool:
-        """
-        Validate if an endpoint follows allowed patterns.
-        
-        :param endpoint: API endpoint to validate
-        :return: True if valid, False otherwise
-        """
-        # First check custom endpoints
-        if endpoint in self._custom_endpoints:
-            return True
-            
-        # Then check against patterns
-        for pattern in self._VALID_ENDPOINTS:
-            if re.match(pattern, endpoint):
-                return True
-        return False
-
-    async def register_endpoint(self, endpoint: str) -> Dict:
-        """
-        Register a custom endpoint as valid.
-        
-        :param endpoint: Endpoint to register
-        :return: Status of the registration
-        """
-        self._custom_endpoints.add(endpoint)
-        return {
-            "status": "success", 
-            "message": f"Registered endpoint: {endpoint}"
-        }
-
-    async def update_api_key(self, api_key: str) -> Dict:
-        """
-        Update the API key.
-        
-        :param api_key: New API key
-        :return: Status of the update
-        """
-        self.api_key = api_key
-        self._config["api_key"] = api_key
-        return {"status": "success", "message": "API key updated successfully"}
-
-    async def update_config(self, config_updates: Dict) -> Dict:
-        """
-        Update multiple configuration values at once.
-        
-        :param config_updates: Dictionary of configuration key-value pairs to update
-        :return: Status of the update
-        """
-        # Update the configuration dictionary
-        self._config.update(config_updates)
-        
-        # Update specific attributes that have dedicated properties
-        if "api_key" in config_updates:
-            self.api_key = config_updates["api_key"]
-        if "base_url" in config_updates:
-            self.base_url = config_updates["base_url"]
-            
-        return {
-            "status": "success", 
-            "message": f"Updated {len(config_updates)} configuration items",
-            "updated_keys": list(config_updates.keys())
-        }
-        
-    async def get_config(self, keys: Optional[List[str]] = None) -> Dict:
-        """
-        Get current configuration values.
-        
-        :param keys: Optional list of specific keys to retrieve (returns all if None)
-        :return: Dictionary of requested configuration values
-        """
-        if keys is None:
-            return self._config
-            
-        return {k: self._config.get(k) for k in keys if k in self._config}
-
     async def _get_response(
         self, srr_message: SrrMessage, dialogue: Optional[BaseDialogue]
     ) -> SrrMessage:
@@ -386,7 +306,7 @@ class GenericMirrorDBConnection(Connection):
             )
 
         # Add endpoint validation when applicable
-        if method_name in {"create_function", "read_function", "update_function", "delete_function"}:
+        if method_name in {"create_", "read_", "update_", "delete_"}:
             endpoint = payload.get("kwargs", {}).get("endpoint")
             if endpoint and not self.validate_endpoint(endpoint):
                 return self.prepare_error_message(
@@ -430,7 +350,7 @@ class GenericMirrorDBConnection(Connection):
         raise Exception(f"Error {action}: {detail} (HTTP {response.status})")
 
     @retry_with_exponential_backoff()
-    async def create_function(self, method_name: str, endpoint: str, data: Dict) -> Dict:
+    async def create_(self, method_name: str, endpoint: str, data: Dict) -> Dict:
         """
         Create a resource using a POST request.
         
@@ -448,7 +368,7 @@ class GenericMirrorDBConnection(Connection):
             return await response.json()
 
     @retry_with_exponential_backoff()
-    async def read_function(self, method_name: str, endpoint: str) -> Dict:
+    async def read_(self, method_name: str, endpoint: str) -> Dict:
         """
         Read a resource using a GET request.
         
@@ -464,7 +384,7 @@ class GenericMirrorDBConnection(Connection):
             return await response.json()
 
     @retry_with_exponential_backoff()
-    async def update_function(self, method_name: str, endpoint: str, data: Dict) -> Dict:
+    async def update_(self, method_name: str, endpoint: str, data: Dict) -> Dict:
         """
         Update a resource using a PUT request.
         
@@ -482,7 +402,7 @@ class GenericMirrorDBConnection(Connection):
             return await response.json()
 
     @retry_with_exponential_backoff()
-    async def delete_function(self, method_name: str, endpoint: str) -> Dict:
+    async def delete_(self, method_name: str, endpoint: str) -> Dict:
         """
         Delete a resource using a DELETE request.
         

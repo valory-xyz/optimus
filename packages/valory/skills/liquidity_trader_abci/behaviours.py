@@ -4639,13 +4639,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 serialized_protocols = json.loads(selected_protocols)
 
             trading_type = db_data.get("trading_type", None)
+
+            if not serialized_protocols:
+                serialized_protocols = ["balancer_pools_search", "asset_lending"]
+
+            if not trading_type:
+                trading_type = TradingType.BALANCED.value
+
             self.context.logger.info(
                 f"Reading values from kv store... Selected protocols: {serialized_protocols}, Trading type: {trading_type}"
             )
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
-            yield from self.calculate_user_share_values()
-            self.store_portfolio_data()
+            
+            # Check if we need to recalculate the portfolio
+            if self.should_recalculate_portfolio(self.portfolio_data):
+                yield from self.calculate_user_share_values()
+                # Store the updated portfolio data
+                self.store_portfolio_data()
+
             payload = FetchStrategiesPayload(
                 sender=sender,
                 content=json.dumps(
@@ -4663,6 +4675,38 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
+    def should_recalculate_portfolio(self, last_portfolio_data: Dict) -> bool:
+        """Determine if the portfolio should be recalculated."""
+        return self._is_period_due() or self._have_positions_changed(last_portfolio_data)
+
+    def _is_period_due(self) -> bool:
+        """Check if the period count indicates a recalculation is due."""
+        return self.synchronized_data.period_count % 10 == 0
+
+    def _have_positions_changed(self, last_portfolio_data: Dict) -> bool:
+        """Check if the positions have changed since the last calculation."""
+        current_positions = self.current_positions
+        last_positions = last_portfolio_data.get("allocations", [])
+
+        if len(current_positions) != len(last_positions):
+            return True
+        
+        # Create a set of current position identifiers i.e. pool_id with their status
+        current_position_status = {
+            (position.get("pool_address"), position.get("status")) for position in current_positions
+        }
+
+        # Create a set of last position identifiers i.e. pool_id with their status
+        last_position_status = {
+            (position.get("id"), "open") for position in last_positions
+        }
+
+        # Check if there are any differences in the sets
+        if current_position_status != last_position_status:
+            return True
+        
+        return False
+    
     def calculate_user_share_values(self) -> Generator[None, None, None]:
         """Calculate the value of shares for the user based on open pools."""
         total_user_share_value_usd = Decimal(0)

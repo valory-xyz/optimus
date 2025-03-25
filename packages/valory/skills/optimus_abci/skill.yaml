@@ -9,10 +9,10 @@ fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
-  dialogues.py: bafybeid3no27p24vveke3e5bkcyi6i4gqlzjzy572zvvalyl7ijc26m7pu
+  dialogues.py: bafybeiagvdqz3fwqtfsq37htlvbbnzotyper52yz2iwineyflfduwlhpxy
   fsm_specification.yaml: bafybeicbqp4idp4ndsh2ffmmfjbn7e3b7dizt2dyrwiupzosg2d4drsupm
-  handlers.py: bafybeif2e33oh2icx6dchfu3f7gpjfm2oc4et3p232gyirgfipxzn5bnvi
-  models.py: bafybeidansk5ghyagtrexmzyg6jx3clilmpyh56cuk2mnxrnnigypcp76m
+  handlers.py: bafybeihk35zfxmwyiodww7zmsvmc5wxxeg62qc6ao3xnqyhtq2x5rz2vhm
+  models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
   modius-ui-build/asset-manifest.json: bafybeigzsoemnwgn4ef7b7gwebckycyhcqpxk32avlet5p7gmt5msohy7q
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
@@ -43,7 +43,7 @@ fingerprint:
   modius-ui-build/static/js/main.303ae61d.js: bafybeifl3ktqcjwefterzvxcibmccjueaej777kg2yydajmwbzqecvgble
   modius-ui-build/static/js/main.303ae61d.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
   modius-ui-build/static/js/main.303ae61d.js.map: bafybeif7eq5ttam77egxaawitg7pygavat2c74eqhdv2muo62deysgcssy
-  prompts.py: bafybeig3m3meqyr6fs3vjzr6quwce5bzg4q7bm7t4gmwjxfx2e2utistle
+  prompts.py: bafybeibyisgc5zck7imdiuzlww3y2dbxpfitgp725ter6tmfihnaai6sji
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -59,7 +59,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeiffsozepjljwcqz2w57lqguoxgbcvttuwmk3a7lkw7eopvacttipa
+- valory/liquidity_trader_abci:0.1.0:bafybeic55mogpclprxu3yn4ttmt5dliu6yqwx4rlvzxe3elxmz5eykltmu
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:

@@ -1,3 +1,5 @@
+"""Module for handling prompts in the Optimus ABCI skill."""
+
 PROMPT = """Based on the user-provided prompt, determine which protocols (from a predefined list) best address the user's request and decide the appropriate trading type based on the user's risk appetite.
 
 - The user's prompt is: {USER_PROMPT}
@@ -23,7 +25,6 @@ A composite score is a single numerical value that represents the overall risk l
       * Why we changed the threshold from the previous value (e.g., "We increased the threshold because your request indicated a more conservative approach")
       * How this change affects the trading strategy in everyday terms
       * If no relevant protocols or trading type are found, explain why the request couldn't be understood and that we'll use previous strategies instead
-      
       **The reasoning should be in plain, conversational language avoiding technical jargon where possible. It should be returned as HTML, with styling using <span> tags for emphasis and <p> tags for paragraphs.**
 
 3. **Do not include any code snippets, code fences, or markdown formatting in your response.**

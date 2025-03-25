@@ -19,9 +19,7 @@
 
 """This module contains the shared state for the abci skill of OptimusAbciApp."""
 
-from typing import Any, Callable, Dict, List, Tuple, Type, Union, cast
-
-from aea.skills.base import Model, SkillContext
+from typing import Any, Dict, Type, Union, cast
 
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,

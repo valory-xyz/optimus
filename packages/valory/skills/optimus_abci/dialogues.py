@@ -19,6 +19,14 @@
 
 """This module contains the dialogues of the OptimusAbciApp."""
 
+from typing import Any
+
+from aea.protocols.base import Address, Message
+from aea.protocols.dialogue.base import Dialogue as BaseDialogue
+from aea.skills.base import Model
+
+from packages.valory.protocols.srr.dialogues import SrrDialogue as BaseSrrDialogue
+from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
 from packages.valory.skills.abstract_round_abci.dialogues import (
     AbciDialogue as BaseAbciDialogue,
 )
@@ -93,30 +101,9 @@ IpfsDialogue = BaseIpfsDialogue
 IpfsDialogues = BaseIpfsDialogues
 
 
-from typing import Any
-
-from aea.protocols.base import Address, Message
-from aea.protocols.dialogue.base import Dialogue as BaseDialogue
-from aea.skills.base import Model
-
-from packages.dvilela.protocols.kv_store.dialogues import (
-    KvStoreDialogue as BaseKvStoreDialogue,
-)
-from packages.dvilela.protocols.kv_store.dialogues import (
-    KvStoreDialogues as BaseKvStoreDialogues,
-)
-from packages.valory.protocols.srr.dialogues import SrrDialogue as BaseSrrDialogue
-from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
-from packages.valory.skills.abstract_round_abci.dialogues import (
-    HttpDialogue as BaseHttpDialogue,
-)
-from packages.valory.skills.abstract_round_abci.dialogues import (
-    HttpDialogues as BaseHttpDialogues,
-)
-
-
 SrrDialogue = BaseSrrDialogue
 HttpDialogue = BaseHttpDialogue
+
 HttpDialogues = BaseHttpDialogues
 KvStoreDialogue = BaseKvStoreDialogue
 

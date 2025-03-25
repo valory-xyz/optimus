@@ -21,26 +21,6 @@
 
 import json
 import re
-from datetime import datetime
-from enum import Enum
-from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast
-from urllib.parse import urlparse
-
-import yaml
-from aea.protocols.base import Message
-
-
-# Strategy to protocol name mapping
-STRATEGY_TO_PROTOCOL = {
-    "balancer_pools_search": "balancerPool",
-    "asset_lending": "sturdy",
-}
-# Reverse mapping for converting protocol names back to strategy names
-PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
-
-import json
-import re
 import threading
 import time
 from datetime import datetime
@@ -89,7 +69,6 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
-from packages.valory.skills.abstract_round_abci.models import Requests
 from packages.valory.skills.liquidity_trader_abci.behaviours import (
     THRESHOLDS,
     TradingType,
@@ -97,12 +76,14 @@ from packages.valory.skills.liquidity_trader_abci.behaviours import (
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
 )
+from packages.valory.skills.liquidity_trader_abci.handlers import (
+    KvStoreHandler as BaseKvStoreHandler,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.optimus_abci.dialogues import (
     HttpDialogue,
     HttpDialogues,
-    SrrDialogue,
     SrrDialogues,
 )
 from packages.valory.skills.optimus_abci.models import Params, SharedState
@@ -115,10 +96,20 @@ LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
+KvStoreHandler = BaseKvStoreHandler
+
+# Strategy to protocol name mapping
+STRATEGY_TO_PROTOCOL = {
+    "balancer_pools_search": "balancerPool",
+    "asset_lending": "sturdy",
+}
+# Reverse mapping for converting protocol names back to strategy names
+PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
 
 
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
+
     with open(
         Path(__file__).parent.parent / "optimus_abci" / "fsm_specification.yaml",
         "r",
@@ -965,11 +956,3 @@ class SrrHandler(BaseHandler):
 
         self.context.state.in_flight_req = False
         self.on_message_handled(message)
-
-
-from packages.valory.skills.liquidity_trader_abci.handlers import (
-    KvStoreHandler as BaseKvStoreHandler,
-)
-
-
-KvStoreHandler = BaseKvStoreHandler

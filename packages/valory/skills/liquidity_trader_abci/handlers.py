@@ -22,7 +22,6 @@
 from typing import Optional, cast
 
 from aea.configurations.data_types import PublicId
-from aea.protocols.base import Message
 
 from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ipfs import IpfsMessage

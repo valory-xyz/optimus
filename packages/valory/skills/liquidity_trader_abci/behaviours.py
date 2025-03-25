@@ -202,6 +202,8 @@ class PositionStatus(Enum):
 
 
 class TradingType(Enum):
+    """TradingType"""
+
     BALANCED = "balanced"
     RISKY = "risky"
 

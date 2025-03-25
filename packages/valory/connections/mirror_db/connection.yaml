@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeif7gf5bvxnwc5tpv5cts64urafayubrzcepsonl6snt55ur7b4chu
-  connection.py: bafybeidqhxexvzzgawgm53ibrew6rdo3w3dwelmxtlfw4wvw2agpsca25u
+  connection.py: bafybeih7jnyl7excvpv2ynmiqizr6cf4kyjir32fig2lonivoazlciobae
   readme.md: bafybeiafz6hnwvpbf3ydbprcirlhppjpjznjd26il7223gi3pgxdcfw3bu
 fingerprint_ignore_patterns: []
 connections: []
@@ -15,7 +15,7 @@ protocols:
 - valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 class_name: GenericMirrorDBConnection
 config:
-  mirror_db_base_url: https://afmdb.autonolas.tech
+  mirror_db_base_url: http://localhost:8000
 excluded_protocols: []
 restricted_to_protocols: []
 dependencies:

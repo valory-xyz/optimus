@@ -14,7 +14,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeici34tuoym3evnzfgbnmgbdy5smshh5jx6ew6zfchmm4tmyzvpg34
 - valory/ledger:0.19.0:bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
-- valory/mirror_db:0.1.0:bafybeih4kaasxeli5cbl74xjok3sls5xryu4nta5bmgw7hqkif64ttxq4a
+- valory/mirror_db:0.1.0:bafybeifk4e4f7kfms75biuv4ymnllf5xku5oyvlg3fffccjbtuyhobyxse
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeie3h2hpzlrie2yc5r3eypce546am5bxlgvzqgjols34yf6z523o6q
@@ -38,8 +38,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeicgjci7esco2v22auxuffls6em5i5uikxtvwfmffbxiedvvrsuscm
-- valory/optimus_abci:0.1.0:bafybeiftvciwzzq7667tmsha5454rm3jm5mqvqqvwkmfy667mwucgb3kp4
+- valory/liquidity_trader_abci:0.1.0:bafybeialdqskhawsdijl2s2l2ixf7zwh3pmbpri6fv3ezr6h3fcikhnqga
+- valory/optimus_abci:0.1.0:bafybeidl5nvwomcrffuf6gnz2js5flaea3qyuq6zc3jbfbsyu6g5twjdh4
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -150,7 +150,7 @@ config:
 public_id: valory/mirror_db:0.1.0
 type: connection
 config:
-  mirror_db_base_url: ${str:https://afmdb.autonolas.tech}
+  mirror_db_base_url: ${str:http://localhost:8000}
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill
@@ -261,7 +261,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/mnt/d/Valory/optimus-Task9/optimus/data}
+      store_path: ${str:/data}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       portfolio_info_filename: ${str:portfolio.json}

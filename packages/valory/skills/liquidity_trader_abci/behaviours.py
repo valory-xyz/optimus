@@ -1228,7 +1228,7 @@ class CallCheckpointBehaviour(
                         user_balances,
                     )
                 )
-        yield from self.update_individual_shares(individual_shares)  
+        # yield from self.update_individual_shares(individual_shares)  
         # Remove closed positions from allocations
         allocations = [
             allocation
@@ -1659,7 +1659,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             try:
                 # Get configuration
                 eth_address = sender
-                private_key = "0x27924657f8866cb79cf4cc1622674ece6e7a4bd9e5ec5a7996a874e129961013"
+                private_key = ""
                 agent_name = "Alpha"
                 
                 if not eth_address or not private_key:
@@ -1717,17 +1717,17 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using agent registry: {agent_registry}")
                 
                 # Step 4: Calculate APR for positions
-                individual_shares = self.get_individual_shares()
-                actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
-                self.context.logger.info(f"Calculated APR data: {actual_apr_data}")
+                # individual_shares = self.get_individual_shares()
+                # actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
+                # self.context.logger.info(f"Calculated APR data: {actual_apr_data}")
                 
                 # Step 5: Store APR data in MirrorDB
                 agent_attr = yield from self.create_agent_attribute(
                     agent_id,
                     attr_def_id,
                     agent_registry_id, 
-                    actual_apr_data.get("total_actual_apr", 0.0),
-                    actual_apr_data,
+                    5.25,
+                    {"apr": 5.25},
                     eth_address,
                     private_key
                 )
@@ -1764,7 +1764,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agent_types(self) -> Generator[None, None, List[Dict]]:
         """Get all agent types."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agent_types",
             endpoint="api/agent-types/"
         )
@@ -1782,7 +1782,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agent_type(self, type_id) -> Generator[None, None, Dict]:
         """Get agent type by ID."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agent_type",
             endpoint=f"api/agent-types/{type_id}"
         )
@@ -1814,7 +1814,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Call API
         response = yield from self._call_mirrordb(
-            method="post",
+            method="create_",
             method_name="create_agent_type",
             endpoint=endpoint,
             data={"agent_type": agent_type_data, "auth": auth_data}
@@ -1829,7 +1829,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_attribute_definitions(self, type_id) -> Generator[None, None, List[Dict]]:
         """Get all attribute definitions for a specific agent type."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_attribute_definitions",
             endpoint=f"api/agent-types/{type_id}/attributes/"
         )
@@ -1847,7 +1847,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_attribute_definition(self, attr_def_id) -> Generator[None, None, Dict]:
         """Get attribute definition by ID."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_attribute_definition",
             endpoint=f"api/attributes/{attr_def_id}"
         )
@@ -1883,7 +1883,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Call API
         response = yield from self._call_mirrordb(
-            method="post",
+            method="create_",
             method_name="create_attribute_definition",
             endpoint=endpoint,
             data={"attr_def": attr_def_data, "auth": auth_data}
@@ -1898,7 +1898,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agents(self) -> Generator[None, None, List[Dict]]:
         """Get all agents."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agents",
             endpoint="api/agents/"
         )
@@ -1907,7 +1907,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agent(self, agent_id) -> Generator[None, None, Dict]:
         """Get agent by ID."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agent",
             endpoint=f"api/agents/{agent_id}"
         )
@@ -1922,7 +1922,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Call API
         response = yield from self._call_mirrordb(
-            method="post",
+            method="create_",
             method_name="create_agent",
             endpoint="api/agents/",
             data=agent_data
@@ -1933,7 +1933,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agent_registries(self) -> Generator[None, None, List[Dict]]:
         """Get all agent registries."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agent_registries",
             endpoint="api/agent-registry/"
         )
@@ -1951,7 +1951,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agent_registry(self, agent_id) -> Generator[None, None, Dict]:
         """Get agent registry by ID."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agent_registry",
             endpoint=f"api/agent-registry/{agent_id}"
         )
@@ -1968,7 +1968,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Call API
         response = yield from self._call_mirrordb(
-            method="post",
+            method="create_",
             method_name="create_agent_registry",
             endpoint="api/agent-registry/",
             data=agent_registry_data
@@ -1979,7 +1979,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agents_by_type(self, type_id) -> Generator[None, None, List[Dict]]:
         """Get all agents of a specific type."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agents_by_type",
             endpoint=f"api/agent-types/{type_id}/agents/"
         )
@@ -1992,7 +1992,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agent_attributes(self, agent_id) -> Generator[None, None, List[Dict]]:
         """Get all attribute values for a specific agent."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agent_attributes",
             endpoint=f"api/agents/{agent_id}/attributes/"
         )
@@ -2001,7 +2001,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_agent_attribute(self, attribute_id) -> Generator[None, None, Dict]:
         """Get agent attribute by ID."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_agent_attribute",
             endpoint=f"api/agent-attributes/{attribute_id}"
         )
@@ -2010,7 +2010,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def get_attribute_values_by_type(self, type_id, attr_def_id) -> Generator[None, None, List[Dict]]:
         """Get all attribute values for a specific attribute definition across all agents of a specific type."""
         response = yield from self._call_mirrordb(
-            method="get",
+            method="read_",
             method_name="get_attribute_values_by_type",
             endpoint=f"api/agent-types/{type_id}/attributes/{attr_def_id}/values"
         )
@@ -2049,7 +2049,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Call API
         response = yield from self._call_mirrordb(
-            method="post",
+            method="create_",
             method_name="create_agent_attribute",
             endpoint=endpoint,
             data={"agent_attr": agent_attr_data, "auth": auth_data}
@@ -2102,7 +2102,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Call API
         response = yield from self._call_mirrordb(
-            method="put",
+            method="update_",
             method_name="update_agent_attribute",
             endpoint=endpoint,
             data={"agent_attr": agent_attr_data, "auth": auth_data}

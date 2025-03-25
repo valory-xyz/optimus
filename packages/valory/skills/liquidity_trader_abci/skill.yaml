@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeibxqnoyaczzedbagvih4ekoouafbgt2alhs7fuiyjkh2q2mbmkghq
+  behaviours.py: bafybeiaakntcawv2yjtibkxun7slf6zszywzeafh7w5onho7besehevb4i
   dialogues.py: bafybeif7khraurushuwuxcknyw4xfmw45zmfliekosyqz7zkpde7qzqrrm
   fsm_specification.yaml: bafybeiadifjdyelg3phoxtym5f332bsztqaf2zb2k5tz6psmlpmjdstcve
   handlers.py: bafybeidik5dxdf66h46gi22xcnh3sotwkg2bzoasgevybc6ixzcnhpjlki
@@ -28,7 +28,7 @@ fingerprint:
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeih4kaasxeli5cbl74xjok3sls5xryu4nta5bmgw7hqkif64ttxq4a
+- valory/mirror_db:0.1.0:bafybeifk4e4f7kfms75biuv4ymnllf5xku5oyvlg3fffccjbtuyhobyxse
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/balancer_weighted_pool:0.1.0:bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm

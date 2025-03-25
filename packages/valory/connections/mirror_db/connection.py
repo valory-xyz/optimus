@@ -308,12 +308,7 @@ class GenericMirrorDBConnection(Connection):
         # Add endpoint validation when applicable
         if method_name in {"create_", "read_", "update_", "delete_"}:
             endpoint = payload.get("kwargs", {}).get("endpoint")
-            if endpoint and not self.validate_endpoint(endpoint):
-                return self.prepare_error_message(
-                    srr_message, 
-                    dialogue,
-                    f"Invalid endpoint pattern: {endpoint}. Use register_endpoint to add custom endpoints."
-                )
+            print(f"endpoint,payload : {endpoint,payload}")
 
         try:
             response = await method(**payload.get("kwargs", {}))

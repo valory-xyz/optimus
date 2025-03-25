@@ -1909,7 +1909,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         response = yield from self._call_mirrordb(
             method="read_",
             method_name="get_agent",
-            endpoint=f"api/agents/{agent_id}"
+            endpoint=f"api/agent-registry/{agent_id}"
         )
         return response
     

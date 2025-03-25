@@ -439,7 +439,7 @@ class HttpHandler(BaseHttpHandler):
         handler(http_msg, http_dialogue, **kwargs)
 
     def _handle_bad_request(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg = None
     ) -> None:
         """
         Handle a Http bad request.
@@ -454,7 +454,7 @@ class HttpHandler(BaseHttpHandler):
             status_code=HttpCode.BAD_REQUEST_CODE.value,
             status_text="Bad request",
             headers=http_msg.headers,
-            body=b"",
+            body=b"" if not error_msg else error_msg.encode("utf-8"),
         )
 
         # Send response
@@ -512,7 +512,7 @@ class HttpHandler(BaseHttpHandler):
             with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
                 portfolio_data = json.load(file)
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            self.context.logger.error(f"Error reading portfolio data: {str(e)}")
+            self.context.logger.info(f"Error reading portfolio data: {str(e)}")
             portfolio_data = {"error": "Could not read portfolio data"}
 
         # Get selected protocols (strategy names) from state
@@ -726,8 +726,57 @@ class HttpHandler(BaseHttpHandler):
             )
 
         except (json.JSONDecodeError, ValueError) as e:
-            self.context.logger.error(f"Error processing prompt: {str(e)}")
+            self.context.logger.info(f"Error processing prompt: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
+
+    def _parse_llm_response(
+        self,
+        llm_response_message: SrrMessage,
+    ) -> Tuple[List[str], str, str, str]:
+        """
+        Parse the LLM response and return the selected protocols, trading type, reasoning, and previous trading type.
+
+        :param llm_response_message: the SrrMessage with the LLM output
+        :return: a tuple containing the selected protocols, trading type, reasoning, and previous trading type
+        """
+        try:
+            payload = json.loads(llm_response_message.payload)
+            if "error" in payload:
+                # Extract the specific error message
+                error_details = payload["error"]
+                error_message = error_details.split("message: \"")[1].split("\"")[0]
+                reasoning = error_message
+                self.context.logger.error(f"Error from LLM: {reasoning}")
+                return [], "", reasoning, self.context.state.trading_type
+
+            response_data = json.loads(payload.get("response", ""))
+        except json.JSONDecodeError:
+            # Attempt to handle JSON content wrapped in triple backticks
+            try:
+                response = json.loads(llm_response_message.payload).get("response", "")
+                if response.strip().startswith("```json") and response.strip().endswith("```"):
+                    # Strip the triple backticks and attempt to parse the JSON content
+                    json_content = response.strip()[7:-3]
+                    response_data = json.loads(json_content)
+                else:
+                    raise ValueError("Response is not in valid JSON format.")
+            except (json.JSONDecodeError, ValueError):
+                reasoning = "Failed to parse LLM response. Falling back to default strategies."
+                self.context.logger.error(reasoning)
+                selected_protocols = self.context.params.available_strategies
+                trading_type = self.context.state.trading_type or TradingType.BALANCED.value
+                return selected_protocols, trading_type, reasoning, trading_type
+
+        self.context.logger.info(f"Received LLM response: {response_data}")
+        selected_protocols = response_data.get("selected_protocols", [])
+        trading_type = response_data.get("trading_type", "")
+        reasoning = response_data.get("reasoning", "")
+        previous_trading_type = self.context.state.trading_type
+
+        if not selected_protocols or not trading_type or not reasoning:
+            return self._fallback_to_previous_strategy()
+
+        return selected_protocols, trading_type, reasoning, previous_trading_type
 
     def _handle_llm_response(
         self,
@@ -739,7 +788,7 @@ class HttpHandler(BaseHttpHandler):
         """
         Handle the response from the LLM.
 
-        :param srr_response_message: the SrrMessage with the LLM output
+        :param llm_response_message: the SrrMessage with the LLM output
         :param dialogue: the Dialogue
         :param http_msg: the original HttpMessage
         :param http_dialogue: the original HttpDialogue
@@ -750,10 +799,12 @@ class HttpHandler(BaseHttpHandler):
             reasoning,
             previous_trading_type,
         ) = self._parse_llm_response(llm_response_message)
+
         selected_protocols = [
             PROTOCOL_TO_STRATEGY.get(protocol, protocol)
             for protocol in selected_protocol_names
         ]
+
         response_data = {
             "selected_protocols": selected_protocols,
             "trading_type": trading_type,
@@ -768,79 +819,24 @@ class HttpHandler(BaseHttpHandler):
             target=self._delayed_write_kv, args=(selected_protocols, trading_type)
         ).start()
 
-    def _parse_llm_response(
-        self,
-        llm_response_message: SrrMessage,
-    ) -> Tuple[List[str], str, str, str]:
-        """
-        Parse the LLM response and return the selected protocols, trading type, reasoning, and previous trading type.
+    def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
+        """Fallback to previous strategy in case of parsing errors."""
+        if self.context.state.selected_protocols:
+            selected_protocols = json.loads(self.context.state.selected_protocols)
+        else:
+            selected_protocols = self.context.params.available_strategies
 
-        :param llm_response_message: the SrrMessage with the LLM output
-        :param http_msg: the original HttpMessage
-        :param http_dialogue: the original HttpDialogue
-        :return: a tuple containing the selected protocols, trading type, reasoning, and previous trading type
-        """
-        try:
-            payload = json.loads(llm_response_message.payload)
-            response_data = json.loads(payload.get("response", ""))
-        except json.JSONDecodeError as e:
-            response = json.loads(llm_response_message.payload).get("response")
-            if response.strip().startswith("```json") and response.strip().endswith(
-                "```"
-            ):
-                # Strip the triple backticks and attempt to parse the JSON content
-                json_content = response.strip()[7:-3]
-                try:
-                    response_data = json.loads(json_content)
-                except json.JSONDecodeError:
-                    if self.context.state.selected_protocols:
-                        selected_protocols = json.loads(
-                            self.context.state.selected_protocols
-                        )
-                    else:
-                        selected_protocols = self.context.params.available_strategies
-                    trading_type = self.context.state.trading_type
-                    if not trading_type:
-                        trading_type = TradingType.BALANCED.value
+        selected_protocols = [
+            STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+            for strategy in selected_protocols
+        ]
 
-                    reasoning = f"Failed to parse LLM response. The response is not in valid JSON format. Falling back to previous strategies: {selected_protocols} and trading type: {trading_type}"
-                    return selected_protocols, trading_type, reasoning, trading_type
-            else:
-                reasoning = (
-                    "Failed to parse LLM response. Falling back to default strategies."
-                )
-                selected_protocols = self.context.params.available_strategies
-                trading_type = self.context.state.trading_type
-                if not trading_type:
-                    trading_type = TradingType.BALANCED.value
-                return selected_protocols, trading_type, reasoning, trading_type
+        trading_type = self.context.state.trading_type
+        if not trading_type:
+            trading_type = TradingType.BALANCED.value
+        reasoning = "Failed to parse LLM response. Falling back to previous strategies."
 
-        self.context.logger.info(f"Received LLM response: {response_data}")
-        selected_protocols = response_data.get("selected_protocols", [])
-
-        # Convert protocol names back to strategy names for backend storage
-
-        trading_type = response_data.get("trading_type", "")
-        reasoning = response_data.get("reasoning", "")
-        previous_trading_type = self.context.state.trading_type
-
-        if not selected_protocols or not trading_type or not reasoning:
-            if self.context.state.selected_protocols:
-                selected_protocols = json.loads(self.context.state.selected_protocols)
-            else:
-                selected_protocols = self.context.params.available_strategies
-
-            selected_protocols = [
-                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
-                for strategy in selected_protocols
-            ]
-
-            trading_type = self.context.state.trading_type
-            if not trading_type:
-                trading_type = TradingType.BALANCED.value
-            reasoning = ""
-
-        return selected_protocols, trading_type, reasoning, previous_trading_type
+        return selected_protocols, trading_type, reasoning, trading_type
 
     def _delayed_write_kv(
         self, selected_protocols: List[str], trading_type: str
@@ -899,7 +895,7 @@ class HttpHandler(BaseHttpHandler):
         if success:
             self.context.logger.info("KV store update successful.")
         else:
-            self.context.logger.error("KV store update failed.")
+            self.context.logger.info("KV store update failed.")
 
     def _send_message(
         self,

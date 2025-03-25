@@ -323,6 +323,7 @@ class Params(BaseParams):
             "available_strategies", kwargs, List[str]
         )
         self.cleanup_freq = self._ensure("cleanup_freq", kwargs, int)
+        self.genai_api_key = self._ensure("genai_api_key", kwargs, str)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

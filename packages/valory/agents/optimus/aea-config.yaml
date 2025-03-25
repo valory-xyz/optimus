@@ -286,3 +286,4 @@ models:
       max_pools: ${int:2}
       available_strategies: ${list:["balancer_pools_search","asset_lending"]}
       default_acceptance_time: ${int:15}
+      genai_api_key: ${str:}

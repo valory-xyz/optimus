@@ -251,6 +251,7 @@ class HttpHandler(BaseHttpHandler):
             rf"{hostname_regex}\/(.*)"  # New regex for serving static files
         )
         process_prompt_regex = rf"{hostname_regex}\/configure_strategies"
+        features_url_regex = rf"{hostname_regex}\/features"  # New regex for /features endpoint
 
         # Define routes
         self.routes = {
@@ -260,12 +261,14 @@ class HttpHandler(BaseHttpHandler):
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (portfolio_url_regex, self._handle_get_portfolio),
+                (features_url_regex, self._handle_get_features),  # Add new route
                 (
                     static_files_regex,
                     self._handle_get_static_file,
-                ),  # New route for serving static files
+                ),
             ],
         }
+
         fsm = load_fsm_spec()
 
         self.json_content_header = "Content-Type: application/json\n"
@@ -296,6 +299,23 @@ class HttpHandler(BaseHttpHandler):
     def shared_state(self) -> SharedState:
         """Get the parameters."""
         return cast(SharedState, self.context.state)
+
+    def _handle_get_features(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a GET request to check if chat feature is enabled.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        # Check if GENAI_API_KEY is set
+        api_key = self.context.params.genai_api_key
+        is_chat_enabled = api_key is not None and isinstance(api_key, str) and api_key.strip() != "" and api_key != "${str:}"
+
+        data = {"isChatEnabled": is_chat_enabled}
+
+        self._send_ok_response(http_msg, http_dialogue, data)
 
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeicpoptz2pcildxsv2o64qtggq2rihom7mqpkto32vkbuexmpauyxy
+  behaviours.py: bafybeidd7twpkkt7rnkkdpp3bvoautjmrjiuvuntklkjrubz3ze3h44kui
   dialogues.py: bafybeif2sz3d2fhf7sldsqffy2cwym3ckdxuggklmh6nfr6ioaxfkibvnq
   fsm_specification.yaml: bafybeibcif6porm3od6omeeuxc73rroqczz5ltcxwpyunljofakvieam5m
   handlers.py: bafybeigilaobjcbtv3rpvbukzda7jeuuvuzkf7pe2nj35pqjhc6luywpua
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeic43spwbtgowd4e4jjvnrhsbxwkqul47tcthbxjee6yght2bso3m4
+  models.py: bafybeig7md7gdzjseksrzmb43qpyqcbnz56ljisredowwcwv3v2eh62xzy
   payloads.py: bafybeigb5wva5xtcwgfnms743nwypc3nfj7kbnorezmzp332fyucsik53q
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
@@ -226,6 +226,7 @@ models:
       available_strategies: null
       default_acceptance_time: null
       cleanup_freq: 50
+      genai_api_key: null
     class_name: Params
   coingecko:
     args:

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeicqdfwzsn4ucyyd653rfmjqdto672qr4xzmlo24lsr6a2qek7s4t4
+agent: valory/optimus:0.1.0:bafybeidgpbwvnvgfx7zljuqx77epyeobivwazqjjft5yfgdexeyqbb3odi
 number_of_agents: 1
 deployment:
   agent:
@@ -105,6 +105,7 @@ models:
       init_fallback_gas: ${INIT_FALLBACK_GAS:int:0}
       available_strategies: ${AVAILABLE_STRATEGIES:list:["balancer_pools_search","asset_lending"]}
       default_acceptance_time: ${DEFAULT_ACCEPTANCE_TIME:int:15}
+      genai_api_key: ${GENAI_API_KEY:str:null}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

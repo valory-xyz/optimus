@@ -251,7 +251,9 @@ class HttpHandler(BaseHttpHandler):
             rf"{hostname_regex}\/(.*)"  # New regex for serving static files
         )
         process_prompt_regex = rf"{hostname_regex}\/configure_strategies"
-        features_url_regex = rf"{hostname_regex}\/features"  # New regex for /features endpoint
+        features_url_regex = (
+            rf"{hostname_regex}\/features"  # New regex for /features endpoint
+        )
 
         # Define routes
         self.routes = {
@@ -311,7 +313,12 @@ class HttpHandler(BaseHttpHandler):
         """
         # Check if GENAI_API_KEY is set
         api_key = self.context.params.genai_api_key
-        is_chat_enabled = api_key is not None and isinstance(api_key, str) and api_key.strip() != "" and api_key != "${str:}"
+        is_chat_enabled = (
+            api_key is not None
+            and isinstance(api_key, str)
+            and api_key.strip() != ""
+            and api_key != "${str:}"
+        )
 
         data = {"isChatEnabled": is_chat_enabled}
 
@@ -439,7 +446,7 @@ class HttpHandler(BaseHttpHandler):
         handler(http_msg, http_dialogue, **kwargs)
 
     def _handle_bad_request(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg = None
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg=None
     ) -> None:
         """
         Handle a Http bad request.
@@ -744,7 +751,7 @@ class HttpHandler(BaseHttpHandler):
             if "error" in payload:
                 # Extract the specific error message
                 error_details = payload["error"]
-                error_message = error_details.split("message: \"")[1].split("\"")[0]
+                error_message = error_details.split('message: "')[1].split('"')[0]
                 reasoning = error_message
                 self.context.logger.error(f"Error from LLM: {reasoning}")
                 return [], "", reasoning, self.context.state.trading_type
@@ -754,17 +761,23 @@ class HttpHandler(BaseHttpHandler):
             # Attempt to handle JSON content wrapped in triple backticks
             try:
                 response = json.loads(llm_response_message.payload).get("response", "")
-                if response.strip().startswith("```json") and response.strip().endswith("```"):
+                if response.strip().startswith("```json") and response.strip().endswith(
+                    "```"
+                ):
                     # Strip the triple backticks and attempt to parse the JSON content
                     json_content = response.strip()[7:-3]
                     response_data = json.loads(json_content)
                 else:
                     raise ValueError("Response is not in valid JSON format.")
             except (json.JSONDecodeError, ValueError):
-                reasoning = "Failed to parse LLM response. Falling back to default strategies."
+                reasoning = (
+                    "Failed to parse LLM response. Falling back to default strategies."
+                )
                 self.context.logger.error(reasoning)
                 selected_protocols = self.context.params.available_strategies
-                trading_type = self.context.state.trading_type or TradingType.BALANCED.value
+                trading_type = (
+                    self.context.state.trading_type or TradingType.BALANCED.value
+                )
                 return selected_protocols, trading_type, reasoning, trading_type
 
         self.context.logger.info(f"Received LLM response: {response_data}")

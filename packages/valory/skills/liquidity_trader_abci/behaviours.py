@@ -4651,7 +4651,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
-            
+
             # Check if we need to recalculate the portfolio
             if self.should_recalculate_portfolio(self.portfolio_data):
                 yield from self.calculate_user_share_values()
@@ -4677,7 +4677,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def should_recalculate_portfolio(self, last_portfolio_data: Dict) -> bool:
         """Determine if the portfolio should be recalculated."""
-        return self._is_period_due() or self._have_positions_changed(last_portfolio_data)
+        return self._is_period_due() or self._have_positions_changed(
+            last_portfolio_data
+        )
 
     def _is_period_due(self) -> bool:
         """Check if the period count indicates a recalculation is due."""
@@ -4690,10 +4692,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         if len(current_positions) != len(last_positions):
             return True
-        
+
         # Create a set of current position identifiers i.e. pool_id with their status
         current_position_status = {
-            (position.get("pool_address"), position.get("status")) for position in current_positions
+            (position.get("pool_address"), position.get("status"))
+            for position in current_positions
         }
 
         # Create a set of last position identifiers i.e. pool_id with their status
@@ -4704,9 +4707,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Check if there are any differences in the sets
         if current_position_status != last_position_status:
             return True
-        
+
         return False
-    
+
     def calculate_user_share_values(self) -> Generator[None, None, None]:
         """Calculate the value of shares for the user based on open pools."""
         total_user_share_value_usd = Decimal(0)

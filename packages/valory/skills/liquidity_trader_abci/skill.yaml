@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeigjfasgkbiizvexf4tya35stoonuk4pvp2s3wdyy2wlflzhgouty4
-  dialogues.py: bafybeif7khraurushuwuxcknyw4xfmw45zmfliekosyqz7zkpde7qzqrrm
+  behaviours.py: bafybeignnsghr5e7q3qga4s53hjj5s26i66copwogmpolc7jq7fg2y75pm
+  dialogues.py: bafybeifizeu2phitkv4nz7jshs7apkvvty7xjdy3vldbb45wlylziftsua
   fsm_specification.yaml: bafybeiadifjdyelg3phoxtym5f332bsztqaf2zb2k5tz6psmlpmjdstcve
-  handlers.py: bafybeidik5dxdf66h46gi22xcnh3sotwkg2bzoasgevybc6ixzcnhpjlki
+  handlers.py: bafybeidcsfovyrrgko72jjd77jnckklj3x6ui2ebbb2nboitn6mckb5jua
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
   models.py: bafybeibicwduevg6pfhzufrstkedapxmswvdxptc7mdupk4apq37pq4vha
@@ -28,7 +28,8 @@ fingerprint:
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeif5lftpq3vv6r4bn4vhjvmq3zizvosaiptb3zh4zky4na3b7vr43e
+- valory/mirror_db:0.1.0:bafybeib2syymmq3vgyu2hm56igvsaaqtm7eidgl2jxizusnxmkbwksphcy
+- dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/balancer_weighted_pool:0.1.0:bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm
@@ -46,6 +47,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
 - valory/ipfs:0.1.0:bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq
 - valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
+- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
@@ -75,6 +77,9 @@ handlers:
   srr:
     args: {}
     class_name: SrrHandler
+  kv_store:
+    args: {}
+    class_name: KvStoreHandler
   tendermint:
     args: {}
     class_name: TendermintHandler
@@ -250,6 +255,9 @@ models:
   srr_dialogues:
     args: {}
     class_name: SrrDialogues
+  kv_store_dialogues:
+    args: {}
+    class_name: KvStoreDialogues
 dependencies:
   web3:
     version: <7,>=6.0.0

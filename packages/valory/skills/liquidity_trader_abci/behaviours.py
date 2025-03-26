@@ -51,6 +51,9 @@ from aea.protocols.dialogue.base import Dialogue
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
 
+from packages.dvilela.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
+)
 from packages.valory.connections.mirror_db.connection import (
     PUBLIC_ID as MIRRORDB_CONNECTION_PUBLIC_ID,
 )
@@ -87,6 +90,11 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
 )
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.skills.liquidity_trader_abci.models import (
     Coingecko,
     Params,
@@ -985,6 +993,48 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
             self.context.logger.error(f"Exception while calling MirrorDB: {e}")
             return None
     
+    def _read_kv(
+        self,
+        keys: Tuple[str, ...],
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Send a request message from the skill context."""
+        self.context.logger.info(f"Reading keys from db: {keys}")
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.READ_REQUEST,
+            keys=keys,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        response = yield from self._do_connection_request(
+            kv_store_message, kv_store_dialogue  # type: ignore
+        )
+        if response.performative != KvStoreMessage.Performative.READ_RESPONSE:
+            return None
+
+        data = {key: response.data.get(key, None) for key in keys}  # type: ignore
+
+        return data
+
+    def _write_kv(
+        self,
+        data: Dict[str, str],
+    ) -> Generator[None, None, bool]:
+        """Send a request message from the skill context."""
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            data=data,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        response = yield from self._do_connection_request(
+            kv_store_message, kv_store_dialogue  # type: ignore
+        )
+        return response == KvStoreMessage.Performative.SUCCESS
+    
 
 class CallCheckpointBehaviour(
     LiquidityTraderBaseBehaviour
@@ -1659,27 +1709,22 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             try:
                 # Get configuration
                 eth_address = sender
-                private_key = ""
                 agent_name = "Alpha"
                 
-                if not eth_address or not private_key:
-                    self.context.logger.error("Missing eth_address or private_key in configuration")
-                    raise ValueError("Missing eth_address or private_key")
-                
                 # Step 1: Get or create agent type for "Modius"
-                agent_type = yield from self.get_agent_type_by_name("Modius")
+                agent_type = yield from self._read_kv(keys=("agent_type",))
                 if not agent_type:
                     agent_type = yield from self.create_agent_type(
                         "Modius", 
                         "An agent for DeFi liquidity management and APR tracking",
-                        eth_address,
-                        private_key
+                        eth_address
                     )
+                    yield from self._write_kv({"agent_type": agent_type})
                 type_id = agent_type.get("type_id")
                 self.context.logger.info(f"Using agent type: {agent_type}")
                 
                 # Step 2: Get or create APR attribute definition
-                attr_def = yield from self.get_attribute_definition_by_name(type_id, "APR")
+                attr_def = yield from self._read_kv(keys=("attr_def",))
                 if not attr_def:
                     attr_def = yield from self.create_attribute_definition(
                         type_id,
@@ -1688,9 +1733,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                         True,
                         "0.0",
                         eth_address,
-                        private_key,
                         admin_agent_id=1  # Assuming admin agent ID is 1
                     )
+                    yield from self._write_kv({"attr_def": attr_def})
                 attr_def_id = attr_def.get("attr_def_id")
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
                 
@@ -1728,8 +1773,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                     agent_registry_id, 
                     5.25,
                     {"apr": 5.25},
-                    eth_address,
-                    private_key
+                    eth_address
                 )
                 self.context.logger.info(f"Stored APR data: {agent_attr}")
                 
@@ -1751,12 +1795,15 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # Utility methods
     # =========================================================================
     
-    def sign_message(self, message, private_key):
-        """Sign a message with the given private key."""
-        message_hash = encode_defunct(text=message)
-        signed_message = Account.sign_message(message_hash, private_key)
-        return signed_message.signature.hex()
-
+    def sign_message(self, message) -> Generator[None, None, Optional[str]]:
+        """Sign a message."""
+        message_bytes = message.encode("utf-8")
+        signature = yield from self.get_signature(message_bytes)
+        if signature:
+            signature_hex = signature[2:]
+            return signature_hex
+        return None 
+    
     # =========================================================================
     # Agent Type API methods
     # =========================================================================
@@ -1789,7 +1836,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         return response
     
     def create_agent_type(
-        self, type_name, description, eth_address, private_key, admin_agent_id=1
+        self, type_name, description, eth_address, admin_agent_id=1
     ) -> Generator[None, None, Dict]:
         """Create a new agent type."""
         # Prepare agent type data
@@ -1802,7 +1849,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
         endpoint = "api/agent-types/"
         message = f"timestamp:{timestamp},endpoint:{endpoint}"
-        signature = self.sign_message(message, private_key)
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
         
         # Prepare authentication data
         auth_data = {
@@ -1855,7 +1904,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     
     def create_attribute_definition(
         self, type_id, attr_name, data_type, is_required, default_value, 
-        eth_address, private_key, admin_agent_id=1
+        eth_address, admin_agent_id=1
     ) -> Generator[None, None, Dict]:
         """Create a new attribute definition for a specific agent type."""
         # Prepare attribute definition data
@@ -1871,7 +1920,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
         endpoint = f"api/agent-types/{type_id}/attributes/"
         message = f"timestamp:{timestamp},endpoint:{endpoint}"
-        signature = self.sign_message(message, private_key)
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
         
         # Prepare authentication data
         auth_data = {
@@ -2018,7 +2069,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     
     def create_agent_attribute(
         self, agent_id, attr_def_id, agent_registry_id, float_value=None, 
-        json_value=None, eth_address=None, private_key=None
+        json_value=None, eth_address=None
     ) -> Generator[None, None, Dict]:
         """Create a new attribute value for a specific agent."""
         # Prepare the agent attribute data with all values set to None initially
@@ -2037,7 +2088,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
         endpoint = f"api/agents/{agent_registry_id}/attributes/"
         message = f"timestamp:{timestamp},endpoint:{endpoint}"
-        signature = self.sign_message(message, private_key)
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
         
         # Prepare authentication data
         auth_data = {
@@ -2059,7 +2112,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     
     def update_agent_attribute(
         self, attribute_id, agent_id, attr_def_id, value, 
-        value_type="float", eth_address=None, private_key=None, agent_registry_id=None
+        value_type="float", eth_address=None, agent_registry_id=None
     ) -> Generator[None, None, Dict]:
         """Update an existing agent attribute."""
         # Prepare the agent attribute data with all values set to None initially
@@ -2090,7 +2143,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
         endpoint = f"api/agent-attributes/{attribute_id}"
         message = f"timestamp:{timestamp},endpoint:{endpoint}"
-        signature = self.sign_message(message, private_key)
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
         
         # Prepare authentication data
         auth_data = {

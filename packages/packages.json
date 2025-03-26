@@ -14,11 +14,11 @@
         "contract/valory/staking_token/0.1.0": "bafybeiev3fx5wg4rs5rciqdxemdvt73fwu2nylv23i7g665jzorcyyjape",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe",
-        "connection/valory/mirror_db/0.1.0": "bafybeif5lftpq3vv6r4bn4vhjvmq3zizvosaiptb3zh4zky4na3b7vr43e",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeicksa4txa37l42bu2ngjk356l4awfrhxtcdiih265qylaemj5x3me",
-        "skill/valory/optimus_abci/0.1.0": "bafybeicihlipglhz7zhnq73ttt4mdymtyyx5dagfridwfn2mml7vckgm6e",
-        "agent/valory/optimus/0.1.0": "bafybeienyqkmn7tjlhjtrqtt24ixot3hgt3thtebnhkqyjhgwxnmcpnrji",
-        "service/valory/optimus/0.1.0": "bafybeihaqtqrg3rrr75dxbnsbnxarvwuoqcrpravdzcurz6dogxzamnjku"
+        "connection/valory/mirror_db/0.1.0": "bafybeib2syymmq3vgyu2hm56igvsaaqtm7eidgl2jxizusnxmkbwksphcy",
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeig5ovm6m2n7mv25rqmfkmulgoc7apwb54egyun7lllyhxdd5eowlq",
+        "skill/valory/optimus_abci/0.1.0": "bafybeidhqr33qhiin7ll7vwpdb72uq5knunkyn2ajggwunyprufgly25ua",
+        "agent/valory/optimus/0.1.0": "bafybeifijovjtb5xn45c24dkb24yny7tlwseq4hsfcftevntusgf4wa5iu",
+        "service/valory/optimus/0.1.0": "bafybeidpeqn2csgwyo3duufai4s6feu6avdquzm3x7vc376vvkf3co3vum"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeig2d36zxy65vd7fwhs7scotuktydcarm74aprmrb5nioiymr3yixm",
@@ -30,6 +30,7 @@
         "protocol/valory/ipfs/0.1.0": "bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq",
         "protocol/valory/tendermint/0.1.0": "bafybeigydrbfrlmr4f7shbtqx44kvmbg22im27mxdap2e3m5tkti6t445y",
         "protocol/valory/srr/0.1.0": "bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4",
+        "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
         "contract/valory/service_registry/0.1.0": "bafybeiabptpha4hnd7avieeqdzekwq6cx7bfshanrchfcqafq2kpa5bqwu",
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeie3h2hpzlrie2yc5r3eypce546am5bxlgvzqgjols34yf6z523o6q",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
@@ -40,6 +41,7 @@
         "connection/valory/ledger/0.19.0": "bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby",
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q",
         "connection/valory/http_server/0.22.0": "bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy",
+        "connection/dvilela/kv_store/0.1.0": "bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4",
         "skill/valory/abstract_abci/0.1.0": "bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla",
         "skill/valory/reset_pause_abci/0.1.0": "bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a",
         "skill/valory/registration_abci/0.1.0": "bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y",

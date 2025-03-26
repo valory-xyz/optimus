@@ -9,9 +9,9 @@ fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
   composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
-  dialogues.py: bafybeicozx4faf655wmvyqpdbllp5ugj6r7lau4wzikmfyfd3qdfgqf6f4
+  dialogues.py: bafybeihuv2jh4kkw2wfopjaxv7uwszat4j2e7rgl54wjmdn35xaxrutm74
   fsm_specification.yaml: bafybeibhvzg44lw3opc276w7gap2yrn3ym4xuasi6llquoacantulvkzxi
-  handlers.py: bafybeif2ainlnu7s3nwouc7rjfonir5mdsvf7cvrp75wdvy5xukxm4ldya
+  handlers.py: bafybeiahywnafnncy2ismlvoembbgtudvqo6zeapin24z6p6gh3kyyxhai
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
   modius-ui-build/asset-manifest.json: bafybeigcx7rmiyqyfhf2xkpsdqaip72tpwxrpapskiwo4zrjftkgaulwaa
@@ -54,7 +54,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeicksa4txa37l42bu2ngjk356l4awfrhxtcdiih265qylaemj5x3me
+- valory/liquidity_trader_abci:0.1.0:bafybeig5ovm6m2n7mv25rqmfkmulgoc7apwb54egyun7lllyhxdd5eowlq
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
@@ -82,6 +82,9 @@ handlers:
   srr:
     args: {}
     class_name: SrrHandler
+  kv_store:
+    args: {}
+    class_name: KvStoreHandler
   tendermint:
     args: {}
     class_name: TendermintHandler
@@ -265,6 +268,9 @@ models:
   srr_dialogues:
     args: {}
     class_name: SrrDialogues
+  kv_store_dialogues:
+    args: {}
+    class_name: KvStoreDialogues
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues

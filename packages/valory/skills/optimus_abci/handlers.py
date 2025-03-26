@@ -31,7 +31,9 @@ import yaml
 from aea.protocols.base import Message
 
 from packages.valory.skills.liquidity_trader_abci.handlers import SrrHandler as BaseSrrHandler
-
+from packages.valory.skills.liquidity_trader_abci.handlers import (
+    KvStoreHandler as BaseKvStoreHandler,
+)
 from packages.valory.connections.http_server.connection import (
     PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
 )
@@ -70,7 +72,7 @@ ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
 SrrHandler = BaseSrrHandler
-
+KvStoreHandler = BaseKvStoreHandler
 
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""

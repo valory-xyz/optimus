@@ -23,6 +23,8 @@ from typing import Optional, cast
 
 from aea.configurations.data_types import PublicId
 
+
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
@@ -93,5 +95,19 @@ class SrrHandler(AbstractResponseHandler):
         {
             SrrMessage.Performative.REQUEST,
             SrrMessage.Performative.RESPONSE,
+        }
+    )
+
+class KvStoreHandler(AbstractResponseHandler):
+    """A class for handling KeyValue messages."""
+
+    SUPPORTED_PROTOCOL: Optional[PublicId] = KvStoreMessage.protocol_id
+    allowed_response_performatives = frozenset(
+        {
+            KvStoreMessage.Performative.READ_REQUEST,
+            KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            KvStoreMessage.Performative.READ_RESPONSE,
+            KvStoreMessage.Performative.SUCCESS,
+            KvStoreMessage.Performative.ERROR,
         }
     )

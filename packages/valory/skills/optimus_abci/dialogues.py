@@ -67,7 +67,12 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
 from packages.valory.skills.abstract_round_abci.dialogues import (
     TendermintDialogues as BaseTendermintDialogues,
 )
-
+from packages.valory.skills.liquidity_trader_abci.dialogues import (
+    KvStoreDialogue as BaseKvStoreDialogue,
+)
+from packages.valory.skills.liquidity_trader_abci.dialogues import (
+    KvStoreDialogues as BaseKvStoreDialogues,
+)
 
 AbciDialogue = BaseAbciDialogue
 AbciDialogues = BaseAbciDialogues
@@ -99,3 +104,6 @@ IpfsDialogues = BaseIpfsDialogues
 
 SrrDialogue = BaseSrrDialogue
 SrrDialogues = BaseSrrDialogues
+
+KvStoreDialogue = BaseKvStoreDialogue
+KvStoreDialogues = BaseKvStoreDialogues

@@ -13,7 +13,7 @@ current_pool.json
 gas_costs.json
 portfolio.json
 Pipfile.lock
-    
+packages/dvilela/*    
 packages/valory/agents/*
 packages/valory/connections/*
 packages/valory/contracts/gnosis_safe

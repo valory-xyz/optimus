@@ -14,10 +14,10 @@
         "contract/valory/staking_token/0.1.0": "bafybeiev3fx5wg4rs5rciqdxemdvt73fwu2nylv23i7g665jzorcyyjape",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeic55mogpclprxu3yn4ttmt5dliu6yqwx4rlvzxe3elxmz5eykltmu",
-        "skill/valory/optimus_abci/0.1.0": "bafybeick4dyzfylbiamt5yl4ckz4orjztow4lx2h32kzars2arvhwasmge",
-        "agent/valory/optimus/0.1.0": "bafybeicfeuirijsxujx46qhkmwepdi4kl3aiwxtvykfrbizuthrt6pdl6u",
-        "service/valory/optimus/0.1.0": "bafybeic4heytta52ot3532gan7kdpyyxjfbdtnifasa3lonnksclyhvc6m"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeia65wlkccg4gg4gs6fezaobfzq7hkucdes2ldddemdl76thjrq2qq",
+        "skill/valory/optimus_abci/0.1.0": "bafybeifqe627khdecjbmz3pqb5xbdswqtbss4fhtgt4qifsnvlh5pg44py",
+        "agent/valory/optimus/0.1.0": "bafybeieshw3oyktlsajjsa5usuht2vi4yyxmcnwykakzqspt7l22rqb22e",
+        "service/valory/optimus/0.1.0": "bafybeiarzdiqj3bqddmop4jhphcvw4ufemq24xb6qa4jnz4bhtbd23a4r4"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -34,7 +34,7 @@
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeie3h2hpzlrie2yc5r3eypce546am5bxlgvzqgjols34yf6z523o6q",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
         "contract/valory/gnosis_safe/0.1.0": "bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4",
-        "connection/dvilela/kv_store/0.1.0": "bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4",
+        "connection/dvilela/kv_store/0.1.0": "bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu",
         "connection/dvilela/genai/0.1.0": "bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty",
         "connection/valory/abci/0.1.0": "bafybeiebm3m3gfgkbdiym6jkl4idbfpjqjjoggmg6pgoc55ijeh7622gaa",
         "connection/valory/http_client/0.23.0": "bafybeid5ffvg76ejjoese7brj5ji3lx66cu7p2ixfwflpo6rgofkypfd7y",

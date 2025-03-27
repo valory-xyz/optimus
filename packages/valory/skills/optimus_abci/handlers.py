@@ -54,6 +54,7 @@ from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
+from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )
@@ -76,9 +77,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours import (
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
 )
-from packages.valory.skills.liquidity_trader_abci.handlers import (
-    KvStoreHandler as BaseKvStoreHandler,
-)
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
 from packages.valory.skills.optimus_abci.dialogues import (
@@ -96,7 +94,7 @@ LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
-KvStoreHandler = BaseKvStoreHandler
+
 
 # Strategy to protocol name mapping
 STRATEGY_TO_PROTOCOL = {
@@ -177,7 +175,7 @@ class BaseHandler(Handler):
             self.cleanup_dialogues()
 
 
-class KvStoreHandler(BaseHandler):
+class KvStoreHandler(AbstractResponseHandler):
     """Handler for managing KV Store messages."""
 
     SUPPORTED_PROTOCOL: Optional[PublicId] = KvStoreMessage.protocol_id
@@ -202,18 +200,21 @@ class KvStoreHandler(BaseHandler):
 
         if kv_store_msg.performative not in self.allowed_response_performatives:
             self.context.logger.warning(
-                f"KV Store performative not recognized: {kv_store_msg.performative}"
+                f"KvStore performative not recognized: {kv_store_msg.performative}"
             )
             self.context.state.in_flight_req = False
             return
 
-        dialogue = self.context.kv_store_dialogues.update(kv_store_msg)
-        nonce = dialogue.dialogue_label.dialogue_reference[0]
-        callback, kwargs = self.context.state.req_to_callback.pop(nonce)
-        callback(kv_store_msg, dialogue, **kwargs)
+        if kv_store_msg.performative == KvStoreMessage.Performative.SUCCESS:
+            dialogue = self.context.kv_store_dialogues.update(kv_store_msg)
+            nonce = dialogue.dialogue_label.dialogue_reference[0]
+            callback, kwargs = self.context.state.req_to_callback.pop(nonce)
+            callback(kv_store_msg, dialogue, **kwargs)
 
-        self.context.state.in_flight_req = False
-        self.on_message_handled(message)
+            self.context.state.in_flight_req = False
+            return
+        else:
+            super().handle(message)
 
 
 class HttpHandler(BaseHttpHandler):

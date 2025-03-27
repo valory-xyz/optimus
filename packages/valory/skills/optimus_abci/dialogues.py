@@ -25,6 +25,12 @@ from aea.protocols.base import Address, Message
 from aea.protocols.dialogue.base import Dialogue as BaseDialogue
 from aea.skills.base import Model
 
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue as BaseKvStoreDialogue,
+)
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogues as BaseKvStoreDialogues,
+)
 from packages.valory.protocols.srr.dialogues import SrrDialogue as BaseSrrDialogue
 from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
 from packages.valory.skills.abstract_round_abci.dialogues import (
@@ -69,12 +75,6 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
 from packages.valory.skills.abstract_round_abci.dialogues import (
     TendermintDialogues as BaseTendermintDialogues,
 )
-from packages.valory.skills.liquidity_trader_abci.dialogues import (
-    KvStoreDialogue as BaseKvStoreDialogue,
-)
-from packages.valory.skills.liquidity_trader_abci.dialogues import (
-    KvStoreDialogues as BaseKvStoreDialogues,
-)
 
 
 AbciDialogue = BaseAbciDialogue
@@ -103,7 +103,6 @@ IpfsDialogues = BaseIpfsDialogues
 
 SrrDialogue = BaseSrrDialogue
 HttpDialogue = BaseHttpDialogue
-
 HttpDialogues = BaseHttpDialogues
 KvStoreDialogue = BaseKvStoreDialogue
 

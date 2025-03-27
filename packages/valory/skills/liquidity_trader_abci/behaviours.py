@@ -1711,59 +1711,62 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 eth_address = sender
                 agent_name = "Alpha"
                 
-                
-                # Step 1: Get or create agent type for "Modius"
-                agent_type = yield from self._read_kv(keys=("agent_type",))
-                if not agent_type['agent_type']:
-                    agent_type = yield from self.create_agent_type(
-                        "Modius", 
-                        "An agent for DeFi liquidity management and APR tracking",
-                        eth_address
-                    )
-                    yield from self._write_kv({"agent_type": agent_type})
-                agent_data = eval(agent_type['agent_type'])
-                type_id = agent_data.get("type_id")
+                # Step 1: Get or create agent registry entry
+                data = yield from self._read_kv(keys=("agent_registry",))
+                if data:
+                    agent_registry = data.get("agent_registry", {})
+                    agent_registry = json.loads(agent_registry)
+                    if not agent_registry:
+                        agent_registry = yield from self.get_agent_registry_by_address(eth_address)
+                        if not agent_registry:
+                            agent_registry = yield from self.create_agent(agent_name)
+                            yield from self._write_kv({"agent_registry": json.dumps(agent_registry)})
+                   
+                agent_id = agent_registry.get("agent_id")
+                self.context.logger.info(f"Using agent: {agent_id}")
+
+                # Step 2: Get or create agent type for "Modius"
+                data = yield from self._read_kv(keys=("agent_type",))
+                if data:
+                    agent_type = data.get("agent_type", {})
+                    agent_type = json.loads(agent_type)
+                    if not agent_type:
+                        # Check external DB
+                        agent_type = yield from self.get_agent_type_by_name("Modius")
+                        if not agent_type:
+                            agent_type = yield from self.create_agent_type(
+                                "Modius", 
+                                "An agent for DeFi liquidity management and APR tracking",
+                                eth_address,
+                                agent_id
+                            )
+                        yield from self._write_kv({"agent_type": json.dumps(agent_type)})
+                   
+                type_id = agent_type.get("type_id")
                 self.context.logger.info(f"Using agent type: {agent_type}")
                 
-                # Step 2: Get or create APR attribute definition
-                attr_def = yield from self._read_kv(keys=("attr_def",))
-                self.context.logger.info(f"attr_def: {attr_def}")
-                if not attr_def['attr_def']:
-                    attr_def = yield from self.create_attribute_definition(
-                        type_id,
-                        "APR",
-                        "float",
-                        True,
-                        "0.0",
-                        eth_address,
-                        admin_agent_id=1  # Assuming admin agent ID is 1
-                    )
-                    yield from self._write_kv({"attr_def": attr_def})
-                attr_def = eval(attr_def['attr_def'])
+                # Step 3: Get or create APR attribute definition
+                data = yield from self._read_kv(keys=("attr_def",))
+                if data:
+                    attr_def = data.get("attr_def", {})
+                    attr_def = json.loads(attr_def)
+                    if not attr_def:
+                        # Check external DB
+                        attr_def = yield from self.get_attr_def_by_name("APR")
+                        if not attr_def:
+                            attr_def = yield from self.create_attribute_definition(
+                                type_id,
+                                "APR",
+                                "float",
+                                True,
+                                "0.0",
+                                eth_address,
+                                agent_id
+                            )
+                        yield from self._write_kv({"attr_def": json.dumps(attr_def)})
+                   
                 attr_def_id = attr_def.get("attr_def_id")
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
-                
-                # Step 3: Get or create agent registry entry
-                agent_registry = yield from self.get_agent_registry_by_address(eth_address)
-                if not agent_registry:
-                    # First create an agent
-                    agent = yield from self.create_agent(agent_name)
-                    agent_id = agent.get("agent_id")
-                    
-                    # Then create agent registry
-                    agent_registry = yield from self.create_agent_registry(
-                        agent_name,
-                        type_id,
-                        eth_address
-                    )
-                else:
-                    # Get agent ID from existing registry
-                    agent_registry_id = agent_registry.get("agent_id")
-                    agent = yield from self.get_agent(agent_registry_id)
-                    agent_id = agent.get("agent_id")
-                
-                agent_registry_id = agent_registry.get("agent_id")
-                self.context.logger.info(f"Using agent registry: {agent_registry}")
                 
                 # Step 4: Calculate APR for positions
                 # individual_shares = self.get_individual_shares()
@@ -1774,7 +1777,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 agent_attr = yield from self.create_agent_attribute(
                     agent_id,
                     attr_def_id,
-                    agent_registry_id, 
                     5.25,
                     {"apr": 5.25},
                     eth_address
@@ -1823,12 +1825,21 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     
     def get_agent_type_by_name(self, type_name) -> Generator[None, None, Optional[Dict]]:
         """Get agent type by name."""
-        agent_types = yield from self.get_agent_types()
-        if agent_types:
-            for agent_type in agent_types:
-                if agent_type.get("type_name") == type_name:
-                    return agent_type
-        return None
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_type_by_name",
+            endpoint=f"api/agent-types/name/{type_name}"
+        )
+        return response
+    
+    def get_attr_def_by_name(self, attr_name) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_attr_def_by_name",
+            endpoint=f"api/attributes/name/{attr_name}"
+        )
+        return response
     
     def get_agent_type(self, type_id) -> Generator[None, None, Dict]:
         """Get agent type by ID."""
@@ -1840,7 +1851,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         return response
     
     def create_agent_type(
-        self, type_name, description, eth_address, admin_agent_id=1
+        self, type_name, description, eth_address, agent_id
     ) -> Generator[None, None, Dict]:
         """Create a new agent type."""
         # Prepare agent type data
@@ -1859,7 +1870,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Prepare authentication data
         auth_data = {
-            "agent_id": admin_agent_id,  # Admin agent ID
+            "agent_id": agent_id,
             "eth_address": eth_address,
             "signature": signature,
             "message": message
@@ -1908,7 +1919,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     
     def create_attribute_definition(
         self, type_id, attr_name, data_type, is_required, default_value, 
-        eth_address, admin_agent_id=1
+        eth_address, agent_id
     ) -> Generator[None, None, Dict]:
         """Create a new attribute definition for a specific agent type."""
         # Prepare attribute definition data
@@ -1930,7 +1941,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Prepare authentication data
         auth_data = {
-            "agent_id": admin_agent_id,  # Admin agent ID
+            "agent_id": agent_id,
             "eth_address": eth_address,
             "signature": signature,
             "message": message
@@ -2072,7 +2083,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         return response
     
     def create_agent_attribute(
-        self, agent_id, attr_def_id, agent_registry_id, float_value=None, 
+        self, agent_id, attr_def_id, float_value=None, 
         json_value=None, eth_address=None
     ) -> Generator[None, None, Dict]:
         """Create a new attribute value for a specific agent."""
@@ -2090,7 +2101,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Generate timestamp and prepare signature
         timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
-        endpoint = f"api/agents/{agent_registry_id}/attributes/"
+        endpoint = f"api/agents/{agent_id}/attributes/"
         message = f"timestamp:{timestamp},endpoint:{endpoint}"
         signature = yield from self.sign_message(message)
         if not signature:
@@ -2098,7 +2109,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Prepare authentication data
         auth_data = {
-            "agent_id": agent_registry_id,
+            "agent_id": agent_id,
             "eth_address": eth_address,
             "signature": signature,
             "message": message
@@ -2116,7 +2127,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     
     def update_agent_attribute(
         self, attribute_id, agent_id, attr_def_id, value, 
-        value_type="float", eth_address=None, agent_registry_id=None
+        value_type="float", eth_address=None,
     ) -> Generator[None, None, Dict]:
         """Update an existing agent attribute."""
         # Prepare the agent attribute data with all values set to None initially
@@ -2153,7 +2164,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         # Prepare authentication data
         auth_data = {
-            "agent_id": agent_registry_id,
+            "agent_id": agent_id,
             "eth_address": eth_address,
             "signature": signature,
             "message": message
@@ -5652,4 +5663,4 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
         PostTxSettlementBehaviour,
-    ]
+		]

@@ -1711,21 +1711,24 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 eth_address = sender
                 agent_name = "Alpha"
                 
+                
                 # Step 1: Get or create agent type for "Modius"
                 agent_type = yield from self._read_kv(keys=("agent_type",))
-                if not agent_type:
+                if not agent_type['agent_type']:
                     agent_type = yield from self.create_agent_type(
                         "Modius", 
                         "An agent for DeFi liquidity management and APR tracking",
                         eth_address
                     )
                     yield from self._write_kv({"agent_type": agent_type})
-                type_id = agent_type.get("type_id")
+                agent_data = eval(agent_type['agent_type'])
+                type_id = agent_data.get("type_id")
                 self.context.logger.info(f"Using agent type: {agent_type}")
                 
                 # Step 2: Get or create APR attribute definition
                 attr_def = yield from self._read_kv(keys=("attr_def",))
-                if not attr_def:
+                self.context.logger.info(f"attr_def: {attr_def}")
+                if not attr_def['attr_def']:
                     attr_def = yield from self.create_attribute_definition(
                         type_id,
                         "APR",
@@ -1736,6 +1739,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                         admin_agent_id=1  # Assuming admin agent ID is 1
                     )
                     yield from self._write_kv({"attr_def": attr_def})
+                attr_def = eval(attr_def['attr_def'])
                 attr_def_id = attr_def.get("attr_def_id")
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
                 

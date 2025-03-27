@@ -88,7 +88,7 @@ default_connection: null
 public_id: dvilela/kv_store:0.1.0
 type: connection
 config:
-  db_path: ${str:/tmp/strategies.db}
+  db_path: ${str:null}
 ---
 public_id: valory/abci:0.1.0
 type: connection

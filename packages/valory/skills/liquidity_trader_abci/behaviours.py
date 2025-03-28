@@ -155,7 +155,9 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
-
+AGENT_TYPE = "Modius"
+METRICS_NAME = "APR"
+METRICS_TYPE = "json"
 
 class DexType(Enum):
     """DexType"""
@@ -1720,11 +1722,11 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                         agent_type = json.loads(agent_type)
                     else:
                         # Check external DB
-                        agent_type = yield from self.get_agent_type_by_name("Modius_1")
+                        agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
                         print("agent_type", agent_type)
                         if not agent_type:
                             agent_type = yield from self.create_agent_type(
-                                "Modius_1", 
+                                AGENT_TYPE, 
                                 "An agent for DeFi liquidity management and APR tracking"
                             )
                             if not agent_type:
@@ -1759,15 +1761,14 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                         attr_def = json.loads(attr_def)
                     else:
                         # Check external DB
-                        attr_def = yield from self.get_attr_def_by_name("APR")
+                        attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
                         if not attr_def:
                             attr_def = yield from self.create_attribute_definition(
                                 type_id,
-                                "APR",
-                                "float",
+                                METRICS_NAME,
+                                METRICS_TYPE,
                                 True,
-                                "0.0",
-                                eth_address,
+                                "{}",
                                 agent_id
                             )
                             if not attr_def:
@@ -1783,12 +1784,11 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 # self.context.logger.info(f"Calculated APR data: {actual_apr_data}")
                 
                 # Step 5: Store APR data in MirrorDB
+                timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
                 agent_attr = yield from self.create_agent_attribute(
                     agent_id,
                     attr_def_id,
-                    5.25,
-                    {"apr": 5.25},
-                    eth_address
+                    {"apr": 5.25, "timestamp": timestamp},
                 )
                 self.context.logger.info(f"Stored APR data: {agent_attr}")
                 
@@ -1823,14 +1823,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # Agent Type API methods
     # =========================================================================
     
-    def get_agent_types(self) -> Generator[None, None, List[Dict]]:
-        """Get all agent types."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent_types",
-            endpoint="api/agent-types/"
-        )
-        return response
     
     def get_agent_type_by_name(self, type_name) -> Generator[None, None, Optional[Dict]]:
         """Get agent type by name."""
@@ -1838,24 +1830,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             method="read_",
             method_name="get_agent_type_by_name",
             endpoint=f"api/agent-types/name/{type_name}"
-        )
-        return response
-    
-    def get_attr_def_by_name(self, attr_name) -> Generator[None, None, Optional[Dict]]:
-        """Get agent type by name."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_attr_def_by_name",
-            endpoint=f"api/attributes/name/{attr_name}"
-        )
-        return response
-    
-    def get_agent_type(self, type_id) -> Generator[None, None, Dict]:
-        """Get agent type by ID."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent_type",
-            endpoint=f"api/agent-types/{type_id}"
         )
         return response
     
@@ -1885,36 +1859,17 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # Attribute Definition API methods
     # =========================================================================
     
-    def get_attribute_definitions(self, type_id) -> Generator[None, None, List[Dict]]:
-        """Get all attribute definitions for a specific agent type."""
+    def get_attr_def_by_name(self, attr_name) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
         response = yield from self._call_mirrordb(
             method="read_",
-            method_name="get_attribute_definitions",
-            endpoint=f"api/agent-types/{type_id}/attributes/"
-        )
-        return response
-    
-    def get_attribute_definition_by_name(self, type_id, attr_name) -> Generator[None, None, Optional[Dict]]:
-        """Get attribute definition by name."""
-        attr_defs = yield from self.get_attribute_definitions(type_id)
-        if attr_defs:
-            for attr_def in attr_defs:
-                if attr_def.get("attr_name") == attr_name:
-                    return attr_def
-        return None
-    
-    def get_attribute_definition(self, attr_def_id) -> Generator[None, None, Dict]:
-        """Get attribute definition by ID."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_attribute_definition",
-            endpoint=f"api/attributes/{attr_def_id}"
+            method_name="get_attr_def_by_name",
+            endpoint=f"api/attributes/name/{attr_name}"
         )
         return response
     
     def create_attribute_definition(
-        self, type_id, attr_name, data_type, is_required, default_value, 
-        eth_address, agent_id
+        self, type_id, attr_name, data_type, is_required, default_value, agent_id
     ) -> Generator[None, None, Dict]:
         """Create a new attribute definition for a specific agent type."""
         # Prepare attribute definition data
@@ -1954,51 +1909,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # =========================================================================
     # Agent Registry API methods
     # =========================================================================
-    
-    def get_agents(self) -> Generator[None, None, List[Dict]]:
-        """Get all agents."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agents",
-            endpoint="api/agents/"
-        )
-        return response
-    
-    def get_agent(self, agent_id) -> Generator[None, None, Dict]:
-        """Get agent by ID."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent",
-            endpoint=f"api/agent-registry/{agent_id}"
-        )
-        return response
-    
-    def create_agent(self, agent_name) -> Generator[None, None, Dict]:
-        """Create a new agent."""
-        # Prepare agent data
-        agent_data = {
-            "agent_name": agent_name
-        }
-        
-        # Call API
-        response = yield from self._call_mirrordb(
-            method="create_",
-            method_name="create_agent",
-            endpoint="api/agents/",
-            data=agent_data
-        )
-        
-        return response
-    
-    def get_agent_registries(self) -> Generator[None, None, List[Dict]]:
-        """Get all agent registries."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent_registries",
-            endpoint="api/agent-registry/"
-        )
-        return response
-    
+
     def get_agent_registry_by_address(self, eth_address) -> Generator[None, None, Optional[Dict]]:
         """Get agent registry by Ethereum address."""
         response = yield from self._call_mirrordb(
@@ -2008,15 +1919,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         )
         return response
 
-    
-    def get_agent_registry(self, agent_id) -> Generator[None, None, Dict]:
-        """Get agent registry by ID."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent_registry",
-            endpoint=f"api/agent-registry/{agent_id}"
-        )
-        return response
     
     def create_agent_registry(self, agent_name, type_id, eth_address) -> Generator[None, None, Dict]:
         """Create a new agent registry."""
@@ -2037,49 +1939,14 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         return response
     
-    def get_agents_by_type(self, type_id) -> Generator[None, None, List[Dict]]:
-        """Get all agents of a specific type."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agents_by_type",
-            endpoint=f"api/agent-types/{type_id}/agents/"
-        )
-        return response
     
     # =========================================================================
     # Agent Attribute API methods
     # =========================================================================
     
-    def get_agent_attributes(self, agent_id) -> Generator[None, None, List[Dict]]:
-        """Get all attribute values for a specific agent."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent_attributes",
-            endpoint=f"api/agents/{agent_id}/attributes/"
-        )
-        return response
-    
-    def get_agent_attribute(self, attribute_id) -> Generator[None, None, Dict]:
-        """Get agent attribute by ID."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_agent_attribute",
-            endpoint=f"api/agent-attributes/{attribute_id}"
-        )
-        return response
-    
-    def get_attribute_values_by_type(self, type_id, attr_def_id) -> Generator[None, None, List[Dict]]:
-        """Get all attribute values for a specific attribute definition across all agents of a specific type."""
-        response = yield from self._call_mirrordb(
-            method="read_",
-            method_name="get_attribute_values_by_type",
-            endpoint=f"api/agent-types/{type_id}/attributes/{attr_def_id}/values"
-        )
-        return response
-    
     def create_agent_attribute(
-        self, agent_id, attr_def_id, float_value=None, 
-        json_value=None, eth_address=None
+        self, agent_id, attr_def_id, 
+        json_value=None,
     ) -> Generator[None, None, Dict]:
         """Create a new attribute value for a specific agent."""
         # Prepare the agent attribute data with all values set to None initially
@@ -2088,7 +1955,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             "attr_def_id": attr_def_id,
             "string_value": None,
             "integer_value": None,
-            "float_value": float_value,
+            "float_value": None,
             "boolean_value": None,
             "date_value": None,
             "json_value": json_value
@@ -2113,60 +1980,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         response = yield from self._call_mirrordb(
             method="create_",
             method_name="create_agent_attribute",
-            endpoint=endpoint,
-            data={"agent_attr": agent_attr_data, "auth": auth_data}
-        )
-        
-        return response
-    
-    def update_agent_attribute(
-        self, attribute_id, agent_id, attr_def_id, value, 
-        value_type="float", eth_address=None,
-    ) -> Generator[None, None, Dict]:
-        """Update an existing agent attribute."""
-        # Prepare the agent attribute data with all values set to None initially
-        agent_attr_data = {
-            "agent_id": agent_id,
-            "attr_def_id": attr_def_id,
-            "string_value": None,
-            "integer_value": None,
-            "float_value": None,
-            "boolean_value": None,
-            "date_value": None,
-            "json_value": None
-        }
-        
-        # Set the appropriate value based on value_type
-        if value_type == "string":
-            agent_attr_data["string_value"] = value
-        elif value_type == "integer":
-            agent_attr_data["integer_value"] = value
-        elif value_type == "float":
-            agent_attr_data["float_value"] = value
-        elif value_type == "boolean":
-            agent_attr_data["boolean_value"] = value
-        elif value_type == "json":
-            agent_attr_data["json_value"] = value
-        
-        # Generate timestamp and prepare signature
-        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
-        endpoint = f"api/agent-attributes/{attribute_id}"
-        message = f"timestamp:{timestamp},endpoint:{endpoint}"
-        signature = yield from self.sign_message(message)
-        if not signature:
-            return None
-        
-        # Prepare authentication data
-        auth_data = {
-            "agent_id": agent_id,
-            "signature": signature,
-            "message": message
-        }
-        
-        # Call API
-        response = yield from self._call_mirrordb(
-            method="update_",
-            method_name="update_agent_attribute",
             endpoint=endpoint,
             data={"agent_attr": agent_attr_data, "auth": auth_data}
         )

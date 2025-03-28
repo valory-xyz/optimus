@@ -1937,7 +1937,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "coingecko_api_key": self.coingecko.api_key,
                 "chains": self.params.target_investment_chains,
                 "apr_threshold": self.params.apr_threshold,
-                "protocols": self.params.selected_protocols,
+                "protocols": self.params.available_protocols,
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
             }
         )

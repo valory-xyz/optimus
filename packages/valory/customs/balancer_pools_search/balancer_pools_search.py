@@ -51,6 +51,29 @@ CHAIN_URLS = {
 
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
 LP = "lp"
+WHITELISTED_ASSETS = {
+    "mode": {
+        "0x4200000000000000000000000000000000000006",  # WETH
+        "0xdfc7c877a950e49d2610114102175a06c2e3167a",  # MODE
+        "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9",  # OLAS
+        "0xd988097fb8612cc24eec14542bc03424c656005f",  # USDC
+        "0x2416092f143378750bb29b79ed961ab195cceea5",  # ezETH
+        "0x59889b7021243db5b1e065385f918316cd90d46c",  # M-BTC
+        "0x6b2a01a5f79deb4c2f3c0eda7b01df456fbd726a",  # uniBTC
+        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138",  # msDAI
+        "0xf0f161fda2712db8b566946122a5af183995e2ed",  # USDT
+        "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",  # weETH.mode
+        "0x80137510979822322193FC997d400D5A6C747bf7",  # STONE
+        "0xe7903B1F75C534Dd8159b313d92cDCfbC62cB3Cd",  # wrsETH
+        "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",  # oUSDT
+        "0x8b2EeA0999876AAB1E7955fe01A5D261b570452C",  # wMLT
+        "0x66eEd5FF1701E6ed8470DC391F05e27B1d0657eb",  # BMX
+        "0x95177295A394f2b9B04545FFf58f4aF0673E839d",  # ICL
+        "0xA70266C8F8Cf33647dcFEE763961aFf418D9E1E4",  # iUSDC
+        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81",  # XVELO
+        "0x18470019bF0E94611f15852F7e93cf5D65BC34CA",  # ION
+    }
+}
 errors = []
 
 @lru_cache(None)
@@ -450,6 +473,17 @@ def get_opportunities(
     if not filtered_pools:
         return {"error": "No suitable pools found"}
 
+    # Filter pools based on whitelisted assets
+    filtered_pools = [
+        pool for pool in filtered_pools
+        if pool["chain"].lower() in WHITELISTED_ASSETS and
+           pool["poolTokens"][0]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()] and
+           pool["poolTokens"][1]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
+    ]
+
+    if not filtered_pools:
+        return {"error": "No pools with whitelisted assets found"}
+    
     token_id_cache = {}
     for pool in filtered_pools:
         pool["chain"] = pool["chain"].lower()

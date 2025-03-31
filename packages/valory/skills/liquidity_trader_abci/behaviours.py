@@ -1265,8 +1265,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         strategy = self.params.dex_type_to_strategy.get(dex_type)
                         if strategy:
                             if (
-                                not position.get("status", PositionStatus.CLOSED.value)
-                                == PositionStatus.OPEN.value
+                                position.get("status", PositionStatus.CLOSED.value)
+                                != PositionStatus.OPEN.value
                             ):
                                 continue
                             metrics = self.get_returns_metrics_for_opportunity(
@@ -1826,10 +1826,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
                     "current_positions": (
                         [
-                            to_checksum_address(pos.get("address"))
+                            to_checksum_address(pos.get("pool_address"))
                             for pos in self.current_positions
                             if pos.get("status") == PositionStatus.OPEN.value
-                            and pos.get("address")
+                            and pos.get("pool_address")
                         ]
                         if self.current_positions
                         else []
@@ -2808,23 +2808,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")
 
-        position_to_close = None
-        max_timestamp = 0
         # Find the most recent position with the matching pool address and update its status
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
-                timestamp = position.get("timestamp", 0)
-                if timestamp > max_timestamp:
-                    position_to_close = position
-                    max_timestamp = timestamp
-
-        if position_to_close:
-            position_to_close["status"] = PositionStatus.CLOSED.value
-            self.context.logger.info(f"Closing position: {position_to_close}")
-        else:
-            self.context.logger.warning(
-                f"No position found for pool_address: {pool_address}"
-            )
+                position["status"] = PositionStatus.CLOSED.value
+                self.context.logger.info(f"Closing position: {position}")
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")

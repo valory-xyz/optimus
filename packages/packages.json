@@ -15,9 +15,9 @@
         "contract/valory/staking_activity_checker/0.1.0": "bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeif27mlgiott2w66botmfwupnzz6qkouix4cwzxjbpxulzznxpighy",
-        "skill/valory/optimus_abci/0.1.0": "bafybeigqa2bmnnfgkme7dq6ytz2vj7t6h5ohtxxyarrb26bb5l5mdl3gbe",
-        "agent/valory/optimus/0.1.0": "bafybeihg5coyygrcvnsmam5uvmz5krpbr3ruh5rlfcydb3um7hixmhun2e",
-        "service/valory/optimus/0.1.0": "bafybeif3pkzcpusmkxoqhococvhuledao6uxqvumgj5w6jkcc72l5jnjgi"
+        "skill/valory/optimus_abci/0.1.0": "bafybeibsxxjmpvhxqnfshwlthmgj6gjdgp4lq2xzuarzhpy65zfzpq52fe",
+        "agent/valory/optimus/0.1.0": "bafybeidknzcfbrmdbyme57b7el37nrww26cmmwlvqb7peuru5yeod7bnma",
+        "service/valory/optimus/0.1.0": "bafybeigsamhvip2ridep7ccdmjvx7kfnvbyybk2jrswrpk36aifbexysvm"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",

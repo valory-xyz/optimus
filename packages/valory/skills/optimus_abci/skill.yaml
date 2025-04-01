@@ -14,10 +14,10 @@ fingerprint:
   handlers.py: bafybeidz23w4cmlden3vrxz7o67qpmdfogc7kwqdvs7scrcbbxv7nk277q
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
-  modius-ui-build/asset-manifest.json: bafybeigzsoemnwgn4ef7b7gwebckycyhcqpxk32avlet5p7gmt5msohy7q
+  modius-ui-build/asset-manifest.json: bafybeihyiy36flgd73lbxfqalqm64r6hphxchqi3dan5t4ykokyhnetmlq
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
   modius-ui-build/globals.css: bafybeidikaeijb6i5kupnzjtvh55dsyi7xjn56t6owo4lhg4gqj3l4ibly
-  modius-ui-build/index.html: bafybeiampsoumdyfkbgu3mqmvrfp6y4ey2npwirje4gmf52zdeyzhfyf4q
+  modius-ui-build/index.html: bafybeidpse3eip7yqzbcnmon3smmgexwx7hpnlpzqol6oqmnj42v5vslby
   modius-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/protocols/balancer.png: bafybeicqmyeayxigss5t2tpbfad5dl4yfrd6d6sqndrgdnt33jwnskicnm
@@ -40,9 +40,9 @@ fingerprint:
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   modius-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
   modius-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
-  modius-ui-build/static/js/main.303ae61d.js: bafybeifl3ktqcjwefterzvxcibmccjueaej777kg2yydajmwbzqecvgble
-  modius-ui-build/static/js/main.303ae61d.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
-  modius-ui-build/static/js/main.303ae61d.js.map: bafybeif7eq5ttam77egxaawitg7pygavat2c74eqhdv2muo62deysgcssy
+  modius-ui-build/static/js/main.6f085b19.js: bafybeigfdj453zki7rfbldt2udzj3lejmwu7ssluiuutvmcresadxh7tu4
+  modius-ui-build/static/js/main.6f085b19.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
+  modius-ui-build/static/js/main.6f085b19.js.map: bafybeigvcf7elx7kvc2rbv7gbcuis24w4kcn63q66ynvlcbdpcipprpsmq
   prompts.py: bafybeigqxufmc5vpem5osqe3bzuwrckv2zle7o4rzodbkggwmpdvzj6idu
 fingerprint_ignore_patterns: []
 connections:

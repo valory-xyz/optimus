@@ -1707,7 +1707,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 # Get configuration
                 eth_address = sender
                 agent_name = "Alpha"
-
+                
                 # Step 1: Get or create agent type for "Modius"
                 data = yield from self._read_kv(keys=("agent_type",))
                 if data:

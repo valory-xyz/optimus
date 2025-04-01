@@ -44,6 +44,8 @@ from typing import (
 from urllib.parse import urlencode
 from eth_account import Account
 from eth_account.messages import encode_defunct
+import decimal
+from decimal import Decimal
 
 from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
@@ -292,7 +294,6 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.current_positions_filepath: str = (
             self.params.store_path / self.params.pool_info_filename
         )
-        self.individual_shares = []
         self.portfolio_data: Dict[str, Any] = {}
         self.portfolio_data_filepath: str = (
             self.params.store_path / self.params.portfolio_info_filename
@@ -407,14 +408,6 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         ]
 
         return positions
-    
-    def update_individual_shares(self, individual_shares) -> Generator[None, None, None]:
-        """update individual_shares"""
-        self.individual_shares = individual_shares
-    
-    def get_individual_shares(self):
-        """update individual_shares"""
-        return self.individual_shares 
     
     def _get_asset_balances(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get asset balances"""
@@ -1280,7 +1273,9 @@ class CallCheckpointBehaviour(
                         user_balances,
                     )
                 )
-        # yield from self.update_individual_shares(individual_shares)  
+        
+        yield from self._write_kv({"individual_shares": (individual_shares)})
+        
         # Remove closed positions from allocations
         allocations = [
             allocation
@@ -1354,7 +1349,7 @@ class CallCheckpointBehaviour(
                     "address": user_address,
                 }
             )
-
+        
         # Store the calculated portfolio value and breakdown
         self.portfolio_data = {
             "portfolio_value": float(total_user_share_value_usd),
@@ -1709,7 +1704,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"APRPopulationBehaviour started by {sender}")
             
             try:
-
                 # Get configuration
                 eth_address = sender
                 agent_name = "Alpha"
@@ -1717,7 +1711,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 # Step 1: Get or create agent type for "Modius"
                 data = yield from self._read_kv(keys=("agent_type",))
                 if data:
-                    agent_type = data.get("agent_type", "{}")
+                    agent_type = data.get("agent_type")
                     if agent_type:
                         agent_type = json.loads(agent_type)
                     else:
@@ -1779,16 +1773,22 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
                 
                 # Step 4: Calculate APR for positions
-                # individual_shares = self.get_individual_shares()
-                # actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
-                # self.context.logger.info(f"Calculated APR data: {actual_apr_data}")
+                total_actual_apr = 0.0
+                data = yield from self._read_kv(keys=("individual_shares",))
+                self.context.logger.info(f"data: {data}")
+                if data and "individual_shares" in data:
+                    safe_globals = {"Decimal": decimal.Decimal}
+                    individual_shares = eval(data["individual_shares"], {"__builtins__": {}}, safe_globals)
+                    individual_shares = list(individual_shares[0])
+                    actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
+                    total_actual_apr = actual_apr_data.get('total_actual_apr', 0)
                 
                 # Step 5: Store APR data in MirrorDB
                 timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
                 agent_attr = yield from self.create_agent_attribute(
                     agent_id,
                     attr_def_id,
-                    {"apr": 5.25, "timestamp": timestamp},
+                    {"apr": total_actual_apr, "timestamp": timestamp},
                 )
                 self.context.logger.info(f"Stored APR data: {agent_attr}")
                 
@@ -1990,71 +1990,247 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # APR Calculation methods
     # =========================================================================
 
-    def calculate_actual_apr_for_positions(
-        self, individual_shares
+    def _fetch_token_name_from_contract(
+        self, chain: str, token_address: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Fetch the token name from the ERC20 contract."""
+
+        token_name = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=token_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_name",
+            data_key="data",
+            chain_id=chain,
+        )
+        return token_name
+     
+    def get_token_id_from_symbol_cached(
+        self, symbol, token_name, coin_list
+    ) -> Optional[str]:
+        """Retrieve the CoinGecko token ID using the token's symbol and name."""
+        # Try to find coins matching the symbol.
+        candidates = [
+            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+        ]
+        if not candidates:
+            return None
+
+        # If single candidate, return it.
+        if len(candidates) == 1:
+            return candidates[0]["id"]
+
+        # If multiple candidates, match by name if possible.
+        normalized_token_name = token_name.replace(" ", "").lower()
+        for coin in candidates:
+            coin_name = coin["name"].replace(" ", "").lower()
+            if coin_name == normalized_token_name or coin_name == symbol.lower():
+                return coin["id"]
+        return None
+
+    def get_token_id_from_symbol(
+        self, token_address, symbol, coin_list, chain_name
+    ) -> Generator[None, None, Optional[str]]:
+        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        token_name = yield from self._fetch_token_name_from_contract(
+            chain_name, token_address
+        )
+        if not token_name:
+            matching_coins = [
+                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+            ]
+            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+
+        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
+
+    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
+        """Fetches the list of coins from CoinGecko API only once."""
+        url = "https://api.coingecko.com/api/v3/coins/list"
+        response = yield from self.get_http_response("GET", url, None, None)
+
+        try:
+            response_json = json.loads(response.body)
+            return response_json
+        except json.decoder.JSONDecodeError as e:
+            self.context.logger.error(f"Failed to fetch coin list: {e}")
+            return None    
+    
+    def _fetch_historical_token_prices(
+        self, tokens: List[List[str]], date_str: str, chain: str
     ) -> Generator[None, None, Dict[str, float]]:
-        """Calculate the actual APR for each position based on performance over time."""
+        """Fetch historical token prices for a specific date."""
+        historical_prices = {}
+
+        coin_list = yield from self.fetch_coin_list()
+        if not coin_list:
+            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
+            return historical_prices
+
+        headers = {"Accept": "application/json"}
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        for token_symbol, token_address in tokens:
+            # Get CoinGecko ID.
+            coingecko_id = yield from self.get_token_id_from_symbol(
+                token_address, token_symbol, coin_list, chain
+            )
+            if not coingecko_id:
+                self.context.logger.error(
+                    f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
+                )
+                continue
+
+            endpoint = self.coingecko.historical_price_endpoint.format(
+                coin_id=coingecko_id,
+                date=date_str,
+            )
+
+            success, response_json = yield from self._request_with_retries(
+                endpoint=endpoint,
+                headers=headers,
+                rate_limited_code=self.coingecko.rate_limited_code,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
+            )
+
+            if success:
+                price = (
+                    response_json.get("market_data", {})
+                    .get("current_price", {})
+                    .get("usd")
+                )
+                if price:
+                    historical_prices[token_address] = price
+                else:
+                    self.context.logger.error(
+                        f"No price in response for token {token_address}"
+                    )
+            else:
+                self.context.logger.error(
+                    f"Failed to fetch historical price for {token_address}"
+                )
+
+        return historical_prices
+
+    def calculate_initial_investment_value(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[float]]:
+        """Calculate the initial investment value based on the initial transaction."""
+    
+        chain = position.get("chain")
+        initial_amount0 = position.get("amount0")
+        initial_amount1 = position.get("amount1")
+        timestamp = position.get("timestamp")
+
+        if None in (initial_amount0, initial_amount1, timestamp):
+            self.context.logger.error(
+                "Missing initial amounts or timestamp in position data."
+            )
+            return None
+
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+        tokens = []
+        # Fetch historical prices
+        tokens.append([position.get("token0_symbol"), position.get("token0")])
+        if position.get("token1") is not None:
+            tokens.append([position.get("token1_symbol"), position.get("token1")])
+
+        historical_prices = yield from self._fetch_historical_token_prices(
+            tokens, date_str, chain
+        )
+
+        if not historical_prices:
+            self.context.logger.error("Failed to fetch historical token prices.")
+            return None
+
+        # Get the price for token0
+        initial_price0 = historical_prices.get(position.get("token0"))
+        if initial_price0 is None:
+            self.context.logger.error("Historical price not found for token0.")
+            return None
+
+        # Calculate initial investment value for token0
+        V_initial = initial_amount0 * initial_price0
+
+        # If token1 exists, include it in the calculations
+        if position.get("token1") is not None and initial_amount1 is not None:
+            initial_price1 = historical_prices.get(position.get("token1"))
+            if initial_price1 is None:
+                self.context.logger.error("Historical price not found for token1.")
+                return None
+            V_initial += initial_amount1 * initial_price1
+
+        return V_initial
+
+    def calculate_actual_apr_for_positions(
+        self, individual_shares_item
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Calculate the actual APR for a position based on performance over time."""
         actual_apr_data = {}
         total_initial_value = Decimal(0)
         total_current_value = Decimal(0)
         weighted_days = Decimal(0)
         
-        for (
-            user_share,
-            dex_type,
-            chain,
-            pool_id,
-            assets,
-            _,  # apr from protocol
-            _,  # details
-            _,  # user_address
-            user_balances,
-        ) in individual_shares:
-            # Find the position in current_positions to get timestamp
-            position = next(
-                (
-                    pos
-                    for pos in self.current_positions
-                    if pos.get("pool_id") == pool_id 
-                    and pos.get("chain") == chain
-                    and pos.get("status") == PositionStatus.OPEN.value
-                ),
-                None,
-            )
+        # Directly use the individual_shares_item elements without iteration
+        user_share = individual_shares_item[0]
+        dex_type = individual_shares_item[1]
+        chain = individual_shares_item[2]
+        pool_id = individual_shares_item[3]
+        assets = individual_shares_item[4]
+        # apr_from_protocol = individual_shares_item[5]
+        # details = individual_shares_item[6]  
+        # user_address = individual_shares_item[7]
+        user_balances = individual_shares_item[8]
+        
+        # Find the position in current_positions to get timestamp
+        position = next(
+            (
+                pos
+                for pos in self.current_positions
+                if pos.get("pool_id") == pool_id 
+                and pos.get("chain") == chain
+                and pos.get("status") == PositionStatus.OPEN.value
+            ),
+            None,
+        )
+        
+        if not position:
+            return actual_apr_data
+                
+        # Get initial investment timestamp
+        timestamp = position.get("timestamp")
+        if not timestamp:
+            return actual_apr_data
+                
+        # Calculate days since investment
+        current_timestamp = int(datetime.now().timestamp())
+        days_invested = max(1, (current_timestamp - timestamp) / (60 * 60 * 24))
+        
+        # Calculate initial investment value
+        initial_value = yield from self.calculate_initial_investment_value(position)
+        if initial_value is None:
+            return actual_apr_data
+                
+        # Convert initial_value to Decimal for calculation with other Decimal values
+        initial_value_decimal = Decimal(str(initial_value))  # Convert through string for precision
+        
+        # Current value is the user_share calculated earlier
+        current_value = user_share
+        
+        # Calculate actual APR
+        if initial_value > 0 and days_invested > 0:
+            profit = current_value - initial_value_decimal  # Now both are Decimal
+            annualized_return = (profit / initial_value_decimal) * (Decimal(365) / Decimal(days_invested))
+            actual_apr = float(annualized_return * 100)  # Convert to percentage
             
-            if not position:
-                continue
-                
-            # Get initial investment timestamp
-            timestamp = position.get("timestamp")
-            if not timestamp:
-                continue
-                
-            # Calculate days since investment
-            current_timestamp = int(datetime.now().timestamp())
-            days_invested = max(1, (current_timestamp - timestamp) / (60 * 60 * 24))
+            # Store the actual APR for this position
+            actual_apr_data[pool_id] = round(actual_apr, 2)
             
-            # Calculate initial investment value
-            initial_value = yield from self.calculate_initial_investment_value(position)
-            if initial_value is None:
-                continue
-                
-            # Current value is the user_share calculated earlier
-            current_value = user_share
-            
-            # Calculate actual APR
-            if initial_value > 0 and days_invested > 0:
-                profit = current_value - initial_value
-                annualized_return = (profit / initial_value) * (365 / days_invested)
-                actual_apr = float(annualized_return * 100)  # Convert to percentage
-                
-                # Store the actual APR for this position
-                actual_apr_data[pool_id] = round(actual_apr, 2)
-                
-                # Accumulate for weighted average calculation
-                total_initial_value += initial_value
-                total_current_value += current_value
-                weighted_days += initial_value * Decimal(days_invested)
+            # Accumulate for weighted average calculation
+            total_initial_value += initial_value_decimal
+            total_current_value += current_value
+            weighted_days += initial_value_decimal * Decimal(days_invested)
         
         # Calculate overall portfolio APR
         if total_initial_value > 0:
@@ -2066,7 +2242,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         
         return actual_apr_data
 
-
+    
+    
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that finds the opportunity and builds actions."""
 

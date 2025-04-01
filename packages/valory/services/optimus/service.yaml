@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeial5w6vhyhu5prapbj6p3x4lo3jkpz6cdrxlbh74y2y25jhbf2vp4
+agent: valory/optimus:0.1.0:bafybeihg5coyygrcvnsmam5uvmz5krpbr3ruh5rlfcydb3um7hixmhun2e
 number_of_agents: 1
 deployment:
   agent:
@@ -104,7 +104,7 @@ models:
       max_pools: ${MAX_POOLS:int:2}
       init_fallback_gas: ${INIT_FALLBACK_GAS:int:0}
       available_strategies: ${AVAILABLE_STRATEGIES:list:["balancer_pools_search","asset_lending"]}
-      default_acceptance_time: ${DEFAULT_ACCEPTANCE_TIME:int:15}
+      default_acceptance_time: ${DEFAULT_ACCEPTANCE_TIME:int:5}
       genai_api_key: ${GENAI_API_KEY:str:null}
   coingecko:
     args:

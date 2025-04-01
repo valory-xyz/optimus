@@ -39,8 +39,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeig36tkyg7byekclefefxrsksdzkkoyf4hwyxhujzovycwbjfxdncu
-- valory/optimus_abci:0.1.0:bafybeidwcyhpinb436x7cmnmkyrzfdev6nlsrwvou3c6e6fgvu2ruuddfi
+- valory/liquidity_trader_abci:0.1.0:bafybeif27mlgiott2w66botmfwupnzz6qkouix4cwzxjbpxulzznxpighy
+- valory/optimus_abci:0.1.0:bafybeigqa2bmnnfgkme7dq6ytz2vj7t6h5ohtxxyarrb26bb5l5mdl3gbe
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -285,5 +285,5 @@ models:
       service_endpoint_base: ${str:https://optimus.staging.autonolas.tech/}
       max_pools: ${int:2}
       available_strategies: ${list:["balancer_pools_search","asset_lending"]}
-      default_acceptance_time: ${int:15}
+      default_acceptance_time: ${int:5}
       genai_api_key: ${str:null}

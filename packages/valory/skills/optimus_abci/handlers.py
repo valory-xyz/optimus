@@ -516,10 +516,12 @@ class HttpHandler(BaseHttpHandler):
             portfolio_data = {"error": "Could not read portfolio data"}
 
         # Get selected protocols (strategy names) from state
-        if self.context.state.selected_protocols:
-            selected_protocols = json.loads(self.context.state.selected_protocols)
-        else:
-            selected_protocols = self.context.params.available_strategies
+        selected_protocols = (
+            json.loads(self.context.state.selected_protocols)
+            if isinstance(self.context.state.selected_protocols, str)
+            else self.context.state.selected_protocols
+            or self.context.params.available_strategies
+        )
 
         # Convert strategy names to protocol names
         selected_protocol_names = [
@@ -537,6 +539,7 @@ class HttpHandler(BaseHttpHandler):
         portfolio_data["trading_type"] = trading_type
 
         portfolio_data_json = json.dumps(portfolio_data)
+        self.context.logger.info(f"Portfolio Response - {portfolio_data}")
         # Send the portfolio data as a response
         self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)
 
@@ -671,22 +674,22 @@ class HttpHandler(BaseHttpHandler):
             if not previous_trading_type:
                 previous_trading_type = TradingType.BALANCED.value
 
-            if self.context.state.selected_protocols:
-                previous_selected_protocols = json.loads(
-                    self.context.state.selected_protocols
-                )
-            else:
-                previous_selected_protocols = self.context.params.available_strategies
+            previous_selected_protocols = (
+                json.loads(self.context.state.selected_protocols)
+                if isinstance(self.context.state.selected_protocols, str)
+                else self.context.state.selected_protocols
+                or self.context.params.available_strategies
+            )
 
             available_trading_types = [
                 trading_type.value for trading_type in TradingType
             ]
             last_selected_threshold = THRESHOLDS.get(previous_trading_type)
             # Convert strategy names to protocol names for LLM
-            available_protocols_for_llm = [
-                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
-                for strategy in self.context.params.available_strategies
-            ]
+            available_protocols_for_llm = {
+                "balancerPool": "protocol for investing in liquidity positions",
+                "sturdy": "protocol for lending assets",
+            }
 
             # Convert previous selected protocols to their protocol names
             previous_protocols_for_llm = [
@@ -827,10 +830,12 @@ class HttpHandler(BaseHttpHandler):
 
     def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
         """Fallback to previous strategy in case of parsing errors."""
-        if self.context.state.selected_protocols:
-            selected_protocols = json.loads(self.context.state.selected_protocols)
-        else:
-            selected_protocols = self.context.params.available_strategies
+        selected_protocols = selected_protocols = (
+            json.loads(self.context.state.selected_protocols)
+            if isinstance(self.context.state.selected_protocols, str)
+            else self.context.state.selected_protocols
+            or self.context.params.available_strategies
+        )
 
         selected_protocols = [
             STRATEGY_TO_PROTOCOL.get(strategy, strategy)
@@ -863,6 +868,8 @@ class HttpHandler(BaseHttpHandler):
                     "trading_type": trading_type,
                 }
             )
+            self.context.state.selected_protocols = selected_protocols
+            self.context.state.trading_type = trading_type
 
         self.context.state.request_queue.pop()
 

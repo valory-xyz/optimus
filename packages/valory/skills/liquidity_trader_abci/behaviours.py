@@ -1870,6 +1870,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for future, result in zip(futures, results):
                 next_strategy = future_to_strategy[future]
                 tried_strategies.add(next_strategy)
+                if not result:
+                    continue
                 if "error" in result:
                     errors = result.get("error", [])
                     for error in errors:

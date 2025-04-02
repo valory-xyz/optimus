@@ -1708,9 +1708,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 # Get configuration
                 eth_address = sender
                 agent_name = "Alpha"
-            
-                actual_apr_data = yield from self.calculate_actual_apr()
-                self.context.logger.info(f"actual_apr_data {actual_apr_data}")
                 
                 # Step 1: Get or create agent type for "Modius"
                 data = yield from self._read_kv(keys=("agent_type",))
@@ -1777,15 +1774,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
                 
                 # Step 4: Calculate APR for positions
-                # total_actual_apr = 0.0
-                # data = yield from self._read_kv(keys=("individual_shares",))
-                # self.context.logger.info(f"data: {data}")
-                # if data and "individual_shares" in data:
-                #     safe_globals = {"Decimal": decimal.Decimal}
-                #     individual_shares = eval(data["individual_shares"], {"__builtins__": {}}, safe_globals)
-                #     individual_shares = list(individual_shares[0])
-                #     actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
-                #     total_actual_apr = actual_apr_data.get('total_actual_apr', 0)
+                actual_apr_data = yield from self.calculate_actual_apr()
+                self.context.logger.info(f"actual_apr_data {actual_apr_data}")
+                total_actual_apr = actual_apr_data.get('total_actual_apr', 0)
                 
                 # Step 5: Store APR data in MirrorDB
                 timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())

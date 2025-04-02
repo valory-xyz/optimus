@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidknzcfbrmdbyme57b7el37nrww26cmmwlvqb7peuru5yeod7bnma
+agent: valory/optimus:0.1.0:bafybeifmpcd3gqdwcbwii6ifyr5ulfqva4uqccx7f5qm3ftfe32ed6t4ya
 number_of_agents: 1
 deployment:
   agent:
@@ -105,7 +105,7 @@ models:
       init_fallback_gas: ${INIT_FALLBACK_GAS:int:0}
       available_strategies: ${AVAILABLE_STRATEGIES:list:["balancer_pools_search","asset_lending"]}
       default_acceptance_time: ${DEFAULT_ACCEPTANCE_TIME:int:5}
-      genai_api_key: ${GENAI_API_KEY:str:null}
+      genai_api_key: ${GENAI_API_KEY:str:""}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -167,7 +167,7 @@ cert_requests:
 public_id: dvilela/genai:0.1.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection
 config:
-  genai_api_key: ${GENAI_API_KEY:str:null}
+  genai_api_key: ${GENAI_API_KEY:str:""}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

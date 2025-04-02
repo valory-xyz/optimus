@@ -2033,14 +2033,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Process rewards
         if self._can_claim_rewards():
             yield from self._process_rewards(actions)
-
-        if (
-            self.synchronized_data.period_count != 0
-            and self.synchronized_data.period_count % self.params.pnl_check_interval
-            == 0
-            and self.current_positions
-        ):
-            tokens = yield from self._process_pnl(actions)
+        # if (  # noqa: E800
+        #     self.synchronized_data.period_count != 0  # noqa: E800
+        #     and self.synchronized_data.period_count % self.params.pnl_check_interval  # noqa: E800
+        #     == 0  # noqa: E800
+        #     and self.current_positions  # noqa: E800
+        # ):  # noqa: E800
+        #     tokens = yield from self._process_pnl(actions)  # noqa: E800
 
         if not self.selected_opportunities:
             return actions

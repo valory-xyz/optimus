@@ -1182,9 +1182,9 @@ class CallCheckpointBehaviour(
                     else [position.get("token0_symbol")]
                 )
                 apr = position.get("apr")
-
+    
                 # Calculate user share value
-                user_address = self.params.safe_contract_addresses.get(chain)
+                user_address = "0xA7293dfaFBb1698Bab60b2E66F45fB1A0791d46D"
                 if dex_type == DexType.BALANCER.value:
                     pool_address = position.get("pool_address")
                     user_balances = yield from self.get_user_share_value_balancer(
@@ -1275,6 +1275,7 @@ class CallCheckpointBehaviour(
                 )
         
         yield from self._write_kv({"individual_shares": (individual_shares)})
+        self.context.logger.info(f"individual_shares on CallCheckpointBehaviour :{individual_shares}")
         
         # Remove closed positions from allocations
         allocations = [
@@ -1707,6 +1708,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 # Get configuration
                 eth_address = sender
                 agent_name = "Alpha"
+            
+                actual_apr_data = yield from self.calculate_actual_apr()
+                self.context.logger.info(f"actual_apr_data {actual_apr_data}")
                 
                 # Step 1: Get or create agent type for "Modius"
                 data = yield from self._read_kv(keys=("agent_type",))
@@ -1773,15 +1777,15 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
                 
                 # Step 4: Calculate APR for positions
-                total_actual_apr = 0.0
-                data = yield from self._read_kv(keys=("individual_shares",))
-                self.context.logger.info(f"data: {data}")
-                if data and "individual_shares" in data:
-                    safe_globals = {"Decimal": decimal.Decimal}
-                    individual_shares = eval(data["individual_shares"], {"__builtins__": {}}, safe_globals)
-                    individual_shares = list(individual_shares[0])
-                    actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
-                    total_actual_apr = actual_apr_data.get('total_actual_apr', 0)
+                # total_actual_apr = 0.0
+                # data = yield from self._read_kv(keys=("individual_shares",))
+                # self.context.logger.info(f"data: {data}")
+                # if data and "individual_shares" in data:
+                #     safe_globals = {"Decimal": decimal.Decimal}
+                #     individual_shares = eval(data["individual_shares"], {"__builtins__": {}}, safe_globals)
+                #     individual_shares = list(individual_shares[0])
+                #     actual_apr_data = yield from self.calculate_actual_apr_for_positions(individual_shares)
+                #     total_actual_apr = actual_apr_data.get('total_actual_apr', 0)
                 
                 # Step 5: Store APR data in MirrorDB
                 timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
@@ -1822,8 +1826,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # =========================================================================
     # Agent Type API methods
     # =========================================================================
-    
-    
+        
     def get_agent_type_by_name(self, type_name) -> Generator[None, None, Optional[Dict]]:
         """Get agent type by name."""
         response = yield from self._call_mirrordb(
@@ -2117,18 +2120,25 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[float]]:
         """Calculate the initial investment value based on the initial transaction."""
-    
-        chain = position.get("chain")
-        initial_amount0 = position.get("amount0")
-        initial_amount1 = position.get("amount1")
-        timestamp = position.get("timestamp")
 
+        chain = position.get("chain")
+
+        token0_decimals = yield from self._get_token_decimals(chain, position.get("token0"))
+        token1_decimals = yield from self._get_token_decimals(chain, position.get("token1"))
+    
+        initial_amount0 = position.get("amount0") / (10**token0_decimals)
+        initial_amount1 = position.get("amount1") / (10**token1_decimals)
+        timestamp = position.get("timestamp")
+    
+        self.context.logger.info(f"initial_amount0 : {initial_amount0}")
+        self.context.logger.info(f"initial_amount1 : {initial_amount1}")
+    
         if None in (initial_amount0, initial_amount1, timestamp):
             self.context.logger.error(
                 "Missing initial amounts or timestamp in position data."
             )
             return None
-
+    
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
         tokens = []
         # Fetch historical prices
@@ -2152,7 +2162,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         # Calculate initial investment value for token0
         V_initial = initial_amount0 * initial_price0
-
+        self.context.logger.info(f"V_initial : {V_initial}")
+    
         # If token1 exists, include it in the calculations
         if position.get("token1") is not None and initial_amount1 is not None:
             initial_price1 = historical_prices.get(position.get("token1"))
@@ -2160,28 +2171,15 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error("Historical price not found for token1.")
                 return None
             V_initial += initial_amount1 * initial_price1
+            self.context.logger.info(f"V_initial : {V_initial}")
 
         return V_initial
 
     def calculate_actual_apr_for_positions(
-        self, individual_shares_item
+        self
     ) -> Generator[None, None, Dict[str, float]]:
         """Calculate the actual APR for a position based on performance over time."""
-        actual_apr_data = {}
-        total_initial_value = Decimal(0)
-        total_current_value = Decimal(0)
-        weighted_days = Decimal(0)
         
-        # Directly use the individual_shares_item elements without iteration
-        user_share = individual_shares_item[0]
-        dex_type = individual_shares_item[1]
-        chain = individual_shares_item[2]
-        pool_id = individual_shares_item[3]
-        assets = individual_shares_item[4]
-        # apr_from_protocol = individual_shares_item[5]
-        # details = individual_shares_item[6]  
-        # user_address = individual_shares_item[7]
-        user_balances = individual_shares_item[8]
         
         # Find the position in current_positions to get timestamp
         position = next(
@@ -2195,6 +2193,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             None,
         )
         
+        self.current_positions
+
         if not position:
             return actual_apr_data
                 
@@ -2211,37 +2211,132 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         initial_value = yield from self.calculate_initial_investment_value(position)
         if initial_value is None:
             return actual_apr_data
-                
+        
+        self.context.logger.info(f"initial_value on actual APR function:{initial_value}")
         # Convert initial_value to Decimal for calculation with other Decimal values
         initial_value_decimal = Decimal(str(initial_value))  # Convert through string for precision
         
+        self.context.logger.info(f"initial_value_decimal on actual APR function:{initial_value_decimal}")
         # Current value is the user_share calculated earlier
         current_value = user_share
         
+        self.context.logger.info(f"current_value on actual APR function:{current_value}")
         # Calculate actual APR
         if initial_value > 0 and days_invested > 0:
             profit = current_value - initial_value_decimal  # Now both are Decimal
+            self.context.logger.info(f"profit = current_value - initial_value_decimal  on actual APR function:{profit}")
             annualized_return = (profit / initial_value_decimal) * (Decimal(365) / Decimal(days_invested))
             actual_apr = float(annualized_return * 100)  # Convert to percentage
             
             # Store the actual APR for this position
             actual_apr_data[pool_id] = round(actual_apr, 2)
-            
+            self.context.logger.info(f"actual_apr_data[pool_id]  on actual APR function:{actual_apr_data[pool_id]}")
             # Accumulate for weighted average calculation
             total_initial_value += initial_value_decimal
             total_current_value += current_value
             weighted_days += initial_value_decimal * Decimal(days_invested)
-        
+
+            self.context.logger.info(f"total_initial_value{total_initial_value}")       
+            self.context.logger.info(f"total_current_value{total_current_value}")       
+            self.context.logger.info(f"weighted_days{weighted_days}")        
         # Calculate overall portfolio APR
         if total_initial_value > 0:
             avg_days = weighted_days / total_initial_value if total_initial_value > 0 else Decimal(1)
+            self.context.logger.info(f"avg_days{avg_days}")  
             total_profit = total_current_value - total_initial_value
+            self.context.logger.info(f"total_profit{total_profit}")  
             total_annualized_return = (total_profit / total_initial_value) * (Decimal(365) / avg_days)
+            self.context.logger.info(f"total_annualized_return{total_annualized_return}")  
             total_actual_apr = float(total_annualized_return * 100)  # Convert to percentage
+            self.context.logger.info(f"total_actual_apr{total_actual_apr}")  
             actual_apr_data["total_actual_apr"] = round(total_actual_apr, 2)
-        
         return actual_apr_data
+    
+    def calculate_actual_apr(self) -> Generator[None, None, Dict[str, float]]:
+        """
+        Calculate the actual APR for the portfolio based on current positions.
+        
+        Returns:
+            Dict[str, float]: Dictionary containing the total portfolio APR
+        """
+        # Initialize result
+        result = {"total_actual_apr": 0.0}
+        
+        # Check if we have positions and portfolio data
+        if not self.current_positions or not hasattr(self, 'portfolio_data') or 'portfolio_value' not in self.portfolio_data:
+            self.context.logger.info("Missing required data for APR calculation")
+            return result
+        
+        # Get current portfolio value (f)
+        final_value = Decimal(self.portfolio_data['portfolio_value'])
+        self.context.logger.info(f"Current portfolio value: {final_value}")
+        
+        # Current timestamp
+        current_timestamp = int(datetime.now().timestamp())
+        
+        # Get timestamp from the first position
+        first_position = self.current_positions[0]
+        timestamp = first_position.get("timestamp")
+        if not timestamp:
+            self.context.logger.info("No timestamp found in the first position")
+            return result
+        
+        # Calculate hours since investment (n)
+        hours = max(1, (current_timestamp - timestamp) / 3600)
+        self.context.logger.info(f"Hours since investment: {hours}")
+        
+        # Calculate total initial value (i)
+        initial_value = Decimal('0')
+        
+        # If multiple positions, calculate initial value for each and sum them
+        if len(self.current_positions) > 1:
+            self.context.logger.info(f"Processing {len(self.current_positions)} positions")
+            for position in self.current_positions:
+                position_value = yield from self.calculate_initial_investment_value(position)
+                if position_value is not None:
+                    initial_value += Decimal(str(position_value))
+        else:
+            # If only one position, calculate its initial value
+            self.context.logger.info("Processing single position")
+            position_value = yield from self.calculate_initial_investment_value(first_position)
+            if position_value is not None:
+                initial_value = Decimal(str(position_value))
+        
+        self.context.logger.info(f"Total initial value: {initial_value}")
+        
+        # If we have a valid initial value, calculate APR
+        if initial_value > 0:
+            # Calculate APR using the formula: (f/i)*(1/(n/8760)))*100
+            
+            # Step 1: Calculate f/i (final_value / initial_value)
+            f_i_ratio = (final_value / initial_value) - 1
+            
+            # Step 2: Calculate 1/(n/8760)
+            hours_in_year = Decimal('8760')
+            time_ratio = Decimal('1') / (Decimal(hours) / hours_in_year)
 
+            
+           # Step 3: Apply the exact formula: (f/i)*(1/(n/8760)))*100
+            apr = float(f_i_ratio * time_ratio * Decimal('100'))
+
+            # Add additional logging to see the intermediate values
+            self.context.logger.info(f"f_i_ratio: {f_i_ratio}")
+            self.context.logger.info(f"time_ratio: {time_ratio}")
+            self.context.logger.info(f"Raw APR before rounding: {apr}")
+            
+            # For significant losses, ensure we show a meaningful negative APR
+            # The standard formula naturally produces near-zero values for massive losses
+            if f_i_ratio < Decimal('0.0001') and initial_value > Decimal('1'):
+                self.context.logger.info("Detected significant loss, adjusting APR calculation")
+                # Calculate a more meaningful negative APR based on loss percentage
+                loss_percentage = (initial_value - final_value) / initial_value * Decimal('100')
+                apr = -float(loss_percentage)
+                self.context.logger.info(f"Adjusted APR based on loss: {apr}%")
+            
+            result["total_actual_apr"] = round(apr, 2)
+            self.context.logger.info(f"Calculated APR: {result['total_actual_apr']}%")
+        
+        return result    
     
     
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):

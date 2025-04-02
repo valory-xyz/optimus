@@ -2,10 +2,10 @@ import math
 from typing import Any, Dict, List, Union
 
 # Constants
-REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools")
-SHARPE_RATIO_THRESHOLD = 1
-DEPTH_SCORE_THRESHOLD = 50
-IL_RISK_SCORE_THRESHOLD = -0.2
+REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools", "composite_score_threshold")
+SHARPE_RATIO_THRESHOLD = 0
+DEPTH_SCORE_THRESHOLD = 0
+IL_RISK_SCORE_THRESHOLD = 1
 
 # Weights for each metric
 SHARPE_RATIO_WEIGHT = 0.4
@@ -97,6 +97,7 @@ def calculate_relative_percentages(percentages):
 
 def apply_risk_thresholds_and_select_optimal_strategy(
     trading_opportunities,
+    composite_score_threshold,
     current_positions=None,
     improvement_threshold=0.1,
     max_pools=1,
@@ -125,15 +126,15 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             continue
 
         if sharpe_ratio <= SHARPE_RATIO_THRESHOLD:
-            logs.append(f"Opportunity does not meet the {SHARPE_RATIO_THRESHOLD=}")
+            logs.append(f"Opportunity does not meet the SHARPE_RATIO_THRESHOLD")
             continue
 
         if depth_score <= DEPTH_SCORE_THRESHOLD:
-            logs.append(f"Opportunity does not meet the {DEPTH_SCORE_THRESHOLD=}")
+            logs.append(f"Opportunity does not meet the DEPTH_SCORE_THRESHOLD")
             continue
 
         if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
-            logs.append(f"Opportunity does not meet the {IL_RISK_SCORE_THRESHOLD=}")
+            logs.append(f"Opportunity does not meet the IL_RISK_SCORE_THRESHOLD")
             continue
 
         logs.append("Opportunity meets all risk thresholds")
@@ -177,6 +178,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             for opportunity in filtered_opportunities
             if opportunity["composite_score"]
             > least_performing_score * (1 + improvement_threshold)
+            and opportunity["composite_score"] >= composite_score_threshold
         ]
 
         if better_opportunities:
@@ -240,12 +242,13 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         top_composite_score = filtered_opportunities[0]["composite_score"]
 
         optimal_opportunities = [
-            opp for opp in filtered_opportunities[:max_pools]
-            if opp["composite_score"] >= MIN_COMPOSITE_SCORE_RATIO * top_composite_score
+            opp
+            for opp in filtered_opportunities[:max_pools]
+            if opp["composite_score"] >= composite_score_threshold
         ]
 
         if not optimal_opportunities:
-            logs.append("No opportunities meet the minimum composite score ratio.")
+            logs.append(f"No opportunities meet the {composite_score_threshold=}")
             reasoning.append("No opportunities currently meet our minimum requirements for safe and profitable trading.")
             return {
                 "optimal_strategies": [],

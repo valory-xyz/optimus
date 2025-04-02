@@ -19,8 +19,11 @@
 
 """This module contains the handlers for the skill of LiquidityTraderAbciApp."""
 
-from typing import cast
+from typing import Optional, cast
 
+from aea.configurations.data_types import PublicId
+
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
@@ -81,3 +84,45 @@ class IpfsHandler(AbstractResponseHandler):
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         callback = self.shared_state.req_to_callback.pop(nonce)
         callback(message, dialogue)
+
+
+class KvStoreHandler(AbstractResponseHandler):
+    """A class for handling KeyValue messages."""
+
+    SUPPORTED_PROTOCOL: Optional[PublicId] = KvStoreMessage.protocol_id
+    allowed_response_performatives = frozenset(
+        {
+            KvStoreMessage.Performative.READ_REQUEST,
+            KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            KvStoreMessage.Performative.READ_RESPONSE,
+            KvStoreMessage.Performative.SUCCESS,
+            KvStoreMessage.Performative.ERROR,
+        }
+    )
+
+    def handle(self, message: KvStoreMessage) -> None:
+        """
+        React to an KvStore message.
+
+        :param message: the KvStoreMessage instance
+        """
+        self.context.logger.info(f"Received KvStore message: {message}")
+        kv_store_msg = cast(KvStoreMessage, message)
+
+        if kv_store_msg.performative not in self.allowed_response_performatives:
+            self.context.logger.warning(
+                f"KvStore performative not recognized: {kv_store_msg.performative}"
+            )
+            self.context.state.in_flight_req = False
+            return
+
+        if kv_store_msg.performative == KvStoreMessage.Performative.SUCCESS:
+            dialogue = self.context.kv_store_dialogues.update(kv_store_msg)
+            nonce = dialogue.dialogue_label.dialogue_reference[0]
+            callback, kwargs = self.context.state.req_to_callback.pop(nonce)
+            callback(kv_store_msg, dialogue, **kwargs)
+
+            self.context.state.in_flight_req = False
+            return
+        else:
+            super().handle(message)

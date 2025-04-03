@@ -311,6 +311,7 @@ class HttpHandler(BaseHttpHandler):
             and isinstance(api_key, str)
             and api_key.strip() != ""
             and api_key != "${str:}"
+            and api_key != '""'
         )
 
         data = {"isChatEnabled": is_chat_enabled}

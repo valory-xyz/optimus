@@ -50,10 +50,14 @@ class SharedState(BaseSharedState):
     def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
         """Initialize the state."""
         super().__init__(*args, skill_context=skill_context, **kwargs)
+        self.in_flight_req: bool = False
         self.strategy_to_filehash: Dict[str, str] = {}
         self.strategies_executables: Dict[str, Tuple[str, str]] = {}
-        self.in_flight_req: bool = False
-        self.req_to_callback: Dict[str, Callable] = {}
+        self.trading_type: str = ""
+        self.selected_protocols: List[str] = []
+        self.request_count: int = 0
+        self.request_queue = []
+        self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.agent_reasoning: str = ""
 
     def setup(self) -> None:
@@ -64,7 +68,7 @@ class SharedState(BaseSharedState):
             value: key for key, value in params.file_hash_to_strategies.items()
         }
         strategy_exec = self.strategy_to_filehash.keys()
-        for selected_strategy in params.selected_strategies:
+        for selected_strategy in params.available_strategies:
             if selected_strategy not in strategy_exec:
                 raise ValueError(
                     f"The selected trading strategy {selected_strategy} "
@@ -293,26 +297,33 @@ class Params(BaseParams):
         self.staking_chain: Optional[str] = self._ensure(
             "staking_chain", kwargs, Optional[str]
         )
-        self.selected_strategies: List[str] = self._ensure(
-            "selected_strategies", kwargs, List[str]
-        )
         self.file_hash_to_strategies = json.loads(
             self._ensure("file_hash_to_strategies", kwargs, str)
         )
         self.strategies_kwargs = json.loads(
             self._ensure("strategies_kwargs", kwargs, str)
         )
-        self.selected_protocols = self._ensure("selected_protocols", kwargs, List[str])
+        self.available_protocols = self._ensure(
+            "available_protocols", kwargs, List[str]
+        )
         self.selected_hyper_strategy = self._ensure(
             "selected_hyper_strategy", kwargs, str
         )
         self.dex_type_to_strategy = json.loads(
             self._ensure("dex_type_to_strategy", kwargs, str)
         )
+        self.default_acceptance_time = self._ensure(
+            "default_acceptance_time", kwargs, int
+        )
         self.max_pools = self._ensure("max_pools", kwargs, int)
         self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
         self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
         self.pnl_check_interval = self._ensure("pnl_check_interval", kwargs, int)
+        self.available_strategies = self._ensure(
+            "available_strategies", kwargs, List[str]
+        )
+        self.cleanup_freq = self._ensure("cleanup_freq", kwargs, int)
+        self.genai_api_key = self._ensure("genai_api_key", kwargs, str)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

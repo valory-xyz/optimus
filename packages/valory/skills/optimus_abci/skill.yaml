@@ -8,16 +8,16 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
-  composition.py: bafybeigxpycqh7xnqwdj5eg2ln6kqchbwvwuvzjtpwhgylr6qb56ooo7wu
-  dialogues.py: bafybeihuv2jh4kkw2wfopjaxv7uwszat4j2e7rgl54wjmdn35xaxrutm74
-  fsm_specification.yaml: bafybeibhvzg44lw3opc276w7gap2yrn3ym4xuasi6llquoacantulvkzxi
-  handlers.py: bafybeiahywnafnncy2ismlvoembbgtudvqo6zeapin24z6p6gh3kyyxhai
+  composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
+  dialogues.py: bafybeiajfmlip5xy275ml2vp3p3n24itqol2jxyee7wsietbcxwyoz6mwq
+  fsm_specification.yaml: bafybeifszjb2yzllrnoiij4jpz2wbrfsa4ybib7hfpf5wo2tkb4yho4nlu
+  handlers.py: bafybeig6zyhb5g2nitgr2ou7hyohd56lzgtnmmkxkis4eeukmt5wlpfyri
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
-  modius-ui-build/asset-manifest.json: bafybeigcx7rmiyqyfhf2xkpsdqaip72tpwxrpapskiwo4zrjftkgaulwaa
+  modius-ui-build/asset-manifest.json: bafybeihyiy36flgd73lbxfqalqm64r6hphxchqi3dan5t4ykokyhnetmlq
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
   modius-ui-build/globals.css: bafybeidikaeijb6i5kupnzjtvh55dsyi7xjn56t6owo4lhg4gqj3l4ibly
-  modius-ui-build/index.html: bafybeibaxxu43e6bvydnep26rbvojopnixbu3gsgdb5zfx2mmpj4vzglhq
+  modius-ui-build/index.html: bafybeidpse3eip7yqzbcnmon3smmgexwx7hpnlpzqol6oqmnj42v5vslby
   modius-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/protocols/balancer.png: bafybeicqmyeayxigss5t2tpbfad5dl4yfrd6d6sqndrgdnt33jwnskicnm
@@ -40,21 +40,26 @@ fingerprint:
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   modius-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
   modius-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
-  modius-ui-build/static/js/main.c2bf48e0.js: bafybeibxmqfkmeput7puejlcmziepwhg5t74ghzeryx223imjtguupxjhy
-  modius-ui-build/static/js/main.c2bf48e0.js.LICENSE.txt: bafybeig2lpx45vgz5yzhqrphmzyy3yhja6tfq76mvhkssx7tpeiwgd6kfy
-  modius-ui-build/static/js/main.c2bf48e0.js.map: bafybeid3ou7zxb66jp54xnc25xgtkkhfxjuxix3byqg6ip4hkzrz4yxxnm
+  modius-ui-build/static/js/main.6f085b19.js: bafybeigfdj453zki7rfbldt2udzj3lejmwu7ssluiuutvmcresadxh7tu4
+  modius-ui-build/static/js/main.6f085b19.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
+  modius-ui-build/static/js/main.6f085b19.js.map: bafybeigvcf7elx7kvc2rbv7gbcuis24w4kcn63q66ynvlcbdpcipprpsmq
+  prompts.py: bafybeigqxufmc5vpem5osqe3bzuwrckv2zle7o4rzodbkggwmpdvzj6idu
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
+- dvilela/genai:0.1.0:bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty
+- dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
 contracts: []
 protocols:
 - valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
+- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
+- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeihce4kl6gkexbfsmbkhqljfa5zw5tserzm6bqttuyoyephtjj2gye
+- valory/liquidity_trader_abci:0.1.0:bafybeifmwcwst42mazpw243bc6ubb2cfqen7dab2qk2at2egin2x62qjv4
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
@@ -67,6 +72,9 @@ handlers:
   contract_api:
     args: {}
     class_name: ContractApiHandler
+  kv_store:
+    args: {}
+    class_name: KvStoreHandler
   http:
     args: {}
     class_name: HttpHandler
@@ -82,9 +90,6 @@ handlers:
   srr:
     args: {}
     class_name: SrrHandler
-  kv_store:
-    args: {}
-    class_name: KvStoreHandler
   tendermint:
     args: {}
     class_name: TendermintHandler
@@ -221,9 +226,7 @@ models:
       staking_chain: optimism
       file_hash_to_strategies: '{"bafybeiez4r4yv3so2j33opdywov6y7sbl65j5ew5n53vidqzhj2jicu3yy":"merkl_pools_search","bafybeighu2qmxopdbgk6orx45fea3ka7jwf657ihasem6jexpmg7xpe7ha":"max_apr_selection"}'
       strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
-      selected_strategies:
-      - merkl_pools_search
-      selected_protocols:
+      available_protocols:
       - balancer
       - uniswap
       selected_hyper_strategy: max_apr_selection
@@ -233,6 +236,10 @@ models:
       profit_threshold: 50
       loss_threshold: 30
       pnl_check_interval: 10
+      available_strategies: null
+      default_acceptance_time: null
+      cleanup_freq: 50
+      genai_api_key: null
     class_name: Params
   coingecko:
     args:

@@ -21,26 +21,40 @@
 
 import json
 import re
+import threading
+import time
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
 import yaml
+from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
+from aea.protocols.dialogue.base import Dialogue
+from aea.skills.base import Handler
 
-from packages.valory.skills.liquidity_trader_abci.handlers import SrrHandler as BaseSrrHandler
-from packages.valory.skills.liquidity_trader_abci.handlers import (
-    KvStoreHandler as BaseKvStoreHandler,
+from packages.dvilela.connections.genai.connection import (
+    PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
 )
+from packages.dvilela.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID,
+)
+from packages.dvilela.protocols.kv_store.dialogues import (
+    KvStoreDialogue,
+    KvStoreDialogues,
+)
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.connections.http_server.connection import (
     PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
 )
 from packages.valory.protocols.http.message import HttpMessage
+from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
+from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.abstract_round_abci.handlers import (
     ContractApiHandler as BaseContractApiHandler,
 )
@@ -56,13 +70,22 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
+from packages.valory.skills.liquidity_trader_abci.behaviours import (
+    THRESHOLDS,
+    TradingType,
+)
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
-from packages.valory.skills.optimus_abci.dialogues import HttpDialogue, HttpDialogues
-from packages.valory.skills.optimus_abci.models import SharedState
+from packages.valory.skills.optimus_abci.dialogues import (
+    HttpDialogue,
+    HttpDialogues,
+    SrrDialogues,
+)
+from packages.valory.skills.optimus_abci.models import Params, SharedState
+from packages.valory.skills.optimus_abci.prompts import PROMPT
 
 
 ABCIHandler = BaseABCIRoundHandler
@@ -71,11 +94,20 @@ LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
-SrrHandler = BaseSrrHandler
-KvStoreHandler = BaseKvStoreHandler
+
+
+# Strategy to protocol name mapping
+STRATEGY_TO_PROTOCOL = {
+    "balancer_pools_search": "balancerPool",
+    "asset_lending": "sturdy",
+}
+# Reverse mapping for converting protocol names back to strategy names
+PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
+
 
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
+
     with open(
         Path(__file__).parent.parent / "optimus_abci" / "fsm_specification.yaml",
         "r",
@@ -109,6 +141,82 @@ class HttpMethod(Enum):
     POST = "post"
 
 
+class BaseHandler(Handler):
+    """Base handler providing shared utilities for all handlers."""
+
+    def setup(self) -> None:
+        """Set up the handler."""
+        self.context.logger.info(f"{self.__class__.__name__}: setup method called.")
+
+    def teardown(self) -> None:
+        """Teardown the handler."""
+        self.context.logger.info(f"{self.__class__.__name__}: teardown called.")
+
+    @property
+    def params(self) -> Params:
+        """Shortcut to access the parameters."""
+        return cast(Params, self.context.params)
+
+    def cleanup_dialogues(self) -> None:
+        """Clean up all dialogues."""
+        for handler_name in self.context.handlers.__dict__.keys():
+            dialogues_name = handler_name.replace("_handler", "_dialogues")
+            dialogues = getattr(self.context, dialogues_name, None)
+            if dialogues is not None:
+                dialogues.cleanup()
+
+    def on_message_handled(self, _message: Message) -> None:
+        """Callback triggered once a message is handled."""
+        self.context.state.request_count += 1
+        if self.context.state.request_count % self.context.params.cleanup_freq == 0:
+            self.context.logger.info(
+                f"{self.context.state.request_count} requests processed. Cleaning up dialogues."
+            )
+            self.cleanup_dialogues()
+
+
+class KvStoreHandler(AbstractResponseHandler):
+    """Handler for managing KV Store messages."""
+
+    SUPPORTED_PROTOCOL: Optional[PublicId] = KvStoreMessage.protocol_id
+    allowed_response_performatives = frozenset(
+        {
+            KvStoreMessage.Performative.READ_REQUEST,
+            KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            KvStoreMessage.Performative.READ_RESPONSE,
+            KvStoreMessage.Performative.SUCCESS,
+            KvStoreMessage.Performative.ERROR,
+        }
+    )
+
+    def handle(self, message: Message) -> None:
+        """
+        React to a KvStoreMessage.
+
+        :param message: the KvStoreMessage instance
+        """
+        self.context.logger.info(f"Received KvStore message: {message}")
+        kv_store_msg = cast(KvStoreMessage, message)
+
+        if kv_store_msg.performative not in self.allowed_response_performatives:
+            self.context.logger.warning(
+                f"KvStore performative not recognized: {kv_store_msg.performative}"
+            )
+            self.context.state.in_flight_req = False
+            return
+
+        if kv_store_msg.performative == KvStoreMessage.Performative.SUCCESS:
+            dialogue = self.context.kv_store_dialogues.update(kv_store_msg)
+            nonce = dialogue.dialogue_label.dialogue_reference[0]
+            callback, kwargs = self.context.state.req_to_callback.pop(nonce)
+            callback(kv_store_msg, dialogue, **kwargs)
+
+            self.context.state.in_flight_req = False
+            return
+        else:
+            super().handle(message)
+
+
 class HttpHandler(BaseHttpHandler):
     """This implements the HTTP handler."""
 
@@ -116,7 +224,6 @@ class HttpHandler(BaseHttpHandler):
 
     def setup(self) -> None:
         """Implement the setup."""
-
         # Custom hostname (set via params)
         service_endpoint_base = urlparse(
             self.context.params.service_endpoint_base
@@ -135,19 +242,28 @@ class HttpHandler(BaseHttpHandler):
         static_files_regex = (
             rf"{hostname_regex}\/(.*)"  # New regex for serving static files
         )
+        process_prompt_regex = rf"{hostname_regex}\/configure_strategies"
+        features_url_regex = (
+            rf"{hostname_regex}\/features"  # New regex for /features endpoint
+        )
 
-        # Routes
+        # Define routes
         self.routes = {
-            (HttpMethod.POST.value,): [],
+            (HttpMethod.POST.value,): [
+                (process_prompt_regex, self._handle_post_process_prompt),
+            ],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (portfolio_url_regex, self._handle_get_portfolio),
+                (features_url_regex, self._handle_get_features),  # Add new route
                 (
                     static_files_regex,
                     self._handle_get_static_file,
-                ),  # New route for serving static files
+                ),
             ],
         }
+
+        fsm = load_fsm_spec()
 
         self.json_content_header = "Content-Type: application/json\n"
         self.html_content_header = "Content-Type: text/html\n"
@@ -164,6 +280,7 @@ class HttpHandler(BaseHttpHandler):
             ] = camel_to_snake(target_round)
         self.json_content_header = "Content-Type: application/json\n"
         self.html_content_header = "Content-Type: text/html\n"
+        self.function_entry_count = 0
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -176,6 +293,30 @@ class HttpHandler(BaseHttpHandler):
     def shared_state(self) -> SharedState:
         """Get the parameters."""
         return cast(SharedState, self.context.state)
+
+    def _handle_get_features(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a GET request to check if chat feature is enabled.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        # Check if GENAI_API_KEY is set
+        api_key = self.context.params.genai_api_key
+
+        is_chat_enabled = (
+            api_key is not None
+            and isinstance(api_key, str)
+            and api_key.strip() != ""
+            and api_key != "${str:}"
+            and api_key != '""'
+        )
+
+        data = {"isChatEnabled": is_chat_enabled}
+
+        self._send_ok_response(http_msg, http_dialogue, data)
 
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -268,7 +409,7 @@ class HttpHandler(BaseHttpHandler):
         ):
             super().handle(message)
             return
-   
+
         # Check if this message is for this skill. If not, send to super()
         handler, kwargs = self._get_handler(http_msg.url, http_msg.method)
         if not handler:
@@ -299,7 +440,7 @@ class HttpHandler(BaseHttpHandler):
         handler(http_msg, http_dialogue, **kwargs)
 
     def _handle_bad_request(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg=None
     ) -> None:
         """
         Handle a Http bad request.
@@ -314,7 +455,7 @@ class HttpHandler(BaseHttpHandler):
             status_code=HttpCode.BAD_REQUEST_CODE.value,
             status_text="Bad request",
             headers=http_msg.headers,
-            body=b"",
+            body=b"" if not error_msg else error_msg.encode("utf-8"),
         )
 
         # Send response
@@ -372,10 +513,34 @@ class HttpHandler(BaseHttpHandler):
             with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
                 portfolio_data = json.load(file)
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            self.context.logger.error(f"Error reading portfolio data: {str(e)}")
+            self.context.logger.info(f"Error reading portfolio data: {str(e)}")
             portfolio_data = {"error": "Could not read portfolio data"}
 
+        # Get selected protocols (strategy names) from state
+        selected_protocols = (
+            json.loads(self.context.state.selected_protocols)
+            if isinstance(self.context.state.selected_protocols, str)
+            else self.context.state.selected_protocols
+            or self.context.params.available_strategies
+        )
+
+        # Convert strategy names to protocol names
+        selected_protocol_names = [
+            STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+            for strategy in selected_protocols
+        ]
+
+        # Get trading type from state
+        trading_type = self.context.state.trading_type
+        if not trading_type:
+            trading_type = TradingType.BALANCED.value
+
+        # Add selected protocol names and trading type to portfolio data
+        portfolio_data["selected_protocols"] = selected_protocol_names
+        portfolio_data["trading_type"] = trading_type
+
         portfolio_data_json = json.dumps(portfolio_data)
+        self.context.logger.info(f"Portfolio Response - {portfolio_data}")
         # Send the portfolio data as a response
         self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)
 
@@ -464,126 +629,6 @@ class HttpHandler(BaseHttpHandler):
         except FileNotFoundError:
             self._handle_not_found(http_msg, http_dialogue)
 
-    def _handle_get_static_css(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a HTTP GET request for the main.css file.
-
-        :param http_msg: the HTTP message
-        :param http_dialogue: the HTTP dialogue
-        """
-        try:
-            # Read the main.css file
-            with open(
-                Path(
-                    Path(__file__).parent,
-                    "modius-ui-build",
-                    "static",
-                    "css",
-                    "main.972e2d60.css",
-                ),
-                "rb",
-            ) as file:
-                file_content = file.read()
-
-            # Send the file content as a response
-            self._send_ok_response(http_msg, http_dialogue, file_content)
-        except FileNotFoundError:
-            self._handle_not_found(http_msg, http_dialogue)
-
-    def _handle_get_manifest(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a HTTP GET request for the manifest.json file.
-
-        :param http_msg: the HTTP message
-        :param http_dialogue: the HTTP dialogue
-        """
-        try:
-            # Read the manifest.json file
-            with open(
-                Path(Path(__file__).parent, "modius-ui-build", "manifest.json"), "rb"
-            ) as file:
-                file_content = file.read()
-
-            # Send the file content as a response
-            self._send_ok_response(http_msg, http_dialogue, file_content)
-        except FileNotFoundError:
-            self._handle_not_found(http_msg, http_dialogue)
-
-    def _handle_get_favicon(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a HTTP GET request for the favicon.ico file.
-
-        :param http_msg: the HTTP message
-        :param http_dialogue: the HTTP dialogue
-        """
-        try:
-            # Read the favicon.ico file
-            with open(
-                Path(Path(__file__).parent, "modius-ui-build", "favicon.ico"), "rb"
-            ) as file:
-                favicon_content = file.read()
-
-            # Send the favicon content as a response
-            self._send_ok_response(http_msg, http_dialogue, favicon_content)
-        except FileNotFoundError:
-            self._handle_not_found(http_msg, http_dialogue)
-
-    def _handle_get_mode_network_logo(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a HTTP GET request for the mode-network.png file.
-
-        :param http_msg: the HTTP message
-        :param http_dialogue: the HTTP dialogue
-        """
-        try:
-            # Read the mode-network.png file
-            with open(
-                Path(
-                    Path(__file__).parent,
-                    "modius-ui-build",
-                    "logos",
-                    "protocols",
-                    "mode-network.png",
-                ),
-                "rb",
-            ) as file:
-                file_content = file.read()
-
-            # Send the file content as a response
-            self._send_ok_response(http_msg, http_dialogue, file_content)
-        except FileNotFoundError:
-            self._handle_not_found(http_msg, http_dialogue)
-
-    def _handle_get_modius_logo(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a HTTP GET request for the modius.png file.
-
-        :param http_msg: the HTTP message
-        :param http_dialogue: the HTTP dialogue
-        """
-        try:
-            # Read the modius.png file
-            with open(
-                Path(Path(__file__).parent, "modius-ui-build", "logos", "modius.png"),
-                "rb",
-            ) as file:
-                file_content = file.read()
-
-            # Send the file content as a response
-            self._send_ok_response(http_msg, http_dialogue, file_content)
-        except FileNotFoundError:
-            self._handle_not_found(http_msg, http_dialogue)
-
     def _handle_not_found(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -606,3 +651,317 @@ class HttpHandler(BaseHttpHandler):
         # Send response
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
+
+    def _handle_post_process_prompt(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> Generator[None, None, None]:
+        """
+        Handle POST requests to process user prompts.
+
+        :param http_msg: the HttpMessage instance
+        :param http_dialogue: the HttpDialogue instance
+        """
+        request_id = http_dialogue.dialogue_label.dialogue_reference[0]
+        self.context.state.request_queue.append(request_id)
+
+        try:
+            # Parse incoming data
+            data = json.loads(http_msg.body.decode("utf-8"))
+            user_prompt = data.get("prompt", "")
+            if not user_prompt:
+                raise ValueError("Prompt is required.")
+
+            previous_trading_type = self.context.state.trading_type
+            if not previous_trading_type:
+                previous_trading_type = TradingType.BALANCED.value
+
+            previous_selected_protocols = (
+                json.loads(self.context.state.selected_protocols)
+                if isinstance(self.context.state.selected_protocols, str)
+                else self.context.state.selected_protocols
+                or self.context.params.available_strategies
+            )
+
+            available_trading_types = [
+                trading_type.value for trading_type in TradingType
+            ]
+            last_selected_threshold = THRESHOLDS.get(previous_trading_type)
+            # Convert strategy names to protocol names for LLM
+            available_protocols_for_llm = {
+                "balancerPool": "protocol for investing in liquidity positions",
+                "sturdy": "protocol for lending assets",
+            }
+
+            # Convert previous selected protocols to their protocol names
+            previous_protocols_for_llm = [
+                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+                for strategy in previous_selected_protocols
+            ]
+
+            # Format the prompt
+            prompt_template = PROMPT.format(
+                USER_PROMPT=user_prompt,
+                PREVIOUS_TRADING_TYPE=previous_trading_type,
+                TRADING_TYPES=available_trading_types,
+                AVAILABLE_PROTOCOLS=available_protocols_for_llm,
+                LAST_THRESHOLD=last_selected_threshold,
+                PREVIOUS_SELECTED_PROTOCOLS=previous_protocols_for_llm,
+                THRESHOLDS=THRESHOLDS,
+            )
+
+            # Prepare payload data
+            payload_data = {"prompt": prompt_template}
+
+            # Create LLM request
+            srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)
+            request_srr_message, srr_dialogue = srr_dialogues.create(
+                counterparty=str(GENAI_CONNECTION_PUBLIC_ID),
+                performative=SrrMessage.Performative.REQUEST,
+                payload=json.dumps(payload_data),
+            )
+
+            # Prepare callback args
+            callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}
+            self._send_message(
+                request_srr_message,
+                srr_dialogue,
+                self._handle_llm_response,
+                callback_kwargs,
+            )
+
+        except (json.JSONDecodeError, ValueError) as e:
+            self.context.logger.info(f"Error processing prompt: {str(e)}")
+            self._handle_bad_request(http_msg, http_dialogue)
+
+    def _parse_llm_response(
+        self,
+        llm_response_message: SrrMessage,
+    ) -> Tuple[List[str], str, str, str]:
+        """
+        Parse the LLM response and return the selected protocols, trading type, reasoning, and previous trading type.
+
+        :param llm_response_message: the SrrMessage with the LLM output
+        :return: a tuple containing the selected protocols, trading type, reasoning, and previous trading type
+        """
+        try:
+            payload = json.loads(llm_response_message.payload)
+            if "error" in payload:
+                # Extract the specific error message
+                error_details = payload["error"]
+                error_message = error_details.split('message: "')[1].split('"')[0]
+                reasoning = error_message
+                self.context.logger.error(f"Error from LLM: {reasoning}")
+                return [], "", reasoning, self.context.state.trading_type
+
+            response_data = json.loads(payload.get("response", ""))
+        except json.JSONDecodeError:
+            # Attempt to handle JSON content wrapped in triple backticks
+            try:
+                response = json.loads(llm_response_message.payload).get("response", "")
+                if response.strip().startswith("```json") and response.strip().endswith(
+                    "```"
+                ):
+                    # Strip the triple backticks and attempt to parse the JSON content
+                    json_content = response.strip()[7:-3]
+                    response_data = json.loads(json_content)
+                else:
+                    raise ValueError("Response is not in valid JSON format.")
+            except (json.JSONDecodeError, ValueError):
+                reasoning = (
+                    "Failed to parse LLM response. Falling back to default strategies."
+                )
+                self.context.logger.error(reasoning)
+                selected_protocols = self.context.params.available_strategies
+                trading_type = (
+                    self.context.state.trading_type or TradingType.BALANCED.value
+                )
+                return selected_protocols, trading_type, reasoning, trading_type
+
+        self.context.logger.info(f"Received LLM response: {response_data}")
+        selected_protocols = response_data.get("selected_protocols", [])
+        trading_type = response_data.get("trading_type", "")
+        reasoning = response_data.get("reasoning", "")
+        previous_trading_type = self.context.state.trading_type
+
+        if not selected_protocols or not trading_type or not reasoning:
+            return self._fallback_to_previous_strategy()
+
+        return selected_protocols, trading_type, reasoning, previous_trading_type
+
+    def _handle_llm_response(
+        self,
+        llm_response_message: SrrMessage,
+        dialogue: Dialogue,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+    ) -> None:
+        """
+        Handle the response from the LLM.
+
+        :param llm_response_message: the SrrMessage with the LLM output
+        :param dialogue: the Dialogue
+        :param http_msg: the original HttpMessage
+        :param http_dialogue: the original HttpDialogue
+        """
+        (
+            selected_protocol_names,
+            trading_type,
+            reasoning,
+            previous_trading_type,
+        ) = self._parse_llm_response(llm_response_message)
+
+        selected_protocols = [
+            PROTOCOL_TO_STRATEGY.get(protocol, protocol)
+            for protocol in selected_protocol_names
+        ]
+
+        response_data = {
+            "selected_protocols": selected_protocol_names,
+            "trading_type": trading_type,
+            "reasoning": reasoning,
+            "previous_trading_type": previous_trading_type,
+        }
+
+        self._send_ok_response(http_msg, http_dialogue, response_data)
+
+        # Offload KV store update to a separate thread
+        threading.Thread(
+            target=self._delayed_write_kv, args=(selected_protocols, trading_type)
+        ).start()
+
+    def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
+        """Fallback to previous strategy in case of parsing errors."""
+        selected_protocols = selected_protocols = (
+            json.loads(self.context.state.selected_protocols)
+            if isinstance(self.context.state.selected_protocols, str)
+            else self.context.state.selected_protocols
+            or self.context.params.available_strategies
+        )
+
+        selected_protocols = [
+            STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+            for strategy in selected_protocols
+        ]
+
+        trading_type = self.context.state.trading_type
+        if not trading_type:
+            trading_type = TradingType.BALANCED.value
+        reasoning = "Failed to parse LLM response. Falling back to previous strategies."
+
+        return selected_protocols, trading_type, reasoning, trading_type
+
+    def _delayed_write_kv(
+        self, selected_protocols: List[str], trading_type: str
+    ) -> None:
+        """
+        Write to the KV store after a delay if this was the only request in queue.
+
+        :param selected_protocols: list of chosen strategy names (not protocol names)
+        :param trading_type: the selected trading type
+        """
+        self.context.logger.info("Waiting for default acceptance time...")
+        time.sleep(self.context.params.default_acceptance_time)
+
+        if len(self.context.state.request_queue) == 1:
+            self._write_kv(
+                {
+                    "selected_protocols": json.dumps(selected_protocols),
+                    "trading_type": trading_type,
+                }
+            )
+            self.context.state.selected_protocols = selected_protocols
+            self.context.state.trading_type = trading_type
+
+        self.context.state.request_queue.pop()
+
+    def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
+        """
+        Create or update data in the KV store.
+
+        :param data: key-value data to store
+        :return: success flag
+        """
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            data=data,
+        )
+        self.context.logger.info(f"Writing to KV store... {kv_store_message}")
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        self._send_message(
+            kv_store_message, kv_store_dialogue, self._handle_kv_store_response
+        )
+
+    def _handle_kv_store_response(
+        self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue
+    ) -> None:
+        """
+        Handle KV store response messages.
+
+        :param kv_store_response_message: the KvStoreMessage response
+        :param dialogue: the KvStoreDialogue
+        """
+        success = (
+            kv_store_response_message.performative
+            == KvStoreMessage.Performative.SUCCESS
+        )
+        if success:
+            self.context.logger.info("KV store update successful.")
+        else:
+            self.context.logger.info("KV store update failed.")
+
+    def _send_message(
+        self,
+        message: Message,
+        dialogue: Dialogue,
+        callback: Callable,
+        callback_kwargs: Optional[Dict] = None,
+    ) -> None:
+        """
+        Send a message and set up a callback for the response.
+
+        :param message: the Message to send
+        :param dialogue: the Dialogue context
+        :param callback: the callback function upon response
+        :param callback_kwargs: optional kwargs for the callback
+        """
+        self.context.outbox.put_message(message=message)
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        self.context.state.req_to_callback[nonce] = (callback, callback_kwargs or {})
+        self.context.state.in_flight_req = True
+
+
+class SrrHandler(BaseHandler):
+    """Handler for managing Srr messages."""
+
+    SUPPORTED_PROTOCOL: Optional[PublicId] = SrrMessage.protocol_id
+    allowed_response_performatives = frozenset(
+        {
+            SrrMessage.Performative.REQUEST,
+            SrrMessage.Performative.RESPONSE,
+        }
+    )
+
+    def handle(self, message: Message) -> None:
+        """
+        React to an SRR message.
+
+        :param message: the SrrMessage instance
+        """
+        self.context.logger.info(f"Received Srr message: {message}")
+        srr_msg = cast(SrrMessage, message)
+        if srr_msg.performative not in self.allowed_response_performatives:
+            self.context.logger.warning(
+                f"SRR performative not recognized: {srr_msg.performative}"
+            )
+            self.context.state.in_flight_req = False
+            return
+
+        dialogue = self.context.srr_dialogues.update(srr_msg)
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        callback, kwargs = self.context.state.req_to_callback.pop(nonce)
+        callback(srr_msg, dialogue, **kwargs)
+
+        self.context.state.in_flight_req = False
+        self.on_message_handled(message)

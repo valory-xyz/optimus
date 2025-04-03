@@ -80,6 +80,11 @@ ROUNDS_INFO = {
         "description": get_latest_agent_reasoning(),
         "transitions": {},
     },
+    "FetchStrategiesRound": {
+        "name": "Fetching the selected protocols and params",
+        "description": "Fetches the selected protocols/strategies and the relevant configurations",
+        "transitions": {},
+    },
     "FinalizationRound": {
         "name": "Sending a transaction",
         "description": "Sends a transaction for mining",

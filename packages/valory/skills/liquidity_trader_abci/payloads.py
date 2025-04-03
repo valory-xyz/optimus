@@ -81,3 +81,10 @@ class PostTxSettlementPayload(BaseTxPayload):
     """Represent a transaction payload for the PostTxSettlementRound."""
 
     content: str
+
+
+@dataclass(frozen=True)
+class FetchStrategiesPayload(BaseTxPayload):
+    """Represent a transaction payload for the FetchStrategiesRound."""
+
+    content: str

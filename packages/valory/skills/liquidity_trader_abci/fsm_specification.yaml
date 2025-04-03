@@ -16,7 +16,7 @@ alphabet_in:
 - UPDATE
 - VANITY_TX_EXECUTED
 - WAIT
-default_start_state: CallCheckpointRound
+default_start_state: FetchStrategiesRound
 final_states:
 - FailedMultiplexerRound
 - FinishedCallCheckpointRound
@@ -29,6 +29,7 @@ start_states:
 - CallCheckpointRound
 - CheckStakingKPIMetRound
 - DecisionMakingRound
+- FetchStrategiesRound
 - GetPositionsRound
 - PostTxSettlementRound
 states:
@@ -38,6 +39,7 @@ states:
 - DecisionMakingRound
 - EvaluateStrategyRound
 - FailedMultiplexerRound
+- FetchStrategiesRound
 - FinishedCallCheckpointRound
 - FinishedCheckStakingKPIMetRound
 - FinishedDecisionMakingRound
@@ -78,6 +80,11 @@ transition_func:
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
     (EvaluateStrategyRound, WAIT): FinishedEvaluateStrategyRound
+    (FetchStrategiesRound, DONE): CallCheckpointRound
+    (FetchStrategiesRound, NONE): FetchStrategiesRound
+    (FetchStrategiesRound, NO_MAJORITY): FetchStrategiesRound
+    (FetchStrategiesRound, ROUND_TIMEOUT): FetchStrategiesRound
+    (FetchStrategiesRound, WAIT): FetchStrategiesRound
     (GetPositionsRound, DONE): APRPopulationRound
     (GetPositionsRound, NONE): GetPositionsRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound

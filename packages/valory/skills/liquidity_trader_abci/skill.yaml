@@ -7,19 +7,19 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeib3pdgnrvuycse7mnbco4ujxge3hfcyev2g6o2zppaz2gbnvbr2kq
+  behaviours.py: bafybeiant5f2qggtjkfv4qqbtocpbelgc4hjlsjja323tdciav4siik5ta
   dialogues.py: bafybeifizeu2phitkv4nz7jshs7apkvvty7xjdy3vldbb45wlylziftsua
-  fsm_specification.yaml: bafybeiadifjdyelg3phoxtym5f332bsztqaf2zb2k5tz6psmlpmjdstcve
-  handlers.py: bafybeidcsfovyrrgko72jjd77jnckklj3x6ui2ebbb2nboitn6mckb5jua
+  fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
+  handlers.py: bafybeiea3mixenleagwjphvjyvz2jiu43p2tsh7hqzi2i3hhttnkf3qfs4
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeibicwduevg6pfhzufrstkedapxmswvdxptc7mdupk4apq37pq4vha
-  payloads.py: bafybeihepyo5prwtxxwrnm7xhaosfcqusp35judsogjchuiobsfq2zhko4
+  models.py: bafybeig7md7gdzjseksrzmb43qpyqcbnz56ljisredowwcwv3v2eh62xzy
+  payloads.py: bafybeif6r3xxldcbo7npigk3b5go3cqjogm4sahtpv5axecapa3d4erpwa
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeiati2tl6ibywcsdm2ysnclxjbmbujrhqkqg42rlp77vc2s7alzmce
-  rounds_info.py: bafybeidshfutl5pvouewyegp3gu74qij4a47f6st5v75o3axay77llqnai
+  rounds.py: bafybeiddsenqnxmpws63tqdpb43dvdouv73uz27d5cgwjx2qoaacvds3qy
+  rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju
@@ -84,6 +84,9 @@ handlers:
     args: {}
     class_name: TendermintHandler
 models:
+  kv_store_dialogues:
+    args: {}
+    class_name: KvStoreDialogues
   abci_dialogues:
     args: {}
     class_name: AbciDialogues
@@ -216,18 +219,19 @@ models:
       staking_chain: optimism
       file_hash_to_strategies: '{"bafybeiez4r4yv3so2j33opdywov6y7sbl65j5ew5n53vidqzhj2jicu3yy":"merkl_pools_search","bafybeighu2qmxopdbgk6orx45fea3ka7jwf657ihasem6jexpmg7xpe7ha":"max_apr_selection"}'
       strategies_kwargs: '{"merkl_pools_search":[["balancer_graphql_endpoints",{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}],["merkl_fetch_campaign_args",{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}]]}'
-      selected_strategies:
-      - merkl_pools_search
-      selected_protocols:
+      available_protocols:
       - balancer
       - uniswap
       selected_hyper_strategy: max_apr_selection
-      service_endpoint_base: https://optimus.staging.autonolas.tech/
       dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
       profit_threshold: 50
       loss_threshold: 30
       pnl_check_interval: 10
+      available_strategies: null
+      default_acceptance_time: null
+      cleanup_freq: 50
+      genai_api_key: null
     class_name: Params
   coingecko:
     args:
@@ -255,9 +259,6 @@ models:
   srr_dialogues:
     args: {}
     class_name: SrrDialogues
-  kv_store_dialogues:
-    args: {}
-    class_name: KvStoreDialogues
 dependencies:
   web3:
     version: <7,>=6.0.0

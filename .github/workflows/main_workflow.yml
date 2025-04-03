@@ -138,6 +138,7 @@ jobs:
           sudo install gitleaks /usr/bin && \
           gitleaks detect --report-format json --report-path leak_report
 
+
   test:
     if: false
     continue-on-error: True

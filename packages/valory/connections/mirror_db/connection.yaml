@@ -6,9 +6,9 @@ description: GenericMirrorDB connection for interacting with REST APIs.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigchp6onepf7zwrksu4t4aixtzsr4yn73xsorrnnwrz2qwec4kvgq
-  connection.py: bafybeigj6yb3xcssuoi7xirbkpn7yeyg4kzg2dnsirx4s6mtj6uojesxua
-  readme.md: bafybeib453wcfkqkvybozrgmll4bqo7tvntfmcbl4tb76a7vo445njlgxe
+  __init__.py: bafybeif7gf5bvxnwc5tpv5cts64urafayubrzcepsonl6snt55ur7b4chu
+  connection.py: bafybeialt2dhloruboayb3pzgbfedz6de4aqr7bibckrzjmzgav6loxcnm
+  readme.md: bafybeiafz6hnwvpbf3ydbprcirlhppjpjznjd26il7223gi3pgxdcfw3bu
 fingerprint_ignore_patterns: []
 connections: []
 protocols:

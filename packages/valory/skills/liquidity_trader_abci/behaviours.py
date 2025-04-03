@@ -1191,7 +1191,7 @@ class CallCheckpointBehaviour(
                 apr = position.get("apr")
 
                 # Calculate user share value
-                user_address = "0xA7293dfaFBb1698Bab60b2E66F45fB1A0791d46D"
+                user_address = self.params.safe_contract_addresses.get(chain)
                 if dex_type == DexType.BALANCER.value:
                     pool_address = position.get("pool_address")
                     user_balances = yield from self.get_user_share_value_balancer(
@@ -2228,6 +2228,57 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         if not timestamp:
             self.context.logger.info("No timestamp found in the first position")
         return timestamp
+    
+    
+    def calculate_initial_investment_value(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[float]]:
+        """Calculate the initial investment value based on the initial transaction."""
+
+        chain = position.get("chain")
+        initial_amount0 = position.get("amount0")
+        initial_amount1 = position.get("amount1")
+        timestamp = position.get("timestamp")
+
+        if None in (initial_amount0, initial_amount1, timestamp):
+            self.context.logger.error(
+                "Missing initial amounts or timestamp in position data."
+            )
+            return None
+
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+        tokens = []
+        # Fetch historical prices
+        tokens.append([position.get("token0_symbol"), position.get("token0")])
+        if position.get("token1") is not None:
+            tokens.append([position.get("token1_symbol"), position.get("token1")])
+
+        historical_prices = yield from self._fetch_historical_token_prices(
+            tokens, date_str, chain
+        )
+
+        if not historical_prices:
+            self.context.logger.error("Failed to fetch historical token prices.")
+            return None
+
+        # Get the price for token0
+        initial_price0 = historical_prices.get(position.get("token0"))
+        if initial_price0 is None:
+            self.context.logger.error("Historical price not found for token0.")
+            return None
+
+        # Calculate initial investment value for token0
+        V_initial = initial_amount0 * initial_price0
+
+        # If token1 exists, include it in the calculations
+        if position.get("token1") is not None and initial_amount1 is not None:
+            initial_price1 = historical_prices.get(position.get("token1"))
+            if initial_price1 is None:
+                self.context.logger.error("Historical price not found for token1.")
+                return None
+            V_initial += initial_amount1 * initial_price1
+
+        return V_initial
 
     def _calculate_total_initial_value(self) -> Generator[None, None, Decimal]:
         """Calculate the total initial investment value."""

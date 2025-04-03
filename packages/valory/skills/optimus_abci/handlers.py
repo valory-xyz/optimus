@@ -197,7 +197,6 @@ class KvStoreHandler(AbstractResponseHandler):
         """
         self.context.logger.info(f"Received KvStore message: {message}")
         kv_store_msg = cast(KvStoreMessage, message)
-
         if kv_store_msg.performative not in self.allowed_response_performatives:
             self.context.logger.warning(
                 f"KvStore performative not recognized: {kv_store_msg.performative}"
@@ -951,6 +950,7 @@ class SrrHandler(AbstractResponseHandler):
         """
         self.context.logger.info(f"Received Srr message: {message}")
         srr_msg = cast(SrrMessage, message)
+
         if srr_msg.performative not in self.allowed_response_performatives:
             self.context.logger.warning(
                 f"SRR performative not recognized: {srr_msg.performative}"
@@ -958,11 +958,13 @@ class SrrHandler(AbstractResponseHandler):
             self.context.state.in_flight_req = False
             return
 
-        dialogue = self.context.srr_dialogues.update(srr_msg)
-        nonce = dialogue.dialogue_label.dialogue_reference[0]
-        callback, kwargs = self.context.state.req_to_callback.pop(nonce)
-        callback(srr_msg, dialogue, **kwargs)
+        nonce = srr_msg.dialogue_reference[0]  # Assuming dialogue_reference is accessible
+        callback, kwargs = self.context.state.req_to_callback.pop(nonce, (None, {}))
 
-        self.context.state.in_flight_req = False
-        self.on_message_handled(message)
-        
+        if callback is None:
+            super().handle(message)
+        else:
+            dialogue = self.context.srr_dialogues.update(srr_msg)
+            callback(srr_msg, dialogue, **kwargs)
+            self.context.state.in_flight_req = False
+            self.on_message_handled(message)

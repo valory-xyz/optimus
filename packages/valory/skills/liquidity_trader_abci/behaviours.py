@@ -6113,46 +6113,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return pool_name
+    
 
-    def _do_connection_request(
-        self,
-        message: Message,
-        dialogue: Message,
-        timeout: Optional[float] = None,
-    ) -> Generator[None, None, Message]:
-        """Do a request and wait the response, asynchronously."""
-
-        self.context.outbox.put_message(message=message)
-        request_nonce = self._get_request_nonce_from_dialogue(dialogue)  # type: ignore
-        cast(Requests, self.context.requests).request_id_to_callback[
-            request_nonce
-        ] = self.get_callback_request()
-        response = yield from self.wait_for_message(timeout=timeout)
-        return response
-
-    def _read_kv(
-        self,
-        keys: Tuple[str, ...],
-    ) -> Generator[None, None, Optional[Dict]]:
-        """Send a request message from the skill context."""
-        self.context.logger.info(f"Reading keys from db: {keys}")
-        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
-        kv_store_message, srr_dialogue = kv_store_dialogues.create(
-            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
-            performative=KvStoreMessage.Performative.READ_REQUEST,
-            keys=keys,
-        )
-        kv_store_message = cast(KvStoreMessage, kv_store_message)
-        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
-        response = yield from self._do_connection_request(
-            kv_store_message, kv_store_dialogue  # type: ignore
-        )
-        if response.performative != KvStoreMessage.Performative.READ_RESPONSE:
-            return None
-
-        data = {key: response.data.get(key, None) for key in keys}  # type: ignore
-
-        return data
+    
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

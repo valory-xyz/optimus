@@ -7,18 +7,18 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeigr4axa7ugnxwm7dwzja2ftvll5l5oyrc7qstqzgvn7gfg2pqdqae
-  dialogues.py: bafybeifizeu2phitkv4nz7jshs7apkvvty7xjdy3vldbb45wlylziftsua
+  behaviours.py: bafybeig7j2pfeijhkxbyxvw4ml4vsd5oryubux3pj7dnzwcxkpmcbxuwhi
+  dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
   models.py: bafybeig7md7gdzjseksrzmb43qpyqcbnz56ljisredowwcwv3v2eh62xzy
-  payloads.py: bafybeif6r3xxldcbo7npigk3b5go3cqjogm4sahtpv5axecapa3d4erpwa
+  payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeiddsenqnxmpws63tqdpb43dvdouv73uz27d5cgwjx2qoaacvds3qy
+  rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge

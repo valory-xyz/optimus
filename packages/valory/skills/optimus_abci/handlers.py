@@ -958,7 +958,9 @@ class SrrHandler(AbstractResponseHandler):
             self.context.state.in_flight_req = False
             return
 
-        nonce = srr_msg.dialogue_reference[0]  # Assuming dialogue_reference is accessible
+        nonce = srr_msg.dialogue_reference[
+            0
+        ]  # Assuming dialogue_reference is accessible
         callback, kwargs = self.context.state.req_to_callback.pop(nonce, (None, {}))
 
         if callback is None:
@@ -967,4 +969,3 @@ class SrrHandler(AbstractResponseHandler):
             dialogue = self.context.srr_dialogues.update(srr_msg)
             callback(srr_msg, dialogue, **kwargs)
             self.context.state.in_flight_req = False
-            self.on_message_handled(message)

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiaam3tg3f2euv67wey3bbyanrvdrl7ssym5m6pqvdw42nqtczgupe
+agent: valory/optimus:0.1.0:bafybeichhiwo5dl7jstnsyikaczczqqaomgnbpfvcy5ivmrae2qr7t5vje
 number_of_agents: 1
 deployment:
   agent:
@@ -183,4 +183,4 @@ config:
 public_id: valory/mirror_db:0.1.0
 type: connection
 config:
-  mirror_db_base_url: ${str:http://localhost:8000}
+  mirror_db_base_url: ${str:https://afmdb.autonolas.tech}

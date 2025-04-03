@@ -121,7 +121,7 @@ class SynchronizedData(BaseSynchronizedData):
             serialized = "[]"
         positions = json.loads(serialized)
         return positions
-    
+
     @property
     def participant_to_context_round(self) -> DeserializedCollection:
         """Get the participants to actions rounds"""
@@ -370,6 +370,7 @@ class GetPositionsRound(CollectSameUntilThresholdRound):
 
     # Event.ROUND_TIMEOUT
 
+
 class APRPopulationRound(CollectSameUntilThresholdRound):
     """APRPopulationRound"""
 
@@ -380,7 +381,7 @@ class APRPopulationRound(CollectSameUntilThresholdRound):
     none_event: Enum = Event.NONE
     collection_key = get_name(SynchronizedData.participant_to_context_round)
     selection_key = get_name(SynchronizedData.context)
-    
+
     ERROR_PAYLOAD = {}
 
     # Event.ROUND_TIMEOUT

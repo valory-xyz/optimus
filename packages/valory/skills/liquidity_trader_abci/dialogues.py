@@ -31,7 +31,6 @@ from packages.dvilela.protocols.kv_store.dialogues import (
 from packages.dvilela.protocols.kv_store.dialogues import (
     KvStoreDialogues as BaseKvStoreDialogues,
 )
-
 from packages.valory.protocols.srr.dialogues import SrrDialogue as BaseSrrDialogue
 from packages.valory.protocols.srr.dialogues import SrrDialogues as BaseSrrDialogues
 from packages.valory.skills.abstract_round_abci.dialogues import (
@@ -147,6 +146,7 @@ class KvStoreDialogues(Model, BaseKvStoreDialogues):
     def __init__(self, **kwargs: Any) -> None:
         """
         Initialize dialogues.
+
         :param kwargs: keyword arguments
         """
         Model.__init__(self, **kwargs)
@@ -155,6 +155,7 @@ class KvStoreDialogues(Model, BaseKvStoreDialogues):
             message: Message, receiver_address: Address
         ) -> BaseDialogue.Role:
             """Infer the role of the agent from an incoming/outgoing first message
+
             :param message: an incoming/outgoing first message
             :param receiver_address: the address of the receiving agent
             :return: The role of the agent

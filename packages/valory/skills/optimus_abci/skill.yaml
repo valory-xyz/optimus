@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
   dialogues.py: bafybeiajfmlip5xy275ml2vp3p3n24itqol2jxyee7wsietbcxwyoz6mwq
   fsm_specification.yaml: bafybeifszjb2yzllrnoiij4jpz2wbrfsa4ybib7hfpf5wo2tkb4yho4nlu
-  handlers.py: bafybeig6zyhb5g2nitgr2ou7hyohd56lzgtnmmkxkis4eeukmt5wlpfyri
+  handlers.py: bafybeidu2ky6sqcksbrfwon2eumx3sm6jcbayaystajksw6finqvjezwqa
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
   modius-ui-build/asset-manifest.json: bafybeihyiy36flgd73lbxfqalqm64r6hphxchqi3dan5t4ykokyhnetmlq
@@ -48,7 +48,7 @@ fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
 - dvilela/genai:0.1.0:bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty
-- dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
+- dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts: []
 protocols:
 - valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
@@ -59,7 +59,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeifmwcwst42mazpw243bc6ubb2cfqen7dab2qk2at2egin2x62qjv4
+- valory/liquidity_trader_abci:0.1.0:bafybeifikshph5txrmgy5lanek345ybsl76bi57pezzu3qp6bozrpq7zca
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
@@ -87,7 +87,7 @@ handlers:
   signing:
     args: {}
     class_name: SigningHandler
-  srr:
+  srr_handler:
     args: {}
     class_name: SrrHandler
   tendermint:

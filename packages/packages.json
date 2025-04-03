@@ -15,10 +15,10 @@
         "contract/valory/staking_activity_checker/0.1.0": "bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe",
         "connection/valory/mirror_db/0.1.0": "bafybeib2syymmq3vgyu2hm56igvsaaqtm7eidgl2jxizusnxmkbwksphcy",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeifmwcwst42mazpw243bc6ubb2cfqen7dab2qk2at2egin2x62qjv4",
-        "skill/valory/optimus_abci/0.1.0": "bafybeidndwgw7cdptiw27uxhxw5g46etpa2lax44ondf4535kkycpya454",
-        "agent/valory/optimus/0.1.0": "bafybeicyxv7gpzifm6bnzbu4hf4iofsmgqmdd37ra3bcr3ztubljxd3rja",
-        "service/valory/optimus/0.1.0": "bafybeidosr2gk5lc4r3dxrzgx4aiiexn5ceks2cxunfif2pyvyixmb3iom"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeifikshph5txrmgy5lanek345ybsl76bi57pezzu3qp6bozrpq7zca",
+        "skill/valory/optimus_abci/0.1.0": "bafybeiffx723kc5klw7jfgoos3d5tj6h6kknzkuukz7cubhwxkb3zibcuy",
+        "agent/valory/optimus/0.1.0": "bafybeihtjukrg5ke5mpihug6klfzq7uwkkusdltnxci4ul7szj4xaf3zcq",
+        "service/valory/optimus/0.1.0": "bafybeig4yqgc7hcybwfxktujqgokvzhqofikurkk7arduy4g73eyib2pp4"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -42,7 +42,7 @@
         "connection/valory/ledger/0.19.0": "bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby",
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q",
         "connection/valory/http_server/0.22.0": "bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy",
-        "connection/dvilela/kv_store/0.1.0": "bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4",
+        "connection/dvilela/kv_store/0.1.0": "bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu",
         "skill/valory/abstract_abci/0.1.0": "bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla",
         "skill/valory/reset_pause_abci/0.1.0": "bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a",
         "skill/valory/registration_abci/0.1.0": "bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y",

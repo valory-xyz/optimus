@@ -965,6 +965,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.context.logger.error(f"Request failed after {retries} retries.")
         return False, response_json
     
+    
     def _do_connection_request(
         self,
         message: Message,
@@ -980,7 +981,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         ] = self.get_callback_request()
         response = yield from self.wait_for_message(timeout=timeout)
         return response
-    
+
     def _call_mirrordb(self, method: str, **kwargs: Any) -> Generator[None, None, Any]:
         """Send a request message to the MirrorDB connection."""
         try:

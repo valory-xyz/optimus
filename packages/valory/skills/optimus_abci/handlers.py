@@ -932,7 +932,7 @@ class HttpHandler(BaseHttpHandler):
         self.context.state.in_flight_req = True
 
 
-class SrrHandler(BaseHandler):
+class SrrHandler(AbstractResponseHandler):
     """Handler for managing Srr messages."""
 
     SUPPORTED_PROTOCOL: Optional[PublicId] = SrrMessage.protocol_id
@@ -965,3 +965,4 @@ class SrrHandler(BaseHandler):
 
         self.context.state.in_flight_req = False
         self.on_message_handled(message)
+        

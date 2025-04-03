@@ -87,8 +87,9 @@ class IpfsHandler(AbstractResponseHandler):
         callback = self.shared_state.req_to_callback.pop(nonce)
         callback(message, dialogue)
 
+
 class SrrHandler(AbstractResponseHandler):
-    """A class for handling SRR messages."""
+    """Handler for managing Srr messages."""
 
     SUPPORTED_PROTOCOL: Optional[PublicId] = SrrMessage.protocol_id
     allowed_response_performatives = frozenset(
@@ -98,6 +99,29 @@ class SrrHandler(AbstractResponseHandler):
         }
     )
 
+    def handle(self, message: Message) -> None:
+        """
+        React to an SRR message.
+
+        :param message: the SrrMessage instance
+        """
+        self.context.logger.info(f"Received Srr message: {message}")
+        srr_msg = cast(SrrMessage, message)
+        if srr_msg.performative not in self.allowed_response_performatives:
+            self.context.logger.warning(
+                f"SRR performative not recognized: {srr_msg.performative}"
+            )
+            self.context.state.in_flight_req = False
+            return
+
+        dialogue = self.context.srr_dialogues.update(srr_msg)
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        callback, kwargs = self.context.state.req_to_callback.pop(nonce)
+        callback(srr_msg, dialogue, **kwargs)
+
+        self.context.state.in_flight_req = False
+        self.on_message_handled(message)
+        
 
 class KvStoreHandler(AbstractResponseHandler):
     """A class for handling KeyValue messages."""

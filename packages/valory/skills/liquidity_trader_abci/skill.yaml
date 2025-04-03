@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeiant5f2qggtjkfv4qqbtocpbelgc4hjlsjja323tdciav4siik5ta
+  behaviours.py: bafybeigetpmnehavsrvmey4ws3p26lik3dcqy4vxggle7gurhg26zon2om
   dialogues.py: bafybeifizeu2phitkv4nz7jshs7apkvvty7xjdy3vldbb45wlylziftsua
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
-  handlers.py: bafybeiea3mixenleagwjphvjyvz2jiu43p2tsh7hqzi2i3hhttnkf3qfs4
+  handlers.py: bafybeid55n7f5xq5dplookuhg7p4i7yophrjuaawljmpt4hbgbsz52wkwu
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
   models.py: bafybeig7md7gdzjseksrzmb43qpyqcbnz56ljisredowwcwv3v2eh62xzy
@@ -29,7 +29,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/mirror_db:0.1.0:bafybeib2syymmq3vgyu2hm56igvsaaqtm7eidgl2jxizusnxmkbwksphcy
-- dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
+- dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/balancer_weighted_pool:0.1.0:bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm
@@ -74,7 +74,7 @@ handlers:
   signing:
     args: {}
     class_name: SigningHandler
-  srr:
+  srr_handler:
     args: {}
     class_name: SrrHandler
   kv_store:
@@ -87,6 +87,9 @@ models:
   kv_store_dialogues:
     args: {}
     class_name: KvStoreDialogues
+  srr_dialogues:
+    args: {}
+    class_name: SrrDialogues
   abci_dialogues:
     args: {}
     class_name: AbciDialogues
@@ -256,9 +259,6 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-  srr_dialogues:
-    args: {}
-    class_name: SrrDialogues
 dependencies:
   web3:
     version: <7,>=6.0.0

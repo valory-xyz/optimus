@@ -14,9 +14,9 @@ connections:
 - valory/ipfs:0.1.0:bafybeici34tuoym3evnzfgbnmgbdy5smshh5jx6ew6zfchmm4tmyzvpg34
 - valory/ledger:0.19.0:bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
-- valory/mirror_db:0.1.0:bafybeib2syymmq3vgyu2hm56igvsaaqtm7eidgl2jxizusnxmkbwksphcy
-- dvilela/kv_store:0.1.0:bafybeiekugvb2kan4342hliluxl3h5och3fjwqoafdyttpcn57evvyztq4
 - dvilela/genai:0.1.0:bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty
+- dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
+- valory/mirror_db:0.1.0:bafybeib2syymmq3vgyu2hm56igvsaaqtm7eidgl2jxizusnxmkbwksphcy
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeie3h2hpzlrie2yc5r3eypce546am5bxlgvzqgjols34yf6z523o6q
@@ -35,14 +35,14 @@ protocols:
 - valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
 - valory/ipfs:0.1.0:bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
-- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 - valory/tendermint:0.1.0:bafybeigydrbfrlmr4f7shbtqx44kvmbg22im27mxdap2e3m5tkti6t445y
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
+- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeifmwcwst42mazpw243bc6ubb2cfqen7dab2qk2at2egin2x62qjv4
-- valory/optimus_abci:0.1.0:bafybeidndwgw7cdptiw27uxhxw5g46etpa2lax44ondf4535kkycpya454
+- valory/liquidity_trader_abci:0.1.0:bafybeifikshph5txrmgy5lanek345ybsl76bi57pezzu3qp6bozrpq7zca
+- valory/optimus_abci:0.1.0:bafybeiffx723kc5klw7jfgoos3d5tj6h6kknzkuukz7cubhwxkb3zibcuy
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -86,6 +86,16 @@ dependencies:
   open-aea-ledger-ethereum:
     version: ==1.64.0
 default_connection: null
+---
+public_id: dvilela/kv_store:0.1.0
+type: connection
+config:
+  store_path: ${str:/tmp}
+---
+public_id: valory/mirror_db:0.1.0
+type: connection
+config:
+  mirror_db_base_url: ${str:http://localhost:8000}
 ---
 public_id: valory/abci:0.1.0
 type: connection
@@ -154,16 +164,6 @@ config:
   host: ${str:0.0.0.0}
   port: ${int:8716}
   target_skill_id: valory/optimus_abci:0.1.0
----
-public_id: dvilela/kv_store:0.1.0
-type: connection
-config:
-  db_path: ${str:/tmp/strategies.db}
----
-public_id: valory/mirror_db:0.1.0
-type: connection
-config:
-  mirror_db_base_url: ${str:http://localhost:8000}
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill
@@ -274,7 +274,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/data}
+      store_path: ${str:/mnt/d/Valory/optimus-Task9/optimus/data}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       portfolio_info_filename: ${str:portfolio.json}

@@ -2130,12 +2130,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def calculate_actual_apr(
         self, agent_id, attr_def_id
     ) -> Generator[None, None, Dict[str, float]]:
-        """
-        Calculate the actual APR for the portfolio based on current positions.
-
-        Returns:
-            Dict[str, float]: Dictionary containing the total portfolio APR
-        """
+        """Calculate the actual APR for the portfolio based on current positions."""
         # Initialize result
         result = {"total_actual_apr": 0.0}
 

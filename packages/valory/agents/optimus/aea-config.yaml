@@ -16,7 +16,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 - dvilela/genai:0.1.0:bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
-- valory/mirror_db:0.1.0:bafybeib2syymmq3vgyu2hm56igvsaaqtm7eidgl2jxizusnxmkbwksphcy
+- valory/mirror_db:0.1.0:bafybeif5lftpq3vv6r4bn4vhjvmq3zizvosaiptb3zh4zky4na3b7vr43e
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeie3h2hpzlrie2yc5r3eypce546am5bxlgvzqgjols34yf6z523o6q
@@ -41,8 +41,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeibrn2b57lvxmxasiueo4tk7psgdyncfqzb2uuyxmexgqazkc67cxm
-- valory/optimus_abci:0.1.0:bafybeidueraiamc43bddx7vxndhwx2w6mwmnq5idc64zq3n7plzvlahhnu
+- valory/liquidity_trader_abci:0.1.0:bafybeie2m6v357kxsxq7w4rsypojnost4yohgkw2d7t7vtbg636mjqxkqm
+- valory/optimus_abci:0.1.0:bafybeia43tnvelfqytoote7s4jjf3r4em6xp3guio7fyxjqolbkkr7npv4
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -95,7 +95,7 @@ config:
 public_id: valory/mirror_db:0.1.0
 type: connection
 config:
-  mirror_db_base_url: ${str:http://localhost:8000}
+  mirror_db_base_url: ${str:https://afmdb.autonolas.tech}
 ---
 public_id: valory/abci:0.1.0
 type: connection

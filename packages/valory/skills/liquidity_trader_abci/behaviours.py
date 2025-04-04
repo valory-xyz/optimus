@@ -2223,8 +2223,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         if not timestamp:
             self.context.logger.info("No timestamp found in the first position")
         return timestamp
-    
-    
+
     def calculate_initial_investment_value(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[float]]:

@@ -1752,6 +1752,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                         )
                         if not agent_registry:
                             agent_name = self.generate_name(sender)
+                            self.context.logger.info(f"agent_name : {agent_name}")
                             agent_registry = yield from self.create_agent_registry(
                                 agent_name, type_id, eth_address
                             )
@@ -1794,23 +1795,33 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
 
                 # Step 4: Calculate APR for positions
-                actual_apr_data = yield from self.calculate_actual_apr(
-                    agent_id, attr_def_id
-                )
-                if actual_apr_data:
-                    self.context.logger.info(f"actual_apr_data {actual_apr_data}")
-                    total_actual_apr = actual_apr_data.get("total_actual_apr", 0)
+                portfolio_value = 0
+                data = yield from self._read_kv(keys=("portfolio_value",))
+                self.context.logger.info(f"data{data}")
+                if data and data["portfolio_value"]:
+                    self.context.logger.info(f"data{data}")
+                    portfolio_value = float(data.get("portfolio_value", "0"))
 
-                    # Step 5: Store APR data in MirrorDB
-                    timestamp = int(
-                        self.round_sequence.last_round_transition_timestamp.timestamp()
-                    )
-                    agent_attr = yield from self.create_agent_attribute(
-                        agent_id,
-                        attr_def_id,
-                        {"apr": total_actual_apr, "timestamp": timestamp},
-                    )
-                    self.context.logger.info(f"Stored APR data: {agent_attr}")
+                if not math.isclose(
+                    portfolio_value,
+                    self.portfolio_data["portfolio_value"],
+                    rel_tol=1e-9,
+                ):
+                    actual_apr_data = yield from self.calculate_actual_apr()
+                    if actual_apr_data:
+                        self.context.logger.info(f"actual_apr_data {actual_apr_data}")
+                        total_actual_apr = actual_apr_data.get("total_actual_apr", 0)
+
+                        # Step 5: Store APR data in MirrorDB
+                        timestamp = int(
+                            self.round_sequence.last_round_transition_timestamp.timestamp()
+                        )
+                        agent_attr = yield from self.create_agent_attribute(
+                            agent_id,
+                            attr_def_id,
+                            {"apr": total_actual_apr, "timestamp": timestamp},
+                        )
+                        self.context.logger.info(f"Stored APR data: {agent_attr}")
 
                 # Prepare payload for consensus
                 payload = APRPopulationPayload(sender=sender, context="APR Population")
@@ -2130,32 +2141,153 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def calculate_actual_apr(
         self, agent_id, attr_def_id
     ) -> Generator[None, None, Dict[str, float]]:
-        """Calculate the actual APR for the portfolio based on current positions."""
+        """
+        Calculate the actual APR for the portfolio based on current positions.
+
+        Returns:
+            Dict[str, float]: Dictionary containing the total portfolio APR
+        """
         # Initialize result
         result = {"total_actual_apr": 0.0}
 
-        # Fetch the last stored APR timestamp
-        last_apr_timestamp = yield from self._get_last_apr_timestamp(
-            agent_id, attr_def_id
+        # Check if we have positions and portfolio data
+        if (
+            not self.current_positions
+            or not hasattr(self, "portfolio_data")
+            or "portfolio_value" not in self.portfolio_data
+        ):
+            self.context.logger.info("Missing required data for APR calculation")
+            return None
+
+        # Get current portfolio value (f)
+        final_value = Decimal(self.portfolio_data["portfolio_value"])
+        self.context.logger.info(f"final_value: {final_value}")
+        yield from self._write_kv(
+            {"portfolio_value": json.dumps(self.portfolio_data["portfolio_value"])}
         )
+        self.context.logger.info(f"Current portfolio value: {final_value}")
 
         # Current timestamp
         current_timestamp = cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
 
-        # Check if APR calculation is needed
-        if not self._is_apr_calculation_needed(last_apr_timestamp, current_timestamp):
+        # Get timestamp from the first position or from stored data
+        data = yield from self._read_kv(keys=("timestamp",))
+        if data and "timestamp" in data and data["timestamp"] not in (None, "{}", ""):
+            try:
+                timestamp = int(data.get("timestamp"))
+                self.context.logger.info(f"Using stored timestamp: {timestamp}")
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    f"Invalid stored timestamp format: {data.get('timestamp')}"
+                )
+                timestamp = None
+        else:
+            self.context.logger.warning(
+                "No valid timestamp found, using current time - 1 hour as fallback"
+            )
+            timestamp = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
+            self.context.logger.info(f"timestamp : {timestamp}")
+
+        # Fallback to position timestamp if stored timestamp is invalid
+        if timestamp is None and self.current_positions:
+            first_position = self.current_positions[0]
+            timestamp = first_position.get("timestamp")
+            self.context.logger.info(
+                f"Using timestamp from first position: {timestamp}"
+            )
+
+        if not timestamp:
             return None
 
-        # Validate data availability
-        if not self._is_data_available():
+        # Calculate hours since investment (n)
+        hours = max(1, (current_timestamp - int(timestamp)) / 3600)
+        self.context.logger.info(f"Hours since investment: {hours}")
+
+        if not self._is_apr_calculation_needed(
+            last_apr_timestamp=timestamp, current_timestamp=current_timestamp
+        ):
             return None
 
-        # Calculate APR
-        apr = yield from self._calculate_apr(last_apr_timestamp, current_timestamp)
-        if apr is not None:
-            result["total_actual_apr"] = apr
+        # Calculate total initial value (i)
+        initial_value = Decimal("0")
+
+        # Process positions and calculate initial value
+        if not self.current_positions:
+            self.context.logger.warning("No positions found for APR calculation")
+            return None
+
+        if len(self.current_positions) > 1:
+            self.context.logger.info(
+                f"Processing {len(self.current_positions)} positions"
+            )
+            for position in self.current_positions:
+                position_value = yield from self.calculate_initial_investment_value(
+                    position
+                )
+                if position_value is not None:
+                    initial_value += Decimal(str(position_value))
+                else:
+                    self.context.logger.warning(
+                        f"Skipping position with null value: {position.get('id', 'unknown')}"
+                    )
+        else:
+            # If only one position, calculate its initial value
+            self.context.logger.info("Processing single position")
+            first_position = self.current_positions[0]
+            position_value = yield from self.calculate_initial_investment_value(
+                first_position
+            )
+            if position_value is not None:
+                self.context.logger.info(f"initial_value: {initial_value}")
+                initial_value = Decimal(str(position_value))
+            else:
+                self.context.logger.warning(
+                    f"Unable to calculate initial value for position: {first_position.get('id', 'unknown')}"
+                )
+
+        self.context.logger.info(f"Total initial value: {initial_value}")
+
+        # If we have a valid initial value, calculate APR
+        if initial_value <= 0:
+            self.context.logger.warning(
+                "Cannot calculate APR: Initial value is zero or negative"
+            )
+            return None
+
+        # Calculate APR using the formula: ((f/i)-1)*(8760/n))*100
+
+        # Step 1: Calculate (f/i)-1 (return ratio)
+        f_i_ratio = (final_value / initial_value) - Decimal("1")
+
+        # Step 2: Calculate (8760/n) (time annualization factor)
+        hours_in_year = Decimal("8760")
+        time_ratio = hours_in_year / Decimal(str(hours))
+
+        # Step 3: Apply the formula: ((f/i)-1)*(8760/n))*100
+        apr = float(f_i_ratio * time_ratio * Decimal("100"))
+
+        # Log intermediate values for debugging
+        self.context.logger.info(f"f_i_ratio: {f_i_ratio}")
+        self.context.logger.info(f"time_ratio: {time_ratio}")
+        self.context.logger.info(f"Raw APR before rounding: {apr}")
+
+        # No need for special handling of losses - the formula correctly handles negative returns
+        result["total_actual_apr"] = round(apr, 2)
+
+        self.context.logger.info(f"Calculated APR: {result['total_actual_apr']}%")
+
+        if result["total_actual_apr"] < 0:
+            result["total_actual_apr"] = round(
+                (float((final_value / initial_value) * Decimal("100"))), 2
+            )
+
+        self.context.logger.info(f"Calculated APR: {result['total_actual_apr']}%")
+
+        # Store the timestamp for future calculations
+        yield from self._write_kv({"timestamp": json.dumps(timestamp)})
+        if result["total_actual_apr"] is not None:
             return result
 
         return None

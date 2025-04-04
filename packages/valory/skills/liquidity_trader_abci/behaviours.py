@@ -1807,7 +1807,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                     self.portfolio_data["portfolio_value"],
                     rel_tol=1e-9,
                 ):
-                    actual_apr_data = yield from self.calculate_actual_apr()
+                    actual_apr_data = yield from self.calculate_actual_apr(agent_id, attr_def_id)
                     if actual_apr_data:
                         self.context.logger.info(f"actual_apr_data {actual_apr_data}")
                         total_actual_apr = actual_apr_data.get("total_actual_apr", 0)

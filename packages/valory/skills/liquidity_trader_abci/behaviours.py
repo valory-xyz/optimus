@@ -2245,9 +2245,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Total initial value: {initial_value}")
 
         # If we have a valid initial value, calculate APR
-        if initial_value <= 0:
+        if initial_value <= 0 or final_value <= 0:
             self.context.logger.warning(
-                "Cannot calculate APR: Initial value is zero or negative"
+                f"Cannot calculate APR: Initial or Final value is zero or negative {initial_value=} {final_value=}"
             )
             return None
 

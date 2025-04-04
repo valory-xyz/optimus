@@ -2366,7 +2366,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         initial_amount1 = position.get("amount1")
         timestamp = position.get("timestamp")
 
-        if None in (initial_amount0, initial_amount1, timestamp):
+        if None in (initial_amount0, timestamp):
             self.context.logger.error(
                 "Missing initial amounts or timestamp in position data."
             )

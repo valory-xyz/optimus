@@ -2220,6 +2220,11 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 f"Processing {len(self.current_positions)} positions"
             )
             for position in self.current_positions:
+                if (
+                    position.get("status", PositionStatus.CLOSED.value)
+                    == PositionStatus.CLOSED.value
+                ):
+                    continue
                 position_value = yield from self.calculate_initial_investment_value(
                     position
                 )
@@ -2232,6 +2237,10 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         else:
             # If only one position, calculate its initial value
             self.context.logger.info("Processing single position")
+            if position.get("status", PositionStatus.CLOSED.value):
+                self.context.logger.warning("No positions present")
+                return None
+
             first_position = self.current_positions[0]
             position_value = yield from self.calculate_initial_investment_value(
                 first_position

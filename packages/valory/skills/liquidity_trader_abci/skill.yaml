@@ -7,26 +7,28 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeiezv27yuqmk7u6hcal74kp27miyi3h2hbslrzy66pcku36kpgmqku
-  dialogues.py: bafybeif2sz3d2fhf7sldsqffy2cwym3ckdxuggklmh6nfr6ioaxfkibvnq
-  fsm_specification.yaml: bafybeibcif6porm3od6omeeuxc73rroqczz5ltcxwpyunljofakvieam5m
+  behaviours.py: bafybeiaqdx24wqi2n4p3jjrg637mh4tkwica6tz5ixs3r2avudqrjize34
+  dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
+  fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
   models.py: bafybeig7md7gdzjseksrzmb43qpyqcbnz56ljisredowwcwv3v2eh62xzy
-  payloads.py: bafybeigb5wva5xtcwgfnms743nwypc3nfj7kbnorezmzp332fyucsik53q
+  payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  rounds.py: bafybeib6eg7ybbj4z7yr6ksa5ki4kdzg67b7sgpns42wbgsbewzphrfoxq
-  rounds_info.py: bafybeiax4nujfotkshixeyek63dpevfc24rddsgl4zwcoh6qsy4cf4lqdi
+  rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
+  rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju
   tests/test_models.py: bafybeic75ux6ulgpnf4ndrctgsw7jlbc7zs3ltxtue4o4eoij7fqvfqmfe
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
+fingerprint_ignore_patterns: []
 connections:
+- valory/mirror_db:0.1.0:bafybeif5lftpq3vv6r4bn4vhjvmq3zizvosaiptb3zh4zky4na3b7vr43e
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
@@ -41,14 +43,14 @@ contracts:
 - valory/staking_activity_checker:0.1.0:bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe
 protocols:
-- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
 - valory/ipfs:0.1.0:bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq
+- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
+- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
-fingerprint_ignore_patterns: []
 behaviours:
   main:
     args: {}
@@ -72,16 +74,22 @@ handlers:
   signing:
     args: {}
     class_name: SigningHandler
-  tendermint:
+  srr_handler:
     args: {}
-    class_name: TendermintHandler
+    class_name: SrrHandler
   kv_store:
     args: {}
     class_name: KvStoreHandler
+  tendermint:
+    args: {}
+    class_name: TendermintHandler
 models:
   kv_store_dialogues:
     args: {}
     class_name: KvStoreDialogues
+  srr_dialogues:
+    args: {}
+    class_name: SrrDialogues
   abci_dialogues:
     args: {}
     class_name: AbciDialogues

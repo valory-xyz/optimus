@@ -57,6 +57,9 @@ from packages.dvilela.protocols.kv_store.dialogues import (
     KvStoreDialogues,
 )
 from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+from packages.valory.connections.mirror_db.connection import (
+    PUBLIC_ID as MIRRORDB_CONNECTION_PUBLIC_ID,
+)
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
@@ -82,6 +85,8 @@ from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolCont
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
+from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
+from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
@@ -103,6 +108,8 @@ from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
     UniswapPoolBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import (
+    APRPopulationPayload,
+    APRPopulationRound,
     CallCheckpointPayload,
     CallCheckpointRound,
     CheckStakingKPIMetPayload,
@@ -148,6 +155,9 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
+AGENT_TYPE = "Modius"
+METRICS_NAME = "APR"
+METRICS_TYPE = "json"
 
 
 class DexType(Enum):
@@ -946,6 +956,88 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.context.logger.error(f"Request failed after {retries} retries.")
         return False, response_json
 
+    def _do_connection_request(
+        self,
+        message: Message,
+        dialogue: Message,
+        timeout: Optional[float] = None,
+    ) -> Generator[None, None, Message]:
+        """Do a request and wait the response, asynchronously."""
+
+        self.context.outbox.put_message(message=message)
+        request_nonce = self._get_request_nonce_from_dialogue(dialogue)  # type: ignore
+        cast(Requests, self.context.requests).request_id_to_callback[
+            request_nonce
+        ] = self.get_callback_request()
+        response = yield from self.wait_for_message(timeout=timeout)
+        return response
+
+    def _call_mirrordb(self, method: str, **kwargs: Any) -> Generator[None, None, Any]:
+        """Send a request message to the MirrorDB connection."""
+        try:
+            srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)
+            srr_message, srr_dialogue = srr_dialogues.create(
+                counterparty=str(MIRRORDB_CONNECTION_PUBLIC_ID),
+                performative=SrrMessage.Performative.REQUEST,
+                payload=json.dumps({"method": method, "kwargs": kwargs}),
+            )
+            srr_message = cast(SrrMessage, srr_message)
+            srr_dialogue = cast(SrrDialogue, srr_dialogue)
+            response = yield from self._do_connection_request(srr_message, srr_dialogue)  # type: ignore
+
+            response_json = json.loads(response.payload)  # type: ignore
+
+            if "error" in response_json:
+                self.context.logger.error(response_json["error"])
+                return None
+
+            return response_json.get("response")  # type: ignore
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(f"Exception while calling MirrorDB: {e}")
+            return None
+
+    def _read_kv(
+        self,
+        keys: Tuple[str, ...],
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Send a request message from the skill context."""
+        self.context.logger.info(f"Reading keys from db: {keys}")
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.READ_REQUEST,
+            keys=keys,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        response = yield from self._do_connection_request(
+            kv_store_message, kv_store_dialogue  # type: ignore
+        )
+        if response.performative != KvStoreMessage.Performative.READ_RESPONSE:
+            return None
+
+        data = {key: response.data.get(key, None) for key in keys}  # type: ignore
+
+        return data
+
+    def _write_kv(
+        self,
+        data: Dict[str, str],
+    ) -> Generator[None, None, bool]:
+        """Send a request message from the skill context."""
+        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+        kv_store_message, srr_dialogue = kv_store_dialogues.create(
+            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+            performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            data=data,
+        )
+        kv_store_message = cast(KvStoreMessage, kv_store_message)
+        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+        response = yield from self._do_connection_request(
+            kv_store_message, kv_store_dialogue  # type: ignore
+        )
+        return response == KvStoreMessage.Performative.SUCCESS
+
 
 class CallCheckpointBehaviour(
     LiquidityTraderBaseBehaviour
@@ -1074,6 +1166,381 @@ class CallCheckpointBehaviour(
             to_address=self.params.staking_token_contract_address,
             data=data,
         )
+
+    def calculate_user_share_values(self) -> Generator[None, None, None]:
+        """Calculate the value of shares for the user based on open pools."""
+        total_user_share_value_usd = Decimal(0)
+        allocations = []
+        individual_shares = []
+        portfolio_breakdown = []
+
+        for position in self.current_positions:
+            if position.get("status") == PositionStatus.OPEN.value:
+                dex_type = position.get("dex_type")
+                chain = position.get("chain")
+                pool_id = (
+                    position.get("pool_id")
+                    if dex_type == DexType.BALANCER.value
+                    else position.get("pool_address")
+                )
+                assets = (
+                    [position.get("token0_symbol"), position.get("token1_symbol")]
+                    if dex_type == DexType.BALANCER.value
+                    else [position.get("token0_symbol")]
+                )
+                apr = position.get("apr")
+
+                # Calculate user share value
+                user_address = self.params.safe_contract_addresses.get(chain)
+                if dex_type == DexType.BALANCER.value:
+                    pool_address = position.get("pool_address")
+                    user_balances = yield from self.get_user_share_value_balancer(
+                        user_address, pool_id, chain
+                    )
+                    details = yield from self._get_balancer_pool_name(
+                        pool_address, chain
+                    )
+                elif dex_type == DexType.STURDY.value:
+                    aggregator_address = position.get("pool_address")
+                    asset_address = position.get("token0")
+                    user_balances = yield from self.get_user_share_value_sturdy(
+                        user_address, aggregator_address, asset_address, chain
+                    )
+                    details = yield from self._get_aggregator_name(
+                        aggregator_address, chain
+                    )
+
+                user_share = Decimal(0)
+
+                for asset in assets:
+                    if dex_type == DexType.BALANCER.value:
+                        token0_address = position.get("token0")
+                        token1_address = position.get("token1")
+                        asset_addresses = [token0_address, token1_address]
+                        asset_address = asset_addresses[assets.index(asset)]
+                    elif dex_type == DexType.STURDY.value:
+                        asset_address = position.get("token0")
+                    else:
+                        self.context.logger.error(f"Unsupported DEX type: {dex_type}")
+                        continue
+
+                    asset_balance = user_balances.get(asset_address)
+                    if asset_balance is None:
+                        self.context.logger.error(
+                            f"Could not find balance for asset {asset}"
+                        )
+                        continue
+
+                    asset_price = yield from self._fetch_token_price(
+                        asset_address, chain
+                    )
+                    if asset_price is not None:
+                        asset_price = Decimal(str(asset_price))
+                    else:
+                        continue
+
+                    asset_value_usd = asset_balance * asset_price
+                    user_share += asset_value_usd
+                    # Check if the asset already exists in the portfolio_breakdown
+                    existing_asset = next(
+                        (
+                            entry
+                            for entry in portfolio_breakdown
+                            if entry["address"] == asset_address
+                        ),
+                        None,
+                    )
+                    if existing_asset:
+                        # Add the balance to the existing entry
+                        existing_asset["balance"] = float(asset_balance)
+                        existing_asset["value_usd"] = asset_value_usd
+                    else:
+                        # Create a new entry for the asset
+                        portfolio_breakdown.append(
+                            {
+                                "asset": asset,
+                                "address": asset_address,
+                                "balance": float(asset_balance),
+                                "price": asset_price,
+                                "value_usd": asset_value_usd,
+                            }
+                        )
+
+                total_user_share_value_usd += user_share
+                individual_shares.append(
+                    (
+                        user_share,
+                        dex_type,
+                        chain,
+                        pool_id,
+                        assets,
+                        apr,
+                        details,
+                        user_address,
+                        user_balances,
+                    )
+                )
+
+        yield from self._write_kv({"individual_shares": (individual_shares)})
+        self.context.logger.info(
+            f"individual_shares on CallCheckpointBehaviour :{individual_shares}"
+        )
+
+        # Remove closed positions from allocations
+        allocations = [
+            allocation
+            for allocation in allocations
+            if allocation["id"] != pool_id
+            or allocation["type"] != dex_type
+            or allocation["status"] != PositionStatus.CLOSED.value
+        ]
+
+        total_user_share_value_usd = sum(
+            Decimal(str(entry["value_usd"])) for entry in portfolio_breakdown
+        )
+        # Calculate the ratio of each asset in the portfolio
+        total_ratio = sum(
+            Decimal(str(entry["value_usd"])) / total_user_share_value_usd
+            for entry in portfolio_breakdown
+            if total_user_share_value_usd > 0
+        )
+        for entry in portfolio_breakdown:
+            if total_user_share_value_usd > 0:
+                entry["ratio"] = round(
+                    Decimal(str(entry["value_usd"]))
+                    / total_user_share_value_usd
+                    / total_ratio,
+                    6,
+                )
+                entry["value_usd"] = float(entry["value_usd"])
+                entry["balance"] = float(entry["balance"])
+            else:
+                entry["ratio"] = 0.0
+                entry["value_usd"] = float(entry["value_usd"])
+                entry["balance"] = float(entry["balance"])
+
+        # Calculate ratios and build allocations
+        total_ratio = sum(
+            float(user_share / total_user_share_value_usd) * 100
+            for user_share, _, _, _, _, _, _, _, _ in individual_shares
+            if total_user_share_value_usd > 0
+        )
+        for (
+            user_share,
+            dex_type,
+            chain,
+            pool_id,
+            assets,
+            apr,
+            details,
+            user_address,
+            _,
+        ) in individual_shares:
+            if total_user_share_value_usd > 0:
+                ratio = round(
+                    float(user_share / total_user_share_value_usd)
+                    * 100
+                    * 100
+                    / total_ratio,
+                    2,
+                )
+            else:
+                ratio = 0.0
+
+            allocations.append(
+                {
+                    "chain": chain,
+                    "type": dex_type,
+                    "id": pool_id,
+                    "assets": assets,
+                    "apr": round(apr, 2),
+                    "details": details,
+                    "ratio": float(ratio),
+                    "address": user_address,
+                }
+            )
+
+        # Store the calculated portfolio value and breakdown
+        self.portfolio_data = {
+            "portfolio_value": float(total_user_share_value_usd),
+            "allocations": [
+                {
+                    "chain": allocation["chain"],
+                    "type": allocation["type"],
+                    "id": allocation["id"],
+                    "assets": allocation["assets"],
+                    "apr": float(allocation["apr"]),
+                    "details": allocation["details"],
+                    "ratio": float(allocation["ratio"]),
+                    "address": allocation["address"],
+                }
+                for allocation in allocations
+            ],
+            "portfolio_breakdown": [
+                {
+                    "asset": entry["asset"],
+                    "address": entry["address"],
+                    "balance": float(entry["balance"]),
+                    "price": float(entry["price"]),
+                    "value_usd": float(entry["value_usd"]),
+                    "ratio": float(entry["ratio"]),
+                }
+                for entry in portfolio_breakdown
+            ],
+            "address": self.params.safe_contract_addresses.get(
+                self.params.target_investment_chains[0]
+            ),
+        }
+
+    def get_user_share_value_balancer(
+        self, user_address: str, pool_id: str, chain: str
+    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
+        """Calculate the user's share value and token balances in a Balancer pool."""
+        subgraph_url = self.params.balancer_graphql_endpoints.get(chain)
+        query = """
+        query getUserShareValue($poolId: ID!, $userAddress: String!) {
+            pool(id: $poolId) {
+                id
+                totalShares
+                tokens {
+                    address
+                    balance
+                    decimals
+                }
+            }
+            poolShares(
+                where: {
+                    userAddress_: { id: $userAddress },
+                    poolId: $poolId
+                }
+            ) {
+                balance
+                userAddress {
+                    id
+                }
+            }
+        }
+        """
+
+        variables = {"poolId": pool_id.lower(), "userAddress": user_address.lower()}
+        body = json.dumps({"query": query, "variables": variables}).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        response = yield from self.get_http_response(
+            "POST", subgraph_url, body, headers
+        )
+
+        if response.status_code != 200:
+            self.context.logger.error(
+                f"Query failed with status code {response.status_code}: {response.body}"
+            )
+            return {}
+
+        try:
+            data = json.loads(response.body)["data"]
+        except json.decoder.JSONDecodeError as e:
+            self.context.logger.error(f"Failed to parse response: {e}")
+            return {}
+
+        pool = data.get("pool")
+        pool_shares = data.get("poolShares")
+
+        if not pool:
+            self.context.logger.error("Pool not found.")
+            return {}
+
+        if not pool_shares:
+            user_balance = Decimal("0")
+            self.context.logger.info(
+                "No pool shares found for the specified user address and pool ID."
+            )
+            return {}
+        else:
+            user_balance = Decimal(pool_shares[0]["balance"])
+
+        total_shares = Decimal(pool["totalShares"])
+
+        getcontext().prec = 50  # Increase decimal precision
+        ctx = Context(prec=50)  # Use higher-precision data type
+
+        user_share = ctx.divide(user_balance, total_shares)
+
+        # Calculate user's token balances
+        user_token_balances = {}
+        for token in pool["tokens"]:
+            token_address = to_checksum_address(token["address"])
+            token_balance = Decimal(token["balance"])
+            user_token_balance = user_share * token_balance
+            user_token_balances[token_address] = user_token_balance
+
+        return user_token_balances
+
+    def get_user_share_value_sturdy(
+        self, user_address: str, aggregator_address: str, asset_address: str, chain: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Calculate the user's share value and token balance in a Sturdy vault."""
+        # Get user's underlying asset balance in the vault
+        user_asset_balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=aggregator_address,
+            contract_public_id=YearnV3VaultContract.contract_id,
+            contract_callable="balance_of",
+            data_key="amount",
+            owner=user_address,
+            chain_id=chain,
+        )
+        if user_asset_balance is None:
+            self.context.logger.error("Failed to get user's asset balance.")
+            return {}
+
+        user_asset_balance = Decimal(user_asset_balance)
+
+        # Get decimals for proper scaling
+        decimals = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=aggregator_address,
+            contract_public_id=YearnV3VaultContract.contract_id,
+            contract_callable="decimals",
+            data_key="decimals",
+            chain_id=chain,
+        )
+        if decimals is None:
+            self.context.logger.error("Failed to get decimals.")
+            return {}
+
+        scaling_factor = Decimal(10 ** int(decimals))
+
+        # Adjust decimals for assets
+        user_asset_balance /= scaling_factor
+
+        return {asset_address: user_asset_balance}
+
+    def _get_aggregator_name(
+        self, aggregator_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Get the name of the Sturdy Aggregator."""
+        aggreator_name = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=aggregator_address,
+            contract_public_id=YearnV3VaultContract.contract_id,
+            contract_callable="name",
+            data_key="name",
+            chain_id=chain,
+        )
+        return aggreator_name
+
+    def _get_balancer_pool_name(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Get the name of the Balancer Pool."""
+        pool_name = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=WeightedPoolContract.contract_id,
+            contract_callable="get_name",
+            data_key="name",
+            chain_id=chain,
+        )
+        return pool_name
 
 
 class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
@@ -1224,6 +1691,902 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
+
+
+class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
+    """Behavior for calculating and storing APR data in MirrorDB."""
+
+    matching_round: Type[AbstractRound] = APRPopulationRound
+
+    def async_act(self) -> Generator:
+        """
+        Execute the APR population behavior.
+
+        This behavior:
+        1. Retrieves or creates necessary resources (agent type, agent registry, attribute definition)
+        2. Calculates APR for positions
+        3. Stores APR data in MirrorDB
+        4. Reads APR data for comparison with other agents
+        5. Completes the round
+        """
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            sender = self.context.agent_address
+            self.context.logger.info(f"APRPopulationBehaviour started by {sender}")
+
+            try:
+                # Get configuration
+                eth_address = sender
+
+                # Step 1: Get or create agent type for "Modius"
+                data = yield from self._read_kv(keys=("agent_type",))
+                if data:
+                    agent_type = data.get("agent_type")
+                    if agent_type:
+                        agent_type = json.loads(agent_type)
+                    else:
+                        # Check external DB
+                        agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
+                        if not agent_type:
+                            agent_type = yield from self.create_agent_type(
+                                AGENT_TYPE,
+                                "An agent for DeFi liquidity management and APR tracking",
+                            )
+                            if not agent_type:
+                                raise Exception("Failed to create agent type.")
+                            yield from self._write_kv(
+                                {"agent_type": json.dumps(agent_type)}
+                            )
+
+                type_id = agent_type.get("type_id")
+                self.context.logger.info(f"Using agent type: {agent_type}")
+
+                # Step 2: Get or create agent registry entry
+                data = yield from self._read_kv(keys=("agent_registry",))
+                if data:
+                    agent_registry = data.get("agent_registry", "{}")
+                    if agent_registry:
+                        agent_registry = json.loads(agent_registry)
+                    else:
+                        agent_registry = yield from self.get_agent_registry_by_address(
+                            eth_address
+                        )
+                        if not agent_registry:
+                            agent_name = self.generate_name(sender)
+                            agent_registry = yield from self.create_agent_registry(
+                                agent_name, type_id, eth_address
+                            )
+                            if not agent_registry:
+                                raise Exception("Failed to create agent registry.")
+                            yield from self._write_kv(
+                                {"agent_registry": json.dumps(agent_registry)}
+                            )
+
+                agent_id = agent_registry.get("agent_id")
+                self.context.logger.info(f"Using agent: {agent_id}")
+
+                # Step 3: Get or create APR attribute definition
+                data = yield from self._read_kv(keys=("attr_def",))
+                if data:
+                    attr_def = data.get("attr_def", "{}")
+                    if attr_def:
+                        attr_def = json.loads(attr_def)
+                    else:
+                        # Check external DB
+                        attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+                        if not attr_def:
+                            attr_def = yield from self.create_attribute_definition(
+                                type_id,
+                                METRICS_NAME,
+                                METRICS_TYPE,
+                                True,
+                                "{}",
+                                agent_id,
+                            )
+                            if not attr_def:
+                                raise Exception(
+                                    "Failed to create attribute definition."
+                                )
+                            yield from self._write_kv(
+                                {"attr_def": json.dumps(attr_def)}
+                            )
+
+                attr_def_id = attr_def.get("attr_def_id")
+                self.context.logger.info(f"Using attribute definition: {attr_def}")
+
+                # Step 4: Calculate APR for positions
+                actual_apr_data = yield from self.calculate_actual_apr(
+                    agent_id, attr_def_id
+                )
+                if actual_apr_data:
+                    self.context.logger.info(f"actual_apr_data {actual_apr_data}")
+                    total_actual_apr = actual_apr_data.get("total_actual_apr", 0)
+
+                    # Step 5: Store APR data in MirrorDB
+                    timestamp = int(
+                        self.round_sequence.last_round_transition_timestamp.timestamp()
+                    )
+                    agent_attr = yield from self.create_agent_attribute(
+                        agent_id,
+                        attr_def_id,
+                        {"apr": total_actual_apr, "timestamp": timestamp},
+                    )
+                    self.context.logger.info(f"Stored APR data: {agent_attr}")
+
+                # Prepare payload for consensus
+                payload = APRPopulationPayload(sender=sender, context="APR Population")
+
+            except Exception as e:
+                self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
+                # Create a payload even in case of error to continue the protocol
+                payload = APRPopulationPayload(
+                    sender=sender, context="APR Population Error"
+                )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+
+        self.set_done()
+
+    # =========================================================================
+    # Utility methods
+    # =========================================================================
+
+    def sign_message(self, message) -> Generator[None, None, Optional[str]]:
+        """Sign a message."""
+        message_bytes = message.encode("utf-8")
+        signature = yield from self.get_signature(message_bytes)
+        if signature:
+            signature_hex = signature[2:]
+            return signature_hex
+        return None
+
+    # =========================================================================
+    # Agent Type API methods
+    # =========================================================================
+
+    def get_agent_type_by_name(
+        self, type_name
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_type_by_name",
+            endpoint=f"api/agent-types/name/{type_name}",
+        )
+        return response
+
+    def create_agent_type(self, type_name, description) -> Generator[None, None, Dict]:
+        """Create a new agent type."""
+        # Prepare agent type data
+        agent_type_data = {"type_name": type_name, "description": description}
+
+        endpoint = "api/agent-types/"
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_type",
+            endpoint=endpoint,
+            data=agent_type_data,
+        )
+
+        return response
+
+    # =========================================================================
+    # Attribute Definition API methods
+    # =========================================================================
+
+    def get_attr_def_by_name(self, attr_name) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_attr_def_by_name",
+            endpoint=f"api/attributes/name/{attr_name}",
+        )
+        return response
+
+    def create_attribute_definition(
+        self, type_id, attr_name, data_type, is_required, default_value, agent_id
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute definition for a specific agent type."""
+        # Prepare attribute definition data
+        attr_def_data = {
+            "type_id": type_id,
+            "attr_name": attr_name,
+            "data_type": data_type,
+            "is_required": is_required,
+            "default_value": default_value,
+        }
+
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agent-types/{type_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
+
+        # Prepare authentication data
+        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_attribute_definition",
+            endpoint=endpoint,
+            data={"attr_def": attr_def_data, "auth": auth_data},
+        )
+
+        return response
+
+    # =========================================================================
+    # Agent Registry API methods
+    # =========================================================================
+
+    def get_agent_registry_by_address(
+        self, eth_address
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get agent registry by Ethereum address."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_registry_by_address",
+            endpoint=f"api/agent-registry/address/{eth_address}",
+        )
+        return response
+
+    def create_agent_registry(
+        self, agent_name, type_id, eth_address
+    ) -> Generator[None, None, Dict]:
+        """Create a new agent registry."""
+        # Prepare agent registry data
+        agent_registry_data = {
+            "agent_name": agent_name,
+            "type_id": type_id,
+            "eth_address": eth_address,
+        }
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_registry",
+            endpoint="api/agent-registry/",
+            data=agent_registry_data,
+        )
+
+        return response
+
+    # =========================================================================
+    # Agent Attribute API methods
+    # =========================================================================
+
+    def create_agent_attribute(
+        self,
+        agent_id,
+        attr_def_id,
+        json_value=None,
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute value for a specific agent."""
+        # Prepare the agent attribute data with all values set to None initially
+        agent_attr_data = {
+            "agent_id": agent_id,
+            "attr_def_id": attr_def_id,
+            "string_value": None,
+            "integer_value": None,
+            "float_value": None,
+            "boolean_value": None,
+            "date_value": None,
+            "json_value": json_value,
+        }
+
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agents/{agent_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
+
+        # Prepare authentication data
+        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_attribute",
+            endpoint=endpoint,
+            data={"agent_attr": agent_attr_data, "auth": auth_data},
+        )
+
+        return response
+
+    # =========================================================================
+    # APR Calculation methods
+    # =========================================================================
+
+    def _fetch_token_name_from_contract(
+        self, chain: str, token_address: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Fetch the token name from the ERC20 contract."""
+
+        token_name = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=token_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_name",
+            data_key="data",
+            chain_id=chain,
+        )
+        return token_name
+
+    def get_token_id_from_symbol_cached(
+        self, symbol, token_name, coin_list
+    ) -> Optional[str]:
+        """Retrieve the CoinGecko token ID using the token's symbol and name."""
+        # Try to find coins matching the symbol.
+        candidates = [
+            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+        ]
+        if not candidates:
+            return None
+
+        # If single candidate, return it.
+        if len(candidates) == 1:
+            return candidates[0]["id"]
+
+        # If multiple candidates, match by name if possible.
+        normalized_token_name = token_name.replace(" ", "").lower()
+        for coin in candidates:
+            coin_name = coin["name"].replace(" ", "").lower()
+            if coin_name == normalized_token_name or coin_name == symbol.lower():
+                return coin["id"]
+        return None
+
+    def get_token_id_from_symbol(
+        self, token_address, symbol, coin_list, chain_name
+    ) -> Generator[None, None, Optional[str]]:
+        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        token_name = yield from self._fetch_token_name_from_contract(
+            chain_name, token_address
+        )
+        if not token_name:
+            matching_coins = [
+                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+            ]
+            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+
+        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
+
+    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
+        """Fetches the list of coins from CoinGecko API only once."""
+        url = "https://api.coingecko.com/api/v3/coins/list"
+        response = yield from self.get_http_response("GET", url, None, None)
+
+        try:
+            response_json = json.loads(response.body)
+            return response_json
+        except json.decoder.JSONDecodeError as e:
+            self.context.logger.error(f"Failed to fetch coin list: {e}")
+            return None
+
+    def _fetch_historical_token_prices(
+        self, tokens: List[List[str]], date_str: str, chain: str
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Fetch historical token prices for a specific date."""
+        historical_prices = {}
+
+        coin_list = yield from self.fetch_coin_list()
+        if not coin_list:
+            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
+            return historical_prices
+
+        headers = {"Accept": "application/json"}
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        for token_symbol, token_address in tokens:
+            # Get CoinGecko ID.
+            coingecko_id = yield from self.get_token_id_from_symbol(
+                token_address, token_symbol, coin_list, chain
+            )
+            if not coingecko_id:
+                self.context.logger.error(
+                    f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
+                )
+                continue
+
+            endpoint = self.coingecko.historical_price_endpoint.format(
+                coin_id=coingecko_id,
+                date=date_str,
+            )
+
+            success, response_json = yield from self._request_with_retries(
+                endpoint=endpoint,
+                headers=headers,
+                rate_limited_code=self.coingecko.rate_limited_code,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
+            )
+
+            if success:
+                price = (
+                    response_json.get("market_data", {})
+                    .get("current_price", {})
+                    .get("usd")
+                )
+                if price:
+                    historical_prices[token_address] = price
+                else:
+                    self.context.logger.error(
+                        f"No price in response for token {token_address}"
+                    )
+            else:
+                self.context.logger.error(
+                    f"Failed to fetch historical price for {token_address}"
+                )
+
+        return historical_prices
+
+    def calculate_actual_apr(
+        self, agent_id, attr_def_id
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Calculate the actual APR for the portfolio based on current positions."""
+        # Initialize result
+        result = {"total_actual_apr": 0.0}
+
+        # Fetch the last stored APR timestamp
+        last_apr_timestamp = yield from self._get_last_apr_timestamp(
+            agent_id, attr_def_id
+        )
+
+        # Current timestamp
+        current_timestamp = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
+
+        # Check if APR calculation is needed
+        if not self._is_apr_calculation_needed(last_apr_timestamp, current_timestamp):
+            return None
+
+        # Validate data availability
+        if not self._is_data_available():
+            return None
+
+        # Calculate APR
+        apr = yield from self._calculate_apr(last_apr_timestamp, current_timestamp)
+        if apr is not None:
+            result["total_actual_apr"] = apr
+            return result
+
+        return None
+
+    def _get_last_apr_timestamp(
+        self, agent_id, attr_def_id
+    ) -> Generator[None, None, Optional[int]]:
+        """Fetch the last stored APR timestamp."""
+        last_apr_data = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
+        return last_apr_data.get("timestamp") if last_apr_data else None
+
+    def _is_apr_calculation_needed(
+        self, last_apr_timestamp: Optional[int], current_timestamp: int
+    ) -> bool:
+        """Check if APR calculation is needed based on the time gap."""
+        if last_apr_timestamp and (current_timestamp - last_apr_timestamp) < 7200:
+            self.context.logger.info(
+                "APR calculation not required, last calculation was within 2 hours."
+            )
+            return False
+        return True
+
+    def _is_data_available(self) -> bool:
+        """Check if the necessary data for APR calculation is available."""
+        if (
+            not self.current_positions
+            or not hasattr(self, "portfolio_data")
+            or "portfolio_value" not in self.portfolio_data
+        ):
+            self.context.logger.info("Missing required data for APR calculation")
+            return False
+        return True
+
+    def _calculate_apr(
+        self, last_apr_timestamp: Optional[int], current_timestamp: int
+    ) -> Generator[None, None, Optional[float]]:
+        """Calculate the APR based on current positions and portfolio data."""
+        # Get current portfolio value (f)
+        final_value = Decimal(self.portfolio_data["portfolio_value"])
+        self.context.logger.info(f"Current portfolio value: {final_value}")
+
+        # Determine the timestamp to use
+        timestamp = self._get_calculation_timestamp(last_apr_timestamp)
+        if timestamp is None:
+            return None
+
+        hours = max(1, (current_timestamp - timestamp) / 3600)
+
+        # Calculate total initial value (i)
+        initial_value = yield from self._calculate_total_initial_value()
+        if initial_value <= 0:
+            return None
+
+        # Calculate APR
+        return self._compute_apr(final_value, initial_value, hours)
+
+    def _get_calculation_timestamp(
+        self, last_apr_timestamp: Optional[int]
+    ) -> Optional[int]:
+        """Determine the timestamp to use for APR calculation."""
+        if last_apr_timestamp:
+            return last_apr_timestamp
+        first_position = self.current_positions[0]
+        timestamp = first_position.get("timestamp")
+        if not timestamp:
+            self.context.logger.info("No timestamp found in the first position")
+        return timestamp
+
+    def calculate_initial_investment_value(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[float]]:
+        """Calculate the initial investment value based on the initial transaction."""
+
+        chain = position.get("chain")
+        initial_amount0 = position.get("amount0")
+        initial_amount1 = position.get("amount1")
+        timestamp = position.get("timestamp")
+
+        if None in (initial_amount0, initial_amount1, timestamp):
+            self.context.logger.error(
+                "Missing initial amounts or timestamp in position data."
+            )
+            return None
+
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+        tokens = []
+        # Fetch historical prices
+        tokens.append([position.get("token0_symbol"), position.get("token0")])
+        if position.get("token1") is not None:
+            tokens.append([position.get("token1_symbol"), position.get("token1")])
+
+        historical_prices = yield from self._fetch_historical_token_prices(
+            tokens, date_str, chain
+        )
+
+        if not historical_prices:
+            self.context.logger.error("Failed to fetch historical token prices.")
+            return None
+
+        # Get the price for token0
+        initial_price0 = historical_prices.get(position.get("token0"))
+        if initial_price0 is None:
+            self.context.logger.error("Historical price not found for token0.")
+            return None
+
+        # Calculate initial investment value for token0
+        V_initial = initial_amount0 * initial_price0
+
+        # If token1 exists, include it in the calculations
+        if position.get("token1") is not None and initial_amount1 is not None:
+            initial_price1 = historical_prices.get(position.get("token1"))
+            if initial_price1 is None:
+                self.context.logger.error("Historical price not found for token1.")
+                return None
+            V_initial += initial_amount1 * initial_price1
+
+        return V_initial
+
+    def _calculate_total_initial_value(self) -> Generator[None, None, Decimal]:
+        """Calculate the total initial investment value."""
+        initial_value = Decimal("0")
+        if len(self.current_positions) > 1:
+            self.context.logger.info(
+                f"Processing {len(self.current_positions)} positions"
+            )
+            for position in self.current_positions:
+                position_value = yield from self.calculate_initial_investment_value(
+                    position
+                )
+                if position_value is not None:
+                    initial_value += Decimal(str(position_value))
+        else:
+            self.context.logger.info("Processing single position")
+            position_value = yield from self.calculate_initial_investment_value(
+                self.current_positions[0]
+            )
+            if position_value is not None:
+                initial_value = Decimal(str(position_value))
+        self.context.logger.info(f"Total initial value: {initial_value}")
+        return initial_value
+
+    def _compute_apr(
+        self, final_value: Decimal, initial_value: Decimal, hours: float
+    ) -> float:
+        """Compute the APR based on final and initial values and time."""
+        # Calculate APR using the formula: (f/i)*(1/(n/8760)))*100
+        f_i_ratio = (final_value / initial_value) - 1
+        hours_in_year = Decimal("8760")
+        time_ratio = Decimal("1") / (Decimal(hours) / hours_in_year)
+        apr = float(f_i_ratio * time_ratio * Decimal("100"))
+
+        # Add additional logging to see the intermediate values
+        self.context.logger.info(f"f_i_ratio: {f_i_ratio}")
+        self.context.logger.info(f"time_ratio: {time_ratio}")
+        self.context.logger.info(f"Raw APR before rounding: {apr}")
+
+        # Adjust for significant losses
+        if f_i_ratio < Decimal("0.0001") and initial_value > Decimal("1"):
+            self.context.logger.info(
+                "Detected significant loss, adjusting APR calculation"
+            )
+            loss_percentage = (
+                (initial_value - final_value) / initial_value * Decimal("100")
+            )
+            apr = -float(loss_percentage)
+            self.context.logger.info(f"Adjusted APR based on loss: {apr}%")
+
+        return round(apr, 2)
+
+    def _fetch_last_apr_data(
+        self, agent_id, attr_def_id
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Fetch the last stored APR data."""
+        try:
+            response = yield from self._call_mirrordb(
+                method="read_",
+                method_name="read_agent_attribute_by_agent_and_def",
+                endpoint=f"api/agents/{agent_id}/attributes/",
+            )
+            # Assuming response is a list of attributes, sort by timestamp and get the latest
+            if response and isinstance(response, list):
+                filtered_response = [
+                    entry for entry in response if entry["attr_def_id"] == attr_def_id
+                ]
+                # Sort the filtered list by timestamp in descending order
+                filtered_response.sort(
+                    key=lambda x: x["json_value"]["timestamp"], reverse=True
+                )
+                return filtered_response[0]["json_value"] if response else None
+            return None
+        except Exception as e:
+            self.context.logger.error(f"Error fetching last APR data: {e}")
+            return None
+
+    def generate_phonetic_syllable(self, seed):
+        """Generates phonetic syllable"""
+
+        phonetic_syllables = [
+            "ba",
+            "bi",
+            "bu",
+            "ka",
+            "ke",
+            "ki",
+            "ko",
+            "ku",
+            "da",
+            "de",
+            "di",
+            "do",
+            "du",
+            "fa",
+            "fe",
+            "fi",
+            "fo",
+            "fu",
+            "ga",
+            "ge",
+            "gi",
+            "go",
+            "gu",
+            "ha",
+            "he",
+            "hi",
+            "ho",
+            "hu",
+            "ja",
+            "je",
+            "ji",
+            "jo",
+            "ju",
+            "ka",
+            "ke",
+            "ki",
+            "ko",
+            "ku",
+            "la",
+            "le",
+            "li",
+            "lo",
+            "lu",
+            "ma",
+            "me",
+            "mi",
+            "mo",
+            "mu",
+            "na",
+            "ne",
+            "ni",
+            "no",
+            "nu",
+            "pa",
+            "pe",
+            "pi",
+            "po",
+            "pu",
+            "ra",
+            "re",
+            "ri",
+            "ro",
+            "ru",
+            "sa",
+            "se",
+            "si",
+            "so",
+            "su",
+            "ta",
+            "te",
+            "ti",
+            "to",
+            "tu",
+            "va",
+            "ve",
+            "vi",
+            "vo",
+            "vu",
+            "wa",
+            "we",
+            "wi",
+            "wo",
+            "wu",
+            "ya",
+            "ye",
+            "yi",
+            "yo",
+            "yu",
+            "za",
+            "ze",
+            "zi",
+            "zo",
+            "zu",
+            "bal",
+            "ben",
+            "bir",
+            "bom",
+            "bun",
+            "cam",
+            "cen",
+            "cil",
+            "cor",
+            "cus",
+            "dan",
+            "del",
+            "dim",
+            "dor",
+            "dun",
+            "fam",
+            "fen",
+            "fil",
+            "fon",
+            "fur",
+            "gar",
+            "gen",
+            "gil",
+            "gon",
+            "gus",
+            "han",
+            "hel",
+            "him",
+            "hon",
+            "hus",
+            "jan",
+            "jel",
+            "jim",
+            "jon",
+            "jus",
+            "kan",
+            "kel",
+            "kim",
+            "kon",
+            "kus",
+            "lan",
+            "lel",
+            "lim",
+            "lon",
+            "lus",
+            "mar",
+            "mel",
+            "min",
+            "mon",
+            "mus",
+            "nar",
+            "nel",
+            "nim",
+            "nor",
+            "nus",
+            "par",
+            "pel",
+            "pim",
+            "pon",
+            "pus",
+            "rar",
+            "rel",
+            "rim",
+            "ron",
+            "rus",
+            "sar",
+            "sel",
+            "sim",
+            "son",
+            "sus",
+            "tar",
+            "tel",
+            "tim",
+            "ton",
+            "tus",
+            "var",
+            "vel",
+            "vim",
+            "von",
+            "vus",
+            "war",
+            "wel",
+            "wim",
+            "won",
+            "wus",
+            "yar",
+            "yel",
+            "yim",
+            "yon",
+            "yus",
+            "zar",
+            "zel",
+            "zim",
+            "zon",
+            "zus",
+            "zez",
+            "zzt",
+            "bzt",
+            "vzt",
+            "kzt",
+            "mek",
+            "tek",
+            "nek",
+            "lek",
+            "tron",
+            "dron",
+            "kron",
+            "pron",
+            "bot",
+            "rot",
+            "not",
+            "lot",
+            "zap",
+            "blip",
+            "bleep",
+            "beep",
+            "wire",
+            "byte",
+            "bit",
+            "chip",
+        ]
+        return phonetic_syllables[seed % len(phonetic_syllables)]
+
+    def generate_phonetic_name(self, address, start_index, syllables):
+        """Generates phonetic name"""
+
+        return "".join(
+            self.generate_phonetic_syllable(
+                int(address[start_index + i * 8 : start_index + (i + 1) * 8], 16)
+            )
+            for i in range(syllables)
+        ).lower()
+
+    def generate_name(self, address):
+        """Generates name from address"""
+
+        first_name = self.generate_phonetic_name(address, 2, 2)
+        last_name_prefix = self.generate_phonetic_name(address, 18, 2)
+        last_name_number = int(address[-4:], 16) % 100
+        return f"{first_name}-{last_name_prefix}{str(last_name_number).zfill(2)}"
 
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
@@ -5071,46 +6434,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
         return pool_name
 
-    def _do_connection_request(
-        self,
-        message: Message,
-        dialogue: Message,
-        timeout: Optional[float] = None,
-    ) -> Generator[None, None, Message]:
-        """Do a request and wait the response, asynchronously."""
-
-        self.context.outbox.put_message(message=message)
-        request_nonce = self._get_request_nonce_from_dialogue(dialogue)  # type: ignore
-        cast(Requests, self.context.requests).request_id_to_callback[
-            request_nonce
-        ] = self.get_callback_request()
-        response = yield from self.wait_for_message(timeout=timeout)
-        return response
-
-    def _read_kv(
-        self,
-        keys: Tuple[str, ...],
-    ) -> Generator[None, None, Optional[Dict]]:
-        """Send a request message from the skill context."""
-        self.context.logger.info(f"Reading keys from db: {keys}")
-        kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
-        kv_store_message, srr_dialogue = kv_store_dialogues.create(
-            counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
-            performative=KvStoreMessage.Performative.READ_REQUEST,
-            keys=keys,
-        )
-        kv_store_message = cast(KvStoreMessage, kv_store_message)
-        kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
-        response = yield from self._do_connection_request(
-            kv_store_message, kv_store_dialogue  # type: ignore
-        )
-        if response.performative != KvStoreMessage.Performative.READ_RESPONSE:
-            return None
-
-        data = {key: response.data.get(key, None) for key in keys}  # type: ignore
-
-        return data
-
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
     """LiquidityTraderRoundBehaviour"""
@@ -5121,6 +6444,7 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         CallCheckpointBehaviour,
         CheckStakingKPIMetBehaviour,
         GetPositionsBehaviour,
+        APRPopulationBehaviour,
         EvaluateStrategyBehaviour,
         DecisionMakingBehaviour,
         PostTxSettlementBehaviour,

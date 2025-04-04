@@ -1,0 +1,27 @@
+name: mirror_db
+author: valory
+version: 0.1.0
+type: connection
+description: GenericMirrorDB connection for interacting with REST APIs.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeigchp6onepf7zwrksu4t4aixtzsr4yn73xsorrnnwrz2qwec4kvgq
+  connection.py: bafybeigj6yb3xcssuoi7xirbkpn7yeyg4kzg2dnsirx4s6mtj6uojesxua
+  readme.md: bafybeib453wcfkqkvybozrgmll4bqo7tvntfmcbl4tb76a7vo445njlgxe
+fingerprint_ignore_patterns: []
+connections: []
+protocols:
+- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
+class_name: GenericMirrorDBConnection
+config:
+  mirror_db_base_url: http://localhost:8000
+excluded_protocols: []
+restricted_to_protocols: []
+dependencies:
+  aiohttp:
+    version: '>=3.7.4'
+  certifi:
+    version: '>=2025.1.31'
+is_abstract: false
+cert_requests: []

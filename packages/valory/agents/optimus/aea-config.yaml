@@ -16,6 +16,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 - dvilela/genai:0.1.0:bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
+- valory/mirror_db:0.1.0:bafybeif5lftpq3vv6r4bn4vhjvmq3zizvosaiptb3zh4zky4na3b7vr43e
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeie3h2hpzlrie2yc5r3eypce546am5bxlgvzqgjols34yf6z523o6q
@@ -36,11 +37,12 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
 - valory/tendermint:0.1.0:bafybeigydrbfrlmr4f7shbtqx44kvmbg22im27mxdap2e3m5tkti6t445y
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
+- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeiggqlf7jhkm2tuadre5rsdevgw7jkizdblar4h6leuluydyyqdszy
-- valory/optimus_abci:0.1.0:bafybeigvc5lai3llyti7myc5nljzblhrko7f4si3lgfugf7s4cdnozm5vq
+- valory/liquidity_trader_abci:0.1.0:bafybeidhx7q5f3abq7pgfbgndt3ufby4z2xhfpi6yiern433tsfazjcuie
+- valory/optimus_abci:0.1.0:bafybeidanz32xcw7fv6daleeydukvusidrxdwedayojrw2w3uhe4whzmau
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -88,7 +90,12 @@ default_connection: null
 public_id: dvilela/kv_store:0.1.0
 type: connection
 config:
-  store_path: ${str:null}
+  store_path: ${str:/tmp}
+---
+public_id: valory/mirror_db:0.1.0
+type: connection
+config:
+  mirror_db_base_url: ${str:https://afmdb.autonolas.tech}
 ---
 public_id: valory/abci:0.1.0
 type: connection

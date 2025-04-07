@@ -2156,8 +2156,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Missing required data for APR calculation")
             return None
 
+        final_value = Decimal(str(self.portfolio_data["portfolio_value"]))
         # Get current portfolio value (f)
-        final_value = Decimal(self.portfolio_data["portfolio_value"])
         self.context.logger.info(f"final_value: {final_value}")
         yield from self._write_kv(
             {"portfolio_value": json.dumps(self.portfolio_data["portfolio_value"])}
@@ -2184,7 +2184,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning(
                 "No valid timestamp found, using current time - 1 hour as fallback"
             )
-            timestamp = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
+            time_data = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
+            timestamp = time_data["timestamp"]
             self.context.logger.info(f"timestamp : {timestamp}")
 
         # Fallback to position timestamp if stored timestamp is invalid
@@ -2209,9 +2210,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         # Calculate total initial value (i)
         initial_value = Decimal("0")
-
         # Process positions and calculate initial value
         if not self.current_positions:
+            self.context.logger.info(f"4,{self.current_positions}")
             self.context.logger.warning("No positions found for APR calculation")
             return None
 
@@ -2220,15 +2221,19 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 f"Processing {len(self.current_positions)} positions"
             )
             for position in self.current_positions:
-                position_value = yield from self.calculate_initial_investment_value(
-                    position
-                )
-                if position_value is not None:
-                    initial_value += Decimal(str(position_value))
-                else:
-                    self.context.logger.warning(
-                        f"Skipping position with null value: {position.get('id', 'unknown')}"
+                if position.get("status") == PositionStatus.OPEN.value:
+                    position_value = yield from self.calculate_initial_investment_value(
+                        position
                     )
+                    self.context.logger.info(
+                        f"position_value of current position {position_value}"
+                    )
+                    if position_value is not None:
+                        initial_value += Decimal(str(position_value))
+                    else:
+                        self.context.logger.warning(
+                            f"Skipping position with null value: {position.get('id', 'unknown')}"
+                        )
         else:
             # If only one position, calculate its initial value
             self.context.logger.info("Processing single position")
@@ -2306,15 +2311,36 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         """Calculate the initial investment value based on the initial transaction."""
 
         chain = position.get("chain")
-        initial_amount0 = position.get("amount0")
-        initial_amount1 = position.get("amount1")
-        timestamp = position.get("timestamp")
+        initial_amount1 = None
 
-        if None in (initial_amount0, timestamp):
-            self.context.logger.error(
-                "Missing initial amounts or timestamp in position data."
+        if position.get("token1") is None:
+            token0_decimals = yield from self._get_token_decimals(
+                chain, position.get("token0")
             )
-            return None
+
+            initial_amount0 = position.get("amount0") / (10**token0_decimals)
+
+            timestamp = position.get("timestamp")
+            self.context.logger.info(f"initial_amount0 : {initial_amount0}")
+        else:
+            token0_decimals = yield from self._get_token_decimals(
+                chain, position.get("token0")
+            )
+            token1_decimals = yield from self._get_token_decimals(
+                chain, position.get("token1")
+            )
+
+            initial_amount0 = position.get("amount0") / (10**token0_decimals)
+            initial_amount1 = position.get("amount1") / (10**token1_decimals)
+
+            timestamp = position.get("timestamp")
+            self.context.logger.info(f"initial_amount0 : {initial_amount0}")
+            self.context.logger.info(f"initial_amount1 : {initial_amount1}")
+            if None in (initial_amount0, initial_amount1, timestamp):
+                self.context.logger.error(
+                    "Missing initial amounts or timestamp in position data."
+                )
+                return None
 
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
         tokens = []
@@ -2339,6 +2365,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         # Calculate initial investment value for token0
         V_initial = initial_amount0 * initial_price0
+        self.context.logger.info(f"V_initial : {V_initial}")
 
         # If token1 exists, include it in the calculations
         if position.get("token1") is not None and initial_amount1 is not None:
@@ -2347,6 +2374,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error("Historical price not found for token1.")
                 return None
             V_initial += initial_amount1 * initial_price1
+            self.context.logger.info(f"V_initial : {V_initial}")
 
         return V_initial
 

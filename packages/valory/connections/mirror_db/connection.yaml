@@ -15,7 +15,7 @@ protocols:
 - valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 class_name: GenericMirrorDBConnection
 config:
-  mirror_db_base_url: http://localhost:8000
+  mirror_db_base_url: https://afmdb.autonolas.tech
 excluded_protocols: []
 restricted_to_protocols: []
 dependencies:

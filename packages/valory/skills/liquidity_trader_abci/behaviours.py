@@ -2212,7 +2212,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         initial_value = Decimal("0")
         # Process positions and calculate initial value
         if not self.current_positions:
-            self.context.logger.info(f"4,{self.current_positions}")
             self.context.logger.warning("No positions found for APR calculation")
             return None
 
@@ -2311,36 +2310,30 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         """Calculate the initial investment value based on the initial transaction."""
 
         chain = position.get("chain")
-        initial_amount1 = None
+        token0 = position.get("token0")
+        token1 = position.get("token1")
+        amount0 = position.get("amount0")
+        amount1 = position.get("amount1")
+        timestamp = position.get("timestamp")
 
-        if position.get("token1") is None:
-            token0_decimals = yield from self._get_token_decimals(
-                chain, position.get("token0")
+        if None in (token0, amount0, timestamp):
+            self.context.logger.error(
+                "Missing token0, amount0, or timestamp in position data."
             )
+            return None
 
-            initial_amount0 = position.get("amount0") / (10**token0_decimals)
+        token0_decimals = yield from self._get_token_decimals(chain, token0)
+        initial_amount0 = amount0 / (10**token0_decimals)
+        self.context.logger.info(f"initial_amount0 : {initial_amount0}")
 
-            timestamp = position.get("timestamp")
-            self.context.logger.info(f"initial_amount0 : {initial_amount0}")
-        else:
-            token0_decimals = yield from self._get_token_decimals(
-                chain, position.get("token0")
-            )
-            token1_decimals = yield from self._get_token_decimals(
-                chain, position.get("token1")
-            )
-
-            initial_amount0 = position.get("amount0") / (10**token0_decimals)
-            initial_amount1 = position.get("amount1") / (10**token1_decimals)
-
-            timestamp = position.get("timestamp")
-            self.context.logger.info(f"initial_amount0 : {initial_amount0}")
+        if token1 is not None and amount1 is not None:
+            token1_decimals = yield from self._get_token_decimals(chain, token1)
+            initial_amount1 = amount1 / (10**token1_decimals)
             self.context.logger.info(f"initial_amount1 : {initial_amount1}")
-            if None in (initial_amount0, initial_amount1, timestamp):
-                self.context.logger.error(
-                    "Missing initial amounts or timestamp in position data."
-                )
-                return None
+
+        if None in (initial_amount0, initial_amount1) and token1 is not None:
+            self.context.logger.error("Missing initial amounts in position data.")
+            return None
 
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
         tokens = []

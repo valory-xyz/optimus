@@ -2323,17 +2323,18 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         token0_decimals = yield from self._get_token_decimals(chain, token0)
+        if not token0_decimals:
+            return None
+
         initial_amount0 = amount0 / (10**token0_decimals)
         self.context.logger.info(f"initial_amount0 : {initial_amount0}")
 
         if token1 is not None and amount1 is not None:
             token1_decimals = yield from self._get_token_decimals(chain, token1)
+            if not token1_decimals:
+                return None
             initial_amount1 = amount1 / (10**token1_decimals)
             self.context.logger.info(f"initial_amount1 : {initial_amount1}")
-
-        if None in (initial_amount0, initial_amount1) and token1 is not None:
-            self.context.logger.error("Missing initial amounts in position data.")
-            return None
 
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
         tokens = []

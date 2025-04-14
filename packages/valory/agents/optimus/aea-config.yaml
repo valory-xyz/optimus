@@ -41,8 +41,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeibrtqa2zakcszlrirgpebzutan6cj2cmbloo7o3qsf5sg7c5fpoiu
-- valory/optimus_abci:0.1.0:bafybeidorwkptq3vlr6pwd5bsvpd7i3kc6rlt6h2jsn3axzklyxmt7kqeu
+- valory/liquidity_trader_abci:0.1.0:bafybeihdo77vaqpesr35l5jhlvqc4zfzdg56vbspre5oo4zmgshiu6flk4
+- valory/optimus_abci:0.1.0:bafybeiblh6ydicqfq2vty6kqe5x4qbigbrm22h3syw47z3jer4taxkjumq
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu

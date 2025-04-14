@@ -2156,8 +2156,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Missing required data for APR calculation")
             return None
 
+        final_value = Decimal(str(self.portfolio_data["portfolio_value"]))
         # Get current portfolio value (f)
-        final_value = Decimal(self.portfolio_data["portfolio_value"])
         self.context.logger.info(f"final_value: {final_value}")
         yield from self._write_kv(
             {"portfolio_value": json.dumps(self.portfolio_data["portfolio_value"])}
@@ -2184,16 +2184,17 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning(
                 "No valid timestamp found, using current time - 1 hour as fallback"
             )
-            timestamp = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
-            self.context.logger.info(f"timestamp : {timestamp}")
-
-        # Fallback to position timestamp if stored timestamp is invalid
-        if timestamp is None and self.current_positions:
-            first_position = self.current_positions[0]
-            timestamp = first_position.get("timestamp")
-            self.context.logger.info(
-                f"Using timestamp from first position: {timestamp}"
-            )
+            time_data = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
+            # Fallback to position timestamp if stored timestamp is invalid
+            if time_data is None and self.current_positions:
+                position = self.current_positions[-1]
+                timestamp = position.get("timestamp")
+                self.context.logger.info(
+                    f"Using timestamp from last position: {timestamp}"
+                )
+            else:
+                timestamp = time_data["timestamp"]
+                self.context.logger.info(f"timestamp : {timestamp}")
 
         if not timestamp:
             return None
@@ -2209,7 +2210,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         # Calculate total initial value (i)
         initial_value = Decimal("0")
-
         # Process positions and calculate initial value
         if not self.current_positions:
             self.context.logger.warning("No positions found for APR calculation")
@@ -2220,15 +2220,19 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 f"Processing {len(self.current_positions)} positions"
             )
             for position in self.current_positions:
-                position_value = yield from self.calculate_initial_investment_value(
-                    position
-                )
-                if position_value is not None:
-                    initial_value += Decimal(str(position_value))
-                else:
-                    self.context.logger.warning(
-                        f"Skipping position with null value: {position.get('id', 'unknown')}"
+                if position.get("status") == PositionStatus.OPEN.value:
+                    position_value = yield from self.calculate_initial_investment_value(
+                        position
                     )
+                    self.context.logger.info(
+                        f"position_value of current position {position_value}"
+                    )
+                    if position_value is not None:
+                        initial_value += Decimal(str(position_value))
+                    else:
+                        self.context.logger.warning(
+                            f"Skipping position with null value: {position.get('id', 'unknown')}"
+                        )
         else:
             # If only one position, calculate its initial value
             self.context.logger.info("Processing single position")
@@ -2306,15 +2310,31 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         """Calculate the initial investment value based on the initial transaction."""
 
         chain = position.get("chain")
-        initial_amount0 = position.get("amount0")
-        initial_amount1 = position.get("amount1")
+        token0 = position.get("token0")
+        token1 = position.get("token1")
+        amount0 = position.get("amount0")
+        amount1 = position.get("amount1")
         timestamp = position.get("timestamp")
 
-        if None in (initial_amount0, timestamp):
+        if None in (token0, amount0, timestamp):
             self.context.logger.error(
-                "Missing initial amounts or timestamp in position data."
+                "Missing token0, amount0, or timestamp in position data."
             )
             return None
+
+        token0_decimals = yield from self._get_token_decimals(chain, token0)
+        if not token0_decimals:
+            return None
+
+        initial_amount0 = amount0 / (10**token0_decimals)
+        self.context.logger.info(f"initial_amount0 : {initial_amount0}")
+
+        if token1 is not None and amount1 is not None:
+            token1_decimals = yield from self._get_token_decimals(chain, token1)
+            if not token1_decimals:
+                return None
+            initial_amount1 = amount1 / (10**token1_decimals)
+            self.context.logger.info(f"initial_amount1 : {initial_amount1}")
 
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
         tokens = []
@@ -2339,6 +2359,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         # Calculate initial investment value for token0
         V_initial = initial_amount0 * initial_price0
+        self.context.logger.info(f"V_initial : {V_initial}")
 
         # If token1 exists, include it in the calculations
         if position.get("token1") is not None and initial_amount1 is not None:
@@ -2347,6 +2368,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error("Historical price not found for token1.")
                 return None
             V_initial += initial_amount1 * initial_price1
+            self.context.logger.info(f"V_initial : {V_initial}")
 
         return V_initial
 

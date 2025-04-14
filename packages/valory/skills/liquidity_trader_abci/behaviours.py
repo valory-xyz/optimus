@@ -2185,16 +2185,16 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 "No valid timestamp found, using current time - 1 hour as fallback"
             )
             time_data = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
-            timestamp = time_data["timestamp"]
-            self.context.logger.info(f"timestamp : {timestamp}")
-
-        # Fallback to position timestamp if stored timestamp is invalid
-        if timestamp is None and self.current_positions:
-            first_position = self.current_positions[0]
-            timestamp = first_position.get("timestamp")
-            self.context.logger.info(
-                f"Using timestamp from first position: {timestamp}"
-            )
+            # Fallback to position timestamp if stored timestamp is invalid
+            if time_data is None and self.current_positions:
+                position = self.current_positions[-1]
+                timestamp = position.get("timestamp")
+                self.context.logger.info(
+                    f"Using timestamp from last position: {timestamp}"
+                )
+            else:
+                timestamp = time_data["timestamp"]
+                self.context.logger.info(f"timestamp : {timestamp}")
 
         if not timestamp:
             return None

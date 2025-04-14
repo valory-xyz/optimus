@@ -2281,7 +2281,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         if result["total_actual_apr"] < 0:
             result["total_actual_apr"] = round(
-                ((float(final_value / initial_value) - 1) * Decimal("100")), 2
+                float((final_value / initial_value) - 1) * 100, 2
             )
 
         self.context.logger.info(f"Calculated APR: {result['total_actual_apr']}%")

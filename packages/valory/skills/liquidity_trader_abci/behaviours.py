@@ -2281,13 +2281,13 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         if result["total_actual_apr"] < 0:
             result["total_actual_apr"] = round(
-                (float((final_value / initial_value) * Decimal("100"))), 2
+                ((float(final_value / initial_value) - 1) * Decimal("100")), 2
             )
 
         self.context.logger.info(f"Calculated APR: {result['total_actual_apr']}%")
 
         # Store the timestamp for future calculations
-        yield from self._write_kv({"timestamp": json.dumps(timestamp)})
+        yield from self._write_kv({"timestamp": json.dumps(current_timestamp)})
         if result["total_actual_apr"] is not None:
             return result
 

@@ -2220,7 +2220,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         if initial_value is None:
             return None
 
-        time_since_investment = self.get_last_investment_timestamp()
+        time_since_investment = self._get_last_investment_timestamp()
         self._calculate_apr(
             final_value, initial_value, current_timestamp, time_since_investment, result
         )
@@ -2278,7 +2278,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         return initial_value
 
-    def get_last_investment_timestamp(self) -> Optional[int]:
+    def _get_last_investment_timestamp(self) -> Optional[int]:
         open_positions = [
             position
             for position in self.current_positions
@@ -2378,7 +2378,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 last_apr_stored_timestamp = time_data["timestamp"]
                 self.context.logger.info(f"timestamp : {last_apr_stored_timestamp}")
             else:
-                last_apr_stored_timestamp = self.get_last_investment_timestamp()
+                last_apr_stored_timestamp = self._get_last_investment_timestamp()
 
         if not last_apr_stored_timestamp:
             return False

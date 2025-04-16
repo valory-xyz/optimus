@@ -180,43 +180,19 @@ def get_filtered_pools(pools, current_positions):
             mapped_type
             and len(pool.get("poolTokens", [])) == 2
             and Web3.to_checksum_address(pool.get("address")) not in current_positions
+            and pool["chain"].lower() in WHITELISTED_ASSETS
+            and pool["poolTokens"][0]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
+            and pool["poolTokens"][1]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
         ):
             pool["type"] = mapped_type
             pool["apr"] = get_total_apr(pool)
             pool["tvl"] = pool.get("dynamicData", {}).get("totalLiquidity", 0)
             qualifying_pools.append(pool)
 
-    if len(qualifying_pools) <= 5:
-        return qualifying_pools
+    # Sort qualifying pools by APR and TVL in descending order
+    qualifying_pools.sort(key=lambda x: (x["apr"], x["tvl"]), reverse=True)
 
-    tvl_list = [float(p.get("tvl", 0)) for p in qualifying_pools]
-    apr_list = [float(p.get("apr", 0)) for p in qualifying_pools]
-
-    tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
-    apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
-    max_tvl = max(tvl_list) if tvl_list else 1
-    max_apr = max(apr_list) if apr_list else 1
-
-    # Score and filter
-    scored_pools = []
-    for p in qualifying_pools:
-        tvl = float(p["tvl"])
-        apr = float(p["apr"])
-        if tvl >= tvl_threshold and apr >= apr_threshold:
-            score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
-            p["score"] = score
-            scored_pools.append(p)
-
-    if not scored_pools:
-        return []
-
-    score_threshold = np.percentile(
-        [p["score"] for p in scored_pools], SCORE_PERCENTILE
-    )
-    filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
-    filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
-
-    return filtered_scored_pools[:10]
+    return qualifying_pools[:50]
 
 
 def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
@@ -458,17 +434,6 @@ def get_opportunities(
     filtered_pools = get_filtered_pools(pools, current_positions)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
-
-    # Filter pools based on whitelisted assets
-    filtered_pools = [
-        pool for pool in filtered_pools
-        if pool["chain"].lower() in WHITELISTED_ASSETS and
-           pool["poolTokens"][0]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()] and
-           pool["poolTokens"][1]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
-    ]
-
-    if not filtered_pools:
-        return {"error": "No pools with whitelisted assets found"}
     
     token_id_cache = {}
     for pool in filtered_pools:

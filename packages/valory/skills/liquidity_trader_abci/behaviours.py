@@ -2216,17 +2216,14 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         ):
             return None
 
-        (
-            initial_value,
-            time_since_investment,
-        ) = yield from self._calculate_initial_value_and_time()
+        initial_value = yield from self._calculate_initial_value()
         if initial_value is None:
             return None
 
-        apr = self._calculate_apr(
-            final_value, initial_value, current_timestamp, time_since_investment
+        time_since_investment = self.get_last_investment_timestamp()
+        self._calculate_apr(
+            final_value, initial_value, current_timestamp, time_since_investment, result
         )
-        result["total_actual_apr"] = round(apr, 2)
 
         yield from self._adjust_apr_for_eth_price(result, time_since_investment)
 
@@ -2257,23 +2254,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
 
-    def _calculate_initial_value_and_time(
+    def _calculate_initial_value(
         self,
-    ) -> Generator[None, None, Tuple[Optional[Decimal], Optional[int]]]:
-        open_positions = [
-            position
-            for position in self.current_positions
-            if position.get("status") == PositionStatus.OPEN.value
-        ]
-        if not open_positions:
-            self.context.logger.warning(
-                "No open positions found for timestamp retrieval"
-            )
-            return None, None
-
-        last_open_position = open_positions[-1]
-        time_since_investment = last_open_position.get("timestamp")
-
+    ) -> Generator[None, None, Optional[Decimal]]:
         initial_value = Decimal("0")
         for position in self.current_positions:
             if position.get("status") == PositionStatus.OPEN.value:
@@ -2291,9 +2274,26 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Total initial value: {initial_value}")
         if initial_value <= 0:
             self.context.logger.warning("Initial value is zero or negative")
-            return None, None
+            return None
 
-        return initial_value, time_since_investment
+        return initial_value
+
+    def get_last_investment_timestamp(self) -> Optional[int]:
+        open_positions = [
+            position
+            for position in self.current_positions
+            if position.get("status") == PositionStatus.OPEN.value
+        ]
+        if not open_positions:
+            self.context.logger.warning(
+                "No open positions found for timestamp retrieval"
+            )
+            return None
+
+        last_open_position = open_positions[-1]
+        time_since_investment = last_open_position.get("timestamp")
+
+        return time_since_investment
 
     def _calculate_apr(
         self,
@@ -2301,7 +2301,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         initial_value: Decimal,
         current_timestamp: int,
         time_since_investment: int,
-    ) -> float:
+        result,
+    ):
         if final_value <= 0:
             self.context.logger.warning("Final value is zero or negative")
             return 0.0
@@ -2318,14 +2319,14 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             apr = round(float((final_value / initial_value) - 1) * 100, 2)
 
         self.context.logger.info(f"Calculated APR: {apr}")
-        return apr
+        if apr:
+            result["total_actual_apr"] = round(apr, 2)
 
     def _adjust_apr_for_eth_price(
         self, result: Dict[str, float], time_since_investment: int
     ) -> Generator[None, None, None]:
-        date_str = datetime.fromtimestamp(
-            time_since_investment, tz=datetime.timezone.utc
-        ).strftime("%d-%m-%Y")
+        date_str = datetime.utcfromtimestamp(time_since_investment).strftime("%d-%m-%Y")
+
         current_eth_price = yield from self._fetch_zero_address_price()
         start_eth_price = yield from self._fetch_historical_token_price(
             coingecko_id="ethereum", date_str=date_str
@@ -2376,6 +2377,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             if time_data:
                 last_apr_stored_timestamp = time_data["timestamp"]
                 self.context.logger.info(f"timestamp : {last_apr_stored_timestamp}")
+            else:
+                last_apr_stored_timestamp = self.get_last_investment_timestamp()
 
         if not last_apr_stored_timestamp:
             return False

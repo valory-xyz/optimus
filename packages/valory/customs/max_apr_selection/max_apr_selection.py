@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Union
 REQUIRED_FIELDS = ("trading_opportunities", "current_positions", "max_pools", "composite_score_threshold")
 SHARPE_RATIO_THRESHOLD = 0
 DEPTH_SCORE_THRESHOLD = 0
-IL_RISK_SCORE_THRESHOLD = 1
+IL_RISK_SCORE_THRESHOLD = 0.5
 
 # Weights for each metric
 SHARPE_RATIO_WEIGHT = 0.4
@@ -133,7 +133,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             logs.append(f"Opportunity does not meet the DEPTH_SCORE_THRESHOLD")
             continue
 
-        if il_risk_score <= IL_RISK_SCORE_THRESHOLD:
+        if il_risk_score > IL_RISK_SCORE_THRESHOLD:
             logs.append(f"Opportunity does not meet the IL_RISK_SCORE_THRESHOLD")
             continue
 

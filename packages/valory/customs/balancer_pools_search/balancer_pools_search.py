@@ -54,25 +54,11 @@ LP = "lp"
 errors = []
 WHITELISTED_ASSETS = {
     "mode": {
-        "0x4200000000000000000000000000000000000006",  # WETH
-        "0xdfc7c877a950e49d2610114102175a06c2e3167a",  # MODE
-        "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9",  # OLAS
         "0xd988097fb8612cc24eec14542bc03424c656005f",  # USDC
-        "0x2416092f143378750bb29b79ed961ab195cceea5",  # ezETH
-        "0x59889b7021243db5b1e065385f918316cd90d46c",  # M-BTC
-        "0x6b2a01a5f79deb4c2f3c0eda7b01df456fbd726a",  # uniBTC
         "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138",  # msDAI
         "0xf0f161fda2712db8b566946122a5af183995e2ed",  # USDT
-        "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",  # weETH.mode
-        "0x80137510979822322193FC997d400D5A6C747bf7",  # STONE
-        "0xe7903B1F75C534Dd8159b313d92cDCfbC62cB3Cd",  # wrsETH
         "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",  # oUSDT
-        "0x8b2EeA0999876AAB1E7955fe01A5D261b570452C",  # wMLT
-        "0x66eEd5FF1701E6ed8470DC391F05e27B1d0657eb",  # BMX
-        "0x95177295A394f2b9B04545FFf58f4aF0673E839d",  # ICL
         "0xA70266C8F8Cf33647dcFEE763961aFf418D9E1E4",  # iUSDC
-        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81",  # XVELO
-        "0x18470019bF0E94611f15852F7e93cf5D65BC34CA",  # ION
     }
 }
 
@@ -194,43 +180,19 @@ def get_filtered_pools(pools, current_positions):
             mapped_type
             and len(pool.get("poolTokens", [])) == 2
             and Web3.to_checksum_address(pool.get("address")) not in current_positions
+            and pool["chain"].lower() in WHITELISTED_ASSETS
+            and pool["poolTokens"][0]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
+            and pool["poolTokens"][1]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
         ):
             pool["type"] = mapped_type
             pool["apr"] = get_total_apr(pool)
             pool["tvl"] = pool.get("dynamicData", {}).get("totalLiquidity", 0)
             qualifying_pools.append(pool)
 
-    if len(qualifying_pools) <= 5:
-        return qualifying_pools
+    # Sort qualifying pools by APR and TVL in descending order
+    qualifying_pools.sort(key=lambda x: (x["apr"], x["tvl"]), reverse=True)
 
-    tvl_list = [float(p.get("tvl", 0)) for p in qualifying_pools]
-    apr_list = [float(p.get("apr", 0)) for p in qualifying_pools]
-
-    tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
-    apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
-    max_tvl = max(tvl_list) if tvl_list else 1
-    max_apr = max(apr_list) if apr_list else 1
-
-    # Score and filter
-    scored_pools = []
-    for p in qualifying_pools:
-        tvl = float(p["tvl"])
-        apr = float(p["apr"])
-        if tvl >= tvl_threshold and apr >= apr_threshold:
-            score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
-            p["score"] = score
-            scored_pools.append(p)
-
-    if not scored_pools:
-        return []
-
-    score_threshold = np.percentile(
-        [p["score"] for p in scored_pools], SCORE_PERCENTILE
-    )
-    filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
-    filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
-
-    return filtered_scored_pools[:10]
+    return qualifying_pools[:50]
 
 
 def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
@@ -472,17 +434,6 @@ def get_opportunities(
     filtered_pools = get_filtered_pools(pools, current_positions)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
-
-    # Filter pools based on whitelisted assets
-    filtered_pools = [
-        pool for pool in filtered_pools
-        if pool["chain"].lower() in WHITELISTED_ASSETS and
-           pool["poolTokens"][0]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()] and
-           pool["poolTokens"][1]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
-    ]
-
-    if not filtered_pools:
-        return {"error": "No pools with whitelisted assets found"}
     
     token_id_cache = {}
     for pool in filtered_pools:

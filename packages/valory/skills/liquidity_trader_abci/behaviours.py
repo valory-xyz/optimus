@@ -1038,6 +1038,50 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         )
         return response == KvStoreMessage.Performative.SUCCESS
 
+    def _fetch_token_prices(
+        self, token_balances: List[Dict[str, Any]]
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Fetch token prices from Coingecko"""
+        token_prices = {}
+
+        for token_data in token_balances:
+            token_address = token_data["token"]
+            chain = token_data.get("chain")
+            if not chain:
+                self.context.logger.error(f"Missing chain for token {token_address}")
+                continue
+
+            if token_address == ZERO_ADDRESS:
+                price = yield from self._fetch_zero_address_price()
+            else:
+                price = yield from self._fetch_token_price(token_address, chain)
+
+            if price is not None:
+                token_prices[token_address] = price
+
+        return token_prices
+
+    def _fetch_zero_address_price(self) -> Generator[None, None, Optional[float]]:
+        """Fetch the price for the zero address (Ethereum)."""
+        headers = {
+            "Accept": "application/json",
+        }
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        success, response_json = yield from self._request_with_retries(
+            endpoint=self.coingecko.coin_price_endpoint.format(coin_id="ethereum"),
+            headers=headers,
+            rate_limited_code=self.coingecko.rate_limited_code,
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
+            retry_wait=self.params.sleep_time,
+        )
+
+        if success:
+            token_data = next(iter(response_json.values()), {})
+            return token_data.get("usd", 0)
+        return None
+
 
 class CallCheckpointBehaviour(
     LiquidityTraderBaseBehaviour
@@ -1812,18 +1856,24 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     if actual_apr_data:
                         self.context.logger.info(f"actual_apr_data {actual_apr_data}")
-                        total_actual_apr = actual_apr_data.get("total_actual_apr", 0)
+                        total_actual_apr = actual_apr_data.get("total_actual_apr", None)
+                        adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-                        # Step 5: Store APR data in MirrorDB
-                        timestamp = int(
-                            self.round_sequence.last_round_transition_timestamp.timestamp()
-                        )
-                        agent_attr = yield from self.create_agent_attribute(
-                            agent_id,
-                            attr_def_id,
-                            {"apr": total_actual_apr, "timestamp": timestamp},
-                        )
-                        self.context.logger.info(f"Stored APR data: {agent_attr}")
+                        if total_actual_apr:
+                            # Step 5: Store APR data in MirrorDB
+                            timestamp = int(
+                                self.round_sequence.last_round_transition_timestamp.timestamp()
+                            )
+                            agent_attr = yield from self.create_agent_attribute(
+                                agent_id,
+                                attr_def_id,
+                                {
+                                    "apr": total_actual_apr,
+                                    "adjusted_apr": adjusted_apr,
+                                    "timestamp": timestamp,
+                                },
+                            )
+                            self.context.logger.info(f"Stored APR data: {agent_attr}")
 
                 # Prepare payload for consensus
                 payload = APRPopulationPayload(sender=sender, context="APR Population")
@@ -2093,10 +2143,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
             return historical_prices
 
-        headers = {"Accept": "application/json"}
-        if self.coingecko.api_key:
-            headers["x-cg-api-key"] = self.coingecko.api_key
-
         for token_symbol, token_address in tokens:
             # Get CoinGecko ID.
             coingecko_id = yield from self.get_token_id_from_symbol(
@@ -2108,200 +2154,244 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 continue
 
-            endpoint = self.coingecko.historical_price_endpoint.format(
-                coin_id=coingecko_id,
-                date=date_str,
+            price = yield from self._fetch_historical_token_price(
+                coingecko_id, date_str
             )
-
-            success, response_json = yield from self._request_with_retries(
-                endpoint=endpoint,
-                headers=headers,
-                rate_limited_code=self.coingecko.rate_limited_code,
-                rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                retry_wait=self.params.sleep_time,
-            )
-
-            if success:
-                price = (
-                    response_json.get("market_data", {})
-                    .get("current_price", {})
-                    .get("usd")
-                )
-                if price:
-                    historical_prices[token_address] = price
-                else:
-                    self.context.logger.error(
-                        f"No price in response for token {token_address}"
-                    )
-            else:
-                self.context.logger.error(
-                    f"Failed to fetch historical price for {token_address}"
-                )
+            if price:
+                historical_prices[token_address] = price
 
         return historical_prices
+
+    def _fetch_historical_token_price(
+        self, coingecko_id, date_str
+    ) -> Generator[None, None, Optional[float]]:
+        endpoint = self.coingecko.historical_price_endpoint.format(
+            coin_id=coingecko_id,
+            date=date_str,
+        )
+
+        headers = {"Accept": "application/json"}
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers=headers,
+            rate_limited_code=self.coingecko.rate_limited_code,
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
+            retry_wait=self.params.sleep_time,
+        )
+
+        if success:
+            price = (
+                response_json.get("market_data", {}).get("current_price", {}).get("usd")
+            )
+            if price:
+                return price
+            else:
+                self.context.logger.error(
+                    f"No price in response for token {coingecko_id}"
+                )
+                return None
+        else:
+            self.context.logger.error(
+                f"Failed to fetch historical price for {coingecko_id}"
+            )
+            return None
 
     def calculate_actual_apr(
         self, agent_id, attr_def_id
     ) -> Generator[None, None, Dict[str, float]]:
         """Calculate the actual APR for the portfolio based on current positions."""
-        # Initialize result
-        result = {"total_actual_apr": 0.0}
+        result = {}
 
-        # Check if we have positions and portfolio data
+        if not self._has_valid_portfolio_data():
+            return None
+
+        final_value = yield from self._get_final_portfolio_value()
+        current_timestamp = self._get_current_timestamp()
+
+        if not self._is_apr_calculation_needed(
+            current_timestamp, agent_id, attr_def_id
+        ):
+            return None
+
+        initial_value = yield from self._calculate_initial_value()
+        if initial_value is None:
+            return None
+
+        time_since_investment = self._get_last_investment_timestamp()
+        self._calculate_apr(
+            final_value, initial_value, current_timestamp, time_since_investment, result
+        )
+
+        yield from self._adjust_apr_for_eth_price(result, time_since_investment)
+
+        yield from self._store_last_apr_timestamp(current_timestamp)
+
+        return result
+
+    def _has_valid_portfolio_data(self) -> bool:
         if (
             not self.current_positions
             or not hasattr(self, "portfolio_data")
             or "portfolio_value" not in self.portfolio_data
         ):
             self.context.logger.info("Missing required data for APR calculation")
-            return None
+            return False
+        return True
 
+    def _get_final_portfolio_value(self) -> Generator[None, None, Optional[Decimal]]:
         final_value = Decimal(str(self.portfolio_data["portfolio_value"]))
-        # Get current portfolio value (f)
-        self.context.logger.info(f"final_value: {final_value}")
+        self.context.logger.info(f"Final portfolio value: {final_value}")
         yield from self._write_kv(
             {"portfolio_value": json.dumps(self.portfolio_data["portfolio_value"])}
         )
-        self.context.logger.info(f"Current portfolio value: {final_value}")
+        return final_value
 
-        # Current timestamp
-        current_timestamp = cast(
+    def _get_current_timestamp(self) -> int:
+        return cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
 
+    def _calculate_initial_value(
+        self,
+    ) -> Generator[None, None, Optional[Decimal]]:
+        initial_value = Decimal("0")
+        for position in self.current_positions:
+            if position.get("status") == PositionStatus.OPEN.value:
+                position_value = yield from self.calculate_initial_investment_value(
+                    position
+                )
+                self.context.logger.info(f"Position value: {position_value}")
+                if position_value is not None:
+                    initial_value += Decimal(str(position_value))
+                else:
+                    self.context.logger.warning(
+                        f"Skipping position with null value: {position.get('id', 'unknown')}"
+                    )
+
+        self.context.logger.info(f"Total initial value: {initial_value}")
+        if initial_value <= 0:
+            self.context.logger.warning("Initial value is zero or negative")
+            return None
+
+        return initial_value
+
+    def _get_last_investment_timestamp(self) -> Optional[int]:
+        open_positions = [
+            position
+            for position in self.current_positions
+            if position.get("status") == PositionStatus.OPEN.value
+        ]
+        if not open_positions:
+            self.context.logger.warning(
+                "No open positions found for timestamp retrieval"
+            )
+            return None
+
+        last_open_position = open_positions[-1]
+        time_since_investment = last_open_position.get("timestamp")
+
+        return time_since_investment
+
+    def _calculate_apr(
+        self,
+        final_value: Decimal,
+        initial_value: Decimal,
+        current_timestamp: int,
+        time_since_investment: int,
+        result,
+    ):
+        if final_value <= 0:
+            self.context.logger.warning("Final value is zero or negative")
+            return 0.0
+
+        f_i_ratio = (final_value / initial_value) - Decimal("1")
+        hours = max(1, (current_timestamp - int(time_since_investment)) / 3600)
+        self.context.logger.info(f"Hours since investment: {hours}")
+
+        hours_in_year = Decimal("8760")
+        time_ratio = hours_in_year / Decimal(str(hours))
+
+        apr = float(f_i_ratio * time_ratio * Decimal("100"))
+        if apr < 0:
+            apr = round(float((final_value / initial_value) - 1) * 100, 2)
+
+        self.context.logger.info(f"Calculated APR: {apr}")
+        if apr:
+            result["total_actual_apr"] = round(apr, 2)
+
+    def _adjust_apr_for_eth_price(
+        self, result: Dict[str, float], time_since_investment: int
+    ) -> Generator[None, None, None]:
+        date_str = datetime.utcfromtimestamp(time_since_investment).strftime("%d-%m-%Y")
+
+        current_eth_price = yield from self._fetch_zero_address_price()
+        start_eth_price = yield from self._fetch_historical_token_price(
+            coingecko_id="ethereum", date_str=date_str
+        )
+
+        if current_eth_price is not None and start_eth_price is not None:
+            adjustment_factor = Decimal("1") - (
+                Decimal(str(current_eth_price)) / Decimal(str(start_eth_price))
+            )
+            result["adjusted_apr"] = round(
+                result["total_actual_apr"] + float(adjustment_factor * Decimal("100")),
+                2,
+            )
+            self.context.logger.info(f"Adjusted APR: {result['adjusted_apr']}%")
+
+    def _store_last_apr_timestamp(
+        self, current_timestamp: int
+    ) -> Generator[None, None, None]:
+        yield from self._write_kv(
+            {"last_apr_stored_timestamp": json.dumps(int(current_timestamp))}
+        )
+
+    def _is_apr_calculation_needed(
+        self, current_timestamp: int, agent_id: int, attr_def_id: int
+    ) -> Generator[None, None, bool]:
+        """Check if APR calculation is needed based on the time gap."""
         # Get timestamp from the first position or from stored data
-        data = yield from self._read_kv(keys=("timestamp",))
-        if data and "timestamp" in data and data["timestamp"] not in (None, "{}", ""):
+        last_apr_stored_timestamp = None
+        data = yield from self._read_kv(keys=("last_apr_stored_timestamp",))
+        if (
+            data
+            and "last_apr_stored_timestamp" in data
+            and data["last_apr_stored_timestamp"] not in (None, "{}", "")
+        ):
             try:
-                timestamp = int(data.get("timestamp"))
-                self.context.logger.info(f"Using stored timestamp: {timestamp}")
+                last_apr_stored_timestamp = int(data.get("last_apr_stored_timestamp"))
+                self.context.logger.info(
+                    f"Using stored timestamp: {last_apr_stored_timestamp}"
+                )
             except (ValueError, TypeError):
                 self.context.logger.warning(
                     f"Invalid stored timestamp format: {data.get('timestamp')}"
                 )
-                timestamp = None
+                last_apr_stored_timestamp = None
         else:
-            self.context.logger.warning(
-                "No valid timestamp found, using current time - 1 hour as fallback"
-            )
             time_data = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
             # Fallback to position timestamp if stored timestamp is invalid
-            if time_data is None and self.current_positions:
-                position = self.current_positions[-1]
-                timestamp = position.get("timestamp")
-                self.context.logger.info(
-                    f"Using timestamp from last position: {timestamp}"
-                )
+            if time_data:
+                last_apr_stored_timestamp = time_data["timestamp"]
+                self.context.logger.info(f"timestamp : {last_apr_stored_timestamp}")
             else:
-                timestamp = time_data["timestamp"]
-                self.context.logger.info(f"timestamp : {timestamp}")
+                last_apr_stored_timestamp = self._get_last_investment_timestamp()
 
-        if not timestamp:
-            return None
+        if not last_apr_stored_timestamp:
+            return False
 
-        # Calculate hours since investment (n)
-        hours = max(1, (current_timestamp - int(timestamp)) / 3600)
-        self.context.logger.info(f"Hours since investment: {hours}")
-
-        if not self._is_apr_calculation_needed(
-            last_apr_timestamp=timestamp, current_timestamp=current_timestamp
+        if (
+            last_apr_stored_timestamp
+            and (current_timestamp - last_apr_stored_timestamp) < 7200
         ):
-            return None
-
-        # Calculate total initial value (i)
-        initial_value = Decimal("0")
-        # Process positions and calculate initial value
-        if not self.current_positions:
-            self.context.logger.warning("No positions found for APR calculation")
-            return None
-
-        if len(self.current_positions) > 1:
-            self.context.logger.info(
-                f"Processing {len(self.current_positions)} positions"
-            )
-            for position in self.current_positions:
-                if position.get("status") == PositionStatus.OPEN.value:
-                    position_value = yield from self.calculate_initial_investment_value(
-                        position
-                    )
-                    self.context.logger.info(
-                        f"position_value of current position {position_value}"
-                    )
-                    if position_value is not None:
-                        initial_value += Decimal(str(position_value))
-                    else:
-                        self.context.logger.warning(
-                            f"Skipping position with null value: {position.get('id', 'unknown')}"
-                        )
-        else:
-            # If only one position, calculate its initial value
-            self.context.logger.info("Processing single position")
-            first_position = self.current_positions[0]
-            position_value = yield from self.calculate_initial_investment_value(
-                first_position
-            )
-            if position_value is not None:
-                self.context.logger.info(f"initial_value: {initial_value}")
-                initial_value = Decimal(str(position_value))
-            else:
-                self.context.logger.warning(
-                    f"Unable to calculate initial value for position: {first_position.get('id', 'unknown')}"
-                )
-
-        self.context.logger.info(f"Total initial value: {initial_value}")
-
-        # If we have a valid initial value, calculate APR
-        if initial_value <= 0 or final_value <= 0:
-            self.context.logger.warning(
-                f"Cannot calculate APR: Initial or Final value is zero or negative {initial_value=} {final_value=}"
-            )
-            return None
-
-        # Calculate APR using the formula: ((f/i)-1)*(8760/n))*100
-
-        # Step 1: Calculate (f/i)-1 (return ratio)
-        f_i_ratio = (final_value / initial_value) - Decimal("1")
-
-        # Step 2: Calculate (8760/n) (time annualization factor)
-        hours_in_year = Decimal("8760")
-        time_ratio = hours_in_year / Decimal(str(hours))
-
-        # Step 3: Apply the formula: ((f/i)-1)*(8760/n))*100
-        apr = float(f_i_ratio * time_ratio * Decimal("100"))
-
-        # Log intermediate values for debugging
-        self.context.logger.info(f"f_i_ratio: {f_i_ratio}")
-        self.context.logger.info(f"time_ratio: {time_ratio}")
-        self.context.logger.info(f"Raw APR before rounding: {apr}")
-
-        # No need for special handling of losses - the formula correctly handles negative returns
-        result["total_actual_apr"] = round(apr, 2)
-
-        self.context.logger.info(f"Calculated APR: {result['total_actual_apr']}%")
-
-        if result["total_actual_apr"] < 0:
-            result["total_actual_apr"] = round(
-                float((final_value / initial_value) - 1) * 100, 2
-            )
-
-        self.context.logger.info(f"Calculated APR: {result['total_actual_apr']}%")
-
-        # Store the timestamp for future calculations
-        yield from self._write_kv({"timestamp": json.dumps(int(current_timestamp))})
-        if result["total_actual_apr"] is not None:
-            return result
-
-        return None
-
-    def _is_apr_calculation_needed(
-        self, last_apr_timestamp: Optional[int], current_timestamp: int
-    ) -> bool:
-        """Check if APR calculation is needed based on the time gap."""
-        if last_apr_timestamp and (current_timestamp - last_apr_timestamp) < 7200:
             self.context.logger.info(
                 "APR calculation not required, last calculation was within 2 hours."
             )
             return False
+
         return True
 
     def calculate_initial_investment_value(
@@ -3671,50 +3761,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             f"Tokens selected for bridging/swapping: {token_balances}"
         )
         return token_balances
-
-    def _fetch_token_prices(
-        self, token_balances: List[Dict[str, Any]]
-    ) -> Generator[None, None, Dict[str, float]]:
-        """Fetch token prices from Coingecko"""
-        token_prices = {}
-
-        for token_data in token_balances:
-            token_address = token_data["token"]
-            chain = token_data.get("chain")
-            if not chain:
-                self.context.logger.error(f"Missing chain for token {token_address}")
-                continue
-
-            if token_address == ZERO_ADDRESS:
-                price = yield from self._fetch_zero_address_price()
-            else:
-                price = yield from self._fetch_token_price(token_address, chain)
-
-            if price is not None:
-                token_prices[token_address] = price
-
-        return token_prices
-
-    def _fetch_zero_address_price(self) -> Generator[None, None, Optional[float]]:
-        """Fetch the price for the zero address (Ethereum)."""
-        headers = {
-            "Accept": "application/json",
-        }
-        if self.coingecko.api_key:
-            headers["x-cg-api-key"] = self.coingecko.api_key
-
-        success, response_json = yield from self._request_with_retries(
-            endpoint=self.coingecko.coin_price_endpoint.format(coin_id="ethereum"),
-            headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
-        )
-
-        if success:
-            token_data = next(iter(response_json.values()), {})
-            return token_data.get("usd", 0)
-        return None
 
     def _build_exit_pool_action(
         self, tokens: List[Dict[str, Any]], num_of_tokens_required: int

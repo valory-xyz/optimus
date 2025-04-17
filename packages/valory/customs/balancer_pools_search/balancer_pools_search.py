@@ -53,13 +53,8 @@ EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_
 LP = "lp"
 errors = []
 WHITELISTED_ASSETS = {
-    "mode": {
-        "0xd988097fb8612cc24eec14542bc03424c656005f",  # USDC
-        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138",  # msDAI
-        "0xf0f161fda2712db8b566946122a5af183995e2ed",  # USDT
-        "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",  # oUSDT
-        "0xA70266C8F8Cf33647dcFEE763961aFf418D9E1E4",  # iUSDC
-    }
+    "mode": {},
+    "optimism": {}
 }
 
 @lru_cache(None)
@@ -176,13 +171,20 @@ def get_filtered_pools(pools, current_positions):
     qualifying_pools = []
     for pool in pools:
         mapped_type = SUPPORTED_POOL_TYPES.get(pool.get("type"))
+        chain = pool["chain"].lower()
+        whitelisted_tokens = WHITELISTED_ASSETS.get(chain, [])
         if (
             mapped_type
             and len(pool.get("poolTokens", [])) == 2
             and Web3.to_checksum_address(pool.get("address")) not in current_positions
-            and pool["chain"].lower() in WHITELISTED_ASSETS
-            and pool["poolTokens"][0]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
-            and pool["poolTokens"][1]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
+            and chain in WHITELISTED_ASSETS
+            and (
+                not whitelisted_tokens
+                or (
+                    pool["poolTokens"][0]["address"] in whitelisted_tokens
+                    and pool["poolTokens"][1]["address"] in whitelisted_tokens
+                )
+            )
         ):
             pool["type"] = mapped_type
             pool["apr"] = get_total_apr(pool)

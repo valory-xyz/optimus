@@ -53,13 +53,8 @@ EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_
 LP = "lp"
 errors = []
 WHITELISTED_ASSETS = {
-    "mode": {
-        "0xd988097fb8612cc24eec14542bc03424c656005f",  # USDC
-        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138",  # msDAI
-        "0xf0f161fda2712db8b566946122a5af183995e2ed",  # USDT
-        "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",  # oUSDT
-        "0xA70266C8F8Cf33647dcFEE763961aFf418D9E1E4",  # iUSDC
-    }
+    "mode": {},
+    "optimism": {}
 }
 
 @lru_cache(None)
@@ -176,24 +171,55 @@ def get_filtered_pools(pools, current_positions):
     qualifying_pools = []
     for pool in pools:
         mapped_type = SUPPORTED_POOL_TYPES.get(pool.get("type"))
+        chain = pool["chain"].lower()
+        whitelisted_tokens = WHITELISTED_ASSETS.get(chain, [])
         if (
             mapped_type
             and len(pool.get("poolTokens", [])) == 2
             and Web3.to_checksum_address(pool.get("address")) not in current_positions
-            and pool["chain"].lower() in WHITELISTED_ASSETS
-            and pool["poolTokens"][0]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
-            and pool["poolTokens"][1]["address"] in WHITELISTED_ASSETS[pool["chain"].lower()]
+            and chain in WHITELISTED_ASSETS
+            and (
+                not whitelisted_tokens
+                or (
+                    pool["poolTokens"][0]["address"] in whitelisted_tokens
+                    and pool["poolTokens"][1]["address"] in whitelisted_tokens
+                )
+            )
         ):
             pool["type"] = mapped_type
             pool["apr"] = get_total_apr(pool)
             pool["tvl"] = pool.get("dynamicData", {}).get("totalLiquidity", 0)
             qualifying_pools.append(pool)
 
-    # Sort qualifying pools by APR and TVL in descending order
-    qualifying_pools.sort(key=lambda x: (x["apr"], x["tvl"]), reverse=True)
+    
+    tvl_list = [float(p.get("tvl", 0)) for p in qualifying_pools]
+    apr_list = [float(p.get("apr", 0)) for p in qualifying_pools]
 
-    return qualifying_pools[:50]
+    tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
+    apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
+    max_tvl = max(tvl_list) if tvl_list else 1
+    max_apr = max(apr_list) if apr_list else 1
 
+    # Score and filter
+    scored_pools = []
+    for p in qualifying_pools:
+        tvl = float(p["tvl"])
+        apr = float(p["apr"])
+        if tvl >= tvl_threshold and apr >= apr_threshold:
+            score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
+            p["score"] = score
+            scored_pools.append(p)
+
+    if not scored_pools:
+        return []
+
+    score_threshold = np.percentile(
+        [p["score"] for p in scored_pools], SCORE_PERCENTILE
+    )
+    filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
+    filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
+
+    return filtered_scored_pools[:20]
 
 def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
     # Try to find a coin matching symbol first.

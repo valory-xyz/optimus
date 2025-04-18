@@ -291,6 +291,6 @@ models:
       selected_hyper_strategy: ${str:max_apr_selection}
       service_endpoint_base: ${str:https://optimus.staging.autonolas.tech/}
       max_pools: ${int:2}
-      available_strategies: ${list:["balancer_pools_search","asset_lending"]}
+      available_strategies: ${str:{"mode":["balancer_pools_search","asset_lending"],"optimism":["balancer_pools_search","uniswap_pools_search"],"base":["balancer_pools_search","uniswap_pools_search"]}}
       default_acceptance_time: ${int:5}
       genai_api_key: ${str:""}

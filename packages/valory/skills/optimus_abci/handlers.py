@@ -100,10 +100,15 @@ IpfsHandler = BaseIpfsHandler
 STRATEGY_TO_PROTOCOL = {
     "balancer_pools_search": "balancerPool",
     "asset_lending": "sturdy",
+    "uniswap_pools_search": "UniswapV3"
 }
 # Reverse mapping for converting protocol names back to strategy names
 PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
-
+PROTOCOL_DEFINITIONS = {
+    "balancerPool": "protocol for investing in liquidity positions",
+    "sturdy": "protocol for lending assets",
+    "UniswapV3": "protocol for investing in liquidity positions"
+}
 
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
@@ -281,7 +286,10 @@ class HttpHandler(BaseHttpHandler):
             ] = camel_to_snake(target_round)
         self.json_content_header = "Content-Type: application/json\n"
         self.html_content_header = "Content-Type: text/html\n"
-        self.function_entry_count = 0
+        self.available_strategies = []
+        for chain in self.context.params.target_investment_chains:
+            chain_strategies = self.context.params.available_strategies.get(chain, [])
+            self.available_strategies.extend(chain_strategies)
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -522,7 +530,7 @@ class HttpHandler(BaseHttpHandler):
             json.loads(self.context.state.selected_protocols)
             if isinstance(self.context.state.selected_protocols, str)
             else self.context.state.selected_protocols
-            or self.context.params.available_strategies
+            or self.available_strategies
         )
 
         # Convert strategy names to protocol names
@@ -680,17 +688,23 @@ class HttpHandler(BaseHttpHandler):
                 json.loads(self.context.state.selected_protocols)
                 if isinstance(self.context.state.selected_protocols, str)
                 else self.context.state.selected_protocols
-                or self.context.params.available_strategies
+                or self.available_strategies
             )
 
             available_trading_types = [
                 trading_type.value for trading_type in TradingType
             ]
             last_selected_threshold = THRESHOLDS.get(previous_trading_type)
+
             # Convert strategy names to protocol names for LLM
-            available_protocols_for_llm = {
-                "balancerPool": "protocol for investing in liquidity positions",
-                "sturdy": "protocol for lending assets",
+            available_protocols = [
+                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+                for strategy in self.available_strategies
+            ]
+
+            available_protocols_definitons = {
+                protocol: PROTOCOL_DEFINITIONS.get(protocol, "") 
+                for protocol in available_protocols
             }
 
             # Convert previous selected protocols to their protocol names
@@ -704,7 +718,7 @@ class HttpHandler(BaseHttpHandler):
                 USER_PROMPT=user_prompt,
                 PREVIOUS_TRADING_TYPE=previous_trading_type,
                 TRADING_TYPES=available_trading_types,
-                AVAILABLE_PROTOCOLS=available_protocols_for_llm,
+                AVAILABLE_PROTOCOLS=available_protocols_definitons,
                 LAST_THRESHOLD=last_selected_threshold,
                 PREVIOUS_SELECTED_PROTOCOLS=previous_protocols_for_llm,
                 THRESHOLDS=THRESHOLDS,
@@ -772,7 +786,7 @@ class HttpHandler(BaseHttpHandler):
                     "Failed to parse LLM response. Falling back to default strategies."
                 )
                 self.context.logger.error(reasoning)
-                selected_protocols = self.context.params.available_strategies
+                selected_protocols = self.available_strategies
                 trading_type = (
                     self.context.state.trading_type or TradingType.BALANCED.value
                 )
@@ -836,7 +850,7 @@ class HttpHandler(BaseHttpHandler):
             json.loads(self.context.state.selected_protocols)
             if isinstance(self.context.state.selected_protocols, str)
             else self.context.state.selected_protocols
-            or self.context.params.available_strategies
+            or self.available_strategies
         )
 
         selected_protocols = [

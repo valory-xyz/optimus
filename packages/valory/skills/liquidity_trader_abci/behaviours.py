@@ -1244,6 +1244,13 @@ class CallCheckpointBehaviour(
                     details = yield from self._get_balancer_pool_name(
                         pool_address, chain
                     )
+                elif dex_type == DexType.UNISWAP_V3.value:
+                    pool_address = position.get("pool_address")
+                    token_id = position.get("token_id")
+                    user_balances = yield from self.get_user_share_value_uniswap(
+                        user_address, pool_address, token_id, chain
+                    )
+                    details = f"Uniswap V3 Pool - {position.get('token0_symbol')}/{position.get('token1_symbol')}"
                 elif dex_type == DexType.STURDY.value:
                     aggregator_address = position.get("pool_address")
                     asset_address = position.get("token0")
@@ -1257,7 +1264,7 @@ class CallCheckpointBehaviour(
                 user_share = Decimal(0)
 
                 for asset in assets:
-                    if dex_type == DexType.BALANCER.value:
+                    if dex_type == DexType.BALANCER.value or dex_type == DexType.UNISWAP_V3.value:
                         token0_address = position.get("token0")
                         token1_address = position.get("token1")
                         asset_addresses = [token0_address, token1_address]
@@ -1585,6 +1592,68 @@ class CallCheckpointBehaviour(
             chain_id=chain,
         )
         return pool_name
+        
+    def get_user_share_value_uniswap(
+        self, user_address: str, pool_address: str, token_id: int, chain: str
+    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
+        """Calculate the user's share value and token balances in a Uniswap V3 position."""
+        # Get the pool tokens
+        pool_tokens_result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=UniswapV3PoolContract.contract_id,
+            contract_callable="get_pool_tokens",
+            data_key="tokens",
+            chain_id=chain,
+        )
+        
+        if not pool_tokens_result:
+            self.context.logger.error(f"Failed to get pool tokens for pool {pool_address}")
+            return {}
+            
+        token0_address = pool_tokens_result[0]
+        token1_address = pool_tokens_result[1]
+        
+        if not token0_address or not token1_address:
+            self.context.logger.error("Token addresses not found in pool tokens")
+            return {}
+            
+        # Get reserves and balances
+        reserves_and_balances = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=UniswapV3PoolContract.contract_id,
+            contract_callable="get_reserves_and_balances",
+            data_key="data",
+            your_address=user_address,
+            chain_id=chain,
+        )
+        
+        if not reserves_and_balances:
+            self.context.logger.error(f"Failed to get reserves and balances for pool {pool_address}")
+            return {}
+            
+        # Get token decimals
+        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+        
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error("Failed to get token decimals")
+            return {}
+            
+        # Get the current amounts in the position
+        current_token0_qty = Decimal(str(reserves_and_balances.get("current_token0_qty", 0)))
+        current_token1_qty = Decimal(str(reserves_and_balances.get("current_token1_qty", 0)))
+        
+        # Adjust for decimals
+        adjusted_token0_qty = current_token0_qty / Decimal(10 ** token0_decimals)
+        adjusted_token1_qty = current_token1_qty / Decimal(10 ** token1_decimals)
+        
+        # Return the balances
+        return {
+            token0_address: adjusted_token0_qty,
+            token1_address: adjusted_token1_qty
+        }
 
 
 class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):

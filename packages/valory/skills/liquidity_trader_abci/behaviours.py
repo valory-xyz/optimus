@@ -1211,6 +1211,7 @@ class CallCheckpointBehaviour(
             data=data,
         )
 
+
 class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that checks if the staking KPI has been met and makes vanity transactions if necessary."""
 
@@ -5784,7 +5785,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return False
 
-
     def calculate_user_share_values(self) -> Generator[None, None, None]:
         """Calculate the value of shares for the user based on open pools."""
         total_user_share_value_usd = Decimal(0)
@@ -5838,7 +5838,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 user_share = Decimal(0)
 
                 for asset in assets:
-                    if dex_type == DexType.BALANCER.value or dex_type == DexType.UNISWAP_V3.value:
+                    if (
+                        dex_type == DexType.BALANCER.value
+                        or dex_type == DexType.UNISWAP_V3.value
+                    ):
                         token0_address = position.get("token0")
                         token1_address = position.get("token1")
                         asset_addresses = [token0_address, token1_address]
@@ -6161,19 +6164,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return pool_name
-        
+
     def get_user_share_value_uniswap(
         self, user_address: str, pool_address: str, token_id: int, chain: str, position
     ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
         """Calculate the user's share value and token balances in a Uniswap V3 position."""
-            
+
         token0_address = position.get("token0")
         token1_address = position.get("token1")
-        
+
         if not token0_address or not token1_address:
             self.context.logger.error("Token addresses not found in pool tokens")
             return {}
-            
+
         # Get reserves and balances
         reserves_and_balances = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -6184,33 +6187,38 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             your_address=user_address,
             chain_id=chain,
         )
-        
+
         if not reserves_and_balances:
-            self.context.logger.error(f"Failed to get reserves and balances for pool {pool_address}")
+            self.context.logger.error(
+                f"Failed to get reserves and balances for pool {pool_address}"
+            )
             return {}
-            
+
         # Get token decimals
         token0_decimals = yield from self._get_token_decimals(chain, token0_address)
         token1_decimals = yield from self._get_token_decimals(chain, token1_address)
-        
+
         if token0_decimals is None or token1_decimals is None:
             self.context.logger.error("Failed to get token decimals")
             return {}
-            
+
         # Get the current amounts in the position
-        current_token0_qty = Decimal(str(reserves_and_balances.get("current_token0_qty", 0)))
-        current_token1_qty = Decimal(str(reserves_and_balances.get("current_token1_qty", 0)))
-        
+        current_token0_qty = Decimal(
+            str(reserves_and_balances.get("current_token0_qty", 0))
+        )
+        current_token1_qty = Decimal(
+            str(reserves_and_balances.get("current_token1_qty", 0))
+        )
+
         # Adjust for decimals
-        adjusted_token0_qty = current_token0_qty / Decimal(10 ** token0_decimals)
-        adjusted_token1_qty = current_token1_qty / Decimal(10 ** token1_decimals)
-        
+        adjusted_token0_qty = current_token0_qty / Decimal(10**token0_decimals)
+        adjusted_token1_qty = current_token1_qty / Decimal(10**token1_decimals)
+
         # Return the balances
         return {
             token0_address: adjusted_token0_qty,
-            token1_address: adjusted_token1_qty
+            token1_address: adjusted_token1_qty,
         }
-
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

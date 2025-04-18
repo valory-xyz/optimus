@@ -43,7 +43,7 @@ CHAIN_URLS = {
 LP = "lp"
 errors = []
 WHITELISTED_ASSETS = {
-    "mode": {},
+    "base": {},
     "optimism": {}
 }
 

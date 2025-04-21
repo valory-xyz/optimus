@@ -6,17 +6,17 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
-  behaviours.py: bafybeig3agtm256pl7rekx3i3kbz6h5hrnneu44f4pzkqp4mwtdxuob54e
-  composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
-  dialogues.py: bafybeifojr2urrwkm6rpm3wbytvcy54ks7x7qashwphyrlkrnaem6jaswy
-  fsm_specification.yaml: bafybeifszjb2yzllrnoiij4jpz2wbrfsa4ybib7hfpf5wo2tkb4yho4nlu
-  handlers.py: bafybeihunkvjah32uhzuhivedqafiqree4yc6pr5q5inslpqazgqn4435q
-  models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
-  modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
-  modius-ui-build/asset-manifest.json: bafybeihyiy36flgd73lbxfqalqm64r6hphxchqi3dan5t4ykokyhnetmlq
+  __init__.py: bafybeihimvaad4b42unlewkjc7t7wt3qacplaemuumofcvz6ckmio6aoei
+  behaviours.py: bafybeidlajmzryduifzktppusucehht6jt5pk6japgk4debs6qsxzjmecm
+  composition.py: bafybeiacev4w54ulcp6eyrvf7zv4ixf4kasiro7aksuucfzgmq6grb76bi
+  dialogues.py: bafybeigqpfxj6cphtgy3gfz7j6ckbn25xndb6bfsrm72rdu5ar5ep4547y
+  fsm_specification.yaml: bafybeigyhjly5ojmiqlvdt4wbwsfyf7jnjd6bgbaxkta5ghmxntpgjj354
+  handlers.py: bafybeifk3mcjrz5hzfsjnf4sueq5eiex3gz2w2u47fxgbz5cahw3mpdkde
+  models.py: bafybeid457du3icit2h6venm5bsyso5pckoia7wke4p3y6j3j2i7wkuedu
+  modius-ui-build/antd-reset.css: bafybeicy7cz2whjqvupudblwy5bk5bspullwz7lwlqej4ktd3bts3ov4wm
+  modius-ui-build/asset-manifest.json: bafybeifkxgnrtaos74faw6klwnnvoyo3acpnftewmozo3kgvjghfwyikki
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  modius-ui-build/globals.css: bafybeidikaeijb6i5kupnzjtvh55dsyi7xjn56t6owo4lhg4gqj3l4ibly
+  modius-ui-build/globals.css: bafybeic4vqwksbvgskqkjr2r57rl56oqehsrm53yyut77va7pxuqwkyhva
   modius-ui-build/index.html: bafybeidpse3eip7yqzbcnmon3smmgexwx7hpnlpzqol6oqmnj42v5vslby
   modius-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
@@ -38,12 +38,12 @@ fingerprint:
   modius-ui-build/logos/tokens/usdc.png: bafybeiddabigc6c5ga27grotfy2bfr247eah2qs3nsjzup7z3l4r2kvggm
   modius-ui-build/logos/tokens/usdt.png: bafybeibx7p2cckrjejds6cwvu23wco5uqgnlmqmdumxytlyqarx5v4j2zy
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  modius-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
-  modius-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
-  modius-ui-build/static/js/main.6f085b19.js: bafybeigfdj453zki7rfbldt2udzj3lejmwu7ssluiuutvmcresadxh7tu4
-  modius-ui-build/static/js/main.6f085b19.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
+  modius-ui-build/manifest.json: bafybeidp5tbziropmhih72dckhnwmgm6cgvim22fklnspfzegzsgzd6gmi
+  modius-ui-build/robots.txt: bafybeiayk46lbzeiuphqjqxeg2j6r7r6zjkbudog4s5t32hlnfz5wx7aam
+  modius-ui-build/static/js/main.6f085b19.js: bafybeiaoqkszjzdidaqysuamhpbrroczxcgbz7xcvx2vlmop57kuioosvi
+  modius-ui-build/static/js/main.6f085b19.js.LICENSE.txt: bafybeid54g6oo67btteio4no6mdglq4l2jsgyt5eukzqtvzx6bb77hzs7y
   modius-ui-build/static/js/main.6f085b19.js.map: bafybeigvcf7elx7kvc2rbv7gbcuis24w4kcn63q66ynvlcbdpcipprpsmq
-  prompts.py: bafybeigqxufmc5vpem5osqe3bzuwrckv2zle7o4rzodbkggwmpdvzj6idu
+  prompts.py: bafybeig7g5f4mjtgejgljjafhxzfedq2vditndiqprtrm3eod7ktetq34q
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -59,7 +59,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeifekc452kdu2jslki6rfgjzb64nk2xznupeg6jebaj7pcc36gzqpe
+- valory/liquidity_trader_abci:0.1.0:bafybeiaw5mdhgobkdydq6eaegvux65x3vxmtvwl3ejov6uemgh3kinn4tu
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
@@ -231,7 +231,7 @@ models:
       - uniswap
       selected_hyper_strategy: max_apr_selection
       service_endpoint_base: https://optimus.staging.autonolas.tech/
-      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
+      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","VelodromeFinance":"velodrome_finance","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
       profit_threshold: 50
       loss_threshold: 30

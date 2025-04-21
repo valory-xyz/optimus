@@ -232,6 +232,15 @@ class Params(BaseParams):
         self.uniswap_position_manager_contract_addresses = json.loads(
             self._ensure("uniswap_position_manager_contract_addresses", kwargs, str)
         )
+        self.velodrome_router_contract_addresses = json.loads(
+            self._ensure("velodrome_router_contract_addresses", kwargs, str)
+        )
+        self.velodrome_cl_pool_contract_addresses = json.loads(
+            self._ensure("velodrome_cl_pool_contract_addresses", kwargs, str)
+        )
+        self.velodrome_cl_manager_contract_addresses = json.loads(
+            self._ensure("velodrome_cl_manager_contract_addresses", kwargs, str)
+        )
         self.chain_to_chain_key_mapping = json.loads(
             self._ensure("chain_to_chain_key_mapping", kwargs, str)
         )

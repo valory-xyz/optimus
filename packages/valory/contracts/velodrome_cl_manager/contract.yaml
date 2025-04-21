@@ -1,0 +1,17 @@
+name: velodrome_cl_manager
+author: valory
+version: 0.1.0
+type: contract
+description: A wrapper for Velodrome's CLPoolManager calls.
+license: Apache-2.0
+aea_version: '>=1.0.0,<2.0.0'
+ledger_apis:
+  - ethereum
+contract_interface_paths:
+  ethereum: contract_interface.json
+class_name: VelodromeCLPoolManagerContract
+dependencies:
+  open-aea-ledger-ethereum:
+    version: '==1.64.0'
+  web3:
+    version: '>=6.0.0,<7'

@@ -43,8 +43,25 @@ CHAIN_URLS = {
 LP = "lp"
 errors = []
 WHITELISTED_ASSETS = {
-    "base": {},
-    "optimism": {}
+    "base": [],
+    "optimism": [
+        "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",  # USDC
+        "0xCB8FA9a76b8e203D8C3797bF438d8FB81Ea3326A",  # alUSD
+        "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",  # USDT0
+        "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",  # USDT
+        "0x9dAbAE7274D28A45F0B65Bf8ED201A5731492ca0",  # msUSD
+        "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",  # USDC.e
+        "0xbfD291DA8A403DAAF7e5E9DC1ec0aCEaCd4848B9",  # USX
+        "0x8aE125E8653821E851F12A49F7765db9a9ce7384",  # DOLA
+        "0xc40F949F8a4e094D1b49a23ea9241D289B7b2819",  # LUSD
+        "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",  # DAI
+        "0x087C440F251Ff6Cfe62B86DdE1bE558B95b4bb9b",  # BOLD
+        "0x2E3D870790dC77A83DD1d18184Acc7439A53f475",  # FRAX
+        "0x2218a117083f5B482B0bB821d27056Ba9c04b1D3",  # sDAI
+        "0x73cb180bf0521828d8849bc8CF2B920918e23032",  # USD+
+        "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",  # oUSDT
+        "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3"   # USDGLO
+    ]
 }
 
 ERC20_ABI = [
@@ -191,7 +208,20 @@ def get_filtered_pools(pools, current_positions) -> List[Dict[str, Any]]:
         apr = calculate_apr(daily_volume, tvl, fee_rate)
         pool["apr"] = apr
         pool["tvl"] = tvl
-        if Web3.to_checksum_address(pool["id"]) not in current_positions:
+        
+        chain = pool["chain"].lower()
+        whitelisted_tokens = WHITELISTED_ASSETS.get(chain, [])
+        
+        if (Web3.to_checksum_address(pool["id"]) not in current_positions
+            and chain in WHITELISTED_ASSETS
+            and (
+                not whitelisted_tokens
+                or (
+                    pool["token0"]["id"] in whitelisted_tokens
+                    and pool["token1"]["id"] in whitelisted_tokens
+                )
+            )
+        ):
             qualifying_pools.append(pool)
 
     if not qualifying_pools:
@@ -230,7 +260,7 @@ def get_filtered_pools(pools, current_positions) -> List[Dict[str, Any]]:
     filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
 
     return (
-        filtered_scored_pools[:10]
+        filtered_scored_pools[:20]
         if len(filtered_scored_pools) > 10
         else filtered_scored_pools
     )

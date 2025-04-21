@@ -1,0 +1,23 @@
+name: velodrome_router
+author: valory
+version: 0.1.0
+type: contract
+description: A wrapper for Velodrome's Router calls.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeigovlecwwk2fgo2rmzhldxgbfdfelraz7mfswakorwkswlpgdqy7a
+  contract.py: bafybeibopzen6cloxcwghgn7whk6k7accxrev5in5nv2ub57clznjfokm4
+  contract_interface.json: bafybeifzgzzkm4lp7lk5unf7cdgcpv5zgxzn56br6yvt4yoakcry2vrgl4
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: VelodromeRouterContract
+contract_interface_paths:
+  ethereum: contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.64.0
+  web3:
+    version: <7,>=6.0.0
+  eth_abi:
+    version: ==4.0.0

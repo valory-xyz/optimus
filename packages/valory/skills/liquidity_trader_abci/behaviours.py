@@ -107,6 +107,9 @@ from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
 from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
     UniswapPoolBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    VelodromePoolBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     APRPopulationPayload,
     APRPopulationRound,
@@ -166,6 +169,7 @@ class DexType(Enum):
     BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
+    VELODROME = "Velodrome"
 
 
 class Action(Enum):
@@ -309,6 +313,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
+        self.pools[DexType.VELODROME.value] = VelodromePoolBehaviour
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(
@@ -4629,12 +4634,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Get enter pool tx hash"""
         dex_type = action.get("dex_type")
         chain = action.get("chain")
-        assets = [action.get("token0"), action.get("token1")]
-        if not assets or len(assets) < 2:
-            self.context.logger.error(f"2 assets required, provided: {assets}")
-            return None, None, None
         pool_address = action.get("pool_address")
-        pool_fee = action.get("pool_fee")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         pool_type = action.get("pool_type")
 
@@ -4643,6 +4643,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
+        # Common code for all pool types
+        assets = [action.get("token0"), action.get("token1")]
+        if not assets or len(assets) < 2:
+            self.context.logger.error(f"2 assets required, provided: {assets}")
+            return None, None, None
+        
         token0_balance = self._get_balance(chain, assets[0], positions)
         token1_balance = self._get_balance(chain, assets[1], positions)
         relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
@@ -4661,16 +4667,21 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None, None, None
 
-        tx_hash, contract_address = yield from pool.enter(
-            self,
-            pool_address=pool_address,
-            safe_address=safe_address,
-            assets=assets,
-            chain=chain,
-            max_amounts_in=max_amounts_in,
-            pool_fee=pool_fee,
-            pool_type=pool_type,
-        )
+        # Prepare kwargs for pool.enter
+        kwargs = {
+            "pool_address": pool_address,
+            "safe_address": safe_address,
+            "assets": assets,
+            "chain": chain,
+            "max_amounts_in": max_amounts_in,
+            "pool_type": pool_type,
+        }
+        
+        # Add pool_fee for non-Velodrome pools
+        if dex_type != "Velodrome":
+            kwargs["pool_fee"] = action.get("pool_fee")
+            
+        tx_hash, contract_address = yield from pool.enter(self, **kwargs)
         if not tx_hash or not contract_address:
             return None, None, None
 
@@ -4763,7 +4774,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
-
+    
     def get_approval_tx_hash(
         self, token_address, amount: int, spender: str, chain: str
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
@@ -4797,9 +4808,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = action.get("assets", {})
-        if not assets or len(assets) < 2:
-            self.context.logger.error(f"2 assets required, provided: {assets}")
-            return None, None, None
         pool_address = action.get("pool_address")
         token_id = action.get("token_id")
         liquidity = action.get("liquidity")
@@ -4811,31 +4819,35 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        exit_pool_kwargs = {}
-
-        if dex_type == DexType.BALANCER.value:
-            exit_pool_kwargs.update(
-                {
-                    "safe_address": safe_address,
-                    "assets": assets,
-                    "pool_address": pool_address,
-                    "chain": chain,
-                    "pool_type": pool_type,
-                }
-            )
-
-        if dex_type == DexType.UNISWAP_V3.value:
-            exit_pool_kwargs.update(
-                {
-                    "token_id": token_id,
-                    "safe_address": safe_address,
-                    "chain": chain,
-                    "liquidity": liquidity,
-                }
-            )
-
-        if not exit_pool_kwargs:
-            self.context.logger.error("Could not find kwargs for exit pool")
+        # Prepare common kwargs for all pool types
+        exit_pool_kwargs = {
+            "pool_address": pool_address,
+            "safe_address": safe_address,
+            "chain": chain,
+            "pool_type": pool_type,
+        }
+        
+        # Add specific parameters based on pool type
+        if dex_type == "Velodrome":
+            exit_pool_kwargs["liquidity"] = liquidity
+            
+            # For Stable/Volatile pools, we need assets
+            if pool_type != "ConcentratedLiquidity":
+                if not assets or len(assets) < 2:
+                    self.context.logger.error(f"2 assets required for Velodrome Stable/Volatile pools, provided: {assets}")
+                    return None, None, None
+                exit_pool_kwargs["assets"] = assets
+                exit_pool_kwargs["is_stable"] = (pool_type == "Stable")
+        elif dex_type == DexType.BALANCER.value:
+            if not assets or len(assets) < 2:
+                self.context.logger.error(f"2 assets required for Balancer pools, provided: {assets}")
+                return None, None, None
+            exit_pool_kwargs["assets"] = assets
+        elif dex_type == DexType.UNISWAP_V3.value:
+            exit_pool_kwargs["token_id"] = token_id
+            exit_pool_kwargs["liquidity"] = liquidity
+        else:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
         tx_hash, contract_address, is_multisend = yield from pool.exit(
@@ -4884,7 +4896,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Tx hash payload string is {payload_string}")
 
         return payload_string, chain, safe_address
-
+    
     def get_deposit_tx_hash(
         self, action, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:

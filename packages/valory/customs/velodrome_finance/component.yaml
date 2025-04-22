@@ -1,29 +1,23 @@
-name: balancer_pools_search
+name: velodrome_finance
 author: valory
 version: 0.1.0
 type: custom
 description: A strategy that returns the highest APR yielding liquidity pool over
-  Balancer
+  velodrome
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeib2ymskkozxy6au5jaijra67ygs3d5ufr5fso35mivuvphze74gce
-  balancer_pools_search.py: bafybeidmphu735tjbrnsccztk36au3gmjbuosvbsx6sediibms22m5gx6a
+  __init__.py: bafybeico5nkgiu6ptr4gesdqqagbkb5mcye6el74jhmyhvm3kafffhigle
+  velodrome_finance.py: bafybeigmlivcvn2kouksz26nxunvoom3db2axibkdfr66yjzwgu6p45svy
 fingerprint_ignore_patterns: []
-entry_point: balancer_pools_search.py
+entry_point: velodrome_finance.py
 callable: run
 dependencies:
   requests:
     version: <2.31.2,>=2.28.1
   pycoingecko:
     version: ==3.2.0
-  pyfolio:
-    version: ==0.9.2
   gql:
     version: ==3.5.0
-  web3:
-    version: <7.0.0,>=6.0.0
   numpy:
     version: ==2.2.0
-  pandas:
-    version: '>=2.2.3'

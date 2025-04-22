@@ -29,13 +29,13 @@ fingerprint:
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja
+- valory/mirror_db:0.1.0:bafybeieftxd7tyizuo5r3gf3jukw4h7ophlvek74sui27imgdbjkpkoc7u
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
-- valory/balancer_weighted_pool:0.1.0:bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm
-- valory/balancer_vault:0.1.0:bafybeiff3ltn6xoh3otuywk2j3yxujdlfzcvri66slnufv5t4hkj5musfa
-- valory/erc20:0.1.0:bafybeie2wet3factwc6pwqvqpwqu3prtv75lmbqo5y4onda5y533ufdqhy
+- valory/balancer_weighted_pool:0.1.0:bafybeid5fhymcnpjo4ztpquga3luj42oxqojn674gpsgzngdm6jk6uzllq
+- valory/balancer_vault:0.1.0:bafybeiabmk7rwa6lwwalvggyqmqwgdkjvq3f4mksxtaxvjwbsfr7gpy5wa
+- valory/erc20:0.1.0:bafybeie22incukeg24rjn2qo5s6vxf5yi3xjmzmgduylfppfasib2cisrm
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeid7h7sxxoglhhqbcz4g64fwbgj6akwecv4ktolhefcsziqntnnt2e
 - valory/uniswap_v3_pool:0.1.0:bafybeiehh6y7qswdnfocoi2ku57w4k2rilambgt2bfp6co7vscghmqpjte
@@ -231,7 +231,7 @@ models:
       - balancer
       - uniswap
       selected_hyper_strategy: max_apr_selection
-      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
+      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","VelodromeFinance":"velodrome_finance","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
       profit_threshold: 50
       loss_threshold: 30

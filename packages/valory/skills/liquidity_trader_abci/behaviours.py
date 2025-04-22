@@ -1928,9 +1928,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return data
 
     def _get_apr_calculation_metrics(self) -> Dict[str, Any]:
-        """
-        Extract and structure the key metrics used in APR calculation.
-        """
+        """Extract and structure the key metrics used in APR calculation."""
         metrics = {
             "initial_value": float(self._initial_value)
             if self._initial_value

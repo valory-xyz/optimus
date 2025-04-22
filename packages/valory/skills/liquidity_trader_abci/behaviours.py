@@ -1907,11 +1907,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # =========================================================================
 
     def _create_portfolio_snapshot(self) -> Dict[str, Any]:
-        """
-        Create a structured snapshot of the current portfolio state.
+        """Create a structured snapshot of the current portfolio state."""
 
-        This captures key metrics about the portfolio that can help diagnose APR calculation issues.
-        """
         snapshot = {
             "portfolio": self._convert_decimals(self.portfolio_data),
             "positons": self._convert_decimals(self.current_positions),

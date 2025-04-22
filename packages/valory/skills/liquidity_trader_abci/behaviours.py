@@ -1746,6 +1746,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     """Behavior for calculating and storing APR data in MirrorDB."""
 
     matching_round: Type[AbstractRound] = APRPopulationRound
+    _initial_value = None
+    _final_value = None
 
     def async_act(self) -> Generator:
         """
@@ -1856,27 +1858,36 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                     self.portfolio_data["portfolio_value"],
                     rel_tol=1e-9,
                 ):
+                    # Create portfolio snapshot for debugging
+                    portfolio_snapshot = self._create_portfolio_snapshot()
+
+                    # Calculate APR and related metrics
                     actual_apr_data = yield from self.calculate_actual_apr(
                         agent_id, attr_def_id
                     )
                     if actual_apr_data:
-                        self.context.logger.info(f"actual_apr_data {actual_apr_data}")
                         total_actual_apr = actual_apr_data.get("total_actual_apr", None)
                         adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
                         if total_actual_apr:
-                            # Step 5: Store APR data in MirrorDB
+                            # Step 5: Store enhanced APR data in MirrorDB
                             timestamp = int(
                                 self.round_sequence.last_round_transition_timestamp.timestamp()
                             )
+
+                            # Create enhanced data payload with portfolio metrics
+                            enhanced_data = {
+                                "apr": float(total_actual_apr),
+                                "adjusted_apr": float(adjusted_apr),
+                                "timestamp": timestamp,
+                                "portfolio_snapshot": portfolio_snapshot,
+                                "calculation_metrics": self._get_apr_calculation_metrics(),
+                            }
+
                             agent_attr = yield from self.create_agent_attribute(
                                 agent_id,
                                 attr_def_id,
-                                {
-                                    "apr": total_actual_apr,
-                                    "adjusted_apr": adjusted_apr,
-                                    "timestamp": timestamp,
-                                },
+                                enhanced_data,
                             )
                             self.context.logger.info(f"Stored APR data: {agent_attr}")
 
@@ -1899,6 +1910,58 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # =========================================================================
     # Utility methods
     # =========================================================================
+
+    def _create_portfolio_snapshot(self) -> Dict[str, Any]:
+        """Create a structured snapshot of the current portfolio state."""
+
+        snapshot = {
+            "portfolio": self._convert_decimals(self.portfolio_data),
+            "positons": self._convert_decimals(self.current_positions),
+        }
+
+        return snapshot
+
+    def _convert_decimals(self, data: Any) -> Any:
+        """Recursively convert Decimal objects to float in a data structure."""
+        if isinstance(data, dict):
+            return {key: self._convert_decimals(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self._convert_decimals(item) for item in data]
+        elif isinstance(data, Decimal):
+            return float(data)
+        else:
+            return data
+
+    def _get_apr_calculation_metrics(self) -> Dict[str, Any]:
+        """Extract and structure the key metrics used in APR calculation."""
+        metrics = {
+            "initial_value": float(self._initial_value)
+            if self._initial_value
+            else None,
+            "final_value": float(self._final_value) if self._final_value else None,
+            "f_i_ratio": None,
+            "last_investment_timestamp": None,
+            "time_ratio": None,
+        }
+
+        # Calculate value change percentage if we have both values
+        if metrics["initial_value"] is not None and metrics["final_value"] is not None:
+            metrics["f_i_ratio"] = (
+                float(metrics["final_value"]) / float(metrics["initial_value"])
+            ) - 1
+
+        # Calculate time period and annualization factor
+        last_investment_timestamp = self._get_last_investment_timestamp()
+        if last_investment_timestamp:
+            metrics["last_investment_timestamp"] = last_investment_timestamp
+
+            current_timestamp = self._get_current_timestamp()
+            hours = max(1, (current_timestamp - int(last_investment_timestamp)) / 3600)
+            hours_in_year = Decimal("8760")
+            time_ratio = hours_in_year / Decimal(str(hours))
+            metrics["time_ratio"] = float(time_ratio)
+
+        return metrics
 
     def sign_message(self, message) -> Generator[None, None, Optional[str]]:
         """Sign a message."""
@@ -2214,14 +2277,18 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         final_value = yield from self._get_final_portfolio_value()
+        self._final_value = final_value
         current_timestamp = self._get_current_timestamp()
 
-        if not self._is_apr_calculation_needed(
+        recalculate_apr = yield from self._is_apr_calculation_needed(
             current_timestamp, agent_id, attr_def_id
-        ):
+        )
+
+        if not recalculate_apr:
             return None
 
         initial_value = yield from self._calculate_initial_value()
+        self._initial_value = initial_value
         if initial_value is None:
             return None
 
@@ -2345,6 +2412,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 result["total_actual_apr"] + float(adjustment_factor * Decimal("100")),
                 2,
             )
+            result["adjustment_factor"] = float(adjustment_factor)
+            result["current_price"] = current_eth_price
+            result["initial_price"] = start_eth_price
             self.context.logger.info(f"Adjusted APR: {result['adjusted_apr']}%")
 
     def _store_last_apr_timestamp(

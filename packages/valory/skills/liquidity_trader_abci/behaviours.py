@@ -3927,6 +3927,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["timestamp"] = timestamp
 
         current_position["status"] = PositionStatus.OPEN.value
+        current_position["tx_hash"] = self.synchronized_data.final_tx_hash
         self.current_positions.append(current_position)
         self.store_current_positions()
         self.context.logger.info(
@@ -3942,6 +3943,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
                 position["status"] = PositionStatus.CLOSED.value
+                position["tx_hash"] = self.synchronized_data.final_tx_hash
                 self.context.logger.info(f"Closing position: {position}")
 
         self.store_current_positions()
@@ -5959,70 +5961,75 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             or allocation["status"] != PositionStatus.CLOSED.value
         ]
 
+        portfolio_breakdown = [
+            entry for entry in portfolio_breakdown if entry["value_usd"] > 0
+        ]
+
         total_user_share_value_usd = sum(
             Decimal(str(entry["value_usd"])) for entry in portfolio_breakdown
         )
-        # Calculate the ratio of each asset in the portfolio
-        total_ratio = sum(
-            Decimal(str(entry["value_usd"])) / total_user_share_value_usd
-            for entry in portfolio_breakdown
-            if total_user_share_value_usd > 0
-        )
-        for entry in portfolio_breakdown:
-            if total_user_share_value_usd > 0:
-                entry["ratio"] = round(
-                    Decimal(str(entry["value_usd"]))
-                    / total_user_share_value_usd
-                    / total_ratio,
-                    6,
-                )
-                entry["value_usd"] = float(entry["value_usd"])
-                entry["balance"] = float(entry["balance"])
-            else:
-                entry["ratio"] = 0.0
-                entry["value_usd"] = float(entry["value_usd"])
-                entry["balance"] = float(entry["balance"])
-
-        # Calculate ratios and build allocations
-        total_ratio = sum(
-            float(user_share / total_user_share_value_usd) * 100
-            for user_share, _, _, _, _, _, _, _, _ in individual_shares
-            if total_user_share_value_usd > 0
-        )
-        for (
-            user_share,
-            dex_type,
-            chain,
-            pool_id,
-            assets,
-            apr,
-            details,
-            user_address,
-            _,
-        ) in individual_shares:
-            if total_user_share_value_usd > 0:
-                ratio = round(
-                    float(user_share / total_user_share_value_usd)
-                    * 100
-                    * 100
-                    / total_ratio,
-                    2,
-                )
-            else:
-                ratio = 0.0
-
-            allocations.append(
-                {
-                    "chain": chain,
-                    "type": dex_type,
-                    "id": pool_id,
-                    "assets": assets,
-                    "apr": round(apr, 2),
-                    "details": details,
-                    "ratio": float(ratio),
-                    "address": user_address,
-                }
+        if total_user_share_value_usd > 0:
+            # Calculate the ratio of each asset in the portfolio
+            total_ratio = sum(
+                Decimal(str(entry["value_usd"])) / total_user_share_value_usd
+                for entry in portfolio_breakdown
+                if total_user_share_value_usd > 0
             )
+            for entry in portfolio_breakdown:
+                if total_user_share_value_usd > 0:
+                    entry["ratio"] = round(
+                        Decimal(str(entry["value_usd"]))
+                        / total_user_share_value_usd
+                        / total_ratio,
+                        6,
+                    )
+                    entry["value_usd"] = float(entry["value_usd"])
+                    entry["balance"] = float(entry["balance"])
+                else:
+                    entry["ratio"] = 0.0
+                    entry["value_usd"] = float(entry["value_usd"])
+                    entry["balance"] = float(entry["balance"])
+
+            # Calculate ratios and build allocations
+            total_ratio = sum(
+                float(user_share / total_user_share_value_usd) * 100
+                for user_share, _, _, _, _, _, _, _, _ in individual_shares
+                if total_user_share_value_usd > 0
+            )
+            for (
+                user_share,
+                dex_type,
+                chain,
+                pool_id,
+                assets,
+                apr,
+                details,
+                user_address,
+                _,
+            ) in individual_shares:
+                if total_user_share_value_usd > 0:
+                    ratio = round(
+                        float(user_share / total_user_share_value_usd)
+                        * 100
+                        * 100
+                        / total_ratio,
+                        2,
+                    )
+                else:
+                    ratio = 0.0
+
+                allocations.append(
+                    {
+                        "chain": chain,
+                        "type": dex_type,
+                        "id": pool_id,
+                        "assets": assets,
+                        "apr": round(apr, 2),
+                        "details": details,
+                        "ratio": float(ratio),
+                        "address": user_address,
+                    }
+                )
 
         # Store the calculated portfolio value and breakdown
         self.portfolio_data = {

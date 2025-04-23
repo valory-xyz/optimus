@@ -1211,6 +1211,7 @@ class CallCheckpointBehaviour(
             data=data,
         )
 
+
 class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that checks if the staking KPI has been met and makes vanity transactions if necessary."""
 
@@ -1465,50 +1466,51 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
 
                 # Step 4: Calculate APR for positions
-                portfolio_value = 0
-                data = yield from self._read_kv(keys=("portfolio_value",))
-                self.context.logger.info(f"data{data}")
-                if data and data["portfolio_value"]:
-                    self.context.logger.info(f"data{data}")
-                    portfolio_value = float(data.get("portfolio_value", "0"))
+                portfolio_value = self.portfolio_data.get("portfolio_value", None)
 
-                if not math.isclose(
-                    portfolio_value,
-                    self.portfolio_data["portfolio_value"],
-                    rel_tol=1e-9,
-                ):
-                    # Create portfolio snapshot for debugging
-                    portfolio_snapshot = self._create_portfolio_snapshot()
-
-                    # Calculate APR and related metrics
-                    actual_apr_data = yield from self.calculate_actual_apr(
-                        agent_id, attr_def_id
+                if portfolio_value:
+                    current_timestamp = self._get_current_timestamp()
+                    recalculate_apr = yield from self._is_apr_calculation_needed(
+                        current_timestamp, agent_id, attr_def_id
                     )
-                    if actual_apr_data:
-                        total_actual_apr = actual_apr_data.get("total_actual_apr", None)
-                        adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-                        if total_actual_apr:
-                            # Step 5: Store enhanced APR data in MirrorDB
-                            timestamp = int(
-                                self.round_sequence.last_round_transition_timestamp.timestamp()
+                    if not recalculate_apr:
+                        self.context.logger.info("APR recalculation not needed.")
+
+                    else:
+                        # Create portfolio snapshot for debugging
+                        portfolio_snapshot = self._create_portfolio_snapshot()
+
+                        # Calculate APR and related metrics
+                        actual_apr_data = yield from self.calculate_actual_apr(
+                            float(portfolio_value)
+                        )
+                        if actual_apr_data:
+                            total_actual_apr = actual_apr_data.get(
+                                "total_actual_apr", None
                             )
+                            adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-                            # Create enhanced data payload with portfolio metrics
                             enhanced_data = {
-                                "apr": float(total_actual_apr),
-                                "adjusted_apr": float(adjusted_apr),
-                                "timestamp": timestamp,
+                                "timestamp": current_timestamp,
                                 "portfolio_snapshot": portfolio_snapshot,
                                 "calculation_metrics": self._get_apr_calculation_metrics(),
                             }
+
+                            if total_actual_apr:
+                                enhanced_data["apr"] = total_actual_apr
+
+                            if adjusted_apr:
+                                enhanced_data["adjusted_apr"] = adjusted_apr
 
                             agent_attr = yield from self.create_agent_attribute(
                                 agent_id,
                                 attr_def_id,
                                 enhanced_data,
                             )
-                            self.context.logger.info(f"Stored APR data: {agent_attr}")
+                            self.context.logger.info(f"Stored Data: {agent_attr}")
+
+                            yield from self._store_last_apr_timestamp(current_timestamp)
 
                 # Prepare payload for consensus
                 payload = APRPopulationPayload(sender=sender, context="APR Population")
@@ -1576,8 +1578,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
             current_timestamp = self._get_current_timestamp()
             hours = max(1, (current_timestamp - int(last_investment_timestamp)) / 3600)
-            hours_in_year = Decimal("8760")
-            time_ratio = hours_in_year / Decimal(str(hours))
+            hours_in_year = 8760
+            time_ratio = hours_in_year / hours
             metrics["time_ratio"] = float(time_ratio)
 
         return metrics
@@ -1887,7 +1889,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
     def calculate_actual_apr(
-        self, agent_id, attr_def_id
+        self, portfolio_value: float
     ) -> Generator[None, None, Dict[str, float]]:
         """Calculate the actual APR for the portfolio based on current positions."""
         result = {}
@@ -1895,30 +1897,19 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         if not self._has_valid_portfolio_data():
             return None
 
-        final_value = yield from self._get_final_portfolio_value()
-        self._final_value = final_value
+        self._final_value = portfolio_value
         current_timestamp = self._get_current_timestamp()
 
-        recalculate_apr = yield from self._is_apr_calculation_needed(
-            current_timestamp, agent_id, attr_def_id
-        )
-
-        if not recalculate_apr:
-            return None
-
         initial_value = yield from self._calculate_initial_value()
-        self._initial_value = initial_value
-        if initial_value is None:
+        if not initial_value:
             return None
+
+        self._initial_value = initial_value
 
         time_since_investment = self._get_last_investment_timestamp()
-        self._calculate_apr(
-            final_value, initial_value, current_timestamp, time_since_investment, result
-        )
+        self._calculate_apr(current_timestamp, time_since_investment, result)
 
         yield from self._adjust_apr_for_eth_price(result, time_since_investment)
-
-        yield from self._store_last_apr_timestamp(current_timestamp)
 
         return result
 
@@ -1932,14 +1923,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return False
         return True
 
-    def _get_final_portfolio_value(self) -> Generator[None, None, Optional[Decimal]]:
-        final_value = Decimal(str(self.portfolio_data["portfolio_value"]))
-        self.context.logger.info(f"Final portfolio value: {final_value}")
-        yield from self._write_kv(
-            {"portfolio_value": json.dumps(self.portfolio_data["portfolio_value"])}
-        )
-        return final_value
-
     def _get_current_timestamp(self) -> int:
         return cast(
             SharedState, self.context.state
@@ -1947,8 +1930,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
     def _calculate_initial_value(
         self,
-    ) -> Generator[None, None, Optional[Decimal]]:
-        initial_value = Decimal("0")
+    ) -> Generator[None, None, Optional[float]]:
+        initial_value = 0.0
         for position in self.current_positions:
             if position.get("status") == PositionStatus.OPEN.value:
                 position_value = yield from self.calculate_initial_investment_value(
@@ -1956,7 +1939,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 self.context.logger.info(f"Position value: {position_value}")
                 if position_value is not None:
-                    initial_value += Decimal(str(position_value))
+                    initial_value += float(position_value)
                 else:
                     self.context.logger.warning(
                         f"Skipping position with null value: {position.get('id', 'unknown')}"
@@ -1988,30 +1971,28 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
     def _calculate_apr(
         self,
-        final_value: Decimal,
-        initial_value: Decimal,
         current_timestamp: int,
         time_since_investment: int,
         result,
     ):
-        if final_value <= 0:
+        if self._final_value <= 0:
             self.context.logger.warning("Final value is zero or negative")
             return 0.0
 
-        f_i_ratio = (final_value / initial_value) - Decimal("1")
+        f_i_ratio = (self._final_value / self._initial_value) - 1
         hours = max(1, (current_timestamp - int(time_since_investment)) / 3600)
         self.context.logger.info(f"Hours since investment: {hours}")
 
-        hours_in_year = Decimal("8760")
-        time_ratio = hours_in_year / Decimal(str(hours))
+        hours_in_year = 8760
+        time_ratio = hours_in_year / hours
 
-        apr = float(f_i_ratio * time_ratio * Decimal("100"))
+        apr = float(f_i_ratio * time_ratio * 100)
         if apr < 0:
-            apr = round(float((final_value / initial_value) - 1) * 100, 2)
+            apr = round(float((self._final_value / self._initial_value) - 1) * 100, 2)
 
         self.context.logger.info(f"Calculated APR: {apr}")
         if apr:
-            result["total_actual_apr"] = round(apr, 2)
+            result["total_actual_apr"] = float(round(apr, 2))
 
     def _adjust_apr_for_eth_price(
         self, result: Dict[str, float], time_since_investment: int
@@ -2028,7 +2009,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 Decimal(str(current_eth_price)) / Decimal(str(start_eth_price))
             )
             result["adjusted_apr"] = round(
-                result["total_actual_apr"] + float(adjustment_factor * Decimal("100")),
+                float(result["total_actual_apr"])
+                + float(adjustment_factor * Decimal("100")),
                 2,
             )
             result["adjustment_factor"] = float(adjustment_factor)
@@ -2081,9 +2063,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             last_apr_stored_timestamp
             and (current_timestamp - last_apr_stored_timestamp) < 7200
         ):
-            self.context.logger.info(
-                "APR calculation not required, last calculation was within 2 hours."
-            )
             return False
 
         return True
@@ -5879,7 +5858,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if dex_type == DexType.BALANCER.value:
                     pool_address = position.get("pool_address")
                     user_balances = yield from self.get_user_share_value_balancer(
-                        user_address, pool_id, pool_address, chain
+                        "0xd0a27060DEC0F2F0307cDB2b1B2ee4cABf559E66",
+                        pool_id,
+                        pool_address,
+                        chain,
                     )
                     details = yield from self._get_balancer_pool_name(
                         pool_address, chain
@@ -5923,7 +5905,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             f"Could not fetch price for asset {asset}"
                         )
                         continue
-                    
+
                     asset_price = Decimal(str(asset_price))
 
                     asset_value_usd = asset_balance * asset_price
@@ -6078,13 +6060,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, user_address: str, pool_id: str, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
         """Calculate the user's share value and token balances in a Balancer pool using direct contract calls."""
-            
+
         # Step 1: Get the pool tokens and balances from the Vault contract
         vault_address = self.params.balancer_vault_contract_addresses.get(chain)
         if not vault_address:
             self.context.logger.error(f"Vault address not found for chain: {chain}")
             return {}
-        
+
         pool_tokens_data = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=vault_address,
@@ -6094,14 +6076,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             pool_id=pool_id,
             chain_id=chain,
         )
-        
+
         if not pool_tokens_data:
-            self.context.logger.error(f"Failed to get pool tokens for pool ID: {pool_id}")
+            self.context.logger.error(
+                f"Failed to get pool tokens for pool ID: {pool_id}"
+            )
             return {}
-        
+
         tokens = pool_tokens_data[0]  # Array of token addresses
         balances = pool_tokens_data[1]  # Array of token balances
-        
+
         # Step 2: Get the user's balance of pool tokens (BPT)
         user_balance = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -6112,11 +6096,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             account=user_address,
             chain_id=chain,
         )
-        
+
         if user_balance is None:
-            self.context.logger.error(f"Failed to get user balance for pool: {pool_address}")
+            self.context.logger.error(
+                f"Failed to get user balance for pool: {pool_address}"
+            )
             return {}
-        
+
         # Step 3: Get the total supply of pool tokens
         total_supply = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -6126,42 +6112,45 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             data_key="data",
             chain_id=chain,
         )
-        
+
         if total_supply is None or total_supply == 0:
-            self.context.logger.error(f"Failed to get total supply for pool: {pool_address}")
+            self.context.logger.error(
+                f"Failed to get total supply for pool: {pool_address}"
+            )
             return {}
-        
+
         # Step 4: Calculate the user's share of the pool
         getcontext().prec = 50  # Increase decimal precision
         ctx = Context(prec=50)  # Use higher-precision data type
-        
+
         user_balance_decimal = Decimal(str(user_balance))
         total_supply_decimal = Decimal(str(total_supply))
-        
+
         if total_supply_decimal == 0:
             self.context.logger.error(f"Total supply is zero for pool: {pool_address}")
             return {}
-        
+
         user_share = ctx.divide(user_balance_decimal, total_supply_decimal)
-        
+
         # Step 5: Calculate user's token balances
         user_token_balances = {}
         for i, token_address in enumerate(tokens):
             token_address = to_checksum_address(token_address)
             token_balance = Decimal(str(balances[i]))
-            
+
             # Get token decimals
             token_decimals = yield from self._get_token_decimals(chain, token_address)
             if token_decimals is None:
-                self.context.logger.error(f"Failed to get decimals for token: {token_address}")
+                self.context.logger.error(
+                    f"Failed to get decimals for token: {token_address}"
+                )
                 continue
-            
+
             # Calculate user's token balance
             user_token_balance = user_share * token_balance
             user_token_balances[token_address] = user_token_balance
-        
+
         return user_token_balances
-            
 
     def get_user_share_value_sturdy(
         self, user_address: str, aggregator_address: str, asset_address: str, chain: str

@@ -5860,7 +5860,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if dex_type == DexType.BALANCER.value:
                     pool_address = position.get("pool_address")
                     user_balances = yield from self.get_user_share_value_balancer(
-                        "0xd0a27060DEC0F2F0307cDB2b1B2ee4cABf559E66",
+                        user_address,
                         pool_id,
                         pool_address,
                         chain,
@@ -6153,8 +6153,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 continue
 
+            # Adjust token balance based on decimals
+            adjusted_token_balance = token_balance / Decimal(10**token_decimals)
+
             # Calculate user's token balance
-            user_token_balance = user_share * token_balance
+            user_token_balance = user_share * adjusted_token_balance
             user_token_balances[token_address] = user_token_balance
 
         return user_token_balances

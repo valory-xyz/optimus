@@ -1211,381 +1211,6 @@ class CallCheckpointBehaviour(
             data=data,
         )
 
-    def calculate_user_share_values(self) -> Generator[None, None, None]:
-        """Calculate the value of shares for the user based on open pools."""
-        total_user_share_value_usd = Decimal(0)
-        allocations = []
-        individual_shares = []
-        portfolio_breakdown = []
-
-        for position in self.current_positions:
-            if position.get("status") == PositionStatus.OPEN.value:
-                dex_type = position.get("dex_type")
-                chain = position.get("chain")
-                pool_id = (
-                    position.get("pool_id")
-                    if dex_type == DexType.BALANCER.value
-                    else position.get("pool_address")
-                )
-                assets = (
-                    [position.get("token0_symbol"), position.get("token1_symbol")]
-                    if dex_type == DexType.BALANCER.value
-                    else [position.get("token0_symbol")]
-                )
-                apr = position.get("apr")
-
-                # Calculate user share value
-                user_address = self.params.safe_contract_addresses.get(chain)
-                if dex_type == DexType.BALANCER.value:
-                    pool_address = position.get("pool_address")
-                    user_balances = yield from self.get_user_share_value_balancer(
-                        user_address, pool_id, chain
-                    )
-                    details = yield from self._get_balancer_pool_name(
-                        pool_address, chain
-                    )
-                elif dex_type == DexType.STURDY.value:
-                    aggregator_address = position.get("pool_address")
-                    asset_address = position.get("token0")
-                    user_balances = yield from self.get_user_share_value_sturdy(
-                        user_address, aggregator_address, asset_address, chain
-                    )
-                    details = yield from self._get_aggregator_name(
-                        aggregator_address, chain
-                    )
-
-                user_share = Decimal(0)
-
-                for asset in assets:
-                    if dex_type == DexType.BALANCER.value:
-                        token0_address = position.get("token0")
-                        token1_address = position.get("token1")
-                        asset_addresses = [token0_address, token1_address]
-                        asset_address = asset_addresses[assets.index(asset)]
-                    elif dex_type == DexType.STURDY.value:
-                        asset_address = position.get("token0")
-                    else:
-                        self.context.logger.error(f"Unsupported DEX type: {dex_type}")
-                        continue
-
-                    asset_balance = user_balances.get(asset_address)
-                    if asset_balance is None:
-                        self.context.logger.error(
-                            f"Could not find balance for asset {asset}"
-                        )
-                        continue
-
-                    asset_price = yield from self._fetch_token_price(
-                        asset_address, chain
-                    )
-                    if asset_price is not None:
-                        asset_price = Decimal(str(asset_price))
-                    else:
-                        continue
-
-                    asset_value_usd = asset_balance * asset_price
-                    user_share += asset_value_usd
-                    # Check if the asset already exists in the portfolio_breakdown
-                    existing_asset = next(
-                        (
-                            entry
-                            for entry in portfolio_breakdown
-                            if entry["address"] == asset_address
-                        ),
-                        None,
-                    )
-                    if existing_asset:
-                        # Add the balance to the existing entry
-                        existing_asset["balance"] = float(asset_balance)
-                        existing_asset["value_usd"] = asset_value_usd
-                    else:
-                        # Create a new entry for the asset
-                        portfolio_breakdown.append(
-                            {
-                                "asset": asset,
-                                "address": asset_address,
-                                "balance": float(asset_balance),
-                                "price": asset_price,
-                                "value_usd": asset_value_usd,
-                            }
-                        )
-
-                total_user_share_value_usd += user_share
-                individual_shares.append(
-                    (
-                        user_share,
-                        dex_type,
-                        chain,
-                        pool_id,
-                        assets,
-                        apr,
-                        details,
-                        user_address,
-                        user_balances,
-                    )
-                )
-
-        yield from self._write_kv({"individual_shares": (individual_shares)})
-        self.context.logger.info(
-            f"individual_shares on CallCheckpointBehaviour :{individual_shares}"
-        )
-
-        # Remove closed positions from allocations
-        allocations = [
-            allocation
-            for allocation in allocations
-            if allocation["id"] != pool_id
-            or allocation["type"] != dex_type
-            or allocation["status"] != PositionStatus.CLOSED.value
-        ]
-
-        total_user_share_value_usd = sum(
-            Decimal(str(entry["value_usd"])) for entry in portfolio_breakdown
-        )
-        # Calculate the ratio of each asset in the portfolio
-        total_ratio = sum(
-            Decimal(str(entry["value_usd"])) / total_user_share_value_usd
-            for entry in portfolio_breakdown
-            if total_user_share_value_usd > 0
-        )
-        for entry in portfolio_breakdown:
-            if total_user_share_value_usd > 0:
-                entry["ratio"] = round(
-                    Decimal(str(entry["value_usd"]))
-                    / total_user_share_value_usd
-                    / total_ratio,
-                    6,
-                )
-                entry["value_usd"] = float(entry["value_usd"])
-                entry["balance"] = float(entry["balance"])
-            else:
-                entry["ratio"] = 0.0
-                entry["value_usd"] = float(entry["value_usd"])
-                entry["balance"] = float(entry["balance"])
-
-        # Calculate ratios and build allocations
-        total_ratio = sum(
-            float(user_share / total_user_share_value_usd) * 100
-            for user_share, _, _, _, _, _, _, _, _ in individual_shares
-            if total_user_share_value_usd > 0
-        )
-        for (
-            user_share,
-            dex_type,
-            chain,
-            pool_id,
-            assets,
-            apr,
-            details,
-            user_address,
-            _,
-        ) in individual_shares:
-            if total_user_share_value_usd > 0:
-                ratio = round(
-                    float(user_share / total_user_share_value_usd)
-                    * 100
-                    * 100
-                    / total_ratio,
-                    2,
-                )
-            else:
-                ratio = 0.0
-
-            allocations.append(
-                {
-                    "chain": chain,
-                    "type": dex_type,
-                    "id": pool_id,
-                    "assets": assets,
-                    "apr": round(apr, 2),
-                    "details": details,
-                    "ratio": float(ratio),
-                    "address": user_address,
-                }
-            )
-
-        # Store the calculated portfolio value and breakdown
-        self.portfolio_data = {
-            "portfolio_value": float(total_user_share_value_usd),
-            "allocations": [
-                {
-                    "chain": allocation["chain"],
-                    "type": allocation["type"],
-                    "id": allocation["id"],
-                    "assets": allocation["assets"],
-                    "apr": float(allocation["apr"]),
-                    "details": allocation["details"],
-                    "ratio": float(allocation["ratio"]),
-                    "address": allocation["address"],
-                }
-                for allocation in allocations
-            ],
-            "portfolio_breakdown": [
-                {
-                    "asset": entry["asset"],
-                    "address": entry["address"],
-                    "balance": float(entry["balance"]),
-                    "price": float(entry["price"]),
-                    "value_usd": float(entry["value_usd"]),
-                    "ratio": float(entry["ratio"]),
-                }
-                for entry in portfolio_breakdown
-            ],
-            "address": self.params.safe_contract_addresses.get(
-                self.params.target_investment_chains[0]
-            ),
-        }
-
-    def get_user_share_value_balancer(
-        self, user_address: str, pool_id: str, chain: str
-    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
-        """Calculate the user's share value and token balances in a Balancer pool."""
-        subgraph_url = self.params.balancer_graphql_endpoints.get(chain)
-        query = """
-        query getUserShareValue($poolId: ID!, $userAddress: String!) {
-            pool(id: $poolId) {
-                id
-                totalShares
-                tokens {
-                    address
-                    balance
-                    decimals
-                }
-            }
-            poolShares(
-                where: {
-                    userAddress_: { id: $userAddress },
-                    poolId: $poolId
-                }
-            ) {
-                balance
-                userAddress {
-                    id
-                }
-            }
-        }
-        """
-
-        variables = {"poolId": pool_id.lower(), "userAddress": user_address.lower()}
-        body = json.dumps({"query": query, "variables": variables}).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
-        response = yield from self.get_http_response(
-            "POST", subgraph_url, body, headers
-        )
-
-        if response.status_code != 200:
-            self.context.logger.error(
-                f"Query failed with status code {response.status_code}: {response.body}"
-            )
-            return {}
-
-        try:
-            data = json.loads(response.body)["data"]
-        except json.decoder.JSONDecodeError as e:
-            self.context.logger.error(f"Failed to parse response: {e}")
-            return {}
-
-        pool = data.get("pool")
-        pool_shares = data.get("poolShares")
-
-        if not pool:
-            self.context.logger.error("Pool not found.")
-            return {}
-
-        if not pool_shares:
-            user_balance = Decimal("0")
-            self.context.logger.info(
-                "No pool shares found for the specified user address and pool ID."
-            )
-            return {}
-        else:
-            user_balance = Decimal(pool_shares[0]["balance"])
-
-        total_shares = Decimal(pool["totalShares"])
-
-        getcontext().prec = 50  # Increase decimal precision
-        ctx = Context(prec=50)  # Use higher-precision data type
-
-        user_share = ctx.divide(user_balance, total_shares)
-
-        # Calculate user's token balances
-        user_token_balances = {}
-        for token in pool["tokens"]:
-            token_address = to_checksum_address(token["address"])
-            token_balance = Decimal(token["balance"])
-            user_token_balance = user_share * token_balance
-            user_token_balances[token_address] = user_token_balance
-
-        return user_token_balances
-
-    def get_user_share_value_sturdy(
-        self, user_address: str, aggregator_address: str, asset_address: str, chain: str
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Calculate the user's share value and token balance in a Sturdy vault."""
-        # Get user's underlying asset balance in the vault
-        user_asset_balance = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=aggregator_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="balance_of",
-            data_key="amount",
-            owner=user_address,
-            chain_id=chain,
-        )
-        if user_asset_balance is None:
-            self.context.logger.error("Failed to get user's asset balance.")
-            return {}
-
-        user_asset_balance = Decimal(user_asset_balance)
-
-        # Get decimals for proper scaling
-        decimals = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=aggregator_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="decimals",
-            data_key="decimals",
-            chain_id=chain,
-        )
-        if decimals is None:
-            self.context.logger.error("Failed to get decimals.")
-            return {}
-
-        scaling_factor = Decimal(10 ** int(decimals))
-
-        # Adjust decimals for assets
-        user_asset_balance /= scaling_factor
-
-        return {asset_address: user_asset_balance}
-
-    def _get_aggregator_name(
-        self, aggregator_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Get the name of the Sturdy Aggregator."""
-        aggreator_name = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=aggregator_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="name",
-            data_key="name",
-            chain_id=chain,
-        )
-        return aggreator_name
-
-    def _get_balancer_pool_name(
-        self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Get the name of the Balancer Pool."""
-        pool_name = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=WeightedPoolContract.contract_id,
-            contract_callable="get_name",
-            data_key="name",
-            chain_id=chain,
-        )
-        return pool_name
-
 
 class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that checks if the staking KPI has been met and makes vanity transactions if necessary."""
@@ -1841,50 +1466,51 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
 
                 # Step 4: Calculate APR for positions
-                portfolio_value = 0
-                data = yield from self._read_kv(keys=("portfolio_value",))
-                self.context.logger.info(f"data{data}")
-                if data and data["portfolio_value"]:
-                    self.context.logger.info(f"data{data}")
-                    portfolio_value = float(data.get("portfolio_value", "0"))
+                portfolio_value = self.portfolio_data.get("portfolio_value", None)
 
-                if not math.isclose(
-                    portfolio_value,
-                    self.portfolio_data["portfolio_value"],
-                    rel_tol=1e-9,
-                ):
-                    # Create portfolio snapshot for debugging
-                    portfolio_snapshot = self._create_portfolio_snapshot()
-
-                    # Calculate APR and related metrics
-                    actual_apr_data = yield from self.calculate_actual_apr(
-                        agent_id, attr_def_id
+                if portfolio_value:
+                    current_timestamp = self._get_current_timestamp()
+                    recalculate_apr = yield from self._is_apr_calculation_needed(
+                        current_timestamp, agent_id, attr_def_id
                     )
-                    if actual_apr_data:
-                        total_actual_apr = actual_apr_data.get("total_actual_apr", None)
-                        adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-                        if total_actual_apr:
-                            # Step 5: Store enhanced APR data in MirrorDB
-                            timestamp = int(
-                                self.round_sequence.last_round_transition_timestamp.timestamp()
+                    if not recalculate_apr:
+                        self.context.logger.info("APR recalculation not needed.")
+
+                    else:
+                        # Create portfolio snapshot for debugging
+                        portfolio_snapshot = self._create_portfolio_snapshot()
+
+                        # Calculate APR and related metrics
+                        actual_apr_data = yield from self.calculate_actual_apr(
+                            float(portfolio_value)
+                        )
+                        if actual_apr_data:
+                            total_actual_apr = actual_apr_data.get(
+                                "total_actual_apr", None
                             )
+                            adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-                            # Create enhanced data payload with portfolio metrics
                             enhanced_data = {
-                                "apr": float(total_actual_apr),
-                                "adjusted_apr": float(adjusted_apr),
-                                "timestamp": timestamp,
+                                "timestamp": current_timestamp,
                                 "portfolio_snapshot": portfolio_snapshot,
                                 "calculation_metrics": self._get_apr_calculation_metrics(),
                             }
+
+                            if total_actual_apr:
+                                enhanced_data["apr"] = total_actual_apr
+
+                            if adjusted_apr:
+                                enhanced_data["adjusted_apr"] = adjusted_apr
 
                             agent_attr = yield from self.create_agent_attribute(
                                 agent_id,
                                 attr_def_id,
                                 enhanced_data,
                             )
-                            self.context.logger.info(f"Stored APR data: {agent_attr}")
+                            self.context.logger.info(f"Stored Data: {agent_attr}")
+
+                            yield from self._store_last_apr_timestamp(current_timestamp)
 
                 # Prepare payload for consensus
                 payload = APRPopulationPayload(sender=sender, context="APR Population")
@@ -1952,8 +1578,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
             current_timestamp = self._get_current_timestamp()
             hours = max(1, (current_timestamp - int(last_investment_timestamp)) / 3600)
-            hours_in_year = Decimal("8760")
-            time_ratio = hours_in_year / Decimal(str(hours))
+            hours_in_year = 8760
+            time_ratio = hours_in_year / hours
             metrics["time_ratio"] = float(time_ratio)
 
         return metrics
@@ -2263,7 +1889,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
     def calculate_actual_apr(
-        self, agent_id, attr_def_id
+        self, portfolio_value: float
     ) -> Generator[None, None, Dict[str, float]]:
         """Calculate the actual APR for the portfolio based on current positions."""
         result = {}
@@ -2271,30 +1897,19 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         if not self._has_valid_portfolio_data():
             return None
 
-        final_value = yield from self._get_final_portfolio_value()
-        self._final_value = final_value
+        self._final_value = portfolio_value
         current_timestamp = self._get_current_timestamp()
 
-        recalculate_apr = yield from self._is_apr_calculation_needed(
-            current_timestamp, agent_id, attr_def_id
-        )
-
-        if not recalculate_apr:
-            return None
-
         initial_value = yield from self._calculate_initial_value()
-        self._initial_value = initial_value
-        if initial_value is None:
+        if not initial_value:
             return None
+
+        self._initial_value = initial_value
 
         time_since_investment = self._get_last_investment_timestamp()
-        self._calculate_apr(
-            final_value, initial_value, current_timestamp, time_since_investment, result
-        )
+        self._calculate_apr(current_timestamp, time_since_investment, result)
 
         yield from self._adjust_apr_for_eth_price(result, time_since_investment)
-
-        yield from self._store_last_apr_timestamp(current_timestamp)
 
         return result
 
@@ -2308,14 +1923,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return False
         return True
 
-    def _get_final_portfolio_value(self) -> Generator[None, None, Optional[Decimal]]:
-        final_value = Decimal(str(self.portfolio_data["portfolio_value"]))
-        self.context.logger.info(f"Final portfolio value: {final_value}")
-        yield from self._write_kv(
-            {"portfolio_value": json.dumps(self.portfolio_data["portfolio_value"])}
-        )
-        return final_value
-
     def _get_current_timestamp(self) -> int:
         return cast(
             SharedState, self.context.state
@@ -2323,8 +1930,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
     def _calculate_initial_value(
         self,
-    ) -> Generator[None, None, Optional[Decimal]]:
-        initial_value = Decimal("0")
+    ) -> Generator[None, None, Optional[float]]:
+        initial_value = 0.0
         for position in self.current_positions:
             if position.get("status") == PositionStatus.OPEN.value:
                 position_value = yield from self.calculate_initial_investment_value(
@@ -2332,7 +1939,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 self.context.logger.info(f"Position value: {position_value}")
                 if position_value is not None:
-                    initial_value += Decimal(str(position_value))
+                    initial_value += float(position_value)
                 else:
                     self.context.logger.warning(
                         f"Skipping position with null value: {position.get('id', 'unknown')}"
@@ -2364,30 +1971,28 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
     def _calculate_apr(
         self,
-        final_value: Decimal,
-        initial_value: Decimal,
         current_timestamp: int,
         time_since_investment: int,
         result,
     ):
-        if final_value <= 0:
+        if self._final_value <= 0:
             self.context.logger.warning("Final value is zero or negative")
             return 0.0
 
-        f_i_ratio = (final_value / initial_value) - Decimal("1")
+        f_i_ratio = (self._final_value / self._initial_value) - 1
         hours = max(1, (current_timestamp - int(time_since_investment)) / 3600)
         self.context.logger.info(f"Hours since investment: {hours}")
 
-        hours_in_year = Decimal("8760")
-        time_ratio = hours_in_year / Decimal(str(hours))
+        hours_in_year = 8760
+        time_ratio = hours_in_year / hours
 
-        apr = float(f_i_ratio * time_ratio * Decimal("100"))
+        apr = float(f_i_ratio * time_ratio * 100)
         if apr < 0:
-            apr = round(float((final_value / initial_value) - 1) * 100, 2)
+            apr = round(float((self._final_value / self._initial_value) - 1) * 100, 2)
 
         self.context.logger.info(f"Calculated APR: {apr}")
         if apr:
-            result["total_actual_apr"] = round(apr, 2)
+            result["total_actual_apr"] = float(round(apr, 2))
 
     def _adjust_apr_for_eth_price(
         self, result: Dict[str, float], time_since_investment: int
@@ -2404,7 +2009,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 Decimal(str(current_eth_price)) / Decimal(str(start_eth_price))
             )
             result["adjusted_apr"] = round(
-                result["total_actual_apr"] + float(adjustment_factor * Decimal("100")),
+                float(result["total_actual_apr"])
+                + float(adjustment_factor * Decimal("100")),
                 2,
             )
             result["adjustment_factor"] = float(adjustment_factor)
@@ -2457,9 +2063,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             last_apr_stored_timestamp
             and (current_timestamp - last_apr_stored_timestamp) < 7200
         ):
-            self.context.logger.info(
-                "APR calculation not required, last calculation was within 2 hours."
-            )
             return False
 
         return True
@@ -4324,6 +3927,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["timestamp"] = timestamp
 
         current_position["status"] = PositionStatus.OPEN.value
+        current_position["tx_hash"] = self.synchronized_data.final_tx_hash
         self.current_positions.append(current_position)
         self.store_current_positions()
         self.context.logger.info(
@@ -4339,6 +3943,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
                 position["status"] = PositionStatus.CLOSED.value
+                position["tx_hash"] = self.synchronized_data.final_tx_hash
                 self.context.logger.info(f"Closing position: {position}")
 
         self.store_current_positions()
@@ -6255,7 +5860,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if dex_type == DexType.BALANCER.value:
                     pool_address = position.get("pool_address")
                     user_balances = yield from self.get_user_share_value_balancer(
-                        user_address, pool_id, chain
+                        "0xd0a27060DEC0F2F0307cDB2b1B2ee4cABf559E66",
+                        pool_id,
+                        pool_address,
+                        chain,
                     )
                     details = yield from self._get_balancer_pool_name(
                         pool_address, chain
@@ -6294,10 +5902,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     asset_price = yield from self._fetch_token_price(
                         asset_address, chain
                     )
-                    if asset_price is not None:
-                        asset_price = Decimal(str(asset_price))
-                    else:
+                    if asset_price is None:
+                        self.context.logger.error(
+                            f"Could not fetch price for asset {asset}"
+                        )
                         continue
+
+                    asset_price = Decimal(str(asset_price))
 
                     asset_value_usd = asset_balance * asset_price
                     user_share += asset_value_usd
@@ -6350,70 +5961,75 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             or allocation["status"] != PositionStatus.CLOSED.value
         ]
 
+        portfolio_breakdown = [
+            entry for entry in portfolio_breakdown if entry["value_usd"] > 0
+        ]
+
         total_user_share_value_usd = sum(
             Decimal(str(entry["value_usd"])) for entry in portfolio_breakdown
         )
-        # Calculate the ratio of each asset in the portfolio
-        total_ratio = sum(
-            Decimal(str(entry["value_usd"])) / total_user_share_value_usd
-            for entry in portfolio_breakdown
-            if total_user_share_value_usd > 0
-        )
-        for entry in portfolio_breakdown:
-            if total_user_share_value_usd > 0:
-                entry["ratio"] = round(
-                    Decimal(str(entry["value_usd"]))
-                    / total_user_share_value_usd
-                    / total_ratio,
-                    6,
-                )
-                entry["value_usd"] = float(entry["value_usd"])
-                entry["balance"] = float(entry["balance"])
-            else:
-                entry["ratio"] = 0.0
-                entry["value_usd"] = float(entry["value_usd"])
-                entry["balance"] = float(entry["balance"])
-
-        # Calculate ratios and build allocations
-        total_ratio = sum(
-            float(user_share / total_user_share_value_usd) * 100
-            for user_share, _, _, _, _, _, _, _, _ in individual_shares
-            if total_user_share_value_usd > 0
-        )
-        for (
-            user_share,
-            dex_type,
-            chain,
-            pool_id,
-            assets,
-            apr,
-            details,
-            user_address,
-            _,
-        ) in individual_shares:
-            if total_user_share_value_usd > 0:
-                ratio = round(
-                    float(user_share / total_user_share_value_usd)
-                    * 100
-                    * 100
-                    / total_ratio,
-                    2,
-                )
-            else:
-                ratio = 0.0
-
-            allocations.append(
-                {
-                    "chain": chain,
-                    "type": dex_type,
-                    "id": pool_id,
-                    "assets": assets,
-                    "apr": round(apr, 2),
-                    "details": details,
-                    "ratio": float(ratio),
-                    "address": user_address,
-                }
+        if total_user_share_value_usd > 0:
+            # Calculate the ratio of each asset in the portfolio
+            total_ratio = sum(
+                Decimal(str(entry["value_usd"])) / total_user_share_value_usd
+                for entry in portfolio_breakdown
+                if total_user_share_value_usd > 0
             )
+            for entry in portfolio_breakdown:
+                if total_user_share_value_usd > 0:
+                    entry["ratio"] = round(
+                        Decimal(str(entry["value_usd"]))
+                        / total_user_share_value_usd
+                        / total_ratio,
+                        6,
+                    )
+                    entry["value_usd"] = float(entry["value_usd"])
+                    entry["balance"] = float(entry["balance"])
+                else:
+                    entry["ratio"] = 0.0
+                    entry["value_usd"] = float(entry["value_usd"])
+                    entry["balance"] = float(entry["balance"])
+
+            # Calculate ratios and build allocations
+            total_ratio = sum(
+                float(user_share / total_user_share_value_usd) * 100
+                for user_share, _, _, _, _, _, _, _, _ in individual_shares
+                if total_user_share_value_usd > 0
+            )
+            for (
+                user_share,
+                dex_type,
+                chain,
+                pool_id,
+                assets,
+                apr,
+                details,
+                user_address,
+                _,
+            ) in individual_shares:
+                if total_user_share_value_usd > 0:
+                    ratio = round(
+                        float(user_share / total_user_share_value_usd)
+                        * 100
+                        * 100
+                        / total_ratio,
+                        2,
+                    )
+                else:
+                    ratio = 0.0
+
+                allocations.append(
+                    {
+                        "chain": chain,
+                        "type": dex_type,
+                        "id": pool_id,
+                        "assets": assets,
+                        "apr": round(apr, 2),
+                        "details": details,
+                        "ratio": float(ratio),
+                        "address": user_address,
+                    }
+                )
 
         # Store the calculated portfolio value and breakdown
         self.portfolio_data = {
@@ -6448,82 +6064,96 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def get_user_share_value_balancer(
-        self, user_address: str, pool_id: str, chain: str
+        self, user_address: str, pool_id: str, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
-        """Calculate the user's share value and token balances in a Balancer pool."""
-        subgraph_url = self.params.balancer_graphql_endpoints.get(chain)
-        query = """
-        query getUserShareValue($poolId: ID!, $userAddress: String!) {
-            pool(id: $poolId) {
-                id
-                totalShares
-                tokens {
-                    address
-                    balance
-                    decimals
-                }
-            }
-            poolShares(
-                where: {
-                    userAddress_: { id: $userAddress },
-                    poolId: $poolId
-                }
-            ) {
-                balance
-                userAddress {
-                    id
-                }
-            }
-        }
-        """
+        """Calculate the user's share value and token balances in a Balancer pool using direct contract calls."""
 
-        variables = {"poolId": pool_id.lower(), "userAddress": user_address.lower()}
-        body = json.dumps({"query": query, "variables": variables}).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
-        response = yield from self.get_http_response(
-            "POST", subgraph_url, body, headers
+        # Step 1: Get the pool tokens and balances from the Vault contract
+        vault_address = self.params.balancer_vault_contract_addresses.get(chain)
+        if not vault_address:
+            self.context.logger.error(f"Vault address not found for chain: {chain}")
+            return {}
+
+        pool_tokens_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=vault_address,
+            contract_public_id=VaultContract.contract_id,
+            contract_callable="get_pool_tokens",
+            data_key="tokens",
+            pool_id=pool_id,
+            chain_id=chain,
         )
 
-        if response.status_code != 200:
+        if not pool_tokens_data:
             self.context.logger.error(
-                f"Query failed with status code {response.status_code}: {response.body}"
+                f"Failed to get pool tokens for pool ID: {pool_id}"
             )
             return {}
 
-        try:
-            data = json.loads(response.body)["data"]
-        except json.decoder.JSONDecodeError as e:
-            self.context.logger.error(f"Failed to parse response: {e}")
-            return {}
+        tokens = pool_tokens_data[0]  # Array of token addresses
+        balances = pool_tokens_data[1]  # Array of token balances
 
-        pool = data.get("pool")
-        pool_shares = data.get("poolShares")
+        # Step 2: Get the user's balance of pool tokens (BPT)
+        user_balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="check_balance",
+            data_key="token",
+            account=user_address,
+            chain_id=chain,
+        )
 
-        if not pool:
-            self.context.logger.error("Pool not found.")
-            return {}
-
-        if not pool_shares:
-            user_balance = Decimal("0")
-            self.context.logger.info(
-                "No pool shares found for the specified user address and pool ID."
+        if user_balance is None:
+            self.context.logger.error(
+                f"Failed to get user balance for pool: {pool_address}"
             )
             return {}
-        else:
-            user_balance = Decimal(pool_shares[0]["balance"])
 
-        total_shares = Decimal(pool["totalShares"])
+        # Step 3: Get the total supply of pool tokens
+        total_supply = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_total_supply",
+            data_key="data",
+            chain_id=chain,
+        )
 
+        if total_supply is None or total_supply == 0:
+            self.context.logger.error(
+                f"Failed to get total supply for pool: {pool_address}"
+            )
+            return {}
+
+        # Step 4: Calculate the user's share of the pool
         getcontext().prec = 50  # Increase decimal precision
         ctx = Context(prec=50)  # Use higher-precision data type
 
-        user_share = ctx.divide(user_balance, total_shares)
+        user_balance_decimal = Decimal(str(user_balance))
+        total_supply_decimal = Decimal(str(total_supply))
 
-        # Calculate user's token balances
+        if total_supply_decimal == 0:
+            self.context.logger.error(f"Total supply is zero for pool: {pool_address}")
+            return {}
+
+        user_share = ctx.divide(user_balance_decimal, total_supply_decimal)
+
+        # Step 5: Calculate user's token balances
         user_token_balances = {}
-        for token in pool["tokens"]:
-            token_address = to_checksum_address(token["address"])
-            token_balance = Decimal(token["balance"])
+        for i, token_address in enumerate(tokens):
+            token_address = to_checksum_address(token_address)
+            token_balance = Decimal(str(balances[i]))
+
+            # Get token decimals
+            token_decimals = yield from self._get_token_decimals(chain, token_address)
+            if token_decimals is None:
+                self.context.logger.error(
+                    f"Failed to get decimals for token: {token_address}"
+                )
+                continue
+
+            # Calculate user's token balance
             user_token_balance = user_share * token_balance
             user_token_balances[token_address] = user_token_balance
 

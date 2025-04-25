@@ -2,13 +2,13 @@
     "dev": {
         "custom/valory/merkl_pools_search/0.1.0": "bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma",
         "custom/valory/asset_lending/0.1.0": "bafybeianomzulpty4lq37qc4bly44tto7scghg2he7qm6nncjxzrvwzy4q",
-        "custom/valory/max_apr_selection/0.1.0": "bafybeifrtzmqqtl7sp2av2ea56z2yitkr5olsanquastbuojlyxrvksqru",
+        "custom/valory/max_apr_selection/0.1.0": "bafybeihimuufg24ernhp7ppug7azwumprr5yrpae5uc3iqatt6vmdtl46q",
         "custom/valory/balancer_pools_search/0.1.0": "bafybeifztzxwdqiccffo4ngggdmork5r5hvejzcqxeukft6zdum43meolq",
         "custom/valory/uniswap_pools_search/0.1.0": "bafybeihxeuahk6mkg5mmh6xiyot6rnwnenpmcpi3fxk4thloevdbuowo4y",
-        "custom/valory/velodrome_finance/0.1.0": "bafybeicyqk6oqhlbgwjswjn5e4swe7ydyoabxvyzpov7anrl63o2szol7q",
-        "contract/valory/velodrome_router/0.1.0": "bafybeiebagwavqjckkx5cdbm3gpye3ym4b2sjdhoeaoboj3zbijenf3ueu",
-        "contract/valory/velodrome_cl_pool/0.1.0": "bafybeidoqdmpjalmm43j23nykhfehbzzftvtooappkhvr6nso7swpq2s5e",
-        "contract/valory/velodrome_cl_manager/0.1.0": "bafybeiebzigyyeqx6xelaws6w2vqcsa56nlpg6lphoxlamgglul6337idu",
+        "custom/valory/velodrome_finance/0.1.0": "bafybeig5oqoslon2ig22jxj6nltthipwtez6opzqqdprgnranoxutwqo4a",
+        "contract/valory/velodrome_router/0.1.0": "bafybeiapkfux4ei3kazmpp42z3hn5l6ixw5j2wxu6h253isfdvy3p6z5ia",
+        "contract/valory/velodrome_cl_pool/0.1.0": "bafybeigxluqnk5icqdyfwgprymfvrlklkutzq462y33vss24fb6fn3zqde",
+        "contract/valory/velodrome_cl_manager/0.1.0": "bafybeify5hcdoafazinb3yesqdwawioic3aim6y763jaqm5jknv6tsnjc4",
         "contract/valory/balancer_weighted_pool/0.1.0": "bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm",
         "contract/valory/balancer_vault/0.1.0": "bafybeiff3ltn6xoh3otuywk2j3yxujdlfzcvri66slnufv5t4hkj5musfa",
         "contract/valory/erc20/0.1.0": "bafybeie2wet3factwc6pwqvqpwqu3prtv75lmbqo5y4onda5y533ufdqhy",
@@ -19,10 +19,10 @@
         "contract/valory/staking_activity_checker/0.1.0": "bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe",
         "connection/valory/mirror_db/0.1.0": "bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeif4nypd275u5j2hgjzsy75bkqganumdamrbetfji7gvu52dxarbfu",
-        "skill/valory/optimus_abci/0.1.0": "bafybeibswbq2w3gnqxy63gb5xaeekmkqmfnpxms4z7dcj6pyyqhsiw6snu",
-        "agent/valory/optimus/0.1.0": "bafybeidyt7ebyw3fyongug555pxpfdmfkugnhptouypswyicb42pfj7ioe",
-        "service/valory/optimus/0.1.0": "bafybeig6b4qwghnug3jeoshqfi4uepoqq7pyx5izioowe67bozvawsw7jy"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeieave5ujftvrrxvswpoukocsm6a3cwa62xwqx2gra4ikktd27xajm",
+        "skill/valory/optimus_abci/0.1.0": "bafybeidpxzfzaalgs3ct3kljiz64lru7ndjeciuu7e2o37gmec4labqona",
+        "agent/valory/optimus/0.1.0": "bafybeidtoirb5g6sf7nloedabp3uqchsi5kwlypyzczoxb4uuaimtodgmy",
+        "service/valory/optimus/0.1.0": "bafybeif4x57luam5qtwumsvzsjkqs3nnchnhawjxyizfr7imxcmrx7hroe"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -51,7 +51,7 @@
         "skill/valory/reset_pause_abci/0.1.0": "bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a",
         "skill/valory/registration_abci/0.1.0": "bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y",
         "skill/valory/abstract_round_abci/0.1.0": "bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai",
-        "skill/valory/termination_abci/0.1.0": "bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu",
-        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u"
+        "skill/valory/termination_abci/0.1.0": "bafybeie7vqlipix3qd5hcdlonwqrjzzppycwypgairnspwchqnsdob3cjq",
+        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeifgxfpiuztvhncsmg7u2owjaue4x7k3xccwu7m52c24twnvqlws5e"
     }
 }

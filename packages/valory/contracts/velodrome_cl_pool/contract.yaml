@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihit4bpbbls4akikswjozkpp3h46o3odwrhljnkrv5h72wsutaduq
-  contract.py: bafybeihcwca6qxhp24mg7glqzja4kcts44jgd3q4pmlq6wo4sqg37dq6xq
-  contract_interface.json: bafybeida66bnw4yp3gb6oaqg53l7eor3qlgjxldkyqaqfqfj3spj22nvki
+  build/contract_interface.json: bafybeih264ikmebscydw6nsv5ldpwugatldqnflrxkij2gvirkcvkm3tpi
+  contract.py: bafybeidxnflswxghbifa4etaymjszyaq5vkob2w3senaqlksec57khjf3a
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeCLPoolContract
 contract_interface_paths:
-  ethereum: contract_interface.json
+  ethereum: build/contract_interface.json
 dependencies:
   open-aea-ledger-ethereum:
     version: ==1.64.0

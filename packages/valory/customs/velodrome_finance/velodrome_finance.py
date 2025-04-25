@@ -6,7 +6,9 @@ import time
 from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Union, Tuple
+import json
 import numpy as np
+import pandas as pd
 import requests
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
@@ -14,6 +16,8 @@ from pycoingecko import CoinGeckoAPI
 import logging
 import random
 from collections import deque
+import os
+import xlsxwriter
 
 # Set up more detailed logging
 logging.basicConfig(
@@ -28,7 +32,7 @@ REQUIRED_FIELDS = (
     "current_positions",
     "coingecko_api_key",
 )
-VELODROME = "velodromePool"
+VELODROME = "Velodrome"
 PERCENT_CONVERSION = 100
 TVL_WEIGHT = 0.7
 APR_WEIGHT = 0.3
@@ -82,18 +86,58 @@ class RateLimiter:
 coingecko_rate_limiter = RateLimiter()
 
 # Cache for token data to reduce redundant API calls
-token_price_cache = {}
 token_id_cache = {}
 
 errors = []
 
-@lru_cache(None)
-def fetch_coin_list():
-    """Fetches the list of coins from CoinGecko API only once."""
-    url = "https://api.coingecko.com/api/v3/coins/list"
+def is_pro_api_key(coingecko_api_key: str) -> bool:
+    """
+    Check if the provided CoinGecko API key is a pro key.
+    """
+    # Try using the key as a pro API key with a direct request
+    url = "https://pro-api.coingecko.com/api/v3/ping"
+    headers = {"x-cg-pro-api-key": coingecko_api_key}
+    
     try:
         coingecko_rate_limiter.wait_if_needed()
-        response = requests.get(url)
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return True
+    except Exception:
+        pass
+    
+    # Try as demo key if pro check failed
+    url = "https://api.coingecko.com/api/v3/ping"
+    headers = {"x-cg-demo-api-key": coingecko_api_key}
+    
+    try:
+        coingecko_rate_limiter.wait_if_needed()
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return False  # It's a valid demo key, not a pro key
+    except Exception:
+        pass
+    
+    # If we can't determine for sure, assume it's a demo key
+    return False
+
+@lru_cache(None)
+def fetch_coin_list(api_key):
+    """Fetches the list of coins from CoinGecko API only once."""
+    is_pro = is_pro_api_key(api_key)
+    
+    if is_pro:
+        # Pro API endpoint with authentication
+        url = "https://pro-api.coingecko.com/api/v3/coins/list"
+        headers = {"x-cg-pro-api-key": api_key}
+    else:
+        # Demo API endpoint
+        url = "https://api.coingecko.com/api/v3/coins/list"
+        headers = {"x-cg-demo-api-key": api_key}
+    
+    try:
+        coingecko_rate_limiter.wait_if_needed()
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         logger.info(f"Successfully fetched coin list: {len(response.json())} coins")
         return response.json()
@@ -153,7 +197,7 @@ def get_velodrome_pools(graphql_endpoint) -> Union[Dict[str, Any], List[Dict[str
     """Get pools from Velodrome."""
     graphql_query = """
     {
-      liquidityPools(first: 25, orderBy: totalValueLockedUSD, orderDirection: desc) {
+      liquidityPools(first: 20, orderBy: totalValueLockedUSD, orderDirection: desc) {
         id
         fees {
           feeType
@@ -358,7 +402,7 @@ def calculate_il_impact_standard(initial_price_ratio, final_price_ratio):
         logger.debug(f"Error calculating IL impact: {str(e)}")
         return 0
 
-def batch_fetch_price_data(token_ids, coingecko_api, from_timestamp, to_timestamp):
+def batch_fetch_price_data(token_ids, coingecko_api, from_timestamp, to_timestamp, api_key):
     """
     Fetch price data for multiple tokens in batches to optimize API calls.
     """
@@ -371,30 +415,35 @@ def batch_fetch_price_data(token_ids, coingecko_api, from_timestamp, to_timestam
         logger.info(f"Fetching price data for batch of {len(batch)} tokens")
         
         for token_id in batch:
-            # Check cache first
-            cache_key = f"{token_id}:{from_timestamp}:{to_timestamp}"
-            if cache_key in token_price_cache:
-                price_data[token_id] = token_price_cache[cache_key]
-                logger.debug(f"Using cached price data for {token_id}")
-                continue
-                
             try:
                 # Wait for rate limit if needed
                 coingecko_rate_limiter.wait_if_needed()
                 
-                prices = coingecko_api.get_coin_market_chart_range_by_id(
-                    id=token_id,
-                    vs_currency="usd",
-                    from_timestamp=from_timestamp,
-                    to_timestamp=to_timestamp,
-                )
+                # Set API params
+                params = {
+                    "id": token_id,
+                    "vs_currency": "usd",
+                    "from_timestamp": from_timestamp,
+                    "to_timestamp": to_timestamp,
+                }
+                
+                # Use CoinGecko API with the appropriate authentication
+                is_pro = is_pro_api_key(api_key)
+                if is_pro:
+                    prices = coingecko_api.get_coin_market_chart_range_by_id(
+                        **params, 
+                        x_cg_pro_api_key=api_key
+                    )
+                else:
+                    prices = coingecko_api.get_coin_market_chart_range_by_id(
+                        **params,
+                        x_cg_demo_api_key=api_key
+                    )
                 
                 # Extract price data
                 token_prices = [x[1] for x in prices["prices"]]
                 price_data[token_id] = token_prices
                 
-                # Cache the result
-                token_price_cache[cache_key] = token_prices
                 logger.debug(f"Fetched {len(token_prices)} price points for {token_id}")
                 
             except Exception as e:
@@ -414,8 +463,12 @@ def calculate_il_risk_score(token_ids, coingecko_api_key: str, time_period: int 
     Calculate IL risk score for multiple tokens based on:
     IL Risk Score = IL Impact × Price Correlation × Volatility Multiplier
     """
-    # Set up CoinGecko client
-    cg = CoinGeckoAPI()
+    # Set up CoinGecko client with appropriate API key type
+    is_pro = is_pro_api_key(coingecko_api_key)
+    if is_pro:
+        cg = CoinGeckoAPI(api_key=coingecko_api_key)
+    else:
+        cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
     
     # Set up time range
     to_timestamp = int(datetime.now().timestamp())
@@ -430,7 +483,7 @@ def calculate_il_risk_score(token_ids, coingecko_api_key: str, time_period: int 
     try:
         # Use batch fetching for price data
         price_data_map = batch_fetch_price_data(
-            valid_token_ids, cg, from_timestamp, to_timestamp
+            valid_token_ids, cg, from_timestamp, to_timestamp, coingecko_api_key
         )
         
         # Make sure we have data for all tokens
@@ -602,6 +655,237 @@ def calculate_sharpe_ratio(snapshots, risk_free_rate=None):
         errors.append(error_msg)
         return None
 
+
+# Add these functions to calculate depth score in the Velodrome script
+
+def calculate_depth_scores_multi_bp(avg_tvl, avg_volume):
+    """
+    Calculate depth scores for multiple basis point levels.
+    
+    Depth Score = (TVL × Average Daily Volume) / (Price Impact × 100)
+    
+    Args:
+        avg_tvl: Average total value locked
+        avg_volume: Average daily volume
+        
+    Returns:
+        dict: Depth scores for different basis point levels
+    """
+    # Basis point levels to calculate (in bp units)
+    bp_levels = [10, 50, 100, 200, 300, 400, 500]
+    
+    depth_scores = {}
+    for bp in bp_levels:
+        # Convert bp to percentage as decimal (e.g., 10bp = 0.001, 50bp = 0.005)
+        # Note: 100bp = 1%, so bp/10000 converts to decimal percentage
+        price_impact = bp / 10000
+        
+        # Calculate depth score using the formula
+        if avg_tvl > 0 and avg_volume > 0 and price_impact > 0:
+            depth_score = (avg_tvl * avg_volume) / (price_impact * 100)
+            # Cap at reasonable values
+            depth_score = min(depth_score, 1e12)
+        else:
+            depth_score = 0
+            
+        # Store in the result dictionary
+        depth_scores[f"depth_score_{bp}bp"] = depth_score
+        
+    return depth_scores
+
+def fetch_liquidity_metrics(
+    pool_id: str,
+    snapshots: List[Dict],
+    price_impact: float = 0.01,  # Price impact in decimal format (0.01 = 1%)
+) -> Optional[Dict[str, Any]]:
+    """
+    Calculate liquidity metrics for a pool based on snapshots.
+    
+    Args:
+        pool_id: Pool identifier
+        snapshots: List of pool snapshots
+        price_impact: Price impact in decimal format (e.g., 0.01 = 1%)
+        
+    Returns:
+        dict: Liquidity metrics including depth scores
+    """
+    cache_key = f"{pool_id}:liquidity_metrics:{price_impact}"
+    
+    # Check if we have a cached result
+    if cache_key in CACHE["metrics"]:
+        return CACHE["metrics"][cache_key]
+        
+    try:
+        # Filter out potentially corrupted data
+        filtered_snapshots = []
+        for snapshot in snapshots:
+            try:
+                liquidity_value = float(snapshot.get("totalValueLockedUSD", 0))
+                volume_value = float(snapshot.get("dailyVolumeUSD", 0))
+                
+                # Skip extreme values that could cause numerical issues
+                if liquidity_value > 1e12 or volume_value > 1e12:
+                    continue
+                    
+                filtered_snapshots.append(snapshot)
+            except (ValueError, TypeError):
+                continue
+                
+        if not filtered_snapshots:
+            logger.warning(f"No valid snapshots after filtering for pool {pool_id}")
+            return None
+                
+        # Calculate metrics on filtered data
+        try:
+            avg_tvl = statistics.mean(float(s.get("totalValueLockedUSD", 0)) for s in filtered_snapshots)
+            avg_volume = statistics.mean(float(s.get("dailyVolumeUSD", 0)) for s in filtered_snapshots)
+            logger.debug(f"Average TVL: {avg_tvl}, Average volume: {avg_volume}")
+        except statistics.StatisticsError as e:
+            logger.error(f"Error calculating statistics: {str(e)}")
+            return None
+
+        # Calculate depth scores for different basis point levels
+        depth_scores = calculate_depth_scores_multi_bp(avg_tvl, avg_volume)
+        
+        # Handle potential division by zero or very small values for main depth score
+        # Note: price_impact is in decimal format (e.g., 0.01 = 1%)
+        if price_impact <= 0.001:  # Avoid division by extremely small values (0.1%)
+            price_impact = 0.001
+            
+        # Calculate depth score using the formula: (TVL × Average Daily Volume) / (Price Impact × 100)
+        try:
+            # Depth Score = (TVL × Average Daily Volume) / (Price Impact × 100)
+            depth_score = (
+                (avg_tvl * avg_volume) / (price_impact * 100)
+                if avg_tvl > 0 and avg_volume > 0
+                else 0
+            )
+            
+            # Cap depth score at reasonable values to prevent numerical issues
+            depth_score = min(depth_score, 1e12)
+            
+            # Liquidity Risk Multiplier = 1 - (1 / Depth Score)
+            liquidity_risk_multiplier = (
+                max(0, 1 - (1 / max(1, depth_score)))
+                if depth_score > 0
+                else 0
+            )
+            
+            # Maximum Position Size = 50 * (TVL * Liquidity Risk Multiplier)/100
+            max_position_size = min(
+                50 * (avg_tvl * liquidity_risk_multiplier) / 100,
+                avg_tvl * 0.1  # Cap at 10% of TVL as a safety measure
+            )
+            
+            # Cap max position size to reasonable values
+            max_position_size = min(max_position_size, 1e7)
+            
+        except (ZeroDivisionError, OverflowError, ValueError) as e:
+            error_msg = f"Error calculating metrics for pool {pool_id}: {str(e)}"
+            logger.error(error_msg)
+            errors.append(error_msg)
+            return None
+
+        result = {
+            "Average TVL": avg_tvl,
+            "Average Daily Volume": avg_volume,
+            "Depth Score": depth_score,
+            "Liquidity Risk Multiplier": liquidity_risk_multiplier,
+            "Maximum Position Size": max_position_size,
+            "Meets Depth Score Threshold": depth_score > 50,
+        }
+        
+        # Add depth scores for different basis point levels
+        result.update(depth_scores)
+        
+        # Cache the result
+        CACHE["metrics"][cache_key] = result
+        return result
+
+    except Exception as e:
+        error_msg = f"Error calculating liquidity metrics for pool {pool_id}: {str(e)}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+        return None
+
+def analyze_pool_liquidity(
+    pool_id: str,
+    snapshots: List[Dict],
+    price_impact: float = 0.01,  # Price impact in decimal format (0.01 = 1%)
+):
+    """
+    Analyze pool liquidity and return depth scores and maximum position size.
+    
+    Args:
+        pool_id: Pool identifier
+        snapshots: List of pool snapshots
+        price_impact: Price impact in decimal format (e.g., 0.01 = 1%)
+        
+    Returns:
+        tuple: (depth_score, max_position_size, depth_scores_multi_bp)
+    """
+    try:
+        logger.info(f"Analyzing liquidity for pool {pool_id}")
+        metrics = fetch_liquidity_metrics(pool_id, snapshots, price_impact)
+        if metrics is None:
+            error_msg = f"Could not retrieve depth score for pool {pool_id}"
+            logger.error(error_msg)
+            errors.append(error_msg)
+            return float("nan"), float("nan"), {}
+        
+        # Extract the main depth score and max position size
+        depth_score = metrics["Depth Score"]
+        max_position_size = metrics["Maximum Position Size"]
+        
+        # Extract depth scores for different basis point levels
+        depth_scores_multi_bp = {k: v for k, v in metrics.items() if k.startswith("depth_score_")}
+        
+        logger.debug(f"Depth score: {depth_score}, Max position: {max_position_size}")
+        logger.debug(f"Multi-BP depth scores: {depth_scores_multi_bp}")
+        
+        return depth_score, max_position_size, depth_scores_multi_bp
+    except Exception as e:
+        error_msg = f"Error analyzing pool liquidity for {pool_id}: {str(e)}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+        return float("nan"), float("nan"), {}
+
+# Function to calculate APR-based max position size (copied from Balancer script)
+def calculate_max_position_size_apr(current_apr, next_best_apr, current_tvl):
+    """
+    Calculate maximum position size based on APR dilution compared to next best opportunity.
+    
+    Formula: a = ((APRi / APRb) - 1) * TVLi
+    
+    Where:
+    - a = Maximum allocation amount
+    - APRi = APR of current pool (formatted as 1.xx where 6% = 1.06)
+    - APRb = APR of next best pool (formatted as 1.xx where 6% = 1.06)
+    - TVLi = TVL of current pool
+    """
+    # Convert APRs to the correct format for formula (decimal to decimal+1 format)
+    current_apr_formatted = 1 + current_apr
+    next_best_apr_formatted = 1 + next_best_apr
+    
+    # Avoid division by zero or invalid calculations
+    if next_best_apr_formatted <= 1 or current_apr_formatted <= next_best_apr_formatted:
+        logger.debug(f"Invalid APR comparison: current={current_apr}, next_best={next_best_apr}")
+        return 0
+        
+    try:
+        # Calculate maximum allocation using the formula: a = ((APRi / APRb) - 1) * TVLi
+        max_allocation = (current_apr_formatted / next_best_apr_formatted - 1) * current_tvl
+        
+        # Ensure non-negative allocation and cap at reasonable values (50% of pool TVL)
+        result = max(0, min(max_allocation, current_tvl * 0.5))
+        
+        logger.debug(f"Calculated APR-based max position: {result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error calculating APR-based max position size: {str(e)}")
+        return 0
+
 def get_filtered_pools(pools, current_positions):
     """Filter pools based on criteria and exclude current positions."""
     qualifying_pools = []
@@ -636,47 +920,6 @@ def get_filtered_pools(pools, current_positions):
     
     # We'll calculate APR in a separate step
     return [p for p in qualifying_pools if p["tvl"] >= tvl_threshold]
-
-def format_pool_data(pools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Format pool data for output according to required schema."""
-    formatted_pools = []
-    
-    for pool in pools:
-        # Skip pools with more than two tokens
-        if pool.get("token_count", 0) != 2:
-            continue
-            
-        # Prepare base data including all required fields
-        formatted_pool = {
-            "dex_type": VELODROME,
-            "pool_address": pool["id"],
-            "pool_id": pool["id"],
-            "has_incentives": False,  # We'd need to adapt this for Velodrome's incentives
-            "total_apr": pool.get("total_apr", 0),
-            "organic_apr": pool.get("organic_apr", 0),
-            "incentive_apr": 0,  # Placeholder, would need to adapt for Velodrome
-            "tvl": float(pool.get("totalValueLockedUSD", 0)),
-            "is_lp": True,  # All pools are LP opportunities
-            "sharpe_ratio": pool.get("sharpe_ratio"),
-            "il_risk_score": pool.get("il_risk_score"),
-            "token_count": pool.get("token_count", 0),
-            "volume": float(pool.get("cumulativeVolumeUSD", 0))
-        }
-        
-        # Add tokens (should be exactly 2 tokens)
-        tokens = pool.get("inputTokens", [])
-        if len(tokens) >= 1:
-            formatted_pool["token0"] = tokens[0]["id"]
-            formatted_pool["token0_symbol"] = tokens[0]["symbol"]
-        
-        if len(tokens) >= 2:
-            formatted_pool["token1"] = tokens[1]["id"]
-            formatted_pool["token1_symbol"] = tokens[1]["symbol"]
-            
-        formatted_pools.append(formatted_pool)
-        
-    logger.info(f"Formatted {len(formatted_pools)} pools for output")
-    return formatted_pools
 
 def get_opportunities(graphql_endpoint, current_positions, coingecko_api_key, coin_list):
     """Get and format pool opportunities with all required metrics."""
@@ -731,48 +974,109 @@ def get_opportunities(graphql_endpoint, current_positions, coingecko_api_key, co
         else:
             logger.warning(f"Not enough valid token IDs for IL calculation for pool {pool_id}")
             pool["il_risk_score"] = None
+            
+        # NEW: Calculate depth score
+        pool["depth_score"], pool["max_position_size"], pool["depth_scores_multi_bp"] = analyze_pool_liquidity(
+            pool_id, snapshots
+        )
+        logger.info(f"Calculated depth score: {pool.get('depth_score')} and max position size: {pool.get('max_position_size')}")
     
     # After calculating APR, apply the APR threshold
     apr_list = [float(p.get("total_apr", 0)) for p in filtered_pools]
-    if apr_list:
-        apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
-        max_apr = max(apr_list)
+    
+    # Rest of the function remains the same...
+    
+    # NEW: Calculate APR-based max position size for all pools
+    if len(filtered_pools) > 1:
+        sorted_pools = sorted(filtered_pools, key=lambda x: float(x.get('total_apr', 0)), reverse=True)
+        logger.info("Calculating APR-based max position sizes using next best opportunities")
         
-        # Score and filter
-        scored_pools = []
-        for p in filtered_pools:
-            tvl = float(p["totalValueLockedUSD"])
-            apr = float(p["total_apr"])
-            max_tvl = max([float(p["totalValueLockedUSD"]) for p in filtered_pools])
+        # For each pool, calculate max position size based on next best opportunity
+        for i, pool in enumerate(sorted_pools):
+            current_apr = float(pool.get('total_apr', 0))
+            current_tvl = float(pool["totalValueLockedUSD"])
             
-            if apr >= apr_threshold:
-                score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
-                p["score"] = score
-                scored_pools.append(p)
-        
-        if scored_pools:
-            score_threshold = np.percentile(
-                [p["score"] for p in scored_pools], SCORE_PERCENTILE
+            # For the highest APR pool, use the second best as reference
+            if i < len(sorted_pools) - 1:
+                next_best_apr = float(sorted_pools[i+1].get('total_apr', 0))
+            else:
+                # For the last pool, use a reasonable fallback (e.g., 70% of its own APR)
+                next_best_apr = current_apr * 0.7
+            
+            # Calculate APR-based max position size
+            apr_based_max_position = calculate_max_position_size_apr(
+                current_apr, 
+                next_best_apr, 
+                current_tvl
             )
-            filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
-            filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
             
-            final_pools = filtered_scored_pools[:10]
-            logger.info(f"Selected top {len(final_pools)} pools after scoring")
-        else:
-            final_pools = filtered_pools[:10]
-            logger.warning("No pools met the scoring thresholds, using top TVL pools")
-    else:
-        final_pools = filtered_pools[:10]
-        logger.warning("No APR data available, using top TVL pools")
-
+            # Store the result
+            pool["max_position_size_apr"] = apr_based_max_position
+            
+            # Update the max_position_size to be the smaller of the two values
+            if apr_based_max_position > 0 and not np.isnan(pool.get("max_position_size", float('nan'))):
+                pool["max_position_size"] = min(pool["max_position_size"], apr_based_max_position)
+            elif apr_based_max_position > 0:
+                pool["max_position_size"] = apr_based_max_position
+    
     # Format pools with all required metrics
-    formatted_pools = format_pool_data(final_pools)
+    formatted_pools = format_pool_data(filtered_pools)
     
     execution_time = time.time() - start_time
     logger.info(f"Opportunity discovery completed in {execution_time:.2f} seconds")
     logger.info(f"Found {len(formatted_pools)} valid opportunities")
     
+    return formatted_pools
+
+# 3. Update format_pool_data function to include depth score in the output
+def format_pool_data(pools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Format pool data for output according to required schema."""
+    formatted_pools = []
+    
+    for pool in pools:
+        # Skip pools with more than two tokens
+        if pool.get("token_count", 0) != 2:
+            continue
+            
+        # Prepare base data including all required fields
+        formatted_pool = {
+            "dex_type": VELODROME,
+            "pool_address": pool["id"],
+            "pool_id": pool["id"],
+            "has_incentives": False,  # We'd need to adapt this for Velodrome's incentives
+            "total_apr": pool.get("total_apr", 0),
+            "organic_apr": pool.get("organic_apr", 0),
+            "incentive_apr": 0,  # Placeholder, would need to adapt for Velodrome
+            "tvl": float(pool.get("totalValueLockedUSD", 0)),
+            "is_lp": True,  # All pools are LP opportunities
+            "sharpe_ratio": pool.get("sharpe_ratio"),
+            "il_risk_score": pool.get("il_risk_score"),
+            "token_count": pool.get("token_count", 0),
+            "volume": float(pool.get("cumulativeVolumeUSD", 0)),
+            # NEW: Add depth score and max position size
+            "chain":"optimism",
+            "depth_score": pool.get("depth_score"),
+            "max_position_size": pool.get("max_position_size"),
+            "max_position_size_apr": pool.get("max_position_size_apr", 0)
+        }
+        
+        # NEW: Add depth scores for different basis point levels
+        if "depth_scores_multi_bp" in pool:
+            formatted_pool.update(pool["depth_scores_multi_bp"])
+        
+        # Add tokens (should be exactly 2 tokens)
+        tokens = pool.get("inputTokens", [])
+        if len(tokens) >= 1:
+            formatted_pool["token0"] = tokens[0]["id"]
+            formatted_pool["token0_symbol"] = tokens[0]["symbol"]
+        
+        if len(tokens) >= 2:
+            formatted_pool["token1"] = tokens[1]["id"]
+            formatted_pool["token1_symbol"] = tokens[1]["symbol"]
+            
+        formatted_pools.append(formatted_pool)
+        
+    logger.info(f"Formatted {len(formatted_pools)} pools for output")
     return formatted_pools
 
 def run(**kwargs) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
@@ -792,9 +1096,10 @@ def run(**kwargs) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
     # Clear previous errors
     errors.clear()
     
-    # Clear cache for a fresh run
+    # Clear caches for a fresh run
     for cache_type in CACHE:
         CACHE[cache_type].clear()
+    token_id_cache.clear()
     
     start_time = time.time()
     logger.info("Starting Velodrome pool analysis")
@@ -807,8 +1112,8 @@ def run(**kwargs) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
         errors.append(error_msg)
         return {"error": errors}
 
-    # Fetch coin list
-    coin_list = fetch_coin_list()
+    # Fetch coin list with API key
+    coin_list = fetch_coin_list(kwargs.get("coingecko_api_key"))
     if coin_list is None:
         error_msg = "Failed to fetch coin list."
         logger.error(error_msg)

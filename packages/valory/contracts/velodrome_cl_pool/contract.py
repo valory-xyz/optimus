@@ -43,7 +43,7 @@ class VelodromeCLPoolContract(Contract):
     ) -> JSONLike:
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(method_name, args=args)
-        return {"tx_bytes": bytes.fromhex(data[2:])}
+        return dict(tx_hash=data)
 
     # ----------------------- Methods -----------------------
     @classmethod
@@ -115,4 +115,23 @@ class VelodromeCLPoolContract(Contract):
                 amount0_requested,
                 amount1_requested,
             ),
+        )
+
+    @classmethod
+    def slot0(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the current state of the pool from slot0."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.slot0().call()
+        return dict(slot0={
+            "sqrt_price_x96": result[0],
+            "tick": result[1],
+            "observation_index": result[2],
+            "observation_cardinality": result[3],
+            "observation_cardinality_next": result[4],
+            "unlocked": result[5],
+            }
         )

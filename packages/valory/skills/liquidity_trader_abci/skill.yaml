@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeigfxs3ovtqeeayar2ugeowpgbhrmhipizsy3sxyg5ojlnxw6zewxm
+  behaviours.py: bafybeibltn47wlm4h3lj2on26qte4mdu2bdznsvlyq7ddtzjmsuwxtycem
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
@@ -18,7 +18,7 @@ fingerprint:
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeibx5ddnn3r5shrbpm6rbus4wofrxfdad2rvmot2lefklkl562sv2e
+  pools/velodrome.py: bafybeiddftwnu5x63siytm73pmmbkdfoo6pjqxmct52kki7jpvqu57mwa4
   rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
@@ -29,13 +29,13 @@ fingerprint:
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeieftxd7tyizuo5r3gf3jukw4h7ophlvek74sui27imgdbjkpkoc7u
+- valory/mirror_db:0.1.0:bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
-- valory/balancer_weighted_pool:0.1.0:bafybeid5fhymcnpjo4ztpquga3luj42oxqojn674gpsgzngdm6jk6uzllq
-- valory/balancer_vault:0.1.0:bafybeiabmk7rwa6lwwalvggyqmqwgdkjvq3f4mksxtaxvjwbsfr7gpy5wa
-- valory/erc20:0.1.0:bafybeie22incukeg24rjn2qo5s6vxf5yi3xjmzmgduylfppfasib2cisrm
+- valory/balancer_weighted_pool:0.1.0:bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm
+- valory/balancer_vault:0.1.0:bafybeiff3ltn6xoh3otuywk2j3yxujdlfzcvri66slnufv5t4hkj5musfa
+- valory/erc20:0.1.0:bafybeie2wet3factwc6pwqvqpwqu3prtv75lmbqo5y4onda5y533ufdqhy
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeid7h7sxxoglhhqbcz4g64fwbgj6akwecv4ktolhefcsziqntnnt2e
 - valory/uniswap_v3_pool:0.1.0:bafybeiehh6y7qswdnfocoi2ku57w4k2rilambgt2bfp6co7vscghmqpjte
@@ -43,9 +43,9 @@ contracts:
 - valory/staking_token:0.1.0:bafybeiev3fx5wg4rs5rciqdxemdvt73fwu2nylv23i7g665jzorcyyjape
 - valory/staking_activity_checker:0.1.0:bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe
-- valory/velodrome_router:0.1.0:bafybeiebagwavqjckkx5cdbm3gpye3ym4b2sjdhoeaoboj3zbijenf3ueu
-- valory/velodrome_cl_pool:0.1.0:bafybeidoqdmpjalmm43j23nykhfehbzzftvtooappkhvr6nso7swpq2s5e
-- valory/velodrome_cl_manager:0.1.0:bafybeiebzigyyeqx6xelaws6w2vqcsa56nlpg6lphoxlamgglul6337idu
+- valory/velodrome_router:0.1.0:bafybeiapkfux4ei3kazmpp42z3hn5l6ixw5j2wxu6h253isfdvy3p6z5ia
+- valory/velodrome_cl_pool:0.1.0:bafybeigxluqnk5icqdyfwgprymfvrlklkutzq462y33vss24fb6fn3zqde
+- valory/velodrome_cl_manager:0.1.0:bafybeify5hcdoafazinb3yesqdwawioic3aim6y763jaqm5jknv6tsnjc4
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
@@ -54,7 +54,7 @@ protocols:
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
+- valory/transaction_settlement_abci:0.1.0:bafybeifgxfpiuztvhncsmg7u2owjaue4x7k3xccwu7m52c24twnvqlws5e
 behaviours:
   main:
     args: {}

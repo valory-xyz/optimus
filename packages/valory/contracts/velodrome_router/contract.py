@@ -44,7 +44,7 @@ class VelodromeRouterContract(Contract):
         """Return the ABI encoded tx bytes for a contract method call."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(method_name, args=args)
-        return {"tx_bytes": bytes.fromhex(data[2:])}
+        return dict(tx_hash=data)
 
     # ---------------------------- main methods --------------------------
     @classmethod

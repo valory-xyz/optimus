@@ -42,34 +42,140 @@ class VelodromeCLPoolManagerContract(Contract):
     ) -> JSONLike:
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(method_name, args=args)
-        return {"tx_bytes": bytes.fromhex(data[2:])}
+        return dict(tx_hash=data)
 
     # ------------------- Methods -------------------
+
     @classmethod
-    def create_position(
+    def mint(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
-        pool: str,
+        token0: str,
+        token1: str,
+        tick_spacing: int,
         tick_lower: int,
         tick_upper: int,
         amount0_desired: int,
         amount1_desired: int,
         amount0_min: int,
         amount1_min: int,
+        recipient: str,
+        deadline: int,
+        sqrt_price_x96: int,
     ) -> JSONLike:
-        """Prepare encoded tx for createPosition."""
+        """Prepare encoded tx for mint."""
+        params = (
+            token0,
+            token1,
+            tick_spacing,
+            tick_lower,
+            tick_upper,
+            amount0_desired,
+            amount1_desired,
+            amount0_min,
+            amount1_min,
+            recipient,
+            deadline,
+            sqrt_price_x96,
+        )
         return cls._encode_call(
             ledger_api,
             contract_address,
-            "createPosition",
-            (
-                pool,
-                tick_lower,
-                tick_upper,
-                amount0_desired,
-                amount1_desired,
-                amount0_min,
-                amount1_min,
-            ),
+            "mint",
+            (params,),
         )
+
+    @classmethod
+    def decrease_liquidity(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+        liquidity: int,
+        amount0_min: int,
+        amount1_min: int,
+        deadline: int,
+    ) -> JSONLike:
+        """Prepare encoded tx for decreaseLiquidity."""
+        params = (
+            token_id,
+            liquidity,
+            amount0_min,
+            amount1_min,
+            deadline,
+        )
+        return cls._encode_call(
+            ledger_api,
+            contract_address,
+            "decreaseLiquidity",
+            (params,),
+        )
+
+    @classmethod
+    def burn(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Prepare encoded tx for burn."""
+        return cls._encode_call(
+            ledger_api,
+            contract_address,
+            "burn",
+            (token_id,),
+        )
+
+    @classmethod
+    def collect(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+        recipient: str,
+        amount0_max: int,
+        amount1_max: int,
+    ) -> JSONLike:
+        """Prepare encoded tx for collect."""
+        params = (
+            token_id,
+            recipient,
+            amount0_max,
+            amount1_max,
+        )
+        return cls._encode_call(
+            ledger_api,
+            contract_address,
+            "collect",
+            (params,),
+        )
+
+    @classmethod
+    def get_pool_tokens(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Get tokens information from a position."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.positions(token_id).call()
+        return dict(
+            token0=result[2],
+            token1=result[3],
+            tick_spacing=result[4],
+            tick_lower=result[5],
+            tick_upper=result[6],
+            liquidity=result[7],
+        )
+
+    @classmethod
+    def get_position(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Get the position info."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)

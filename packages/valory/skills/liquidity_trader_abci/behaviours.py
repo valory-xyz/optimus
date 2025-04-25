@@ -293,7 +293,7 @@ class GasCostTracker:
         self.data = new_data
 
 
-class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, ABC):
+class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour,VelodromePoolBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -2828,33 +2828,65 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     sender=sender, actions=json.dumps(actions)
                 )
             else:
-                yield from self.fetch_all_trading_opportunities()
+                #yield from self.fetch_all_trading_opportunities()
+                self.selected_opportunities = [{
+                        "dex_type": "Velodrome",
+                        "pool_address": "0x3A545744f5d0e9425e34741Afd9E388D5d0e6dfB",
+                        "pool_id": "0x985612ff2c9409174fedcff23d4f4761af124f88",
+                        "has_incentives": False,
+                        "total_apr": 87.16823152296979,
+                        "organic_apr": 87.16823152296979,
+                        "incentive_apr": 0,
+                        "tvl": 101700.31921646433,
+                        "is_lp": True,
+                        "sharpe_ratio": 5.485912937681533,
+                        "il_risk_score": -0.10886226339259253,
+                        "token_count": 2,
+                        "volume": 7106643.8792321645,
+                        "chain": "optimism",
+                        "depth_score": 392740.7941058705,
+                        "max_position_size": 519.1801220591152,
+                        "max_position_size_apr": 50850.15960823216,
+                        "depth_score_10bp": 3927407.9410587046,
+                        "depth_score_50bp": 785481.588211741,
+                        "depth_score_100bp": 392740.7941058705,
+                        "depth_score_200bp": 196370.39705293524,
+                        "depth_score_300bp": 130913.59803529015,
+                        "depth_score_400bp": 98185.19852646762,
+                        "depth_score_500bp": 78548.15882117409,
+                        "token0": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                        "token0_symbol": "USDC",
+                        "token1": "0xdFA46478F9e5EA86d57387849598dbFB2e964b02",
+                        "token1_symbol": "MAI",
+                        "composite_score": 3083224557.4765472,
+                        "funds_percentage": 67.33122596959345,
+                        "relative_funds_percentage": 0.6733122597
+                        }]
+                # if self.current_positions:
+                #     for position in (
+                #         pos
+                #         for pos in self.current_positions
+                #         if pos.get("status") == PositionStatus.OPEN.value
+                #     ):
+                #         dex_type = position.get("dex_type")
+                #         strategy = self.params.dex_type_to_strategy.get(dex_type)
+                #         if strategy:
+                #             if (
+                #                 position.get("status", PositionStatus.CLOSED.value)
+                #                 != PositionStatus.OPEN.value
+                #             ):
+                #                 continue
+                #             metrics = self.get_returns_metrics_for_opportunity(
+                #                 position, strategy
+                #             )
+                #             if metrics:
+                #                 position.update(metrics)
+                #         else:
+                #             self.context.logger.error(
+                #                 f"No strategy found for dex type {dex_type}"
+                #             )
 
-                if self.current_positions:
-                    for position in (
-                        pos
-                        for pos in self.current_positions
-                        if pos.get("status") == PositionStatus.OPEN.value
-                    ):
-                        dex_type = position.get("dex_type")
-                        strategy = self.params.dex_type_to_strategy.get(dex_type)
-                        if strategy:
-                            if (
-                                position.get("status", PositionStatus.CLOSED.value)
-                                != PositionStatus.OPEN.value
-                            ):
-                                continue
-                            metrics = self.get_returns_metrics_for_opportunity(
-                                position, strategy
-                            )
-                            if metrics:
-                                position.update(metrics)
-                        else:
-                            self.context.logger.error(
-                                f"No strategy found for dex type {dex_type}"
-                            )
-
-                self.execute_hyper_strategy()
+                #self.execute_hyper_strategy()
                 actions = (
                     yield from self.get_order_of_transactions()
                     if self.selected_opportunities is not None
@@ -3606,8 +3638,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         actions = []
         tokens = []
         # Process rewards
-        if self._can_claim_rewards():
-            yield from self._process_rewards(actions)
+        # if self._can_claim_rewards():
+        #     yield from self._process_rewards(actions)
         # if (  # noqa: E800
         #     self.synchronized_data.period_count != 0  # noqa: E800
         #     and self.synchronized_data.period_count % self.params.pnl_check_interval  # noqa: E800
@@ -6170,7 +6202,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             trading_type = db_data.get("trading_type", None)
 
             if not serialized_protocols:
-                serialized_protocols = ["balancer_pools_search", "asset_lending"]
+                serialized_protocols = self.params.available_strategies
 
             if not trading_type:
                 trading_type = TradingType.BALANCED.value

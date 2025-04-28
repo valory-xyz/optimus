@@ -65,7 +65,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         assets = kwargs.get("assets")
         chain = kwargs.get("chain")
         max_amounts_in = kwargs.get("max_amounts_in")
-        pool_type = 'ConcentratedLiquidity' #to-do: remove this
+        pool_type = 'Stable' #to-do: remove this
+        is_stable = kwargs.get("is_stable")
 
         if not all([pool_address, safe_address, assets, chain, max_amounts_in]):
             self.context.logger.error(
@@ -91,7 +92,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 assets=assets,
                 chain=chain,
                 max_amounts_in=max_amounts_in,
-                is_stable=(pool_type == PoolType.STABLE.value),
+                is_stable= is_stable,
             ))
 
     def exit(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str, bool]]]:
@@ -99,7 +100,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
         chain = kwargs.get("chain")
-        pool_type = 'ConcentratedLiquidity'
+        pool_type = 'Stable'
+        is_stable = kwargs.get("is_stable")
         if not all([pool_address, safe_address, chain]):
             self.context.logger.error(
                 f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
@@ -128,7 +130,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 assets=kwargs.get("assets"),
                 chain=chain,
                 liquidity=kwargs.get("liquidity"),
-                is_stable=(pool_type == PoolType.STABLE.value),
+                is_stable=is_stable,
             ))
 
     def _enter_stable_volatile_pool(
@@ -151,8 +153,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Set minimum amounts (with slippage protection)
         # TO-DO: Implement proper slippage protection
-        amount_a_min = int(max_amounts_in[0] * 0.99)  # 1% slippage
-        amount_b_min = int(max_amounts_in[1] * 0.99)  # 1% slippage
+        amount_a_min = 0
+        amount_b_min = 0  
 
         # Set deadline (20 minutes from now)
         last_update_time = cast(
@@ -166,7 +168,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             contract_address=router_address,
             contract_public_id=VelodromeRouterContract.contract_id,
             contract_callable="add_liquidity",
-            data_key="tx_bytes",
+            data_key="tx_hash",
             token_a=assets[0],
             token_b=assets[1],
             stable=is_stable,
@@ -216,7 +218,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             contract_address=router_address,
             contract_public_id=VelodromeRouterContract.contract_id,
             contract_callable="remove_liquidity",
-            data_key="tx_bytes",
+            data_key="tx_hash",
             token_a=assets[0],
             token_b=assets[1],
             stable=is_stable,

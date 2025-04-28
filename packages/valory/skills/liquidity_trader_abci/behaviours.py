@@ -1764,142 +1764,143 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             sender = self.context.agent_address
             self.context.logger.info(f"APRPopulationBehaviour started by {sender}")
 
-            try:
-                # Get configuration
-                eth_address = sender
+            # try:
+            #     # Get configuration
+            #     eth_address = sender
 
-                # Step 1: Get or create agent type for "Modius"
-                data = yield from self._read_kv(keys=("agent_type",))
-                if data:
-                    agent_type = data.get("agent_type")
-                    if agent_type:
-                        agent_type = json.loads(agent_type)
-                    else:
-                        # Check external DB
-                        agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
-                        if not agent_type:
-                            agent_type = yield from self.create_agent_type(
-                                AGENT_TYPE,
-                                "An agent for DeFi liquidity management and APR tracking",
-                            )
-                            if not agent_type:
-                                raise Exception("Failed to create agent type.")
-                            yield from self._write_kv(
-                                {"agent_type": json.dumps(agent_type)}
-                            )
+            #     # Step 1: Get or create agent type for "Modius"
+            #     data = yield from self._read_kv(keys=("agent_type",))
+            #     if data:
+            #         agent_type = data.get("agent_type")
+            #         if agent_type:
+            #             agent_type = json.loads(agent_type)
+            #         else:
+            #             # Check external DB
+            #             agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
+            #             if not agent_type:
+            #                 agent_type = yield from self.create_agent_type(
+            #                     AGENT_TYPE,
+            #                     "An agent for DeFi liquidity management and APR tracking",
+            #                 )
+            #                 if not agent_type:
+            #                     raise Exception("Failed to create agent type.")
+            #                 yield from self._write_kv(
+            #                     {"agent_type": json.dumps(agent_type)}
+            #                 )
 
-                type_id = agent_type.get("type_id")
-                self.context.logger.info(f"Using agent type: {agent_type}")
+            #     type_id = agent_type.get("type_id")
+            #     self.context.logger.info(f"Using agent type: {agent_type}")
 
-                # Step 2: Get or create agent registry entry
-                data = yield from self._read_kv(keys=("agent_registry",))
-                if data:
-                    agent_registry = data.get("agent_registry", "{}")
-                    if agent_registry:
-                        agent_registry = json.loads(agent_registry)
-                    else:
-                        agent_registry = yield from self.get_agent_registry_by_address(
-                            eth_address
-                        )
-                        if not agent_registry:
-                            agent_name = self.generate_name(sender)
-                            self.context.logger.info(f"agent_name : {agent_name}")
-                            agent_registry = yield from self.create_agent_registry(
-                                agent_name, type_id, eth_address
-                            )
-                            if not agent_registry:
-                                raise Exception("Failed to create agent registry.")
-                            yield from self._write_kv(
-                                {"agent_registry": json.dumps(agent_registry)}
-                            )
+            #     # Step 2: Get or create agent registry entry
+            #     data = yield from self._read_kv(keys=("agent_registry",))
+            #     if data:
+            #         agent_registry = data.get("agent_registry", "{}")
+            #         if agent_registry:
+            #             agent_registry = json.loads(agent_registry)
+            #         else:
+            #             agent_registry = yield from self.get_agent_registry_by_address(
+            #                 eth_address
+            #             )
+            #             if not agent_registry:
+            #                 agent_name = self.generate_name(sender)
+            #                 self.context.logger.info(f"agent_name : {agent_name}")
+            #                 agent_registry = yield from self.create_agent_registry(
+            #                     agent_name, type_id, eth_address
+            #                 )
+            #                 if not agent_registry:
+            #                     raise Exception("Failed to create agent registry.")
+            #                 yield from self._write_kv(
+            #                     {"agent_registry": json.dumps(agent_registry)}
+            #                 )
 
-                agent_id = agent_registry.get("agent_id")
-                self.context.logger.info(f"Using agent: {agent_id}")
+            #     agent_id = agent_registry.get("agent_id")
+            #     self.context.logger.info(f"Using agent: {agent_id}")
 
-                # Step 3: Get or create APR attribute definition
-                data = yield from self._read_kv(keys=("attr_def",))
-                if data:
-                    attr_def = data.get("attr_def", "{}")
-                    if attr_def:
-                        attr_def = json.loads(attr_def)
-                    else:
-                        # Check external DB
-                        attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
-                        if not attr_def:
-                            attr_def = yield from self.create_attribute_definition(
-                                type_id,
-                                METRICS_NAME,
-                                METRICS_TYPE,
-                                True,
-                                "{}",
-                                agent_id,
-                            )
-                            if not attr_def:
-                                raise Exception(
-                                    "Failed to create attribute definition."
-                                )
-                            yield from self._write_kv(
-                                {"attr_def": json.dumps(attr_def)}
-                            )
+            #     # Step 3: Get or create APR attribute definition
+            #     data = yield from self._read_kv(keys=("attr_def",))
+            #     if data:
+            #         attr_def = data.get("attr_def", "{}")
+            #         if attr_def:
+            #             attr_def = json.loads(attr_def)
+            #         else:
+            #             # Check external DB
+            #             attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+            #             if not attr_def:
+            #                 attr_def = yield from self.create_attribute_definition(
+            #                     type_id,
+            #                     METRICS_NAME,
+            #                     METRICS_TYPE,
+            #                     True,
+            #                     "{}",
+            #                     agent_id,
+            #                 )
+            #                 if not attr_def:
+            #                     raise Exception(
+            #                         "Failed to create attribute definition."
+            #                     )
+            #                 yield from self._write_kv(
+            #                     {"attr_def": json.dumps(attr_def)}
+            #                 )
 
-                attr_def_id = attr_def.get("attr_def_id")
-                self.context.logger.info(f"Using attribute definition: {attr_def}")
+            #     attr_def_id = attr_def.get("attr_def_id")
+            #     self.context.logger.info(f"Using attribute definition: {attr_def}")
 
-                # Step 4: Calculate APR for positions
-                portfolio_value = 0
-                data = yield from self._read_kv(keys=("portfolio_value",))
-                self.context.logger.info(f"data{data}")
-                if data and data["portfolio_value"]:
-                    self.context.logger.info(f"data{data}")
-                    portfolio_value = float(data.get("portfolio_value", "0"))
+            #     # Step 4: Calculate APR for positions
+            #     portfolio_value = 0
+            #     data = yield from self._read_kv(keys=("portfolio_value",))
+            #     self.context.logger.info(f"data{data}")
+            #     if data and data["portfolio_value"]:
+            #         self.context.logger.info(f"data{data}")
+            #         portfolio_value = float(data.get("portfolio_value", "0"))
 
-                if not math.isclose(
-                    portfolio_value,
-                    self.portfolio_data["portfolio_value"],
-                    rel_tol=1e-9,
-                ):
-                    # Create portfolio snapshot for debugging
-                    portfolio_snapshot = self._create_portfolio_snapshot()
+            #     if not math.isclose(
+            #         portfolio_value,
+            #         self.portfolio_data["portfolio_value"],
+            #         rel_tol=1e-9,
+            #     ):
+            #         # Create portfolio snapshot for debugging
+            #         portfolio_snapshot = self._create_portfolio_snapshot()
 
-                    # Calculate APR and related metrics
-                    actual_apr_data = yield from self.calculate_actual_apr(
-                        agent_id, attr_def_id
-                    )
-                    if actual_apr_data:
-                        total_actual_apr = actual_apr_data.get("total_actual_apr", None)
-                        adjusted_apr = actual_apr_data.get("adjusted_apr", None)
+            #         # Calculate APR and related metrics
+            #         actual_apr_data = yield from self.calculate_actual_apr(
+            #             agent_id, attr_def_id
+            #         )
+            #         if actual_apr_data:
+            #             total_actual_apr = actual_apr_data.get("total_actual_apr", None)
+            #             adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-                        if total_actual_apr:
-                            # Step 5: Store enhanced APR data in MirrorDB
-                            timestamp = int(
-                                self.round_sequence.last_round_transition_timestamp.timestamp()
-                            )
+            #             if total_actual_apr:
+            #                 # Step 5: Store enhanced APR data in MirrorDB
+            #                 timestamp = int(
+            #                     self.round_sequence.last_round_transition_timestamp.timestamp()
+            #                 )
 
-                            # Create enhanced data payload with portfolio metrics
-                            enhanced_data = {
-                                "apr": float(total_actual_apr),
-                                "adjusted_apr": float(adjusted_apr),
-                                "timestamp": timestamp,
-                                "portfolio_snapshot": portfolio_snapshot,
-                                "calculation_metrics": self._get_apr_calculation_metrics(),
-                            }
+            #                 # Create enhanced data payload with portfolio metrics
+            #                 enhanced_data = {
+            #                     "apr": float(total_actual_apr),
+            #                     "adjusted_apr": float(adjusted_apr),
+            #                     "timestamp": timestamp,
+            #                     "portfolio_snapshot": portfolio_snapshot,
+            #                     "calculation_metrics": self._get_apr_calculation_metrics(),
+            #                 }
 
-                            agent_attr = yield from self.create_agent_attribute(
-                                agent_id,
-                                attr_def_id,
-                                enhanced_data,
-                            )
-                            self.context.logger.info(f"Stored APR data: {agent_attr}")
+            #                 agent_attr = yield from self.create_agent_attribute(
+            #                     agent_id,
+            #                     attr_def_id,
+            #                     enhanced_data,
+            #                 )
+            #                 self.context.logger.info(f"Stored APR data: {agent_attr}")
 
-                # Prepare payload for consensus
-                payload = APRPopulationPayload(sender=sender, context="APR Population")
+            #     # Prepare payload for consensus
+            #     payload = APRPopulationPayload(sender=sender, context="APR Population")
 
-            except Exception as e:
-                self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
-                # Create a payload even in case of error to continue the protocol
-                payload = APRPopulationPayload(
-                    sender=sender, context="APR Population Error"
-                )
+            # except Exception as e:
+            #     self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
+            #     # Create a payload even in case of error to continue the protocol
+            #     payload = APRPopulationPayload(
+            #         sender=sender, context="APR Population Error"
+            #     )
+            payload = APRPopulationPayload(sender=sender, context="APR Population")
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -2831,8 +2832,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 #yield from self.fetch_all_trading_opportunities()
                 self.selected_opportunities = [{
                         "dex_type": "Velodrome",
-                        "pool_address": "0x3A545744f5d0e9425e34741Afd9E388D5d0e6dfB",
-                        "pool_id": "0x985612ff2c9409174fedcff23d4f4761af124f88",
+                        "pool_address": "0x62270F70C750D66Cf10Bc8cBe12390B120498097",
+                        "pool_id": "0x62270F70C750D66Cf10Bc8cBe12390B120498097",
                         "has_incentives": False,
                         "total_apr": 87.16823152296979,
                         "organic_apr": 87.16823152296979,
@@ -2854,10 +2855,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         "depth_score_300bp": 130913.59803529015,
                         "depth_score_400bp": 98185.19852646762,
                         "depth_score_500bp": 78548.15882117409,
-                        "token0": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-                        "token0_symbol": "USDC",
-                        "token1": "0xdFA46478F9e5EA86d57387849598dbFB2e964b02",
-                        "token1_symbol": "MAI",
+                        "token0": "0x4200000000000000000000000000000000000006",
+                        "token0_symbol": "WETH",
+                        "token1": "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
+                        "token1_symbol": "USDT",
                         "composite_score": 3083224557.4765472,
                         "funds_percentage": 67.33122596959345,
                         "relative_funds_percentage": 0.6733122597,
@@ -2866,8 +2867,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         "amount0": 1897817,
                         "amount1": 8932751203375952221,
                         "timestamp": 1745836746,
+                        "is_stable": False
                         }]
-                self.position_to_exit = self.selected_opportunities[0]
+                # self.position_to_exit = self.selected_opportunities[0]
                 # if self.current_positions:
                 #     for position in (
                 #         pos
@@ -3902,6 +3904,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "pool_type": self.position_to_exit.get("pool_type"),
             "token_id": self.position_to_exit.get("token_id"),
             "liquidity": self.position_to_exit.get("liquidity"),
+            "is_stable": self.position_to_exit.get("is_stable")
         }
 
         return exit_pool_action
@@ -4745,6 +4748,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = action.get("pool_address")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         pool_type = action.get("pool_type")
+        is_stable = action.get("is_stable")
 
         pool = self.pools.get(dex_type)
         if not pool:
@@ -4783,6 +4787,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "chain": chain,
             "max_amounts_in": max_amounts_in,
             "pool_type": pool_type,
+            "is_stable": is_stable
         }
         
         # Add pool_fee for non-Velodrome pools
@@ -4921,6 +4926,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         token_id = action.get("token_id")
         liquidity = action.get("liquidity")
         pool_type = action.get("pool_type")
+        is_stable = action.get("is_stable")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
 
         pool = self.pools.get(dex_type)
@@ -4940,13 +4946,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if dex_type == DexType.VELODROME.value:
             exit_pool_kwargs["liquidity"] = liquidity
             exit_pool_kwargs["token_id"] = token_id
-            # For Stable/Volatile pools, we need assets
-            if pool_type != "ConcentratedLiquidity":
-                if not assets or len(assets) < 2:
-                    self.context.logger.error(f"2 assets required for Velodrome Stable/Volatile pools, provided: {assets}")
-                    return None, None, None
-                exit_pool_kwargs["assets"] = assets
-                exit_pool_kwargs["is_stable"] = (pool_type == "Stable")
+            if not assets or len(assets) < 2:
+                self.context.logger.error(f"2 assets required for Velodrome Stable/Volatile pools, provided: {assets}")
+                return None, None, None
+            exit_pool_kwargs["assets"] = assets
+            exit_pool_kwargs["is_stable"] = is_stable
         elif dex_type == DexType.BALANCER.value:
             if not assets or len(assets) < 2:
                 self.context.logger.error(f"2 assets required for Balancer pools, provided: {assets}")

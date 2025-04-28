@@ -2860,8 +2860,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         "token1_symbol": "MAI",
                         "composite_score": 3083224557.4765472,
                         "funds_percentage": 67.33122596959345,
-                        "relative_funds_percentage": 0.6733122597
+                        "relative_funds_percentage": 0.6733122597,
+                        "token_id": 2164758,
+                        "liquidity": 4117368573026,
+                        "amount0": 1897817,
+                        "amount1": 8932751203375952221,
+                        "timestamp": 1745836746,
                         }]
+                self.position_to_exit = self.selected_opportunities[0]
                 # if self.current_positions:
                 #     for position in (
                 #         pos
@@ -4320,7 +4326,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             key: action[key] for key in keys_to_extract if key in action
         }
 
-        if action.get("dex_type") == DexType.UNISWAP_V3.value:
+        if action.get("dex_type") == DexType.UNISWAP_V3.value or action.get("dex_type") == DexType.VELODROME.value:
             (
                 token_id,
                 liquidity,
@@ -4906,6 +4912,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def get_exit_pool_tx_hash(
         self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+
         """Get exit pool tx hash"""
         dex_type = action.get("dex_type")
         chain = action.get("chain")
@@ -4930,9 +4937,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
         
         # Add specific parameters based on pool type
-        if dex_type == "Velodrome":
+        if dex_type == DexType.VELODROME.value:
             exit_pool_kwargs["liquidity"] = liquidity
-            
+            exit_pool_kwargs["token_id"] = token_id
             # For Stable/Volatile pools, we need assets
             if pool_type != "ConcentratedLiquidity":
                 if not assets or len(assets) < 2:
@@ -6215,9 +6222,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check if we need to recalculate the portfolio
             if self.should_recalculate_portfolio(self.portfolio_data):
-                yield from self.calculate_user_share_values()
+                pass
+                # yield from self.calculate_user_share_values()
                 # Store the updated portfolio data
-                self.store_portfolio_data()
+                # self.store_portfolio_data()
 
             payload = FetchStrategiesPayload(
                 sender=sender,

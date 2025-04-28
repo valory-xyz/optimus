@@ -135,3 +135,14 @@ class VelodromeCLPoolContract(Contract):
             "unlocked": result[5],
             }
         )
+
+    @classmethod
+    def get_tick_spacing(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """get the tick spacing."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        tick_spacing = contract_instance.functions.tickSpacing().call()
+        return dict(data=tick_spacing)

@@ -177,5 +177,7 @@ class VelodromeCLPoolManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """Get the position info."""
+        """get the position info"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
+        position = contract_instance.functions.positions(token_id).call()
+        return dict(data=position)

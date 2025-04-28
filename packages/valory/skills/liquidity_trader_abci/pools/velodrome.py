@@ -100,7 +100,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         safe_address = kwargs.get("safe_address")
         chain = kwargs.get("chain")
         pool_type = 'ConcentratedLiquidity'
-
         if not all([pool_address, safe_address, chain]):
             self.context.logger.error(
                 f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
@@ -250,20 +249,22 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None, None
 
         # Calculate tick range based on pool's tick spacing
-        tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper(
-            pool_address, chain
-        )
+        # tick_lower, tick_upper = yield from self._calculate_tick_lower_and_upper_velodrome(
+        #     pool_address, chain
+        # )
+        tick_lower = MIN_TICK
+        tick_upper = MAX_TICK
         if not tick_lower or not tick_upper:
             return None, None
 
         # Get tick spacing for the pool
-        tick_spacing = yield from self._get_tick_spacing(pool_address, chain)
+        tick_spacing = yield from self._get_tick_spacing_velodrome(pool_address, chain)
         if not tick_spacing:
             self.context.logger.error(f"Could not get tick spacing for pool {pool_address}")
             return None, None
 
         # Get or calculate sqrt_price_x96
-        sqrt_price_x96 = yield from self._get_sqrt_price_x96(pool_address, chain)
+        sqrt_price_x96 = 0
         if sqrt_price_x96 is None:
             self.context.logger.error(f"Could not determine sqrt_price_x96 for pool {pool_address}")
             return None, None
@@ -340,6 +341,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         liquidity: Optional[int] = None,
     ) -> Generator[None, None, Optional[Tuple[str, str, bool]]]:
         """Remove liquidity from a Velodrome Concentrated Liquidity pool."""
+
         position_manager_address = self.params.velodrome_cl_manager_contract_addresses.get(chain, "")
         if not position_manager_address:
             self.context.logger.error(
@@ -356,7 +358,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # fetch liquidity from contract if not provided
         if not liquidity:
-            liquidity = yield from self.get_liquidity_for_token(token_id, chain)
+            liquidity = yield from self.get_liquidity_for_token_velodrome(token_id, chain)
             if not liquidity:
                 return None, None, None
 
@@ -366,7 +368,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         ).round_sequence.last_round_transition_timestamp.timestamp()
         deadline = int(last_update_time) + (20 * 60)
 
-        decrease_liquidity_tx_hash = yield from self.decrease_liquidity(
+        decrease_liquidity_tx_hash = yield from self.decrease_liquidity_velodrome(
             token_id, liquidity, amount0_min, amount1_min, deadline, chain
         )
         if not decrease_liquidity_tx_hash:
@@ -383,7 +385,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # collect the tokens
         # Use a high max value similar to Uniswap's approach
         amount_max = Web3.to_wei(2**100 - 1, "wei")
-        collect_tokens_tx_hash = yield from self.collect_tokens(
+        collect_tokens_tx_hash = yield from self.collect_tokens_velodrome(
             token_id=token_id,
             recipient=safe_address,
             amount0_max=amount_max,
@@ -424,7 +426,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
-    def get_liquidity_for_token(
+    def get_liquidity_for_token_velodrome(
         self, token_id: int, chain: str
     ) -> Generator[None, None, Optional[int]]:
         """Get liquidity for token"""
@@ -439,9 +441,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=VelodromeCLPoolManagerContract.contract_id,
-            contract_callable="positions",
+            contract_callable="get_position",
             data_key="data",
-            tokenId=token_id,
+            token_id=token_id,
             chain_id=chain,
         )
 
@@ -453,7 +455,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         liquidity = position[2]  # This should match the index where liquidity is stored in the positions struct
         return liquidity
 
-    def decrease_liquidity(
+    def decrease_liquidity_velodrome(
         self,
         token_id: int,
         liquidity: int,
@@ -474,7 +476,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
             contract_public_id=VelodromeCLPoolManagerContract.contract_id,
-            contract_callable="decreaseLiquidity",
+            contract_callable="decrease_liquidity",
             data_key="tx_hash",
             token_id=token_id,
             liquidity=liquidity,
@@ -486,7 +488,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         return tx_hash
 
-    def collect_tokens(
+    def collect_tokens_velodrome(
         self,
         token_id: int,
         recipient: str,
@@ -517,29 +519,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         return tx_hash
 
-    def _get_pool_fee(
-        self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[int]]:
-        """Get velodrome pool fee"""
-        pool_fee = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=VelodromeCLPoolContract.contract_id,
-            contract_callable="fee",
-            data_key="data",
-            chain_id=chain,
-        )
 
-        if not pool_fee:
-            self.context.logger.error(
-                f"Could not fetch pool fee for velodrome pool {pool_address}"
-            )
-            return None
-
-        self.context.logger.info(f"Fee for velodrome pool {pool_address} : {pool_fee}")
-        return pool_fee
-
-    def _get_tick_spacing(
+    def _get_tick_spacing_velodrome(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[int]]:
         """Get velodrome pool tick spacing"""
@@ -547,7 +528,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
             contract_public_id=VelodromeCLPoolContract.contract_id,
-            contract_callable="tickSpacing",
+            contract_callable="get_tick_spacing",
             data_key="data",
             chain_id=chain,
         )
@@ -563,12 +544,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         return tick_spacing
 
-    def _calculate_tick_lower_and_upper(
+    def _calculate_tick_lower_and_upper_velodrome(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[Tuple[int, int]]]:
         self.context.logger.info(f"Calculating tick range for {pool_address} on chain {chain}")
         # Fetch tick spacing from velodrome cl pool
-        tick_spacing = yield from self._get_tick_spacing(pool_address, chain)
+        tick_spacing = yield from self._get_tick_spacing_velodrome(pool_address, chain)
         if not tick_spacing:
             return None, None
             

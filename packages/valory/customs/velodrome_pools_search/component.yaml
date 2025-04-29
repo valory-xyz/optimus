@@ -1,4 +1,4 @@
-name: velodrome_finance
+name: velodrome_pools_search
 author: valory
 version: 0.1.0
 type: custom
@@ -8,9 +8,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeig54kazemffrqk7h5ufvfm7n3fzg5pekpx75uxytjs3o7mnhywox4
-  velodrome_finance.py: bafybeihl23fc466acq4ulbuihh2f2jeluj6tkkqutmjlfwwq3cpq7vyroy
+  velodrome_pools_search.py: bafybeihl23fc466acq4ulbuihh2f2jeluj6tkkqutmjlfwwq3cpq7vyroy
 fingerprint_ignore_patterns: []
-entry_point: velodrome_finance.py
+entry_point: velodrome_pools_search.py
 callable: run
 dependencies:
   requests:

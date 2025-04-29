@@ -13,12 +13,12 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeif7jtd3266jt5x3umlp5weygzc75ulzasaihdjcigyuti6ytj7mpi
+  models.py: bafybeify4a3s4s5lej2haunjeov5sdobmz5shqxqio4fj4hr7ybcadfffa
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeidduiwdhh3ofankf4ona6ae6lnwwicn7kpympqfieshn27sda7nyy
+  pools/velodrome.py: bafybeiczfk33kx5vxx2qwjfakm7wjkvr3t7mjr7ua3zy6xvtit23537l3q
   rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
@@ -45,7 +45,7 @@ contracts:
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe
 - valory/velodrome_router:0.1.0:bafybeiapkfux4ei3kazmpp42z3hn5l6ixw5j2wxu6h253isfdvy3p6z5ia
 - valory/velodrome_cl_pool:0.1.0:bafybeibfqes45dgnifbfyzjiblsh4bnxxjlwtd6r46um5vdyk7j2wgh7ca
-- valory/velodrome_cl_manager:0.1.0:bafybeicm72ztuwqv67b7wo6ev4z6t3lzxx4m625qhaxib7ghssqb3gqi54
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeibxxvwb7vyff6go7225kuf4eji5dl5ngy6hz5h6bhl3mx223kzbz4
 - valory/velodrome_pool:0.1.0:bafybeidvbw6wcgazwrdeptnzmpltcg4l4klzt4hs6iuiycllv63iv5xp2u
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
@@ -232,7 +232,7 @@ models:
       - balancer
       - uniswap
       selected_hyper_strategy: max_apr_selection
-      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","VelodromeFinance":"velodrome_finance","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
+      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","Velodrome":"velodrome_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
       profit_threshold: 50
       loss_threshold: 30
@@ -242,8 +242,7 @@ models:
       cleanup_freq: 50
       genai_api_key: null
       velodrome_router_contract_addresses: '{"optimism":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","base":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858"}'
-      velodrome_cl_pool_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
-      velodrome_cl_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
+      velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
     class_name: Params
   coingecko:
     args:

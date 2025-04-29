@@ -24,10 +24,10 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea_ledger_ethereum import EthereumApi
 
-PUBLIC_ID = PublicId.from_str("valory/velodrome_cl_manager:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/velodrome_non_fungible_position_manager:0.1.0")
 
 
-class VelodromeCLPoolManagerContract(Contract):
+class VelodromeNonFungiblePositionManagerContract(Contract):
     """Velodrome CL Pool Manager contract wrapper."""
 
     contract_id = PUBLIC_ID

@@ -33,7 +33,7 @@ from packages.valory.contracts.multisend.contract import (
 from packages.valory.contracts.velodrome_router.contract import VelodromeRouterContract
 from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
-from packages.valory.contracts.velodrome_cl_manager.contract import VelodromeCLPoolManagerContract
+from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import VelodromeNonFungiblePositionManagerContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
@@ -321,11 +321,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         pool_fee: Optional[int] = None,
     ) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Add liquidity to a Velodrome Concentrated Liquidity pool."""
-        # Get CLPoolManager contract address
-        position_manager_address = self.params.velodrome_cl_manager_contract_addresses.get(chain, "")
+        # Get NonFungiblePositionManager contract address
+        position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain, "")
         if not position_manager_address:
             self.context.logger.error(
-                f"No CLPoolManager contract address found for chain {chain}"
+                f"No NonFungiblePositionManager contract address found for chain {chain}"
             )
             return None, None
 
@@ -364,7 +364,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
-            contract_public_id=VelodromeCLPoolManagerContract.contract_id,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="mint",
             data_key="tx_hash",
             token0=assets[0],
@@ -423,7 +423,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[Tuple[str, str, bool]]]:
         """Remove liquidity from a Velodrome Concentrated Liquidity pool."""
 
-        position_manager_address = self.params.velodrome_cl_manager_contract_addresses.get(chain, "")
+        position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain, "")
         if not position_manager_address:
             self.context.logger.error(
                 f"No CLPoolManager contract address found for chain {chain}"
@@ -511,7 +511,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self, token_id: int, chain: str
     ) -> Generator[None, None, Optional[int]]:
         """Get liquidity for token"""
-        position_manager_address = self.params.velodrome_cl_manager_contract_addresses.get(chain, "")
+        position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain, "")
         if not position_manager_address:
             self.context.logger.error(
                 f"No CLPoolManager contract address found for chain {chain}"
@@ -521,7 +521,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         position = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
-            contract_public_id=VelodromeCLPoolManagerContract.contract_id,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="get_position",
             data_key="data",
             token_id=token_id,
@@ -546,7 +546,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         chain: str,
     ) -> Generator[None, None, Optional[str]]:
         """Decrease liquidity"""
-        position_manager_address = self.params.velodrome_cl_manager_contract_addresses.get(chain, "")
+        position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain, "")
         if not position_manager_address:
             self.context.logger.error(
                 f"No CLPoolManager contract address found for chain {chain}"
@@ -556,7 +556,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
-            contract_public_id=VelodromeCLPoolManagerContract.contract_id,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="decrease_liquidity",
             data_key="tx_hash",
             token_id=token_id,
@@ -578,7 +578,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         chain: str,
     ) -> Generator[None, None, Optional[str]]:
         """Collect tokens"""
-        position_manager_address = self.params.velodrome_cl_manager_contract_addresses.get(chain, "")
+        position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain, "")
         if not position_manager_address:
             self.context.logger.error(
                 f"No CLPoolManager contract address found for chain {chain}"
@@ -588,7 +588,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=position_manager_address,
-            contract_public_id=VelodromeCLPoolManagerContract.contract_id,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="collect",
             data_key="tx_hash",
             token_id=token_id,

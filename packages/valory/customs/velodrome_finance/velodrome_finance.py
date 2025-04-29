@@ -18,6 +18,10 @@ import random
 from collections import deque
 import os
 import xlsxwriter
+from web3 import Web3
+
+# Import the Velodrome LP Sugar contract wrapper
+from packages.valory.contracts.velodrome_lp_sugar.contract import VelodromeLpSugarContract
 
 # Set up more detailed logging
 logging.basicConfig(
@@ -28,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Constants and mappings
 REQUIRED_FIELDS = (
+    "chains",
     "graphql_endpoint",
     "current_positions",
     "coingecko_api_key",
@@ -39,6 +44,27 @@ APR_WEIGHT = 0.3
 TVL_PERCENTILE = 50
 APR_PERCENTILE = 50
 SCORE_PERCENTILE = 80
+
+# Chain-specific constants
+OPTIMISM_CHAIN_ID = 10
+MODE_CHAIN_ID = 34443
+CHAIN_NAMES = {
+    OPTIMISM_CHAIN_ID: "optimism",
+    MODE_CHAIN_ID: "mode",
+}
+
+# Sugar contract addresses
+SUGAR_CONTRACT_ADDRESSES = {
+    MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Actual contract address
+}
+
+# RPC endpoints
+RPC_ENDPOINTS = {
+    MODE_CHAIN_ID: "https://mainnet.mode.network",
+}
+
+# Seconds in a year for APR calculations
+SECONDS_IN_YEAR = 365 * 24 * 3600
 
 # Centralized cache storage
 CACHE = {
@@ -193,8 +219,39 @@ def run_query(query, graphql_endpoint, variables=None, max_retries=3) -> Dict[st
     
     return {"error": "Maximum retries reached for GraphQL query"}
 
-def get_velodrome_pools(graphql_endpoint) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-    """Get pools from Velodrome."""
+def get_velodrome_pools(graphql_endpoint, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """
+    Get pools from Velodrome.
+    
+    Args:
+        graphql_endpoint: GraphQL endpoint for subgraph (used for Optimism)
+        chain_id: Chain ID to determine which method to use
+        lp_sugar_address: Address of the LpSugar contract (used for Mode)
+        ledger_api: Ethereum API instance (used for Mode)
+        
+    Returns:
+        List of pools or error dictionary
+    """
+    # For Optimism, use the subgraph
+    if chain_id == OPTIMISM_CHAIN_ID:
+        return get_velodrome_pools_via_subgraph(graphql_endpoint)
+    
+    # For Mode, use the Sugar contract
+    elif chain_id == MODE_CHAIN_ID:
+        if not lp_sugar_address or not ledger_api:
+            error_msg = "LpSugar address and ledger_api are required for Mode chain"
+            logger.error(error_msg)
+            return {"error": error_msg}
+        
+        return get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=ledger_api)
+    
+    else:
+        error_msg = f"Unsupported chain ID: {chain_id}"
+        logger.error(error_msg)
+        return {"error": error_msg}
+
+def get_velodrome_pools_via_subgraph(graphql_endpoint) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Get pools from Velodrome via subgraph (Optimism)."""
     graphql_query = """
     {
       liquidityPools(first: 20, orderBy: totalValueLockedUSD, orderDirection: desc) {
@@ -216,15 +273,185 @@ def get_velodrome_pools(graphql_endpoint) -> Union[Dict[str, Any], List[Dict[str
     }
     """
     
-    logger.info("Fetching Velodrome pools")
+    logger.info("Fetching Velodrome pools via subgraph")
     data = run_query(graphql_query, graphql_endpoint)
     if isinstance(data, dict) and "error" in data:
         logger.error(f"Error fetching pools: {data['error']}")
         return data
     
     pools = data.get("liquidityPools", [])
-    logger.info(f"Successfully fetched {len(pools)} pools")
+    logger.info(f"Successfully fetched {len(pools)} pools via subgraph")
     return pools
+
+def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """
+    Get pools from Velodrome via Sugar contract (Mode).
+    
+    Args:
+        lp_sugar_address: Address of the LpSugar contract
+        rpc_url: RPC URL for the Mode chain (default: uses RPC_ENDPOINTS[MODE_CHAIN_ID])
+        
+    Returns:
+        List of pools or error dictionary
+    """
+    # Use the default RPC URL if none is provided
+    if rpc_url is None:
+        rpc_url = RPC_ENDPOINTS[MODE_CHAIN_ID]
+    
+    logger.info(f"Fetching Velodrome pools via Sugar contract at {lp_sugar_address}")
+    
+    try:
+        # Initialize Web3 with the correct provider
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
+        
+        # Check connection
+        if not w3.is_connected():
+            error_msg = f"Failed to connect to RPC endpoint: {rpc_url}"
+            logger.error(error_msg)
+            return {"error": error_msg}
+        
+        # Load the ABI directly
+        import json
+        from pathlib import Path
+        
+        abi_path = Path("packages/valory/contracts/velodrome_lp_sugar/build/velodrome_lp_sugar.json")
+        logger.info(f"Loading ABI from: {abi_path}")
+        
+        with open(abi_path, "r") as f:
+            abi_json = json.load(f)
+        
+        # Extract the ABI
+        abi = abi_json["abi"]
+        logger.info(f"ABI loaded with {len(abi)} entries")
+        
+        # Create the contract instance directly
+        logger.info(f"Creating contract instance for address: {lp_sugar_address}")
+        contract_instance = w3.eth.contract(address=lp_sugar_address, abi=abi)
+        
+        # Use direct Web3 calls
+        all_pools = []
+        limit, offset = 5, 0  # Start with a smaller batch size
+        max_pools = 10  # Limit to only fetch 10 pools
+        
+        while len(all_pools) < max_pools:
+            try:
+                # Call the contract directly
+                logger.info(f"Calling all() function with limit={limit}, offset={offset}")
+                raw_pools = contract_instance.functions.all(limit, offset).call()
+                logger.info(f"Received {len(raw_pools)} pools from contract")
+                
+                if not raw_pools:
+                    logger.info(f"No more pools returned (offset={offset})")
+                    break
+                
+                # Format the pools
+                formatted_pools = []
+                for pool_data in raw_pools:
+                    # Map the tuple data to a dictionary with named fields based on the ABI structure
+                    pool = {
+                        "id": pool_data[0],  # lp address
+                        "symbol": pool_data[1],
+                        "decimals": pool_data[2],
+                        "liquidity": pool_data[3],
+                        "type": pool_data[4],
+                        "tick": pool_data[5],
+                        "sqrt_ratio": pool_data[6],
+                        "token0": pool_data[7],
+                        "reserve0": pool_data[8],
+                        "staked0": pool_data[9],
+                        "token1": pool_data[10],
+                        "reserve1": pool_data[11],
+                        "staked1": pool_data[12],
+                        "gauge": pool_data[13],
+                        "gauge_liquidity": pool_data[14],
+                        "gauge_alive": pool_data[15],
+                        "fee": pool_data[16],
+                        "bribe": pool_data[17],
+                        "factory": pool_data[18],
+                        "emissions": pool_data[19],
+                        "emissions_token": pool_data[20],
+                        "pool_fee": pool_data[21],
+                        "unstaked_fee": pool_data[22],
+                        "token0_fees": pool_data[23],
+                        "token1_fees": pool_data[24],
+                        "nfpm": pool_data[25],
+                        "alm": pool_data[26],
+                        "root": pool_data[27],
+                    }
+                    formatted_pools.append(pool)
+                
+                # Add the formatted pools to our collection, but limit to max_pools
+                all_pools.extend(formatted_pools[:max_pools - len(all_pools)])
+                logger.info(f"Formatted {len(formatted_pools)} pools")
+                
+                # Check if we've reached the max number of pools or the end of available pools
+                if len(all_pools) >= max_pools or len(raw_pools) < limit:
+                    logger.info(f"Reached the limit of {max_pools} pools or end of available pools")
+                    break
+                
+                # Move to next batch
+                offset += limit
+            except Exception as e:
+                logger.error(f"Error fetching pools batch (offset={offset}): {str(e)}")
+                break
+        
+        # Convert Sugar pool format to match subgraph format
+        formatted_pools = []
+        for pool in all_pools:
+            # Skip invalid or empty entries returned by the contract
+            if pool is None or not isinstance(pool, dict):
+                continue
+            # Skip pools with missing or zero-address tokens
+            ZERO_ADDR = "0x0000000000000000000000000000000000000000"
+            token0 = str(pool.get("token0", ZERO_ADDR)).lower()
+            token1 = str(pool.get("token1", ZERO_ADDR)).lower()
+            # Format the pool to match subgraph format
+            formatted_pool = {
+                "id": pool["id"],
+                "inputTokens": [
+                    {"id": pool["token0"], "symbol": ""},  # Symbol will be filled later
+                    {"id": pool["token1"], "symbol": ""},  # Symbol will be filled later
+                ],
+                "totalValueLockedUSD": calculate_tvl_from_reserves(
+                    pool["reserve0"], 
+                    pool["reserve1"],
+                    pool["token0"],
+                    pool["token1"],
+                    # We'll need to get prices separately
+                ),
+                "inputTokenBalances": [str(pool["reserve0"]), str(pool["reserve1"])],
+                "cumulativeVolumeUSD": "0",  # Not available directly, will need to estimate
+                "sugar_data": pool,  # Store the original data for APR calculation
+            }
+            
+            formatted_pools.append(formatted_pool)
+        
+        logger.info(f"Successfully fetched {len(formatted_pools)} pools via Sugar contract")
+        return formatted_pools
+        
+    except Exception as e:
+        error_msg = f"Error fetching pools via Sugar: {str(e)}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+        return {"error": error_msg}
+
+def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_address, token_prices=None):
+    """
+    Calculate TVL from token reserves and prices.
+    
+    This is a placeholder function. In a real implementation, you would:
+    1. Get token prices from an oracle or price API
+    2. Calculate TVL as reserve0 * price0 + reserve1 * price1
+    
+    For now, we'll return a placeholder value.
+    """
+    # TODO: Implement actual TVL calculation with token prices
+    # This would require fetching token prices from an oracle or API
+    
+    # For now, return a placeholder based on the reserves
+    # In a real implementation, you would multiply by actual token prices
+    placeholder_tvl = float(reserve0) + float(reserve1)
+    return str(placeholder_tvl)
 
 def fetch_daily_snapshots(pool_id, graphql_endpoint, days=30):
     """Fetch daily snapshots for a given pool."""
@@ -921,13 +1148,13 @@ def get_filtered_pools(pools, current_positions):
     # We'll calculate APR in a separate step
     return [p for p in qualifying_pools if p["tvl"] >= tvl_threshold]
 
-def get_opportunities(graphql_endpoint, current_positions, coingecko_api_key, coin_list):
+def get_opportunities(graphql_endpoint, current_positions, coingecko_api_key, coin_list, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None):
     """Get and format pool opportunities with all required metrics."""
     start_time = time.time()
-    logger.info("Starting opportunity discovery")
+    logger.info(f"Starting opportunity discovery for chain ID {chain_id}")
     
-    # Get pools
-    pools = get_velodrome_pools(graphql_endpoint)
+    # Get pools based on chain
+    pools = get_velodrome_pools(graphql_endpoint, chain_id, lp_sugar_address, ledger_api)
     if isinstance(pools, dict) and "error" in pools:
         error_msg = f"Error in pool discovery: {pools['error']}"
         logger.error(error_msg)
@@ -945,17 +1172,45 @@ def get_opportunities(graphql_endpoint, current_positions, coingecko_api_key, co
         pool_id = pool["id"]
         logger.info(f"Processing pool {i+1}/{len(filtered_pools)}: {pool_id}")
         
-        # Fetch daily snapshots
-        snapshots = fetch_daily_snapshots(pool_id, graphql_endpoint)
+        # Different processing based on chain
+        if chain_id == OPTIMISM_CHAIN_ID:
+            # For Optimism, use subgraph data
+            # Fetch daily snapshots
+            snapshots = fetch_daily_snapshots(pool_id, graphql_endpoint)
+            
+            # Calculate APR
+            pool["total_apr"] = calculate_apr(snapshots)
+            pool["organic_apr"] = pool["total_apr"]  # For simplicity, all APR is organic
+            pool["incentive_apr"] = 0  # Placeholder
+            
+            # Calculate Sharpe ratio
+            pool["sharpe_ratio"] = calculate_sharpe_ratio(snapshots)
+            
+            # Calculate depth score
+            pool["depth_score"], pool["max_position_size"], pool["depth_scores_multi_bp"] = analyze_pool_liquidity(
+                pool_id, snapshots
+            )
+            
+        elif chain_id == MODE_CHAIN_ID:
+            # For Mode, use Sugar contract data
+            sugar_data = pool.get("sugar_data", {})
+            
+            # Calculate APR from emissions and fees
+            emissions_apr, fees_apr = calculate_apr_from_sugar_data(sugar_data)
+            pool["total_apr"] = emissions_apr + fees_apr
+            pool["organic_apr"] = fees_apr
+            pool["incentive_apr"] = emissions_apr
+            
+            # For Mode, we don't have historical data for Sharpe ratio
+            # Use a placeholder or alternative metric
+            pool["sharpe_ratio"] = None
+            
+            # For depth score, use a simplified calculation based on reserves
+            pool["depth_score"] = calculate_simplified_depth_score(sugar_data)
+            pool["max_position_size"] = calculate_simplified_max_position(sugar_data)
+            pool["depth_scores_multi_bp"] = {}  # Placeholder
         
-        # Calculate APR
-        pool["total_apr"] = calculate_apr(snapshots)
-        pool["organic_apr"] = pool["total_apr"]  # For simplicity, all APR is organic
-        
-        # Calculate Sharpe ratio
-        pool["sharpe_ratio"] = calculate_sharpe_ratio(snapshots)
-        
-        # Calculate IL risk score
+        # Calculate IL risk score (common for both chains)
         token_ids = []
         for token in pool["inputTokens"]:
             token_id = get_token_id_from_symbol(
@@ -975,18 +1230,9 @@ def get_opportunities(graphql_endpoint, current_positions, coingecko_api_key, co
             logger.warning(f"Not enough valid token IDs for IL calculation for pool {pool_id}")
             pool["il_risk_score"] = None
             
-        # NEW: Calculate depth score
-        pool["depth_score"], pool["max_position_size"], pool["depth_scores_multi_bp"] = analyze_pool_liquidity(
-            pool_id, snapshots
-        )
-        logger.info(f"Calculated depth score: {pool.get('depth_score')} and max position size: {pool.get('max_position_size')}")
+        logger.info(f"Calculated metrics for pool {pool_id}: APR={pool.get('total_apr')}, depth score={pool.get('depth_score')}")
     
-    # After calculating APR, apply the APR threshold
-    apr_list = [float(p.get("total_apr", 0)) for p in filtered_pools]
-    
-    # Rest of the function remains the same...
-    
-    # NEW: Calculate APR-based max position size for all pools
+    # Calculate APR-based max position size for all pools
     if len(filtered_pools) > 1:
         sorted_pools = sorted(filtered_pools, key=lambda x: float(x.get('total_apr', 0)), reverse=True)
         logger.info("Calculating APR-based max position sizes using next best opportunities")
@@ -1020,7 +1266,7 @@ def get_opportunities(graphql_endpoint, current_positions, coingecko_api_key, co
                 pool["max_position_size"] = apr_based_max_position
     
     # Format pools with all required metrics
-    formatted_pools = format_pool_data(filtered_pools)
+    formatted_pools = format_pool_data(filtered_pools, chain_id)
     
     execution_time = time.time() - start_time
     logger.info(f"Opportunity discovery completed in {execution_time:.2f} seconds")
@@ -1028,10 +1274,136 @@ def get_opportunities(graphql_endpoint, current_positions, coingecko_api_key, co
     
     return formatted_pools
 
-# 3. Update format_pool_data function to include depth score in the output
-def format_pool_data(pools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def calculate_apr_from_sugar_data(sugar_data):
+    """
+    Calculate APR from Sugar contract data.
+    
+    Args:
+        sugar_data: Pool data from Sugar contract
+        
+    Returns:
+        Tuple of (emissions_apr, fees_apr)
+    """
+    try:
+        # Extract relevant data
+        emissions_rate = float(sugar_data.get("emissions", 0))
+        emissions_token = sugar_data.get("emissions_token")
+        token0_fees = float(sugar_data.get("token0_fees", 0))
+        token1_fees = float(sugar_data.get("token1_fees", 0))
+        reserve0 = float(sugar_data.get("reserve0", 0))
+        reserve1 = float(sugar_data.get("reserve1", 0))
+        
+        # TODO: Get actual token prices from an oracle or API
+        # For now, use placeholder prices
+        token0_price = 1.0  # Placeholder
+        token1_price = 1.0  # Placeholder
+        emissions_token_price = 1.0  # Placeholder
+        
+        # Calculate TVL
+        tvl = reserve0 * token0_price + reserve1 * token1_price
+        
+        # Calculate annual emissions value
+        annual_emissions = emissions_rate * SECONDS_IN_YEAR
+        emissions_value = annual_emissions * emissions_token_price
+        
+        # Calculate emissions APR
+        emissions_apr = 0
+        if tvl > 0:
+            emissions_apr = (emissions_value / tvl) * 100
+        
+        # Calculate annual fees (epoch ≈ 1 week)
+        annual_fees0 = token0_fees * 52 * token0_price
+        annual_fees1 = token1_fees * 52 * token1_price
+        total_fees = annual_fees0 + annual_fees1
+        
+        # Calculate fees APR
+        fees_apr = 0
+        if tvl > 0:
+            fees_apr = (total_fees / tvl) * 100
+        
+        logger.debug(f"Calculated APR: emissions={emissions_apr:.2f}%, fees={fees_apr:.2f}%")
+        return emissions_apr, fees_apr
+        
+    except Exception as e:
+        error_msg = f"Error calculating APR from Sugar data: {str(e)}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+        return 0, 0
+
+def calculate_simplified_depth_score(sugar_data):
+    """
+    Calculate a simplified depth score based on Sugar contract data.
+    
+    Args:
+        sugar_data: Pool data from Sugar contract
+        
+    Returns:
+        Simplified depth score
+    """
+    try:
+        # Extract relevant data
+        reserve0 = float(sugar_data.get("reserve0", 0))
+        reserve1 = float(sugar_data.get("reserve1", 0))
+        
+        # TODO: Get actual token prices from an oracle or API
+        # For now, use placeholder prices
+        token0_price = 1.0  # Placeholder
+        token1_price = 1.0  # Placeholder
+        
+        # Calculate TVL
+        tvl = reserve0 * token0_price + reserve1 * token1_price
+        
+        # Simple depth score based on TVL
+        # In a real implementation, you would use more sophisticated metrics
+        depth_score = tvl / 10000  # Arbitrary scaling factor
+        
+        return depth_score
+        
+    except Exception as e:
+        error_msg = f"Error calculating simplified depth score: {str(e)}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+        return 0
+
+def calculate_simplified_max_position(sugar_data):
+    """
+    Calculate a simplified maximum position size based on Sugar contract data.
+    
+    Args:
+        sugar_data: Pool data from Sugar contract
+        
+    Returns:
+        Simplified maximum position size
+    """
+    try:
+        # Extract relevant data
+        reserve0 = float(sugar_data.get("reserve0", 0))
+        reserve1 = float(sugar_data.get("reserve1", 0))
+        
+        # TODO: Get actual token prices from an oracle or API
+        # For now, use placeholder prices
+        token0_price = 1.0  # Placeholder
+        token1_price = 1.0  # Placeholder
+        
+        # Calculate TVL
+        tvl = reserve0 * token0_price + reserve1 * token1_price
+        
+        # Simple max position size as a percentage of TVL
+        # In a real implementation, you would use more sophisticated metrics
+        max_position = tvl * 0.05  # 5% of TVL as a conservative estimate
+        
+        return max_position
+        
+    except Exception as e:
+        error_msg = f"Error calculating simplified max position: {str(e)}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+        return 0
+
+def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
+    chain_name = CHAIN_NAMES.get(chain_id, "unknown")
     
     for pool in pools:
         # Skip pools with more than two tokens
@@ -1043,18 +1415,17 @@ def format_pool_data(pools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "dex_type": VELODROME,
             "pool_address": pool["id"],
             "pool_id": pool["id"],
-            "has_incentives": False,  # We'd need to adapt this for Velodrome's incentives
+            "has_incentives": pool.get("incentive_apr", 0) > 0,
             "total_apr": pool.get("total_apr", 0),
             "organic_apr": pool.get("organic_apr", 0),
-            "incentive_apr": 0,  # Placeholder, would need to adapt for Velodrome
+            "incentive_apr": pool.get("incentive_apr", 0),
             "tvl": float(pool.get("totalValueLockedUSD", 0)),
             "is_lp": True,  # All pools are LP opportunities
             "sharpe_ratio": pool.get("sharpe_ratio"),
             "il_risk_score": pool.get("il_risk_score"),
             "token_count": pool.get("token_count", 0),
             "volume": float(pool.get("cumulativeVolumeUSD", 0)),
-            # NEW: Add depth score and max position size
-            "chain":"optimism",
+            "chain": chain_name,
             "depth_score": pool.get("depth_score"),
             "max_position_size": pool.get("max_position_size"),
             "max_position_size_apr": pool.get("max_position_size_apr", 0)
@@ -1084,11 +1455,12 @@ def run(**kwargs) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
     
     Args:
         **kwargs: Arbitrary keyword arguments
+            chains: List of chains to analyze (e.g., ["optimism", "mode"])
             graphql_endpoint: GraphQL endpoint for Velodrome API
             current_positions: List of current position IDs to exclude
             coingecko_api_key: API key for CoinGecko
-            export_excel: Boolean flag to export results to Excel
-            excel_filename: Filename for Excel export
+            lp_sugar_address: Address of the LpSugar contract (required for Mode chain)
+            rpc_url: RPC URL for the Mode chain (optional, uses default if not provided)
             
     Returns:
         Dict containing either error messages or result data
@@ -1102,7 +1474,6 @@ def run(**kwargs) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
     token_id_cache.clear()
     
     start_time = time.time()
-    logger.info("Starting Velodrome pool analysis")
     
     # Check for missing required fields
     missing = check_missing_fields(kwargs)
@@ -1111,7 +1482,15 @@ def run(**kwargs) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
         logger.error(error_msg)
         errors.append(error_msg)
         return {"error": errors}
-
+    
+    # Get chains from kwargs
+    chains = kwargs.get("chains", [])
+    if not chains:
+        error_msg = "No chains specified for analysis."
+        logger.error(error_msg)
+        errors.append(error_msg)
+        return {"error": errors}
+    
     # Fetch coin list with API key
     coin_list = fetch_coin_list(kwargs.get("coingecko_api_key"))
     if coin_list is None:
@@ -1119,26 +1498,86 @@ def run(**kwargs) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
         logger.error(error_msg)
         errors.append(error_msg)
         return {"error": errors}
-
-    # Get opportunities
-    result = get_opportunities(
-        kwargs["graphql_endpoint"],
-        kwargs.get("current_positions", []),
-        kwargs["coingecko_api_key"],
-        coin_list
-    )
     
-    if isinstance(result, dict) and "error" in result:
-        errors.append(result["error"])
-        logger.error(f"Error in opportunity discovery: {result['error']}")
-        return {"error": errors}
-    elif not result:
-        error_msg = "No suitable pools found"
+    # Process each chain
+    all_results = []
+    for chain in chains:
+        logger.info(f"Starting Velodrome pool analysis for {chain} chain")
+        
+        # Map chain name to chain ID
+        chain_id = None
+        for cid, cname in CHAIN_NAMES.items():
+            if cname.lower() == chain.lower():
+                chain_id = cid
+                break
+        
+        if chain_id is None:
+            error_msg = f"Unsupported chain: {chain}"
+            logger.error(error_msg)
+            errors.append(error_msg)
+            continue
+        
+        # Check for Mode chain specific requirements
+        if chain_id == MODE_CHAIN_ID:
+            if not kwargs.get("lp_sugar_address"):
+                error_msg = "lp_sugar_address is required for Mode chain"
+                logger.error(error_msg)
+                errors.append(error_msg)
+                continue
+            
+            # Initialize Web3 for Mode chain
+            rpc_url = kwargs.get("rpc_url", RPC_ENDPOINTS[MODE_CHAIN_ID])
+            w3 = Web3(Web3.HTTPProvider(rpc_url))
+            if not w3.is_connected():
+                error_msg = f"Failed to connect to RPC endpoint for {chain}: {rpc_url}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+                continue
+            
+            # Get opportunities for Mode chain
+            result = get_opportunities(
+                kwargs["graphql_endpoint"],
+                kwargs.get("current_positions", []),
+                kwargs["coingecko_api_key"],
+                coin_list,
+                chain_id,
+                kwargs.get("lp_sugar_address"),
+                rpc_url
+            )
+        else:
+            # Get opportunities for other chains (e.g., Optimism)
+            result = get_opportunities(
+                kwargs["graphql_endpoint"],
+                kwargs.get("current_positions", []),
+                kwargs["coingecko_api_key"],
+                coin_list,
+                chain_id
+            )
+        
+        # Process results
+        if isinstance(result, dict) and "error" in result:
+            errors.append(result["error"])
+            logger.error(f"Error in opportunity discovery for {chain}: {result['error']}")
+            continue
+        elif not result:
+            error_msg = f"No suitable pools found for {chain}"
+            logger.warning(error_msg)
+            errors.append(error_msg)
+            continue
+        
+        # Add results to the combined list
+        all_results.extend(result)
+    
+    # Check if we have any results
+    if not all_results:
+        error_msg = "No suitable pools found across any chains"
         logger.warning(error_msg)
         errors.append(error_msg)
         return {"error": errors}
     
     execution_time = time.time() - start_time
     logger.info(f"Full execution completed in {execution_time:.2f} seconds")
+    logger.info(f"Found {len(all_results)} valid opportunities across all chains")
     
-    return {"result": result}
+    return {"result": all_results}
+

@@ -5,7 +5,7 @@ license: Apache-2.0
 description: An optimism liquidity trader agent.
 aea_version: '>=1.19.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
+  __init__.py: bafybeia5756suph5q6bri6vf3t6pzturldvb3ngd4tg2csgqd2h44claxi
 fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeiebm3m3gfgkbdiym6jkl4idbfpjqjjoggmg6pgoc55ijeh7622gaa
@@ -16,17 +16,17 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 - dvilela/genai:0.1.0:bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
-- valory/mirror_db:0.1.0:bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja
+- valory/mirror_db:0.1.0:bafybeieftxd7tyizuo5r3gf3jukw4h7ophlvek74sui27imgdbjkpkoc7u
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeie3h2hpzlrie2yc5r3eypce546am5bxlgvzqgjols34yf6z523o6q
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeiabptpha4hnd7avieeqdzekwq6cx7bfshanrchfcqafq2kpa5bqwu
-- valory/balancer_weighted_pool:0.1.0:bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm
-- valory/balancer_vault:0.1.0:bafybeiff3ltn6xoh3otuywk2j3yxujdlfzcvri66slnufv5t4hkj5musfa
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeid7h7sxxoglhhqbcz4g64fwbgj6akwecv4ktolhefcsziqntnnt2e
-- valory/uniswap_v3_pool:0.1.0:bafybeiehh6y7qswdnfocoi2ku57w4k2rilambgt2bfp6co7vscghmqpjte
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe
+- valory/balancer_weighted_pool:0.1.0:bafybeid5fhymcnpjo4ztpquga3luj42oxqojn674gpsgzngdm6jk6uzllq
+- valory/balancer_vault:0.1.0:bafybeiabmk7rwa6lwwalvggyqmqwgdkjvq3f4mksxtaxvjwbsfr7gpy5wa
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeieynvqfmcx5ufvxkmfe6nfgfg6tlmbjebxipay2qqqgetmlnilqkq
+- valory/uniswap_v3_pool:0.1.0:bafybeid3s37cbrxrsdwrj2cio5sqjokgczsn7k4wz7tgzz556kmhkvoejq
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeiam3f7wro3dspemhpdogindopshwppuljudzz5vnoaonoxgycgjoi
 protocols:
 - open_aea/signing:1.0.0:bafybeig2d36zxy65vd7fwhs7scotuktydcarm74aprmrb5nioiymr3yixm
 - valory/abci:0.1.0:bafybeiatodhboj6a3p35x4f4b342lzk6ckxpud23awnqbxwjeon3k5y36u
@@ -41,18 +41,18 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeiatse7cijmz4rpvhhngmlhha6d35h3zosydqmm6oporw2xbdzab4u
-- valory/optimus_abci:0.1.0:bafybeig6zw6gyiz3nw4yytemkqyv34nei5yv3pabofjrq5onxcwppk4ney
+- valory/liquidity_trader_abci:0.1.0:bafybeibhmiqtzgiipzrsvagg4j76lnzhppqmsy2zqiz5yaekqoj3gjbjia
+- valory/optimus_abci:0.1.0:bafybeiajuk2tqdxnzelreahcmdmxldb7qctpcgdyvtjxqtaaeehp3ja6vy
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 customs:
-- valory/merkl_pools_search:0.1.0:bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma
-- valory/max_apr_selection:0.1.0:bafybeifrtzmqqtl7sp2av2ea56z2yitkr5olsanquastbuojlyxrvksqru
-- valory/balancer_pools_search:0.1.0:bafybeifztzxwdqiccffo4ngggdmork5r5hvejzcqxeukft6zdum43meolq
-- valory/uniswap_pools_search:0.1.0:bafybeihxeuahk6mkg5mmh6xiyot6rnwnenpmcpi3fxk4thloevdbuowo4y
-- valory/asset_lending:0.1.0:bafybeianomzulpty4lq37qc4bly44tto7scghg2he7qm6nncjxzrvwzy4q
+- valory/merkl_pools_search:0.1.0:bafybeidngsgesfv3gxa7zu6tml2jhmvotjzg46k6xjchinshwrzoct2ez4
+- valory/max_apr_selection:0.1.0:bafybeicgzphehagavm7ejtax2yh5rwbl5ejp3t7vd2swtbmu3rei65t5de
+- valory/balancer_pools_search:0.1.0:bafybeic2k5jj4oupyfowdfxkgapgmsswvfiompajr23wltngsdgnrkue3e
+- valory/uniswap_pools_search:0.1.0:bafybeiaga6ll76c73dsld2lwdv564rywex3kbiaxqogmmfujxgpkblau24
+- valory/asset_lending:0.1.0:bafybeigdk6bscpr5hqkcoekqnemzeotyszvy62wfrdxt2whkhbocdvxukq
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -274,7 +274,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/data}
+      store_path: ${str:/mnt/d/Valory/optimus-Task11(1)/optimus/data}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       portfolio_info_filename: ${str:portfolio.json}

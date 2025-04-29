@@ -45,12 +45,6 @@ MAX_TICK = 887272
 INT_MAX = sys.maxsize
 
 
-class PoolType(Enum):
-    """Velodrome Pool Types"""
-    STABLE = "Stable"
-    VOLATILE = "Volatile"
-    CONCENTRATED_LIQUIDITY = "ConcentratedLiquidity"
-
 
 class VelodromePoolBehaviour(PoolBehaviour, ABC):
     """Velodrome Pool Behaviour that handles both Stable/Volatile and Concentrated Liquidity pools"""
@@ -66,7 +60,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         assets = kwargs.get("assets")
         chain = kwargs.get("chain")
         max_amounts_in = kwargs.get("max_amounts_in")
-        pool_type = 'Stable' #to-do: remove this
+        is_cl_pool = kwargs.get("is_cl_pool", False)
         is_stable = kwargs.get("is_stable")
 
         if not all([pool_address, safe_address, assets, chain, max_amounts_in]):
@@ -76,7 +70,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None, None
 
         # Determine the pool type and call the appropriate method
-        if pool_type == PoolType.CONCENTRATED_LIQUIDITY.value:
+        if is_cl_pool:
             return (yield from self._enter_cl_pool(
                 pool_address=pool_address,
                 safe_address=safe_address,
@@ -101,7 +95,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
         chain = kwargs.get("chain")
-        pool_type = 'Stable'
+        is_cl_pool = kwargs.get("is_cl_pool", False)
         is_stable = kwargs.get("is_stable")
         if not all([pool_address, safe_address, chain]):
             self.context.logger.error(
@@ -110,7 +104,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None, None, None
 
         # Determine the pool type and call the appropriate method
-        if pool_type == PoolType.CONCENTRATED_LIQUIDITY.value:
+        if is_cl_pool:
             return (yield from self._exit_cl_pool(
                 token_id=kwargs.get("token_id"),
                 safe_address=safe_address,

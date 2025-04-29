@@ -2832,8 +2832,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 #yield from self.fetch_all_trading_opportunities()
                 self.selected_opportunities = [{
                         "dex_type": "Velodrome",
-                        "pool_address": "0x985612ff2C9409174FedcFf23d4F4761AF124F88",
-                        "pool_id": "0x985612ff2C9409174FedcFf23d4F4761AF124F88",
+                        "pool_address": "0x478946BcD4a5a22b316470F5486fAfb928C0bA25",
+                        "pool_id": "0x1de84e1324baf5a9f3a49a48892fe90ce48456f1",
                         "has_incentives": False,
                         "total_apr": 87.16823152296979,
                         "organic_apr": 87.16823152296979,
@@ -3658,6 +3658,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if not self.selected_opportunities:
             return actions
+        
 
         # Prepare tokens for exit or investment
         available_tokens = yield from self._prepare_tokens_for_investment()
@@ -3904,7 +3905,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "pool_type": self.position_to_exit.get("pool_type"),
             "token_id": self.position_to_exit.get("token_id"),
             "liquidity": self.position_to_exit.get("liquidity"),
-            "is_stable": self.position_to_exit.get("is_stable")
+            "is_stable": self.position_to_exit.get("is_stable"),
+            "is_cl_pool": self.position_to_exit.get("is_cl_pool")
         }
 
         return exit_pool_action
@@ -4322,7 +4324,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "pool_type",
             "whitelistedSilos",
             "pool_id",
-            "is_stable"
+            "is_stable",
+            "is_cl_pool"
         ]
 
         # Create the current_position dictionary with only the desired information
@@ -4609,13 +4612,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.DONE.value, {}
 
         next_action = Action(action_name)
-        if next_action == Action.ENTER_POOL:
+        if next_action == Action.ENTER_POOL:         
+            
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
             )
             last_action = Action.ENTER_POOL.value
 
         elif next_action == Action.EXIT_POOL:
+
             tx_hash, chain_id, safe_address = yield from self.get_exit_pool_tx_hash(
                 next_action_details
             )
@@ -4778,6 +4783,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         pool_type = action.get("pool_type")
         is_stable = action.get("is_stable")
+        is_cl_pool = action.get("is_cl_pool")
 
         pool = self.pools.get(dex_type)
         if not pool:
@@ -4816,7 +4822,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "chain": chain,
             "max_amounts_in": max_amounts_in,
             "pool_type": pool_type,
-            "is_stable": is_stable
+            "is_stable": is_stable,
+            "is_cl_pool": is_cl_pool
         }
         
         # Add pool_fee for non-Velodrome pools
@@ -4956,6 +4963,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         liquidity = action.get("liquidity")
         pool_type = action.get("pool_type")
         is_stable = action.get("is_stable")
+        is_cl_pool = action.get("is_cl_pool")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
 
         pool = self.pools.get(dex_type)
@@ -4980,6 +4988,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return None, None, None
             exit_pool_kwargs["assets"] = assets
             exit_pool_kwargs["is_stable"] = is_stable
+            exit_pool_kwargs["is_cl_pool"] = is_cl_pool
         elif dex_type == DexType.BALANCER.value:
             if not assets or len(assets) < 2:
                 self.context.logger.error(f"2 assets required for Balancer pools, provided: {assets}")

@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeib6dwhornj6ystwefh6dgcgn64hr7jlswlq25b3zy6bto4y2sxlfy
+  behaviours.py: bafybeiaousvbgcnbrwhhwiyhgtiovrv55wvefy7uu7u5suj3rxwcoqtrx4
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
@@ -18,7 +18,7 @@ fingerprint:
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeicatycfno4fgnscblonb3qf5rf65kc2dkr7ibpe5pmkdt4zfhz2kq
+  pools/velodrome.py: bafybeidduiwdhh3ofankf4ona6ae6lnwwicn7kpympqfieshn27sda7nyy
   rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
@@ -46,6 +46,7 @@ contracts:
 - valory/velodrome_router:0.1.0:bafybeiapkfux4ei3kazmpp42z3hn5l6ixw5j2wxu6h253isfdvy3p6z5ia
 - valory/velodrome_cl_pool:0.1.0:bafybeibfqes45dgnifbfyzjiblsh4bnxxjlwtd6r46um5vdyk7j2wgh7ca
 - valory/velodrome_cl_manager:0.1.0:bafybeicm72ztuwqv67b7wo6ev4z6t3lzxx4m625qhaxib7ghssqb3gqi54
+- valory/velodrome_pool:0.1.0:bafybeidvbw6wcgazwrdeptnzmpltcg4l4klzt4hs6iuiycllv63iv5xp2u
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4

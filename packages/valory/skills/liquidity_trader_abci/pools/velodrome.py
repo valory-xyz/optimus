@@ -32,6 +32,7 @@ from packages.valory.contracts.multisend.contract import (
 )
 from packages.valory.contracts.velodrome_router.contract import VelodromeRouterContract
 from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
+from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
 from packages.valory.contracts.velodrome_cl_manager.contract import VelodromeCLPoolManagerContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
@@ -118,9 +119,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             ))
         else:
             # Handle Stable or Volatile pools
-            if not kwargs.get("assets") or not kwargs.get("liquidity"):
+            if not kwargs.get("assets"):
                 self.context.logger.error(
-                    f"Missing assets or liquidity for exiting stable/volatile pool"
+                    f"Missing assets for exiting stable/volatile pool"
                 )
                 return None, None, None
                 
@@ -201,6 +202,21 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None, None
 
+        if not liquidity:
+            liquidity = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromePoolContract.contract_id,
+                contract_callable="get_balance",
+                data_key="balance",
+                account=safe_address,
+                chain_id=chain,
+            )
+
+        if not liquidity:
+            self.context.logger.error(f"No liquidity found for account ({safe_address}) in pool ({pool_address})")
+            return None, None, None
+        
         # Set minimum amounts (with slippage protection)
         # TO-DO: Implement proper slippage protection
         amount_a_min = 0
@@ -212,8 +228,36 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         ).round_sequence.last_round_transition_timestamp.timestamp()
         deadline = int(last_update_time) + (20 * 60)
 
-        # Call removeLiquidity on the router contract
-        tx_hash = yield from self.contract_interact(
+        # Use multisend to batch approve and remove liquidity transactions
+        multi_send_txs = []
+        
+        # First, approve the liquidity tokens to the router
+        approve_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromePoolContract.contract_id,
+            contract_callable="build_approval_tx",
+            data_key="tx_hash",
+            spender=router_address,
+            amount=liquidity,
+            chain_id=chain,
+        )
+        
+        if not approve_tx_hash:
+            self.context.logger.error(f"Failed to approve liquidity tokens to router")
+            return None, None, None
+            
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": pool_address,
+                "value": 0,
+                "data": approve_tx_hash,
+            }
+        )
+
+        # Then, call removeLiquidity on the router contract
+        remove_liquidity_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=router_address,
             contract_public_id=VelodromeRouterContract.contract_id,
@@ -229,8 +273,43 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             deadline=deadline,
             chain_id=chain,
         )
+        
+        if not remove_liquidity_tx_hash:
+            self.context.logger.error(f"Failed to create remove_liquidity transaction")
+            return None, None, None
+            
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": router_address,
+                "value": 0,
+                "data": remove_liquidity_tx_hash,
+            }
+        )
+        
+        # Prepare multisend transaction
+        multisend_address = self.params.multisend_contract_addresses.get(chain, "")
+        if not multisend_address:
+            self.context.logger.error(
+                f"Could not find multisend address for chain {chain}"
+            )
+            return None, None, None
 
-        return tx_hash, router_address, False
+        multisend_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
+            chain_id=chain,
+        )
+        
+        if not multisend_tx_hash:
+            return None, None, None
+            
+        self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
+        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
     def _enter_cl_pool(
         self,

@@ -2832,8 +2832,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 #yield from self.fetch_all_trading_opportunities()
                 self.selected_opportunities = [{
                         "dex_type": "Velodrome",
-                        "pool_address": "0x62270F70C750D66Cf10Bc8cBe12390B120498097",
-                        "pool_id": "0x62270F70C750D66Cf10Bc8cBe12390B120498097",
+                        "pool_address": "0x985612ff2C9409174FedcFf23d4F4761AF124F88",
+                        "pool_id": "0x985612ff2C9409174FedcFf23d4F4761AF124F88",
                         "has_incentives": False,
                         "total_apr": 87.16823152296979,
                         "organic_apr": 87.16823152296979,
@@ -2857,19 +2857,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         "depth_score_500bp": 78548.15882117409,
                         "token0": "0x4200000000000000000000000000000000000006",
                         "token0_symbol": "WETH",
-                        "token1": "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
-                        "token1_symbol": "USDT",
+                        "token1": "0x9Bcef72be871e61ED4fBbc7630889beE758eb81D",
+                        "token1_symbol": "rETH",
                         "composite_score": 3083224557.4765472,
                         "funds_percentage": 67.33122596959345,
                         "relative_funds_percentage": 0.6733122597,
-                        "token_id": 2164758,
-                        "liquidity": 4117368573026,
-                        "amount0": 1897817,
-                        "amount1": 8932751203375952221,
-                        "timestamp": 1745836746,
+                        # "token_id": 2164758,
+                        # "liquidity": 4117368573026,
+                        # "amount0": 1897817,
+                        # "amount1": 8932751203375952221,
+                        # "timestamp": 1745836746,
                         "is_stable": False
                         }]
-                # self.position_to_exit = self.selected_opportunities[0]
+                self.position_to_exit = self.selected_opportunities[0]
                 # if self.current_positions:
                 #     for position in (
                 #         pos
@@ -4322,6 +4322,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "pool_type",
             "whitelistedSilos",
             "pool_id",
+            "is_stable"
         ]
 
         # Create the current_position dictionary with only the desired information
@@ -4329,7 +4330,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             key: action[key] for key in keys_to_extract if key in action
         }
 
-        if action.get("dex_type") == DexType.UNISWAP_V3.value or action.get("dex_type") == DexType.VELODROME.value:
+        if action.get("dex_type") == DexType.UNISWAP_V3.value:
             (
                 token_id,
                 liquidity,
@@ -4344,8 +4345,36 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
-
-        if action.get("dex_type") == DexType.BALANCER.value:
+        elif action.get("dex_type") == DexType.VELODROME.value:
+            is_cl_pool = action.get("is_cl_pool", False)
+            if is_cl_pool:
+                (
+                    token_id,
+                    liquidity,
+                    amount0,
+                    amount1,
+                    timestamp,
+                ) = yield from self._get_data_from_mint_tx_receipt(
+                    self.synchronized_data.final_tx_hash, action.get("chain")
+                )
+                current_position["token_id"] = token_id
+                current_position["liquidity"] = liquidity
+                current_position["amount0"] = amount0
+                current_position["amount1"] = amount1
+                current_position["timestamp"] = timestamp
+            else:
+                (
+                    amount0,
+                    amount1,
+                    timestamp,
+                ) = yield from self._get_data_from_velodrome_mint_event(
+                    self.synchronized_data.final_tx_hash, action.get("chain")
+                )
+                current_position["amount0"] = amount0
+                current_position["amount1"] = amount1
+                current_position["timestamp"] = timestamp
+        
+        elif action.get("dex_type") == DexType.BALANCER.value:
             (
                 amount0,
                 amount1,
@@ -4357,7 +4386,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
 
-        if action.get("dex_type") == DexType.STURDY.value:
+        elif action.get("dex_type") == DexType.STURDY.value:
             (
                 amount,
                 shares,
@@ -6063,6 +6092,87 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         signatures += packed_signature
 
         return signatures.hex()
+
+    def _get_data_from_velodrome_mint_event(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, Tuple[Optional[int], Optional[int], Optional[int]]]:
+        """Extract data from Velodrome Mint event for non-CL pools."""
+        response = yield from self.get_transaction_receipt(
+            tx_digest=tx_hash,
+            chain_id=chain,
+        )
+        if not response:
+            self.context.logger.error(
+                f"Error fetching tx receipt for Velodrome Mint event! Response: {response}"
+            )
+            return None, None, None
+
+        # Define the event signature and calculate its hash
+        # Mint (index_topic_1 address sender, uint256 amount0, uint256 amount1)
+        event_signature = "Mint(address,uint256,uint256)"
+        event_signature_hash = keccak(text=event_signature)
+        event_signature_hex = to_hex(event_signature_hash)[2:]
+
+        # Extract logs from the response
+        logs = response.get("logs", [])
+
+        # Find the log that matches the Mint event
+        log = next(
+            (
+                log
+                for log in logs
+                if log.get("topics", []) and log.get("topics", [])[0][2:] == event_signature_hex
+            ),
+            None,
+        )
+
+        if not log:
+            self.context.logger.error("No logs found for Velodrome Mint event")
+            return None, None, None
+
+        try:
+            # Decode indexed parameter (sender address)
+            sender_topic = log.get("topics", [])[1]
+            if not sender_topic:
+                self.context.logger.error(f"Sender address topic is missing from log {log}")
+                return None, None, None
+
+            # Decode non-indexed parameters (amount0, amount1) from the data field
+            data_hex = log.get("data")
+            if not data_hex:
+                self.context.logger.error(f"Data field is empty in log {log}")
+                return None, None, None
+
+            data_bytes = bytes.fromhex(data_hex[2:])
+            decoded_data = decode(["uint256", "uint256"], data_bytes)
+            amount0 = decoded_data[0]
+            amount1 = decoded_data[1]
+
+            # Get the timestamp from the block
+            block_number = response.get("blockNumber")
+            if block_number is None:
+                self.context.logger.error("Block number not found in transaction receipt.")
+                return None, None, None
+
+            block = yield from self.get_block(
+                block_number=block_number,
+                chain_id=chain,
+            )
+
+            if block is None:
+                self.context.logger.error(f"Failed to fetch block {block_number}")
+                return None, None, None
+
+            timestamp = block.get("timestamp")
+            if timestamp is None:
+                self.context.logger.error("Timestamp not found in block data.")
+                return None, None, None
+
+            return amount0, amount1, timestamp
+
+        except Exception as e:
+            self.context.logger.error(f"Error decoding data from Velodrome Mint event: {e}")
+            return None, None, None
 
     def _get_data_from_deposit_tx_receipt(
         self, tx_hash: str, chain: str

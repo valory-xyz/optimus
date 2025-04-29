@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihit4bpbbls4akikswjozkpp3h46o3odwrhljnkrv5h72wsutaduq
   build/contract_interface.json: bafybeih264ikmebscydw6nsv5ldpwugatldqnflrxkij2gvirkcvkm3tpi
-  contract.py: bafybeidxnflswxghbifa4etaymjszyaq5vkob2w3senaqlksec57khjf3a
+  contract.py: bafybeibdj2xa7om3jkkpce2u3tkmhsctw35blwusbxz4trogk7ytgpqiay
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeCLPoolContract

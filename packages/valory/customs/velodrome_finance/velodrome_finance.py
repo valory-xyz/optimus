@@ -264,6 +264,7 @@ def get_velodrome_pools_via_subgraph(graphql_endpoint) -> Union[Dict[str, Any], 
           id
           symbol
         }
+        _stable
         isSingleSided
         totalValueLockedUSD
         inputTokenBalances
@@ -1428,7 +1429,8 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID) ->
             "chain": chain_name,
             "depth_score": pool.get("depth_score"),
             "max_position_size": pool.get("max_position_size"),
-            "max_position_size_apr": pool.get("max_position_size_apr", 0)
+            "max_position_size_apr": pool.get("max_position_size_apr", 0),
+            "is_stable": pool.get("_stable")
         }
         
         # NEW: Add depth scores for different basis point levels

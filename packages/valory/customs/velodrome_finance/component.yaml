@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeig54kazemffrqk7h5ufvfm7n3fzg5pekpx75uxytjs3o7mnhywox4
-  velodrome_finance.py: bafybeihpulfvwmzc5p25nvcjymlp73rk2q5i47b5dfo25n2gxq6yzofqpm
+  velodrome_finance.py: bafybeihl23fc466acq4ulbuihh2f2jeluj6tkkqutmjlfwwq3cpq7vyroy
 fingerprint_ignore_patterns: []
 entry_point: velodrome_finance.py
 callable: run

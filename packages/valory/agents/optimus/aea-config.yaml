@@ -45,19 +45,19 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeihfa7ehtn4g7aixtxvxgz3jn5vpjjtqq7ogzn5sfpc3uo3foxgz6e
-- valory/optimus_abci:0.1.0:bafybeicoz6qmchwpw3qrfmk47ht4vekxl4nku77mpmvuxty6hz7g6kwsw4
+- valory/liquidity_trader_abci:0.1.0:bafybeihihpp5cdncormdde7a4i3ilwmw3icm7eaeo6xbhv7rwcjpmmx3jq
+- valory/optimus_abci:0.1.0:bafybeics6ynf3xnqnbv2nzbbumn6ijx2irc6nrhlt4hrhwxx3cbiud523m
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
-- valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
+- valory/termination_abci:0.1.0:bafybeie7vqlipix3qd5hcdlonwqrjzzppycwypgairnspwchqnsdob3cjq
+- valory/transaction_settlement_abci:0.1.0:bafybeifgxfpiuztvhncsmg7u2owjaue4x7k3xccwu7m52c24twnvqlws5e
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma
 - valory/max_apr_selection:0.1.0:bafybeifrtzmqqtl7sp2av2ea56z2yitkr5olsanquastbuojlyxrvksqru
 - valory/balancer_pools_search:0.1.0:bafybeifztzxwdqiccffo4ngggdmork5r5hvejzcqxeukft6zdum43meolq
 - valory/uniswap_pools_search:0.1.0:bafybeihxeuahk6mkg5mmh6xiyot6rnwnenpmcpi3fxk4thloevdbuowo4y
 - valory/asset_lending:0.1.0:bafybeianomzulpty4lq37qc4bly44tto7scghg2he7qm6nncjxzrvwzy4q
-- valory/velodrome_pools_search:0.1.0:bafybeifwjmffqtwi7raetmrfqk6bbvm5ab7pypc5po2pybmm5q5qeyugqy
+- valory/velodrome_pools_search:0.1.0:bafybeiazxln2ykxfqfjyskmvvr2ehcox5zkujnr2r33kzmoskxjsh3jc6m
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -125,7 +125,7 @@ config:
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     optimism:
-      address: ${str:https://mainnet.optimism.io/}
+      address: ${str:https://virtual.optimism.rpc.tenderly.co/976b1e32-9a77-47a9-9ae6-eb333387708f}
       chain_id: ${int:10}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}

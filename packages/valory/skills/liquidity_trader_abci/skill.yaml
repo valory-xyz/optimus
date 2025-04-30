@@ -7,18 +7,26 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeidezn3vy5ejxkwxiux36idq4wred2uydwo2iwziaghznnrrgbowge
+  behaviours.py: bafybeigs6ee3bpsvzpa7yfbkz7zyzbyfa7lgga6d3auhw7wx4hgy3gvohm
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
+  model/__init__.py: bafybeifj33eqowo6ny67h5h4hle6qdf2mgvrnvj7ptlggh7kt5wozpacje
+  model/price_history.py: bafybeigoejx6bvr3fgdpkjxvbth67f7zum5oqbcezk3za56rdevtksavzq
+  model/stablecoin_model.py: bafybeieorqi5noi6i3t2ysy6nclusei54rqfiz27oijisnpbpbll5woloa
+  model/utils.py: bafybeidajfif7pjk6xlqotkpd7yraz3hy4s2juyp7ff6mcmfbfu5rfo5xq
+  model/velodrome.py: bafybeiababk2bceslegmqpmnkmn7y726atmphucs3fnvsd3a6saspviira
+  model/velodrome_bridge.py: bafybeiborbjsys4rm4grrcrh4wgrq64pbiz4m42gs46vvjigbbm5kvhfua
   models.py: bafybeify4a3s4s5lej2haunjeov5sdobmz5shqxqio4fj4hr7ybcadfffa
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
+  pools/__init__.py: bafybeibhsdrwyhsmji3cxsb4qdp6vyh7yqh3744iimmdp5ojmot7ikq2ku
   pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
+  pools/stablecoin_model.py: bafybeicpg7ugup5hsrnlk2iwsz5p2bkp7rebgtwzyucydte5f5ctuaw7uq
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeibfcd6k67vn7jitvxvcd6ox64ocdkvw6c4hutncjglb3fvxlqgz4q
+  pools/velodrome.py: bafybeihmkpstiwctl6mmen3gym6x3hf3cue6kgqqrf5srtornm3647peq4
   rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
@@ -27,6 +35,8 @@ fingerprint:
   tests/test_models.py: bafybeic75ux6ulgpnf4ndrctgsw7jlbc7zs3ltxtue4o4eoij7fqvfqmfe
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
+  utils/__init__.py: bafybeiha5v6o4ybbq5taq2o7hvoosp7q2pes6zmb3s22f5kaltufkyuznu
+  utils/price_history.py: bafybeia6e2ewv27nubxxg4wjmop5xdp7hhxst6u6aunf6z65yliy5rbigm
 fingerprint_ignore_patterns: []
 connections:
 - valory/mirror_db:0.1.0:bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja
@@ -55,7 +65,7 @@ protocols:
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
+- valory/transaction_settlement_abci:0.1.0:bafybeifgxfpiuztvhncsmg7u2owjaue4x7k3xccwu7m52c24twnvqlws5e
 behaviours:
   main:
     args: {}

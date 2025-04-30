@@ -58,9 +58,9 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
-- valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeifrp24whkdfw7intcx2ch5sxn44yqch4oav75fwefn52hta74lo4a
-- valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
+- valory/termination_abci:0.1.0:bafybeie7vqlipix3qd5hcdlonwqrjzzppycwypgairnspwchqnsdob3cjq
+- valory/liquidity_trader_abci:0.1.0:bafybeihihpp5cdncormdde7a4i3ilwmw3icm7eaeo6xbhv7rwcjpmmx3jq
+- valory/transaction_settlement_abci:0.1.0:bafybeifgxfpiuztvhncsmg7u2owjaue4x7k3xccwu7m52c24twnvqlws5e
 behaviours:
   main:
     args: {}

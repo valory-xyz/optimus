@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
@@ -22,7 +23,8 @@
 import sys
 from abc import ABC
 from enum import Enum
-from typing import Any, Dict, Generator, Optional, Tuple, cast
+import numpy as np
+from typing import Any, Dict, Generator, List, Optional, Tuple, cast
 
 from web3 import Web3
 
@@ -37,6 +39,17 @@ from packages.valory.contracts.velodrome_non_fungible_position_manager.contract 
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
+from packages.valory.skills.liquidity_trader_abci.pools import (
+    calculate_ema,
+    calculate_std_dev,
+    optimize_stablecoin_bands,
+    calculate_tick_range_from_bands,
+)
+from packages.valory.skills.liquidity_trader_abci.utils.price_history import (
+    get_pool_token_history,
+    get_stablecoin_pair_history,
+    check_is_stablecoin_pool,
+)
 
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -622,12 +635,207 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def _calculate_tick_lower_and_upper_velodrome(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[Tuple[int, int]]]:
-        self.context.logger.info(f"Calculating tick range for {pool_address} on chain {chain}")
-        # Fetch tick spacing from velodrome cl pool
+        """
+        Calculate tick range for Velodrome concentrated liquidity pool.
+        
+        Uses historical price data and the stablecoin model to determine optimal tick bounds.
+        
+        Args:
+            pool_address: The address of the Velodrome concentrated liquidity pool
+            chain: The blockchain chain ID
+            
+        Returns:
+            A tuple of (lower_tick, upper_tick) or None if calculation fails
+        """
+        self.context.logger.info(f"Calculating tick range using stablecoin model for pool {pool_address}")
+        
+        # 1. Fetch tick spacing from velodrome cl pool
         tick_spacing = yield from self._get_tick_spacing_velodrome(pool_address, chain)
         if not tick_spacing:
+            self.context.logger.error(f"Failed to get tick spacing for pool {pool_address}")
             return None, None
             
+        # 2. Get the token addresses from the pool
+        token0, token1 = yield from self._get_pool_tokens(pool_address, chain)
+        if not token0 or not token1:
+            self.context.logger.error(f"Failed to get tokens for pool {pool_address}")
+            return (yield from self._calculate_basic_tick_range(tick_spacing))
+        
+        # 3. Get current price
+        current_price = yield from self._get_current_pool_price(pool_address, chain)
+        if current_price is None:
+            self.context.logger.error(f"Failed to get current price for pool {pool_address}")
+            return (yield from self._calculate_basic_tick_range(tick_spacing))
+            
+        try:
+            # 4. Get historical price data for both tokens and calculate price ratio history
+            self.context.logger.info(f"Fetching historical price data for tokens: {token0} and {token1}")
+            pool_data = get_pool_token_history(
+                chain=chain, 
+                token0_address=token0, 
+                token1_address=token1
+            )
+            
+            # Check if we have price data
+            token0_prices = pool_data["token0"]["prices"]
+            token1_prices = pool_data["token1"]["prices"]
+            ratio_prices = pool_data["ratio_prices"]
+            
+            if not ratio_prices:
+                self.context.logger.warning(
+                    f"Could not get price ratio history for pool {pool_address}. "
+                    f"Falling back to basic tick range."
+                )
+                return (yield from self._calculate_basic_tick_range(tick_spacing))
+                
+            # 5. Check if this is a stablecoin pool (both tokens are stablecoins)
+            # This is optional but helps tailor the approach
+            is_stablecoin_pool = False
+            if token0_prices and token1_prices:
+                is_stablecoin_pool = check_is_stablecoin_pool(token0_prices, token1_prices)
+                
+            self.context.logger.info(
+                f"Pool {pool_address} identified as {'stablecoin' if is_stablecoin_pool else 'regular'} pool"
+            )
+            
+            # 6. Use stablecoin model to optimize bands
+            # For stablecoin pools, we want narrow ranges
+            # For volatile pools, we might adjust parameters
+            model_params = {
+                "ema_period": 50,  # Default from the model
+                "std_dev_window": 100,  # Default from the model
+                "verbose": False
+            }
+            
+            # For stablecoin pools, we can use more aggressive settings
+            if is_stablecoin_pool:
+                model_params["min_width_pct"] = 0.0001  # Narrower bands for stablecoins
+            
+            # Run the optimization
+            result = optimize_stablecoin_bands(
+                prices=ratio_prices,
+                **model_params
+            )
+            
+            # 7. Calculate standard deviation for current window
+            ema = calculate_ema(ratio_prices[-100:], model_params["ema_period"])
+            std_dev = calculate_std_dev(ratio_prices[-100:], ema, model_params["std_dev_window"])
+            current_std_dev = std_dev[-1]  # Use the most recent standard deviation
+            
+            # 8. Define a price to tick conversion function
+            def price_to_tick(price: float) -> int:
+                """Convert price to tick using the base 1.0001 formula."""
+                # log base 1.0001 of the price
+                return int(np.log(price) / np.log(1.0001))
+            
+            # 9. Calculate tick range using model band multipliers
+            band_multipliers = result["band_multipliers"]
+            
+            # For stablecoin pools, use a more conservative range but still use the 
+            # calculate_tick_range_from_bands function for consistent processing
+            if is_stablecoin_pool:
+                # Use a more conservative multiplier for stablecoins
+                sigma_range = (band_multipliers[0] + band_multipliers[1]) / 2
+                self.context.logger.info(f"Using stablecoin sigma range: {sigma_range:.4f}")
+                
+                # Create modified band_multipliers with all three bands set to our chosen sigma_range
+                # This ensures the tick calculation will use our preferred range
+                band_multipliers = [sigma_range, sigma_range * 1.5, sigma_range * 2]
+                
+            # Calculate tick range 
+            tick_range_results = calculate_tick_range_from_bands(
+                band_multipliers=band_multipliers,
+                standard_deviation=current_std_dev,
+                current_price=current_price,
+                tick_spacing=tick_spacing,
+                price_to_tick_function=price_to_tick,
+                min_tick=MIN_TICK,
+                max_tick=MAX_TICK
+            )
+            
+            # For backward compatibility, use the outer band ticks
+            tick_lower, tick_upper = tick_range_results["outer_ticks"]
+                
+            # Ensure we have a meaningful range (at least 10 ticks)
+            min_range = 10 * tick_spacing
+            if tick_upper - tick_lower < min_range:
+                # Expand the range
+                midpoint = (tick_upper + tick_lower) // 2
+                tick_lower = midpoint - (min_range // 2)
+                tick_upper = midpoint + (min_range // 2)
+                # Re-adjust to be within bounds
+                tick_lower = max(tick_lower, MIN_TICK)
+                tick_upper = min(tick_upper, MAX_TICK)
+            
+            self.context.logger.info(
+                f"Stablecoin model calculated tick range: LOWER={tick_lower}, UPPER={tick_upper}"
+            )
+            
+            # Log information about all three bands
+            self.context.logger.info("Band details (inner, middle, outer):")
+            for i, band_name in enumerate(["inner", "middle", "outer"]):
+                band_data = tick_range_results[f"band{i+1}"]
+                self.context.logger.info(
+                    f"  {band_name.upper()}: ticks=({band_data['tick_lower']}, {band_data['tick_upper']}), "
+                    f"ratio={band_data['price_ratio']:.4f}"
+                )
+            
+            self.context.logger.info(
+                f"Model band multipliers: {band_multipliers[0]:.4f}, "
+                f"{band_multipliers[1]:.4f}, {band_multipliers[2]:.4f}"
+            )
+            
+            # Log recommended allocation ratios
+            self.context.logger.info(
+                f"Recommended band allocations: {result['band_allocations'][0]:.1%}, "
+                f"{result['band_allocations'][1]:.1%}, {result['band_allocations'][2]:.1%}"
+            )
+            
+            return tick_lower, tick_upper
+            
+        except Exception as e:
+            self.context.logger.error(f"Error in stablecoin model calculation: {str(e)}")
+            self.context.logger.info("Falling back to basic tick range calculation")
+            return (yield from self._calculate_basic_tick_range(tick_spacing))
+            
+    def _get_pool_tokens(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str]]]:
+        """Get the token addresses from a Velodrome pool."""
+        try:
+            # Call the token0 and token1 functions on the pool contract
+            token0 = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromeCLPoolContract.contract_id,
+                contract_callable="token0",
+                data_key="token0",
+                chain_id=chain,
+            )
+            
+            token1 = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromeCLPoolContract.contract_id,
+                contract_callable="token1",
+                data_key="token1",
+                chain_id=chain,
+            )
+            
+            if not token0 or not token1:
+                self.context.logger.error(f"Could not get token addresses for pool {pool_address}")
+                return None, None
+                
+            return token0, token1
+            
+        except Exception as e:
+            self.context.logger.error(f"Error getting pool tokens: {str(e)}")
+            return None, None
+
+    def _calculate_basic_tick_range(
+        self, tick_spacing: int
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """Calculate basic tick range using min/max ticks adjusted to tick spacing."""
         # Adjust MIN_TICK to the nearest higher multiple of tick_spacing
         adjusted_tick_lower = abs(MIN_TICK) // tick_spacing * tick_spacing
         if adjusted_tick_lower > abs(MIN_TICK):
@@ -640,6 +848,25 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             adjusted_tick_upper = adjusted_tick_upper - tick_spacing
 
         self.context.logger.info(
-            f"TICK LOWER: {adjusted_tick_lower} TICK UPPER: {adjusted_tick_upper}"
+            f"Basic tick range: LOWER={adjusted_tick_lower}, UPPER={adjusted_tick_upper}"
         )
         return adjusted_tick_lower, adjusted_tick_upper
+        
+    def _get_current_pool_price(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[float]]:
+        """Get the current price from a Velodrome concentrated liquidity pool."""
+        try:
+            # Get the sqrt_price_x96 from the pool
+            sqrt_price_x96 = yield from self._get_sqrt_price_x96(pool_address, chain)
+            if sqrt_price_x96 is None:
+                return None
+                
+            # Convert sqrt_price_x96 to price
+            # The formula is: price = (sqrt_price_x96 / 2^96)^2
+            price = (sqrt_price_x96 / (2**96))**2
+            self.context.logger.info(f"Current pool price: {price}")
+            return price
+        except Exception as e:
+            self.context.logger.error(f"Error getting current pool price: {str(e)}")
+            return None

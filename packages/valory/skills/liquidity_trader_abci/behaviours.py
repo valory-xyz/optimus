@@ -2833,7 +2833,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.selected_opportunities = [{
                         "dex_type": "Velodrome",
                         "pool_address": "0x478946BcD4a5a22b316470F5486fAfb928C0bA25",
-                        "pool_id": "0x1de84e1324baf5a9f3a49a48892fe90ce48456f1",
+                        "pool_id": "0x478946BcD4a5a22b316470F5486fAfb928C0bA25",
                         "has_incentives": False,
                         "total_apr": 87.16823152296979,
                         "organic_apr": 87.16823152296979,
@@ -2855,13 +2855,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         "depth_score_300bp": 130913.59803529015,
                         "depth_score_400bp": 98185.19852646762,
                         "depth_score_500bp": 78548.15882117409,
-                        "token0": "0x4200000000000000000000000000000000000006",
-                        "token0_symbol": "WETH",
-                        "token1": "0x9Bcef72be871e61ED4fBbc7630889beE758eb81D",
-                        "token1_symbol": "rETH",
+                        "token0": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                        "token0_symbol": "USDC",
+                        "token1": "0x4200000000000000000000000000000000000006",
+                        "token1_symbol": "WETH",
                         "composite_score": 3083224557.4765472,
                         "funds_percentage": 67.33122596959345,
                         "relative_funds_percentage": 0.6733122597,
+                        "is_cl_pool": True,
                         # "token_id": 2164758,
                         # "liquidity": 4117368573026,
                         # "amount0": 1897817,
@@ -2869,7 +2870,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         # "timestamp": 1745836746,
                         "is_stable": False
                         }]
-                self.position_to_exit = self.selected_opportunities[0]
+                #self.position_to_exit = self.selected_opportunities[0]
                 # if self.current_positions:
                 #     for position in (
                 #         pos

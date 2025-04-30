@@ -3340,10 +3340,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             
             if invested_amount >= 950 or invested_amount==0:
                 exit_pool_found = False
-                for action in actions:
+                for action in actions[:]:
                     if action.get('action') == 'ExitPool':
                         exit_pool_found = True
-                        break
+                        for sub_item in actions[:]:
+                            if sub_item.get('action') == 'EnterPool':
+                                actions.remove(sub_item)
+                        break    
                 
                 if not exit_pool_found:
                    actions = []  # Clear actions only if no 'ExitPool' was found and invested_amount greate than 1000 dollar

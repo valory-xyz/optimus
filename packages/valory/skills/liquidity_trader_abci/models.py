@@ -324,6 +324,12 @@ class Params(BaseParams):
         )
         self.cleanup_freq = self._ensure("cleanup_freq", kwargs, int)
         self.genai_api_key = self._ensure("genai_api_key", kwargs, str)
+        self.velodrome_router_contract_addresses = json.loads(
+            self._ensure("velodrome_router_contract_addresses", kwargs, str)
+        )
+        self.velodrome_non_fungible_position_manager_contract_addresses = json.loads(
+            self._ensure("velodrome_non_fungible_position_manager_contract_addresses", kwargs, str)
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

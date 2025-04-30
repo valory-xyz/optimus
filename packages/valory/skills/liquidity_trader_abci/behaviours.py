@@ -107,6 +107,9 @@ from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
 from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
     UniswapPoolBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    VelodromePoolBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     APRPopulationPayload,
     APRPopulationRound,
@@ -166,6 +169,7 @@ class DexType(Enum):
     BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
+    VELODROME = "Velodrome"
 
 
 class Action(Enum):
@@ -289,7 +293,7 @@ class GasCostTracker:
         self.data = new_data
 
 
-class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, ABC):
+class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour,VelodromePoolBehaviour, ABC):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -309,6 +313,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
+        self.pools[DexType.VELODROME.value] = VelodromePoolBehaviour
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(
@@ -1384,143 +1389,143 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             sender = self.context.agent_address
             self.context.logger.info(f"APRPopulationBehaviour started by {sender}")
 
-            try:
-                # Get configuration
-                eth_address = sender
+            # try:
+            #     # Get configuration
+            #     eth_address = sender
 
-                # Step 1: Get or create agent type for "Modius"
-                data = yield from self._read_kv(keys=("agent_type",))
-                if data:
-                    agent_type = data.get("agent_type")
-                    if agent_type:
-                        agent_type = json.loads(agent_type)
-                    else:
-                        # Check external DB
-                        agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
-                        if not agent_type:
-                            agent_type = yield from self.create_agent_type(
-                                AGENT_TYPE,
-                                "An agent for DeFi liquidity management and APR tracking",
-                            )
-                            if not agent_type:
-                                raise Exception("Failed to create agent type.")
-                            yield from self._write_kv(
-                                {"agent_type": json.dumps(agent_type)}
-                            )
+            #     # Step 1: Get or create agent type for "Modius"
+            #     data = yield from self._read_kv(keys=("agent_type",))
+            #     if data:
+            #         agent_type = data.get("agent_type")
+            #         if agent_type:
+            #             agent_type = json.loads(agent_type)
+            #         else:
+            #             # Check external DB
+            #             agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
+            #             if not agent_type:
+            #                 agent_type = yield from self.create_agent_type(
+            #                     AGENT_TYPE,
+            #                     "An agent for DeFi liquidity management and APR tracking",
+            #                 )
+            #                 if not agent_type:
+            #                     raise Exception("Failed to create agent type.")
+            #                 yield from self._write_kv(
+            #                     {"agent_type": json.dumps(agent_type)}
+            #                 )
 
-                type_id = agent_type.get("type_id")
-                self.context.logger.info(f"Using agent type: {agent_type}")
+            #     type_id = agent_type.get("type_id")
+            #     self.context.logger.info(f"Using agent type: {agent_type}")
 
-                # Step 2: Get or create agent registry entry
-                data = yield from self._read_kv(keys=("agent_registry",))
-                if data:
-                    agent_registry = data.get("agent_registry", "{}")
-                    if agent_registry:
-                        agent_registry = json.loads(agent_registry)
-                    else:
-                        agent_registry = yield from self.get_agent_registry_by_address(
-                            eth_address
-                        )
-                        if not agent_registry:
-                            agent_name = self.generate_name(sender)
-                            self.context.logger.info(f"agent_name : {agent_name}")
-                            agent_registry = yield from self.create_agent_registry(
-                                agent_name, type_id, eth_address
-                            )
-                            if not agent_registry:
-                                raise Exception("Failed to create agent registry.")
-                            yield from self._write_kv(
-                                {"agent_registry": json.dumps(agent_registry)}
-                            )
+            #     # Step 2: Get or create agent registry entry
+            #     data = yield from self._read_kv(keys=("agent_registry",))
+            #     if data:
+            #         agent_registry = data.get("agent_registry", "{}")
+            #         if agent_registry:
+            #             agent_registry = json.loads(agent_registry)
+            #         else:
+            #             agent_registry = yield from self.get_agent_registry_by_address(
+            #                 eth_address
+            #             )
+            #             if not agent_registry:
+            #                 agent_name = self.generate_name(sender)
+            #                 self.context.logger.info(f"agent_name : {agent_name}")
+            #                 agent_registry = yield from self.create_agent_registry(
+            #                     agent_name, type_id, eth_address
+            #                 )
+            #                 if not agent_registry:
+            #                     raise Exception("Failed to create agent registry.")
+            #                 yield from self._write_kv(
+            #                     {"agent_registry": json.dumps(agent_registry)}
+            #                 )
 
-                agent_id = agent_registry.get("agent_id")
-                self.context.logger.info(f"Using agent: {agent_id}")
+            #     agent_id = agent_registry.get("agent_id")
+            #     self.context.logger.info(f"Using agent: {agent_id}")
 
-                # Step 3: Get or create APR attribute definition
-                data = yield from self._read_kv(keys=("attr_def",))
-                if data:
-                    attr_def = data.get("attr_def", "{}")
-                    if attr_def:
-                        attr_def = json.loads(attr_def)
-                    else:
-                        # Check external DB
-                        attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
-                        if not attr_def:
-                            attr_def = yield from self.create_attribute_definition(
-                                type_id,
-                                METRICS_NAME,
-                                METRICS_TYPE,
-                                True,
-                                "{}",
-                                agent_id,
-                            )
-                            if not attr_def:
-                                raise Exception(
-                                    "Failed to create attribute definition."
-                                )
-                            yield from self._write_kv(
-                                {"attr_def": json.dumps(attr_def)}
-                            )
+            #     # Step 3: Get or create APR attribute definition
+            #     data = yield from self._read_kv(keys=("attr_def",))
+            #     if data:
+            #         attr_def = data.get("attr_def", "{}")
+            #         if attr_def:
+            #             attr_def = json.loads(attr_def)
+            #         else:
+            #             # Check external DB
+            #             attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+            #             if not attr_def:
+            #                 attr_def = yield from self.create_attribute_definition(
+            #                     type_id,
+            #                     METRICS_NAME,
+            #                     METRICS_TYPE,
+            #                     True,
+            #                     "{}",
+            #                     agent_id,
+            #                 )
+            #                 if not attr_def:
+            #                     raise Exception(
+            #                         "Failed to create attribute definition."
+            #                     )
+            #                 yield from self._write_kv(
+            #                     {"attr_def": json.dumps(attr_def)}
+            #                 )
 
-                attr_def_id = attr_def.get("attr_def_id")
-                self.context.logger.info(f"Using attribute definition: {attr_def}")
+            #     attr_def_id = attr_def.get("attr_def_id")
+            #     self.context.logger.info(f"Using attribute definition: {attr_def}")
 
-                # Step 4: Calculate APR for positions
-                portfolio_value = self.portfolio_data.get("portfolio_value", None)
+            #     # Step 4: Calculate APR for positions
+            #     portfolio_value = 0
+            #     data = yield from self._read_kv(keys=("portfolio_value",))
+            #     self.context.logger.info(f"data{data}")
+            #     if data and data["portfolio_value"]:
+            #         self.context.logger.info(f"data{data}")
+            #         portfolio_value = float(data.get("portfolio_value", "0"))
 
-                if portfolio_value:
-                    current_timestamp = self._get_current_timestamp()
-                    recalculate_apr = yield from self._is_apr_calculation_needed(
-                        current_timestamp, agent_id, attr_def_id
-                    )
+            #     if not math.isclose(
+            #         portfolio_value,
+            #         self.portfolio_data["portfolio_value"],
+            #         rel_tol=1e-9,
+            #     ):
+            #         # Create portfolio snapshot for debugging
+            #         portfolio_snapshot = self._create_portfolio_snapshot()
 
-                    if not recalculate_apr:
-                        self.context.logger.info("APR recalculation not needed.")
+            #         # Calculate APR and related metrics
+            #         actual_apr_data = yield from self.calculate_actual_apr(
+            #             agent_id, attr_def_id
+            #         )
+            #         if actual_apr_data:
+            #             total_actual_apr = actual_apr_data.get("total_actual_apr", None)
+            #             adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-                    else:
-                        # Create portfolio snapshot for debugging
-                        portfolio_snapshot = self._create_portfolio_snapshot()
+            #             if total_actual_apr:
+            #                 # Step 5: Store enhanced APR data in MirrorDB
+            #                 timestamp = int(
+            #                     self.round_sequence.last_round_transition_timestamp.timestamp()
+            #                 )
 
-                        # Calculate APR and related metrics
-                        actual_apr_data = yield from self.calculate_actual_apr(
-                            float(portfolio_value)
-                        )
-                        if actual_apr_data:
-                            total_actual_apr = actual_apr_data.get(
-                                "total_actual_apr", None
-                            )
-                            adjusted_apr = actual_apr_data.get("adjusted_apr", None)
+            #                 # Create enhanced data payload with portfolio metrics
+            #                 enhanced_data = {
+            #                     "apr": float(total_actual_apr),
+            #                     "adjusted_apr": float(adjusted_apr),
+            #                     "timestamp": timestamp,
+            #                     "portfolio_snapshot": portfolio_snapshot,
+            #                     "calculation_metrics": self._get_apr_calculation_metrics(),
+            #                 }
 
-                            enhanced_data = {
-                                "timestamp": current_timestamp,
-                                "portfolio_snapshot": portfolio_snapshot,
-                                "calculation_metrics": self._get_apr_calculation_metrics(),
-                            }
+            #                 agent_attr = yield from self.create_agent_attribute(
+            #                     agent_id,
+            #                     attr_def_id,
+            #                     enhanced_data,
+            #                 )
+            #                 self.context.logger.info(f"Stored APR data: {agent_attr}")
 
-                            if total_actual_apr:
-                                enhanced_data["apr"] = total_actual_apr
+            #     # Prepare payload for consensus
+            #     payload = APRPopulationPayload(sender=sender, context="APR Population")
 
-                            if adjusted_apr:
-                                enhanced_data["adjusted_apr"] = adjusted_apr
-
-                            agent_attr = yield from self.create_agent_attribute(
-                                agent_id,
-                                attr_def_id,
-                                enhanced_data,
-                            )
-                            self.context.logger.info(f"Stored Data: {agent_attr}")
-
-                            yield from self._store_last_apr_timestamp(current_timestamp)
-
-                # Prepare payload for consensus
-                payload = APRPopulationPayload(sender=sender, context="APR Population")
-
-            except Exception as e:
-                self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
-                # Create a payload even in case of error to continue the protocol
-                payload = APRPopulationPayload(
-                    sender=sender, context="APR Population Error"
-                )
+            # except Exception as e:
+            #     self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
+            #     # Create a payload even in case of error to continue the protocol
+            #     payload = APRPopulationPayload(
+            #         sender=sender, context="APR Population Error"
+            #     )
+            payload = APRPopulationPayload(sender=sender, context="APR Population")
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -2426,33 +2431,72 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     sender=sender, actions=json.dumps(actions)
                 )
             else:
-                yield from self.fetch_all_trading_opportunities()
+                #yield from self.fetch_all_trading_opportunities()
+                self.selected_opportunities = [{
+                        "dex_type": "Velodrome",
+                        "pool_address": "0x478946BcD4a5a22b316470F5486fAfb928C0bA25",
+                        "pool_id": "0x1de84e1324baf5a9f3a49a48892fe90ce48456f1",
+                        "has_incentives": False,
+                        "total_apr": 87.16823152296979,
+                        "organic_apr": 87.16823152296979,
+                        "incentive_apr": 0,
+                        "tvl": 101700.31921646433,
+                        "is_lp": True,
+                        "sharpe_ratio": 5.485912937681533,
+                        "il_risk_score": -0.10886226339259253,
+                        "token_count": 2,
+                        "volume": 7106643.8792321645,
+                        "chain": "optimism",
+                        "depth_score": 392740.7941058705,
+                        "max_position_size": 519.1801220591152,
+                        "max_position_size_apr": 50850.15960823216,
+                        "depth_score_10bp": 3927407.9410587046,
+                        "depth_score_50bp": 785481.588211741,
+                        "depth_score_100bp": 392740.7941058705,
+                        "depth_score_200bp": 196370.39705293524,
+                        "depth_score_300bp": 130913.59803529015,
+                        "depth_score_400bp": 98185.19852646762,
+                        "depth_score_500bp": 78548.15882117409,
+                        "token0": "0x4200000000000000000000000000000000000006",
+                        "token0_symbol": "WETH",
+                        "token1": "0x9Bcef72be871e61ED4fBbc7630889beE758eb81D",
+                        "token1_symbol": "rETH",
+                        "composite_score": 3083224557.4765472,
+                        "funds_percentage": 67.33122596959345,
+                        "relative_funds_percentage": 0.6733122597,
+                        # "token_id": 2164758,
+                        # "liquidity": 4117368573026,
+                        # "amount0": 1897817,
+                        # "amount1": 8932751203375952221,
+                        # "timestamp": 1745836746,
+                        "is_stable": False
+                        }]
+                self.position_to_exit = self.selected_opportunities[0]
+                # if self.current_positions:
+                #     for position in (
+                #         pos
+                #         for pos in self.current_positions
+                #         if pos.get("status") == PositionStatus.OPEN.value
+                #     ):
+                #         dex_type = position.get("dex_type")
+                #         strategy = self.params.dex_type_to_strategy.get(dex_type)
+                #         if strategy:
+                #             if (
+                #                 position.get("status", PositionStatus.CLOSED.value)
+                #                 != PositionStatus.OPEN.value
+                #             ):
+                #                 continue
+                #             metrics = self.get_returns_metrics_for_opportunity(
+                #                 position, strategy
+                #             )
+                #             if metrics:
+                #                 position.update(metrics)
+                #         else:
+                #             self.context.logger.error(
+                #                 f"No strategy found for dex type {dex_type}"
+                #             )
 
-                if self.current_positions:
-                    for position in (
-                        pos
-                        for pos in self.current_positions
-                        if pos.get("status") == PositionStatus.OPEN.value
-                    ):
-                        dex_type = position.get("dex_type")
-                        strategy = self.params.dex_type_to_strategy.get(dex_type)
-                        if strategy:
-                            if (
-                                position.get("status", PositionStatus.CLOSED.value)
-                                != PositionStatus.OPEN.value
-                            ):
-                                continue
-                            metrics = self.get_returns_metrics_for_opportunity(
-                                position, strategy
-                            )
-                            if metrics:
-                                position.update(metrics)
-                        else:
-                            self.context.logger.error(
-                                f"No strategy found for dex type {dex_type}"
-                            )
-
-                self.execute_hyper_strategy()
+                #self.execute_hyper_strategy()
                 actions = (
                     yield from self.get_order_of_transactions()
                     if self.selected_opportunities is not None
@@ -3223,8 +3267,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         actions = []
         tokens = []
         # Process rewards
-        if self._can_claim_rewards():
-            yield from self._process_rewards(actions)
+        # if self._can_claim_rewards():
+        #     yield from self._process_rewards(actions)
         # if (  # noqa: E800
         #     self.synchronized_data.period_count != 0  # noqa: E800
         #     and self.synchronized_data.period_count % self.params.pnl_check_interval  # noqa: E800
@@ -3235,6 +3279,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.selected_opportunities = [{'dex_type': 'balancerPool', 'chain': 'mode', 'apr': 9.666696438950499, 'pool_address': '0x7c86a44778c52a0aad17860924b53bf3f35dc932', 'pool_id': '0x7c86a44778c52a0aad17860924b53bf3f35dc932000200000000000000000007', 'pool_type': 'Weighted', 'token_count': 2, 'il_risk_score': -69.03165020125523, 'sharpe_ratio': 1.2749808810720547, 'depth_score': np.float64(150.96397999473865), 'max_position_size': 77227.32858298799, 'type': 'lp', 'tvl': 124129.84, 'token0': '0x4200000000000000000000000000000000000006', 'token0_symbol': 'WETH', 'token1': '0xdfc7c877a950e49d2610114102175a06c2e3167a', 'token1_symbol': 'MODE', 'max_investment_amounts': [0.26082012, 116741.14751878], 'max_investment_usd': 1000.0, 'composite_score': np.float64(86636.30556539547), 'funds_percentage': np.float64(100.0), 'relative_funds_percentage': np.float64(1.0)}]
         if not self.selected_opportunities:
             return actions
+        
 
         # Prepare tokens for exit or investment
         available_tokens = yield from self._prepare_tokens_for_investment()
@@ -3522,6 +3567,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "pool_type": self.position_to_exit.get("pool_type"),
             "token_id": self.position_to_exit.get("token_id"),
             "liquidity": self.position_to_exit.get("liquidity"),
+            "is_stable": self.position_to_exit.get("is_stable"),
+            "is_cl_pool": self.position_to_exit.get("is_cl_pool")
         }
 
         return exit_pool_action
@@ -3939,6 +3986,8 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
             "pool_type",
             "whitelistedSilos",
             "pool_id",
+            "is_stable",
+            "is_cl_pool"
         ]
 
         # Create the current_position dictionary with only the desired information
@@ -3961,8 +4010,36 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
-
-        if action.get("dex_type") == DexType.BALANCER.value:
+        elif action.get("dex_type") == DexType.VELODROME.value:
+            is_cl_pool = action.get("is_cl_pool", False)
+            if is_cl_pool:
+                (
+                    token_id,
+                    liquidity,
+                    amount0,
+                    amount1,
+                    timestamp,
+                ) = yield from self._get_data_from_mint_tx_receipt(
+                    self.synchronized_data.final_tx_hash, action.get("chain")
+                )
+                current_position["token_id"] = token_id
+                current_position["liquidity"] = liquidity
+                current_position["amount0"] = amount0
+                current_position["amount1"] = amount1
+                current_position["timestamp"] = timestamp
+            else:
+                (
+                    amount0,
+                    amount1,
+                    timestamp,
+                ) = yield from self._get_data_from_velodrome_mint_event(
+                    self.synchronized_data.final_tx_hash, action.get("chain")
+                )
+                current_position["amount0"] = amount0
+                current_position["amount1"] = amount1
+                current_position["timestamp"] = timestamp
+        
+        elif action.get("dex_type") == DexType.BALANCER.value:
             (
                 amount0,
                 amount1,
@@ -3974,7 +4051,7 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
 
-        if action.get("dex_type") == DexType.STURDY.value:
+        elif action.get("dex_type") == DexType.STURDY.value:
             (
                 amount,
                 shares,
@@ -4199,13 +4276,15 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
             return Event.DONE.value, {}
 
         next_action = Action(action_name)
-        if next_action == Action.ENTER_POOL:
+        if next_action == Action.ENTER_POOL:         
+            
             tx_hash, chain_id, safe_address = yield from self.get_enter_pool_tx_hash(
                 positions, next_action_details
             )
             last_action = Action.ENTER_POOL.value
 
         elif next_action == Action.EXIT_POOL:
+
             tx_hash, chain_id, safe_address = yield from self.get_exit_pool_tx_hash(
                 next_action_details
             )
@@ -4375,6 +4454,9 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
         pool_fee = action.get("pool_fee")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         pool_type = action.get("pool_type")
+        is_stable = action.get("is_stable")
+        is_cl_pool = action.get("is_cl_pool")
+
         pool = self.pools.get(dex_type)
         if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
@@ -4487,17 +4569,23 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
                 f"Insufficient balance for entering pool: {max_amounts_in}"
             )
             return None, None, None
-
-        tx_hash, contract_address = yield from pool.enter(
-            self,
-            pool_address=pool_address,
-            safe_address=safe_address,
-            assets=assets,
-            chain=chain,
-            max_amounts_in=max_amounts_in,
-            pool_fee=pool_fee,
-            pool_type=pool_type,
-        )
+      # Prepare kwargs for pool.enter
+        kwargs = {
+            "pool_address": pool_address,
+            "safe_address": safe_address,
+            "assets": assets,
+            "chain": chain,
+            "max_amounts_in": max_amounts_in,
+            "pool_type": pool_type,
+            "is_stable": is_stable,
+            "is_cl_pool": is_cl_pool
+        }
+        
+        # Add pool_fee for non-Velodrome pools
+        if dex_type != "Velodrome":
+            kwargs["pool_fee"] = action.get("pool_fee")
+            
+        tx_hash, contract_address = yield from pool.enter(self, **kwargs)
         if not tx_hash or not contract_address:
             return None, None, None
 
@@ -4557,7 +4645,7 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
             multi_send_txs=multi_send_txs,
             chain_id=chain,
         )
-    
+
         safe_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
             contract_address=safe_address,
@@ -4620,17 +4708,17 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
     def get_exit_pool_tx_hash(
         self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+
         """Get exit pool tx hash"""
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = action.get("assets", {})
-        if not assets or len(assets) < 2:
-            self.context.logger.error(f"2 assets required, provided: {assets}")
-            return None, None, None
         pool_address = action.get("pool_address")
         token_id = action.get("token_id")
         liquidity = action.get("liquidity")
         pool_type = action.get("pool_type")
+        is_stable = action.get("is_stable")
+        is_cl_pool = action.get("is_cl_pool")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
 
         pool = self.pools.get(dex_type)
@@ -4638,31 +4726,34 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        exit_pool_kwargs = {}
-
-        if dex_type == DexType.BALANCER.value:
-            exit_pool_kwargs.update(
-                {
-                    "safe_address": safe_address,
-                    "assets": assets,
-                    "pool_address": pool_address,
-                    "chain": chain,
-                    "pool_type": pool_type,
-                }
-            )
-
-        if dex_type == DexType.UNISWAP_V3.value:
-            exit_pool_kwargs.update(
-                {
-                    "token_id": token_id,
-                    "safe_address": safe_address,
-                    "chain": chain,
-                    "liquidity": liquidity,
-                }
-            )
-
-        if not exit_pool_kwargs:
-            self.context.logger.error("Could not find kwargs for exit pool")
+        # Prepare common kwargs for all pool types
+        exit_pool_kwargs = {
+            "pool_address": pool_address,
+            "safe_address": safe_address,
+            "chain": chain,
+            "pool_type": pool_type,
+        }
+        
+        # Add specific parameters based on pool type
+        if dex_type == DexType.VELODROME.value:
+            exit_pool_kwargs["liquidity"] = liquidity
+            exit_pool_kwargs["token_id"] = token_id
+            if not assets or len(assets) < 2:
+                self.context.logger.error(f"2 assets required for Velodrome Stable/Volatile pools, provided: {assets}")
+                return None, None, None
+            exit_pool_kwargs["assets"] = assets
+            exit_pool_kwargs["is_stable"] = is_stable
+            exit_pool_kwargs["is_cl_pool"] = is_cl_pool
+        elif dex_type == DexType.BALANCER.value:
+            if not assets or len(assets) < 2:
+                self.context.logger.error(f"2 assets required for Balancer pools, provided: {assets}")
+                return None, None, None
+            exit_pool_kwargs["assets"] = assets
+        elif dex_type == DexType.UNISWAP_V3.value:
+            exit_pool_kwargs["token_id"] = token_id
+            exit_pool_kwargs["liquidity"] = liquidity
+        else:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
         tx_hash, contract_address, is_multisend = yield from pool.exit(
@@ -4712,7 +4803,6 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
 
         return payload_string, chain, safe_address
     
-        
     def get_deposit_tx_hash(
         self, action, positions
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
@@ -5807,6 +5897,87 @@ class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
 
         return signatures.hex()
 
+    def _get_data_from_velodrome_mint_event(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, Tuple[Optional[int], Optional[int], Optional[int]]]:
+        """Extract data from Velodrome Mint event for non-CL pools."""
+        response = yield from self.get_transaction_receipt(
+            tx_digest=tx_hash,
+            chain_id=chain,
+        )
+        if not response:
+            self.context.logger.error(
+                f"Error fetching tx receipt for Velodrome Mint event! Response: {response}"
+            )
+            return None, None, None
+
+        # Define the event signature and calculate its hash
+        # Mint (index_topic_1 address sender, uint256 amount0, uint256 amount1)
+        event_signature = "Mint(address,uint256,uint256)"
+        event_signature_hash = keccak(text=event_signature)
+        event_signature_hex = to_hex(event_signature_hash)[2:]
+
+        # Extract logs from the response
+        logs = response.get("logs", [])
+
+        # Find the log that matches the Mint event
+        log = next(
+            (
+                log
+                for log in logs
+                if log.get("topics", []) and log.get("topics", [])[0][2:] == event_signature_hex
+            ),
+            None,
+        )
+
+        if not log:
+            self.context.logger.error("No logs found for Velodrome Mint event")
+            return None, None, None
+
+        try:
+            # Decode indexed parameter (sender address)
+            sender_topic = log.get("topics", [])[1]
+            if not sender_topic:
+                self.context.logger.error(f"Sender address topic is missing from log {log}")
+                return None, None, None
+
+            # Decode non-indexed parameters (amount0, amount1) from the data field
+            data_hex = log.get("data")
+            if not data_hex:
+                self.context.logger.error(f"Data field is empty in log {log}")
+                return None, None, None
+
+            data_bytes = bytes.fromhex(data_hex[2:])
+            decoded_data = decode(["uint256", "uint256"], data_bytes)
+            amount0 = decoded_data[0]
+            amount1 = decoded_data[1]
+
+            # Get the timestamp from the block
+            block_number = response.get("blockNumber")
+            if block_number is None:
+                self.context.logger.error("Block number not found in transaction receipt.")
+                return None, None, None
+
+            block = yield from self.get_block(
+                block_number=block_number,
+                chain_id=chain,
+            )
+
+            if block is None:
+                self.context.logger.error(f"Failed to fetch block {block_number}")
+                return None, None, None
+
+            timestamp = block.get("timestamp")
+            if timestamp is None:
+                self.context.logger.error("Timestamp not found in block data.")
+                return None, None, None
+
+            return amount0, amount1, timestamp
+
+        except Exception as e:
+            self.context.logger.error(f"Error decoding data from Velodrome Mint event: {e}")
+            return None, None, None
+
     def _get_data_from_deposit_tx_receipt(
         self, tx_hash: str, chain: str
     ) -> Generator[None, None, Tuple[int, int, int]]:
@@ -5956,7 +6127,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             trading_type = db_data.get("trading_type", None)
 
             if not serialized_protocols:
-                serialized_protocols = ["balancer_pools_search", "asset_lending"]
+                serialized_protocols = self.params.available_strategies
 
             if not trading_type:
                 trading_type = TradingType.BALANCED.value
@@ -5969,9 +6140,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check if we need to recalculate the portfolio
             if self.should_recalculate_portfolio(self.portfolio_data):
-                yield from self.calculate_user_share_values()
+                pass
+                # yield from self.calculate_user_share_values()
                 # Store the updated portfolio data
-                self.store_portfolio_data()
+                # self.store_portfolio_data()
 
             payload = FetchStrategiesPayload(
                 sender=sender,

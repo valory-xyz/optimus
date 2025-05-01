@@ -53,6 +53,10 @@ CHAIN_URLS = {
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
 LP = "lp"
 errors = []
+WHITELISTED_ASSETS = {
+    "mode": {},
+    "optimism": {}
+}
 
 @lru_cache(None)
 def fetch_coin_list():
@@ -162,10 +166,20 @@ def get_filtered_pools(pools, current_positions):
         token_count = len(pool.get("poolTokens", []))
         # Accept pools with 3-8 tokens (we're removing the 2-token restriction)
         mapped_type = SUPPORTED_POOL_TYPES.get(pool.get("type"))
+        chain = pool["chain"].lower()
+        whitelisted_tokens = WHITELISTED_ASSETS.get(chain, [])
         if (
             mapped_type
             and 2 <= token_count 
             and Web3.to_checksum_address(pool.get("address")) not in current_positions
+            and chain in WHITELISTED_ASSETS
+            and (
+                not whitelisted_tokens
+                or (
+                    pool["poolTokens"][0]["address"] in whitelisted_tokens
+                    and pool["poolTokens"][1]["address"] in whitelisted_tokens
+                )
+            )
         ):
             pool["type"] = mapped_type
             pool["apr"] = get_total_apr(pool)

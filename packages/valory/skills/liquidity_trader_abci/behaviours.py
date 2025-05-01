@@ -3337,8 +3337,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     yield from self.sleep(10)  # Additional sleep if needed
         
             self.context.logger.info(f"Final invested_amount: {invested_amount}")
+
+            THRESHOLD_INVESTED_AMOUNT = 950
+            global_cap = 1000
             
-            if invested_amount >= 950 or invested_amount==0:
+            if invested_amount >= THRESHOLD_INVESTED_AMOUNT or invested_amount==0:
                 exit_pool_found = False
                 for action in actions[:]:
                     if action.get('action') == 'ExitPool':
@@ -3353,10 +3356,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 for action in actions:
                     if action.get('action') == 'EnterPool':
-                        action['invested_amount'] = (1000 - invested_amount)
+                        action['invested_amount'] = (global_cap - invested_amount)
 
         return actions
-
+    
     def _process_rewards(self, actions: List[Dict[str, Any]]) -> Generator:
         """Process reward claims and add actions."""
         allowed_chains = self.params.target_investment_chains
@@ -3813,7 +3816,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
 
 
-class DecisionMakingBehaviour(EvaluateStrategyBehaviour):
+class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that executes all the actions."""
 
     matching_round: Type[AbstractRound] = DecisionMakingRound

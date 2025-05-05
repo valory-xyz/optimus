@@ -2431,73 +2431,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     sender=sender, actions=json.dumps(actions)
                 )
             else:
-                #yield from self.fetch_all_trading_opportunities()
-                self.selected_opportunities = [{
-                        "dex_type": "Velodrome",
-                        "pool_address": "0x478946BcD4a5a22b316470F5486fAfb928C0bA25",
-                        "pool_id": "0x478946BcD4a5a22b316470F5486fAfb928C0bA25",
-                        "has_incentives": False,
-                        "total_apr": 87.16823152296979,
-                        "organic_apr": 87.16823152296979,
-                        "incentive_apr": 0,
-                        "tvl": 101700.31921646433,
-                        "is_lp": True,
-                        "sharpe_ratio": 5.485912937681533,
-                        "il_risk_score": -0.10886226339259253,
-                        "token_count": 2,
-                        "volume": 7106643.8792321645,
-                        "chain": "optimism",
-                        "depth_score": 392740.7941058705,
-                        "max_position_size": 519.1801220591152,
-                        "max_position_size_apr": 50850.15960823216,
-                        "depth_score_10bp": 3927407.9410587046,
-                        "depth_score_50bp": 785481.588211741,
-                        "depth_score_100bp": 392740.7941058705,
-                        "depth_score_200bp": 196370.39705293524,
-                        "depth_score_300bp": 130913.59803529015,
-                        "depth_score_400bp": 98185.19852646762,
-                        "depth_score_500bp": 78548.15882117409,
-                        "token0": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-                        "token0_symbol": "USDC",
-                        "token1": "0x4200000000000000000000000000000000000006",
-                        "token1_symbol": "WETH",
-                        "composite_score": 3083224557.4765472,
-                        "funds_percentage": 67.33122596959345,
-                        "relative_funds_percentage": 0.6733122597,
-                        "is_cl_pool": True,
-                        # "token_id": 2164758,
-                        # "liquidity": 4117368573026,
-                        # "amount0": 1897817,
-                        # "amount1": 8932751203375952221,
-                        # "timestamp": 1745836746,
-                        "is_stable": False
-                        }]
-                #self.position_to_exit = self.selected_opportunities[0]
-                # if self.current_positions:
-                #     for position in (
-                #         pos
-                #         for pos in self.current_positions
-                #         if pos.get("status") == PositionStatus.OPEN.value
-                #     ):
-                #         dex_type = position.get("dex_type")
-                #         strategy = self.params.dex_type_to_strategy.get(dex_type)
-                #         if strategy:
-                #             if (
-                #                 position.get("status", PositionStatus.CLOSED.value)
-                #                 != PositionStatus.OPEN.value
-                #             ):
-                #                 continue
-                #             metrics = self.get_returns_metrics_for_opportunity(
-                #                 position, strategy
-                #             )
-                #             if metrics:
-                #                 position.update(metrics)
-                #         else:
-                #             self.context.logger.error(
-                #                 f"No strategy found for dex type {dex_type}"
-                #             )
+                yield from self.fetch_all_trading_opportunities()
+                
+                if self.current_positions:
+                    for position in (
+                        pos
+                        for pos in self.current_positions
+                        if pos.get("status") == PositionStatus.OPEN.value
+                    ):
+                        dex_type = position.get("dex_type")
+                        strategy = self.params.dex_type_to_strategy.get(dex_type)
+                        if strategy:
+                            if (
+                                position.get("status", PositionStatus.CLOSED.value)
+                                != PositionStatus.OPEN.value
+                            ):
+                                continue
+                            metrics = self.get_returns_metrics_for_opportunity(
+                                position, strategy
+                            )
+                            if metrics:
+                                position.update(metrics)
+                        else:
+                            self.context.logger.error(
+                                f"No strategy found for dex type {dex_type}"
+                            )
 
-                #self.execute_hyper_strategy()
+                self.execute_hyper_strategy()
                 actions = (
                     yield from self.get_order_of_transactions()
                     if self.selected_opportunities is not None
@@ -3277,7 +3237,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         #     and self.current_positions  # noqa: E800
         # ):  # noqa: E800
         #     tokens = yield from self._process_pnl(actions)  # noqa: E800
-        self.selected_opportunities = [{'dex_type': 'balancerPool', 'chain': 'mode', 'apr': 9.666696438950499, 'pool_address': '0x7c86a44778c52a0aad17860924b53bf3f35dc932', 'pool_id': '0x7c86a44778c52a0aad17860924b53bf3f35dc932000200000000000000000007', 'pool_type': 'Weighted', 'token_count': 2, 'il_risk_score': -69.03165020125523, 'sharpe_ratio': 1.2749808810720547, 'depth_score': np.float64(150.96397999473865), 'max_position_size': 77227.32858298799, 'type': 'lp', 'tvl': 124129.84, 'token0': '0x4200000000000000000000000000000000000006', 'token0_symbol': 'WETH', 'token1': '0xdfc7c877a950e49d2610114102175a06c2e3167a', 'token1_symbol': 'MODE', 'max_investment_amounts': [0.26082012, 116741.14751878], 'max_investment_usd': 1000.0, 'composite_score': np.float64(86636.30556539547), 'funds_percentage': np.float64(100.0), 'relative_funds_percentage': np.float64(1.0)}]
         if not self.selected_opportunities:
             return actions
         
@@ -3572,11 +3531,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "assets": [token.get("token") for token in tokens],
             "pool_address": self.position_to_exit.get("pool_address"),
             "pool_type": self.position_to_exit.get("pool_type"),
-            "token_id": self.position_to_exit.get("token_id"),
-            "liquidity": self.position_to_exit.get("liquidity"),
             "is_stable": self.position_to_exit.get("is_stable"),
             "is_cl_pool": self.position_to_exit.get("is_cl_pool")
         }
+        
+        # Handle Velodrome CL pools with multiple positions
+        if (self.position_to_exit.get("dex_type") == DexType.VELODROME.value and 
+            self.position_to_exit.get("is_cl_pool") and 
+            "positions" in self.position_to_exit):
+            # Extract token IDs from all positions
+            token_ids = [pos["token_id"] for pos in self.position_to_exit.get("positions", [])]
+            liquidities = [pos["liquidity"] for pos in self.position_to_exit.get("positions", [])]
+            if token_ids and liquidities:
+                self.context.logger.info(
+                    f"Exiting Velodrome CL pool with {len(token_ids)} positions. "
+                    f"Token IDs: {token_ids}"
+                )
+                exit_pool_action["token_ids"] = token_ids
+                exit_pool_action["liquidities"] = liquidities
+        # For single position case (backward compatibility)
+        elif "token_id" in self.position_to_exit:
+            exit_pool_action["token_id"] = self.position_to_exit.get("token_id")
+            exit_pool_action["liquidity"] = self.position_to_exit.get("liquidity")
 
         return exit_pool_action
 
@@ -4017,24 +3993,78 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
+            current_position["status"] = PositionStatus.OPEN.value
+            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            self.current_positions.append(current_position)
+            
         elif action.get("dex_type") == DexType.VELODROME.value:
             is_cl_pool = action.get("is_cl_pool", False)
             if is_cl_pool:
-                (
-                    token_id,
-                    liquidity,
-                    amount0,
-                    amount1,
-                    timestamp,
-                ) = yield from self._get_data_from_mint_tx_receipt(
+                # For Velodrome CL pools, we need to handle multiple positions
+                # First, check if there are multiple positions in the transaction
+                positions_data = yield from self._get_all_positions_from_tx_receipt(
                     self.synchronized_data.final_tx_hash, action.get("chain")
                 )
-                current_position["token_id"] = token_id
-                current_position["liquidity"] = liquidity
-                current_position["amount0"] = amount0
-                current_position["amount1"] = amount1
-                current_position["timestamp"] = timestamp
+                
+                if positions_data and len(positions_data) > 0:
+                    # We have multiple positions for the same pool
+                    # Create a single entry with nested positions
+                    current_position["status"] = PositionStatus.OPEN.value
+                    current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+                    current_position["timestamp"] = positions_data[0][4]  # Use timestamp from first position
+                    
+                    # Calculate total amounts across all positions
+                    total_amount0 = sum(position_data[2] for position_data in positions_data)
+                    total_amount1 = sum(position_data[3] for position_data in positions_data)
+                    current_position["amount0"] = total_amount0
+                    current_position["amount1"] = total_amount1
+                    
+                    # Store individual position details in a nested structure
+                    positions = []
+                    for position_data in positions_data:
+                        token_id, liquidity, amount0, amount1, _ = position_data
+                        positions.append({
+                            "token_id": token_id,
+                            "liquidity": liquidity,
+                            "amount0": amount0,
+                            "amount1": amount1
+                        })
+                    
+                    # Add the positions list to the current_position
+                    current_position["positions"] = positions
+                    
+                    # Add to current_positions
+                    self.current_positions.append(current_position)
+                    
+                    self.context.logger.info(
+                        f"Added Velodrome CL pool with {len(positions)} positions to pool {current_position['pool_address']}"
+                    )
+                else:
+                    # Fallback to single position handling
+                    (
+                        token_id,
+                        liquidity,
+                        amount0,
+                        amount1,
+                        timestamp,
+                    ) = yield from self._get_data_from_mint_tx_receipt(
+                        self.synchronized_data.final_tx_hash, action.get("chain")
+                    )
+                    current_position["timestamp"] = timestamp
+                    current_position["status"] = PositionStatus.OPEN.value
+                    current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+                    
+                    # For consistency, also add a positions list with a single entry
+                    current_position["positions"] = [{
+                        "token_id": token_id,
+                        "liquidity": liquidity,
+                        "amount0": amount0,
+                        "amount1": amount1
+                    }]
+                    
+                    self.current_positions.append(current_position)
             else:
+                # For non-CL Velodrome pools
                 (
                     amount0,
                     amount1,
@@ -4045,6 +4075,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 current_position["amount0"] = amount0
                 current_position["amount1"] = amount1
                 current_position["timestamp"] = timestamp
+                current_position["status"] = PositionStatus.OPEN.value
+                current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+                self.current_positions.append(current_position)
         
         elif action.get("dex_type") == DexType.BALANCER.value:
             (
@@ -4057,6 +4090,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
+            current_position["status"] = PositionStatus.OPEN.value
+            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            self.current_positions.append(current_position)
 
         elif action.get("dex_type") == DexType.STURDY.value:
             (
@@ -4069,26 +4105,37 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["amount0"] = amount
             current_position["shares"] = shares
             current_position["timestamp"] = timestamp
+            current_position["status"] = PositionStatus.OPEN.value
+            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            self.current_positions.append(current_position)
 
-        current_position["status"] = PositionStatus.OPEN.value
-        current_position["tx_hash"] = self.synchronized_data.final_tx_hash
-        self.current_positions.append(current_position)
         self.store_current_positions()
         self.context.logger.info(
-            f"Enter pool was successful! Updating current pool to {current_position}"
+            f"Enter pool was successful! Updated current positions for pool {current_position['pool_address']}"
         )
 
     def _post_execute_exit_pool(self, actions, last_executed_action_index):
         """Handle exiting a pool."""
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")
+        is_cl_pool = action.get("is_cl_pool", False)
+        dex_type = action.get("dex_type")
 
-        # Find the most recent position with the matching pool address and update its status
+        # Find all positions with the matching pool address and update their status
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
                 position["status"] = PositionStatus.CLOSED.value
                 position["tx_hash"] = self.synchronized_data.final_tx_hash
-                self.context.logger.info(f"Closing position: {position}")
+                
+                # For Velodrome CL pools, log all the positions that were exited
+                if dex_type == DexType.VELODROME.value and is_cl_pool and "positions" in position:
+                    position_ids = [pos["token_id"] for pos in position.get("positions", [])]
+                    self.context.logger.info(
+                        f"Closed Velodrome CL pool with {len(position_ids)} positions. "
+                        f"Token IDs: {position_ids}"
+                    )
+                else:
+                    self.context.logger.info(f"Closing position: {position}")
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
@@ -4468,11 +4515,24 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
-    
-        token0_decimals = yield from self._get_token_decimals(chain, assets[0])
-        token1_decimals = yield from self._get_token_decimals(chain, assets[1])
-        max_investment_amounts[0] = int(Decimal(str(max_investment_amounts[0])) * (Decimal(10) ** Decimal(token0_decimals)))
-        max_investment_amounts[1] = int(Decimal(str(max_investment_amounts[1])) * (Decimal(10) ** Decimal(token1_decimals)))
+        
+        if not max_investment_amounts:
+            token0_balance = self._get_balance(chain, assets[0], positions)
+            token1_balance = self._get_balance(chain, assets[1], positions)
+            relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+            max_amounts_in = [
+                int(token0_balance * relative_funds_percentage),
+                int(token1_balance * relative_funds_percentage),
+            ]
+            max_amounts_in = [
+                min(max_amounts_in[0], token0_balance),
+                min(max_amounts_in[1], token1_balance),
+            ]
+        else:
+            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+            max_investment_amounts[0] = int(Decimal(str(max_investment_amounts[0])) * (Decimal(10) ** Decimal(token0_decimals)))
+            max_investment_amounts[1] = int(Decimal(str(max_investment_amounts[1])) * (Decimal(10) ** Decimal(token1_decimals)))
         
         self.context.logger.info(f"Max investment amounts according to strategy: {max_investment_amounts}.")
         
@@ -4743,14 +4803,29 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         
         # Add specific parameters based on pool type
         if dex_type == DexType.VELODROME.value:
-            exit_pool_kwargs["liquidity"] = liquidity
-            exit_pool_kwargs["token_id"] = token_id
-            if not assets or len(assets) < 2:
-                self.context.logger.error(f"2 assets required for Velodrome Stable/Volatile pools, provided: {assets}")
-                return None, None, None
-            exit_pool_kwargs["assets"] = assets
             exit_pool_kwargs["is_stable"] = is_stable
             exit_pool_kwargs["is_cl_pool"] = is_cl_pool
+            
+            # For Velodrome CL pools, we need to handle multiple positions
+            if is_cl_pool:
+                # Extract token IDs from all nested positions
+                token_ids = action.get("token_ids")
+                liquidities = action.get("liquidities")
+                if token_ids and liquidities:
+                    self.context.logger.info(
+                        f"Exiting Velodrome CL pool with {len(token_ids)} positions. "
+                        f"Token IDs: {token_ids}"
+                    )
+                    exit_pool_kwargs["token_ids"] = token_ids
+                    exit_pool_kwargs["liquidities"] = liquidities                            
+            else:
+                # For non-CL pools, we need assets
+                if not assets or len(assets) < 2:
+                    self.context.logger.error(f"2 assets required for Velodrome Stable/Volatile pools, provided: {assets}")
+                    return None, None, None
+                exit_pool_kwargs["assets"] = assets
+                exit_pool_kwargs["liquidity"] = liquidity
+                
         elif dex_type == DexType.BALANCER.value:
             if not assets or len(assets) < 2:
                 self.context.logger.error(f"2 assets required for Balancer pools, provided: {assets}")
@@ -5644,6 +5719,110 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
+    def _get_all_positions_from_tx_receipt(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, Optional[List[Tuple[int, int, int, int, int]]]]:
+        """
+        Extract data for all positions from a transaction receipt.
+        
+        This method handles the case where multiple positions are created in a single transaction.
+        It returns a list of tuples, where each tuple contains:
+        (token_id, liquidity, amount0, amount1, timestamp)
+        """
+        response = yield from self.get_transaction_receipt(
+            tx_digest=tx_hash,
+            chain_id=chain,
+        )
+        if not response:
+            self.context.logger.error(
+                f"Error fetching tx receipt! Response: {response}"
+            )
+            return None
+
+        # Define the event signature and calculate its hash
+        event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
+        event_signature_hash = keccak(text=event_signature)
+        event_signature_hex = to_hex(event_signature_hash)[2:]
+
+        # Extract logs from the response
+        logs = response.get("logs", [])
+
+        # Find all logs that match the IncreaseLiquidity event
+        matching_logs = [
+            log
+            for log in logs
+            if log.get("topics", []) and log.get("topics", [])[0][2:] == event_signature_hex
+        ]
+
+        if not matching_logs:
+            self.context.logger.error("No logs found for IncreaseLiquidity event")
+            return None
+
+        positions_data = []
+        
+        # Get the timestamp from the block (same for all positions in this tx)
+        block_number = response.get("blockNumber")
+        if block_number is None:
+            self.context.logger.error("Block number not found in transaction receipt.")
+            return None
+
+        block = yield from self.get_block(
+            block_number=block_number,
+            chain_id=chain,
+        )
+
+        if block is None:
+            self.context.logger.error(f"Failed to fetch block {block_number}")
+            return None
+
+        timestamp = block.get("timestamp")
+        if timestamp is None:
+            self.context.logger.error("Timestamp not found in block data.")
+            return None
+
+        # Process each matching log
+        for log in matching_logs:
+            try:
+                # Decode indexed parameter (tokenId)
+                token_id_topic = log.get("topics", [])[1]
+                if not token_id_topic:
+                    self.context.logger.error(f"Token ID topic is missing from log {log}")
+                    continue
+                
+                # Convert hex to bytes and decode
+                token_id_bytes = bytes.fromhex(token_id_topic[2:])
+                token_id = decode(["uint256"], token_id_bytes)[0]
+
+                # Decode non-indexed parameters (liquidity, amount0, amount1) from the data field
+                data_hex = log.get("data")
+                if not data_hex:
+                    self.context.logger.error(f"Data field is empty in log {log}")
+                    continue
+
+                data_bytes = bytes.fromhex(data_hex[2:])
+                decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
+                liquidity = decoded_data[0]
+                amount0 = decoded_data[1]
+                amount1 = decoded_data[2]
+
+                # Add this position's data to the list
+                positions_data.append((token_id, liquidity, amount0, amount1, timestamp))
+                
+                self.context.logger.info(
+                    f"Found position: token_id={token_id}, liquidity={liquidity}, "
+                    f"amount0={amount0}, amount1={amount1}"
+                )
+
+            except Exception as e:
+                self.context.logger.error(f"Error decoding data from mint event: {e}")
+                continue
+
+        if not positions_data:
+            self.context.logger.error("Failed to extract any position data from logs")
+            return None
+
+        return positions_data
+
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str
     ) -> Generator[
@@ -5653,7 +5832,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             Optional[int], Optional[int], Optional[int], Optional[int], Optional[int]
         ],
     ]:
-        """Extract data from mint transaction receipt."""
+        """
+        Extract data from mint transaction receipt for a single position.
+        
+        This is a legacy method that extracts data for the first position found in the transaction.
+        For transactions with multiple positions, use _get_all_positions_from_tx_receipt instead.
+        """
         response = yield from self.get_transaction_receipt(
             tx_digest=tx_hash,
             chain_id=chain,

@@ -7,26 +7,19 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeigs6ee3bpsvzpa7yfbkz7zyzbyfa7lgga6d3auhw7wx4hgy3gvohm
+  behaviours.py: bafybeigjxnq2okiclmiorvf4djdlqcvsam4urlmbrkxd7g3esxdaja7ndq
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  model/__init__.py: bafybeifj33eqowo6ny67h5h4hle6qdf2mgvrnvj7ptlggh7kt5wozpacje
-  model/price_history.py: bafybeigoejx6bvr3fgdpkjxvbth67f7zum5oqbcezk3za56rdevtksavzq
-  model/stablecoin_model.py: bafybeieorqi5noi6i3t2ysy6nclusei54rqfiz27oijisnpbpbll5woloa
-  model/utils.py: bafybeidajfif7pjk6xlqotkpd7yraz3hy4s2juyp7ff6mcmfbfu5rfo5xq
-  model/velodrome.py: bafybeiababk2bceslegmqpmnkmn7y726atmphucs3fnvsd3a6saspviira
-  model/velodrome_bridge.py: bafybeiborbjsys4rm4grrcrh4wgrq64pbiz4m42gs46vvjigbbm5kvhfua
   models.py: bafybeify4a3s4s5lej2haunjeov5sdobmz5shqxqio4fj4hr7ybcadfffa
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
-  pools/__init__.py: bafybeibhsdrwyhsmji3cxsb4qdp6vyh7yqh3744iimmdp5ojmot7ikq2ku
-  pools/balancer.py: bafybeigznhgv7ylo5dvlhxcqikhiuqlqtnx3ikv4tszyvkl2lpcuqgoa5u
-  pools/stablecoin_model.py: bafybeicpg7ugup5hsrnlk2iwsz5p2bkp7rebgtwzyucydte5f5ctuaw7uq
+  pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
+  pools/balancer.py: bafybeieoahz6rtrocv5jy667wb4agptqlkn5kjtfbq7o5zkqurs7tofwzm
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeihmkpstiwctl6mmen3gym6x3hf3cue6kgqqrf5srtornm3647peq4
+  pools/velodrome.py: bafybeia7fqhwexndtwx23zuvqrgjh47qf5q5wolvkrkeg2k4qjnigwap6u
   rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
@@ -35,17 +28,15 @@ fingerprint:
   tests/test_models.py: bafybeic75ux6ulgpnf4ndrctgsw7jlbc7zs3ltxtue4o4eoij7fqvfqmfe
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
-  utils/__init__.py: bafybeiha5v6o4ybbq5taq2o7hvoosp7q2pes6zmb3s22f5kaltufkyuznu
-  utils/price_history.py: bafybeia6e2ewv27nubxxg4wjmop5xdp7hhxst6u6aunf6z65yliy5rbigm
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeieftxd7tyizuo5r3gf3jukw4h7ophlvek74sui27imgdbjkpkoc7u
+- valory/mirror_db:0.1.0:bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeidao75ykdhkm7brclsslx3iinmgnvdiot5npanfbmatcaqrcvlsk4
-- valory/balancer_weighted_pool:0.1.0:bafybeid5fhymcnpjo4ztpquga3luj42oxqojn674gpsgzngdm6jk6uzllq
-- valory/balancer_vault:0.1.0:bafybeiabmk7rwa6lwwalvggyqmqwgdkjvq3f4mksxtaxvjwbsfr7gpy5wa
-- valory/erc20:0.1.0:bafybeie22incukeg24rjn2qo5s6vxf5yi3xjmzmgduylfppfasib2cisrm
+- valory/balancer_weighted_pool:0.1.0:bafybeiflrfjvdgthgxi3lfprwpb3c53ftrysp2qjfnl4a3dgxmscwro7gm
+- valory/balancer_vault:0.1.0:bafybeiff3ltn6xoh3otuywk2j3yxujdlfzcvri66slnufv5t4hkj5musfa
+- valory/erc20:0.1.0:bafybeie2wet3factwc6pwqvqpwqu3prtv75lmbqo5y4onda5y533ufdqhy
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeid7h7sxxoglhhqbcz4g64fwbgj6akwecv4ktolhefcsziqntnnt2e
 - valory/uniswap_v3_pool:0.1.0:bafybeiehh6y7qswdnfocoi2ku57w4k2rilambgt2bfp6co7vscghmqpjte
@@ -54,7 +45,7 @@ contracts:
 - valory/staking_activity_checker:0.1.0:bafybeigse23vkx6rxws7ydkl44gtqs5z2g7fo4qejb36pjznegkbv5tkeu
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeif7jichdhvvptgp6ezovod6em47qfid7kr3wtdi77l3ihqbzr5twe
 - valory/velodrome_router:0.1.0:bafybeiapkfux4ei3kazmpp42z3hn5l6ixw5j2wxu6h253isfdvy3p6z5ia
-- valory/velodrome_cl_pool:0.1.0:bafybeibfqes45dgnifbfyzjiblsh4bnxxjlwtd6r46um5vdyk7j2wgh7ca
+- valory/velodrome_cl_pool:0.1.0:bafybeiegcp72ushmquytaszdr24dblbvusueniihzg24x4sjzgx3i43dbe
 - valory/velodrome_non_fungible_position_manager:0.1.0:bafybeibxxvwb7vyff6go7225kuf4eji5dl5ngy6hz5h6bhl3mx223kzbz4
 - valory/velodrome_pool:0.1.0:bafybeidvbw6wcgazwrdeptnzmpltcg4l4klzt4hs6iuiycllv63iv5xp2u
 protocols:
@@ -65,7 +56,7 @@ protocols:
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/transaction_settlement_abci:0.1.0:bafybeifgxfpiuztvhncsmg7u2owjaue4x7k3xccwu7m52c24twnvqlws5e
+- valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
     args: {}
@@ -259,7 +250,7 @@ models:
       token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
       coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
       historical_price_endpoint: https://api.coingecko.com/api/v3/coins/{coin_id}/history?date={date}
-      api_key: null
+      api_key: CG-mf5xZnGELpSXeSqmHDLY2nNU
       requests_per_minute: 30
       credits: 10000
       rate_limited_code: 429

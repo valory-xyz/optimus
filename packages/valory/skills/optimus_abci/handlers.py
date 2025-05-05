@@ -307,7 +307,7 @@ class HttpHandler(BaseHttpHandler):
         """
         # Check if GENAI_API_KEY is set
         api_key = self.context.params.genai_api_key
-
+       
         is_chat_enabled = (
             api_key is not None
             and isinstance(api_key, str)

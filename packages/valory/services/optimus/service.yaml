@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidlzsts5zqzixdnpuh3ehydgctc7ur6rd6yovogv47dye3alphmky
+agent: valory/optimus:0.1.0:bafybeicfhpiugbxaqwebv2kfahekblrlfz4llzjwrnd2wr4gpx6e7wadcu
 number_of_agents: 1
 deployment:
   agent:
@@ -110,7 +110,7 @@ models:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
       coin_price_endpoint: ${COINGECKO_COIN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
-      api_key: ${COINGECKO_API_KEY:str:null}
+      api_key: ${COINGECKO_API_KEY:str:CG-mf5xZnGELpSXeSqmHDLY2nNU}
       requests_per_minute: ${COINGECKO_REQUESTS_PER_MINUTE:int:30}
       credits: ${COINGECKO_CREDITS:int:10000}
       rate_limited_code: ${COINGECKO_RATE_LIMITED_CODE:int:429}

@@ -146,3 +146,15 @@ class VelodromeCLPoolContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tick_spacing = contract_instance.functions.tickSpacing().call()
         return dict(data=tick_spacing)
+    
+    @classmethod
+    def get_pool_tokens(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """get the pool tokens"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        token0 = contract_instance.functions.token0().call()
+        token1 = contract_instance.functions.token1().call()
+        return dict(tokens=[token0, token1])

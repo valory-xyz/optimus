@@ -135,7 +135,10 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
-
+from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
+from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import VelodromeNonFungiblePositionManagerContract
+from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
+from packages.valory.skills.liquidity_trader_abci.utils.tick_math import TickMath, LiquidityAmounts
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 SAFE_TX_GAS = 0
@@ -1402,144 +1405,142 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         """
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-            self.context.logger.info(f"APRPopulationBehaviour started by {sender}")
+            try:
+                # Get configuration
+                eth_address = sender
 
-            # try:
-            #     # Get configuration
-            #     eth_address = sender
+                # Step 1: Get or create agent type for "Modius"
+                data = yield from self._read_kv(keys=("agent_type",))
+                if data:
+                    agent_type = data.get("agent_type")
+                    if agent_type:
+                        agent_type = json.loads(agent_type)
+                    else:
+                        # Check external DB
+                        agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
+                        if not agent_type:
+                            agent_type = yield from self.create_agent_type(
+                                AGENT_TYPE,
+                                "An agent for DeFi liquidity management and APR tracking",
+                            )
+                            if not agent_type:
+                                raise Exception("Failed to create agent type.")
+                            yield from self._write_kv(
+                                {"agent_type": json.dumps(agent_type)}
+                            )
 
-            #     # Step 1: Get or create agent type for "Modius"
-            #     data = yield from self._read_kv(keys=("agent_type",))
-            #     if data:
-            #         agent_type = data.get("agent_type")
-            #         if agent_type:
-            #             agent_type = json.loads(agent_type)
-            #         else:
-            #             # Check external DB
-            #             agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
-            #             if not agent_type:
-            #                 agent_type = yield from self.create_agent_type(
-            #                     AGENT_TYPE,
-            #                     "An agent for DeFi liquidity management and APR tracking",
-            #                 )
-            #                 if not agent_type:
-            #                     raise Exception("Failed to create agent type.")
-            #                 yield from self._write_kv(
-            #                     {"agent_type": json.dumps(agent_type)}
-            #                 )
+                type_id = agent_type.get("type_id")
+                self.context.logger.info(f"Using agent type: {agent_type}")
 
-            #     type_id = agent_type.get("type_id")
-            #     self.context.logger.info(f"Using agent type: {agent_type}")
+                # Step 2: Get or create agent registry entry
+                data = yield from self._read_kv(keys=("agent_registry",))
+                if data:
+                    agent_registry = data.get("agent_registry", "{}")
+                    if agent_registry:
+                        agent_registry = json.loads(agent_registry)
+                    else:
+                        agent_registry = yield from self.get_agent_registry_by_address(
+                            eth_address
+                        )
+                        if not agent_registry:
+                            agent_name = self.generate_name(sender)
+                            self.context.logger.info(f"agent_name : {agent_name}")
+                            agent_registry = yield from self.create_agent_registry(
+                                agent_name, type_id, eth_address
+                            )
+                            if not agent_registry:
+                                raise Exception("Failed to create agent registry.")
+                            yield from self._write_kv(
+                                {"agent_registry": json.dumps(agent_registry)}
+                            )
 
-            #     # Step 2: Get or create agent registry entry
-            #     data = yield from self._read_kv(keys=("agent_registry",))
-            #     if data:
-            #         agent_registry = data.get("agent_registry", "{}")
-            #         if agent_registry:
-            #             agent_registry = json.loads(agent_registry)
-            #         else:
-            #             agent_registry = yield from self.get_agent_registry_by_address(
-            #                 eth_address
-            #             )
-            #             if not agent_registry:
-            #                 agent_name = self.generate_name(sender)
-            #                 self.context.logger.info(f"agent_name : {agent_name}")
-            #                 agent_registry = yield from self.create_agent_registry(
-            #                     agent_name, type_id, eth_address
-            #                 )
-            #                 if not agent_registry:
-            #                     raise Exception("Failed to create agent registry.")
-            #                 yield from self._write_kv(
-            #                     {"agent_registry": json.dumps(agent_registry)}
-            #                 )
+                agent_id = agent_registry.get("agent_id")
+                self.context.logger.info(f"Using agent: {agent_id}")
 
-            #     agent_id = agent_registry.get("agent_id")
-            #     self.context.logger.info(f"Using agent: {agent_id}")
+                # Step 3: Get or create APR attribute definition
+                data = yield from self._read_kv(keys=("attr_def",))
+                if data:
+                    attr_def = data.get("attr_def", "{}")
+                    if attr_def:
+                        attr_def = json.loads(attr_def)
+                    else:
+                        # Check external DB
+                        attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+                        if not attr_def:
+                            attr_def = yield from self.create_attribute_definition(
+                                type_id,
+                                METRICS_NAME,
+                                METRICS_TYPE,
+                                True,
+                                "{}",
+                                agent_id,
+                            )
+                            if not attr_def:
+                                raise Exception(
+                                    "Failed to create attribute definition."
+                                )
+                            yield from self._write_kv(
+                                {"attr_def": json.dumps(attr_def)}
+                            )
 
-            #     # Step 3: Get or create APR attribute definition
-            #     data = yield from self._read_kv(keys=("attr_def",))
-            #     if data:
-            #         attr_def = data.get("attr_def", "{}")
-            #         if attr_def:
-            #             attr_def = json.loads(attr_def)
-            #         else:
-            #             # Check external DB
-            #             attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
-            #             if not attr_def:
-            #                 attr_def = yield from self.create_attribute_definition(
-            #                     type_id,
-            #                     METRICS_NAME,
-            #                     METRICS_TYPE,
-            #                     True,
-            #                     "{}",
-            #                     agent_id,
-            #                 )
-            #                 if not attr_def:
-            #                     raise Exception(
-            #                         "Failed to create attribute definition."
-            #                     )
-            #                 yield from self._write_kv(
-            #                     {"attr_def": json.dumps(attr_def)}
-            #                 )
+                attr_def_id = attr_def.get("attr_def_id")
+                self.context.logger.info(f"Using attribute definition: {attr_def}")
 
-            #     attr_def_id = attr_def.get("attr_def_id")
-            #     self.context.logger.info(f"Using attribute definition: {attr_def}")
+                # Step 4: Calculate APR for positions
+                portfolio_value = 0
+                data = yield from self._read_kv(keys=("portfolio_value",))
+                self.context.logger.info(f"data{data}")
+                if data and data["portfolio_value"]:
+                    self.context.logger.info(f"data{data}")
+                    portfolio_value = float(data.get("portfolio_value", "0"))
 
-            #     # Step 4: Calculate APR for positions
-            #     portfolio_value = 0
-            #     data = yield from self._read_kv(keys=("portfolio_value",))
-            #     self.context.logger.info(f"data{data}")
-            #     if data and data["portfolio_value"]:
-            #         self.context.logger.info(f"data{data}")
-            #         portfolio_value = float(data.get("portfolio_value", "0"))
+                if not math.isclose(
+                    portfolio_value,
+                    self.portfolio_data["portfolio_value"],
+                    rel_tol=1e-9,
+                ):
+                    # Create portfolio snapshot for debugging
+                    portfolio_snapshot = self._create_portfolio_snapshot()
 
-            #     if not math.isclose(
-            #         portfolio_value,
-            #         self.portfolio_data["portfolio_value"],
-            #         rel_tol=1e-9,
-            #     ):
-            #         # Create portfolio snapshot for debugging
-            #         portfolio_snapshot = self._create_portfolio_snapshot()
+                    # Calculate APR and related metrics
+                    actual_apr_data = yield from self.calculate_actual_apr(
+                        agent_id, attr_def_id
+                    )
+                    if actual_apr_data:
+                        total_actual_apr = actual_apr_data.get("total_actual_apr", None)
+                        adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-            #         # Calculate APR and related metrics
-            #         actual_apr_data = yield from self.calculate_actual_apr(
-            #             agent_id, attr_def_id
-            #         )
-            #         if actual_apr_data:
-            #             total_actual_apr = actual_apr_data.get("total_actual_apr", None)
-            #             adjusted_apr = actual_apr_data.get("adjusted_apr", None)
+                        if total_actual_apr:
+                            # Step 5: Store enhanced APR data in MirrorDB
+                            timestamp = int(
+                                self.round_sequence.last_round_transition_timestamp.timestamp()
+                            )
 
-            #             if total_actual_apr:
-            #                 # Step 5: Store enhanced APR data in MirrorDB
-            #                 timestamp = int(
-            #                     self.round_sequence.last_round_transition_timestamp.timestamp()
-            #                 )
+                            # Create enhanced data payload with portfolio metrics
+                            enhanced_data = {
+                                "apr": float(total_actual_apr),
+                                "adjusted_apr": float(adjusted_apr),
+                                "timestamp": timestamp,
+                                "portfolio_snapshot": portfolio_snapshot,
+                                "calculation_metrics": self._get_apr_calculation_metrics(),
+                            }
 
-            #                 # Create enhanced data payload with portfolio metrics
-            #                 enhanced_data = {
-            #                     "apr": float(total_actual_apr),
-            #                     "adjusted_apr": float(adjusted_apr),
-            #                     "timestamp": timestamp,
-            #                     "portfolio_snapshot": portfolio_snapshot,
-            #                     "calculation_metrics": self._get_apr_calculation_metrics(),
-            #                 }
+                            agent_attr = yield from self.create_agent_attribute(
+                                agent_id,
+                                attr_def_id,
+                                enhanced_data,
+                            )
+                            self.context.logger.info(f"Stored APR data: {agent_attr}")
 
-            #                 agent_attr = yield from self.create_agent_attribute(
-            #                     agent_id,
-            #                     attr_def_id,
-            #                     enhanced_data,
-            #                 )
-            #                 self.context.logger.info(f"Stored APR data: {agent_attr}")
+                # Prepare payload for consensus
+                payload = APRPopulationPayload(sender=sender, context="APR Population")
 
-            #     # Prepare payload for consensus
-            #     payload = APRPopulationPayload(sender=sender, context="APR Population")
-
-            # except Exception as e:
-            #     self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
-            #     # Create a payload even in case of error to continue the protocol
-            #     payload = APRPopulationPayload(
-            #         sender=sender, context="APR Population Error"
-            #     )
+            except Exception as e:
+                self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
+                # Create a payload even in case of error to continue the protocol
+                payload = APRPopulationPayload(
+                    sender=sender, context="APR Population Error"
+                )
             payload = APRPopulationPayload(sender=sender, context="APR Population")
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
@@ -6234,10 +6235,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check if we need to recalculate the portfolio
             if self.should_recalculate_portfolio(self.portfolio_data):
-                pass
-                # yield from self.calculate_user_share_values()
+                yield from self.calculate_user_share_values()
                 # Store the updated portfolio data
-                # self.store_portfolio_data()
+                self.store_portfolio_data()
 
             payload = FetchStrategiesPayload(
                 sender=sender,
@@ -6336,6 +6336,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     details = yield from self._get_aggregator_name(
                         aggregator_address, chain
                     )
+                elif dex_type == DexType.VELODROME.value:
+                    pool_address = position.get("pool_address")
+                    token_id = position.get("token_id")
+                    user_balances = yield from self.get_user_share_value_velodrome(
+                        user_address,
+                        pool_address,
+                        token_id,
+                        chain,
+                        position
+                    )
+                    # For Velodrome pools, we'll use a simple description for now
+                    details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
 
                 user_share = Decimal(0)
 
@@ -6520,6 +6532,259 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             "address": self.params.safe_contract_addresses.get(
                 self.params.target_investment_chains[0]
             ),
+        }
+    
+    def get_user_share_value_velodrome(
+        self, user_address: str, pool_address: str, token_id: int, chain: str, position
+    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
+        """Calculate the user's share value and token balances in a Velodrome pool."""
+        token0_address = position.get("token0")
+        token1_address = position.get("token1")
+        is_cl_pool = position.get("is_cl_pool", False)
+
+        if not token0_address or not token1_address:
+            self.context.logger.error("Token addresses not found")
+            return {}
+
+        if is_cl_pool:
+            result = yield from self._get_user_share_value_velodrome_cl(
+                user_address, pool_address, token_id, chain, position, token0_address, token1_address
+            )
+        else:
+            result = yield from self._get_user_share_value_velodrome_non_cl(
+                user_address, pool_address, chain, position, token0_address, token1_address
+            )
+        return result
+
+    def _get_token_decimals_pair(self, chain, token0_address, token1_address):
+        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error("Failed to get token decimals")
+            return None, None
+        return token0_decimals, token1_decimals
+
+    def _adjust_for_decimals(self, amount, decimals):
+        return Decimal(str(amount)) / Decimal(10**decimals)
+
+    def _get_user_share_value_velodrome_cl(
+        self, user_address, pool_address, token_id, chain, position, token0_address, token1_address
+    ):
+        position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain)
+        if not position_manager_address:
+            self.context.logger.error(f"No position manager address found for chain {chain}")
+            return {}
+
+        slot0_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromeCLPoolContract.contract_id,
+            contract_callable="slot0",
+            data_key="slot0",
+            chain_id=chain,
+        )
+        if not slot0_data:
+            self.context.logger.error(f"Failed to get slot0 data for pool {pool_address}")
+            return {}
+
+        sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
+        current_tick = slot0_data.get("tick")
+        self.context.logger.info(
+            f"Fetched pool data once - Current Tick: {current_tick}, Sqrt Price X96: {sqrt_price_x96}"
+        )
+
+        # Handle multiple or single positions
+        positions_data = position.get("positions", []) if (
+            isinstance(token_id, (list, tuple)) or (position.get("positions") and len(position.get("positions", [])) > 1)
+        ) else [dict(token_id=token_id)]
+
+        total_token0_qty = Decimal(0)
+        total_token1_qty = Decimal(0)
+
+        for pos in positions_data:
+            pos_token_id = pos.get("token_id")
+            position_details = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                contract_callable="get_position",
+                data_key="data",
+                token_id=pos_token_id,
+                chain_id=chain,
+            )
+            if not position_details:
+                self.context.logger.error(f"Failed to get position details for token ID {pos_token_id}")
+                continue
+
+            reserves_and_balances = self.get_reserves_and_balances(
+                position=position_details,
+                sqrt_price_x96=sqrt_price_x96,
+                current_tick=current_tick,
+                tick_lower=position_details.get("tickLower"),
+                tick_upper=position_details.get("tickUpper"),
+                liquidity=position_details.get("liquidity"),
+                tokens_owed0=position_details.get("tokensOwed0", 0),
+                tokens_owed1=position_details.get("tokensOwed1", 0)
+            )
+            if not reserves_and_balances:
+                self.context.logger.error(
+                    f"Failed to get reserves and balances for pool {pool_address} with token_id {pos_token_id}"
+                )
+                continue
+
+            total_token0_qty += Decimal(str(reserves_and_balances.get("current_token0_qty", 0)))
+            total_token1_qty += Decimal(str(reserves_and_balances.get("current_token1_qty", 0)))
+
+        token0_decimals, token1_decimals = yield from self._get_token_decimals_pair(chain, token0_address, token1_address)
+        if token0_decimals is None or token1_decimals is None:
+            return {}
+
+        adjusted_token0_qty = self._adjust_for_decimals(total_token0_qty, token0_decimals)
+        adjusted_token1_qty = self._adjust_for_decimals(total_token1_qty, token1_decimals)
+
+        self.context.logger.info(
+            f"Velodrome CL Pool Total Position Balances - "
+            f"Token0: {adjusted_token0_qty} {position.get('token0_symbol')}, "
+            f"Token1: {adjusted_token1_qty} {position.get('token1_symbol')}"
+        )
+        return {
+            token0_address: adjusted_token0_qty,
+            token1_address: adjusted_token1_qty,
+        }
+
+    def _get_user_share_value_velodrome_non_cl(
+        self, user_address, pool_address, chain, position, token0_address, token1_address
+    ):
+        user_balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="check_balance",
+            data_key="token",
+            account=user_address,
+            chain_id=chain,
+        )
+        if user_balance is None:
+            self.context.logger.error(f"Failed to get user balance for pool: {pool_address}")
+            return {}
+
+        total_supply = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_total_supply",
+            data_key="data",
+            chain_id=chain,
+        )
+        if not total_supply:
+            self.context.logger.error(f"Failed to get total supply for pool: {pool_address}")
+            return {}
+
+        reserves = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromePoolContract.contract_id,
+            contract_callable="get_reserves",
+            data_key="data",
+            chain_id=chain,
+        )
+        if not reserves:
+            self.context.logger.error(f"Failed to get reserves for pool: {pool_address}")
+            return {}
+
+        getcontext().prec = 50
+        user_share = Decimal(str(user_balance)) / Decimal(str(total_supply))
+        token0_decimals, token1_decimals = yield from self._get_token_decimals_pair(chain, token0_address, token1_address)
+        if token0_decimals is None or token1_decimals is None:
+            return {}
+
+        token0_balance = self._adjust_for_decimals(reserves[0], token0_decimals)
+        token1_balance = self._adjust_for_decimals(reserves[1], token1_decimals)
+        user_token0_balance = user_share * token0_balance
+        user_token1_balance = user_share * token1_balance
+
+        self.context.logger.info(
+            f"Velodrome Non-CL Pool Balances - "
+            f"User share: {user_share}, "
+            f"Token0: {user_token0_balance} {position.get('token0_symbol')}, "
+            f"Token1: {user_token1_balance} {position.get('token1_symbol')}"
+        )
+        return {
+            token0_address: user_token0_balance,
+            token1_address: user_token1_balance,
+        }
+    
+    def get_reserves_and_balances(
+        self,
+        position,
+        sqrt_price_x96=None,
+        current_tick=None,
+        tick_lower=None,
+        tick_upper=None,
+        liquidity=None,
+        tokens_owed0=0,
+        tokens_owed1=0
+    ) -> Dict:
+        """
+        Calculate token amounts for a concentrated liquidity position.
+        
+        This implements the calculation as per Uniswap V3 documentation:
+        1. Use position info from NonfungiblePositionManager
+        2. Use pool information including current price
+        3. Calculate amounts using LiquidityAmounts formula
+        
+        Args:
+            position: The position details (can be passed directly or values provided individually)
+            sqrt_price_x96: The current sqrt price X96 from slot0
+            current_tick: The current tick from slot0
+            tick_lower: The lower tick bound for the position
+            tick_upper: The upper tick bound for the position
+            liquidity: The liquidity amount for the position
+            tokens_owed0: Uncollected fees for token0
+            tokens_owed1: Uncollected fees for token1
+            
+        Returns:
+            A dictionary containing the calculated token amounts and position details
+        """
+        # Extract position details if passed via position object
+        if position is not None:
+            tick_lower = position.get("tickLower", tick_lower)
+            tick_upper = position.get("tickUpper", tick_upper)  
+            liquidity = position.get("liquidity", liquidity)
+            tokens_owed0 = position.get("tokensOwed0", tokens_owed0)
+            tokens_owed1 = position.get("tokensOwed1", tokens_owed1)
+        
+        
+        # Calculate sqrtRatioA and sqrtRatioB
+        sqrt_ratio_a_x96 = TickMath.getSqrtRatioAtTick(tick_lower)
+        sqrt_ratio_b_x96 = TickMath.getSqrtRatioAtTick(tick_upper)
+        
+        # Ensure sqrtRatioA <= sqrtRatioB
+        if sqrt_ratio_a_x96 > sqrt_ratio_b_x96:
+            sqrt_ratio_a_x96, sqrt_ratio_b_x96 = sqrt_ratio_b_x96, sqrt_ratio_a_x96
+        
+        # Calculate amounts
+        amount0, amount1 = LiquidityAmounts.getAmountsForLiquidity(
+            sqrt_price_x96 or TickMath.getSqrtRatioAtTick(current_tick), 
+            sqrt_ratio_a_x96, 
+            sqrt_ratio_b_x96, 
+            liquidity
+        )
+        
+        # Add uncollected fees
+        amount0 += tokens_owed0
+        amount1 += tokens_owed1
+        
+        return {
+            "current_token0_qty": amount0,
+            "current_token1_qty": amount1,
+            "liquidity": liquidity,
+            "tick_lower": tick_lower,
+            "tick_upper": tick_upper,
+            "current_tick": current_tick,
+            "sqrt_price_x96": sqrt_price_x96,
+            "tokens_owed0": tokens_owed0,
+            "tokens_owed1": tokens_owed1,
         }
 
     def get_user_share_value_balancer(

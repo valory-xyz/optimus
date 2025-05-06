@@ -169,7 +169,7 @@ class DexType(Enum):
     BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
-    VELODROME = "Velodrome"
+    VELODROME = "velodrome"
 
 
 class Action(Enum):
@@ -4542,7 +4542,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
         
         # Add pool_fee for non-Velodrome pools
-        if dex_type != "Velodrome":
+        if dex_type != DexType.VELODROME:
             kwargs["pool_fee"] = action.get("pool_fee")
             
         result = yield from pool.enter(self, **kwargs)

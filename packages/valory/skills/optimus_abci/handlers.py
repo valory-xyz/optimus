@@ -100,7 +100,7 @@ IpfsHandler = BaseIpfsHandler
 STRATEGY_TO_PROTOCOL = {
     "balancer_pools_search": "balancerPool",
     "asset_lending": "sturdy",
-    "velodrome_pools_search":"Velodrome",
+    "velodrome_pools_search":"velodrome",
 }
 # Reverse mapping for converting protocol names back to strategy names
 PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}

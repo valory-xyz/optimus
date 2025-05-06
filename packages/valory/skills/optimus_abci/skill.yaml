@@ -60,7 +60,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeid6bo7ppmnr4w4il4cmkyr2okwyhyly7m7gqvn4eypjjwtyaxde4u
+- valory/liquidity_trader_abci:0.1.0:bafybeiee3il4in3hmfqkj6nazyf7vjo3xwvapf5lhm34bacedaqmtxegfi
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:
@@ -234,7 +234,7 @@ models:
       - uniswap
       selected_hyper_strategy: max_apr_selection
       service_endpoint_base: https://optimus.staging.autonolas.tech/
-      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","Velodrome":"velodrome_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
+      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","velodrome":"velodrome_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
       profit_threshold: 50
       loss_threshold: 30

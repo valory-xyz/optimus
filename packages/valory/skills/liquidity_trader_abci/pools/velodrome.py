@@ -349,6 +349,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
+        #we provide in 50/50 ratio
+        #works only for stablecoins for now (because the decimals are same, for non-stablecoins this won't work)
+        if max_amounts_in and len(max_amounts_in) == 2:
+            min_amount = min(max_amounts_in)
+            max_amounts_in = [min_amount, min_amount]
         # Calculate tick ranges based on pool's tick spacing
         tick_ranges = yield from self._calculate_tick_lower_and_upper_velodrome(
             pool_address, chain, is_stable

@@ -1442,24 +1442,34 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
         
     return formatted_pools
 
-def get_top_n_pools_by_apr(pools, n=10):
+def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     """
-    Sort pools by APR and return the top N pools.
+    Filter pools by CL status and return the top N pools by APR.
     
     Args:
         pools: List of formatted pool dictionaries
         n: Number of top pools to return (default: 10)
+        cl_filter: Filter for concentrated liquidity pools
+                   True = only CL pools
+                   False = only non-CL pools
+                   None = include all pools (default)
         
     Returns:
         List of the top N pools sorted by APR in descending order
     """
-    # Sort pools by APR in descending order
-    sorted_pools = sorted(pools, key=lambda x: x.get("apr", 0), reverse=True)
+    # First filter by CL status if specified
+    if cl_filter is not None:
+        filtered_pools = [pool for pool in pools if pool.get("is_cl_pool", False) == cl_filter]
+    else:
+        filtered_pools = pools
+    
+    # Then sort by APR in descending order
+    sorted_pools = sorted(filtered_pools, key=lambda x: x.get("apr", 0), reverse=True)
     
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, coin_list=None):
+def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, coin_list=None, cl_filter=True):
     """
     Get and format pool opportunities.
     
@@ -1471,6 +1481,10 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
         ledger_api: Ethereum API instance or RPC URL
         top_n: Number of top pools by APR to return (default: 10)
         coin_list: List of coins from CoinGecko API (optional)
+        cl_filter: Filter for concentrated liquidity pools
+                   True = only CL pools
+                   False = only non-CL pools
+                   None = include all pools (default)
     
     Returns:
         List of formatted pool opportunities
@@ -1497,10 +1511,11 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
         chain_id
     )
     
-    # Get top N pools by APR
+    # Get top N pools by APR, with optional CL filtering
     if top_n > 0:
-        top_pools = get_top_n_pools_by_apr(formatted_pools, top_n)
-        logger.info(f"Filtered to top {len(top_pools)} pools by APR")
+        top_pools = get_top_n_pools_by_apr(formatted_pools, top_n, cl_filter)
+        cl_status = "CL pools only" if cl_filter is True else "non-CL pools only" if cl_filter is False else "all pools"
+        logger.info(f"Filtered to top {len(top_pools)} {cl_status} by APR")
     else:
         top_pools = formatted_pools
     
@@ -1594,6 +1609,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             lp_sugar_address: Address of the LpSugar contract (if not provided, uses SUGAR_CONTRACT_ADDRESSES)
             rpc_url: RPC URL for the Mode chain (optional, uses default if not provided)
             top_n: Number of top pools by APR to return (default: 10)
+            cl_filter: Filter for concentrated liquidity pools (True=CL only, False=non-CL only, None=all)
             
     Returns:
         Dict containing either error messages or result data
@@ -1674,7 +1690,8 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             sugar_address,
             rpc_url,
             kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
-            coin_list=coin_list  # Pass coin list for token ID resolution
+            coin_list=coin_list,  # Pass coin list for token ID resolution
+            cl_filter=kwargs.get("cl_filter")  # Pass cl_filter to get_top_n_pools_by_apr
         )
         
         # Process results

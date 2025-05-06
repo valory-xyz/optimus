@@ -319,6 +319,7 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour,V
         self.gas_cost_tracker = GasCostTracker(
             file_path=self.params.store_path / self.params.gas_cost_info_filename
         )
+
         # Read the assets and current pool
         self.read_current_positions()
         self.read_assets()
@@ -884,7 +885,15 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour,V
     def _fetch_token_price(
         self, token_address: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
-        """Fetch the price for a specific token."""
+        """Fetch the price for a specific token, with in-memory caching."""
+        now = self._get_current_timestamp()
+        cache_key = (token_address, chain)
+        cache_entry = self.shared_state._token_price_cache.get(cache_key)
+        if cache_entry:
+            price, timestamp = cache_entry
+            if now - timestamp < self.shared_state._token_price_cache_ttl:
+                return price  # Return cached value
+
         headers = {
             "Accept": "application/json",
         }
@@ -908,7 +917,9 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour,V
 
         if success:
             token_data = response_json.get(token_address.lower(), {})
-            return token_data.get("usd", 0)
+            price = token_data.get("usd", 0)
+            self.shared_state._token_price_cache[cache_key] = (price, now)
+            return price
         return None
 
     def _request_with_retries(
@@ -1087,6 +1098,10 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour,V
             return token_data.get("usd", 0)
         return None
 
+    def _get_current_timestamp(self) -> int:
+        return cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
 
 class CallCheckpointBehaviour(
     LiquidityTraderBaseBehaviour
@@ -1928,10 +1943,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return False
         return True
 
-    def _get_current_timestamp(self) -> int:
-        return cast(
-            SharedState, self.context.state
-        ).round_sequence.last_round_transition_timestamp.timestamp()
 
     def _calculate_initial_value(
         self,
@@ -2416,63 +2427,77 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             has_funds = True
-            if not self.current_positions:
-                has_funds = any(
-                    asset.get("balance", 0) > 0
-                    for position in self.synchronized_data.positions
-                    for asset in position.get("assets", [])
-                )
 
-            if not has_funds:
+            #for testing - to make sure agent stays in the pool
+            has_open_position = any(
+                position.get("status") == PositionStatus.OPEN.value
+                for position in self.current_positions
+            )
+
+            if has_open_position:
                 actions = []
-                self.context.logger.info("No funds available.")
                 sender = self.context.agent_address
                 payload = EvaluateStrategyPayload(
                     sender=sender, actions=json.dumps(actions)
                 )
             else:
-                yield from self.fetch_all_trading_opportunities()
-                
-                if self.current_positions:
-                    for position in (
-                        pos
-                        for pos in self.current_positions
-                        if pos.get("status") == PositionStatus.OPEN.value
-                    ):
-                        dex_type = position.get("dex_type")
-                        strategy = self.params.dex_type_to_strategy.get(dex_type)
-                        if strategy:
-                            if (
-                                position.get("status", PositionStatus.CLOSED.value)
-                                != PositionStatus.OPEN.value
-                            ):
-                                continue
-                            metrics = self.get_returns_metrics_for_opportunity(
-                                position, strategy
-                            )
-                            if metrics:
-                                position.update(metrics)
-                        else:
-                            self.context.logger.error(
-                                f"No strategy found for dex type {dex_type}"
-                            )
+                if not self.current_positions:
+                    has_funds = any(
+                        asset.get("balance", 0) > 0
+                        for position in self.synchronized_data.positions
+                        for asset in position.get("assets", [])
+                    )
 
-                self.execute_hyper_strategy()
-                actions = (
-                    yield from self.get_order_of_transactions()
-                    if self.selected_opportunities is not None
-                    else []
-                )
-
-                if actions:
-                    self.context.logger.info(f"Actions: {actions}")
+                if not has_funds:
+                    actions = []
+                    self.context.logger.info("No funds available.")
+                    sender = self.context.agent_address
+                    payload = EvaluateStrategyPayload(
+                        sender=sender, actions=json.dumps(actions)
+                    )
                 else:
-                    self.context.logger.info("No actions prepared")
+                    yield from self.fetch_all_trading_opportunities()
+                    
+                    if self.current_positions:
+                        for position in (
+                            pos
+                            for pos in self.current_positions
+                            if pos.get("status") == PositionStatus.OPEN.value
+                        ):
+                            dex_type = position.get("dex_type")
+                            strategy = self.params.dex_type_to_strategy.get(dex_type)
+                            if strategy:
+                                if (
+                                    position.get("status", PositionStatus.CLOSED.value)
+                                    != PositionStatus.OPEN.value
+                                ):
+                                    continue
+                                metrics = self.get_returns_metrics_for_opportunity(
+                                    position, strategy
+                                )
+                                if metrics:
+                                    position.update(metrics)
+                            else:
+                                self.context.logger.error(
+                                    f"No strategy found for dex type {dex_type}"
+                                )
 
-                sender = self.context.agent_address
-                payload = EvaluateStrategyPayload(
-                    sender=sender, actions=json.dumps(actions)
-                )
+                    self.execute_hyper_strategy()
+                    actions = (
+                        yield from self.get_order_of_transactions()
+                        if self.selected_opportunities is not None
+                        else []
+                    )
+
+                    if actions:
+                        self.context.logger.info(f"Actions: {actions}")
+                    else:
+                        self.context.logger.info("No actions prepared")
+
+                    sender = self.context.agent_address
+                    payload = EvaluateStrategyPayload(
+                        sender=sender, actions=json.dumps(actions)
+                    )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)

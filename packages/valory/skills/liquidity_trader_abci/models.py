@@ -59,6 +59,8 @@ class SharedState(BaseSharedState):
         self.request_queue = []
         self.req_to_callback: Dict[str, Tuple[Callable, Dict[str, Any]]] = {}
         self.agent_reasoning: str = ""
+        self._token_price_cache = {}
+        self._token_price_cache_ttl = 600
 
     def setup(self) -> None:
         """Set up the model."""

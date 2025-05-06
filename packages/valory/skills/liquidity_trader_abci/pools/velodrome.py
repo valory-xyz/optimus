@@ -811,20 +811,21 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # For stablecoin pools, we want narrow ranges
             # For volatile pools, we might adjust parameters
             model_params = {
-                "ema_period": 50,  # Default from the model
+                "ema_period": 10,  # Default from the model
                 "std_dev_window": 100,  # Default from the model
                 "verbose": True
             }
             
             # For stablecoin pools, we can use more aggressive settings
             if is_stable:
-                model_params["min_width_pct"] = 0.0001  # Narrower bands for stablecoins
+                model_params["min_width_pct"] = 0.00001  # Narrower bands for stablecoins
             
             # Run the optimization
             result = self.optimize_stablecoin_bands(
                 prices=ratio_prices,
                 **model_params
             )
+            self.context.logger.info(f"Result from models: {result}")
             
             if not result:
                 self.context.logger.error(f"Error in stablecoin model calculation")
@@ -835,6 +836,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             std_dev = self.calculate_std_dev(ratio_prices[-100:], ema, model_params["std_dev_window"])
             current_std_dev = std_dev[-1]  # Use the most recent standard deviation
             
+            self.context.logger.info(f"EMA: {ema} Current_Std_Dev: {current_std_dev}")
             # 8. Define a price to tick conversion function
             def price_to_tick(price: float) -> int:
                 """Convert price to tick using the base 1.0001 formula."""

@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeigjxnq2okiclmiorvf4djdlqcvsam4urlmbrkxd7g3esxdaja7ndq
+  behaviours.py: bafybeidm5as2embuohzqoohorahj5pjgerj57va6lamqpwechy2642og4m
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
@@ -19,7 +19,7 @@ fingerprint:
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeieoahz6rtrocv5jy667wb4agptqlkn5kjtfbq7o5zkqurs7tofwzm
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeia7fqhwexndtwx23zuvqrgjh47qf5q5wolvkrkeg2k4qjnigwap6u
+  pools/velodrome.py: bafybeidxfeoknrgpb6blqz2f7goim5k4ynhbz2cqemy4dt6jqf7hvn6vg4
   rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24

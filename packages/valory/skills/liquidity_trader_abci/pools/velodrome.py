@@ -29,7 +29,7 @@ import numpy as np
 import time
 import json
 import email.utils
-from typing import Any, Dict, Generator, List, Optional, Tuple, cast, Callable
+from typing import Any, Dict, Generator, List, Optional, Tuple, Union, cast, Callable
 
 from web3 import Web3
 
@@ -44,6 +44,7 @@ from packages.valory.contracts.velodrome_non_fungible_position_manager.contract 
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
+from collections import defaultdict
 
 # Constants for price history functions
 PRICE_VOLATILITY_THRESHOLD = 0.02  # 2% threshold for stablecoin detection
@@ -65,7 +66,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         """Initialize the Velodrome pool behaviour."""
         super().__init__(**kwargs)
 
-    def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
+    def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
         """Add liquidity to a Velodrome pool."""
         pool_address = kwargs.get("pool_address")
         safe_address = kwargs.get("safe_address")
@@ -338,7 +339,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         max_amounts_in: list,
         is_stable: bool,
         pool_fee: Optional[int] = None,
-    ) -> Generator[None, None, Optional[Tuple[str, str]]]:
+    ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
         """Add liquidity to a Velodrome Concentrated Liquidity pool."""
         # Get NonFungiblePositionManager contract address
         position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain, "")
@@ -383,10 +384,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         if not tick_ranges:
             self.context.logger.error(f"No valid positions calculated for pool {pool_address}")
             return None, None
-
-        # Create a multisend transaction to mint multiple positions
-        multi_send_txs = []
-        
+            
         self.context.logger.info(
             f"Using max amounts: {max_amounts_in[0]} token0, {max_amounts_in[1]} token1"
         )
@@ -431,6 +429,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 position["amount0_desired"] = int(position["amount0_desired"] * scale_factor)
                 position["amount1_desired"] = int(position["amount1_desired"] * scale_factor)
         
+        # Process each position and collect individual transaction hashes
+        tx_hashes = []
+        
         # Process each position
         for position in tick_ranges:
             amount0_desired = position.get("amount0_desired", 0)
@@ -438,7 +439,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             
             self.context.logger.info(
                 f"Position allocation: {position.get('allocation', 0):.1%}, "
-                f"Token ratios: {position.get('token0_ratio', 0.5):.4f}/{position.get('token1_ratio', 0.5):.4f}, "
                 f"Amounts: {amount0_desired}/{amount1_desired}"
             )
             
@@ -474,43 +474,16 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(f"Failed to create mint transaction for position {position}")
                 continue
                 
-            multi_send_txs.append({
-                "operation": MultiSendOperation.CALL,
-                "to": position_manager_address,
-                "value": 0,
-                "data": mint_tx_hash,
-            })
+            tx_hashes.append(mint_tx_hash)
         
         # If no transactions were created, return error
-        if not multi_send_txs:
+        if not tx_hashes:
             self.context.logger.error("No valid mint transactions created")
             return None, None
-            
-        # If only one transaction, return it directly
-        if len(multi_send_txs) == 1:
-            return multi_send_txs[0]["data"], position_manager_address
-            
-        # Otherwise, create a multisend transaction
-        multisend_address = self.params.multisend_contract_addresses.get(chain, "")
-        if not multisend_address:
-            self.context.logger.error(f"Could not find multisend address for chain {chain}")
-            return None, None
-            
-        multisend_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=multisend_address,
-            contract_public_id=MultiSendContract.contract_id,
-            contract_callable="get_tx_data",
-            data_key="data",
-            multi_send_txs=multi_send_txs,
-            chain_id=chain,
-        )
         
-        if not multisend_tx_hash:
-            self.context.logger.error("Failed to create multisend transaction")
-            return None, None
             
-        return multisend_tx_hash, multisend_address
+        # Return the list of transaction hashes
+        return tx_hashes, position_manager_address
 
     def _get_sqrt_price_x96(
         self, pool_address: str, chain: str
@@ -866,31 +839,20 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # 9. Calculate tick range using model band multipliers
             band_multipliers = result["band_multipliers"]
             
-            # For stablecoin pools, use a more conservative range but still use the 
-            # calculate_tick_range_from_bands function for consistent processing
-            if is_stable:
-                # Use a more conservative multiplier for stablecoins
-                sigma_range = (band_multipliers[0] + band_multipliers[1]) / 2
-                self.context.logger.info(f"Using stablecoin sigma range: {sigma_range:.4f}")
+            # Get the most recent EMA value
+            current_ema = ema[-1]
                 
-                # Create modified band_multipliers with all three bands set to our chosen sigma_range
-                # This ensures the tick calculation will use our preferred range
-                band_multipliers = [sigma_range, sigma_range * 1.5, sigma_range * 2]
-                
-            # Calculate tick range 
+            # Calculate tick range using the exact formula: Upper bound = EMA + (sigma*multiplier)
             tick_range_results = self.calculate_tick_range_from_bands_wrapper(
                 band_multipliers=band_multipliers,
                 standard_deviation=current_std_dev,
-                current_price=current_price,
+                ema=current_ema,  # Use EMA instead of current_price
                 tick_spacing=tick_spacing,
                 price_to_tick_function=price_to_tick,
                 min_tick=MIN_TICK,
                 max_tick=MAX_TICK
             )
             
-                
-            # Ensure we have a meaningful range (at least 10 ticks)
-            min_range = 10 * tick_spacing
             
             # Prepare positions data for all three bands
             positions = []
@@ -901,46 +863,52 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 tick_lower = band_data["tick_lower"]
                 tick_upper = band_data["tick_upper"]
                 
-                # Ensure each range has a minimum width
-                if tick_upper - tick_lower < min_range:
-                    midpoint = (tick_upper + tick_lower) // 2
-                    tick_lower = midpoint - (min_range // 2)
-                    tick_upper = midpoint + (min_range // 2)
-                    # Re-adjust to be within bounds
-                    tick_lower = max(tick_lower, MIN_TICK)
-                    tick_upper = min(tick_upper, MAX_TICK)
-                
-                # Round to tick spacing
-                tick_lower = (tick_lower // tick_spacing) * tick_spacing
-                tick_upper = (tick_upper // tick_spacing) * tick_spacing
-                
-                # Calculate price bounds for this band
-                price_lower = self.tick_to_price(tick_lower, 0, 0)  # Using default decimals
-                price_upper = self.tick_to_price(tick_upper, 0, 0)  # Using default decimals
-                
-                # Calculate token ratios for this band
-                token0_ratio, token1_ratio = self._calculate_token_ratios(price_lower, price_upper, current_price)
-                
                 positions.append({
                     "tick_lower": tick_lower,
                     "tick_upper": tick_upper,
                     "allocation": band_allocations[i],
-                    "token0_ratio": token0_ratio,
-                    "token1_ratio": token1_ratio
                 })
             
-                        # Check if all positions have the same tick range
-            all_same = all(
-                (p["tick_lower"], p["tick_upper"]) == (positions[0]["tick_lower"], positions[0]["tick_upper"])
-                for p in positions
-            )
-            if all_same:
-                # Collapse to a single position with 100% allocation
-                single = positions[0].copy()
-                single["allocation"] = 1.0
-                positions = [single]
+            for p in positions:
+                if p["tick_lower"] == p["tick_upper"]:
+                    self.context.logger.info(
+                        f"Adjusting position with equal ticks: tick_lower={p['tick_lower']}, tick_upper={p['tick_upper']}. "
+                        f"Setting tick_upper to {p['tick_lower'] + tick_spacing}."
+                    )
+                    p["tick_upper"] = p["tick_lower"] + tick_spacing
+                    self.context.logger.info(
+                        f"Adjusted position: tick_lower={p['tick_lower']}, tick_upper={p['tick_upper']}."
+                    )
+                    
+            tick_to_band = defaultdict(lambda: {"tick_lower": None, "tick_upper": None, "allocation": 0.0})
 
+            for p in positions:
+                key = (p["tick_lower"], p["tick_upper"])
+                if tick_to_band[key]["tick_lower"] is None:
+                    tick_to_band[key]["tick_lower"] = p["tick_lower"]
+                    tick_to_band[key]["tick_upper"] = p["tick_upper"]
+                tick_to_band[key]["allocation"] += p["allocation"]
+
+            collapsed_positions = [
+                {"tick_lower": v["tick_lower"], "tick_upper": v["tick_upper"], "allocation": v["allocation"]}
+                for v in tick_to_band.values()
+            ]
+
+            self.context.logger.info(f"Collapsed positions before normalization: {collapsed_positions}")
+            total_alloc = sum(p["allocation"] for p in collapsed_positions)
+            self.context.logger.info(f"Total allocation before normalization: {total_alloc}")
+
+            if total_alloc > 0:
+                for p in collapsed_positions:
+                    p["allocation"] /= total_alloc
+                    self.context.logger.info(
+                        f"Normalized allocation for position with ticks ({p['tick_lower']}, {p['tick_upper']}): {p['allocation']:.1%}"
+                    )
+
+            positions = collapsed_positions
+            self.context.logger.info(f"Final positions after normalization: {positions}")
             self.context.logger.info("Band details (inner, middle, outer):")
+
             for i, position in enumerate(positions):
                 band_name = ["inner", "middle", "outer"][i]
                 self.context.logger.info(
@@ -1574,67 +1542,62 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         endpoint = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
         yield from self.sleep(2)
-        retries = 3
-        for attempt in range(retries):
+        try:
+            response = yield from self.get_http_response(
+                method="GET",
+                url=endpoint,
+                headers=headers,
+                content=None
+            )
+            # Try to parse the response body as JSON
             try:
-                response = yield from self.get_http_response(
-                    method="GET",
-                    url=endpoint,
-                    headers=headers,
-                    content=None
-                )
-                # Try to parse the response body as JSON
-                try:
-                    response_json = json.loads(response.body)
-                except Exception:
-                    response_json = {}
+                response_json = json.loads(response.body)
+            except Exception:
+                response_json = {}
 
-                # Check for HTTP 429 or JSON error code 429
-                is_rate_limited = False
-                if hasattr(response_json, 'status_code') and response_json.status_code == 429:
+            # Check for HTTP 429 or JSON error code 429
+            is_rate_limited = False
+            if hasattr(response_json, 'status_code') and response_json.status_code == 429:
+                is_rate_limited = True
+            elif isinstance(response_json, dict):
+                status = response_json.get("status", {})
+                if status.get("error_code") == 429:
                     is_rate_limited = True
-                elif isinstance(response_json, dict):
-                    status = response_json.get("status", {})
-                    if status.get("error_code") == 429:
-                        is_rate_limited = True
 
-                if is_rate_limited:
-                    # Fallback: sleep a default time if header missing
-                    if attempt < retries - 1:
-                        self.context.logger.info(
-                            f"Rate limit reached on CoinGecko API. Waiting for 60 seconds before retrying... (Attempt {attempt + 1} of {retries})"
-                        )
-                        yield from self.sleep(60)
-                        continue
-                    else:
-                        return None
-
-                # Handle other non-200 responses
-                if hasattr(response_json, 'status_code') and response_json.status_code != 200:
-                    self.context.logger.warning(
-                        f"Error getting market data for {coin_id}: {response_json.status_code}"
-                    )
-                    return None
-
-                # Parse response body
-                try:
-                    prices_data = response_json.get("prices", [])
-                    timestamps = [entry[0]/1000 for entry in prices_data]  # ms to seconds
-                    prices = [entry[1] for entry in prices_data]
-                    return {
-                        "coin_id": coin_id,
-                        "timestamps": timestamps,
-                        "prices": prices,
-                        "days": days,
-                        "last_updated": time.time()
-                    }
-                except json.JSONDecodeError:
-                    self.context.logger.warning(f"Error parsing response for {coin_id}")
-                    return None
-
-            except Exception as e:
-                self.context.logger.warning(f"Error getting market data for {coin_id}: {str(e)}")
+            if is_rate_limited:
+                self.context.logger.error(
+                    f"Rate limit reached on CoinGecko API. Waiting for 10 seconds before retrying... (Attempt {attempt + 1} of {retries})"
+                )
+                yield from self.sleep(10)
                 return None
+
+            # Handle other non-200 responses
+            if hasattr(response_json, 'status_code') and response_json.status_code != 200:
+                self.context.logger.warning(
+                    f"Error getting market data for {coin_id}: {response_json.status_code}"
+                )
+                return None
+
+            # Parse response body
+            try:
+                prices_data = response_json.get("prices", [])
+                timestamps = [entry[0]/1000 for entry in prices_data]  # ms to seconds
+                prices = [entry[1] for entry in prices_data]
+                return {
+                    "coin_id": coin_id,
+                    "timestamps": timestamps,
+                    "prices": prices,
+                    "days": days,
+                    "last_updated": time.time()
+                }
+            except json.JSONDecodeError:
+                self.context.logger.warning(f"Error parsing response for {coin_id}")
+                return None
+
+        except Exception as e:
+            self.context.logger.warning(f"Error getting market data for {coin_id}: {str(e)}")
+            return None
+
         
     def _get_current_pool_price(
         self, pool_address: str, chain: str
@@ -1660,7 +1623,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self,
         band_multipliers: List[float],
         standard_deviation: float,
-        current_price: float,
+        ema: float,
         tick_spacing: int,
         price_to_tick_function: Callable,
         min_tick: int = MIN_TICK,
@@ -1671,8 +1634,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         
         Args:
             band_multipliers: List of band multipliers [inner, middle, outer]
-            standard_deviation: Current standard deviation
-            current_price: Current price
+            standard_deviation: Current standard deviation (sigma)
+            ema: Exponential Moving Average value
             tick_spacing: Pool tick spacing
             price_to_tick_function: Function to convert price to tick
             min_tick: Minimum allowed tick
@@ -1681,19 +1644,23 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         Returns:
             Dictionary with tick ranges for each band
         """
-        # Convert band multipliers to price ranges
-        # Each band is defined as current_price +/- (multiplier * std_dev)
-        std_pct = standard_deviation / current_price
+        # Convert band multipliers to price ranges using the formula:
+        # Upper bound = EMA + (sigma*multiplier)
+        # Lower bound = EMA - (sigma*multiplier)
         
-        band1_lower = current_price * (1 - band_multipliers[0] * std_pct)
-        band1_upper = current_price * (1 + band_multipliers[0] * std_pct)
+        # Calculate band price ranges
+        band1_lower = ema - (band_multipliers[0] * standard_deviation)
+        band1_upper = ema + (band_multipliers[0] * standard_deviation)
+        self.context.logger.info(f"Band 1 price range: lower={band1_lower}, upper={band1_upper}")
         
-        band2_lower = current_price * (1 - band_multipliers[1] * std_pct)
-        band2_upper = current_price * (1 + band_multipliers[1] * std_pct)
+        band2_lower = ema - (band_multipliers[1] * standard_deviation)
+        band2_upper = ema + (band_multipliers[1] * standard_deviation)
+        self.context.logger.info(f"Band 2 price range: lower={band2_lower}, upper={band2_upper}")
         
-        band3_lower = current_price * (1 - band_multipliers[2] * std_pct)
-        band3_upper = current_price * (1 + band_multipliers[2] * std_pct)
-        
+        band3_lower = ema - (band_multipliers[2] * standard_deviation)
+        band3_upper = ema + (band_multipliers[2] * standard_deviation)
+        self.context.logger.info(f"Band 3 price range: lower={band3_lower}, upper={band3_upper}")
+
         # Convert to ticks and round to tick spacing
         def round_to_spacing(tick):
             return int(tick // tick_spacing) * tick_spacing
@@ -1701,66 +1668,43 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # Convert prices to ticks
         band1_tick_lower = round_to_spacing(price_to_tick_function(band1_lower))
         band1_tick_upper = round_to_spacing(price_to_tick_function(band1_upper))
+        self.context.logger.info(f"Band 1 ticks: lower={band1_tick_lower}, upper={band1_tick_upper}")
         
         band2_tick_lower = round_to_spacing(price_to_tick_function(band2_lower))
         band2_tick_upper = round_to_spacing(price_to_tick_function(band2_upper))
+        self.context.logger.info(f"Band 2 ticks: lower={band2_tick_lower}, upper={band2_tick_upper}")
         
         band3_tick_lower = round_to_spacing(price_to_tick_function(band3_lower))
         band3_tick_upper = round_to_spacing(price_to_tick_function(band3_upper))
+        self.context.logger.info(f"Band 3 ticks: lower={band3_tick_lower}, upper={band3_tick_upper}")
         
         # Ensure ticks are within allowed range
         band1_tick_lower = max(min_tick, min(max_tick, band1_tick_lower))
         band1_tick_upper = max(min_tick, min(max_tick, band1_tick_upper))
+        self.context.logger.info(f"Band 1 ticks adjusted: lower={band1_tick_lower}, upper={band1_tick_upper}")
         
         band2_tick_lower = max(min_tick, min(max_tick, band2_tick_lower))
         band2_tick_upper = max(min_tick, min(max_tick, band2_tick_upper))
+        self.context.logger.info(f"Band 2 ticks adjusted: lower={band2_tick_lower}, upper={band2_tick_upper}")
         
         band3_tick_lower = max(min_tick, min(max_tick, band3_tick_lower))
         band3_tick_upper = max(min_tick, min(max_tick, band3_tick_upper))
+        self.context.logger.info(f"Band 3 ticks adjusted: lower={band3_tick_lower}, upper={band3_tick_upper}")
         
-        # Ensure each band has at least one tick spacing width
-        if band1_tick_upper - band1_tick_lower < tick_spacing:
-            center = (band1_tick_upper + band1_tick_lower) // 2
-            band1_tick_lower = center - (tick_spacing // 2)
-            band1_tick_upper = band1_tick_lower + tick_spacing
-        
-        if band2_tick_upper - band2_tick_lower < tick_spacing:
-            center = (band2_tick_upper + band2_tick_lower) // 2
-            band2_tick_lower = center - (tick_spacing // 2)
-            band2_tick_upper = band2_tick_lower + tick_spacing
-        
-        if band3_tick_upper - band3_tick_lower < tick_spacing:
-            center = (band3_tick_upper + band3_tick_lower) // 2
-            band3_tick_lower = center - (tick_spacing // 2)
-            band3_tick_upper = band3_tick_lower + tick_spacing
-        
-        # Calculate price ratios for reporting
-        band1_ratio = band1_upper / band1_lower
-        band2_ratio = band2_upper / band2_lower
-        band3_ratio = band3_upper / band3_lower
         
         # Build result dictionary
         return {
             "band1": {
                 "tick_lower": band1_tick_lower,
                 "tick_upper": band1_tick_upper,
-                "price_lower": band1_lower,
-                "price_upper": band1_upper,
-                "price_ratio": band1_ratio
             },
             "band2": {
                 "tick_lower": band2_tick_lower,
                 "tick_upper": band2_tick_upper,
-                "price_lower": band2_lower,
-                "price_upper": band2_upper,
-                "price_ratio": band2_ratio
             },
             "band3": {
                 "tick_lower": band3_tick_lower,
                 "tick_upper": band3_tick_upper,
-                "price_lower": band3_lower,
-                "price_upper": band3_upper,
-                "price_ratio": band3_ratio
             },
             "inner_ticks": (band1_tick_lower, band1_tick_upper),
             "middle_ticks": (band2_tick_lower, band2_tick_upper),
@@ -1826,4 +1770,3 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 std_dev[i] = 0.001 * prices_array[i]  # Small default value
         
         return std_dev
-

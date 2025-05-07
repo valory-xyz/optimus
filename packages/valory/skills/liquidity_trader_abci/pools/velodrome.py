@@ -1640,9 +1640,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         endpoint = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
         yield from self.sleep(2)
-        # For rate limiting, define max retries and attempt counter
-        retries = 3
-        attempt = 0
 
         try:
             response = yield from self.get_http_response(
@@ -1667,9 +1664,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     is_rate_limited = True
 
             if is_rate_limited:
-                self.context.logger.error(
-                    f"Rate limit reached on CoinGecko API..."
-                )
+                self.context.logger.error("Rate limit reached on CoinGecko API...")
                 yield from self.sleep(10)
                 return None
 

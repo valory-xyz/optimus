@@ -2435,14 +2435,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-
             if not self.current_positions:
                 has_funds = any(
                     asset.get("balance", 0) > 0
                     for position in self.synchronized_data.positions
                     for asset in position.get("assets", [])
                 )
-            
+
             has_funds = True
             if not has_funds:
                 actions = []
@@ -2453,7 +2452,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
             else:
                 yield from self.fetch_all_trading_opportunities()
-                
+
                 if self.current_positions:
                     for position in (
                         pos
@@ -6391,7 +6390,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 user_share = Decimal(0)
 
                 for asset in assets:
-                    if dex_type == DexType.BALANCER.value or dex_type == DexType.VELODROME.value:
+                    if (
+                        dex_type == DexType.BALANCER.value
+                        or dex_type == DexType.VELODROME.value
+                    ):
                         token0_address = position.get("token0")
                         token1_address = position.get("token1")
                         asset_addresses = [token0_address, token1_address]
@@ -6647,7 +6649,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         if not slot0_data:
-            self.context.logger.error(f"Failed to get slot0 data for pool {pool_address}")
+            self.context.logger.error(
+                f"Failed to get slot0 data for pool {pool_address}"
+            )
             return {}
 
         total_liquidity = yield from self.contract_interact(
@@ -6659,7 +6663,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         if not total_liquidity:
-            self.context.logger.error(f"Failed to get slot0 data for pool {pool_address}")
+            self.context.logger.error(
+                f"Failed to get slot0 data for pool {pool_address}"
+            )
             return {}
 
         sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
@@ -6709,13 +6715,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # All in token0
                 sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
                 sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
-                amount0 = LiquidityAmounts._getAmount0ForLiquidity(sqrtA, sqrtB, liquidity)
+                amount0 = LiquidityAmounts._getAmount0ForLiquidity(
+                    sqrtA, sqrtB, liquidity
+                )
                 amount1 = 0
             elif current_tick >= tick_upper:
                 sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
                 sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
                 amount0 = 0
-                amount1 = LiquidityAmounts._getAmount1ForLiquidity(sqrtA, sqrtB, liquidity)
+                amount1 = LiquidityAmounts._getAmount1ForLiquidity(
+                    sqrtA, sqrtB, liquidity
+                )
             else:
                 # In range, use band math
                 reserves_and_balances = self.get_reserves_and_balances(
@@ -6726,13 +6736,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     tick_upper=tick_upper,
                     liquidity=liquidity,
                     tokens_owed0=tokens_owed0,
-                    tokens_owed1=tokens_owed1
+                    tokens_owed1=tokens_owed1,
                 )
                 amount0 = reserves_and_balances.get("current_token0_qty", 0)
                 amount1 = reserves_and_balances.get("current_token1_qty", 0)
 
-
-            if (amount0 < 1e-8 and amount1 < 1e-8):
+            if amount0 < 1e-8 and amount1 < 1e-8:
                 # Value is negligible due to narrow band
                 self.context.logger.warning(
                     "User position is in a very narrow band and out of range. "

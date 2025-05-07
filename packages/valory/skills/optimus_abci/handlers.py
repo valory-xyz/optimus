@@ -100,7 +100,7 @@ IpfsHandler = BaseIpfsHandler
 STRATEGY_TO_PROTOCOL = {
     "balancer_pools_search": "balancerPool",
     "asset_lending": "sturdy",
-    "velodrome_pools_search":"velodrome",
+    "velodrome_pools_search": "velodrome",
 }
 # Reverse mapping for converting protocol names back to strategy names
 PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
@@ -307,7 +307,7 @@ class HttpHandler(BaseHttpHandler):
         """
         # Check if GENAI_API_KEY is set
         api_key = self.context.params.genai_api_key
-       
+
         is_chat_enabled = (
             api_key is not None
             and isinstance(api_key, str)

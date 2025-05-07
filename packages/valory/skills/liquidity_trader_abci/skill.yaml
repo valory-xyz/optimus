@@ -7,19 +7,19 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeichbi4paauj6jojmawicz6vguqoja3p54myqkbs4bk5uikdojk6re
+  behaviours.py: bafybeick6ox36weofatpq2qkfgbm6obfmnbh5ngbxxbnqhhae35vcb5nam
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeieflywdwd7budah26xkvwm6pfgyq6qb3inma6ybmwpkhiyhof5gru
+  models.py: bafybeihds7jmiiybkpv32vhvgbgiuyctmatzadwiweeg2velvapt4ybl64
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
-  pools/balancer.py: bafybeieoahz6rtrocv5jy667wb4agptqlkn5kjtfbq7o5zkqurs7tofwzm
+  pools/balancer.py: bafybeib6ftotspu2ojuk5hy6gclq36b2fnftsyi5fxocuyqayjxsgjlueu
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeid7m47kjrpkyyljqipgu72wryz2uugw63ajftgezmz7bi3s4dqvk4
+  pools/velodrome.py: bafybeigz5kaesex63zn7tdg6wui6pxdmg6n6yyus3odr73udtwp6lsh4oa
   rounds.py: bafybeigltqlryu7v6amgf3xw67orccope3acf6fzqhtf5cqa2wmdaacyaa
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
@@ -29,7 +29,7 @@ fingerprint:
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
   utils/__init__.py: bafybeia253c4hk3xgghu2uinlf67m326hbfm77fntoxh7y4tbhgkjv7mwi
-  utils/tick_math.py: bafybeie6fn2qcngcbdhv6yfhsyzmpfxp6yv4f2vcbfyzy57aj54e3nuile
+  utils/tick_math.py: bafybeifedq76gnd6ejvyczqxkwn4ij62oedydeb6ruquctrlmdlm3m3x74
 fingerprint_ignore_patterns: []
 connections:
 - valory/mirror_db:0.1.0:bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja
@@ -278,5 +278,7 @@ dependencies:
   eth_utils: {}
   pyyaml:
     version: <=6.0.1,>=3.10
+  numpy:
+    version: ==2.2.5
 is_abstract: true
 customs: []

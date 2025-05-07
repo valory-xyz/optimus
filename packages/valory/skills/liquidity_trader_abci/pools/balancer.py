@@ -21,7 +21,7 @@
 
 from abc import ABC
 from enum import Enum
-from typing import Any, Dict, Generator, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
@@ -106,8 +106,7 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the balancer pool behaviour."""
         super().__init__(**kwargs)
-    
-    
+
     def update_value(
         self, **kwargs: Any
     ) -> Generator[None, None, Tuple[Optional[list], Optional[list]]]:
@@ -142,50 +141,48 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             # Safely extract and flatten token addresses
             tokens_nested = pool_info[0]
             new_max_amounts_in = self.adjust_amounts(
-                assets, max_amounts_in, tokens_nested
+                assets, tokens_nested, max_amounts_in
             )
 
             return tokens_nested, new_max_amounts_in
         except Exception as e:
             self.context.logger.error(f"Error fetching pool tokens: {str(e)}")
             return None, None
-    
-    def adjust_amounts(self, assets, max_amounts_in, assets_new):
-        """
-        Return the Max Amounts for new assets based on existing assets and their amounts.
-    
-        Args:
-            assets: List of original asset addresses
-            max_amounts_in: List of amounts corresponding to original assets
-            assets_new: List of new asset addresses to map amounts to
-    
-        Returns:
-            List of amounts corresponding to assets_new
-        """
+
+    def adjust_amounts(
+        self, assets: List[str], assets_new: List[str], max_amounts_in: List[int]
+    ) -> List[int]:
+        """Adjust token amounts to match the order of tokens in a Balancer pool."""
         # Log the inputs for debugging
-        self.context.logger.info(f"assets, max_amounts_in, assets_new:{assets, max_amounts_in, assets_new}")
-        
+        self.context.logger.info(
+            f"assets, assets_new, max_amounts_in:{assets, assets_new, max_amounts_in}"
+        )
+
         # Input validation
         if not all(isinstance(x, (str, bytes)) for x in assets):
             raise ValueError("All assets must be strings or bytes")
         if len(assets) != len(max_amounts_in):
             raise ValueError("Length of assets and max_amounts_in must match")
-        
+
         # Normalize all addresses to lowercase for consistent comparison
         normalized_assets = [asset.lower() for asset in assets]
         normalized_assets_new = [asset.lower() for asset in assets_new]
-    
+
         # Create a mapping from normalized asset to amount
         asset_to_amount = dict(zip(normalized_assets, max_amounts_in))
-        
+
         # Map amounts for new assets based on the normalized keys
-        new_max_amounts_in = [asset_to_amount.get(asset, 0) for asset in normalized_assets_new]
-        
+        new_max_amounts_in = [
+            asset_to_amount.get(asset, 0) for asset in normalized_assets_new
+        ]
+
         # Log the outcome for debugging
-        self.context.logger.info(f"Into adjust amounts new_max_amounts_in: {new_max_amounts_in}")
-        
+        self.context.logger.info(
+            f"Into adjust amounts new_max_amounts_in: {new_max_amounts_in}"
+        )
+
         return new_max_amounts_in
-    
+
     def enter(self, **kwargs: Any) -> Generator[None, None, Optional[Tuple[str, str]]]:
         """Enter a Balancer pool."""
         pool_address = kwargs.get("pool_address")
@@ -240,9 +237,11 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         )
         # fromInternalBalance - True if sending from internal token balances. False if sending ERC20.
         from_internal_balance = ZERO_ADDRESS in assets
-        self.context.logger.info(f"new_assets, new_max_amounts_in:{new_assets, new_max_amounts_in}")
+        self.context.logger.info(
+            f"new_assets, new_max_amounts_in:{new_assets, new_max_amounts_in}"
+        )
         self.context.logger.info("Preparing transaction for pool join.")
-    
+
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=vault_address,

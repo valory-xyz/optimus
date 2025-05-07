@@ -330,7 +330,11 @@ class Params(BaseParams):
             self._ensure("velodrome_router_contract_addresses", kwargs, str)
         )
         self.velodrome_non_fungible_position_manager_contract_addresses = json.loads(
-            self._ensure("velodrome_non_fungible_position_manager_contract_addresses", kwargs, str)
+            self._ensure(
+                "velodrome_non_fungible_position_manager_contract_addresses",
+                kwargs,
+                str,
+            )
         )
         super().__init__(*args, **kwargs)
 

@@ -2448,7 +2448,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         for position in self.synchronized_data.positions
                         for asset in position.get("assets", [])
                     )
-
+                
+                has_funds = True
                 if not has_funds:
                     actions = []
                     self.context.logger.info("No funds available.")

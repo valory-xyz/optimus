@@ -23,7 +23,7 @@ REQUIRED_FIELDS = (
     "current_positions",
     "coingecko_api_key",
 )
-VELODROME = "Velodrome"
+VELODROME = "velodrome"
 
 # Chain-specific constants
 OPTIMISM_CHAIN_ID = 10

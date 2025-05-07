@@ -380,19 +380,31 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
         # USDC
         "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "usd-coin",
         "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "usd-coin",
+        # Mode USDC
+        "0xd988097fb8612cc24eec14542bc03424c656005f": "usd-coin",
+        "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": "usd-coin", # iUSDC
         # USDT
         "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "tether",
         "0x01bff41798a0bcf287b996046ca68b395dbc1071": "tether",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "tether",
+        # Mode USDT
+        "0xf0f161fda2712db8b566946122a5af183995e2ed": "tether",
         # DAI
         "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "dai",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "dai",
+        # Mode DAI
+        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "dai", # msDAI
         # Other stablecoins
         "0x73cb180bf0521828d8849bc8cf2b920918e23032": "usd-plus",
         "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "dola-usd",
         "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "liquity-usd",
         "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "frax",
         "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "usd-glo",
+        # Adding missing stablecoins
+        "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": "dai", # Metronome Synth USD - map to DAI as it's a stablecoin
+        "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "frax", # Alchemix USD - map to FRAX as it's a stablecoin
+        "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "dai", # USX - map to DAI as it's a stablecoin
+        "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "dai", # BOLD - map to DAI as it's a stablecoin
     }
     
     # Check if token address is in the hard-coded mappings
@@ -516,6 +528,7 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period
     
     # If we don't have at least 2 valid token IDs, return None
     if len(valid_token_ids) < 2:
+        logger.warning(f"Not enough valid token IDs for pool {pool_id} on chain {chain}. Found: {valid_token_ids}")
         return None
     
     to_timestamp = int(datetime.now().timestamp())
@@ -546,6 +559,7 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period
         # Find minimum length to align all price series
         min_length = min(len(prices) for prices in prices_data)
         if min_length < 2:
+            logger.warning(f"Insufficient price data points for pool {pool_id} on chain {chain}. Min length: {min_length}")
             return None
             
         # Truncate all price series to the same length
@@ -1574,10 +1588,12 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
                             pool["chain"]
                         )
                         token_ids.append(token_id)
+                        logger.info(f"Pool {pool['pool_id']}: Token {token['id']} ({token['symbol']}) mapped to CoinGecko ID: {token_id}")
                     
                     # Only calculate IL risk if we have at least 2 valid token IDs
                     valid_token_ids = [tid for tid in token_ids if tid]
                     if len(valid_token_ids) >= 2:
+                        logger.info(f"Pool {pool['pool_id']}: Calculating IL risk score with {len(valid_token_ids)} valid token IDs: {valid_token_ids}")
                         il_risk_score = calculate_il_risk_score_multi(
                             valid_token_ids, 
                             coingecko_api_key,
@@ -1585,7 +1601,9 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
                             chain=pool["chain"]
                         )
                         pool["il_risk_score"] = il_risk_score
+                        logger.info(f"Pool {pool['pool_id']}: IL risk score calculated: {il_risk_score}")
                     else:
+                        logger.warning(f"Pool {pool['pool_id']}: Not enough valid token IDs to calculate IL risk score. Found: {valid_token_ids}")
                         pool["il_risk_score"] = None
                 except Exception as e:
                     logger.error(f"Error calculating IL risk score for pool {pool['pool_id']}: {str(e)}")

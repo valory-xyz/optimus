@@ -244,7 +244,7 @@ models:
       default_acceptance_time: null
       cleanup_freq: 50
       genai_api_key: null
-      velodrome_router_contract_addresses: '{"optimism":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","base":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858"}'
+      velodrome_router_contract_addresses: '{"optimism":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","base":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","mode":"0x9c12939390052919aF3155f41Bf4160Fd3666A6f"}'
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
     class_name: Params
   coingecko:

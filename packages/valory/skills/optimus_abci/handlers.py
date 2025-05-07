@@ -692,7 +692,7 @@ class HttpHandler(BaseHttpHandler):
             available_protocols_for_llm = {
                 "balancerPool": "protocol for investing in liquidity positions",
                 "sturdy": "protocol for lending assets",
-                "velodrome": "protocol for investing in liquidity positions"
+                "velodrome": "protocol for investing in liquidity positions",
             }
 
             # Convert previous selected protocols to their protocol names

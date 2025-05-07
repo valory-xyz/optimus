@@ -58,5 +58,17 @@ class VelodromePoolContract(Contract):
         checksumed_spender = ledger_api.api.to_checksum_address(spender)
         data = contract_instance.encodeABI("approve", args=(checksumed_spender, amount))
         return {"tx_hash": bytes.fromhex(data[2:])}
+    
+    @classmethod
+    def get_reserves(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the current reserves of token0 and token1."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        reserve0 = contract_instance.functions.reserve0().call()
+        reserve1 = contract_instance.functions.reserve1().call()
+        return dict(data=[reserve0, reserve1])
 
     

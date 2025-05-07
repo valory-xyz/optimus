@@ -33,34 +33,34 @@ CHAIN_NAMES = {
     MODE_CHAIN_ID: "mode",
 }
 
-# Whitelist of allowed token addresses for each chain
+# Whitelist of allowed token addresses for each chain with their symbols
 WHITELISTED_ASSETS = {
     "mode": {
         # MODE tokens - stablecoins
-        "0xd988097fb8612cc24eec14542bc03424c656005f": True,  # USDC
-        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": True,  # msDAI
-        "0xf0f161fda2712db8b566946122a5af183995e2ed": True,  # USDT
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": True,  # oUSDT
-        "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": True,  # iUSDC
+        "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
+        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "msDAI",
+        "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": "iUSDC",
     },
     "optimism": {
         # Optimism tokens - stablecoins
-        "0x0b2c639c533813f4aa9d7837caf62653d097ff85": True,  # USDC
-        "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": True,  # alUSD
-        "0x01bff41798a0bcf287b996046ca68b395dbc1071": True,  # USDT0
-        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": True,  # USDT
-        "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": True,  # msUSD
-        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": True,  # USDC.e
-        "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": True,  # USX
-        "0x8ae125e8653821e851f12a49f7765db9a9ce7384": True,  # DOLA
-        "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": True,  # LUSD
-        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": True,  # DAI
-        "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": True,  # BOLD
-        "0x2e3d870790dc77a83dd1d18184acc7439a53f475": True,  # FRAX
-        "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": True,  # sDAI
-        "0x73cb180bf0521828d8849bc8cf2b920918e23032": True,  # USD+
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": True,  # oUSDT
-        "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": True,  # USDGLO
+        "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "USDC",
+        "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alUSD",
+        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
+        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
+        "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": "msUSD",
+        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
+        "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "USX",
+        "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "DOLA",
+        "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "LUSD",
+        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",
+        "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "BOLD",
+        "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "FRAX",
+        "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
+        "0x73cb180bf0521828d8849bc8cf2b920918e23032": "USD+",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "USDGLO",
     }
 }
 
@@ -379,14 +379,14 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
     stablecoin_mappings = {
         # USDC
         "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "usd-coin",
-        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "usd-coin",
+        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "bridged-usd-coin-optimism",
         # Mode USDC
         "0xd988097fb8612cc24eec14542bc03424c656005f": "usd-coin",
-        "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": "usd-coin", # iUSDC
+        "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": "ironclad-usd", # iUSDC
         # USDT
         "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "tether",
-        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "tether",
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "tether",
+        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "usdt0",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
         # Mode USDT
         "0xf0f161fda2712db8b566946122a5af183995e2ed": "tether",
         # DAI
@@ -402,7 +402,7 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
         "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "usd-glo",
         # Adding missing stablecoins
         "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": "dai", # Metronome Synth USD - map to DAI as it's a stablecoin
-        "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "frax", # Alchemix USD - map to FRAX as it's a stablecoin
+        "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alchemix-usd", # Alchemix USD
         "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "dai", # USX - map to DAI as it's a stablecoin
         "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "dai", # BOLD - map to DAI as it's a stablecoin
     }
@@ -1333,14 +1333,25 @@ def get_filtered_pools(pools, current_positions):
             if whitelisted_tokens:
                 # Check if all tokens in the pool are in the whitelist
                 all_tokens_whitelisted = True
+                # Store the symbols for whitelisted tokens
+                token_symbols = []
+                
                 for token in input_tokens:
-                    if token["id"].lower() not in whitelisted_tokens:
+                    token_address = token["id"].lower()
+                    if token_address not in whitelisted_tokens:
                         all_tokens_whitelisted = False
                         break
+                    # Store the symbol from the whitelist
+                    token_symbols.append(whitelisted_tokens[token_address])
                 
                 # Skip this pool if not all tokens are whitelisted
                 if not all_tokens_whitelisted:
                     continue
+                
+                # Update token symbols in the input_tokens
+                for i, symbol in enumerate(token_symbols):
+                    if i < len(input_tokens):
+                        input_tokens[i]["symbol"] = symbol
             
             # Add basic metrics
             pool["token_count"] = token_count

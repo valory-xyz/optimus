@@ -6060,8 +6060,28 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if not log:
-            self.context.logger.error("No logs found for Velodrome Mint event")
-            return None, None, None
+            # If the standard signature is not found, try the alternative Mint signature
+            event_signature = "Mint(address,address,uint256,uint256)"
+            event_signature_hash = keccak(text=event_signature)
+            event_signature_hex = to_hex(event_signature_hash)[2:]
+
+            # Extract logs from the response
+            logs = response.get("logs", [])
+
+            # Find the log that matches the Mint event
+            log = next(
+                (
+                    log
+                    for log in logs
+                    if log.get("topics", [])
+                    and log.get("topics", [])[0][2:] == event_signature_hex
+                ),
+                None,
+            )
+
+            if not log:
+                self.context.logger.error("No logs found for Velodrome Mint event")
+                return None, None, None
 
         try:
             # Decode indexed parameter (sender address)
@@ -6649,20 +6669,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         if not slot0_data:
-            self.context.logger.error(
-                f"Failed to get slot0 data for pool {pool_address}"
-            )
-            return {}
-
-        total_liquidity = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=VelodromeCLPoolContract.contract_id,
-            contract_callable="liquidity",
-            data_key="liquidity",
-            chain_id=chain,
-        )
-        if not total_liquidity:
             self.context.logger.error(
                 f"Failed to get slot0 data for pool {pool_address}"
             )

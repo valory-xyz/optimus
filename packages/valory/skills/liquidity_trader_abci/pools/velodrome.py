@@ -1590,6 +1590,47 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[str]]:
         """Retrieve the CoinGecko coin ID for a token address on a specific blockchain."""
         try:
+            # Check stablecoin mappings first
+            stablecoin_mappings = {
+                # USDC
+                "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "usd-coin",
+                "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "bridged-usd-coin-optimism",
+                # Mode USDC
+                "0xd988097fb8612cc24eec14542bc03424c656005f": "usd-coin",
+                "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": "ironclad-usd",  # iUSDC
+                # USDT
+                "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "tether",
+                "0x01bff41798a0bcf287b996046ca68b395dbc1071": "usdt0",
+                "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
+                # Mode USDT
+                "0xf0f161fda2712db8b566946122a5af183995e2ed": "tether",
+                # DAI
+                "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "dai",
+                "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "dai",
+                # Mode DAI
+                "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "dai",  # msDAI
+                # Other stablecoins
+                "0x73cb180bf0521828d8849bc8cf2b920918e23032": "usd-plus",
+                "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "dola-usd",
+                "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "liquity-usd",
+                "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "frax",
+                "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "usd-glo",
+                # Adding missing stablecoins
+                "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": "dai",  # Metronome Synth USD - map to DAI as it's a stablecoin
+                "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alchemix-usd",  # Alchemix USD
+                "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "dai",  # USX - map to DAI as it's a stablecoin
+                "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "dai",  # BOLD - map to DAI as it's a stablecoin
+            }
+
+            # Check if the address is in the stablecoin mappings
+            if address.lower() in stablecoin_mappings:
+                coin_id = stablecoin_mappings[address.lower()]
+                self.context.logger.info(
+                    f"Using stablecoin mapping for {address}: {coin_id}"
+                )
+                return coin_id
+
+            # If not in mappings, proceed with API request
             # Rate limiting to avoid CoinGecko API restrictions
             yield from self.sleep(1)
 
@@ -1706,7 +1747,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         """Get the current price from a Velodrome concentrated liquidity pool."""
         try:
             # Get the sqrt_price_x96 from the pool
-            sqrt_price_x96 = yield from self._get_sqrt_price_x96(pool_address, chain)
+            sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
             if sqrt_price_x96 is None:
                 return None
 

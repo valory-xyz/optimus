@@ -842,6 +842,7 @@ class HttpHandler(BaseHttpHandler):
     def calculate_composite_score_from_var(self, var: float, correlation_coefficient: float = 1.0) -> float:
         """
         Calculate the composite score threshold based on user's risk tolerance (VaR)
+        Formula: CS = (ln[(A) / (VaR + B)] - C) / D
         
         Args:
             var: Value at Risk (negative number representing max acceptable loss)
@@ -850,10 +851,10 @@ class HttpHandler(BaseHttpHandler):
         Returns:
             The calculated composite score threshold
         """
-        # Constants from the equation
-        A = 8.786e-1
-        B = 8.272e-1
-        C = 2.447
+        # Constants from the formula
+        A = 8.786e-1  # 8.786×10^-1
+        B = 8.272e-1  # 8.272×10^-1
+        C = 2.44
         D = -7.552
         
         # Define bounds for the CS
@@ -862,10 +863,17 @@ class HttpHandler(BaseHttpHandler):
         
         # Apply the equation: CS = ln((A/(VaR + B)) - C)/D
         try:
-            inner = (A / (var + B)) - C
-            if inner <= 0:
-                raise ValueError("Invalid VaR value leads to non-positive logarithm input")
-            cs = math.log(inner) / D
+                  # Calculate the numerator
+            numerator = A
+            
+            # Calculate the denominator
+            denominator = var + B
+            
+            # Apply natural logarithm to the ratio
+            ln_term = math.log(numerator / denominator)
+            
+            # Calculate the composite score
+            cs = (ln_term - C) / D
             
             # Apply correlation coefficient adjustment
             adjusted_cs = cs * correlation_coefficient
@@ -926,17 +934,8 @@ class HttpHandler(BaseHttpHandler):
         }
         
         self.context.logger.info(f"response_data: {response_data}")
-
         self._send_ok_response(http_msg, http_dialogue, response_data)
-
         # Store the calculated composite score in the state
-        thresholds = {
-            TradingType.BALANCED.value: THRESHOLDS.get(TradingType.BALANCED.value),
-            TradingType.RISKY.value: THRESHOLDS.get(TradingType.RISKY.value),
-        }
-        thresholds[trading_type] = composite_score
-        self.context.state.thresholds = thresholds
-
         self.context.logger.info(f"trading_type: {trading_type}")    
         
         storage_data = {
@@ -960,17 +959,17 @@ class HttpHandler(BaseHttpHandler):
             else self.context.state.selected_protocols
             or self.context.params.available_strategies
         )
-
+    
         selected_protocols = [
             STRATEGY_TO_PROTOCOL.get(strategy, strategy)
             for strategy in selected_protocols
         ]
-
+    
         trading_type = self.context.state.trading_type
         if not trading_type:
             trading_type = TradingType.BALANCED.value
         reasoning = "Failed to parse LLM response. Falling back to previous strategies."
-
+    
         return selected_protocols, trading_type, reasoning, trading_type
     
     def _delayed_write_kv_extended(self, data: Dict[str, str]) -> None:
@@ -992,10 +991,8 @@ class HttpHandler(BaseHttpHandler):
                 self.context.state.trading_type = data["trading_type"]
             if "composite_score" in data:
                 # Update the appropriate threshold based on trading type
-                thresholds = getattr(self.context.state, "thresholds", THRESHOLDS.copy())
-                if "trading_type" in data:
-                    thresholds[data["trading_type"]] = float(data["composite_score"])
-                self.context.state.thresholds = thresholds
+                self.context.logger.info(f"KV composite_score {(data['composite_score'])}")
+                self.context.state.composite_score = float(data["composite_score"])
     
         self.context.state.request_queue.pop()    
 
@@ -1017,7 +1014,7 @@ class HttpHandler(BaseHttpHandler):
         self._send_message(
             kv_store_message, kv_store_dialogue, self._handle_kv_store_response
         )
-
+    
     def _handle_kv_store_response(
         self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue
     ) -> None:

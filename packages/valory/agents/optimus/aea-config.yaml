@@ -41,8 +41,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeibmalsmnx2pv6nw24flqxzh6hd6yjebbdde4xa4kmndbxltqbp2eq
-- valory/optimus_abci:0.1.0:bafybeigqs7cil4ok5u67ddc3rkvsfp5yawrr43luxnub5qn5qpf7vfs4qu
+- valory/liquidity_trader_abci:0.1.0:bafybeidzgqtastndyn4zj4jsu7aldhfln7h4y7km6qhhkdeexs7cxhmt3a
+- valory/optimus_abci:0.1.0:bafybeicdtaxitqmkxw6yyghhwotlpw63bdkq4u32r6xqvevkz43vwi6qya
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -175,7 +175,7 @@ models:
     args:
       token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
       coin_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
-      api_key: ${str:null}
+      api_key: ${str:CG-mf5xZnGELpSXeSqmHDLY2nNU}
       requests_per_minute: ${int:30}
       credits: ${int:10000}
       rate_limited_code: ${int:429}
@@ -274,7 +274,7 @@ models:
       staking_token_contract_address: ${str:0x88996bbdE7f982D93214881756840cE2c77C4992}
       staking_activity_checker_contract_address: ${str:0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68}
       staking_threshold_period: ${int:5}
-      store_path: ${str:/data}
+      store_path: ${str:/mnt/d/Valory/optimus-Task15/optimus/data}
       assets_info_filename: ${str:assets.json}
       pool_info_filename: ${str:current_pool.json}
       portfolio_info_filename: ${str:portfolio.json}

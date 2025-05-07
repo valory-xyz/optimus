@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
   dialogues.py: bafybeifojr2urrwkm6rpm3wbytvcy54ks7x7qashwphyrlkrnaem6jaswy
   fsm_specification.yaml: bafybeifszjb2yzllrnoiij4jpz2wbrfsa4ybib7hfpf5wo2tkb4yho4nlu
-  handlers.py: bafybeicscef6e5gr6kvwioomqsxxusqgvyxbqe33y32tvuyexdg33m7dou
+  handlers.py: bafybeihqymahp22uzm4re7jcjh22ipsmarjrrj5o26zq5cscvszv6rxhti
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
   modius-ui-build/asset-manifest.json: bafybeihyiy36flgd73lbxfqalqm64r6hphxchqi3dan5t4ykokyhnetmlq
@@ -59,7 +59,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
-- valory/liquidity_trader_abci:0.1.0:bafybeibmalsmnx2pv6nw24flqxzh6hd6yjebbdde4xa4kmndbxltqbp2eq
+- valory/liquidity_trader_abci:0.1.0:bafybeidzgqtastndyn4zj4jsu7aldhfln7h4y7km6qhhkdeexs7cxhmt3a
 - valory/transaction_settlement_abci:0.1.0:bafybeifkftgkyzrxwxjdyqixpp7vk6aqmufikalmwx3kydtlg74tonu47u
 behaviours:
   main:

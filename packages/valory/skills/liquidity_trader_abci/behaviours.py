@@ -2427,79 +2427,65 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+
+            if not self.current_positions:
+                has_funds = any(
+                    asset.get("balance", 0) > 0
+                    for position in self.synchronized_data.positions
+                    for asset in position.get("assets", [])
+                )
+            
             has_funds = True
-
-            #for testing - to make sure agent stays in the pool
-            has_open_position = any(
-                position.get("status") == PositionStatus.OPEN.value
-                for position in self.current_positions
-            )
-
-            if has_open_position:
+            if not has_funds:
                 actions = []
+                self.context.logger.info("No funds available.")
                 sender = self.context.agent_address
                 payload = EvaluateStrategyPayload(
                     sender=sender, actions=json.dumps(actions)
                 )
             else:
-                if not self.current_positions:
-                    has_funds = any(
-                        asset.get("balance", 0) > 0
-                        for position in self.synchronized_data.positions
-                        for asset in position.get("assets", [])
-                    )
+                yield from self.fetch_all_trading_opportunities()
                 
-                has_funds = True
-                if not has_funds:
-                    actions = []
-                    self.context.logger.info("No funds available.")
-                    sender = self.context.agent_address
-                    payload = EvaluateStrategyPayload(
-                        sender=sender, actions=json.dumps(actions)
-                    )
+                if self.current_positions:
+                    for position in (
+                        pos
+                        for pos in self.current_positions
+                        if pos.get("status") == PositionStatus.OPEN.value
+                    ):
+                        dex_type = position.get("dex_type")
+                        strategy = self.params.dex_type_to_strategy.get(dex_type)
+                        if strategy:
+                            if (
+                                position.get("status", PositionStatus.CLOSED.value)
+                                != PositionStatus.OPEN.value
+                            ):
+                                continue
+                            metrics = self.get_returns_metrics_for_opportunity(
+                                position, strategy
+                            )
+                            if metrics:
+                                position.update(metrics)
+                        else:
+                            self.context.logger.error(
+                                f"No strategy found for dex type {dex_type}"
+                            )
+
+                self.execute_hyper_strategy()
+                actions = (
+                    yield from self.get_order_of_transactions()
+                    if self.selected_opportunities is not None
+                    else []
+                )
+
+                if actions:
+                    self.context.logger.info(f"Actions: {actions}")
                 else:
-                    yield from self.fetch_all_trading_opportunities()
-                    
-                    if self.current_positions:
-                        for position in (
-                            pos
-                            for pos in self.current_positions
-                            if pos.get("status") == PositionStatus.OPEN.value
-                        ):
-                            dex_type = position.get("dex_type")
-                            strategy = self.params.dex_type_to_strategy.get(dex_type)
-                            if strategy:
-                                if (
-                                    position.get("status", PositionStatus.CLOSED.value)
-                                    != PositionStatus.OPEN.value
-                                ):
-                                    continue
-                                metrics = self.get_returns_metrics_for_opportunity(
-                                    position, strategy
-                                )
-                                if metrics:
-                                    position.update(metrics)
-                            else:
-                                self.context.logger.error(
-                                    f"No strategy found for dex type {dex_type}"
-                                )
+                    self.context.logger.info("No actions prepared")
 
-                    self.execute_hyper_strategy()
-                    actions = (
-                        yield from self.get_order_of_transactions()
-                        if self.selected_opportunities is not None
-                        else []
-                    )
-
-                    if actions:
-                        self.context.logger.info(f"Actions: {actions}")
-                    else:
-                        self.context.logger.info("No actions prepared")
-
-                    sender = self.context.agent_address
-                    payload = EvaluateStrategyPayload(
-                        sender=sender, actions=json.dumps(actions)
-                    )
+                sender = self.context.agent_address
+                payload = EvaluateStrategyPayload(
+                    sender=sender, actions=json.dumps(actions)
+                )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)

@@ -1582,3 +1582,10 @@ e6b3765d47cabc6640f6ac8b8874a00f1441b572:packages/valory/skills/optimus_abci/mod
 e6b3765d47cabc6640f6ac8b8874a00f1441b572:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.a5dd0b36.js.map:generic-api-key:1
 e3709c09ce7a8b1dfb0cf7c71568d5c317ed3f14:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.46a95d1c.js.map:generic-api-key:1
 e3709c09ce7a8b1dfb0cf7c71568d5c317ed3f14:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.46a95d1c.js.map:generic-api-key:1
+e6b3765d47cabc6640f6ac8b8874a00f1441b572:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.a5dd0b36.js:generic-api-key:2
+e6b3765d47cabc6640f6ac8b8874a00f1441b572:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.a5dd0b36.js:generic-api-key:2
+32f962c83241b85afd48e9de9d48a6c42b2542bf:packages/valory/contracts/staking_token/contract.yaml:generic-api-key:10
+32f962c83241b85afd48e9de9d48a6c42b2542bf:packages/valory/skills/liquidity_trader_abci/behaviours.py:generic-api-key:3235
+7ca5c93bfe9f08ab128152afffc5eff0636fc51c:packages/valory/skills/liquidity_trader_abci/behaviours.py:generic-api-key:2860
+e3709c09ce7a8b1dfb0cf7c71568d5c317ed3f14:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.46a95d1c.js:generic-api-key:2
+e3709c09ce7a8b1dfb0cf7c71568d5c317ed3f14:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.46a95d1c.js:generic-api-key:2

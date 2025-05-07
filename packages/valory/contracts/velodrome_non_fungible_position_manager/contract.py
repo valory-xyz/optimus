@@ -170,7 +170,6 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
             liquidity=result[7],
         )
 
-    @classmethod
     def get_position(
         cls,
         ledger_api: EthereumApi,
@@ -180,4 +179,19 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
         """get the position info"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         position = contract_instance.functions.positions(token_id).call()
-        return dict(data=position)
+        if not position:
+            return dict(data={})
+        return dict(data={
+            "nonce": position[0],
+            "operator": position[1],
+            "token0": position[2],
+            "token1": position[3],
+            "tickSpacing": position[4],
+            "tickLower": position[5],
+            "tickUpper": position[6],
+            "liquidity": position[7],
+            "feeGrowthInside0LastX128": position[8],
+            "feeGrowthInside1LastX128": position[9],
+            "tokensOwed0": position[10],
+            "tokensOwed1": position[11],
+        })

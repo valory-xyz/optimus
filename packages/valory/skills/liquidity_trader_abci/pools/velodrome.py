@@ -1573,7 +1573,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             if is_rate_limited:
                 self.context.logger.error(
-                    f"Rate limit reached on CoinGecko API. Waiting for 10 seconds before retrying... (Attempt {attempt + 1} of {retries})"
+                    f"Rate limit reached on CoinGecko API..."
                 )
                 yield from self.sleep(10)
                 return None

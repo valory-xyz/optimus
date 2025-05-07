@@ -6352,7 +6352,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 user_share = Decimal(0)
 
                 for asset in assets:
-                    if dex_type == DexType.BALANCER.value:
+                    if dex_type == DexType.BALANCER.value or dex_type == DexType.VELODROME.value:
                         token0_address = position.get("token0")
                         token1_address = position.get("token1")
                         asset_addresses = [token0_address, token1_address]
@@ -6587,6 +6587,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Failed to get slot0 data for pool {pool_address}")
             return {}
 
+        total_liquidity = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromeCLPoolContract.contract_id,
+            contract_callable="liquidity",
+            data_key="liquidity",
+            chain_id=chain,
+        )
+        if not total_liquidity:
+            self.context.logger.error(f"Failed to get slot0 data for pool {pool_address}")
+            return {}
+
         sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
         current_tick = slot0_data.get("tick")
         self.context.logger.info(
@@ -6615,25 +6627,52 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if not position_details:
                 self.context.logger.error(f"Failed to get position details for token ID {pos_token_id}")
                 continue
+            tick_lower = int(position_details.get("tickLower"))
+            tick_upper = int(position_details.get("tickUpper"))
+            liquidity = int(position_details.get("liquidity"))
+            tokens_owed0 = int(position_details.get("tokensOwed0", 0))
+            tokens_owed1 = int(position_details.get("tokensOwed1", 0))
 
-            reserves_and_balances = self.get_reserves_and_balances(
-                position=position_details,
-                sqrt_price_x96=sqrt_price_x96,
-                current_tick=current_tick,
-                tick_lower=position_details.get("tickLower"),
-                tick_upper=position_details.get("tickUpper"),
-                liquidity=position_details.get("liquidity"),
-                tokens_owed0=position_details.get("tokensOwed0", 0),
-                tokens_owed1=position_details.get("tokensOwed1", 0)
-            )
-            if not reserves_and_balances:
-                self.context.logger.error(
-                    f"Failed to get reserves and balances for pool {pool_address} with token_id {pos_token_id}"
+            if current_tick < tick_lower:
+                # All in token0
+                sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
+                sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
+                amount0 = LiquidityAmounts._getAmount0ForLiquidity(sqrtA, sqrtB, liquidity)
+                amount1 = 0
+            elif current_tick >= tick_upper:
+                sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
+                sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
+                amount0 = 0
+                amount1 = LiquidityAmounts._getAmount1ForLiquidity(sqrtA, sqrtB, liquidity)
+            else:
+                # In range, use band math
+                reserves_and_balances = self.get_reserves_and_balances(
+                    position=position_details,
+                    sqrt_price_x96=sqrt_price_x96,
+                    current_tick=current_tick,
+                    tick_lower=tick_lower,
+                    tick_upper=tick_upper,
+                    liquidity=liquidity,
+                    tokens_owed0=tokens_owed0,
+                    tokens_owed1=tokens_owed1
                 )
-                continue
+                amount0 = reserves_and_balances.get("current_token0_qty", 0)
+                amount1 = reserves_and_balances.get("current_token1_qty", 0)
 
-            total_token0_qty += Decimal(str(reserves_and_balances.get("current_token0_qty", 0)))
-            total_token1_qty += Decimal(str(reserves_and_balances.get("current_token1_qty", 0)))
+
+            if (amount0 < 1e-8 and amount1 < 1e-8):
+                # Value is negligible due to narrow band
+                self.context.logger.warning(
+                    "User position is in a very narrow band and out of range. "
+                    "Current claimable value is extremely small. "
+                    "If the price moves into the tick range, the value will be claimable."
+                )
+                # Optionally, show initial deposit as fallback
+                amount0 = pos.get("amount0", 0)
+                amount1 = pos.get("amount1", 0)
+
+            total_token0_qty += Decimal(amount0)
+            total_token1_qty += Decimal(amount1)
 
         token0_decimals, token1_decimals = yield from self._get_token_decimals_pair(chain, token0_address, token1_address)
         if token0_decimals is None or token1_decimals is None:

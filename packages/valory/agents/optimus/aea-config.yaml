@@ -41,8 +41,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeiatse7cijmz4rpvhhngmlhha6d35h3zosydqmm6oporw2xbdzab4u
-- valory/optimus_abci:0.1.0:bafybeig6zw6gyiz3nw4yytemkqyv34nei5yv3pabofjrq5onxcwppk4ney
+- valory/liquidity_trader_abci:0.1.0:bafybeibmalsmnx2pv6nw24flqxzh6hd6yjebbdde4xa4kmndbxltqbp2eq
+- valory/optimus_abci:0.1.0:bafybeigqs7cil4ok5u67ddc3rkvsfp5yawrr43luxnub5qn5qpf7vfs4qu
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -156,7 +156,7 @@ cert_requests:
 public_id: dvilela/genai:0.1.0
 type: connection
 config:
-  genai_api_key: ${str:""}
+  genai_api_key: ${str:AIzaSyClt7GiocSYHhAMpHqxWm5pJ7BXNLdFyCw}
 ---
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection
@@ -293,4 +293,4 @@ models:
       max_pools: ${int:2}
       available_strategies: ${list:["balancer_pools_search","asset_lending"]}
       default_acceptance_time: ${int:5}
-      genai_api_key: ${str:""}
+      genai_api_key: ${str:AIzaSyClt7GiocSYHhAMpHqxWm5pJ7BXNLdFyCw}

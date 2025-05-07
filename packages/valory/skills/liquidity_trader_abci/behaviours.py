@@ -2934,7 +2934,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         result = self.execute_strategy(**kwargs)
         self.selected_opportunities = result.get("optimal_strategies")
         self.position_to_exit = result.get("position_to_exit")
-
+       
         logs = result.get("logs", [])
         if logs:
             for log in logs:
@@ -5761,7 +5761,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 serialized_protocols = json.loads(selected_protocols)
 
             trading_type = db_data.get("trading_type", None)
-
+    
             if not serialized_protocols:
                 serialized_protocols = ["balancer_pools_search", "asset_lending"]
 

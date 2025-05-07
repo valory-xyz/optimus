@@ -28,7 +28,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
-
+import math
 import yaml
 from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
@@ -306,6 +306,7 @@ class HttpHandler(BaseHttpHandler):
         """
         # Check if GENAI_API_KEY is set
         api_key = self.context.params.genai_api_key
+        self.context.logger.info(f"genai_api_key API KEY {api_key}")
 
         is_chat_enabled = (
             api_key is not None
@@ -664,14 +665,16 @@ class HttpHandler(BaseHttpHandler):
         """
         request_id = http_dialogue.dialogue_label.dialogue_reference[0]
         self.context.state.request_queue.append(request_id)
-
+    
         try:
             # Parse incoming data
             data = json.loads(http_msg.body.decode("utf-8"))
             user_prompt = data.get("prompt", "")
+            self.context.logger.info(f"user_prompt from the user {user_prompt}")
+
             if not user_prompt:
                 raise ValueError("Prompt is required.")
-
+    
             previous_trading_type = self.context.state.trading_type
             if not previous_trading_type:
                 previous_trading_type = TradingType.BALANCED.value
@@ -682,7 +685,7 @@ class HttpHandler(BaseHttpHandler):
                 else self.context.state.selected_protocols
                 or self.context.params.available_strategies
             )
-
+            
             available_trading_types = [
                 trading_type.value for trading_type in TradingType
             ]
@@ -691,14 +694,13 @@ class HttpHandler(BaseHttpHandler):
             available_protocols_for_llm = {
                 "balancerPool": "protocol for investing in liquidity positions",
                 "sturdy": "protocol for lending assets",
-            }
-
+            }  
             # Convert previous selected protocols to their protocol names
             previous_protocols_for_llm = [
                 STRATEGY_TO_PROTOCOL.get(strategy, strategy)
                 for strategy in previous_selected_protocols
             ]
-
+      
             # Format the prompt
             prompt_template = PROMPT.format(
                 USER_PROMPT=user_prompt,
@@ -709,10 +711,9 @@ class HttpHandler(BaseHttpHandler):
                 PREVIOUS_SELECTED_PROTOCOLS=previous_protocols_for_llm,
                 THRESHOLDS=THRESHOLDS,
             )
-
             # Prepare payload data
             payload_data = {"prompt": prompt_template}
-
+            
             # Create LLM request
             srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)
             request_srr_message, srr_dialogue = srr_dialogues.create(
@@ -720,7 +721,6 @@ class HttpHandler(BaseHttpHandler):
                 performative=SrrMessage.Performative.REQUEST,
                 payload=json.dumps(payload_data),
             )
-
             # Prepare callback args
             callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}
             self._send_message(
@@ -729,31 +729,32 @@ class HttpHandler(BaseHttpHandler):
                 self._handle_llm_response,
                 callback_kwargs,
             )
-
         except (json.JSONDecodeError, ValueError) as e:
             self.context.logger.info(f"Error processing prompt: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
-
+    
     def _parse_llm_response(
         self,
         llm_response_message: SrrMessage,
-    ) -> Tuple[List[str], str, str, str]:
+    ) -> Tuple[List[str], str, float, str, str]:
         """
-        Parse the LLM response and return the selected protocols, trading type, reasoning, and previous trading type.
-
+        Parse the LLM response and return the selected protocols, trading type, max loss percentage, reasoning, and previous trading type.
+        
         :param llm_response_message: the SrrMessage with the LLM output
-        :return: a tuple containing the selected protocols, trading type, reasoning, and previous trading type
+        :return: a tuple containing the selected protocols, trading type, max loss percentage, reasoning, and previous trading type
         """
         try:
             payload = json.loads(llm_response_message.payload)
+            self.context.logger.info(f"response from the geminia {payload}")
+            
             if "error" in payload:
                 # Extract the specific error message
                 error_details = payload["error"]
                 error_message = error_details.split('message: "')[1].split('"')[0]
                 reasoning = error_message
                 self.context.logger.error(f"Error from LLM: {reasoning}")
-                return [], "", reasoning, self.context.state.trading_type
-
+                return [], "", 10.0, reasoning, self.context.state.trading_type
+    
             response_data = json.loads(payload.get("response", ""))
         except json.JSONDecodeError:
             # Attempt to handle JSON content wrapped in triple backticks
@@ -772,22 +773,113 @@ class HttpHandler(BaseHttpHandler):
                     "Failed to parse LLM response. Falling back to default strategies."
                 )
                 self.context.logger.error(reasoning)
-                selected_protocols = self.context.params.available_strategies
-                trading_type = (
-                    self.context.state.trading_type or TradingType.BALANCED.value
-                )
-                return selected_protocols, trading_type, reasoning, trading_type
-
+                return self._fallback_to_previous_strategy_with_loss()
+    
         self.context.logger.info(f"Received LLM response: {response_data}")
+        
+        # Extract the main fields
         selected_protocols = response_data.get("selected_protocols", [])
         trading_type = response_data.get("trading_type", "")
         reasoning = response_data.get("reasoning", "")
         previous_trading_type = self.context.state.trading_type
+        
+        # Extract and validate max_loss_percentage
+        max_loss_percentage = response_data.get("max_loss_percentage", None)
 
+        self.context.logger.info(f"max_loss_percentage: {max_loss_percentage}")
+        
+        # Validate max_loss_percentage
+        if max_loss_percentage is None or not isinstance(max_loss_percentage, (int, float)):
+            # Provide default based on trading type
+            max_loss_percentage = 15.0 if trading_type == TradingType.RISKY.value else 5.0
+            self.context.logger.warning(
+                f"Missing or invalid max_loss_percentage in LLM response. Using default: {max_loss_percentage}"
+            )
+        else:
+            # Ensure the max_loss_percentage is within acceptable bounds
+            max_loss_percentage = float(max_loss_percentage)
+            if max_loss_percentage < 1.0:
+                self.context.logger.warning(
+                    f"max_loss_percentage too low: {max_loss_percentage}. Setting to minimum: 1.0"
+                )
+                max_loss_percentage = 1.0
+            elif max_loss_percentage > 30.0:
+                self.context.logger.warning(
+                    f"max_loss_percentage too high: {max_loss_percentage}. Setting to maximum: 30.0"
+                )
+                max_loss_percentage = 30.0
+    
         if not selected_protocols or not trading_type or not reasoning:
-            return self._fallback_to_previous_strategy()
-
-        return selected_protocols, trading_type, reasoning, previous_trading_type
+            return self._fallback_to_previous_strategy_with_loss()
+    
+        return selected_protocols, trading_type, max_loss_percentage, reasoning, previous_trading_type
+    
+    def _fallback_to_previous_strategy_with_loss(self) -> Tuple[List[str], str, float, str, str]:
+        """Fallback to previous strategy in case of parsing errors, including default loss percentage."""
+        selected_protocols = (
+            json.loads(self.context.state.selected_protocols)
+            if isinstance(self.context.state.selected_protocols, str)
+            else self.context.state.selected_protocols
+            or self.context.params.available_strategies
+        )
+    
+        selected_protocols = [
+            STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+            for strategy in selected_protocols
+        ]
+    
+        trading_type = self.context.state.trading_type
+        if not trading_type:
+            trading_type = TradingType.BALANCED.value
+        
+        # Default loss percentage based on trading type
+        max_loss_percentage = 15.0 if trading_type == TradingType.RISKY.value else 5.0
+        
+        reasoning = "Failed to parse LLM response. Falling back to previous strategies."
+    
+        return selected_protocols, trading_type, max_loss_percentage, reasoning, trading_type   
+    
+    def calculate_composite_score_from_var(self, var: float, correlation_coefficient: float = 1.0) -> float:
+        """
+        Calculate the composite score threshold based on user's risk tolerance (VaR)
+        
+        Args:
+            var: Value at Risk (negative number representing max acceptable loss)
+            correlation_coefficient: The Pearson correlation coefficient to apply (default: 1.0)
+            
+        Returns:
+            The calculated composite score threshold
+        """
+        # Constants from the equation
+        A = 8.786e-1
+        B = 8.272e-1
+        C = 2.447
+        D = -7.552
+        
+        # Define bounds for the CS
+        MIN_CS = 0.20
+        MAX_CS = 0.50
+        
+        # Apply the equation: CS = ln((A/(VaR + B)) - C)/D
+        try:
+            inner = (A / (var + B)) - C
+            if inner <= 0:
+                raise ValueError("Invalid VaR value leads to non-positive logarithm input")
+            cs = math.log(inner) / D
+            
+            # Apply correlation coefficient adjustment
+            adjusted_cs = cs * correlation_coefficient
+            
+            # Apply bounds
+            bounded_cs = max(MIN_CS, min(MAX_CS, adjusted_cs))
+            
+            self.context.logger.info(f"Calculated CS: {adjusted_cs}, Bounded CS: {bounded_cs} for VaR: {var}")
+            
+            return bounded_cs
+        except (ValueError, ZeroDivisionError) as e:
+            self.context.logger.error(f"Error calculating composite score: {e}")
+            # Return a default value if calculation fails
+            return THRESHOLDS.get(TradingType.BALANCED.value, 0.3374)
 
     def _handle_llm_response(
         self,
@@ -805,11 +897,19 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the original HttpDialogue
         """
         (
-            selected_protocol_names,
-            trading_type,
-            reasoning,
-            previous_trading_type,
+        selected_protocol_names,
+        trading_type,
+        max_loss_percentage,
+        reasoning,
+        previous_trading_type,
         ) = self._parse_llm_response(llm_response_message)
+
+        # Convert percentage to VaR (negative decimal)
+        var_value = -max_loss_percentage / 100.0
+        # Calculate composite score using the formula
+        composite_score = self.calculate_composite_score_from_var(var_value)
+
+        self.context.logger.info(f"composite_score: {composite_score}")
 
         selected_protocols = [
             PROTOCOL_TO_STRATEGY.get(protocol, protocol)
@@ -819,16 +919,38 @@ class HttpHandler(BaseHttpHandler):
         response_data = {
             "selected_protocols": selected_protocol_names,
             "trading_type": trading_type,
+            "max_loss_percentage": max_loss_percentage,
+            "composite_score": round(composite_score, 4),
             "reasoning": reasoning,
             "previous_trading_type": previous_trading_type,
         }
+        
+        self.context.logger.info(f"response_data: {response_data}")
 
         self._send_ok_response(http_msg, http_dialogue, response_data)
 
+        # Store the calculated composite score in the state
+        thresholds = {
+            TradingType.BALANCED.value: THRESHOLDS.get(TradingType.BALANCED.value),
+            TradingType.RISKY.value: THRESHOLDS.get(TradingType.RISKY.value),
+        }
+        thresholds[trading_type] = composite_score
+        self.context.state.thresholds = thresholds
+
+        self.context.logger.info(f"trading_type: {trading_type}")    
+        
+        storage_data = {
+            "selected_protocols": json.dumps(selected_protocols),
+            "trading_type": trading_type,
+            "composite_score": str(composite_score),
+            "max_loss_percentage": str(max_loss_percentage)
+        }
+        
         # Offload KV store update to a separate thread
         threading.Thread(
-            target=self._delayed_write_kv, args=(selected_protocols, trading_type)
-        ).start()
+            target=self._delayed_write_kv_extended, 
+            args=(storage_data,)
+        ).start()    
 
     def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
         """Fallback to previous strategy in case of parsing errors."""
@@ -850,30 +972,32 @@ class HttpHandler(BaseHttpHandler):
         reasoning = "Failed to parse LLM response. Falling back to previous strategies."
 
         return selected_protocols, trading_type, reasoning, trading_type
-
-    def _delayed_write_kv(
-        self, selected_protocols: List[str], trading_type: str
-    ) -> None:
+    
+    def _delayed_write_kv_extended(self, data: Dict[str, str]) -> None:
         """
         Write to the KV store after a delay if this was the only request in queue.
-
-        :param selected_protocols: list of chosen strategy names (not protocol names)
-        :param trading_type: the selected trading type
+    
+        :param data: Dictionary of data to store
         """
         self.context.logger.info("Waiting for default acceptance time...")
         time.sleep(self.context.params.default_acceptance_time)
-
+    
         if len(self.context.state.request_queue) == 1:
-            self._write_kv(
-                {
-                    "selected_protocols": json.dumps(selected_protocols),
-                    "trading_type": trading_type,
-                }
-            )
-            self.context.state.selected_protocols = selected_protocols
-            self.context.state.trading_type = trading_type
-
-        self.context.state.request_queue.pop()
+            self._write_kv(data)
+            
+            # Also update the state values
+            if "selected_protocols" in data:
+                self.context.state.selected_protocols = json.loads(data["selected_protocols"])
+            if "trading_type" in data:
+                self.context.state.trading_type = data["trading_type"]
+            if "composite_score" in data:
+                # Update the appropriate threshold based on trading type
+                thresholds = getattr(self.context.state, "thresholds", THRESHOLDS.copy())
+                if "trading_type" in data:
+                    thresholds[data["trading_type"]] = float(data["composite_score"])
+                self.context.state.thresholds = thresholds
+    
+        self.context.state.request_queue.pop()    
 
     def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
         """

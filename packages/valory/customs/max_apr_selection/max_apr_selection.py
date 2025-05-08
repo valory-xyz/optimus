@@ -40,7 +40,10 @@ def calculate_composite_score(pool, max_values):
     # Normalize metrics
     normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"]
     normalized_depth_score = depth_score / max_values["depth_score"]
-    normalized_il_risk_score = (abs(il_risk_score)) / abs(max_values["il_risk_score"])
+    if max_values["il_risk_score"] == 0:
+        normalized_il_risk_score = 0
+    else:
+        normalized_il_risk_score = abs(il_risk_score) / abs(max_values["il_risk_score"])
 
     # Calculate composite score
     return (

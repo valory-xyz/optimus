@@ -1,0 +1,30 @@
+name: velodrome_pools_search
+author: valory
+version: 0.1.0
+type: custom
+description: A strategy that returns the highest APR yielding liquidity pool over
+  velodrome
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeig54kazemffrqk7h5ufvfm7n3fzg5pekpx75uxytjs3o7mnhywox4
+  velodrome_lp_sugar.json: bafybeiamf3gev3vfeikh2mjmrhaqmyrsuzl6bt34gcilgz375z4o4uap2q
+  velodrome_pools_search.py: bafybeidiozg4wtg3ukswgm6djpsjwrori7a4xvn7uhs2eaol42il2qc73m
+fingerprint_ignore_patterns: []
+entry_point: velodrome_pools_search.py
+callable: run
+dependencies:
+  requests:
+    version: <2.31.2,>=2.28.1
+  pycoingecko:
+    version: ==3.2.0
+  gql:
+    version: ==3.5.0
+  numpy:
+    version: ==2.2.0
+  pyfolio:
+    version: ==0.9.2
+  web3:
+    version: ==6.20.4
+  pandas:
+    version: ==2.2.3

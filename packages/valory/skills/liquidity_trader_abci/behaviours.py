@@ -2959,9 +2959,30 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
         return token_name
 
-    def execute_hyper_strategy(self) -> None:
+    def execute_hyper_strategy(self) -> Generator[None, None, None]:
         """Executes hyper strategy"""
         hyper_strategy = self.params.selected_hyper_strategy
+
+        # Attempt to retrieve composite score from KV store
+        composite_score = None
+        try:
+            db_data = yield from self._read_kv(keys=("composite_score",))
+            composite_score = db_data.get("composite_score") if db_data else None
+            self.context.logger.info(
+                f"Retrieved composite score from KV store: {composite_score}"
+            )
+        except Exception as e:
+            self.context.logger.warning(
+                f"Failed to read composite score from KV store: {str(e)}"
+            )
+
+        # Fall back to default thresholds if no composite score found
+        if composite_score is None:
+            composite_score = THRESHOLDS.get(self.synchronized_data.trading_type, {})
+            self.context.logger.info(
+                f"Using default threshold for {self.synchronized_data.trading_type}: {composite_score}"
+            )
+
         kwargs = {
             "strategy": hyper_strategy,
             "trading_opportunities": self.trading_opportunities,
@@ -2971,9 +2992,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if pos.get("status") == PositionStatus.OPEN.value
             ],
             "max_pools": self.params.max_pools,
-            "composite_score_threshold": THRESHOLDS.get(
-                self.synchronized_data.trading_type, {}
-            ),
+            "composite_score_threshold": composite_score,
         }
         self.context.logger.info(f"kwargs: {kwargs}")
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")

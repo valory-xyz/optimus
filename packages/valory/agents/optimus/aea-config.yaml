@@ -45,8 +45,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeia2egqettv7fd4yryya5ocrxdmpxibvt5ayjg2npvblz73rjpoxla
 - valory/abstract_round_abci:0.1.0:bafybeia27qmw6w5ds5fcrpj2475brnz742aampe3sgochloijs2l7jovai
-- valory/liquidity_trader_abci:0.1.0:bafybeihgfm2wddxj3mg4mdi233zkqqykvvw5palz6flv25atczmjn6mgoy
-- valory/optimus_abci:0.1.0:bafybeifeqeh3z6wl2cvlz2aozfy7ibylkk6owwpoggdfbvoq7jfirktriu
+- valory/liquidity_trader_abci:0.1.0:bafybeihhikevenmb47psjhw2sctjyvq4ioabtgi4rpbmix2hmebu244xpi
+- valory/optimus_abci:0.1.0:bafybeibymutvv45yzxqbp6274mub5jnjuh536stmk4iqwvl5gi32wdwsne
 - valory/registration_abci:0.1.0:bafybeifaa6ejpihwxxxswqd5qfy63rixml43d3ljnezilflvdtclspjj6y
 - valory/reset_pause_abci:0.1.0:bafybeigebq46oqz2mx2iajupr6p5pgm6z5pvfye5w6zypsseuqtvta7b4a
 - valory/termination_abci:0.1.0:bafybeieurwmfernodqyczj5ertsgfbjtjnrlgvte7sli4sajnbopty7inu
@@ -180,7 +180,7 @@ models:
     args:
       token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
       coin_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
-      api_key: ${str:null}
+      api_key: ${str:""}
       requests_per_minute: ${int:30}
       credits: ${int:10000}
       rate_limited_code: ${int:429}

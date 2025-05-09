@@ -224,6 +224,13 @@ class HttpHandler(BaseHttpHandler):
     """This implements the HTTP handler."""
 
     SUPPORTED_PROTOCOL = HttpMessage.protocol_id
+    A = 8.786e-1  # 8.786×10^-1
+    B = 8.272e-1  # 8.272×10^-1
+    C = 2.44
+    D = -7.552
+    # Define bounds for the CS
+    MIN_CS = 0.20
+    MAX_CS = 0.50
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -308,7 +315,6 @@ class HttpHandler(BaseHttpHandler):
         """
         # Check if GENAI_API_KEY is set
         api_key = self.context.params.genai_api_key
-        self.context.logger.info(f"genai_api_key API KEY {api_key}")
 
         is_chat_enabled = (
             api_key is not None

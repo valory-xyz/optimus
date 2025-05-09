@@ -109,7 +109,7 @@ PROTOCOL_DEFINITIONS = {
     "balancerPool": "protocol for investing in liquidity positions",
     "sturdy": "protocol for lending assets",
     "UniswapV3": "protocol for investing in liquidity positions",
-    "velodrome": "protocol for investing in liquidity positions"
+    "velodrome": "protocol for investing in liquidity positions",
 }
 
 

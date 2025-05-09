@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
-  behaviours.py: bafybeiauxytcdlixbknq3agsiifthgc36xrku7gm55ngkw3l6535y2pkiq
+  behaviours.py: bafybeihsm6i6heamonuebqu5gfa62p36jhybqsdsdf5tacs46j3ruwepqe
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeihae3cyuelmi3vwdwhdu6jzzfiexlhcs5uhujujb7zg3ogt2wub2m
+  models.py: bafybeidgyv22dbsf6f2ijrnkfi2llbhiq2envumtar4gbgfzvba2cw4kky
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74

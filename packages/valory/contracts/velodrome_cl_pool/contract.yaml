@@ -1,0 +1,23 @@
+name: velodrome_cl_pool
+author: valory
+version: 0.1.0
+type: contract
+description: A wrapper for Velodrome's CLPool calls.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeihit4bpbbls4akikswjozkpp3h46o3odwrhljnkrv5h72wsutaduq
+  build/contract_interface.json: bafybeih264ikmebscydw6nsv5ldpwugatldqnflrxkij2gvirkcvkm3tpi
+  contract.py: bafybeie5yaettgat22aka5f3crknyv6ynni5qtj2vosu4ky5ummnvlaj4q
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: VelodromeCLPoolContract
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.64.0
+  web3:
+    version: <7,>=6.0.0
+  eth_abi:
+    version: ==4.0.0

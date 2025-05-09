@@ -1,3 +1,5 @@
+"""Module for handling prompts in the Optimus ABCI skill."""
+
 PROMPT = """Analyze the user prompt to determine protocols and risk tolerance.
 
 - User prompt: {USER_PROMPT}

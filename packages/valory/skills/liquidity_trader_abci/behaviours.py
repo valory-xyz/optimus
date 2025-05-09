@@ -85,6 +85,11 @@ from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract
     UniswapV3NonfungiblePositionManagerContract,
 )
 from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
+from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
+from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
+    VelodromeNonFungiblePositionManagerContract,
+)
+from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -110,6 +115,9 @@ from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
 from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
     UniswapPoolBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
+    VelodromePoolBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import (
     APRPopulationPayload,
     APRPopulationRound,
@@ -131,6 +139,10 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     PostTxSettlementRound,
     StakingState,
     SynchronizedData,
+)
+from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
+    LiquidityAmounts,
+    TickMath,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -169,6 +181,7 @@ class DexType(Enum):
     BALANCER = "balancerPool"
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
+    VELODROME = "velodrome"
 
 
 class Action(Enum):
@@ -292,7 +305,9 @@ class GasCostTracker:
         self.data = new_data
 
 
-class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, ABC):
+class LiquidityTraderBaseBehaviour(
+    BalancerPoolBehaviour, UniswapPoolBehaviour, VelodromePoolBehaviour, ABC
+):
     """Base behaviour for the liquidity_trader_abci skill."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -312,11 +327,13 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
+        self.pools[DexType.VELODROME.value] = VelodromePoolBehaviour
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(
             file_path=self.params.store_path / self.params.gas_cost_info_filename
         )
+
         # Read the assets and current pool
         self.read_current_positions()
         self.read_assets()
@@ -882,7 +899,15 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
     def _fetch_token_price(
         self, token_address: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
-        """Fetch the price for a specific token."""
+        """Fetch the price for a specific token, with in-memory caching."""
+        now = self._get_current_timestamp()
+        cache_key = (token_address, chain)
+        cache_entry = self.shared_state._token_price_cache.get(cache_key)
+        if cache_entry:
+            price, timestamp = cache_entry
+            if now - timestamp < self.shared_state._token_price_cache_ttl:
+                return price  # Return cached value
+
         headers = {
             "Accept": "application/json",
         }
@@ -906,7 +931,9 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
 
         if success:
             token_data = response_json.get(token_address.lower(), {})
-            return token_data.get("usd", 0)
+            price = token_data.get("usd", 0)
+            self.shared_state._token_price_cache[cache_key] = (price, now)
+            return price
         return None
 
     def _request_with_retries(
@@ -1084,6 +1111,11 @@ class LiquidityTraderBaseBehaviour(BalancerPoolBehaviour, UniswapPoolBehaviour, 
             token_data = next(iter(response_json.values()), {})
             return token_data.get("usd", 0)
         return None
+
+    def _get_current_timestamp(self) -> int:
+        return cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
 
 
 class CallCheckpointBehaviour(
@@ -1385,8 +1417,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         """
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
-            self.context.logger.info(f"APRPopulationBehaviour started by {sender}")
-
             try:
                 # Get configuration
                 eth_address = sender
@@ -1469,51 +1499,50 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"Using attribute definition: {attr_def}")
 
                 # Step 4: Calculate APR for positions
-                portfolio_value = self.portfolio_data.get("portfolio_value", None)
+                portfolio_value = 0
+                data = yield from self._read_kv(keys=("portfolio_value",))
+                self.context.logger.info(f"data{data}")
+                if data and data["portfolio_value"]:
+                    self.context.logger.info(f"data{data}")
+                    portfolio_value = float(data.get("portfolio_value", "0"))
 
-                if portfolio_value:
-                    current_timestamp = self._get_current_timestamp()
-                    recalculate_apr = yield from self._is_apr_calculation_needed(
-                        current_timestamp, agent_id, attr_def_id
+                if not math.isclose(
+                    portfolio_value,
+                    self.portfolio_data["portfolio_value"],
+                    rel_tol=1e-9,
+                ):
+                    # Create portfolio snapshot for debugging
+                    portfolio_snapshot = self._create_portfolio_snapshot()
+
+                    # Calculate APR and related metrics
+                    actual_apr_data = yield from self.calculate_actual_apr(
+                        agent_id, attr_def_id
                     )
+                    if actual_apr_data:
+                        total_actual_apr = actual_apr_data.get("total_actual_apr", None)
+                        adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
-                    if not recalculate_apr:
-                        self.context.logger.info("APR recalculation not needed.")
-
-                    else:
-                        # Create portfolio snapshot for debugging
-                        portfolio_snapshot = self._create_portfolio_snapshot()
-
-                        # Calculate APR and related metrics
-                        actual_apr_data = yield from self.calculate_actual_apr(
-                            float(portfolio_value)
-                        )
-                        if actual_apr_data:
-                            total_actual_apr = actual_apr_data.get(
-                                "total_actual_apr", None
+                        if total_actual_apr:
+                            # Step 5: Store enhanced APR data in MirrorDB
+                            timestamp = int(
+                                self.round_sequence.last_round_transition_timestamp.timestamp()
                             )
-                            adjusted_apr = actual_apr_data.get("adjusted_apr", None)
 
+                            # Create enhanced data payload with portfolio metrics
                             enhanced_data = {
-                                "timestamp": current_timestamp,
+                                "apr": float(total_actual_apr),
+                                "adjusted_apr": float(adjusted_apr),
+                                "timestamp": timestamp,
                                 "portfolio_snapshot": portfolio_snapshot,
                                 "calculation_metrics": self._get_apr_calculation_metrics(),
                             }
-
-                            if total_actual_apr:
-                                enhanced_data["apr"] = total_actual_apr
-
-                            if adjusted_apr:
-                                enhanced_data["adjusted_apr"] = adjusted_apr
 
                             agent_attr = yield from self.create_agent_attribute(
                                 agent_id,
                                 attr_def_id,
                                 enhanced_data,
                             )
-                            self.context.logger.info(f"Stored Data: {agent_attr}")
-
-                            yield from self._store_last_apr_timestamp(current_timestamp)
+                            self.context.logger.info(f"Stored APR data: {agent_attr}")
 
                 # Prepare payload for consensus
                 payload = APRPopulationPayload(sender=sender, context="APR Population")
@@ -1524,6 +1553,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 payload = APRPopulationPayload(
                     sender=sender, context="APR Population Error"
                 )
+            payload = APRPopulationPayload(sender=sender, context="APR Population")
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -1559,9 +1589,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def _get_apr_calculation_metrics(self) -> Dict[str, Any]:
         """Extract and structure the key metrics used in APR calculation."""
         metrics = {
-            "initial_value": float(self._initial_value)
-            if self._initial_value
-            else None,
+            "initial_value": (
+                float(self._initial_value) if self._initial_value else None
+            ),
             "final_value": float(self._final_value) if self._final_value else None,
             "f_i_ratio": None,
             "last_investment_timestamp": None,
@@ -1925,11 +1955,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Missing required data for APR calculation")
             return False
         return True
-
-    def _get_current_timestamp(self) -> int:
-        return cast(
-            SharedState, self.context.state
-        ).round_sequence.last_round_transition_timestamp.timestamp()
 
     def _calculate_initial_value(
         self,
@@ -2413,7 +2438,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            has_funds = True
             if not self.current_positions:
                 has_funds = any(
                     asset.get("balance", 0) > 0
@@ -2421,6 +2445,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     for asset in position.get("assets", [])
                 )
 
+            has_funds = True
             if not has_funds:
                 actions = []
                 self.context.logger.info("No funds available.")
@@ -2831,7 +2856,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Calculate initial investment value for token0
-        V_initial = initial_amount0 * initial_price0
+        token0_decimals = yield from self._get_token_decimals(
+            chain, (position.get("token0"))
+        )
+        V_initial = (initial_amount0 / (10**token0_decimals)) * initial_price0
 
         # If token1 exists, include it in the calculations
         if position.get("token1") is not None and initial_amount1 is not None:
@@ -2839,7 +2867,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if initial_price1 is None:
                 self.context.logger.error("Historical price not found for token1.")
                 return None
-            V_initial += initial_amount1 * initial_price1
+            token1_decimals = yield from self._get_token_decimals(
+                chain, (position.get("token1"))
+            )
+            V_initial += (initial_amount1 / (10**token1_decimals)) * initial_price1
 
         return V_initial
 
@@ -2917,10 +2948,26 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self, symbol, token_name, coin_list
     ) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's symbol and name."""
-        # Try to find coins matching the symbol.
+
+        self.context.logger.info(f"Type of coin_list: {type(coin_list)}")
+
+        # Check the type before accessing by index.
+        if isinstance(coin_list, dict):
+            self.context.logger.info(
+                f"Coin list is a dict with keys: {list(coin_list.keys())}"
+            )
+            coin_list = list(coin_list.values())
+        elif isinstance(coin_list, list) and coin_list:
+            self.context.logger.info(f"First element of coin_list: {coin_list[0]}")
+
+        # Build candidates ensuring that each element is a dict.
         candidates = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+            coin
+            for coin in coin_list
+            if isinstance(coin, dict)
+            and coin.get("symbol", "").lower() == symbol.lower()
         ]
+
         if not candidates:
             return None
 
@@ -2928,7 +2975,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if len(candidates) == 1:
             return candidates[0]["id"]
 
-        # If multiple candidates, match by name if possible.
         normalized_token_name = token_name.replace(" ", "").lower()
         for coin in candidates:
             coin_name = coin["name"].replace(" ", "").lower()
@@ -3004,13 +3050,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             for selected_opportunity in self.selected_opportunities:
                 # Convert token addresses to checksum addresses if they are present
-                if "token0" in selected_opportunity:
-                    selected_opportunity["token0"] = to_checksum_address(
-                        selected_opportunity["token0"]
+                # Dynamically handle multiple tokens
+                token_keys = [
+                    key
+                    for key in selected_opportunity.keys()
+                    if key.startswith("token")
+                    and not key.endswith("_symbol")
+                    and isinstance(selected_opportunity[key], str)
+                ]
+                for token_key in token_keys:
+                    selected_opportunity[token_key] = to_checksum_address(
+                        selected_opportunity[token_key]
                     )
-                if "token1" in selected_opportunity:
-                    selected_opportunity["token1"] = to_checksum_address(
-                        selected_opportunity["token1"]
+                    self.context.logger.info(
+                        f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
                     )
 
     def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
@@ -3257,8 +3310,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         actions = []
         tokens = []
         # Process rewards
-        if self._can_claim_rewards():
-            yield from self._process_rewards(actions)
+        # if self._can_claim_rewards():
+        #     yield from self._process_rewards(actions)
         # if (  # noqa: E800
         #     self.synchronized_data.period_count != 0  # noqa: E800
         #     and self.synchronized_data.period_count % self.params.pnl_check_interval  # noqa: E800
@@ -3266,7 +3319,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         #     and self.current_positions  # noqa: E800
         # ):  # noqa: E800
         #     tokens = yield from self._process_pnl(actions)  # noqa: E800
-
         if not self.selected_opportunities:
             return actions
 
@@ -3514,9 +3566,34 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "assets": [token.get("token") for token in tokens],
             "pool_address": self.position_to_exit.get("pool_address"),
             "pool_type": self.position_to_exit.get("pool_type"),
-            "token_id": self.position_to_exit.get("token_id"),
-            "liquidity": self.position_to_exit.get("liquidity"),
+            "is_stable": self.position_to_exit.get("is_stable"),
+            "is_cl_pool": self.position_to_exit.get("is_cl_pool"),
         }
+
+        # Handle Velodrome CL pools with multiple positions
+        if (
+            self.position_to_exit.get("dex_type") == DexType.VELODROME.value
+            and self.position_to_exit.get("is_cl_pool")
+            and "positions" in self.position_to_exit
+        ):
+            # Extract token IDs from all positions
+            token_ids = [
+                pos["token_id"] for pos in self.position_to_exit.get("positions", [])
+            ]
+            liquidities = [
+                pos["liquidity"] for pos in self.position_to_exit.get("positions", [])
+            ]
+            if token_ids and liquidities:
+                self.context.logger.info(
+                    f"Exiting Velodrome CL pool with {len(token_ids)} positions. "
+                    f"Token IDs: {token_ids}"
+                )
+                exit_pool_action["token_ids"] = token_ids
+                exit_pool_action["liquidities"] = liquidities
+        # For single position case (backward compatibility)
+        elif "token_id" in self.position_to_exit:
+            exit_pool_action["token_id"] = self.position_to_exit.get("token_id")
+            exit_pool_action["liquidity"] = self.position_to_exit.get("liquidity")
 
         return exit_pool_action
 
@@ -3933,6 +4010,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "pool_type",
             "whitelistedSilos",
             "pool_id",
+            "is_stable",
+            "is_cl_pool",
         ]
 
         # Create the current_position dictionary with only the desired information
@@ -3955,8 +4034,103 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
+            current_position["status"] = PositionStatus.OPEN.value
+            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            self.current_positions.append(current_position)
 
-        if action.get("dex_type") == DexType.BALANCER.value:
+        elif action.get("dex_type") == DexType.VELODROME.value:
+            is_cl_pool = action.get("is_cl_pool", False)
+            if is_cl_pool:
+                # For Velodrome CL pools, we need to handle multiple positions
+                # First, check if there are multiple positions in the transaction
+                positions_data = yield from self._get_all_positions_from_tx_receipt(
+                    self.synchronized_data.final_tx_hash, action.get("chain")
+                )
+
+                if positions_data and len(positions_data) > 0:
+                    # We have multiple positions for the same pool
+                    # Create a single entry with nested positions
+                    current_position["status"] = PositionStatus.OPEN.value
+                    current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+                    current_position["timestamp"] = positions_data[0][
+                        4
+                    ]  # Use timestamp from first position
+
+                    # Calculate total amounts across all positions
+                    total_amount0 = sum(
+                        position_data[2] for position_data in positions_data
+                    )
+                    total_amount1 = sum(
+                        position_data[3] for position_data in positions_data
+                    )
+                    current_position["amount0"] = total_amount0
+                    current_position["amount1"] = total_amount1
+
+                    # Store individual position details in a nested structure
+                    positions = []
+                    for position_data in positions_data:
+                        token_id, liquidity, amount0, amount1, _ = position_data
+                        positions.append(
+                            {
+                                "token_id": token_id,
+                                "liquidity": liquidity,
+                                "amount0": amount0,
+                                "amount1": amount1,
+                            }
+                        )
+
+                    # Add the positions list to the current_position
+                    current_position["positions"] = positions
+
+                    # Add to current_positions
+                    self.current_positions.append(current_position)
+
+                    self.context.logger.info(
+                        f"Added Velodrome CL pool with {len(positions)} positions to pool {current_position['pool_address']}"
+                    )
+                else:
+                    # Fallback to single position handling
+                    (
+                        token_id,
+                        liquidity,
+                        amount0,
+                        amount1,
+                        timestamp,
+                    ) = yield from self._get_data_from_mint_tx_receipt(
+                        self.synchronized_data.final_tx_hash, action.get("chain")
+                    )
+                    current_position["timestamp"] = timestamp
+                    current_position["status"] = PositionStatus.OPEN.value
+                    current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+
+                    # For consistency, also add a positions list with a single entry
+                    current_position["positions"] = [
+                        {
+                            "token_id": token_id,
+                            "liquidity": liquidity,
+                            "amount0": amount0,
+                            "amount1": amount1,
+                        }
+                    ]
+
+                    self.current_positions.append(current_position)
+            else:
+                # For non-CL Velodrome pools
+                (
+                    amount0,
+                    amount1,
+                    timestamp,
+                ) = yield from self._get_data_from_velodrome_mint_event(
+                    self.synchronized_data.final_tx_hash, action.get("chain")
+                )
+                current_position["amount0"] = amount0
+                current_position["amount1"] = amount1
+                current_position["timestamp"] = timestamp
+                current_position["status"] = PositionStatus.OPEN.value
+                current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+                self.current_positions.append(current_position)
+
+        elif action.get("dex_type") == DexType.BALANCER.value:
             (
                 amount0,
                 amount1,
@@ -3967,8 +4141,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
             current_position["timestamp"] = timestamp
+            current_position["status"] = PositionStatus.OPEN.value
+            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            self.current_positions.append(current_position)
 
-        if action.get("dex_type") == DexType.STURDY.value:
+        elif action.get("dex_type") == DexType.STURDY.value:
             (
                 amount,
                 shares,
@@ -3979,26 +4156,43 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["amount0"] = amount
             current_position["shares"] = shares
             current_position["timestamp"] = timestamp
+            current_position["status"] = PositionStatus.OPEN.value
+            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            self.current_positions.append(current_position)
 
-        current_position["status"] = PositionStatus.OPEN.value
-        current_position["tx_hash"] = self.synchronized_data.final_tx_hash
-        self.current_positions.append(current_position)
         self.store_current_positions()
         self.context.logger.info(
-            f"Enter pool was successful! Updating current pool to {current_position}"
+            f"Enter pool was successful! Updated current positions for pool {current_position['pool_address']}"
         )
 
     def _post_execute_exit_pool(self, actions, last_executed_action_index):
         """Handle exiting a pool."""
         action = actions[last_executed_action_index]
         pool_address = action.get("pool_address")
+        is_cl_pool = action.get("is_cl_pool", False)
+        dex_type = action.get("dex_type")
 
-        # Find the most recent position with the matching pool address and update its status
+        # Find all positions with the matching pool address and update their status
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
                 position["status"] = PositionStatus.CLOSED.value
                 position["tx_hash"] = self.synchronized_data.final_tx_hash
-                self.context.logger.info(f"Closing position: {position}")
+
+                # For Velodrome CL pools, log all the positions that were exited
+                if (
+                    dex_type == DexType.VELODROME.value
+                    and is_cl_pool
+                    and "positions" in position
+                ):
+                    position_ids = [
+                        pos["token_id"] for pos in position.get("positions", [])
+                    ]
+                    self.context.logger.info(
+                        f"Closed Velodrome CL pool with {len(position_ids)} positions. "
+                        f"Token IDs: {position_ids}"
+                    )
+                else:
+                    self.context.logger.info(f"Closing position: {position}")
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
@@ -4356,51 +4550,122 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
+        max_amounts_in = []
+        self.context.logger.info(f"action here: {action}")
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = [action.get("token0"), action.get("token1")]
+        max_investment_amounts = action.get("max_investment_amounts")
         if not assets or len(assets) < 2:
             self.context.logger.error(f"2 assets required, provided: {assets}")
             return None, None, None
         pool_address = action.get("pool_address")
-        pool_fee = action.get("pool_fee")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
         pool_type = action.get("pool_type")
+        is_stable = action.get("is_stable")
+        is_cl_pool = action.get("is_cl_pool")
 
         pool = self.pools.get(dex_type)
         if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
+        if not max_investment_amounts:
+            token0_balance = self._get_balance(chain, assets[0], positions)
+            token1_balance = self._get_balance(chain, assets[1], positions)
+            relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+            max_amounts_in = [
+                int(token0_balance * relative_funds_percentage),
+                int(token1_balance * relative_funds_percentage),
+            ]
+            max_amounts_in = [
+                min(max_amounts_in[0], token0_balance),
+                min(max_amounts_in[1], token1_balance),
+            ]
+        else:
+            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+            max_investment_amounts[0] = int(
+                Decimal(str(max_investment_amounts[0]))
+                * (Decimal(10) ** Decimal(token0_decimals))
+            )
+            max_investment_amounts[1] = int(
+                Decimal(str(max_investment_amounts[1]))
+                * (Decimal(10) ** Decimal(token1_decimals))
+            )
+
+        self.context.logger.info(
+            f"Max investment amounts according to strategy: {max_investment_amounts}."
+        )
+
+        relative_funds_percentage = action.get("relative_funds_percentage")
+        if not relative_funds_percentage:
+            self.context.logger.error(
+                f"relative_funds_percentage not define: {relative_funds_percentage}"
+            )
+            return None, None, None
+
         token0_balance = self._get_balance(chain, assets[0], positions)
         token1_balance = self._get_balance(chain, assets[1], positions)
-        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+
+        if token0_balance is None or token1_balance is None:
+            self.context.logger.error("Balance for one or more tokens is None")
+            return None, None, None  # Or handle the error as appropriate
+
         max_amounts_in = [
             int(token0_balance * relative_funds_percentage),
             int(token1_balance * relative_funds_percentage),
         ]
+        # Ensure that allocated amounts do not exceed available balances.
         max_amounts_in = [
             min(max_amounts_in[0], token0_balance),
             min(max_amounts_in[1], token1_balance),
         ]
+        self.context.logger.info(
+            f"Adjusted max amounts in after comparing with balances: {max_amounts_in}"
+        )
+
+        # Adjust max_amounts_in based on max_investment_amounts
+        if max_investment_amounts and (
+            type(max_investment_amounts) == type(max_amounts_in)
+        ):
+            max_amounts_in = [
+                min(max_amounts_in[i], max_investment_amounts[i])
+                for i in range(len(max_amounts_in))
+            ]
+
+        self.context.logger.info(
+            f"Adjusted max amounts in after comparing with max investment amounts: {max_amounts_in}"
+        )
 
         if any(amount == 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error(
                 f"Insufficient balance for entering pool: {max_amounts_in}"
             )
             return None, None, None
+        # Prepare kwargs for pool.enter
+        kwargs = {
+            "pool_address": pool_address,
+            "safe_address": safe_address,
+            "assets": assets,
+            "chain": chain,
+            "max_amounts_in": max_amounts_in,
+            "pool_type": pool_type,
+            "is_stable": is_stable,
+            "is_cl_pool": is_cl_pool,
+        }
 
-        tx_hash, contract_address = yield from pool.enter(
-            self,
-            pool_address=pool_address,
-            safe_address=safe_address,
-            assets=assets,
-            chain=chain,
-            max_amounts_in=max_amounts_in,
-            pool_fee=pool_fee,
-            pool_type=pool_type,
-        )
-        if not tx_hash or not contract_address:
+        # Add pool_fee for non-Velodrome pools
+        if dex_type != DexType.VELODROME:
+            kwargs["pool_fee"] = action.get("pool_fee")
+
+        result = yield from pool.enter(self, **kwargs)
+        if not result or len(result) < 2:
+            return None, None, None
+
+        # Unpack the result
+        tx_hash_or_hashes, contract_address = result[:2]
+        if not tx_hash_or_hashes or not contract_address:
             return None, None, None
 
         multi_send_txs = []
@@ -4438,14 +4703,28 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         else:
             value = max_amounts_in[1]
 
-        multi_send_txs.append(
-            {
-                "operation": MultiSendOperation.CALL,
-                "to": contract_address,
-                "value": value,
-                "data": tx_hash,
-            }
-        )
+        # Handle the case where tx_hash_or_hashes is a list (from enter_cl_pool)
+        if isinstance(tx_hash_or_hashes, list):
+            # Add each transaction hash as a separate entry in the multisend
+            for tx_hash in tx_hash_or_hashes:
+                multi_send_txs.append(
+                    {
+                        "operation": MultiSendOperation.CALL,
+                        "to": contract_address,
+                        "value": value,
+                        "data": tx_hash,
+                    }
+                )
+        else:
+            # Handle the case where tx_hash_or_hashes is a single tx_hash
+            multi_send_txs.append(
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": contract_address,
+                    "value": value,
+                    "data": tx_hash_or_hashes,
+                }
+            )
 
         # Get the transaction from the multisend contract
         multisend_address = self.params.multisend_contract_addresses[chain]
@@ -4526,13 +4805,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = action.get("assets", {})
-        if not assets or len(assets) < 2:
-            self.context.logger.error(f"2 assets required, provided: {assets}")
-            return None, None, None
         pool_address = action.get("pool_address")
         token_id = action.get("token_id")
         liquidity = action.get("liquidity")
         pool_type = action.get("pool_type")
+        is_stable = action.get("is_stable")
+        is_cl_pool = action.get("is_cl_pool")
         safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
 
         pool = self.pools.get(dex_type)
@@ -4540,31 +4818,53 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        exit_pool_kwargs = {}
+        # Prepare common kwargs for all pool types
+        exit_pool_kwargs = {
+            "pool_address": pool_address,
+            "safe_address": safe_address,
+            "chain": chain,
+            "pool_type": pool_type,
+        }
 
-        if dex_type == DexType.BALANCER.value:
-            exit_pool_kwargs.update(
-                {
-                    "safe_address": safe_address,
-                    "assets": assets,
-                    "pool_address": pool_address,
-                    "chain": chain,
-                    "pool_type": pool_type,
-                }
-            )
+        # Add specific parameters based on pool type
+        if dex_type == DexType.VELODROME.value:
+            exit_pool_kwargs["is_stable"] = is_stable
+            exit_pool_kwargs["is_cl_pool"] = is_cl_pool
 
-        if dex_type == DexType.UNISWAP_V3.value:
-            exit_pool_kwargs.update(
-                {
-                    "token_id": token_id,
-                    "safe_address": safe_address,
-                    "chain": chain,
-                    "liquidity": liquidity,
-                }
-            )
+            # For Velodrome CL pools, we need to handle multiple positions
+            if is_cl_pool:
+                # Extract token IDs from all nested positions
+                token_ids = action.get("token_ids")
+                liquidities = action.get("liquidities")
+                if token_ids and liquidities:
+                    self.context.logger.info(
+                        f"Exiting Velodrome CL pool with {len(token_ids)} positions. "
+                        f"Token IDs: {token_ids}"
+                    )
+                    exit_pool_kwargs["token_ids"] = token_ids
+                    exit_pool_kwargs["liquidities"] = liquidities
+            else:
+                # For non-CL pools, we need assets
+                if not assets or len(assets) < 2:
+                    self.context.logger.error(
+                        f"2 assets required for Velodrome Stable/Volatile pools, provided: {assets}"
+                    )
+                    return None, None, None
+                exit_pool_kwargs["assets"] = assets
+                exit_pool_kwargs["liquidity"] = liquidity
 
-        if not exit_pool_kwargs:
-            self.context.logger.error("Could not find kwargs for exit pool")
+        elif dex_type == DexType.BALANCER.value:
+            if not assets or len(assets) < 2:
+                self.context.logger.error(
+                    f"2 assets required for Balancer pools, provided: {assets}"
+                )
+                return None, None, None
+            exit_pool_kwargs["assets"] = assets
+        elif dex_type == DexType.UNISWAP_V3.value:
+            exit_pool_kwargs["token_id"] = token_id
+            exit_pool_kwargs["liquidity"] = liquidity
+        else:
+            self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
         tx_hash, contract_address, is_multisend = yield from pool.exit(
@@ -4620,9 +4920,17 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Get deposit tx hash"""
         chain = action.get("chain")
         asset = action.get("token0")
-        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+        amount = 0
+        relative_funds_percentage = action.get("relative_funds_percentage")
+        if not relative_funds_percentage:
+            self.context.logger.error(
+                f"relative_funds_percentage not define: {relative_funds_percentage}"
+            )
+            return None, None, None
+
         token_balance = self._get_balance(chain, asset, positions)
         amount = int(min(token_balance * relative_funds_percentage, token_balance))
+
         safe_address = self.params.safe_contract_addresses.get(chain)
         receiver = safe_address
         contract_address = action.get("pool_address")
@@ -5408,6 +5716,109 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
+    def _get_all_positions_from_tx_receipt(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, Optional[List[Tuple[int, int, int, int, int]]]]:
+        """Extract data for all positions from a transaction receipt."""
+        response = yield from self.get_transaction_receipt(
+            tx_digest=tx_hash,
+            chain_id=chain,
+        )
+        if not response:
+            self.context.logger.error(
+                f"Error fetching tx receipt! Response: {response}"
+            )
+            return None
+
+        # Define the event signature and calculate its hash
+        event_signature = "IncreaseLiquidity(uint256,uint128,uint256,uint256)"
+        event_signature_hash = keccak(text=event_signature)
+        event_signature_hex = to_hex(event_signature_hash)[2:]
+
+        # Extract logs from the response
+        logs = response.get("logs", [])
+
+        # Find all logs that match the IncreaseLiquidity event
+        matching_logs = [
+            log
+            for log in logs
+            if log.get("topics", [])
+            and log.get("topics", [])[0][2:] == event_signature_hex
+        ]
+
+        if not matching_logs:
+            self.context.logger.error("No logs found for IncreaseLiquidity event")
+            return None
+
+        positions_data = []
+
+        # Get the timestamp from the block (same for all positions in this tx)
+        block_number = response.get("blockNumber")
+        if block_number is None:
+            self.context.logger.error("Block number not found in transaction receipt.")
+            return None
+
+        block = yield from self.get_block(
+            block_number=block_number,
+            chain_id=chain,
+        )
+
+        if block is None:
+            self.context.logger.error(f"Failed to fetch block {block_number}")
+            return None
+
+        timestamp = block.get("timestamp")
+        if timestamp is None:
+            self.context.logger.error("Timestamp not found in block data.")
+            return None
+
+        # Process each matching log
+        for log in matching_logs:
+            try:
+                # Decode indexed parameter (tokenId)
+                token_id_topic = log.get("topics", [])[1]
+                if not token_id_topic:
+                    self.context.logger.error(
+                        f"Token ID topic is missing from log {log}"
+                    )
+                    continue
+
+                # Convert hex to bytes and decode
+                token_id_bytes = bytes.fromhex(token_id_topic[2:])
+                token_id = decode(["uint256"], token_id_bytes)[0]
+
+                # Decode non-indexed parameters (liquidity, amount0, amount1) from the data field
+                data_hex = log.get("data")
+                if not data_hex:
+                    self.context.logger.error(f"Data field is empty in log {log}")
+                    continue
+
+                data_bytes = bytes.fromhex(data_hex[2:])
+                decoded_data = decode(["uint128", "uint256", "uint256"], data_bytes)
+                liquidity = decoded_data[0]
+                amount0 = decoded_data[1]
+                amount1 = decoded_data[2]
+
+                # Add this position's data to the list
+                positions_data.append(
+                    (token_id, liquidity, amount0, amount1, timestamp)
+                )
+
+                self.context.logger.info(
+                    f"Found position: token_id={token_id}, liquidity={liquidity}, "
+                    f"amount0={amount0}, amount1={amount1}"
+                )
+
+            except Exception as e:
+                self.context.logger.error(f"Error decoding data from mint event: {e}")
+                continue
+
+        if not positions_data:
+            self.context.logger.error("Failed to extract any position data from logs")
+            return None
+
+        return positions_data
+
     def _get_data_from_mint_tx_receipt(
         self, tx_hash: str, chain: str
     ) -> Generator[
@@ -5417,7 +5828,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             Optional[int], Optional[int], Optional[int], Optional[int], Optional[int]
         ],
     ]:
-        """Extract data from mint transaction receipt."""
+        """Extract data from mint transaction receipt for the first position found."""
         response = yield from self.get_transaction_receipt(
             tx_digest=tx_hash,
             chain_id=chain,
@@ -5667,6 +6078,114 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         signatures += packed_signature
 
         return signatures.hex()
+
+    def _get_data_from_velodrome_mint_event(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, Tuple[Optional[int], Optional[int], Optional[int]]]:
+        """Extract data from Velodrome Mint event for non-CL pools."""
+        response = yield from self.get_transaction_receipt(
+            tx_digest=tx_hash,
+            chain_id=chain,
+        )
+        if not response:
+            self.context.logger.error(
+                f"Error fetching tx receipt for Velodrome Mint event! Response: {response}"
+            )
+            return None, None, None
+
+        # Define the event signature and calculate its hash
+        # Mint (index_topic_1 address sender, uint256 amount0, uint256 amount1)
+        event_signature = "Mint(address,uint256,uint256)"
+        event_signature_hash = keccak(text=event_signature)
+        event_signature_hex = to_hex(event_signature_hash)[2:]
+
+        # Extract logs from the response
+        logs = response.get("logs", [])
+
+        # Find the log that matches the Mint event
+        log = next(
+            (
+                log
+                for log in logs
+                if log.get("topics", [])
+                and log.get("topics", [])[0][2:] == event_signature_hex
+            ),
+            None,
+        )
+
+        if not log:
+            # If the standard signature is not found, try the alternative Mint signature
+            event_signature = "Mint(address,address,uint256,uint256)"
+            event_signature_hash = keccak(text=event_signature)
+            event_signature_hex = to_hex(event_signature_hash)[2:]
+
+            # Extract logs from the response
+            logs = response.get("logs", [])
+
+            # Find the log that matches the Mint event
+            log = next(
+                (
+                    log
+                    for log in logs
+                    if log.get("topics", [])
+                    and log.get("topics", [])[0][2:] == event_signature_hex
+                ),
+                None,
+            )
+
+            if not log:
+                self.context.logger.error("No logs found for Velodrome Mint event")
+                return None, None, None
+
+        try:
+            # Decode indexed parameter (sender address)
+            sender_topic = log.get("topics", [])[1]
+            if not sender_topic:
+                self.context.logger.error(
+                    f"Sender address topic is missing from log {log}"
+                )
+                return None, None, None
+
+            # Decode non-indexed parameters (amount0, amount1) from the data field
+            data_hex = log.get("data")
+            if not data_hex:
+                self.context.logger.error(f"Data field is empty in log {log}")
+                return None, None, None
+
+            data_bytes = bytes.fromhex(data_hex[2:])
+            decoded_data = decode(["uint256", "uint256"], data_bytes)
+            amount0 = decoded_data[0]
+            amount1 = decoded_data[1]
+
+            # Get the timestamp from the block
+            block_number = response.get("blockNumber")
+            if block_number is None:
+                self.context.logger.error(
+                    "Block number not found in transaction receipt."
+                )
+                return None, None, None
+
+            block = yield from self.get_block(
+                block_number=block_number,
+                chain_id=chain,
+            )
+
+            if block is None:
+                self.context.logger.error(f"Failed to fetch block {block_number}")
+                return None, None, None
+
+            timestamp = block.get("timestamp")
+            if timestamp is None:
+                self.context.logger.error("Timestamp not found in block data.")
+                return None, None, None
+
+            return amount0, amount1, timestamp
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error decoding data from Velodrome Mint event: {e}"
+            )
+            return None, None, None
 
     def _get_data_from_deposit_tx_receipt(
         self, tx_hash: str, chain: str
@@ -5941,6 +6460,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     details = yield from self._get_aggregator_name(
                         aggregator_address, chain
                     )
+                elif dex_type == DexType.VELODROME.value:
+                    pool_address = position.get("pool_address")
+                    token_id = position.get("token_id")
+                    user_balances = yield from self.get_user_share_value_velodrome(
+                        user_address, pool_address, token_id, chain, position
+                    )
+                    # For Velodrome pools, we'll use a simple description for now
+                    details = "Velodrome " + (
+                        "CL Pool" if position.get("is_cl_pool") else "Pool"
+                    )
 
                 user_share = Decimal(0)
 
@@ -5948,6 +6477,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if (
                         dex_type == DexType.BALANCER.value
                         or dex_type == DexType.UNISWAP_V3.value
+                        or dex_type == DexType.VELODROME.value
                     ):
                         token0_address = position.get("token0")
                         token1_address = position.get("token1")
@@ -6128,6 +6658,323 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             "address": self.params.safe_contract_addresses.get(
                 self.params.target_investment_chains[0]
             ),
+        }
+
+    def get_user_share_value_velodrome(
+        self, user_address: str, pool_address: str, token_id: int, chain: str, position
+    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
+        """Calculate the user's share value and token balances in a Velodrome pool."""
+        token0_address = position.get("token0")
+        token1_address = position.get("token1")
+        is_cl_pool = position.get("is_cl_pool", False)
+
+        if not token0_address or not token1_address:
+            self.context.logger.error("Token addresses not found")
+            return {}
+
+        if is_cl_pool:
+            result = yield from self._get_user_share_value_velodrome_cl(
+                user_address,
+                pool_address,
+                token_id,
+                chain,
+                position,
+                token0_address,
+                token1_address,
+            )
+        else:
+            result = yield from self._get_user_share_value_velodrome_non_cl(
+                user_address,
+                pool_address,
+                chain,
+                position,
+                token0_address,
+                token1_address,
+            )
+        return result
+
+    def _get_token_decimals_pair(self, chain, token0_address, token1_address):
+        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error("Failed to get token decimals")
+            return None, None
+        return token0_decimals, token1_decimals
+
+    def _adjust_for_decimals(self, amount, decimals):
+        return Decimal(str(amount)) / Decimal(10**decimals)
+
+    def _get_user_share_value_velodrome_cl(
+        self,
+        user_address,
+        pool_address,
+        token_id,
+        chain,
+        position,
+        token0_address,
+        token1_address,
+    ):
+        position_manager_address = (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain
+            )
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return {}
+
+        slot0_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromeCLPoolContract.contract_id,
+            contract_callable="slot0",
+            data_key="slot0",
+            chain_id=chain,
+        )
+        if not slot0_data:
+            self.context.logger.error(
+                f"Failed to get slot0 data for pool {pool_address}"
+            )
+            return {}
+
+        sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
+        current_tick = slot0_data.get("tick")
+        self.context.logger.info(
+            f"Fetched pool data once - Current Tick: {current_tick}, Sqrt Price X96: {sqrt_price_x96}"
+        )
+
+        # Handle multiple or single positions
+        positions_data = (
+            position.get("positions", [])
+            if (
+                isinstance(token_id, (list, tuple))
+                or (
+                    position.get("positions") and len(position.get("positions", [])) > 1
+                )
+            )
+            else [dict(token_id=token_id)]
+        )
+
+        total_token0_qty = Decimal(0)
+        total_token1_qty = Decimal(0)
+
+        for pos in positions_data:
+            pos_token_id = pos.get("token_id")
+            position_details = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                contract_callable="get_position",
+                data_key="data",
+                token_id=pos_token_id,
+                chain_id=chain,
+            )
+            if not position_details:
+                self.context.logger.error(
+                    f"Failed to get position details for token ID {pos_token_id}"
+                )
+                continue
+            tick_lower = int(position_details.get("tickLower"))
+            tick_upper = int(position_details.get("tickUpper"))
+            liquidity = int(position_details.get("liquidity"))
+            tokens_owed0 = int(position_details.get("tokensOwed0", 0))
+            tokens_owed1 = int(position_details.get("tokensOwed1", 0))
+
+            if current_tick < tick_lower:
+                # All in token0
+                sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
+                sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
+                amount0 = LiquidityAmounts._getAmount0ForLiquidity(
+                    sqrtA, sqrtB, liquidity
+                )
+                amount1 = 0
+            elif current_tick >= tick_upper:
+                sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
+                sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
+                amount0 = 0
+                amount1 = LiquidityAmounts._getAmount1ForLiquidity(
+                    sqrtA, sqrtB, liquidity
+                )
+            else:
+                # In range, use band math
+                reserves_and_balances = self.get_reserves_and_balances(
+                    position=position_details,
+                    sqrt_price_x96=sqrt_price_x96,
+                    current_tick=current_tick,
+                    tick_lower=tick_lower,
+                    tick_upper=tick_upper,
+                    liquidity=liquidity,
+                    tokens_owed0=tokens_owed0,
+                    tokens_owed1=tokens_owed1,
+                )
+                amount0 = reserves_and_balances.get("current_token0_qty", 0)
+                amount1 = reserves_and_balances.get("current_token1_qty", 0)
+
+            if amount0 < 1e-8 and amount1 < 1e-8:
+                # Value is negligible due to narrow band
+                self.context.logger.warning(
+                    "User position is in a very narrow band and out of range. "
+                    "Current claimable value is extremely small. "
+                    "If the price moves into the tick range, the value will be claimable."
+                )
+                # Optionally, show initial deposit as fallback
+                amount0 = pos.get("amount0", 0)
+                amount1 = pos.get("amount1", 0)
+
+            total_token0_qty += Decimal(amount0)
+            total_token1_qty += Decimal(amount1)
+
+        token0_decimals, token1_decimals = yield from self._get_token_decimals_pair(
+            chain, token0_address, token1_address
+        )
+        if token0_decimals is None or token1_decimals is None:
+            return {}
+
+        adjusted_token0_qty = self._adjust_for_decimals(
+            total_token0_qty, token0_decimals
+        )
+        adjusted_token1_qty = self._adjust_for_decimals(
+            total_token1_qty, token1_decimals
+        )
+
+        self.context.logger.info(
+            f"Velodrome CL Pool Total Position Balances - "
+            f"Token0: {adjusted_token0_qty} {position.get('token0_symbol')}, "
+            f"Token1: {adjusted_token1_qty} {position.get('token1_symbol')}"
+        )
+        return {
+            token0_address: adjusted_token0_qty,
+            token1_address: adjusted_token1_qty,
+        }
+
+    def _get_user_share_value_velodrome_non_cl(
+        self,
+        user_address,
+        pool_address,
+        chain,
+        position,
+        token0_address,
+        token1_address,
+    ):
+        user_balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="check_balance",
+            data_key="token",
+            account=user_address,
+            chain_id=chain,
+        )
+        if user_balance is None:
+            self.context.logger.error(
+                f"Failed to get user balance for pool: {pool_address}"
+            )
+            return {}
+
+        total_supply = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_total_supply",
+            data_key="data",
+            chain_id=chain,
+        )
+        if not total_supply:
+            self.context.logger.error(
+                f"Failed to get total supply for pool: {pool_address}"
+            )
+            return {}
+
+        reserves = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=VelodromePoolContract.contract_id,
+            contract_callable="get_reserves",
+            data_key="data",
+            chain_id=chain,
+        )
+        if not reserves:
+            self.context.logger.error(
+                f"Failed to get reserves for pool: {pool_address}"
+            )
+            return {}
+
+        getcontext().prec = 50
+        user_share = Decimal(str(user_balance)) / Decimal(str(total_supply))
+        token0_decimals, token1_decimals = yield from self._get_token_decimals_pair(
+            chain, token0_address, token1_address
+        )
+        if token0_decimals is None or token1_decimals is None:
+            return {}
+
+        token0_balance = self._adjust_for_decimals(reserves[0], token0_decimals)
+        token1_balance = self._adjust_for_decimals(reserves[1], token1_decimals)
+        user_token0_balance = user_share * token0_balance
+        user_token1_balance = user_share * token1_balance
+
+        self.context.logger.info(
+            f"Velodrome Non-CL Pool Balances - "
+            f"User share: {user_share}, "
+            f"Token0: {user_token0_balance} {position.get('token0_symbol')}, "
+            f"Token1: {user_token1_balance} {position.get('token1_symbol')}"
+        )
+        return {
+            token0_address: user_token0_balance,
+            token1_address: user_token1_balance,
+        }
+
+    def get_reserves_and_balances(
+        self,
+        position,
+        sqrt_price_x96=None,
+        current_tick=None,
+        tick_lower=None,
+        tick_upper=None,
+        liquidity=None,
+        tokens_owed0=0,
+        tokens_owed1=0,
+    ) -> Dict:
+        """Calculate token amounts for a concentrated liquidity position based on Uniswap V3 methodology."""
+        # Extract position details if passed via position object
+        if position is not None:
+            tick_lower = position.get("tickLower", tick_lower)
+            tick_upper = position.get("tickUpper", tick_upper)
+            liquidity = position.get("liquidity", liquidity)
+            tokens_owed0 = position.get("tokensOwed0", tokens_owed0)
+            tokens_owed1 = position.get("tokensOwed1", tokens_owed1)
+
+        # Calculate sqrtRatioA and sqrtRatioB
+        sqrt_ratio_a_x96 = TickMath.getSqrtRatioAtTick(tick_lower)
+        sqrt_ratio_b_x96 = TickMath.getSqrtRatioAtTick(tick_upper)
+
+        # Ensure sqrtRatioA <= sqrtRatioB
+        if sqrt_ratio_a_x96 > sqrt_ratio_b_x96:
+            sqrt_ratio_a_x96, sqrt_ratio_b_x96 = sqrt_ratio_b_x96, sqrt_ratio_a_x96
+
+        # Calculate amounts
+        amount0, amount1 = LiquidityAmounts.getAmountsForLiquidity(
+            sqrt_price_x96 or TickMath.getSqrtRatioAtTick(current_tick),
+            sqrt_ratio_a_x96,
+            sqrt_ratio_b_x96,
+            liquidity,
+        )
+
+        # Add uncollected fees
+        amount0 += tokens_owed0
+        amount1 += tokens_owed1
+
+        return {
+            "current_token0_qty": amount0,
+            "current_token1_qty": amount1,
+            "liquidity": liquidity,
+            "tick_lower": tick_lower,
+            "tick_upper": tick_upper,
+            "current_tick": current_tick,
+            "sqrt_price_x96": sqrt_price_x96,
+            "tokens_owed0": tokens_owed0,
+            "tokens_owed1": tokens_owed1,
         }
 
     def get_user_share_value_balancer(

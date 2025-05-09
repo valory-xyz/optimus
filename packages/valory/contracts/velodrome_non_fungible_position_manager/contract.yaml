@@ -1,0 +1,23 @@
+name: velodrome_non_fungible_position_manager
+author: valory
+version: 0.1.0
+type: contract
+description: A wrapper for Velodrome's CLPoolManager calls.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeia7lmypaakjxrui66untszhhzzzwbzdpq3ps2htvval75f2io4vve
+  build/contract_interface.json: bafybeibsh5efqfgttzkbnvyipffdtn6fjwyv5veg3ihindd3rhslfmovb4
+  contract.py: bafybeigwrfejksownkqck3q7kmu44e56thqn3cbvtixw6l4hb5vzefl4ai
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: VelodromeNonFungiblePositionManagerContract
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.64.0
+  web3:
+    version: <7,>=6.0.0
+  eth_abi:
+    version: ==4.0.0

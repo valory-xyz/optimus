@@ -81,8 +81,10 @@ from packages.valory.contracts.staking_token.contract import StakingTokenContrac
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
+from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
+    UniswapV3NonfungiblePositionManagerContract,
+)
 from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
-from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import UniswapV3NonfungiblePositionManagerContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -2479,28 +2481,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def calculate_pnl_for_uniswap(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """
-        Calculate PnL for a Uniswap position using the updated calculation method.
-        
-        This implements the calculation as per Uniswap V3 documentation:
-        1. Use NonfungiblePositionManager to get position info
-        2. Get pool information including current price
-        3. Calculate amounts using LiquidityAmounts formula
-        """
+        """Calculate PnL for a Uniswap position using the updated calculation method."""
         chain = position.get("chain")
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
-        
+
         if not token_id:
             self.context.logger.error("Token ID not found in position data")
             return None
 
         # Get the position manager address for the chain
-        position_manager_address = self.params.uniswap_position_manager_contract_addresses.get(chain)
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
         if not position_manager_address:
-            self.context.logger.error(f"No position manager address found for chain {chain}")
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
             return None
-        
+
         # Interact with UniswapV3PoolContract to get reserves and balances with token_id
         position_data = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -3322,6 +3321,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pnl_calculation_functions = {
             DexType.BALANCER.value: self.calculate_pnl_for_balancer,
             DexType.STURDY.value: self.calculate_pnl_for_sturdy,
+            DexType.UNISWAP_V3.value: self.calculate_pnl_for_uniswap,
         }
         tokens_required = {
             DexType.UNISWAP_V3.value: 2,
@@ -6300,14 +6300,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def get_user_share_value_uniswap(
         self, user_address: str, pool_address: str, token_id: int, chain: str, position
     ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
-        """
-        Calculate the user's share value and token balances in a Uniswap V3 position.
-        
-        This implements the calculation as per Uniswap V3 documentation:
-        1. Use NonfungiblePositionManager to get position info
-        2. Get pool information including current price
-        3. Calculate amounts using LiquidityAmounts formula
-        """
+        """Calculate the user's share value and token balances in a Uniswap V3 position."""
         token0_address = position.get("token0")
         token1_address = position.get("token1")
 
@@ -6316,9 +6309,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return {}
 
         # Get the position manager address for the chain
-        position_manager_address = self.params.uniswap_position_manager_contract_addresses.get(chain)
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
         if not position_manager_address:
-            self.context.logger.error(f"No position manager address found for chain {chain}")
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
             return {}
 
         # First get position details directly from the position manager
@@ -6333,7 +6330,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if not position_details:
-            self.context.logger.error(f"Failed to get position details for token ID {token_id}")
+            self.context.logger.error(
+                f"Failed to get position details for token ID {token_id}"
+            )
             return {}
 
         # Get reserves and balances using the position details

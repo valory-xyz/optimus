@@ -70,7 +70,15 @@ class SharedState(BaseSharedState):
             value: key for key, value in params.file_hash_to_strategies.items()
         }
         strategy_exec = self.strategy_to_filehash.keys()
-        for selected_strategy in params.available_strategies:
+        # Extract all strategy values from the available_strategies dictionary
+        available_strategies_list = [
+            strategy
+            for strategies in params.available_strategies.values()
+            for strategy in strategies
+        ]
+
+        # Iterate over each strategy in the flattened list of available strategies
+        for selected_strategy in available_strategies_list:
             if selected_strategy not in strategy_exec:
                 raise ValueError(
                     f"The selected trading strategy {selected_strategy} "
@@ -321,8 +329,8 @@ class Params(BaseParams):
         self.profit_threshold = self._ensure("profit_threshold", kwargs, int)
         self.loss_threshold = self._ensure("loss_threshold", kwargs, int)
         self.pnl_check_interval = self._ensure("pnl_check_interval", kwargs, int)
-        self.available_strategies = self._ensure(
-            "available_strategies", kwargs, List[str]
+        self.available_strategies = json.loads(
+            self._ensure("available_strategies", kwargs, str)
         )
         self.cleanup_freq = self._ensure("cleanup_freq", kwargs, int)
         self.genai_api_key = self._ensure("genai_api_key", kwargs, str)

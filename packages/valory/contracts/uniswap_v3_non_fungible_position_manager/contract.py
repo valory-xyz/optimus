@@ -146,7 +146,70 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """get the position info"""
+        """
+        Get the position info from the NonfungiblePositionManager contract.
+        
+        Args:
+            ledger_api: The ledger API
+            contract_address: The NonfungiblePositionManager contract address
+            token_id: The NFT token ID representing the position
+            
+        Returns:
+            A dictionary containing the position data with the following fields:
+            - nonce (uint96)
+            - operator (address)
+            - token0 (address)
+            - token1 (address)
+            - fee (uint24)
+            - tickLower (int24)
+            - tickUpper (int24)
+            - liquidity (uint128)
+            - feeGrowthInside0LastX128 (uint256)
+            - feeGrowthInside1LastX128 (uint256)
+            - tokensOwed0 (uint128)
+            - tokensOwed1 (uint128)
+        """
         contract_instance = cls.get_instance(ledger_api, contract_address)
         position = contract_instance.functions.positions(token_id).call()
         return dict(data=position)
+    
+    @classmethod
+    def get_position_details(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """
+        Get detailed position information with named fields.
+        
+        Args:
+            ledger_api: The ledger API
+            contract_address: The NonfungiblePositionManager contract address
+            token_id: The NFT token ID representing the position
+            
+        Returns:
+            A dictionary containing the position data with named fields
+        """
+        position_data = cls.get_position(ledger_api, contract_address, token_id)
+        if not position_data or "data" not in position_data:
+            return dict(error="Failed to get position data")
+            
+        position = position_data["data"]
+        
+        return dict(
+            data={
+                "nonce": position[0],
+                "operator": position[1],
+                "token0": position[2],
+                "token1": position[3],
+                "fee": position[4],
+                "tickLower": position[5],
+                "tickUpper": position[6],
+                "liquidity": position[7],
+                "feeGrowthInside0LastX128": position[8],
+                "feeGrowthInside1LastX128": position[9],
+                "tokensOwed0": position[10],
+                "tokensOwed1": position[11],
+            }
+        )

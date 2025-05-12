@@ -81,6 +81,9 @@ from packages.valory.contracts.staking_token.contract import StakingTokenContrac
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
+from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
+    UniswapV3NonfungiblePositionManagerContract,
+)
 from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
 from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
 from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
@@ -2503,25 +2506,69 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def calculate_pnl_for_uniswap(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Calculate PnL for a Uniswap position."""
+        """Calculate PnL for a Uniswap position using the updated calculation method."""
         chain = position.get("chain")
         pool_address = position.get("pool_address")
+        token_id = position.get("token_id")
 
-        # Interact with UniswapV3PoolContract to get reserves and balances
+        if not token_id:
+            self.context.logger.error("Token ID not found in position data")
+            return None
+
+        # Get the position manager address for the chain
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return None
+
+        # Interact with UniswapV3PoolContract to get reserves and balances with token_id
+        position_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="get_position_details",
+            data_key="data",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if position_data is None:
+            self.context.logger.error(
+                f"Failed to position_data for token ID {token_id}"
+            )
+            return None
+
+        # Interact with UniswapV3PoolContract to get reserves and balances with token_id
         reserves_and_balances = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
-            contract_id=str(UniswapV3PoolContract.contract_id),
+            contract_public_id=UniswapV3PoolContract.contract_id,
             contract_callable="get_reserves_and_balances",
             data_key="data",
-            chain_id=position.get("chain"),
+            position_data=position_data,
+            chain_id=chain,
         )
 
         if reserves_and_balances is None:
             self.context.logger.error(
-                f"Failed to get reserves and balances from pool {pool_address}"
+                f"Failed to get reserves and balances from pool {pool_address} for token ID {token_id}"
             )
             return None
+
+        # Log additional information from the new implementation
+        self.context.logger.info(
+            f"Uniswap V3 Position Details - Token ID: {token_id}, "
+            f"Liquidity: {reserves_and_balances.get('liquidity')}, "
+            f"Tick Lower: {reserves_and_balances.get('tick_lower')}, "
+            f"Tick Upper: {reserves_and_balances.get('tick_upper')}, "
+            f"Current Tick: {reserves_and_balances.get('current_tick')}, "
+            f"Uncollected Fees Token0: {reserves_and_balances.get('tokens_owed0')}, "
+            f"Uncollected Fees Token1: {reserves_and_balances.get('tokens_owed1')}"
+        )
 
         current_token0_qty = float(reserves_and_balances.get("current_token0_qty", 0))
         current_token1_qty = float(reserves_and_balances.get("current_token1_qty", 0))
@@ -2540,6 +2587,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Adjust quantities for decimals
         adjusted_token0_qty = current_token0_qty / (10**token0_decimals)
         adjusted_token1_qty = current_token1_qty / (10**token1_decimals)
+
+        self.context.logger.info(
+            f"Uniswap V3 Position Balances - "
+            f"Token0: {adjusted_token0_qty} {position.get('token0_symbol')}, "
+            f"Token1: {adjusted_token1_qty} {position.get('token1_symbol')}"
+        )
 
         token0_price = yield from self._fetch_token_price(token0_address, chain)
         token1_price = yield from self._fetch_token_price(token1_address, chain)
@@ -2567,7 +2620,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pnl_percentage = (pnl / V_initial) * 100
 
         self.context.logger.info(
-            f"Current Position Value: ${V_current:.2f}, Total PnL: ${pnl:.2f}"
+            f"Current Position Value: ${V_current:.2f}, Initial Value: ${V_initial:.2f}, Total PnL: ${pnl:.2f} ({pnl_percentage:.2f}%)"
         )
 
         return {
@@ -3320,6 +3373,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pnl_calculation_functions = {
             DexType.BALANCER.value: self.calculate_pnl_for_balancer,
             DexType.STURDY.value: self.calculate_pnl_for_sturdy,
+            DexType.UNISWAP_V3.value: self.calculate_pnl_for_uniswap,
         }
         tokens_required = {
             DexType.UNISWAP_V3.value: 2,
@@ -6282,7 +6336,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             trading_type = db_data.get("trading_type", None)
 
             if not serialized_protocols:
-                serialized_protocols = self.params.available_strategies
+                serialized_protocols = []
+                for chain in self.params.target_investment_chains:
+                    chain_strategies = self.params.available_strategies.get(chain, [])
+                    serialized_protocols.extend(chain_strategies)
 
             if not trading_type:
                 trading_type = TradingType.BALANCED.value
@@ -6387,6 +6444,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     details = yield from self._get_balancer_pool_name(
                         pool_address, chain
                     )
+                elif dex_type == DexType.UNISWAP_V3.value:
+                    pool_address = position.get("pool_address")
+                    token_id = position.get("token_id")
+                    user_balances = yield from self.get_user_share_value_uniswap(
+                        user_address, pool_address, token_id, chain, position
+                    )
+                    details = f"Uniswap V3 Pool - {position.get('token0_symbol')}/{position.get('token1_symbol')}"
                 elif dex_type == DexType.STURDY.value:
                     aggregator_address = position.get("pool_address")
                     asset_address = position.get("token0")
@@ -6412,6 +6476,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 for asset in assets:
                     if (
                         dex_type == DexType.BALANCER.value
+                        or dex_type == DexType.UNISWAP_V3.value
                         or dex_type == DexType.VELODROME.value
                     ):
                         token0_address = position.get("token0")
@@ -7078,6 +7143,112 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return pool_name
+
+    def get_user_share_value_uniswap(
+        self, user_address: str, pool_address: str, token_id: int, chain: str, position
+    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
+        """Calculate the user's share value and token balances in a Uniswap V3 position."""
+        token0_address = position.get("token0")
+        token1_address = position.get("token1")
+
+        if not token0_address or not token1_address or not token_id:
+            self.context.logger.error("Token addresses or token_id not found")
+            return {}
+
+        # Get the position manager address for the chain
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return {}
+
+        # First get position details directly from the position manager
+        position_details = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="get_position_details",
+            data_key="data",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if not position_details:
+            self.context.logger.error(
+                f"Failed to get position details for token ID {token_id}"
+            )
+            return {}
+
+        # Get reserves and balances using the position details
+        reserves_and_balances = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=UniswapV3PoolContract.contract_id,
+            contract_callable="get_reserves_and_balances",
+            data_key="data",
+            position=position_details,
+            chain_id=chain,
+        )
+
+        if not reserves_and_balances:
+            self.context.logger.error(
+                f"Failed to get reserves and balances for pool {pool_address} with token_id {token_id}"
+            )
+            return {}
+
+        # Get token decimals
+        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error("Failed to get token decimals")
+            return {}
+
+        # Get the current amounts in the position
+        current_token0_qty = Decimal(
+            str(reserves_and_balances.get("current_token0_qty", 0))
+        )
+        current_token1_qty = Decimal(
+            str(reserves_and_balances.get("current_token1_qty", 0))
+        )
+
+        # Log position details from the position manager
+        self.context.logger.info(
+            f"Uniswap V3 Position Details from Manager - Token ID: {token_id}, "
+            f"Token0: {position_details.get('token0')}, "
+            f"Token1: {position_details.get('token1')}, "
+            f"Fee: {position_details.get('fee')}, "
+            f"Tick Lower: {position_details.get('tickLower')}, "
+            f"Tick Upper: {position_details.get('tickUpper')}, "
+            f"Liquidity: {position_details.get('liquidity')}"
+        )
+
+        # Log additional information from the pool calculation
+        self.context.logger.info(
+            f"Uniswap V3 Position Details from Pool - "
+            f"Current Tick: {reserves_and_balances.get('current_tick')}, "
+            f"Uncollected Fees Token0: {reserves_and_balances.get('tokens_owed0')}, "
+            f"Uncollected Fees Token1: {reserves_and_balances.get('tokens_owed1')}"
+        )
+
+        # Adjust for decimals
+        adjusted_token0_qty = current_token0_qty / Decimal(10**token0_decimals)
+        adjusted_token1_qty = current_token1_qty / Decimal(10**token1_decimals)
+
+        self.context.logger.info(
+            f"Uniswap V3 Position Balances - "
+            f"Token0: {adjusted_token0_qty} {position.get('token0_symbol')}, "
+            f"Token1: {adjusted_token1_qty} {position.get('token1_symbol')}"
+        )
+
+        # Return the balances
+        return {
+            token0_address: adjusted_token0_qty,
+            token1_address: adjusted_token1_qty,
+        }
 
 
 class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):

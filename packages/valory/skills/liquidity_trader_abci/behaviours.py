@@ -1516,7 +1516,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Calculate APR and related metrics
                     actual_apr_data = yield from self.calculate_actual_apr(
-                        agent_id, attr_def_id
+                        portfolio_value
                     )
                     if actual_apr_data:
                         total_actual_apr = actual_apr_data.get("total_actual_apr", None)

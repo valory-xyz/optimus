@@ -110,3 +110,55 @@ tm:
 	tendermint node --proxy_app=tcp://127.0.0.1:26658 --rpc.laddr=tcp://127.0.0.1:26657 --p2p.laddr=tcp://0.0.0.0:26656 --p2p.seeds= --consensus.create_empty_blocks=true
 
 v := $(shell pip -V | grep virtualenvs)
+
+
+.PHONY: build-agent-runner
+build-agent-runner:
+	poetry lock
+	poetry install
+	poetry run pip install -U pyinstaller
+	poetry run pip install --upgrade setuptools==59.8.0
+	poetry run pyinstaller \
+	--collect-data eth_account \
+	--collect-all aea \
+	--collect-all autonomy \
+	--collect-all operate \
+	--collect-all google.generativeai \
+	--collect-all aea_ledger_ethereum \
+	--collect-all aea_ledger_cosmos \
+	--collect-all aea_ledger_ethereum_flashbots \
+	--hidden-import aea_ledger_ethereum \
+	--hidden-import aea_ledger_cosmos \
+	--hidden-import aea_ledger_ethereum_flashbots \
+	--hidden-import grpc \
+	--hidden-import openapi_core \
+	--collect-all google.protobuf \
+	--collect-all openapi_core \
+	--collect-all openapi_spec_validator \
+	--collect-all asn1crypto \
+	--hidden-import py_ecc \
+	--hidden-import pytz \
+	--collect-all requests \
+	--collect-all pycoingecko \
+	--collect-all numpy \
+	--collect-all pandas \
+	--collect-all pyfolio \
+	--collect-all peewee \
+	--collect-all google-generativeai \
+	--collect-all google.generativeai \
+	--hidden-import requests \
+	--hidden-import pycoingecko \
+	--hidden-import numpy \
+	--hidden-import pandas \
+	--hidden-import pyfolio \
+	--hidden-import peewee \
+	--hidden-import google-generativeai \
+	--hidden-import google.generativeai \
+	--hidden-import distutils.dir_util \
+	--hidden-import distutils \
+	--collect-all distutils \
+	--onefile pyinstaller/optimus_bin.py \
+	--name agent_runner_bin
+	sleep 1
+	./dist/agent_runner_bin --version
+

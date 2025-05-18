@@ -17,9 +17,25 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the default skill."""
+"""This module contains the DegenarateRounds of LiquidityTraderAbciApp."""
 
-from aea.configurations.base import PublicId
+from packages.valory.skills.abstract_round_abci.base import DegenerateRound
 
 
-PUBLIC_ID = PublicId.from_str("valory/liquidity_trader_abci:0.1.0")
+class FailedMultiplexerRound(DegenerateRound):
+    """FailedMultiplexerRound"""
+
+class FinishedCallCheckpointRound(DegenerateRound):
+    """FinishedCallCheckpointRound"""
+
+class FinishedCheckStakingKPIMetRound(DegenerateRound):
+    """FinishedCheckStakingKPIMetRound"""
+
+class FinishedDecisionMakingRound(DegenerateRound):
+    """FinishedDecisionMakingRound"""
+
+class FinishedEvaluateStrategyRound(DegenerateRound):
+    """FinishedEvaluateStrategyRound"""
+
+class FinishedTxPreparationRound(DegenerateRound):
+    """FinishedTxPreparationRound"""

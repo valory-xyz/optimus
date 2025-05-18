@@ -1,0 +1,1464 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2024 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+"""This package contains round behaviours of LiquidityTraderAbciApp."""
+
+import json
+from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast, Callable
+from urllib.parse import urlencode
+
+from eth_utils import to_checksum_address
+
+from packages.valory.contracts.balancer_vault.contract import VaultContract
+from packages.valory.contracts.balancer_weighted_pool.contract import WeightedPoolContract
+from packages.valory.contracts.erc20.contract import ERC20
+from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
+    UniswapV3NonfungiblePositionManagerContract,
+)
+from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
+from packages.valory.contracts.sturdy_yearn_v3_vault.contract import YearnV3VaultContract
+from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    Action,
+    DexType,
+    HTTP_OK,
+    LiquidityTraderBaseBehaviour,
+    PositionStatus,
+    THRESHOLDS,
+    ZERO_ADDRESS,
+    execute_strategy
+)
+from packages.valory.skills.liquidity_trader_abci.models import SharedState
+from packages.valory.skills.liquidity_trader_abci.payloads import EvaluateStrategyPayload
+from packages.valory.skills.liquidity_trader_abci.rounds import EvaluateStrategyRound
+from packages.valory.protocols.ipfs import IpfsMessage
+from aea.protocols.base import Message
+from aea.protocols.dialogue.base import Dialogue
+from packages.valory.skills.liquidity_trader_abci.io_.loader import (
+    ComponentPackageLoader,
+)
+
+class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
+    """Behaviour that finds the opportunity and builds actions."""
+
+    matching_round: Type[AbstractRound] = EvaluateStrategyRound
+    selected_opportunities = None
+    position_to_exit = None
+    trading_opportunities = []
+
+    def async_act(self) -> Generator:
+        """Async act"""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            if not self.current_positions:
+                has_funds = any(
+                    asset.get("balance", 0) > 0
+                    for position in self.synchronized_data.positions
+                    for asset in position.get("assets", [])
+                )
+
+            has_funds = True
+            if not has_funds:
+                actions = []
+                self.context.logger.info("No funds available.")
+                sender = self.context.agent_address
+                payload = EvaluateStrategyPayload(
+                    sender=sender, actions=json.dumps(actions)
+                )
+            else:
+                yield from self.fetch_all_trading_opportunities()
+
+                if self.current_positions:
+                    for position in (
+                        pos
+                        for pos in self.current_positions
+                        if pos.get("status") == PositionStatus.OPEN.value
+                    ):
+                        dex_type = position.get("dex_type")
+                        strategy = self.params.dex_type_to_strategy.get(dex_type)
+                        if strategy:
+                            if (
+                                position.get("status", PositionStatus.CLOSED.value)
+                                != PositionStatus.OPEN.value
+                            ):
+                                continue
+                            metrics = self.get_returns_metrics_for_opportunity(
+                                position, strategy
+                            )
+                            if metrics:
+                                position.update(metrics)
+                        else:
+                            self.context.logger.error(
+                                f"No strategy found for dex type {dex_type}"
+                            )
+
+                self.execute_hyper_strategy()
+                actions = (
+                    yield from self.get_order_of_transactions()
+                    if self.selected_opportunities is not None
+                    else []
+                )
+
+                if actions:
+                    self.context.logger.info(f"Actions: {actions}")
+                else:
+                    self.context.logger.info("No actions prepared")
+
+                sender = self.context.agent_address
+                payload = EvaluateStrategyPayload(
+                    sender=sender, actions=json.dumps(actions)
+                )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+
+        self.set_done()
+
+    def calculate_pnl_for_uniswap(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Calculate PnL for a Uniswap position using the updated calculation method."""
+        chain = position.get("chain")
+        pool_address = position.get("pool_address")
+        token_id = position.get("token_id")
+
+        if not token_id:
+            self.context.logger.error("Token ID not found in position data")
+            return None
+
+        # Get the position manager address for the chain
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return None
+
+        # Interact with UniswapV3PoolContract to get reserves and balances with token_id
+        position_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="get_position_details",
+            data_key="data",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if position_data is None:
+            self.context.logger.error(
+                f"Failed to position_data for token ID {token_id}"
+            )
+            return None
+
+        # Interact with UniswapV3PoolContract to get reserves and balances with token_id
+        reserves_and_balances = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=UniswapV3PoolContract.contract_id,
+            contract_callable="get_reserves_and_balances",
+            data_key="data",
+            position_data=position_data,
+            chain_id=chain,
+        )
+
+        if reserves_and_balances is None:
+            self.context.logger.error(
+                f"Failed to get reserves and balances from pool {pool_address} for token ID {token_id}"
+            )
+            return None
+
+        # Log additional information from the new implementation
+        self.context.logger.info(
+            f"Uniswap V3 Position Details - Token ID: {token_id}, "
+            f"Liquidity: {reserves_and_balances.get('liquidity')}, "
+            f"Tick Lower: {reserves_and_balances.get('tick_lower')}, "
+            f"Tick Upper: {reserves_and_balances.get('tick_upper')}, "
+            f"Current Tick: {reserves_and_balances.get('current_tick')}, "
+            f"Uncollected Fees Token0: {reserves_and_balances.get('tokens_owed0')}, "
+            f"Uncollected Fees Token1: {reserves_and_balances.get('tokens_owed1')}"
+        )
+
+        current_token0_qty = float(reserves_and_balances.get("current_token0_qty", 0))
+        current_token1_qty = float(reserves_and_balances.get("current_token1_qty", 0))
+
+        token0_address = position.get("token0")
+        token1_address = position.get("token1")
+
+        # Get token decimals
+        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error("Failed to get token decimals.")
+            return None
+
+        # Adjust quantities for decimals
+        adjusted_token0_qty = current_token0_qty / (10**token0_decimals)
+        adjusted_token1_qty = current_token1_qty / (10**token1_decimals)
+
+        self.context.logger.info(
+            f"Uniswap V3 Position Balances - "
+            f"Token0: {adjusted_token0_qty} {position.get('token0_symbol')}, "
+            f"Token1: {adjusted_token1_qty} {position.get('token1_symbol')}"
+        )
+
+        token0_price = yield from self._fetch_token_price(token0_address, chain)
+        token1_price = yield from self._fetch_token_price(token1_address, chain)
+
+        if token0_price is None or token1_price is None:
+            self.context.logger.error(
+                "Current prices not found for one or both tokens."
+            )
+            return None
+
+        # Calculate current position value
+        V_current = (adjusted_token0_qty * token0_price) + (
+            adjusted_token1_qty * token1_price
+        )
+
+        # Calculate initial investment value
+        V_initial = yield from self.calculate_initial_investment_value(position)
+
+        if V_initial is None:
+            self.context.logger.error("Failed to calculate initial investment value.")
+            return None
+
+        # Calculate PnL
+        pnl = V_current - V_initial
+        pnl_percentage = (pnl / V_initial) * 100
+
+        self.context.logger.info(
+            f"Current Position Value: ${V_current:.2f}, Initial Value: ${V_initial:.2f}, Total PnL: ${pnl:.2f} ({pnl_percentage:.2f}%)"
+        )
+
+        return {
+            "current_value": V_current,
+            "pnl": pnl_percentage,
+        }
+
+    def calculate_pnl_for_balancer(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Calculate PnL for a Balancer position."""
+        chain = position.get("chain")
+        pool_address = position.get("pool_address")
+
+        pool_id = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=WeightedPoolContract.contract_id,
+            contract_callable="get_pool_id",
+            data_key="pool_id",
+            chain_id=chain,
+        )
+
+        # Interact with BalancerPoolContract to get pool information
+        pool_info = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=self.params.balancer_vault_contract_addresses.get(chain),
+            contract_public_id=VaultContract.contract_id,
+            contract_callable="get_pool_tokens",
+            pool_id=pool_id,
+            data_key="tokens",
+            chain_id=chain,
+        )
+
+        if pool_info is None:
+            self.context.logger.error(
+                f"Failed to get pool info from pool {pool_address}"
+            )
+            return None
+
+        total_supply = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position.get("pool_address"),
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_total_supply",
+            data_key="data",
+            chain_id=chain,
+        )
+
+        # Get balances of tokens in the pool
+        tokens = pool_info[0]
+        balances = pool_info[1]
+
+        if not tokens or not balances:
+            self.context.logger.error("No tokens or balances found in pool info.")
+            return None
+
+        bpt_balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=str(WeightedPoolContract.contract_id),
+            contract_callable="get_balance",
+            data_key="balance",
+            account=self.params.safe_contract_addresses.get(chain),
+            chain_id=chain,
+        )
+        if bpt_balance == 0:
+            self.context.logger.error("User has no BPT balance in this pool.")
+            return None
+
+        # Calculate user's share of the pool
+        user_share = bpt_balance / total_supply
+
+        # Adjust quantities for decimals and calculate user's amounts
+        user_amounts = []
+        token_prices = []
+        for token_address, balance in zip(tokens, balances):
+            # Get token decimals
+            decimals = yield from self._get_token_decimals(chain, token_address)
+            if decimals is None:
+                self.context.logger.error(
+                    f"Failed to get decimals for token {token_address}"
+                )
+                return None
+
+            adjusted_balance = balance / (10**decimals)
+
+            # Calculate user's amount for this token
+            user_amount = adjusted_balance * user_share
+            user_amounts.append(user_amount)
+
+            # Fetch current token prices using _fetch_token_prices
+            token_price = yield from self._fetch_token_price(token_address, chain)
+
+            # Add to token balances for price fetching
+            token_prices.append(token_price)
+
+        if not token_prices:
+            self.context.logger.error("Failed to fetch current token prices.")
+            return None
+
+        # Calculate current position value
+        V_current = 0
+        for token_price, user_amount in zip(token_prices, user_amounts):
+            if token_price is None:
+                self.context.logger.error(
+                    f"Current price not found for token {token_address}."
+                )
+                return None
+            V_current += user_amount * token_price
+
+        # Calculate initial investment value
+        V_initial = yield from self.calculate_initial_investment_value(position)
+
+        if V_initial is None:
+            self.context.logger.error("Failed to calculate initial investment value.")
+            return None
+
+        # Calculate PnL
+        pnl = V_current - V_initial
+        pnl_percentage = (pnl / V_initial) * 100
+
+        self.context.logger.info(
+            f"Current Position Value: ${V_current:.2f}, Total PnL: ${pnl:.2f}"
+        )
+
+        return {
+            "current_value": V_current,
+            "pnl": pnl_percentage,
+        }
+
+    def calculate_pnl_for_sturdy(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Calculate PnL for a STURDY position."""
+        chain = position.get("chain")
+        vault_address = position.get("pool_address")
+        token_address = position.get("token0")
+        safe_address = self.params.safe_contract_addresses.get(chain)
+
+        # Get user's balance in the vault
+        balance_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=vault_address,
+            contract_public_id=YearnV3VaultContract.contract_id,
+            contract_callable="balance_of",
+            data_key="amount",
+            owner=safe_address,
+            chain_id=chain,
+        )
+
+        if balance_data is None:
+            self.context.logger.error(
+                f"Failed to get user balance from vault {vault_address}"
+            )
+            return None
+
+        user_balance = int(balance_data)
+
+        # Get token decimals
+        token_decimals = yield from self._get_token_decimals(chain, token_address)
+        if token_decimals is None:
+            self.context.logger.error("Failed to get token decimals.")
+            return None
+
+        # Adjust balance for decimals
+        adjusted_token_qty = user_balance / (10**token_decimals)
+
+        token_price = yield from self._fetch_token_price(token_address, chain)
+
+        if not token_price:
+            self.context.logger.error("Failed to fetch current token price.")
+            return None
+
+        # Calculate current position value
+        V_current = adjusted_token_qty * token_price
+
+        # Calculate initial investment value
+        V_initial = yield from self.calculate_initial_investment_value(position)
+
+        if V_initial is None:
+            self.context.logger.error("Failed to calculate initial investment value.")
+            return None
+
+        # Calculate PnL
+        pnl = V_current - V_initial
+        pnl_percentage = (pnl / V_initial) * 100
+
+        self.context.logger.info(
+            f"Current Position Value: ${V_current:.2f}, Total PnL: ${pnl:.2f}"
+        )
+
+        return {
+            "current_value": V_current,
+            "pnl": pnl_percentage,
+        }
+
+    def calculate_initial_investment_value(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[float]]:
+        """Calculate the initial investment value based on the initial transaction."""
+
+        chain = position.get("chain")
+        initial_amount0 = position.get("amount0")
+        initial_amount1 = position.get("amount1")
+        timestamp = position.get("timestamp")
+
+        if None in (initial_amount0, initial_amount1, timestamp):
+            self.context.logger.error(
+                "Missing initial amounts or timestamp in position data."
+            )
+            return None
+
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+        tokens = []
+        # Fetch historical prices
+        tokens.append([position.get("token0_symbol"), position.get("token0")])
+        if position.get("token1") is not None:
+            tokens.append([position.get("token1_symbol"), position.get("token1")])
+
+        historical_prices = yield from self._fetch_historical_token_prices(
+            tokens, date_str, chain
+        )
+
+        if not historical_prices:
+            self.context.logger.error("Failed to fetch historical token prices.")
+            return None
+
+        # Get the price for token0
+        initial_price0 = historical_prices.get(position.get("token0"))
+        if initial_price0 is None:
+            self.context.logger.error("Historical price not found for token0.")
+            return None
+
+        # Calculate initial investment value for token0
+        token0_decimals = yield from self._get_token_decimals(
+            chain, (position.get("token0"))
+        )
+        V_initial = (initial_amount0 / (10**token0_decimals)) * initial_price0
+
+        # If token1 exists, include it in the calculations
+        if position.get("token1") is not None and initial_amount1 is not None:
+            initial_price1 = historical_prices.get(position.get("token1"))
+            if initial_price1 is None:
+                self.context.logger.error("Historical price not found for token1.")
+                return None
+            token1_decimals = yield from self._get_token_decimals(
+                chain, (position.get("token1"))
+            )
+            V_initial += (initial_amount1 / (10**token1_decimals)) * initial_price1
+
+        return V_initial
+
+    def _fetch_historical_token_prices(
+        self, tokens: List[List[str]], date_str: str, chain: str
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Fetch historical token prices for a specific date."""
+        historical_prices = {}
+
+        coin_list = yield from self.fetch_coin_list()
+        if not coin_list:
+            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
+            return historical_prices
+
+        headers = {"Accept": "application/json"}
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        for token_symbol, token_address in tokens:
+            # Get CoinGecko ID.
+            coingecko_id = yield from self.get_token_id_from_symbol(
+                token_address, token_symbol, coin_list, chain
+            )
+            if not coingecko_id:
+                self.context.logger.error(
+                    f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
+                )
+                continue
+
+            endpoint = self.coingecko.historical_price_endpoint.format(
+                coin_id=coingecko_id,
+                date=date_str,
+            )
+
+            success, response_json = yield from self._request_with_retries(
+                endpoint=endpoint,
+                headers=headers,
+                rate_limited_code=self.coingecko.rate_limited_code,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
+            )
+
+            if success:
+                price = (
+                    response_json.get("market_data", {})
+                    .get("current_price", {})
+                    .get("usd")
+                )
+                if price:
+                    historical_prices[token_address] = price
+                else:
+                    self.context.logger.error(
+                        f"No price in response for token {token_address}"
+                    )
+            else:
+                self.context.logger.error(
+                    f"Failed to fetch historical price for {token_address}"
+                )
+
+        return historical_prices
+
+    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
+        """Fetches the list of coins from CoinGecko API only once."""
+        url = "https://api.coingecko.com/api/v3/coins/list"
+        response = yield from self.get_http_response("GET", url, None, None)
+
+        try:
+            response_json = json.loads(response.body)
+            return response_json
+        except json.decoder.JSONDecodeError as e:
+            self.context.logger.error(f"Failed to fetch coin list: {e}")
+            return None
+
+    def get_token_id_from_symbol_cached(
+        self, symbol, token_name, coin_list
+    ) -> Optional[str]:
+        """Retrieve the CoinGecko token ID using the token's symbol and name."""
+
+        self.context.logger.info(f"Type of coin_list: {type(coin_list)}")
+
+        # Check the type before accessing by index.
+        if isinstance(coin_list, dict):
+            self.context.logger.info(
+                f"Coin list is a dict with keys: {list(coin_list.keys())}"
+            )
+            coin_list = list(coin_list.values())
+        elif isinstance(coin_list, list) and coin_list:
+            self.context.logger.info(f"First element of coin_list: {coin_list[0]}")
+
+        # Build candidates ensuring that each element is a dict.
+        candidates = [
+            coin
+            for coin in coin_list
+            if isinstance(coin, dict)
+            and coin.get("symbol", "").lower() == symbol.lower()
+        ]
+
+        if not candidates:
+            return None
+
+        # If single candidate, return it.
+        if len(candidates) == 1:
+            return candidates[0]["id"]
+
+        normalized_token_name = token_name.replace(" ", "").lower()
+        for coin in candidates:
+            coin_name = coin["name"].replace(" ", "").lower()
+            if coin_name == normalized_token_name or coin_name == symbol.lower():
+                return coin["id"]
+        return None
+
+    def get_token_id_from_symbol(
+        self, token_address, symbol, coin_list, chain_name
+    ) -> Generator[None, None, Optional[str]]:
+        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        token_name = yield from self._fetch_token_name_from_contract(
+            chain_name, token_address
+        )
+        if not token_name:
+            matching_coins = [
+                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+            ]
+            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+
+        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
+
+    def _fetch_token_name_from_contract(
+        self, chain: str, token_address: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Fetch the token name from the ERC20 contract."""
+
+        token_name = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=token_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_name",
+            data_key="data",
+            chain_id=chain,
+        )
+        return token_name
+
+    def execute_hyper_strategy(self) -> None:
+        """Executes hyper strategy"""
+        hyper_strategy = self.params.selected_hyper_strategy
+        kwargs = {
+            "strategy": hyper_strategy,
+            "trading_opportunities": self.trading_opportunities,
+            "current_positions": [
+                pos
+                for pos in self.current_positions
+                if pos.get("status") == PositionStatus.OPEN.value
+            ],
+            "max_pools": self.params.max_pools,
+            "composite_score_threshold": THRESHOLDS.get(
+                self.synchronized_data.trading_type, {}
+            ),
+        }
+        self.context.logger.info(f"kwargs: {kwargs}")
+        self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
+        result = self.execute_strategy(**kwargs)
+        self.selected_opportunities = result.get("optimal_strategies")
+        self.position_to_exit = result.get("position_to_exit")
+
+        logs = result.get("logs", [])
+        if logs:
+            for log in logs:
+                self.context.logger.info(log)
+
+        reasoning = result.get("reasoning")
+        if reasoning:
+            self.shared_state.agent_reasoning = reasoning
+        self.context.logger.info(f"Agent Reasoning: {reasoning}")
+
+        if self.selected_opportunities is not None:
+            self.context.logger.info(
+                f"Selected opportunities: {self.selected_opportunities}"
+            )
+            for selected_opportunity in self.selected_opportunities:
+                # Convert token addresses to checksum addresses if they are present
+                # Dynamically handle multiple tokens
+                token_keys = [
+                    key
+                    for key in selected_opportunity.keys()
+                    if key.startswith("token")
+                    and not key.endswith("_symbol")
+                    and isinstance(selected_opportunity[key], str)
+                ]
+                for token_key in token_keys:
+                    selected_opportunity[token_key] = to_checksum_address(
+                        selected_opportunity[token_key]
+                    )
+                    self.context.logger.info(
+                        f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
+                    )
+
+    def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
+        """Get the completed futures"""
+        while True:
+            if not future.done():
+                yield
+                continue
+            try:
+                result = future.result()
+                return result
+            except Exception as e:
+                self.context.logger.error(
+                    f"Exception occurred while executing strategy: {e}",
+                )
+                return None
+
+    def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
+        """Fetches all the trading opportunities using multiprocessing"""
+        self.trading_opportunities.clear()
+        yield from self.download_strategies()
+        strategies = self.synchronized_data.selected_protocols.copy()
+        tried_strategies: Set[str] = set()
+        self.context.logger.info(f"Selected Strategies: {strategies}")
+
+        # Collect strategy kwargs
+        strategy_kwargs_list = []
+        for next_strategy in strategies:
+            self.context.logger.info(f"Preparing strategy: {next_strategy}")
+            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
+                next_strategy, {}
+            )
+
+            kwargs.update(
+                {
+                    "strategy": next_strategy,
+                    "chains": self.params.target_investment_chains,
+                    "protocols": self.params.available_protocols,
+                    "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
+                    "current_positions": (
+                        [
+                            to_checksum_address(pos.get("pool_address"))
+                            for pos in self.current_positions
+                            if pos.get("status") == PositionStatus.OPEN.value
+                            and pos.get("pool_address")
+                        ]
+                        if self.current_positions
+                        else []
+                    ),
+                    "coingecko_api_key": self.coingecko.api_key,
+                    "get_metrics": False,
+                }
+            )
+            strategy_kwargs_list.append(kwargs)
+
+        strategies_executables = self.shared_state.strategies_executables
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future_to_strategy = {}
+            futures = []
+            for kwargs in strategy_kwargs_list:
+                strategy_name = kwargs["strategy"]
+                # Remove 'strategy' from kwargs to avoid passing it twice
+                kwargs_without_strategy = {
+                    k: v for k, v in kwargs.items() if k != "strategy"
+                }
+
+                future = executor.submit(
+                    execute_strategy,
+                    strategy_name,
+                    strategies_executables,
+                    **kwargs_without_strategy,
+                )
+                future_to_strategy[future] = strategy_name
+                futures.append(future)
+
+            results = []
+
+            for future in futures:
+                result = yield from self.get_result(future)
+                results.append(result)
+
+            for future, result in zip(futures, results):
+                next_strategy = future_to_strategy[future]
+                tried_strategies.add(next_strategy)
+                if not result:
+                    continue
+                if "error" in result:
+                    errors = result.get("error", [])
+                    for error in errors:
+                        self.context.logger.error(
+                            f"Error in strategy {next_strategy}: {error}"
+                        )
+                    continue
+
+                opportunities = result.get("result", [])
+                if opportunities:
+                    self.context.logger.info(
+                        f"Opportunities found using {next_strategy} strategy"
+                    )
+                    for opportunity in opportunities:
+                        self.context.logger.info(
+                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                            f"Chain: {opportunity.get('chain', 'N/A')}, "
+                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                        )
+                    self.trading_opportunities.extend(opportunities)
+                else:
+                    self.context.logger.warning(
+                        f"No opportunity found using {next_strategy} strategy"
+                    )
+
+    def download_next_strategy(self) -> None:
+        """Download the strategies one by one."""
+        if self._inflight_strategy_req is not None:
+            # there already is a req in flight
+            return
+        if len(self.shared_state.strategy_to_filehash) == 0:
+            # no strategies pending to be fetched
+            return
+
+        strategies_to_remove = []
+        for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
+            if (
+                strategy not in self.synchronized_data.selected_protocols
+                and strategy != self.params.selected_hyper_strategy
+            ):
+                strategies_to_remove.append(strategy)
+                continue
+            self.context.logger.info(f"Fetching {strategy} strategy...")
+            ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
+            self._inflight_strategy_req = strategy
+            self.send_message(ipfs_msg, message, self._handle_get_strategy)
+            return
+
+        for strategy in strategies_to_remove:
+            self.shared_state.strategy_to_filehash.pop(strategy)
+
+    def get_returns_metrics_for_opportunity(
+        self, position: Dict[str, Any], strategy: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get and update metrics for the current pool ."""
+
+        kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
+
+        kwargs.update(
+            {
+                "strategy": strategy,
+                "get_metrics": True,
+                "position": position,
+                "coingecko_api_key": self.coingecko.api_key,
+                "chains": self.params.target_investment_chains,
+                "apr_threshold": self.params.apr_threshold,
+                "protocols": self.params.available_protocols,
+                "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
+            }
+        )
+
+        # Execute the strategy to calculate metrics
+        metrics = self.execute_strategy(**kwargs)
+        if not metrics:
+            return None
+        elif "error" in metrics:
+            self.context.logger.error(
+                f"Failed to calculate metrics for the current position {position.get('pool_address')} : {metrics.get('error')}"
+            )
+            return None
+        else:
+            self.context.logger.info(
+                f"Calculated position metrics for {position.get('pool_address')} : {metrics}"
+            )
+            return metrics
+
+    def download_strategies(self) -> Generator:
+        """Download all the strategies, if not yet downloaded."""
+        while len(self.shared_state.strategy_to_filehash) > 0:
+            self.download_next_strategy()
+            yield from self.sleep(self.params.sleep_time)
+
+    def execute_strategy(self, *args: Any, **kwargs: Any) -> Optional[Dict[str, Any]]:
+        """Execute the strategy and return the results."""
+
+        strategy = kwargs.pop("strategy", None)
+        if strategy is None:
+            self.context.logger.error(f"No trading strategy was given in {kwargs=}!")
+            return None
+
+        strategy = self.strategy_exec(strategy)
+        if strategy is None:
+            self.context.logger.error(f"No executable was found for {strategy=}!")
+            return None
+
+        strategy_exec, callable_method = strategy
+        if callable_method in globals():
+            del globals()[callable_method]
+
+        exec(strategy_exec, globals())  # pylint: disable=W0122  # nosec
+        method = globals().get(callable_method, None)
+        if method is None:
+            self.context.logger.error(
+                f"No {callable_method!r} method was found in {strategy} executable."
+            )
+            return None
+
+        return method(*args, **kwargs)
+
+    def strategy_exec(self, strategy: str) -> Optional[Tuple[str, str]]:
+        """Get the executable strategy file's content."""
+        return self.shared_state.strategies_executables.get(strategy, None)
+
+    def send_message(
+        self, msg: Message, dialogue: Dialogue, callback: Callable
+    ) -> None:
+        """Send a message."""
+        self.context.outbox.put_message(message=msg)
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        self.shared_state.req_to_callback[nonce] = callback
+        self.shared_state.in_flight_req = True
+
+    def _handle_get_strategy(self, message: IpfsMessage, _: Dialogue) -> None:
+        """Handle get strategy response."""
+        strategy_req = self._inflight_strategy_req
+        if strategy_req is None:
+            self.context.logger.error(f"No strategy request to handle for {message=}.")
+            return
+
+        # store the executable and remove the hash from the mapping because we have downloaded it
+        _component_yaml, strategy_exec, callable_method = ComponentPackageLoader.load(
+            message.files
+        )
+
+        self.shared_state.strategies_executables[strategy_req] = (
+            strategy_exec,
+            callable_method,
+        )
+        self.shared_state.strategy_to_filehash.pop(strategy_req)
+        self._inflight_strategy_req = None
+
+    def get_order_of_transactions(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Get the order of transactions to perform based on the current pool status and token balances."""
+        actions = []
+        tokens = []
+        # Process rewards
+        # if self._can_claim_rewards():
+        #     yield from self._process_rewards(actions)
+        # if (  # noqa: E800
+        #     self.synchronized_data.period_count != 0  # noqa: E800
+        #     and self.synchronized_data.period_count % self.params.pnl_check_interval  # noqa: E800
+        #     == 0  # noqa: E800
+        #     and self.current_positions  # noqa: E800
+        # ):  # noqa: E800
+        #     tokens = yield from self._process_pnl(actions)  # noqa: E800
+        if not self.selected_opportunities:
+            return actions
+
+        # Prepare tokens for exit or investment
+        available_tokens = yield from self._prepare_tokens_for_investment()
+        if available_tokens is None:
+            return actions
+        tokens.extend(available_tokens)
+        if self.position_to_exit:
+            dex_type = self.position_to_exit.get("dex_type")
+            num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
+            exit_pool_action = self._build_exit_pool_action(
+                tokens, num_of_tokens_required
+            )
+            if not exit_pool_action:
+                self.context.logger.error("Error building exit pool action")
+                return None
+            actions.append(exit_pool_action)
+        # Build actions based on selected opportunities
+        for opportunity in self.selected_opportunities:
+            bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
+            if bridge_swap_actions is None:
+                self.context.logger.info("Error preparing bridge swap actions")
+                return None
+            if bridge_swap_actions:
+                actions.extend(bridge_swap_actions)
+
+            enter_pool_action = self._build_enter_pool_action(opportunity)
+            if not enter_pool_action:
+                self.context.logger.error("Error building enter pool action")
+                return None
+            actions.append(enter_pool_action)
+
+        return actions
+
+    def _process_rewards(self, actions: List[Dict[str, Any]]) -> Generator:
+        """Process reward claims and add actions."""
+        allowed_chains = self.params.target_investment_chains
+        for chain in allowed_chains:
+            chain_id = self.params.chain_to_chain_id_mapping.get(chain)
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            rewards = yield from self._get_rewards(chain_id, safe_address)
+            if not rewards:
+                continue
+            action = self._build_claim_reward_action(rewards, chain)
+            actions.append(action)
+
+    def _process_pnl(
+        self, actions: List[Dict[str, Any]]
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Evaluate positions for exit based on PnL thresholds."""
+        pnl_calculation_functions = {
+            DexType.BALANCER.value: self.calculate_pnl_for_balancer,
+            DexType.STURDY.value: self.calculate_pnl_for_sturdy,
+            DexType.UNISWAP_V3.value: self.calculate_pnl_for_uniswap,
+        }
+        tokens_required = {
+            DexType.UNISWAP_V3.value: 2,
+            DexType.BALANCER.value: 2,
+            DexType.STURDY.value: 1,
+        }
+        exited_tokens = []
+
+        for position in self.current_positions:
+            if position.get("status") == PositionStatus.OPEN.value:
+                dex_type = position.get("dex_type")
+                pnl_function = pnl_calculation_functions.get(dex_type)
+                num_tokens = tokens_required.get(dex_type)
+
+                if not pnl_function or num_tokens is None:
+                    self.context.logger.error(
+                        f"No PnL calculation function for dex_type {dex_type}"
+                    )
+                    continue
+
+                pnl_data = yield from pnl_function(position)
+                if not pnl_data:
+                    continue
+
+                position.update(pnl_data)
+                pnl = pnl_data.get("pnl")
+                if pnl is None:
+                    continue
+
+                if (
+                    pnl > self.params.profit_threshold
+                    or pnl < -self.params.loss_threshold
+                ):
+                    tokens = self._build_tokens_from_position(position, num_tokens)
+                    if not tokens:
+                        self.context.logger.error(
+                            f"Invalid number of tokens required for dex_type {dex_type}"
+                        )
+                        continue
+
+                    exit_pool_action = self._build_exit_pool_action(
+                        tokens, num_of_tokens_required=num_tokens
+                    )
+                    if not exit_pool_action:
+                        self.context.logger.error("Error building exit pool action")
+                        continue
+                    actions.append(exit_pool_action)
+                    exited_tokens.extend(tokens)
+                    self.context.logger.info(
+                        f"PnL {pnl:.2f}% is beyond threshold, deciding to exit the pool."
+                    )
+
+        return exited_tokens
+
+    def _prepare_tokens_for_investment(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Prepare tokens for exit or investment, and append exit actions if needed."""
+        tokens = []
+
+        if self.position_to_exit:
+            dex_type = self.position_to_exit.get("dex_type")
+            num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
+            tokens = self._build_tokens_from_position(
+                self.position_to_exit, num_of_tokens_required
+            )
+            if not tokens or len(tokens) < num_of_tokens_required:
+                self.context.logger.error(
+                    f"{num_of_tokens_required} tokens required to exit pool, provided: {tokens}"
+                )
+                return None
+
+        else:
+            # Get available tokens and extend tokens list
+            tokens = yield from self._get_available_tokens()
+
+        if not tokens:
+            self.context.logger.error("No tokens available for investment")
+            return None  # Not enough tokens
+
+        return tokens
+
+    def _build_tokens_from_position(
+        self, position: Dict[str, Any], num_tokens: int
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Build token entries from position based on number of tokens required."""
+        chain = position.get("chain")
+        if num_tokens == 1:
+            return [
+                {
+                    "chain": chain,
+                    "token": position.get("token0"),
+                    "token_symbol": position.get("token0_symbol"),
+                }
+            ]
+        elif num_tokens == 2:
+            return [
+                {
+                    "chain": chain,
+                    "token": position.get("token0"),
+                    "token_symbol": position.get("token0_symbol"),
+                },
+                {
+                    "chain": chain,
+                    "token": position.get("token1"),
+                    "token_symbol": position.get("token1_symbol"),
+                },
+            ]
+        else:
+            return None
+
+    def _get_available_tokens(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Get tokens with the highest balances."""
+        token_balances = []
+
+        for position in self.synchronized_data.positions:
+            chain = position.get("chain")
+            for asset in position.get("assets", []):
+                asset_address = asset.get("address")
+                balance = asset.get("balance", 0)
+                if chain and asset_address and balance > 0:
+                    token_balances.append(
+                        {
+                            "chain": chain,
+                            "token": asset_address,
+                            "token_symbol": asset.get("asset_symbol"),
+                            "balance": balance,
+                        }
+                    )
+
+        # Sort tokens by balance in descending order
+        token_balances.sort(key=lambda x: x["balance"], reverse=True)
+        token_prices = yield from self._fetch_token_prices(token_balances)
+
+        # Calculate the relative value of each token
+        for token_data in token_balances:
+            token_address = token_data["token"]
+            chain = token_data["chain"]
+            token_price = token_prices.get(token_address, 0)
+            if token_address == ZERO_ADDRESS:
+                decimals = 18
+            else:
+                decimals = yield from self._get_token_decimals(chain, token_address)
+            token_data["value"] = (
+                token_data["balance"] / (10**decimals)
+            ) * token_price
+
+        # Sort tokens by value in descending order and add the highest ones
+        token_balances.sort(key=lambda x: x["value"], reverse=True)
+        self.context.logger.info(f"Available token balances: {token_balances}")
+
+        self.context.logger.info(
+            f"Filtering tokens with a minimum investment value of: {self.params.min_investment_amount}"
+        )
+        token_balances = [
+            token
+            for token in token_balances
+            if token["value"] >= self.params.min_investment_amount
+        ]
+
+        self.context.logger.info(
+            f"Tokens selected for bridging/swapping: {token_balances}"
+        )
+        return token_balances
+
+    def _build_exit_pool_action(
+        self, tokens: List[Dict[str, Any]], num_of_tokens_required: int
+    ) -> Optional[Dict[str, Any]]:
+        """Build action for exiting the current pool."""
+        if not self.position_to_exit:
+            self.context.logger.error("No pool present")
+            return None
+
+        if len(tokens) < num_of_tokens_required:
+            self.context.logger.error(
+                f"Insufficient tokens provided for exit action. Required atleast {num_of_tokens_required}, provided: {tokens}"
+            )
+            return None
+
+        exit_pool_action = {
+            "action": (
+                Action.WITHDRAW.value
+                if self.position_to_exit.get("dex_type") == DexType.STURDY.value
+                else Action.EXIT_POOL.value
+            ),
+            "dex_type": self.position_to_exit.get("dex_type"),
+            "chain": self.position_to_exit.get("chain"),
+            "assets": [token.get("token") for token in tokens],
+            "pool_address": self.position_to_exit.get("pool_address"),
+            "pool_type": self.position_to_exit.get("pool_type"),
+            "is_stable": self.position_to_exit.get("is_stable"),
+            "is_cl_pool": self.position_to_exit.get("is_cl_pool"),
+        }
+
+        # Handle Velodrome CL pools with multiple positions
+        if (
+            self.position_to_exit.get("dex_type") == DexType.VELODROME.value
+            and self.position_to_exit.get("is_cl_pool")
+            and "positions" in self.position_to_exit
+        ):
+            # Extract token IDs from all positions
+            token_ids = [
+                pos["token_id"] for pos in self.position_to_exit.get("positions", [])
+            ]
+            liquidities = [
+                pos["liquidity"] for pos in self.position_to_exit.get("positions", [])
+            ]
+            if token_ids and liquidities:
+                self.context.logger.info(
+                    f"Exiting Velodrome CL pool with {len(token_ids)} positions. "
+                    f"Token IDs: {token_ids}"
+                )
+                exit_pool_action["token_ids"] = token_ids
+                exit_pool_action["liquidities"] = liquidities
+        # For single position case (backward compatibility)
+        elif "token_id" in self.position_to_exit:
+            exit_pool_action["token_id"] = self.position_to_exit.get("token_id")
+            exit_pool_action["liquidity"] = self.position_to_exit.get("liquidity")
+
+        return exit_pool_action
+
+    def _build_bridge_swap_actions(
+        self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Build bridge and swap actions for the given tokens."""
+        if not opportunity:
+            self.context.logger.error("No pool present.")
+            return None
+
+        bridge_swap_actions = []
+
+        # Get the highest APR pool's tokens
+        # Extract opportunity details
+        dest_token0_address = opportunity.get("token0")
+        dest_token0_symbol = opportunity.get("token0_symbol")
+        dest_chain = opportunity.get("chain")
+        dex_type = opportunity.get("dex_type")
+        relative_funds_percentage = opportunity.get("relative_funds_percentage")
+
+        if not dest_token0_address or not dest_token0_symbol or not dest_chain:
+            self.context.logger.error(
+                f"Incomplete data in highest APR pool {opportunity}"
+            )
+            return None
+
+        if dex_type == DexType.STURDY.value:
+            # Handle STURDY dex type
+            for token in tokens:
+                self._add_bridge_swap_action(
+                    bridge_swap_actions,
+                    token,
+                    dest_chain,
+                    dest_token0_address,
+                    dest_token0_symbol,
+                    relative_funds_percentage,
+                )
+        else:
+            # Handle other dex types
+            dest_token1_address = opportunity.get("token1")
+            dest_token1_symbol = opportunity.get("token1_symbol")
+
+            if not dest_token1_address or not dest_token1_symbol:
+                self.context.logger.error(
+                    f"Incomplete data in highest APR pool {opportunity}"
+                )
+                return None
+
+            if len(tokens) == 1:
+                # Only one source token, split it in half for two destination tokens
+                self._add_bridge_swap_action(
+                    bridge_swap_actions,
+                    tokens[0],
+                    dest_chain,
+                    dest_token0_address,
+                    dest_token0_symbol,
+                    relative_funds_percentage / 2,
+                )
+                self._add_bridge_swap_action(
+                    bridge_swap_actions,
+                    tokens[0],
+                    dest_chain,
+                    dest_token1_address,
+                    dest_token1_symbol,
+                    relative_funds_percentage,
+                )
+            else:
+                tokens.sort(key=lambda x: x["token"])
+                dest_tokens = sorted(
+                    [
+                        (dest_token0_address, dest_token0_symbol),
+                        (dest_token1_address, dest_token1_symbol),
+                    ],
+                    key=lambda x: x[0],
+                )
+                for idx, token in enumerate(tokens):
+                    dest_token_address, dest_token_symbol = dest_tokens[idx % 2]
+                    self._add_bridge_swap_action(
+                        bridge_swap_actions,
+                        token,
+                        dest_chain,
+                        dest_token_address,
+                        dest_token_symbol,
+                        relative_funds_percentage,
+                    )
+        return bridge_swap_actions
+
+    def _add_bridge_swap_action(
+        self,
+        actions: List[Dict[str, Any]],
+        token: Dict[str, Any],
+        dest_chain: str,
+        dest_token_address: str,
+        dest_token_symbol: str,
+        relative_funds_percentage: float,
+    ) -> None:
+        """Helper function to add a bridge swap action."""
+        source_token_chain = token.get("chain")
+        source_token_address = token.get("token")
+        source_token_symbol = token.get("token_symbol")
+
+        if (
+            not source_token_chain
+            or not source_token_address
+            or not source_token_symbol
+        ):
+            self.context.logger.error(f"Incomplete data in tokens {token}")
+            return
+
+        if (
+            source_token_chain != dest_chain
+            or source_token_address != dest_token_address
+        ):
+            actions.append(
+                {
+                    "action": Action.FIND_BRIDGE_ROUTE.value,
+                    "from_chain": source_token_chain,
+                    "to_chain": dest_chain,
+                    "from_token": source_token_address,
+                    "from_token_symbol": source_token_symbol,
+                    "to_token": dest_token_address,
+                    "to_token_symbol": dest_token_symbol,
+                    "funds_percentage": relative_funds_percentage,
+                }
+            )
+
+    def _build_enter_pool_action(self, opportunity) -> Dict[str, Any]:
+        """Build action for entering the pool with the highest APR."""
+        if not opportunity:
+            self.context.logger.error("No pool present.")
+            return None
+
+        action_details = {
+            **opportunity,
+            "action": (
+                Action.DEPOSIT.value
+                if opportunity.get("dex_type") == DexType.STURDY.value
+                else Action.ENTER_POOL.value
+            ),
+        }
+        return action_details
+
+    def _build_claim_reward_action(
+        self, rewards: Dict[str, Any], chain: str
+    ) -> Dict[str, Any]:
+        return {
+            "action": Action.CLAIM_REWARDS.value,
+            "chain": chain,
+            "users": rewards.get("users"),
+            "tokens": rewards.get("tokens"),
+            "claims": rewards.get("claims"),
+            "proofs": rewards.get("proofs"),
+            "token_symbols": rewards.get("symbols"),
+        }
+
+    def _get_asset_symbol(self, chain: str, address: str) -> Optional[str]:
+        positions = self.synchronized_data.positions
+        for position in positions:
+            if position.get("chain") == chain:
+                for asset in position.get("assets", {}):
+                    if asset.get("address") == address:
+                        return asset.get("asset_symbol")
+
+        return None
+
+    def _get_rewards(
+        self, chain_id: int, user_address: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        base_url = self.params.merkl_user_rewards_url
+        params = {"user": user_address, "chainId": chain_id, "proof": True}
+        api_url = f"{base_url}?{urlencode(params)}"
+        response = yield from self.get_http_response(
+            method="GET",
+            url=api_url,
+            headers={"accept": "application/json"},
+        )
+
+        if response.status_code not in HTTP_OK:
+            self.context.logger.error(
+                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message: {response.body}"
+            )
+            return None
+
+        try:
+            data = json.loads(response.body)
+            self.context.logger.info(f"User rewards: {data}")
+            tokens = [k for k, v in data.items() if v.get("proof")]
+            if not tokens:
+                self.context.logger.info("No tokens to claim!")
+                return None
+            symbols = [data[t].get("symbol") for t in tokens]
+            claims = [int(data[t].get("accumulated", 0)) for t in tokens]
+
+            # Check if all claims are zero
+            if all(claim == 0 for claim in claims):
+                self.context.logger.info("All claims are zero, nothing to claim")
+                return None
+
+            unclaimed = [int(data[t].get("unclaimed", 0)) for t in tokens]
+            # Check if everything has been already claimed are zero
+            if all(claim == 0 for claim in unclaimed):
+                self.context.logger.info(
+                    "All accumulated claims already made. Nothing left to claim."
+                )
+                return None
+
+            proofs = [data[t].get("proof") for t in tokens]
+            return {
+                "users": [user_address] * len(tokens),
+                "tokens": tokens,
+                "symbols": symbols,
+                "claims": claims,
+                "proofs": proofs,
+            }
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(
+                f"Could not parse response from api, "
+                f"the following error was encountered {type(e).__name__}: {e}"
+            )
+            return None
+
+    def _can_claim_rewards(self) -> bool:
+        # Check if rewards can be claimed. Rewards can be claimed if either:
+        # 1. No rewards have been claimed yet (last_reward_claimed_timestamp is None), or
+        # 2. The current timestamp exceeds the allowed reward claiming time period since the last claim.
+
+        current_timestamp = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
+
+        last_claimed_timestamp = self.synchronized_data.last_reward_claimed_timestamp
+        if last_claimed_timestamp is None:
+            return True
+        return (
+            current_timestamp
+            >= last_claimed_timestamp + self.params.reward_claiming_time_period
+        )

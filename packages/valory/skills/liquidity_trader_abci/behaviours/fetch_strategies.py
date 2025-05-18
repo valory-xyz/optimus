@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the behaviour for fetching the strategies to execute for 'liquidity_trader_abci' skill."""
 
 import json
 from decimal import Context, Decimal, getcontext
@@ -27,6 +27,9 @@ from typing import (
     Generator,
     Optional,
     Type,
+    List,
+    Tuple,
+    Union,
 )
 from eth_utils import to_checksum_address
 from packages.valory.contracts.balancer_vault.contract import VaultContract
@@ -176,7 +179,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 assets = (
                     [position.get("token0_symbol"), position.get("token1_symbol")]
-                    if dex_type == DexType.BALANCER.value
+                    if dex_type in [DexType.BALANCER.value, DexType.UNISWAP_V3.value, DexType.VELODROME.value]
                     else [position.get("token0_symbol")]
                 )
                 apr = position.get("apr")
@@ -198,7 +201,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     pool_address = position.get("pool_address")
                     token_id = position.get("token_id")
                     user_balances = yield from self.get_user_share_value_uniswap(
-                        user_address, pool_address, token_id, chain, position
+                        pool_address, token_id, chain, position
                     )
                     details = f"Uniswap V3 Pool - {position.get('token0_symbol')}/{position.get('token1_symbol')}"
                 elif dex_type == DexType.STURDY.value:
@@ -424,9 +427,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         if is_cl_pool:
             result = yield from self._get_user_share_value_velodrome_cl(
-                user_address,
                 pool_address,
-                token_id,
                 chain,
                 position,
                 token0_address,
@@ -454,16 +455,198 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _adjust_for_decimals(self, amount, decimals):
         return Decimal(str(amount)) / Decimal(10**decimals)
 
+    def _calculate_cl_position_value(
+        self,
+        pool_address: str,
+        chain: str,
+        position: Dict[str, Any],
+        token0_address: str,
+        token1_address: str,
+        position_manager_address: str,
+        contract_id: Any,
+        get_position_callable: str = "get_position",
+        position_data_key: str = "data",
+        slot0_contract_id: Any = None,
+    ) -> Generator[None, None, Dict[str, Decimal]]:
+        """
+        Calculate concentrated liquidity position value.
+        
+        Args:
+            pool_address: Address of the pool contract
+            chain: Chain identifier
+            position: Position data dictionary
+            token0_address: Address of token0
+            token1_address: Address of token1
+            position_manager_address: Address of position manager contract
+            contract_id: Contract identifier
+            get_position_callable: Name of the position getter function
+            position_data_key: Key for position data in response
+            slot0_contract_id: Optional contract ID for slot0 calls
+        
+        Returns:
+            Dictionary mapping token addresses to their quantities
+        """
+        # Early validation of required parameters
+        if not all([pool_address, chain, position, token0_address, token1_address, position_manager_address]):
+            self.context.logger.error("Missing required parameters")
+            return {}
+
+        # Get slot0 data in a single call
+        slot0_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=slot0_contract_id or contract_id,
+            contract_callable="slot0",
+            data_key="slot0",
+            chain_id=chain,
+        )
+        
+        # Early return if slot0 data is invalid
+        if not slot0_data:
+            self.context.logger.error(f"Failed to get slot0 data for pool {pool_address}")
+            return {}
+
+        # Extract and validate slot0 data
+        sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
+        current_tick = slot0_data.get("tick")
+        if not sqrt_price_x96 or current_tick is None:
+            self.context.logger.error(f"Invalid slot0 data: {slot0_data}")
+            return {}
+
+        # Get token decimals in parallel using a list comprehension
+        token_decimals = yield from self._get_token_decimals_pair(chain, token0_address, token1_address)
+        if None in token_decimals:
+            return {}
+        token0_decimals, token1_decimals = token_decimals
+
+        # Initialize quantities
+        total_token0_qty = Decimal(0)
+        total_token1_qty = Decimal(0)
+
+        # Handle position(s)
+        positions_to_process = (
+            position.get("positions", []) if isinstance(position.get("positions", []), list)
+            else [position]
+        )
+
+        # Process all positions
+        for pos in positions_to_process:
+            token_id = pos.get("token_id")
+            if not token_id:
+                continue
+
+            position_details = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=contract_id,
+                contract_callable=get_position_callable,
+                data_key=position_data_key,
+                token_id=token_id,
+                chain_id=chain,
+            )
+            
+            if not position_details:
+                self.context.logger.error(f"Failed to get position details for token ID {token_id}")
+                continue
+
+            # Calculate amounts for this position
+            amount0, amount1 = yield from self._calculate_position_amounts(
+                position_details, current_tick, sqrt_price_x96, pos
+            )
+            
+            total_token0_qty += Decimal(amount0)
+            total_token1_qty += Decimal(amount1)
+
+        # Calculate final adjusted quantities
+        result = {
+            token0_address: self._adjust_for_decimals(total_token0_qty, token0_decimals),
+            token1_address: self._adjust_for_decimals(total_token1_qty, token1_decimals),
+        }
+
+        # Log results
+        self.context.logger.info(
+            f"CL Pool Total Position Balances - "
+            f"Token0: {result[token0_address]} {position.get('token0_symbol')}, "
+            f"Token1: {result[token1_address]} {position.get('token1_symbol')}"
+        )
+        
+        return result
+    
+    def _calculate_position_amounts(
+        self, 
+        position_details: Dict[str, Any], 
+        current_tick: int, 
+        sqrt_price_x96: int, 
+        position: Dict[str, Any],
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """
+        Calculate token amounts for a position based on whether it's in range or not.
+        
+        Args:
+            position_details: Position details from the contract
+            current_tick: Current tick from the pool
+            sqrt_price_x96: Current sqrt price from the pool
+            position: Position data from our system
+            
+        Returns:
+            Tuple of (amount0, amount1)
+        """
+        # Extract position details
+        tick_lower = int(position_details.get("tickLower"))
+        tick_upper = int(position_details.get("tickUpper"))
+        liquidity = int(position_details.get("liquidity"))
+        tokens_owed0 = int(position_details.get("tokensOwed0", 0))
+        tokens_owed1 = int(position_details.get("tokensOwed1", 0))
+        
+        # Log position details
+        self.context.logger.info(
+            f"For position, liquidity range is [{tick_lower}, {tick_upper}] "
+            f"and current tick is {current_tick}"
+        )
+        
+        # Check if current tick is within the provided tick range
+        if tick_lower <= current_tick <= tick_upper:
+            # In range, use getAmountsForLiquidity
+            sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
+            sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
+            
+            # Calculate amounts using getAmountsForLiquidity
+            amount0, amount1 = LiquidityAmounts.getAmountsForLiquidity(
+                sqrt_price_x96,
+                sqrtA,
+                sqrtB,
+                liquidity
+            )
+            
+            self.context.logger.info(
+                f"Position is in range. Current tick: {current_tick}, "
+                f"Range: [{tick_lower}, {tick_upper})"
+            )
+        else:
+            # Out of range, return invested amounts + tokensOwed
+            amount0 = position.get("amount0", 0)
+            amount1 = position.get("amount1", 0)
+            
+            # Add uncollected fees (tokensOwed)
+            amount0 += tokens_owed0
+            amount1 += tokens_owed1
+            
+            self.context.logger.info(
+                f"Position is out of range. Current tick: {current_tick}, "
+                f"Range: [{tick_lower}, {tick_upper})"
+            )
+            
+        return amount0, amount1
+
     def _get_user_share_value_velodrome_cl(
         self,
-        user_address,
         pool_address,
-        token_id,
         chain,
         position,
         token0_address,
         token1_address,
     ):
+        """Calculate the user's share value and token balances in a Velodrome CL pool."""
         position_manager_address = (
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
@@ -474,130 +657,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"No position manager address found for chain {chain}"
             )
             return {}
-
-        slot0_data = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=VelodromeCLPoolContract.contract_id,
-            contract_callable="slot0",
-            data_key="slot0",
-            chain_id=chain,
-        )
-        if not slot0_data:
-            self.context.logger.error(
-                f"Failed to get slot0 data for pool {pool_address}"
-            )
-            return {}
-
-        sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
-        current_tick = slot0_data.get("tick")
-        self.context.logger.info(
-            f"Fetched pool data once - Current Tick: {current_tick}, Sqrt Price X96: {sqrt_price_x96}"
-        )
-
-        # Handle multiple or single positions
-        positions_data = (
-            position.get("positions", [])
-            if (
-                isinstance(token_id, (list, tuple))
-                or (
-                    position.get("positions") and len(position.get("positions", [])) > 1
-                )
-            )
-            else [dict(token_id=token_id)]
-        )
-
-        total_token0_qty = Decimal(0)
-        total_token1_qty = Decimal(0)
-
-        for pos in positions_data:
-            pos_token_id = pos.get("token_id")
-            position_details = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=position_manager_address,
-                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
-                contract_callable="get_position",
-                data_key="data",
-                token_id=pos_token_id,
-                chain_id=chain,
-            )
-            if not position_details:
-                self.context.logger.error(
-                    f"Failed to get position details for token ID {pos_token_id}"
-                )
-                continue
-            tick_lower = int(position_details.get("tickLower"))
-            tick_upper = int(position_details.get("tickUpper"))
-            liquidity = int(position_details.get("liquidity"))
-            tokens_owed0 = int(position_details.get("tokensOwed0", 0))
-            tokens_owed1 = int(position_details.get("tokensOwed1", 0))
-
-            if current_tick < tick_lower:
-                # All in token0
-                sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
-                sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
-                amount0 = LiquidityAmounts._getAmount0ForLiquidity(
-                    sqrtA, sqrtB, liquidity
-                )
-                amount1 = 0
-            elif current_tick >= tick_upper:
-                sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
-                sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
-                amount0 = 0
-                amount1 = LiquidityAmounts._getAmount1ForLiquidity(
-                    sqrtA, sqrtB, liquidity
-                )
-            else:
-                # In range, use band math
-                reserves_and_balances = self.get_reserves_and_balances(
-                    position=position_details,
-                    sqrt_price_x96=sqrt_price_x96,
-                    current_tick=current_tick,
-                    tick_lower=tick_lower,
-                    tick_upper=tick_upper,
-                    liquidity=liquidity,
-                    tokens_owed0=tokens_owed0,
-                    tokens_owed1=tokens_owed1,
-                )
-                amount0 = reserves_and_balances.get("current_token0_qty", 0)
-                amount1 = reserves_and_balances.get("current_token1_qty", 0)
-
-            if amount0 < 1e-8 and amount1 < 1e-8:
-                # Value is negligible due to narrow band
-                self.context.logger.warning(
-                    "User position is in a very narrow band and out of range. "
-                    "Current claimable value is extremely small. "
-                    "If the price moves into the tick range, the value will be claimable."
-                )
-                # Optionally, show initial deposit as fallback
-                amount0 = pos.get("amount0", 0)
-                amount1 = pos.get("amount1", 0)
-
-            total_token0_qty += Decimal(amount0)
-            total_token1_qty += Decimal(amount1)
-
-        token0_decimals, token1_decimals = yield from self._get_token_decimals_pair(
-            chain, token0_address, token1_address
-        )
-        if token0_decimals is None or token1_decimals is None:
-            return {}
-
-        adjusted_token0_qty = self._adjust_for_decimals(
-            total_token0_qty, token0_decimals
-        )
-        adjusted_token1_qty = self._adjust_for_decimals(
-            total_token1_qty, token1_decimals
-        )
-
-        self.context.logger.info(
-            f"Velodrome CL Pool Total Position Balances - "
-            f"Token0: {adjusted_token0_qty} {position.get('token0_symbol')}, "
-            f"Token1: {adjusted_token1_qty} {position.get('token1_symbol')}"
-        )
-        return {
-            token0_address: adjusted_token0_qty,
-            token1_address: adjusted_token1_qty,
-        }
+            
+        return (yield from self._calculate_cl_position_value(
+            pool_address=pool_address,
+            chain=chain,
+            position=position,
+            token0_address=token0_address,
+            token1_address=token1_address,
+            position_manager_address=position_manager_address,
+            contract_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+            get_position_callable="get_position",
+            position_data_key="data",
+            slot0_contract_id=VelodromeCLPoolContract.contract_id,
+        ))
 
     def _get_user_share_value_velodrome_non_cl(
         self,
@@ -608,6 +680,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token0_address,
         token1_address,
     ):
+        """Calculate the user's share value and token balances in a Velodrome non-CL pool."""
         user_balance = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
@@ -675,57 +748,40 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             token1_address: user_token1_balance,
         }
 
-    def get_reserves_and_balances(
-        self,
-        position,
-        sqrt_price_x96=None,
-        current_tick=None,
-        tick_lower=None,
-        tick_upper=None,
-        liquidity=None,
-        tokens_owed0=0,
-        tokens_owed1=0,
-    ) -> Dict:
-        """Calculate token amounts for a concentrated liquidity position based on Uniswap V3 methodology."""
-        # Extract position details if passed via position object
-        if position is not None:
-            tick_lower = position.get("tickLower", tick_lower)
-            tick_upper = position.get("tickUpper", tick_upper)
-            liquidity = position.get("liquidity", liquidity)
-            tokens_owed0 = position.get("tokensOwed0", tokens_owed0)
-            tokens_owed1 = position.get("tokensOwed1", tokens_owed1)
+    def get_user_share_value_uniswap(
+        self, pool_address: str, token_id: int, chain: str, position
+    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
+        """Calculate the user's share value and token balances in a Uniswap V3 position."""
+        token0_address = position.get("token0")
+        token1_address = position.get("token1")
 
-        # Calculate sqrtRatioA and sqrtRatioB
-        sqrt_ratio_a_x96 = TickMath.getSqrtRatioAtTick(tick_lower)
-        sqrt_ratio_b_x96 = TickMath.getSqrtRatioAtTick(tick_upper)
+        if not token0_address or not token1_address or not token_id:
+            self.context.logger.error("Token addresses or token_id not found")
+            return {}
 
-        # Ensure sqrtRatioA <= sqrtRatioB
-        if sqrt_ratio_a_x96 > sqrt_ratio_b_x96:
-            sqrt_ratio_a_x96, sqrt_ratio_b_x96 = sqrt_ratio_b_x96, sqrt_ratio_a_x96
-
-        # Calculate amounts
-        amount0, amount1 = LiquidityAmounts.getAmountsForLiquidity(
-            sqrt_price_x96 or TickMath.getSqrtRatioAtTick(current_tick),
-            sqrt_ratio_a_x96,
-            sqrt_ratio_b_x96,
-            liquidity,
+        # Get the position manager address for the chain
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
         )
-
-        # Add uncollected fees
-        amount0 += tokens_owed0
-        amount1 += tokens_owed1
-
-        return {
-            "current_token0_qty": amount0,
-            "current_token1_qty": amount1,
-            "liquidity": liquidity,
-            "tick_lower": tick_lower,
-            "tick_upper": tick_upper,
-            "current_tick": current_tick,
-            "sqrt_price_x96": sqrt_price_x96,
-            "tokens_owed0": tokens_owed0,
-            "tokens_owed1": tokens_owed1,
-        }
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return {}
+            
+        # Use the common helper function for CL position calculation
+        return (yield from self._calculate_cl_position_value(
+            pool_address=pool_address,
+            chain=chain,
+            position=position,
+            token0_address=token0_address,
+            token1_address=token1_address,
+            position_manager_address=position_manager_address,
+            contract_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            get_position_callable="get_position",
+            position_data_key="data",
+            slot0_contract_id=UniswapV3PoolContract.contract_id,
+        ))
 
     def get_user_share_value_balancer(
         self, user_address: str, pool_id: str, pool_address: str, chain: str
@@ -893,109 +949,3 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return pool_name
-
-    def get_user_share_value_uniswap(
-        self, user_address: str, pool_address: str, token_id: int, chain: str, position
-    ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
-        """Calculate the user's share value and token balances in a Uniswap V3 position."""
-        token0_address = position.get("token0")
-        token1_address = position.get("token1")
-
-        if not token0_address or not token1_address or not token_id:
-            self.context.logger.error("Token addresses or token_id not found")
-            return {}
-
-        # Get the position manager address for the chain
-        position_manager_address = (
-            self.params.uniswap_position_manager_contract_addresses.get(chain)
-        )
-        if not position_manager_address:
-            self.context.logger.error(
-                f"No position manager address found for chain {chain}"
-            )
-            return {}
-
-        # First get position details directly from the position manager
-        position_details = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=position_manager_address,
-            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
-            contract_callable="get_position_details",
-            data_key="data",
-            token_id=token_id,
-            chain_id=chain,
-        )
-
-        if not position_details:
-            self.context.logger.error(
-                f"Failed to get position details for token ID {token_id}"
-            )
-            return {}
-
-        # Get reserves and balances using the position details
-        reserves_and_balances = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=UniswapV3PoolContract.contract_id,
-            contract_callable="get_reserves_and_balances",
-            data_key="data",
-            position=position_details,
-            chain_id=chain,
-        )
-
-        if not reserves_and_balances:
-            self.context.logger.error(
-                f"Failed to get reserves and balances for pool {pool_address} with token_id {token_id}"
-            )
-            return {}
-
-        # Get token decimals
-        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
-        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
-
-        if token0_decimals is None or token1_decimals is None:
-            self.context.logger.error("Failed to get token decimals")
-            return {}
-
-        # Get the current amounts in the position
-        current_token0_qty = Decimal(
-            str(reserves_and_balances.get("current_token0_qty", 0))
-        )
-        current_token1_qty = Decimal(
-            str(reserves_and_balances.get("current_token1_qty", 0))
-        )
-
-        # Log position details from the position manager
-        self.context.logger.info(
-            f"Uniswap V3 Position Details from Manager - Token ID: {token_id}, "
-            f"Token0: {position_details.get('token0')}, "
-            f"Token1: {position_details.get('token1')}, "
-            f"Fee: {position_details.get('fee')}, "
-            f"Tick Lower: {position_details.get('tickLower')}, "
-            f"Tick Upper: {position_details.get('tickUpper')}, "
-            f"Liquidity: {position_details.get('liquidity')}"
-        )
-
-        # Log additional information from the pool calculation
-        self.context.logger.info(
-            f"Uniswap V3 Position Details from Pool - "
-            f"Current Tick: {reserves_and_balances.get('current_tick')}, "
-            f"Uncollected Fees Token0: {reserves_and_balances.get('tokens_owed0')}, "
-            f"Uncollected Fees Token1: {reserves_and_balances.get('tokens_owed1')}"
-        )
-
-        # Adjust for decimals
-        adjusted_token0_qty = current_token0_qty / Decimal(10**token0_decimals)
-        adjusted_token1_qty = current_token1_qty / Decimal(10**token1_decimals)
-
-        self.context.logger.info(
-            f"Uniswap V3 Position Balances - "
-            f"Token0: {adjusted_token0_qty} {position.get('token0_symbol')}, "
-            f"Token1: {adjusted_token1_qty} {position.get('token1_symbol')}"
-        )
-
-        # Return the balances
-        return {
-            token0_address: adjusted_token0_qty,
-            token1_address: adjusted_token1_qty,
-        }

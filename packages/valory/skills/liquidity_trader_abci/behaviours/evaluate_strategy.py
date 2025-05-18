@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the behaviour for evaluating opportunities and forming actions for the 'liquidity_trader_abci' skill."""
 
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -30,10 +30,6 @@ from eth_utils import to_checksum_address
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import WeightedPoolContract
 from packages.valory.contracts.erc20.contract import ERC20
-from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
-    UniswapV3NonfungiblePositionManagerContract,
-)
-from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolContract
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import YearnV3VaultContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -75,7 +71,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     for asset in position.get("assets", [])
                 )
 
-            has_funds = True
             if not has_funds:
                 actions = []
                 self.context.logger.info("No funds available.")
@@ -132,131 +127,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
-
-    def calculate_pnl_for_uniswap(
-        self, position: Dict[str, Any]
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Calculate PnL for a Uniswap position using the updated calculation method."""
-        chain = position.get("chain")
-        pool_address = position.get("pool_address")
-        token_id = position.get("token_id")
-
-        if not token_id:
-            self.context.logger.error("Token ID not found in position data")
-            return None
-
-        # Get the position manager address for the chain
-        position_manager_address = (
-            self.params.uniswap_position_manager_contract_addresses.get(chain)
-        )
-        if not position_manager_address:
-            self.context.logger.error(
-                f"No position manager address found for chain {chain}"
-            )
-            return None
-
-        # Interact with UniswapV3PoolContract to get reserves and balances with token_id
-        position_data = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
-            contract_callable="get_position_details",
-            data_key="data",
-            token_id=token_id,
-            chain_id=chain,
-        )
-
-        if position_data is None:
-            self.context.logger.error(
-                f"Failed to position_data for token ID {token_id}"
-            )
-            return None
-
-        # Interact with UniswapV3PoolContract to get reserves and balances with token_id
-        reserves_and_balances = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=UniswapV3PoolContract.contract_id,
-            contract_callable="get_reserves_and_balances",
-            data_key="data",
-            position_data=position_data,
-            chain_id=chain,
-        )
-
-        if reserves_and_balances is None:
-            self.context.logger.error(
-                f"Failed to get reserves and balances from pool {pool_address} for token ID {token_id}"
-            )
-            return None
-
-        # Log additional information from the new implementation
-        self.context.logger.info(
-            f"Uniswap V3 Position Details - Token ID: {token_id}, "
-            f"Liquidity: {reserves_and_balances.get('liquidity')}, "
-            f"Tick Lower: {reserves_and_balances.get('tick_lower')}, "
-            f"Tick Upper: {reserves_and_balances.get('tick_upper')}, "
-            f"Current Tick: {reserves_and_balances.get('current_tick')}, "
-            f"Uncollected Fees Token0: {reserves_and_balances.get('tokens_owed0')}, "
-            f"Uncollected Fees Token1: {reserves_and_balances.get('tokens_owed1')}"
-        )
-
-        current_token0_qty = float(reserves_and_balances.get("current_token0_qty", 0))
-        current_token1_qty = float(reserves_and_balances.get("current_token1_qty", 0))
-
-        token0_address = position.get("token0")
-        token1_address = position.get("token1")
-
-        # Get token decimals
-        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
-        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
-
-        if token0_decimals is None or token1_decimals is None:
-            self.context.logger.error("Failed to get token decimals.")
-            return None
-
-        # Adjust quantities for decimals
-        adjusted_token0_qty = current_token0_qty / (10**token0_decimals)
-        adjusted_token1_qty = current_token1_qty / (10**token1_decimals)
-
-        self.context.logger.info(
-            f"Uniswap V3 Position Balances - "
-            f"Token0: {adjusted_token0_qty} {position.get('token0_symbol')}, "
-            f"Token1: {adjusted_token1_qty} {position.get('token1_symbol')}"
-        )
-
-        token0_price = yield from self._fetch_token_price(token0_address, chain)
-        token1_price = yield from self._fetch_token_price(token1_address, chain)
-
-        if token0_price is None or token1_price is None:
-            self.context.logger.error(
-                "Current prices not found for one or both tokens."
-            )
-            return None
-
-        # Calculate current position value
-        V_current = (adjusted_token0_qty * token0_price) + (
-            adjusted_token1_qty * token1_price
-        )
-
-        # Calculate initial investment value
-        V_initial = yield from self.calculate_initial_investment_value(position)
-
-        if V_initial is None:
-            self.context.logger.error("Failed to calculate initial investment value.")
-            return None
-
-        # Calculate PnL
-        pnl = V_current - V_initial
-        pnl_percentage = (pnl / V_initial) * 100
-
-        self.context.logger.info(
-            f"Current Position Value: ${V_current:.2f}, Initial Value: ${V_initial:.2f}, Total PnL: ${pnl:.2f} ({pnl_percentage:.2f}%)"
-        )
-
-        return {
-            "current_value": V_current,
-            "pnl": pnl_percentage,
-        }
 
     def calculate_pnl_for_balancer(
         self, position: Dict[str, Any]
@@ -1003,7 +873,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         pnl_calculation_functions = {
             DexType.BALANCER.value: self.calculate_pnl_for_balancer,
             DexType.STURDY.value: self.calculate_pnl_for_sturdy,
-            DexType.UNISWAP_V3.value: self.calculate_pnl_for_uniswap,
         }
         tokens_required = {
             DexType.UNISWAP_V3.value: 2,

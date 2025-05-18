@@ -138,40 +138,33 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         token0 = contract_instance.functions.token0().call()
         token1 = contract_instance.functions.token1().call()
         return dict(tokens=[token0, token1])
-
-    @classmethod
+    
     def get_position(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
         token_id: int,
     ) -> JSONLike:
-        """
-        Get the position info from the NonfungiblePositionManager contract.
-        
-        Args:
-            ledger_api: The ledger API
-            contract_address: The NonfungiblePositionManager contract address
-            token_id: The NFT token ID representing the position
-            
-        Returns:
-            A dictionary containing the position data with the following fields:
-            - nonce (uint96)
-            - operator (address)
-            - token0 (address)
-            - token1 (address)
-            - fee (uint24)
-            - tickLower (int24)
-            - tickUpper (int24)
-            - liquidity (uint128)
-            - feeGrowthInside0LastX128 (uint256)
-            - feeGrowthInside1LastX128 (uint256)
-            - tokensOwed0 (uint128)
-            - tokensOwed1 (uint128)
-        """
+        """get the position info"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         position = contract_instance.functions.positions(token_id).call()
-        return dict(data=position)
+        if not position:
+            return dict(data={})
+        return dict(data={
+            "nonce": position[0],
+            "operator": position[1],
+            "token0": position[2],
+            "token1": position[3],
+            "fee": position[4],
+            "tickSpacing": position[5],
+            "tickLower": position[6],
+            "tickUpper": position[7],
+            "liquidity": position[8],
+            "feeGrowthInside0LastX128": position[9],
+            "feeGrowthInside1LastX128": position[10],
+            "tokensOwed0": position[11],
+            "tokensOwed1": position[12],
+        })
     
     @classmethod
     def get_position_details(

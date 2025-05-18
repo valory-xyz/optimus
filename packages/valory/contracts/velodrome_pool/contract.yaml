@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeie3w4zegifkxn2zdl4rdczxs7vkzoojnylyayo6i25hotkfaovw4i
-  build/VelodromePool.json: bafybeictdlipvqc7g6swetvcxvpwnsvdfzr2oweqkhsti6zssde4z6x5yy
+  build/VelodromePool.json: bafybeidgimpxtkds5kaha5mvojvr7e5pjefyvw362teh65vn44qqvfcvza
   contract.py: bafybeicvuyxj4onwshc75tlybnxziiaiwiotrtmkrxajkvt24wfl2l4dlq
 fingerprint_ignore_patterns: []
 contracts: []

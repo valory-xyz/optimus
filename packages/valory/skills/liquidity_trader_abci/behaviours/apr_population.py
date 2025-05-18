@@ -42,7 +42,8 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PositionStatus,
     METRICS_NAME,
     METRICS_TYPE,
-    AGENT_TYPE
+    AGENT_TYPE,
+    APR_UPDATE_INTERVAL
 )
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.contracts.erc20.contract import ERC20
@@ -55,166 +56,168 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     _final_value = None
 
     def async_act(self) -> Generator:
-        """
-        Execute the APR population behavior.
-
-        This behavior:
-        1. Retrieves or creates necessary resources (agent type, agent registry, attribute definition)
-        2. Calculates APR for positions
-        3. Stores APR data in MirrorDB
-        4. Reads APR data for comparison with other agents
-        5. Completes the round
-        """
+        """Execute the APR population behavior."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
+            payload_context = "APR Population"
+            
             try:
-                # Get configuration
-                eth_address = sender
-
-                # Step 1: Get or create agent type for "Modius"
-                data = yield from self._read_kv(keys=("agent_type",))
-                if data:
-                    agent_type = data.get("agent_type")
-                    if agent_type:
-                        agent_type = json.loads(agent_type)
-                    else:
-                        # Check external DB
-                        type_name=AGENT_TYPE.get(self.params.target_investment_chains[0])
-                        agent_type = yield from self.get_agent_type_by_name(type_name)
-                        if not agent_type:
-                            agent_type = yield from self.create_agent_type(
-                                type_name,
-                                "An agent for DeFi liquidity management and APR tracking",
-                            )
-                            if not agent_type:
-                                raise Exception("Failed to create agent type.")
-                            yield from self._write_kv(
-                                {"agent_type": json.dumps(agent_type)}
-                            )
-
-                type_id = agent_type.get("type_id")
-                self.context.logger.info(f"Using agent type: {agent_type}")
-
-                # Step 2: Get or create agent registry entry
-                data = yield from self._read_kv(keys=("agent_registry",))
-                if data:
-                    agent_registry = data.get("agent_registry", "{}")
-                    if agent_registry:
-                        agent_registry = json.loads(agent_registry)
-                    else:
-                        agent_registry = yield from self.get_agent_registry_by_address(
-                            eth_address
-                        )
-                        if not agent_registry:
-                            agent_name = self.generate_name(sender)
-                            self.context.logger.info(f"agent_name : {agent_name}")
-                            agent_registry = yield from self.create_agent_registry(
-                                agent_name, type_id, eth_address
-                            )
-                            if not agent_registry:
-                                raise Exception("Failed to create agent registry.")
-                            yield from self._write_kv(
-                                {"agent_registry": json.dumps(agent_registry)}
-                            )
-
-                agent_id = agent_registry.get("agent_id")
-                self.context.logger.info(f"Using agent: {agent_id}")
-
-                # Step 3: Get or create APR attribute definition
-                data = yield from self._read_kv(keys=("attr_def",))
-                if data:
-                    attr_def = data.get("attr_def", "{}")
-                    if attr_def:
-                        attr_def = json.loads(attr_def)
-                    else:
-                        # Check external DB
-                        attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
-                        if not attr_def:
-                            attr_def = yield from self.create_attribute_definition(
-                                type_id,
-                                METRICS_NAME,
-                                METRICS_TYPE,
-                                True,
-                                "{}",
-                                agent_id,
-                            )
-                            if not attr_def:
-                                raise Exception(
-                                    "Failed to create attribute definition."
-                                )
-                            yield from self._write_kv(
-                                {"attr_def": json.dumps(attr_def)}
-                            )
-
-                attr_def_id = attr_def.get("attr_def_id")
-                self.context.logger.info(f"Using attribute definition: {attr_def}")
-
-                # Step 4: Calculate APR for positions
-                portfolio_value = 0
-                data = yield from self._read_kv(keys=("portfolio_value",))
-                self.context.logger.info(f"data{data}")
-                if data and data["portfolio_value"]:
-                    self.context.logger.info(f"data{data}")
-                    portfolio_value = float(data.get("portfolio_value", "0"))
-
-                if not math.isclose(
-                    portfolio_value,
-                    self.portfolio_data["portfolio_value"],
-                    rel_tol=1e-9,
-                ):
-                    # Create portfolio snapshot for debugging
-                    portfolio_snapshot = self._create_portfolio_snapshot()
+                # Check if we should calculate APR
+                should_calculate = yield from self._should_calculate_apr()
+                if should_calculate:
+                    # Get or create required resources
+                    agent_type = yield from self._get_or_create_agent_type(sender)
+                    type_id = agent_type["type_id"]
+                    self.context.logger.info(f"Using agent type: {agent_type}")
                     
-                    # Calculate APR and related metrics
-                    actual_apr_data = yield from self.calculate_actual_apr(
-                        portfolio_value
-                    )
-                    if actual_apr_data:
-                        total_actual_apr = actual_apr_data.get("total_actual_apr", None)
-                        adjusted_apr = actual_apr_data.get("adjusted_apr", None)
-
-                        if total_actual_apr:
-                            # Step 5: Store enhanced APR data in MirrorDB
-                            timestamp = int(
-                                self.round_sequence.last_round_transition_timestamp.timestamp()
-                            )
-
-                            # Create enhanced data payload with portfolio metrics
-                            enhanced_data = {
-                                "apr": float(total_actual_apr),
-                                "adjusted_apr": float(adjusted_apr),
-                                "timestamp": timestamp,
-                                "portfolio_snapshot": portfolio_snapshot,
-                                "calculation_metrics": self._get_apr_calculation_metrics(),
-                            }
-
-                            agent_attr = yield from self.create_agent_attribute(
-                                agent_id,
-                                attr_def_id,
-                                enhanced_data,
-                            )
-                            self.context.logger.info(f"Stored APR data: {agent_attr}")
-
-                # Prepare payload for consensus
-                payload = APRPopulationPayload(sender=sender, context="APR Population")
-
+                    agent_registry = yield from self._get_or_create_agent_registry(sender, type_id)
+                    agent_id = agent_registry["agent_id"]
+                    self.context.logger.info(f"Using agent: {agent_id}")
+                    
+                    attr_def = yield from self._get_or_create_attr_def(type_id, agent_id)
+                    attr_def_id = attr_def["attr_def_id"]
+                    self.context.logger.info(f"Using attribute definition: {attr_def}")
+                    
+                    # Calculate and store APR
+                    yield from self._calculate_and_store_apr(agent_id, attr_def_id)
+                    
             except Exception as e:
                 self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
-                # Create a payload even in case of error to continue the protocol
-                payload = APRPopulationPayload(
-                    sender=sender, context="APR Population Error"
+                payload_context = "APR Population Error"
+                
+            payload = APRPopulationPayload(sender=sender, context=payload_context)
+            
+            with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                
+            self.set_done()
+
+    def _get_or_create_agent_type(self, eth_address: str) -> Generator[Dict[str, Any], None, None]:
+        """Get or create agent type."""
+        data = yield from self._read_kv(keys=("agent_type",))
+        if not data or not data.get("agent_type"):
+            type_name = AGENT_TYPE.get(self.params.target_investment_chains[0])
+            agent_type = yield from self.get_agent_type_by_name(type_name)
+            if not agent_type:
+                agent_type = yield from self.create_agent_type(
+                    type_name,
+                    "An agent for DeFi liquidity management and APR tracking",
                 )
-            payload = APRPopulationPayload(sender=sender, context="APR Population")
+                if not agent_type:
+                    raise Exception("Failed to create agent type.")
+                yield from self._write_kv({"agent_type": json.dumps(agent_type)})
+            return agent_type
+        
+        return json.loads(data["agent_type"])
 
-        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
-            yield from self.send_a2a_transaction(payload)
-            yield from self.wait_until_round_end()
+    def _get_or_create_agent_registry(self, eth_address: str, type_id: str) -> Generator[Dict[str, Any], None, None]:
+        """Get or create agent registry entry."""
+        data = yield from self._read_kv(keys=("agent_registry",))
+        if not data or not data.get("agent_registry"):
+            agent_registry = yield from self.get_agent_registry_by_address(eth_address)
+            if not agent_registry:
+                agent_name = self.generate_name(eth_address)
+                self.context.logger.info(f"agent_name : {agent_name}")
+                agent_registry = yield from self.create_agent_registry(
+                    agent_name, type_id, eth_address
+                )
+                if not agent_registry:
+                    raise Exception("Failed to create agent registry.")
+                yield from self._write_kv({"agent_registry": json.dumps(agent_registry)})
+            return agent_registry
+            
+        return json.loads(data["agent_registry"])
 
-        self.set_done()
+    def _get_or_create_attr_def(self, type_id: str, agent_id: str) -> Generator[Dict[str, Any], None, None]:
+        """Get or create APR attribute definition."""
+        data = yield from self._read_kv(keys=("attr_def",))
+        if not data or not data.get("attr_def"):
+            attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+            if not attr_def:
+                attr_def = yield from self.create_attribute_definition(
+                    type_id,
+                    METRICS_NAME,
+                    METRICS_TYPE,
+                    True,
+                    "{}",
+                    agent_id,
+                )
+                if not attr_def:
+                    raise Exception("Failed to create attribute definition.")
+                yield from self._write_kv({"attr_def": json.dumps(attr_def)})
+            return attr_def
+            
+        return json.loads(data["attr_def"])
 
-    # =========================================================================
-    # Utility methods
-    # =========================================================================
+    def _calculate_and_store_apr(self, agent_id: str, attr_def_id: str) -> Generator[None, None, None]:
+        """Calculate and store APR data."""
+        # Get portfolio value
+        data = yield from self._read_kv(keys=("portfolio_value",))
+        portfolio_value = float(data.get("portfolio_value", "0")) if data and data.get("portfolio_value") else 0
+        
+        # Create portfolio snapshot and calculate APR
+        portfolio_snapshot = self._create_portfolio_snapshot()
+        actual_apr_data = yield from self.calculate_actual_apr(portfolio_value)
+        
+        if not actual_apr_data:
+            return
+            
+        total_actual_apr = actual_apr_data.get("total_actual_apr")
+        adjusted_apr = actual_apr_data.get("adjusted_apr")
+        
+        if not total_actual_apr:
+            return
+            
+        # Store APR data
+        timestamp = self._get_current_timestamp()
+        enhanced_data = {
+            "apr": float(total_actual_apr),
+            "adjusted_apr": float(adjusted_apr),
+            "timestamp": timestamp,
+            "portfolio_snapshot": portfolio_snapshot,
+            "calculation_metrics": self._get_apr_calculation_metrics(),
+            "first_investment_timestamp": self.current_positions[0].get('timestamp')
+        }
+        
+        agent_attr = yield from self.create_agent_attribute(
+            agent_id,
+            attr_def_id,
+            enhanced_data,
+        )
+        # Update the last calculation time in DB
+        yield from self._write_kv({"last_apr_calculation": str(timestamp)})
+        
+        self.context.logger.info(f"Stored APR data: {agent_attr}")
+
+    def _should_calculate_apr(self) -> Generator[bool, None, None]:
+        """Check if enough time has passed since last APR calculation or if any investment has been made."""
+        
+        if len(self.current_positions) == 0:
+            self.context.logger.info("No investments made by agent yet")
+            return False
+        
+        # Get last calculation time from DB
+        data = yield from self._read_kv(keys=("last_apr_calculation",))
+        last_calculation_time = None
+        
+        if data and data.get("last_apr_calculation"):
+            try:
+                last_calculation_time = int(data.get("last_apr_calculation"))
+            except (ValueError, TypeError):
+                self.context.logger.warning("Invalid last APR calculation time in DB")
+        
+        current_time = self._get_current_timestamp()
+        
+        # If no last calculation or 30 minutes have passed
+        if not last_calculation_time or (current_time - last_calculation_time) >= APR_UPDATE_INTERVAL:
+            return True
+        
+        self.context.logger.info(
+            f"Skipping APR calculation. Only {(current_time - last_calculation_time) // 60} minutes "
+            f"passed since last calculation"
+        )
+        return False
 
     def _create_portfolio_snapshot(self) -> Dict[str, Any]:
         """Create a structured snapshot of the current portfolio state."""
@@ -245,7 +248,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             ),
             "final_value": float(self._final_value) if self._final_value else None,
             "f_i_ratio": None,
-            "last_investment_timestamp": None,
+            "first_investment_timestamp": None,
             "time_ratio": None,
         }
 
@@ -256,12 +259,12 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             ) - 1
 
         # Calculate time period and annualization factor
-        last_investment_timestamp = self._get_last_investment_timestamp()
-        if last_investment_timestamp:
-            metrics["last_investment_timestamp"] = last_investment_timestamp
+        first_investment_timestamp = self._get_first_investment_timestamp()
+        if first_investment_timestamp:
+            metrics["first_investment_timestamp"] = first_investment_timestamp
 
             current_timestamp = self._get_current_timestamp()
-            hours = max(1, (current_timestamp - int(last_investment_timestamp)) / 3600)
+            hours = max(1, (current_timestamp - int(first_investment_timestamp)) / 3600)
             hours_in_year = 8760
             time_ratio = hours_in_year / hours
             metrics["time_ratio"] = float(time_ratio)
@@ -590,22 +593,12 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         self._initial_value = initial_value
 
-        time_since_investment = self._get_last_investment_timestamp()
-        self._calculate_apr(current_timestamp, time_since_investment, result)
+        first_investment_timestamp = self._get_first_investment_timestamp()
+        self._calculate_apr(current_timestamp, first_investment_timestamp, result)
 
-        yield from self._adjust_apr_for_eth_price(result, time_since_investment)
+        yield from self._adjust_apr_for_eth_price(result, first_investment_timestamp)
 
         return result
-
-    def _has_valid_portfolio_data(self) -> bool:
-        if (
-            not self.current_positions
-            or not hasattr(self, "portfolio_data")
-            or "portfolio_value" not in self.portfolio_data
-        ):
-            self.context.logger.info("Missing required data for APR calculation")
-            return False
-        return True
 
     def _calculate_initial_value(
         self,
@@ -631,27 +624,14 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         return initial_value
 
-    def _get_last_investment_timestamp(self) -> Optional[int]:
-        open_positions = [
-            position
-            for position in self.current_positions
-            if position.get("status") == PositionStatus.OPEN.value
-        ]
-        if not open_positions:
-            self.context.logger.warning(
-                "No open positions found for timestamp retrieval"
-            )
-            return None
-
-        last_open_position = open_positions[-1]
-        time_since_investment = last_open_position.get("timestamp")
-
-        return time_since_investment
+    def _get_first_investment_timestamp(self) -> Optional[int]:
+        first_investment_timestamp = self.current_positions[0].get("timestamp")
+        return first_investment_timestamp
 
     def _calculate_apr(
         self,
         current_timestamp: int,
-        time_since_investment: int,
+        first_investment_timestamp: int,
         result,
     ):
         if self._final_value <= 0:
@@ -659,7 +639,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return 0.0
 
         f_i_ratio = (self._final_value / self._initial_value) - 1
-        hours = max(1, (current_timestamp - int(time_since_investment)) / 3600)
+        hours = max(1, (current_timestamp - int(first_investment_timestamp)) / 3600)
         self.context.logger.info(f"Hours since investment: {hours}")
 
         hours_in_year = 8760
@@ -674,9 +654,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             result["total_actual_apr"] = float(round(apr, 2))
 
     def _adjust_apr_for_eth_price(
-        self, result: Dict[str, float], time_since_investment: int
+        self, result: Dict[str, float], first_investment_timestamp: int
     ) -> Generator[None, None, None]:
-        date_str = datetime.utcfromtimestamp(time_since_investment).strftime("%d-%m-%Y")
+        date_str = datetime.utcfromtimestamp(first_investment_timestamp).strftime("%d-%m-%Y")
 
         current_eth_price = yield from self._fetch_zero_address_price()
         start_eth_price = yield from self._fetch_historical_token_price(
@@ -696,55 +676,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             result["current_price"] = current_eth_price
             result["initial_price"] = start_eth_price
             self.context.logger.info(f"Adjusted APR: {result['adjusted_apr']}%")
-
-    def _store_last_apr_timestamp(
-        self, current_timestamp: int
-    ) -> Generator[None, None, None]:
-        yield from self._write_kv(
-            {"last_apr_stored_timestamp": json.dumps(int(current_timestamp))}
-        )
-
-    def _is_apr_calculation_needed(
-        self, current_timestamp: int, agent_id: int, attr_def_id: int
-    ) -> Generator[None, None, bool]:
-        """Check if APR calculation is needed based on the time gap."""
-        # Get timestamp from the first position or from stored data
-        last_apr_stored_timestamp = None
-        data = yield from self._read_kv(keys=("last_apr_stored_timestamp",))
-        if (
-            data
-            and "last_apr_stored_timestamp" in data
-            and data["last_apr_stored_timestamp"] not in (None, "{}", "")
-        ):
-            try:
-                last_apr_stored_timestamp = int(data.get("last_apr_stored_timestamp"))
-                self.context.logger.info(
-                    f"Using stored timestamp: {last_apr_stored_timestamp}"
-                )
-            except (ValueError, TypeError):
-                self.context.logger.warning(
-                    f"Invalid stored timestamp format: {data.get('timestamp')}"
-                )
-                last_apr_stored_timestamp = None
-        else:
-            time_data = yield from self._fetch_last_apr_data(agent_id, attr_def_id)
-            # Fallback to position timestamp if stored timestamp is invalid
-            if time_data:
-                last_apr_stored_timestamp = time_data["timestamp"]
-                self.context.logger.info(f"timestamp : {last_apr_stored_timestamp}")
-            else:
-                last_apr_stored_timestamp = self._get_last_investment_timestamp()
-
-        if not last_apr_stored_timestamp:
-            return False
-
-        if (
-            last_apr_stored_timestamp
-            and (current_timestamp - last_apr_stored_timestamp) < 7200
-        ):
-            return False
-
-        return True
 
     def calculate_initial_investment_value(
         self, position: Dict[str, Any]
@@ -813,31 +744,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"V_initial : {V_initial}")
 
         return V_initial
-
-    def _fetch_last_apr_data(
-        self, agent_id, attr_def_id
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Fetch the last stored APR data."""
-        try:
-            response = yield from self._call_mirrordb(
-                method="read_",
-                method_name="read_agent_attribute_by_agent_and_def",
-                endpoint=f"api/agents/{agent_id}/attributes/",
-            )
-            # Assuming response is a list of attributes, sort by timestamp and get the latest
-            if response and isinstance(response, list):
-                filtered_response = [
-                    entry for entry in response if entry["attr_def_id"] == attr_def_id
-                ]
-                # Sort the filtered list by timestamp in descending order
-                filtered_response.sort(
-                    key=lambda x: x["json_value"]["timestamp"], reverse=True
-                )
-                return filtered_response[0]["json_value"] if response else None
-            return None
-        except Exception as e:
-            self.context.logger.error(f"Error fetching last APR data: {e}")
-            return None
 
     def generate_phonetic_syllable(self, seed):
         """Generates phonetic syllable"""

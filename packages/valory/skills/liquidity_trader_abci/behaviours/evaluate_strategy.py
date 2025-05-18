@@ -41,7 +41,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PositionStatus,
     THRESHOLDS,
     ZERO_ADDRESS,
-    execute_strategy
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import EvaluateStrategyPayload
@@ -127,196 +126,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
-
-    def calculate_pnl_for_balancer(
-        self, position: Dict[str, Any]
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Calculate PnL for a Balancer position."""
-        chain = position.get("chain")
-        pool_address = position.get("pool_address")
-
-        pool_id = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=WeightedPoolContract.contract_id,
-            contract_callable="get_pool_id",
-            data_key="pool_id",
-            chain_id=chain,
-        )
-
-        # Interact with BalancerPoolContract to get pool information
-        pool_info = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=self.params.balancer_vault_contract_addresses.get(chain),
-            contract_public_id=VaultContract.contract_id,
-            contract_callable="get_pool_tokens",
-            pool_id=pool_id,
-            data_key="tokens",
-            chain_id=chain,
-        )
-
-        if pool_info is None:
-            self.context.logger.error(
-                f"Failed to get pool info from pool {pool_address}"
-            )
-            return None
-
-        total_supply = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=position.get("pool_address"),
-            contract_public_id=ERC20.contract_id,
-            contract_callable="get_total_supply",
-            data_key="data",
-            chain_id=chain,
-        )
-
-        # Get balances of tokens in the pool
-        tokens = pool_info[0]
-        balances = pool_info[1]
-
-        if not tokens or not balances:
-            self.context.logger.error("No tokens or balances found in pool info.")
-            return None
-
-        bpt_balance = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=str(WeightedPoolContract.contract_id),
-            contract_callable="get_balance",
-            data_key="balance",
-            account=self.params.safe_contract_addresses.get(chain),
-            chain_id=chain,
-        )
-        if bpt_balance == 0:
-            self.context.logger.error("User has no BPT balance in this pool.")
-            return None
-
-        # Calculate user's share of the pool
-        user_share = bpt_balance / total_supply
-
-        # Adjust quantities for decimals and calculate user's amounts
-        user_amounts = []
-        token_prices = []
-        for token_address, balance in zip(tokens, balances):
-            # Get token decimals
-            decimals = yield from self._get_token_decimals(chain, token_address)
-            if decimals is None:
-                self.context.logger.error(
-                    f"Failed to get decimals for token {token_address}"
-                )
-                return None
-
-            adjusted_balance = balance / (10**decimals)
-
-            # Calculate user's amount for this token
-            user_amount = adjusted_balance * user_share
-            user_amounts.append(user_amount)
-
-            # Fetch current token prices using _fetch_token_prices
-            token_price = yield from self._fetch_token_price(token_address, chain)
-
-            # Add to token balances for price fetching
-            token_prices.append(token_price)
-
-        if not token_prices:
-            self.context.logger.error("Failed to fetch current token prices.")
-            return None
-
-        # Calculate current position value
-        V_current = 0
-        for token_price, user_amount in zip(token_prices, user_amounts):
-            if token_price is None:
-                self.context.logger.error(
-                    f"Current price not found for token {token_address}."
-                )
-                return None
-            V_current += user_amount * token_price
-
-        # Calculate initial investment value
-        V_initial = yield from self.calculate_initial_investment_value(position)
-
-        if V_initial is None:
-            self.context.logger.error("Failed to calculate initial investment value.")
-            return None
-
-        # Calculate PnL
-        pnl = V_current - V_initial
-        pnl_percentage = (pnl / V_initial) * 100
-
-        self.context.logger.info(
-            f"Current Position Value: ${V_current:.2f}, Total PnL: ${pnl:.2f}"
-        )
-
-        return {
-            "current_value": V_current,
-            "pnl": pnl_percentage,
-        }
-
-    def calculate_pnl_for_sturdy(
-        self, position: Dict[str, Any]
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Calculate PnL for a STURDY position."""
-        chain = position.get("chain")
-        vault_address = position.get("pool_address")
-        token_address = position.get("token0")
-        safe_address = self.params.safe_contract_addresses.get(chain)
-
-        # Get user's balance in the vault
-        balance_data = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=vault_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="balance_of",
-            data_key="amount",
-            owner=safe_address,
-            chain_id=chain,
-        )
-
-        if balance_data is None:
-            self.context.logger.error(
-                f"Failed to get user balance from vault {vault_address}"
-            )
-            return None
-
-        user_balance = int(balance_data)
-
-        # Get token decimals
-        token_decimals = yield from self._get_token_decimals(chain, token_address)
-        if token_decimals is None:
-            self.context.logger.error("Failed to get token decimals.")
-            return None
-
-        # Adjust balance for decimals
-        adjusted_token_qty = user_balance / (10**token_decimals)
-
-        token_price = yield from self._fetch_token_price(token_address, chain)
-
-        if not token_price:
-            self.context.logger.error("Failed to fetch current token price.")
-            return None
-
-        # Calculate current position value
-        V_current = adjusted_token_qty * token_price
-
-        # Calculate initial investment value
-        V_initial = yield from self.calculate_initial_investment_value(position)
-
-        if V_initial is None:
-            self.context.logger.error("Failed to calculate initial investment value.")
-            return None
-
-        # Calculate PnL
-        pnl = V_current - V_initial
-        pnl_percentage = (pnl / V_initial) * 100
-
-        self.context.logger.info(
-            f"Current Position Value: ${V_current:.2f}, Total PnL: ${pnl:.2f}"
-        )
-
-        return {
-            "current_value": V_current,
-            "pnl": pnl_percentage,
-        }
 
     def calculate_initial_investment_value(
         self, position: Dict[str, Any]
@@ -632,7 +441,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
 
                 future = executor.submit(
-                    execute_strategy,
+                    self.execute_strategy,
                     strategy_name,
                     strategies_executables,
                     **kwargs_without_strategy,
@@ -685,23 +494,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if len(self.shared_state.strategy_to_filehash) == 0:
             # no strategies pending to be fetched
             return
-
-        strategies_to_remove = []
+        
         for strategy, file_hash in self.shared_state.strategy_to_filehash.items():
-            if (
-                strategy not in self.synchronized_data.selected_protocols
-                and strategy != self.params.selected_hyper_strategy
-            ):
-                strategies_to_remove.append(strategy)
-                continue
             self.context.logger.info(f"Fetching {strategy} strategy...")
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
             self._inflight_strategy_req = strategy
             self.send_message(ipfs_msg, message, self._handle_get_strategy)
             return
-
-        for strategy in strategies_to_remove:
-            self.shared_state.strategy_to_filehash.pop(strategy)
 
     def get_returns_metrics_for_opportunity(
         self, position: Dict[str, Any], strategy: str
@@ -812,13 +611,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Process rewards
         # if self._can_claim_rewards():
         #     yield from self._process_rewards(actions)
-        # if (  # noqa: E800
-        #     self.synchronized_data.period_count != 0  # noqa: E800
-        #     and self.synchronized_data.period_count % self.params.pnl_check_interval  # noqa: E800
-        #     == 0  # noqa: E800
-        #     and self.current_positions  # noqa: E800
-        # ):  # noqa: E800
-        #     tokens = yield from self._process_pnl(actions)  # noqa: E800
         if not self.selected_opportunities:
             return actions
 
@@ -865,67 +657,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 continue
             action = self._build_claim_reward_action(rewards, chain)
             actions.append(action)
-
-    def _process_pnl(
-        self, actions: List[Dict[str, Any]]
-    ) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Evaluate positions for exit based on PnL thresholds."""
-        pnl_calculation_functions = {
-            DexType.BALANCER.value: self.calculate_pnl_for_balancer,
-            DexType.STURDY.value: self.calculate_pnl_for_sturdy,
-        }
-        tokens_required = {
-            DexType.UNISWAP_V3.value: 2,
-            DexType.BALANCER.value: 2,
-            DexType.STURDY.value: 1,
-        }
-        exited_tokens = []
-
-        for position in self.current_positions:
-            if position.get("status") == PositionStatus.OPEN.value:
-                dex_type = position.get("dex_type")
-                pnl_function = pnl_calculation_functions.get(dex_type)
-                num_tokens = tokens_required.get(dex_type)
-
-                if not pnl_function or num_tokens is None:
-                    self.context.logger.error(
-                        f"No PnL calculation function for dex_type {dex_type}"
-                    )
-                    continue
-
-                pnl_data = yield from pnl_function(position)
-                if not pnl_data:
-                    continue
-
-                position.update(pnl_data)
-                pnl = pnl_data.get("pnl")
-                if pnl is None:
-                    continue
-
-                if (
-                    pnl > self.params.profit_threshold
-                    or pnl < -self.params.loss_threshold
-                ):
-                    tokens = self._build_tokens_from_position(position, num_tokens)
-                    if not tokens:
-                        self.context.logger.error(
-                            f"Invalid number of tokens required for dex_type {dex_type}"
-                        )
-                        continue
-
-                    exit_pool_action = self._build_exit_pool_action(
-                        tokens, num_of_tokens_required=num_tokens
-                    )
-                    if not exit_pool_action:
-                        self.context.logger.error("Error building exit pool action")
-                        continue
-                    actions.append(exit_pool_action)
-                    exited_tokens.extend(tokens)
-                    self.context.logger.info(
-                        f"PnL {pnl:.2f}% is beyond threshold, deciding to exit the pool."
-                    )
-
-        return exited_tokens
 
     def _prepare_tokens_for_investment(
         self,

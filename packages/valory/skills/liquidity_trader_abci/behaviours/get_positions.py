@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the behaviour for fetching the positions for the 'liquidity_trader_abci' skill."""
 
 import json
 from typing import (

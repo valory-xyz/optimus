@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the base behaviour for the 'liquidity_trader_abci' skill."""
 
 import json
 import logging
@@ -118,7 +118,7 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
-AGENT_TYPE = "Modius"
+AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus"}
 METRICS_NAME = "APR"
 METRICS_TYPE = "json"
 

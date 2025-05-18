@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the behaviour for executing trades for the 'liquidity_trader_abci' skill."""
 
 from decimal import Decimal
 from enum import Enum

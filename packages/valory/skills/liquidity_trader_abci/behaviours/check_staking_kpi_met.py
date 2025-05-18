@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the behaviour for checking is staking kpi is met for the 'liquidity_trader_abci' skill."""
 
 
 from typing import Generator, Optional, Type

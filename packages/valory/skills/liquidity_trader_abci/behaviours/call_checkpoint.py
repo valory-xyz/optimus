@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the behaviour for calling the checkpoint on staking contract for the 'liquidity_trader_abci' skill."""
 
 from typing import Generator, Optional
 

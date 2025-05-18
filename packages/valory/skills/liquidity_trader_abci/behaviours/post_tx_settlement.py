@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the behaviour for deciding the next round post transaction settlement for the 'liquidity_trader_abci' skill."""
 
 from typing import (
     Generator,

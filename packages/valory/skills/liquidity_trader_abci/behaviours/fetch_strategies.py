@@ -63,7 +63,8 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
     PositionStatus,
     DexType,
-    TradingType
+    TradingType,
+    PORTFOLIO_UPDATE_INTERVAL
 )
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
@@ -128,35 +129,58 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def should_recalculate_portfolio(self, last_portfolio_data: Dict) -> bool:
         """Determine if the portfolio should be recalculated."""
-        return self._is_period_due() or self._have_positions_changed(
+        return self._is_time_update_due() or self._have_positions_changed(
             last_portfolio_data
         )
 
-    def _is_period_due(self) -> bool:
-        """Check if the period count indicates a recalculation is due."""
-        return self.synchronized_data.period_count % 10 == 0
+    def _is_time_update_due(self) -> bool:
+        """Check if enough time has passed since last update."""
+        current_time = self._get_current_timestamp()
+        last_update_time = self.portfolio_data.get("last_updated", 0)
+        
+        return (current_time - last_update_time) >= PORTFOLIO_UPDATE_INTERVAL
 
     def _have_positions_changed(self, last_portfolio_data: Dict) -> bool:
-        """Check if the positions have changed since the last calculation."""
+        """Check if positions have changed by comparing current and last positions."""
         current_positions = self.current_positions
         last_positions = last_portfolio_data.get("allocations", [])
 
+        # Early return if the number of positions changed
         if len(current_positions) != len(last_positions):
+            self.context.logger.info(
+                f"Portfolio update needed: Position count changed. Current: {len(current_positions)}, Previous: {len(last_positions)}"
+            )
             return True
 
-        # Create a set of current position identifiers i.e. pool_id with their status
-        current_position_status = {
-            (position.get("pool_address"), position.get("status"))
+        # Create sets of position identifiers with their status
+        current_position_set = {
+            (
+                position.get("pool_address", position.get("pool_id")),  # Handle both Balancer and other DEXes
+                position.get("dex_type"),
+                position.get("status")
+            )
             for position in current_positions
         }
 
-        # Create a set of last position identifiers i.e. pool_id with their status
-        last_position_status = {
-            (position.get("id"), "open") for position in last_positions
+        last_position_set = {
+            (
+                position.get("id"),  # pool_id or pool_address from allocations
+                position.get("type"),  # dex_type in allocations
+                PositionStatus.OPEN.value  # allocations only contain open positions
+            )
+            for position in last_positions
         }
 
-        # Check if there are any differences in the sets
-        if current_position_status != last_position_status:
+        # Check for any differences
+        new_positions = current_position_set - last_position_set
+        closed_positions = last_position_set - current_position_set
+
+        if new_positions:
+            self.context.logger.info(f"Portfolio update needed: New positions opened: {new_positions}")
+            return True
+
+        if closed_positions:
+            self.context.logger.info(f"Portfolio update needed: Positions closed: {closed_positions}")
             return True
 
         return False
@@ -168,222 +192,161 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         individual_shares = []
         portfolio_breakdown = []
 
-        for position in self.current_positions:
-            if position.get("status") == PositionStatus.OPEN.value:
+        # Map DEX types to their handler functions
+        dex_handlers = {
+            DexType.BALANCER.value: self._handle_balancer_position,
+            DexType.UNISWAP_V3.value: self._handle_uniswap_position,
+            DexType.STURDY.value: self._handle_sturdy_position,
+            DexType.VELODROME.value: self._handle_velodrome_position
+        }
+
+        # Process open positions
+        for position in (p for p in self.current_positions if p.get("status") == PositionStatus.OPEN.value):
+            try:
                 dex_type = position.get("dex_type")
                 chain = position.get("chain")
-                pool_id = (
-                    position.get("pool_id")
-                    if dex_type == DexType.BALANCER.value
-                    else position.get("pool_address")
+                
+                if not dex_type or not chain:
+                    self.context.logger.error("Missing dex_type or chain")
+                    continue
+
+                handler = dex_handlers.get(dex_type)
+                if not handler:
+                    self.context.logger.error(f"Unsupported DEX type: {dex_type}")
+                    continue
+
+                # Get position details and balances using the appropriate handler
+                result = yield from handler(position, chain)
+                if not result:
+                    continue
+
+                user_balances, details, token_info = result
+                user_share = yield from self._calculate_position_value(
+                    position, chain, user_balances, token_info, portfolio_breakdown
                 )
-                assets = (
-                    [position.get("token0_symbol"), position.get("token1_symbol")]
-                    if dex_type in [DexType.BALANCER.value, DexType.UNISWAP_V3.value, DexType.VELODROME.value]
-                    else [position.get("token0_symbol")]
-                )
-                apr = position.get("apr")
-
-                # Calculate user share value
-                user_address = self.params.safe_contract_addresses.get(chain)
-                if dex_type == DexType.BALANCER.value:
-                    pool_address = position.get("pool_address")
-                    user_balances = yield from self.get_user_share_value_balancer(
-                        user_address,
-                        pool_id,
-                        pool_address,
-                        chain,
-                    )
-                    details = yield from self._get_balancer_pool_name(
-                        pool_address, chain
-                    )
-                elif dex_type == DexType.UNISWAP_V3.value:
-                    pool_address = position.get("pool_address")
-                    token_id = position.get("token_id")
-                    user_balances = yield from self.get_user_share_value_uniswap(
-                        pool_address, token_id, chain, position
-                    )
-                    details = f"Uniswap V3 Pool - {position.get('token0_symbol')}/{position.get('token1_symbol')}"
-                elif dex_type == DexType.STURDY.value:
-                    aggregator_address = position.get("pool_address")
-                    asset_address = position.get("token0")
-                    user_balances = yield from self.get_user_share_value_sturdy(
-                        user_address, aggregator_address, asset_address, chain
-                    )
-                    details = yield from self._get_aggregator_name(
-                        aggregator_address, chain
-                    )
-                elif dex_type == DexType.VELODROME.value:
-                    pool_address = position.get("pool_address")
-                    token_id = position.get("token_id")
-                    user_balances = yield from self.get_user_share_value_velodrome(
-                        user_address, pool_address, token_id, chain, position
-                    )
-                    # For Velodrome pools, we'll use a simple description for now
-                    details = "Velodrome " + (
-                        "CL Pool" if position.get("is_cl_pool") else "Pool"
-                    )
-
-                user_share = Decimal(0)
-
-                for asset in assets:
-                    if (
-                        dex_type == DexType.BALANCER.value
-                        or dex_type == DexType.UNISWAP_V3.value
-                        or dex_type == DexType.VELODROME.value
-                    ):
-                        token0_address = position.get("token0")
-                        token1_address = position.get("token1")
-                        asset_addresses = [token0_address, token1_address]
-                        asset_address = asset_addresses[assets.index(asset)]
-                    elif dex_type == DexType.STURDY.value:
-                        asset_address = position.get("token0")
-                    else:
-                        self.context.logger.error(f"Unsupported DEX type: {dex_type}")
-                        continue
-
-                    asset_balance = user_balances.get(asset_address)
-                    if asset_balance is None:
-                        self.context.logger.error(
-                            f"Could not find balance for asset {asset}"
-                        )
-                        continue
-
-                    asset_price = yield from self._fetch_token_price(
-                        asset_address, chain
-                    )
-                    if asset_price is None:
-                        self.context.logger.error(
-                            f"Could not fetch price for asset {asset}"
-                        )
-                        continue
-
-                    asset_price = Decimal(str(asset_price))
-
-                    asset_value_usd = asset_balance * asset_price
-                    user_share += asset_value_usd
-                    # Check if the asset already exists in the portfolio_breakdown
-                    existing_asset = next(
-                        (
-                            entry
-                            for entry in portfolio_breakdown
-                            if entry["address"] == asset_address
-                        ),
-                        None,
-                    )
-                    if existing_asset:
-                        # Add the balance to the existing entry
-                        existing_asset["balance"] = float(asset_balance)
-                        existing_asset["value_usd"] = asset_value_usd
-                    else:
-                        # Create a new entry for the asset
-                        portfolio_breakdown.append(
-                            {
-                                "asset": asset,
-                                "address": asset_address,
-                                "balance": float(asset_balance),
-                                "price": asset_price,
-                                "value_usd": asset_value_usd,
-                            }
-                        )
-
-                total_user_share_value_usd += user_share
-                individual_shares.append(
-                    (
+                
+                if user_share > 0:
+                    total_user_share_value_usd += user_share
+                    pool_address = (position.get("pool_id") if dex_type == DexType.BALANCER.value 
+                            else position.get("pool_address"))
+                    
+                    individual_shares.append((
                         user_share,
                         dex_type,
                         chain,
-                        pool_id,
-                        assets,
-                        apr,
+                        pool_address,
+                        list(token_info.values()),  # token symbols
+                        position.get("apr", 0.0),
                         details,
-                        user_address,
-                        user_balances,
-                    )
-                )
+                        self.params.safe_contract_addresses.get(chain),
+                        user_balances
+                    ))
 
-        # Remove closed positions from allocations
-        allocations = [
-            allocation
-            for allocation in allocations
-            if allocation["id"] != pool_id
-            or allocation["type"] != dex_type
-            or allocation["status"] != PositionStatus.CLOSED.value
-        ]
+            except Exception as e:
+                self.context.logger.error(f"Error processing position: {str(e)}")
+                continue
 
-        portfolio_breakdown = [
-            entry for entry in portfolio_breakdown if entry["value_usd"] > 0
-        ]
-
-        total_user_share_value_usd = sum(
-            Decimal(str(entry["value_usd"])) for entry in portfolio_breakdown
-        )
+        # Calculate final portfolio metrics
         if total_user_share_value_usd > 0:
-            # Calculate the ratio of each asset in the portfolio
-            total_ratio = sum(
-                Decimal(str(entry["value_usd"])) / total_user_share_value_usd
-                for entry in portfolio_breakdown
-                if total_user_share_value_usd > 0
+            yield from self._update_portfolio_metrics(
+                total_user_share_value_usd, individual_shares, portfolio_breakdown, allocations
             )
-            for entry in portfolio_breakdown:
-                if total_user_share_value_usd > 0:
-                    entry["ratio"] = round(
-                        Decimal(str(entry["value_usd"]))
-                        / total_user_share_value_usd
-                        / total_ratio,
-                        6,
-                    )
-                    entry["value_usd"] = float(entry["value_usd"])
-                    entry["balance"] = float(entry["balance"])
-                else:
-                    entry["ratio"] = 0.0
-                    entry["value_usd"] = float(entry["value_usd"])
-                    entry["balance"] = float(entry["balance"])
 
-            # Calculate ratios and build allocations
-            total_ratio = sum(
-                float(user_share / total_user_share_value_usd) * 100
-                for user_share, _, _, _, _, _, _, _, _ in individual_shares
-                if total_user_share_value_usd > 0
-            )
-            for (
-                user_share,
-                dex_type,
-                chain,
-                pool_id,
-                assets,
-                apr,
-                details,
-                user_address,
-                _,
-            ) in individual_shares:
-                if total_user_share_value_usd > 0:
-                    ratio = round(
-                        float(user_share / total_user_share_value_usd)
-                        * 100
-                        * 100
-                        / total_ratio,
-                        2,
-                    )
-                else:
-                    ratio = 0.0
+        self.portfolio_data = self._create_portfolio_data(
+            total_user_share_value_usd, allocations, portfolio_breakdown
+        )
 
-                allocations.append(
-                    {
-                        "chain": chain,
-                        "type": dex_type,
-                        "id": pool_id,
-                        "assets": assets,
-                        "apr": round(apr, 2),
-                        "details": details,
-                        "ratio": float(ratio),
-                        "address": user_address,
-                    }
+    def _update_portfolio_metrics(
+        self, 
+        total_user_share_value_usd: Decimal,
+        individual_shares: List[Tuple],
+        portfolio_breakdown: List[Dict],
+        allocations: List[Dict]
+    ) -> Generator[None, None, None]:
+        """Update portfolio metrics including ratios for both breakdown and allocations."""
+        # First update portfolio breakdown ratios
+        yield from self._update_portfolio_breakdown_ratios(
+            portfolio_breakdown, total_user_share_value_usd
+        )
+        
+        # Then calculate allocation ratios
+        yield from self._update_allocation_ratios(
+            individual_shares, total_user_share_value_usd, allocations
+        )
+
+    def _update_portfolio_breakdown_ratios(
+        self, 
+        portfolio_breakdown: List[Dict],
+        total_value: Decimal
+    ) -> Generator[None, None, None]:
+        """Calculate ratios for portfolio breakdown entries."""
+        # Calculate total ratio first
+        total_ratio = sum(
+            Decimal(str(entry["value_usd"])) / total_value
+            for entry in portfolio_breakdown
+        )
+        
+        # Update each entry with its ratio
+        for entry in portfolio_breakdown:
+            if total_value > 0:
+                entry["ratio"] = round(
+                    Decimal(str(entry["value_usd"])) / total_value / total_ratio,
+                    6
                 )
+            else:
+                entry["ratio"] = 0.0
+                
+            # Convert values to float for JSON serialization
+            entry["value_usd"] = float(entry["value_usd"])
+            entry["balance"] = float(entry["balance"])
+            entry["price"] = float(entry["price"])
 
-        # Store the calculated portfolio value and breakdown
-        self.portfolio_data = {
-            "portfolio_value": float(total_user_share_value_usd),
+    def _update_allocation_ratios(
+        self,
+        individual_shares: List[Tuple],
+        total_value: Decimal,
+        allocations: List[Dict]
+    ) -> Generator[None, None, None]:
+        """Calculate and update allocation ratios."""
+        if total_value <= 0:
+            return
+
+        # Calculate total ratio for allocations
+        total_ratio = sum(
+            float(user_share / total_value) * 100
+            for user_share, *_ in individual_shares
+        )
+
+        # Process each share and create allocation entry
+        for (
+            user_share, dex_type, chain, pool_id, 
+            assets, apr, details, user_address, _
+        ) in individual_shares:
+            ratio = round(
+                float(user_share / total_value) * 100 * 100 / total_ratio,
+                2
+            ) if total_ratio > 0 else 0.0
+
+            allocations.append({
+                "chain": chain,
+                "type": dex_type,
+                "id": pool_id,
+                "assets": assets,
+                "apr": round(float(apr), 2),
+                "details": details,
+                "ratio": float(ratio),
+                "address": user_address
+            })
+
+    def _create_portfolio_data(
+        self,
+        total_value: Decimal,
+        allocations: List[Dict],
+        portfolio_breakdown: List[Dict]
+    ) -> Dict:
+        """Create the final portfolio data structure."""
+        return {
+            "portfolio_value": float(total_value),
             "allocations": [
                 {
                     "chain": allocation["chain"],
@@ -393,7 +356,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "apr": float(allocation["apr"]),
                     "details": allocation["details"],
                     "ratio": float(allocation["ratio"]),
-                    "address": allocation["address"],
+                    "address": allocation["address"]
                 }
                 for allocation in allocations
             ],
@@ -404,14 +367,125 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "balance": float(entry["balance"]),
                     "price": float(entry["price"]),
                     "value_usd": float(entry["value_usd"]),
-                    "ratio": float(entry["ratio"]),
+                    "ratio": float(entry["ratio"])
                 }
                 for entry in portfolio_breakdown
             ],
             "address": self.params.safe_contract_addresses.get(
                 self.params.target_investment_chains[0]
             ),
+            "last_updated": self._get_current_timestamp()
         }
+
+    def _handle_balancer_position(self, position: Dict, chain: str) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
+        """Handle Balancer position processing."""
+        user_address = self.params.safe_contract_addresses.get(chain)
+        pool_address = position.get("pool_address")
+        pool_id = position.get("pool_id")
+        
+        user_balances = yield from self.get_user_share_value_balancer(
+            user_address, pool_id, pool_address, chain
+        )
+        details = yield from self._get_balancer_pool_name(pool_address, chain)
+        token_info = {
+            position.get("token0"): position.get("token0_symbol"),
+            position.get("token1"): position.get("token1_symbol")
+        }
+        
+        return user_balances, details, token_info
+
+    def _handle_uniswap_position(self, position: Dict, chain: str) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
+        """Handle Uniswap V3 position processing."""
+        pool_address = position.get("pool_address")
+        token_id = position.get("token_id")
+        
+        user_balances = yield from self.get_user_share_value_uniswap(
+            pool_address, token_id, chain, position
+        )
+        details = f"Uniswap V3 Pool - {position.get('token0_symbol')}/{position.get('token1_symbol')}"
+        token_info = {
+            position.get("token0"): position.get("token0_symbol"),
+            position.get("token1"): position.get("token1_symbol")
+        }
+        
+        return user_balances, details, token_info
+
+    def _handle_sturdy_position(self, position: Dict, chain: str) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
+        """Handle Sturdy position processing."""
+        user_address = self.params.safe_contract_addresses.get(chain)
+        aggregator_address = position.get("pool_address")
+        asset_address = position.get("token0")
+        
+        user_balances = yield from self.get_user_share_value_sturdy(
+            user_address, aggregator_address, asset_address, chain
+        )
+        details = yield from self._get_aggregator_name(aggregator_address, chain)
+        token_info = {
+            position.get("token0"): position.get("token0_symbol")
+        }
+        
+        return user_balances, details, token_info
+
+    def _handle_velodrome_position(self, position: Dict, chain: str) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
+        """Handle Velodrome position processing."""
+        user_address = self.params.safe_contract_addresses.get(chain)
+        pool_address = position.get("pool_address")
+        token_id = position.get("token_id")
+        
+        user_balances = yield from self.get_user_share_value_velodrome(
+            user_address, pool_address, token_id, chain, position
+        )
+        details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
+        token_info = {
+            position.get("token0"): position.get("token0_symbol"),
+            position.get("token1"): position.get("token1_symbol")
+        }
+        
+        return user_balances, details, token_info
+
+    def _calculate_position_value(
+        self, position: Dict, chain: str, user_balances: Dict, 
+        token_info: Dict[str, str], portfolio_breakdown: List
+    ) -> Generator[Decimal, None, None]:
+        """Calculate total value of a position and update portfolio breakdown."""
+        user_share = Decimal(0)
+        
+        for token_address, token_symbol in token_info.items():
+            asset_balance = user_balances.get(token_address)
+            if asset_balance is None:
+                self.context.logger.error(f"Could not find balance for {token_symbol}")
+                continue
+
+            asset_price = yield from self._fetch_token_price(token_address, chain)
+            if asset_price is None:
+                self.context.logger.error(f"Could not fetch price for {token_symbol}")
+                continue
+
+            asset_price = Decimal(str(asset_price))
+            asset_value_usd = asset_balance * asset_price
+            user_share += asset_value_usd
+
+            # Update portfolio breakdown
+            existing_asset = next(
+                (entry for entry in portfolio_breakdown if entry["address"] == token_address),
+                None
+            )
+            
+            if existing_asset:
+                existing_asset.update({
+                    "balance": float(asset_balance),
+                    "value_usd": float(asset_value_usd)
+                })
+            else:
+                portfolio_breakdown.append({
+                    "asset": token_symbol,
+                    "address": token_address,
+                    "balance": float(asset_balance),
+                    "price": float(asset_price),
+                    "value_usd": float(asset_value_usd)
+                })
+        
+        return user_share
 
     def get_user_share_value_velodrome(
         self, user_address: str, pool_address: str, token_id: int, chain: str, position

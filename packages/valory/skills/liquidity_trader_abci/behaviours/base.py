@@ -121,7 +121,7 @@ ERC20_DECIMALS = 18
 AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus"}
 METRICS_NAME = "APR"
 METRICS_TYPE = "json"
-
+PORTFOLIO_UPDATE_INTERVAL = 3600
 
 class DexType(Enum):
     """DexType"""

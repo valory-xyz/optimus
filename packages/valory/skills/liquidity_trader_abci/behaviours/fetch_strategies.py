@@ -301,6 +301,99 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             entry["balance"] = float(entry["balance"])
             entry["price"] = float(entry["price"])
 
+    def _get_tick_ranges(self, position: Dict, chain: str) -> Generator[List[Dict[str, int]], None, None]:
+        """Get tick ranges for a position."""
+        if position.get("dex_type") not in [DexType.UNISWAP_V3.value, DexType.VELODROME.value]:
+            return []
+            
+        # For Velodrome positions, we only get tick ranges if it's a CL pool
+        if position.get("dex_type") == DexType.VELODROME.value and not position.get("is_cl_pool"):
+            return []
+            
+        pool_address = position.get("pool_address")
+        if not pool_address:
+            return []
+            
+        # Get current tick from pool
+        contract_id = (
+            VelodromeCLPoolContract.contract_id 
+            if position.get("dex_type") == DexType.VELODROME.value 
+            else UniswapV3PoolContract.contract_id
+        )
+        
+        slot0_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=contract_id,
+            contract_callable="slot0",
+            data_key="slot0",
+            chain_id=chain,
+        )
+        
+        if not slot0_data or "tick" not in slot0_data:
+            self.context.logger.error(f"Failed to get current tick for pool {pool_address}")
+            return []
+            
+        current_tick = slot0_data["tick"]
+        
+        # Get position manager address
+        position_manager_address = (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain)
+            if position.get("dex_type") == DexType.VELODROME.value
+            else self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
+        
+        if not position_manager_address:
+            self.context.logger.error(f"No position manager address found for chain {chain}")
+            return []
+            
+        # Get contract ID for position manager
+        contract_id = (
+            VelodromeNonFungiblePositionManagerContract.contract_id
+            if position.get("dex_type") == DexType.VELODROME.value
+            else UniswapV3NonfungiblePositionManagerContract.contract_id
+        )
+        
+        tick_ranges = []
+        
+        # Handle both single positions and multiple positions (Velodrome CL)
+        positions_to_process = (
+            position["positions"] if position.get("positions")
+            else [position]
+        )
+        
+        for pos in positions_to_process:
+            token_id = pos.get("token_id")
+            if not token_id:
+                continue
+                
+            position_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=contract_id,
+                contract_callable="get_position",
+                data_key="data",
+                token_id=token_id,
+                chain_id=chain,
+            )
+            
+            if not position_data:
+                continue
+                
+            tick_lower = position_data.get("tickLower")
+            tick_upper = position_data.get("tickUpper")
+            
+            if tick_lower is not None and tick_upper is not None:
+                tick_ranges.append({
+                    "current_tick": current_tick,
+                    "tick_lower": tick_lower,
+                    "tick_upper": tick_upper,
+                    "token_id": token_id,
+                    "in_range": tick_lower <= current_tick <= tick_upper
+                })
+        
+        return tick_ranges
+
     def _update_allocation_ratios(
         self,
         individual_shares: List[Tuple],
@@ -326,8 +419,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 float(user_share / total_value) * 100 * 100 / total_ratio,
                 2
             ) if total_ratio > 0 else 0.0
+            
+            # Get tick ranges for concentrated liquidity positions
+            position = next(
+                (p for p in self.current_positions if 
+                 (p.get("pool_address") == pool_id or p.get("pool_id") == pool_id)),
+                None
+            )
+            
+            tick_ranges = []
+            if position:
+                tick_ranges = yield from self._get_tick_ranges(position, chain)
 
-            allocations.append({
+            allocation = {
                 "chain": chain,
                 "type": dex_type,
                 "id": pool_id,
@@ -336,8 +440,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "details": details,
                 "ratio": float(ratio),
                 "address": user_address
-            })
-
+            }
+            
+            # Only add tick_ranges if they exist
+            if tick_ranges:
+                allocation["tick_ranges"] = tick_ranges
+                
+            allocations.append(allocation)
     def _create_portfolio_data(
         self,
         total_value: Decimal,

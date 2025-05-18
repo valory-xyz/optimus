@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of LiquidityTraderAbciApp."""
+"""This module contains the behaviour for writing apr related data to database for the 'liquidity_trader_abci' skill."""
 
 import json
 import math
@@ -79,10 +79,11 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                         agent_type = json.loads(agent_type)
                     else:
                         # Check external DB
-                        agent_type = yield from self.get_agent_type_by_name(AGENT_TYPE)
+                        type_name=AGENT_TYPE.get(self.params.target_investment_chains[0])
+                        agent_type = yield from self.get_agent_type_by_name(type_name)
                         if not agent_type:
                             agent_type = yield from self.create_agent_type(
-                                AGENT_TYPE,
+                                type_name,
                                 "An agent for DeFi liquidity management and APR tracking",
                             )
                             if not agent_type:
@@ -163,10 +164,10 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 ):
                     # Create portfolio snapshot for debugging
                     portfolio_snapshot = self._create_portfolio_snapshot()
-
+                    
                     # Calculate APR and related metrics
                     actual_apr_data = yield from self.calculate_actual_apr(
-                        agent_id, attr_def_id
+                        portfolio_value
                     )
                     if actual_apr_data:
                         total_actual_apr = actual_apr_data.get("total_actual_apr", None)

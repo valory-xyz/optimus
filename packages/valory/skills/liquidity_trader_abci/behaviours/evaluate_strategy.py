@@ -41,6 +41,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PositionStatus,
     THRESHOLDS,
     ZERO_ADDRESS,
+    METRICS_UPDATE_INTERVAL
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import EvaluateStrategyPayload
@@ -94,15 +95,34 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                 != PositionStatus.OPEN.value
                             ):
                                 continue
-                            metrics = self.get_returns_metrics_for_opportunity(
-                                position, strategy
-                            )
-                            if metrics:
-                                position.update(metrics)
+                                
+                            # Check when metrics were last calculated
+                            current_timestamp = self._get_current_timestamp()
+                            last_metrics_update = position.get("last_metrics_update", 0)
+                            
+                            # Only recalculate metrics every 6 hours (21600 seconds)
+                            # This reduces API calls while still keeping metrics reasonably up-to-date
+                            if current_timestamp - last_metrics_update >= METRICS_UPDATE_INTERVAL:
+                                self.context.logger.info(
+                                    f"Recalculating metrics for position {position.get('pool_address')} - last update was {(current_timestamp - last_metrics_update) / 3600:.2f} hours ago"
+                                )
+                                metrics = self.get_returns_metrics_for_opportunity(
+                                    position, strategy
+                                )
+                                if metrics:
+                                    # Add the timestamp of this update
+                                    metrics["last_metrics_update"] = current_timestamp
+                                    position.update(metrics)
+                            else:
+                                self.context.logger.info(
+                                    f"Skipping metrics calculation for position {position.get('pool_address')} - last update was {(current_timestamp - last_metrics_update) / 3600:.2f} hours ago"
+                                )
                         else:
                             self.context.logger.error(
                                 f"No strategy found for dex type {dex_type}"
                             )
+                        
+                        self.store_current_positions()
 
                 self.execute_hyper_strategy()
                 actions = (

@@ -93,7 +93,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-15, macos-15-large]
+        os: [windows-latest, macos-14, macos-14-large]
     defaults:
       run:
         shell: bash
@@ -140,13 +140,9 @@ jobs:
 
       - name: Install and configure Poetry
         run: pip install poetry
-
-      - name: Build Agent Runner
-        run: |
-            make build-agent-runner
-
-
-      - name: sign the file mac os
+      
+      #### MAC
+      - name: build an sign sign the file mac os
         if: runner.os != 'Windows'
         env:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -154,6 +150,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}  # Apple ID email
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}  # App-specific password
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}  # Team ID из Apple Dev Account
+          SIGN_ID: "Developer ID Application: Valory AG (${{ secrets.APPLE_TEAM_ID }})"
         run: | 
           echo "$CSC_LINK" | base64 --decode > certificate.p12
 
@@ -162,8 +159,8 @@ jobs:
           security unlock-keychain -p temp build.keychain
           security import certificate.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k temp build.keychain
-          
-          codesign --force --verbose --sign "Developer ID Application" --timestamp --options runtime dist/agent_runner_bin
+
+          make build-agent-runner-mac
 
           codesign -dv --verbose=4 dist/agent_runner_bin
     
@@ -174,6 +171,12 @@ jobs:
           echo "FILENAME=$FILENAME" >> $GITHUB_ENV; 
           mv dist/agent_runner_bin dist/${FILENAME}
           dist/${FILENAME} --version
+      
+      ### WINDOWS
+      - name: Build Agent Runner Windonws
+        if: runner.os == 'Windows'
+        run: |
+            make build-agent-runner
 
       - name: sign the file
         if: runner.os == 'Windows'

@@ -60,7 +60,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PositionStatus,
     THRESHOLDS,
     ZERO_ADDRESS,
-    execute_strategy
+    execute_strategy,
 )
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
@@ -85,7 +85,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            
             if not self.current_positions:
                 has_funds = any(
                     asset.get("balance", 0) > 0
@@ -101,10 +100,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     yield from self.send_a2a_transaction(payload)
                     # Then move to consensus block
-                    with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+                    with self.context.benchmark_tool.measure(
+                        self.behaviour_id
+                    ).consensus():
                         yield from self.wait_until_round_end()
                     self.set_done()
-            
 
             yield from self.fetch_all_trading_opportunities()
 
@@ -569,7 +569,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "apr_threshold": self.params.apr_threshold,
                 "protocols": self.params.available_protocols,
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                "current_positions": self.current_positions
+                "current_positions": self.current_positions,
             }
         )
 

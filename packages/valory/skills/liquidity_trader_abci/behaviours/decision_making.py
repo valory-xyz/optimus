@@ -70,9 +70,6 @@ from packages.valory.skills.liquidity_trader_abci.states.decision_making import 
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
 )
-from packages.valory.skills.liquidity_trader_abci.models import (
-    SharedState,
-)
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )

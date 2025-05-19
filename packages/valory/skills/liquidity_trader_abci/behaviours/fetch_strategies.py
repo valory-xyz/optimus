@@ -512,7 +512,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "details": allocation["details"],
                     "ratio": float(allocation["ratio"]),
                     "address": allocation["address"],
-                    "tick_ranges": allocation.get("tick_ranges")
+                    "tick_ranges": allocation.get("tick_ranges"),
                 }
                 for allocation in allocations
             ],

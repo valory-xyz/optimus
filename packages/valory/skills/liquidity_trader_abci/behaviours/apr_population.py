@@ -161,7 +161,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, None]:
         """Calculate and store APR data."""
         # Get portfolio value
-        portfolio_value = self.portfolio_data.get("portfolio_value",0)
+        portfolio_value = self.portfolio_data.get("portfolio_value", 0)
 
         # Create portfolio snapshot and calculate APR
         portfolio_snapshot = self._create_portfolio_snapshot()
@@ -506,7 +506,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Missing required data for APR calculation")
             return False
         return True
-    
+
     def _get_first_investment_timestamp(self) -> Optional[int]:
         first_investment_timestamp = self.current_positions[0].get("timestamp")
         return first_investment_timestamp

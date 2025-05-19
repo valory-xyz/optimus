@@ -443,138 +443,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     # APR Calculation methods
     # =========================================================================
 
-    def _fetch_token_name_from_contract(
-        self, chain: str, token_address: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Fetch the token name from the ERC20 contract."""
-
-        token_name = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=token_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="get_name",
-            data_key="data",
-            chain_id=chain,
-        )
-        return token_name
-
-    def get_token_id_from_symbol_cached(
-        self, symbol, token_name, coin_list
-    ) -> Optional[str]:
-        """Retrieve the CoinGecko token ID using the token's symbol and name."""
-        # Try to find coins matching the symbol.
-        candidates = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-        ]
-        if not candidates:
-            return None
-
-        # If single candidate, return it.
-        if len(candidates) == 1:
-            return candidates[0]["id"]
-
-        # If multiple candidates, match by name if possible.
-        normalized_token_name = token_name.replace(" ", "").lower()
-        for coin in candidates:
-            coin_name = coin["name"].replace(" ", "").lower()
-            if coin_name == normalized_token_name or coin_name == symbol.lower():
-                return coin["id"]
-        return None
-
-    def get_token_id_from_symbol(
-        self, token_address, symbol, coin_list, chain_name
-    ) -> Generator[None, None, Optional[str]]:
-        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
-        token_name = yield from self._fetch_token_name_from_contract(
-            chain_name, token_address
-        )
-        if not token_name:
-            matching_coins = [
-                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-            ]
-            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-
-        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-
-    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
-        """Fetches the list of coins from CoinGecko API only once."""
-        url = "https://api.coingecko.com/api/v3/coins/list"
-        response = yield from self.get_http_response("GET", url, None, None)
-
-        try:
-            response_json = json.loads(response.body)
-            return response_json
-        except json.decoder.JSONDecodeError as e:
-            self.context.logger.error(f"Failed to fetch coin list: {e}")
-            return None
-
-    def _fetch_historical_token_prices(
-        self, tokens: List[List[str]], date_str: str, chain: str
-    ) -> Generator[None, None, Dict[str, float]]:
-        """Fetch historical token prices for a specific date."""
-        historical_prices = {}
-
-        coin_list = yield from self.fetch_coin_list()
-        if not coin_list:
-            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
-            return historical_prices
-
-        for token_symbol, token_address in tokens:
-            # Get CoinGecko ID.
-            coingecko_id = yield from self.get_token_id_from_symbol(
-                token_address, token_symbol, coin_list, chain
-            )
-            if not coingecko_id:
-                self.context.logger.error(
-                    f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
-                )
-                continue
-
-            price = yield from self._fetch_historical_token_price(
-                coingecko_id, date_str
-            )
-            if price:
-                historical_prices[token_address] = price
-
-        return historical_prices
-
-    def _fetch_historical_token_price(
-        self, coingecko_id, date_str
-    ) -> Generator[None, None, Optional[float]]:
-        endpoint = self.coingecko.historical_price_endpoint.format(
-            coin_id=coingecko_id,
-            date=date_str,
-        )
-
-        headers = {"Accept": "application/json"}
-        if self.coingecko.api_key:
-            headers["x-cg-api-key"] = self.coingecko.api_key
-
-        success, response_json = yield from self._request_with_retries(
-            endpoint=endpoint,
-            headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
-        )
-
-        if success:
-            price = (
-                response_json.get("market_data", {}).get("current_price", {}).get("usd")
-            )
-            if price:
-                return price
-            else:
-                self.context.logger.error(
-                    f"No price in response for token {coingecko_id}"
-                )
-                return None
-        else:
-            self.context.logger.error(
-                f"Failed to fetch historical price for {coingecko_id}"
-            )
-            return None
-
     def calculate_actual_apr(
         self, portfolio_value: float
     ) -> Generator[None, None, Dict[str, float]]:
@@ -587,11 +455,16 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         self._final_value = portfolio_value
         current_timestamp = self._get_current_timestamp()
 
-        initial_value = yield from self._calculate_initial_value()
+        # Use the stored initial investment value if available
+        initial_value = self.get_stored_initial_investment()
         if not initial_value:
-            return None
+            # Fall back to calculating it if not available
+            initial_value = yield from self.calculate_initial_investment()
+            if not initial_value:
+                return None
 
         self._initial_value = initial_value
+        self.context.logger.info(f"Using initial investment value: {initial_value}")
 
         first_investment_timestamp = self._get_first_investment_timestamp()
         self._calculate_apr(current_timestamp, first_investment_timestamp, result)
@@ -600,30 +473,18 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         return result
 
-    def _calculate_initial_value(
-        self,
-    ) -> Generator[None, None, Optional[float]]:
-        initial_value = 0.0
-        for position in self.current_positions:
-            if position.get("status") == PositionStatus.OPEN.value:
-                position_value = yield from self.calculate_initial_investment_value(
-                    position
-                )
-                self.context.logger.info(f"Position value: {position_value}")
-                if position_value is not None:
-                    initial_value += float(position_value)
-                else:
-                    self.context.logger.warning(
-                        f"Skipping position with null value: {position.get('id', 'unknown')}"
-                    )
-
-        self.context.logger.info(f"Total initial value: {initial_value}")
-        if initial_value <= 0:
-            self.context.logger.warning("Initial value is zero or negative")
+    def get_stored_initial_investment(self) -> Optional[float]:
+        """Get the initial investment value from the portfolio data."""
+        if not self.portfolio_data:
             return None
-
-        return initial_value
-
+            
+        initial_investment = self.portfolio_data.get("initial_investment")
+        if initial_investment is not None:
+            self.context.logger.info(f"Found stored initial investment: {initial_investment}")
+            return float(initial_investment)
+            
+        return None
+    
     def _get_first_investment_timestamp(self) -> Optional[int]:
         first_investment_timestamp = self.current_positions[0].get("timestamp")
         return first_investment_timestamp
@@ -982,4 +843,3 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         last_name_prefix = self.generate_phonetic_name(address, 18, 2)
         last_name_number = int(address[-4:], 16) % 100
         return f"{first_name}-{last_name_prefix}{str(last_name_number).zfill(2)}"
-

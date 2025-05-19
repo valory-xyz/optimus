@@ -25,6 +25,7 @@ import math
 import types
 from abc import ABC
 from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from typing import (
     Any,
@@ -1003,6 +1004,229 @@ class LiquidityTraderBaseBehaviour(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
     
+    def calculate_initial_investment_value(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[float]]:
+        """Calculate the initial investment value based on the initial transaction."""
+        chain = position.get("chain")
+        token0 = position.get("token0")
+        token1 = position.get("token1")
+        amount0 = position.get("amount0")
+        amount1 = position.get("amount1")
+        timestamp = position.get("timestamp")
+
+        if None in (token0, amount0, timestamp):
+            self.context.logger.error(
+                "Missing token0, amount0, or timestamp in position data."
+            )
+            return None
+
+        token0_decimals = yield from self._get_token_decimals(chain, token0)
+        if not token0_decimals:
+            return None
+
+        initial_amount0 = amount0 / (10**token0_decimals)
+        self.context.logger.info(f"initial_amount0 : {initial_amount0}")
+
+        if token1 is not None and amount1 is not None:
+            token1_decimals = yield from self._get_token_decimals(chain, token1)
+            if not token1_decimals:
+                return None
+            initial_amount1 = amount1 / (10**token1_decimals)
+            self.context.logger.info(f"initial_amount1 : {initial_amount1}")
+
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+        tokens = []
+        # Fetch historical prices
+        tokens.append([position.get("token0_symbol"), position.get("token0")])
+        if position.get("token1") is not None:
+            tokens.append([position.get("token1_symbol"), position.get("token1")])
+
+        historical_prices = yield from self._fetch_historical_token_prices(
+            tokens, date_str, chain
+        )
+
+        if not historical_prices:
+            self.context.logger.error("Failed to fetch historical token prices.")
+            return None
+
+        # Get the price for token0
+        initial_price0 = historical_prices.get(position.get("token0"))
+        if initial_price0 is None:
+            self.context.logger.error("Historical price not found for token0.")
+            return None
+
+        # Calculate initial investment value for token0
+        V_initial = initial_amount0 * initial_price0
+        self.context.logger.info(f"V_initial : {V_initial}")
+
+        # If token1 exists, include it in the calculations
+        if position.get("token1") is not None and initial_amount1 is not None:
+            initial_price1 = historical_prices.get(position.get("token1"))
+            if initial_price1 is None:
+                self.context.logger.error("Historical price not found for token1.")
+                return None
+            V_initial += initial_amount1 * initial_price1
+            self.context.logger.info(f"V_initial : {V_initial}")
+
+        return V_initial
+        
+    def calculate_initial_investment(self) -> Generator[None, None, Optional[float]]:
+        """Calculate the initial investment value for all open positions."""
+        initial_value = 0.0
+        for position in self.current_positions:
+            if position.get("status") == PositionStatus.OPEN.value:
+                position_value = yield from self.calculate_initial_investment_value(
+                    position
+                )
+                self.context.logger.info(f"Position value: {position_value}")
+                if position_value is not None:
+                    initial_value += float(position_value)
+                else:
+                    self.context.logger.warning(
+                        f"Skipping position with null value: {position.get('id', 'unknown')}"
+                    )
+
+        self.context.logger.info(f"Total initial investment value: {initial_value}")
+        if initial_value <= 0:
+            self.context.logger.warning("Initial value is zero or negative")
+            return None
+
+        return initial_value
+
+    def _fetch_historical_token_prices(
+        self, tokens: List[List[str]], date_str: str, chain: str
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Fetch historical token prices for a specific date."""
+        historical_prices = {}
+
+        coin_list = yield from self.fetch_coin_list()
+        if not coin_list:
+            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
+            return historical_prices
+
+        for token_symbol, token_address in tokens:
+            # Get CoinGecko ID.
+            coingecko_id = yield from self.get_token_id_from_symbol(
+                token_address, token_symbol, coin_list, chain
+            )
+            if not coingecko_id:
+                self.context.logger.error(
+                    f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
+                )
+                continue
+
+            price = yield from self._fetch_historical_token_price(
+                coingecko_id, date_str
+            )
+            if price:
+                historical_prices[token_address] = price
+
+        return historical_prices
+
+    def _fetch_historical_token_price(
+        self, coingecko_id, date_str
+    ) -> Generator[None, None, Optional[float]]:
+        endpoint = self.coingecko.historical_price_endpoint.format(
+            coin_id=coingecko_id,
+            date=date_str,
+        )
+
+        headers = {"Accept": "application/json"}
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers=headers,
+            rate_limited_code=self.coingecko.rate_limited_code,
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
+            retry_wait=self.params.sleep_time,
+        )
+
+        if success:
+            price = (
+                response_json.get("market_data", {}).get("current_price", {}).get("usd")
+            )
+            if price:
+                return price
+            else:
+                self.context.logger.error(
+                    f"No price in response for token {coingecko_id}"
+                )
+                return None
+        else:
+            self.context.logger.error(
+                f"Failed to fetch historical price for {coingecko_id}"
+            )
+            return None
+        
+    def _fetch_token_name_from_contract(
+        self, chain: str, token_address: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Fetch the token name from the ERC20 contract."""
+
+        token_name = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=token_address,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="get_name",
+            data_key="data",
+            chain_id=chain,
+        )
+        return token_name
+
+    def get_token_id_from_symbol_cached(
+        self, symbol, token_name, coin_list
+    ) -> Optional[str]:
+        """Retrieve the CoinGecko token ID using the token's symbol and name."""
+        # Try to find coins matching the symbol.
+        candidates = [
+            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+        ]
+        if not candidates:
+            return None
+
+        # If single candidate, return it.
+        if len(candidates) == 1:
+            return candidates[0]["id"]
+
+        # If multiple candidates, match by name if possible.
+        normalized_token_name = token_name.replace(" ", "").lower()
+        for coin in candidates:
+            coin_name = coin["name"].replace(" ", "").lower()
+            if coin_name == normalized_token_name or coin_name == symbol.lower():
+                return coin["id"]
+        return None
+
+    def get_token_id_from_symbol(
+        self, token_address, symbol, coin_list, chain_name
+    ) -> Generator[None, None, Optional[str]]:
+        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        token_name = yield from self._fetch_token_name_from_contract(
+            chain_name, token_address
+        )
+        if not token_name:
+            matching_coins = [
+                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+            ]
+            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+
+        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
+
+    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
+        """Fetches the list of coins from CoinGecko API only once."""
+        url = "https://api.coingecko.com/api/v3/coins/list"
+        response = yield from self.get_http_response("GET", url, None, None)
+
+        try:
+            response_json = json.loads(response.body)
+            return response_json
+        except json.decoder.JSONDecodeError as e:
+            self.context.logger.error(f"Failed to fetch coin list: {e}")
+            return None
+
+
 
 def execute_strategy(
     strategy: str, strategies_executables: Dict[str, Tuple[str, str]], **kwargs: Any
@@ -1081,4 +1305,3 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         PostTxSettlementBehaviour,
         FetchStrategiesBehaviour,
     ]
-

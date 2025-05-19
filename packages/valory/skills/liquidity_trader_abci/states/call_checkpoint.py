@@ -27,7 +27,11 @@ from packages.valory.skills.abstract_round_abci.base import (
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import CallCheckpointPayload
-from packages.valory.skills.liquidity_trader_abci.states.base import Event, StakingState, SynchronizedData
+from packages.valory.skills.liquidity_trader_abci.states.base import (
+    Event,
+    StakingState,
+    SynchronizedData,
+)
 
 
 class CallCheckpointRound(CollectSameUntilThresholdRound):

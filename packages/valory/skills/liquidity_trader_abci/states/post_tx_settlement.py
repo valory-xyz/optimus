@@ -26,11 +26,22 @@ from packages.valory.skills.abstract_round_abci.base import (
     CollectSameUntilThresholdRound,
     get_name,
 )
-from packages.valory.skills.liquidity_trader_abci.payloads import PostTxSettlementPayload
-from packages.valory.skills.liquidity_trader_abci.states.base import Event, SynchronizedData
-from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import CallCheckpointRound
-from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import CheckStakingKPIMetRound
-from packages.valory.skills.liquidity_trader_abci.states.decision_making import DecisionMakingRound
+from packages.valory.skills.liquidity_trader_abci.payloads import (
+    PostTxSettlementPayload,
+)
+from packages.valory.skills.liquidity_trader_abci.states.base import (
+    Event,
+    SynchronizedData,
+)
+from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import (
+    CallCheckpointRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import (
+    CheckStakingKPIMetRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.decision_making import (
+    DecisionMakingRound,
+)
 
 
 class PostTxSettlementRound(CollectSameUntilThresholdRound):

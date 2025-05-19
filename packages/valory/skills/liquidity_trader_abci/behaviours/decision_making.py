@@ -19,18 +19,14 @@
 
 """This module contains the behaviour for executing trades for the 'liquidity_trader_abci' skill."""
 
+import json
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type, cast
 
-import json
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
 
-
-from packages.valory.contracts.erc20.contract import ERC20
-from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
-from packages.valory.contracts.multisend.contract import MultiSendContract
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -47,44 +43,40 @@ from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
-from packages.valory.skills.liquidity_trader_abci.models import (
-    SharedState,
-)
-
-from packages.valory.protocols.contract_api import ContractApiMessage
-from packages.valory.protocols.ledger_api import LedgerApiMessage
-
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    LiquidityTraderBaseBehaviour,
-    Decision,
     Action,
+    Decision,
     DexType,
-    Event,
-    HTTP_OK,
+    ERC20_DECIMALS,
+    ETHER_VALUE,
     HTTP_NOT_FOUND,
+    HTTP_OK,
     INTEGRATOR,
+    LiquidityTraderBaseBehaviour,
     MAX_RETRIES_FOR_ROUTES,
     MAX_STEP_COST_RATIO,
-    MultiSendOperation,
     PositionStatus,
-    SafeOperation,
-    SharedState,
+    SAFE_TX_GAS,
     SwapStatus,
     WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
     ZERO_ADDRESS,
-    ERC20_DECIMALS,
-    ETHER_VALUE,
-    SAFE_TX_GAS,
 )
-
+from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import DecisionMakingPayload
+from packages.valory.skills.liquidity_trader_abci.rounds import Event
 from packages.valory.skills.liquidity_trader_abci.states.decision_making import (
     DecisionMakingRound,
 )
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
 )
-from packages.valory.skills.liquidity_trader_abci.utils import hash_payload_to_hex
+from packages.valory.skills.liquidity_trader_abci.models import (
+    SharedState,
+)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
+)
+
 
 class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that executes all the actions."""
@@ -2498,4 +2490,3 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.error("Deposit event not found in transaction receipt")
         return None, None, None
-

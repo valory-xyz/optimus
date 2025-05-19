@@ -26,8 +26,13 @@ from packages.valory.skills.abstract_round_abci.base import (
     CollectSameUntilThresholdRound,
     get_name,
 )
-from packages.valory.skills.liquidity_trader_abci.payloads import CheckStakingKPIMetPayload
-from packages.valory.skills.liquidity_trader_abci.states.base import Event, SynchronizedData
+from packages.valory.skills.liquidity_trader_abci.payloads import (
+    CheckStakingKPIMetPayload,
+)
+from packages.valory.skills.liquidity_trader_abci.states.base import (
+    Event,
+    SynchronizedData,
+)
 
 
 class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):

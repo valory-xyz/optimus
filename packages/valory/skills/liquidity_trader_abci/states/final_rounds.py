@@ -25,17 +25,22 @@ from packages.valory.skills.abstract_round_abci.base import DegenerateRound
 class FailedMultiplexerRound(DegenerateRound):
     """FailedMultiplexerRound"""
 
+
 class FinishedCallCheckpointRound(DegenerateRound):
     """FinishedCallCheckpointRound"""
+
 
 class FinishedCheckStakingKPIMetRound(DegenerateRound):
     """FinishedCheckStakingKPIMetRound"""
 
+
 class FinishedDecisionMakingRound(DegenerateRound):
     """FinishedDecisionMakingRound"""
 
+
 class FinishedEvaluateStrategyRound(DegenerateRound):
     """FinishedEvaluateStrategyRound"""
+
 
 class FinishedTxPreparationRound(DegenerateRound):
     """FinishedTxPreparationRound"""

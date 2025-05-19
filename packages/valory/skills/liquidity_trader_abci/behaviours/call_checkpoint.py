@@ -25,12 +25,18 @@ from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
 from packages.valory.contracts.staking_token.contract import StakingTokenContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    LiquidityTraderBaseBehaviour,
     ETHER_VALUE,
-    SAFE_TX_GAS
+    LiquidityTraderBaseBehaviour,
+    SAFE_TX_GAS,
 )
-from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import CallCheckpointRound, CallCheckpointPayload, StakingState
-from packages.valory.skills.transaction_settlement_abci.payload_tools import hash_payload_to_hex
+from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import (
+    CallCheckpointPayload,
+    CallCheckpointRound,
+    StakingState,
+)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
+)
 
 
 class CallCheckpointBehaviour(

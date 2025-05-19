@@ -19,17 +19,17 @@
 
 """This module contains the behaviour for deciding the next round post transaction settlement for the 'liquidity_trader_abci' skill."""
 
-from typing import (
-    Generator,
+from typing import Generator
+
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    LiquidityTraderBaseBehaviour,
 )
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
     CheckStakingKPIMetRound,
     PostTxSettlementPayload,
     PostTxSettlementRound,
 )
-from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    LiquidityTraderBaseBehaviour,
-)
+
 
 class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that is executed after a tx is settled via the transaction_settlement_abci."""

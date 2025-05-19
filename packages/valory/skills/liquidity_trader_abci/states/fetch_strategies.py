@@ -28,7 +28,10 @@ from packages.valory.skills.abstract_round_abci.base import (
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import FetchStrategiesPayload
-from packages.valory.skills.liquidity_trader_abci.states.base import Event, SynchronizedData
+from packages.valory.skills.liquidity_trader_abci.states.base import (
+    Event,
+    SynchronizedData,
+)
 
 
 class FetchStrategiesRound(CollectSameUntilThresholdRound):

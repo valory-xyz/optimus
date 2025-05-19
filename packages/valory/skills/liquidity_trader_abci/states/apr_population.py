@@ -24,7 +24,10 @@ from packages.valory.skills.abstract_round_abci.base import (
     get_name,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import APRPopulationPayload
-from packages.valory.skills.liquidity_trader_abci.states.base import Event, SynchronizedData
+from packages.valory.skills.liquidity_trader_abci.states.base import (
+    Event,
+    SynchronizedData,
+)
 
 
 class APRPopulationRound(CollectSameUntilThresholdRound):

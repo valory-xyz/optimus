@@ -27,23 +27,42 @@ from packages.valory.skills.abstract_round_abci.base import (
     AppState,
     get_name,
 )
-from packages.valory.skills.liquidity_trader_abci.states.apr_population import APRPopulationRound
-from packages.valory.skills.liquidity_trader_abci.states.base import Event, SynchronizedData
-from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import CallCheckpointRound
-from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import CheckStakingKPIMetRound
-from packages.valory.skills.liquidity_trader_abci.states.decision_making import DecisionMakingRound
-from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import EvaluateStrategyRound
+from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
+    APRPopulationRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.base import (
+    Event,
+    SynchronizedData,
+)
+from packages.valory.skills.liquidity_trader_abci.states.call_checkpoint import (
+    CallCheckpointRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import (
+    CheckStakingKPIMetRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.decision_making import (
+    DecisionMakingRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
+    EvaluateStrategyRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
+    FetchStrategiesRound,
+)
 from packages.valory.skills.liquidity_trader_abci.states.final_rounds import (
     FailedMultiplexerRound,
     FinishedCallCheckpointRound,
     FinishedCheckStakingKPIMetRound,
     FinishedDecisionMakingRound,
     FinishedEvaluateStrategyRound,
-    FinishedTxPreparationRound
+    FinishedTxPreparationRound,
 )
-from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import FetchStrategiesRound
-from packages.valory.skills.liquidity_trader_abci.states.get_positions import GetPositionsRound
-from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import PostTxSettlementRound
+from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
+    GetPositionsRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
+    PostTxSettlementRound,
+)
 
 
 class LiquidityTraderAbciApp(AbciApp[Event]):

@@ -64,19 +64,7 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
 from packages.valory.protocols.srr.message import SrrMessage
-from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour,
-    BaseBehaviour,
-)
 from packages.valory.skills.abstract_round_abci.models import Requests
-from packages.valory.skills.liquidity_trader_abci.behaviours.apr_population import APRPopulationBehaviour
-from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint import CallCheckpointBehaviour
-from packages.valory.skills.liquidity_trader_abci.behaviours.check_staking_kpi_met import CheckStakingKPIMetBehaviour
-from packages.valory.skills.liquidity_trader_abci.behaviours.decision_making import DecisionMakingBehaviour
-from packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy import EvaluateStrategyBehaviour
-from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies import FetchStrategiesBehaviour
-from packages.valory.skills.liquidity_trader_abci.behaviours.get_positions import GetPositionsBehaviour
-from packages.valory.skills.liquidity_trader_abci.behaviours.post_tx_settlement import PostTxSettlementBehaviour
 from packages.valory.skills.liquidity_trader_abci.models import (
     Coingecko,
     Params,
@@ -91,8 +79,7 @@ from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
 from packages.valory.skills.liquidity_trader_abci.pools.velodrome import (
     VelodromePoolBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.rounds import (
-    LiquidityTraderAbciApp,
+from packages.valory.skills.liquidity_trader_abci.states.base import (
     StakingState,
     SynchronizedData,
 )
@@ -122,9 +109,10 @@ ERC20_DECIMALS = 18
 AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus"}
 METRICS_NAME = "APR"
 METRICS_TYPE = "json"
-PORTFOLIO_UPDATE_INTERVAL = 3600 #1hr
-APR_UPDATE_INTERVAL = 3600 #1hr
-METRICS_UPDATE_INTERVAL = 21600 #6hr
+PORTFOLIO_UPDATE_INTERVAL = 3600  # 1hr
+APR_UPDATE_INTERVAL = 3600  # 1hr
+METRICS_UPDATE_INTERVAL = 21600  # 6hr
+
 
 class DexType(Enum):
     """DexType"""
@@ -191,6 +179,7 @@ ASSETS_FILENAME = "assets.json"
 POOL_FILENAME = "current_pool.json"
 READ_MODE = "r"
 WRITE_MODE = "w"
+
 
 class LiquidityTraderBaseBehaviour(
     BalancerPoolBehaviour, UniswapPoolBehaviour, VelodromePoolBehaviour, ABC
@@ -851,6 +840,7 @@ class LiquidityTraderBaseBehaviour(
                 response_json = json.loads(response.body)
             except json.decoder.JSONDecodeError as exc:
                 self.context.logger.error(f"Exception during json loading: {exc}")
+                self.context.logger.info(f"Received response: {response}")
                 response_json = {"exception": str(exc)}
 
             if response.status_code == rate_limited_code:
@@ -1003,7 +993,7 @@ class LiquidityTraderBaseBehaviour(
         return cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
-    
+
     def calculate_initial_investment_value(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, Optional[float]]:
@@ -1070,7 +1060,7 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.info(f"V_initial : {V_initial}")
 
         return V_initial
-        
+
     def calculate_initial_investment(self) -> Generator[None, None, Optional[float]]:
         """Calculate the initial investment value for all open positions."""
         initial_value = 0.0
@@ -1160,7 +1150,7 @@ class LiquidityTraderBaseBehaviour(
                 f"Failed to fetch historical price for {coingecko_id}"
             )
             return None
-        
+
     def _fetch_token_name_from_contract(
         self, chain: str, token_address: str
     ) -> Generator[None, None, Optional[str]]:
@@ -1227,7 +1217,6 @@ class LiquidityTraderBaseBehaviour(
             return None
 
 
-
 def execute_strategy(
     strategy: str, strategies_executables: Dict[str, Tuple[str, str]], **kwargs: Any
 ) -> Optional[Dict[str, Any]]:
@@ -1289,19 +1278,3 @@ class GasCostTracker:
     def update_data(self, new_data: dict):
         """Update the internal data with new data."""
         self.data = new_data
-
-class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
-    """LiquidityTraderRoundBehaviour"""
-
-    initial_behaviour_cls = CallCheckpointBehaviour
-    abci_app_cls = LiquidityTraderAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = [
-        CallCheckpointBehaviour,
-        CheckStakingKPIMetBehaviour,
-        GetPositionsBehaviour,
-        APRPopulationBehaviour,
-        EvaluateStrategyBehaviour,
-        DecisionMakingBehaviour,
-        PostTxSettlementBehaviour,
-        FetchStrategiesBehaviour,
-    ]

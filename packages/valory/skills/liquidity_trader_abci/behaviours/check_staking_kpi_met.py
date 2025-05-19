@@ -22,21 +22,26 @@
 
 from typing import Generator, Optional, Type
 
-from aea.protocols.base import ContractApiMessage
-
-from packages.valory.protocols.contract_api import ContractApiMessage
-from packages.valory.skills.abstract_round_abci.base import AbstractRound
-from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    LiquidityTraderBaseBehaviour,
-    ZERO_ADDRESS,
-    ETHER_VALUE,
-    SAFE_TX_GAS)
-from packages.valory.skills.liquidity_trader_abci.payloads import CheckStakingKPIMetPayload
-from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import CheckStakingKPIMetRound
-from packages.valory.skills.transaction_settlement_abci.payload_tools import hash_payload_to_hex
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
+)
+from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    ETHER_VALUE,
+    LiquidityTraderBaseBehaviour,
+    SAFE_TX_GAS,
+    ZERO_ADDRESS,
+)
+from packages.valory.skills.liquidity_trader_abci.payloads import (
+    CheckStakingKPIMetPayload,
+)
+from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import (
+    CheckStakingKPIMetRound,
+)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
 )
 
 

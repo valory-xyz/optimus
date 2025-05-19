@@ -21,17 +21,10 @@
 
 import json
 from decimal import Context, Decimal, getcontext
-from typing import (
-    Any,
-    Dict,
-    Generator,
-    Optional,
-    Type,
-    List,
-    Tuple,
-    Union,
-)
+from typing import Any, Dict, Generator, List, Optional, Tuple, Type, Union
+
 from eth_utils import to_checksum_address
+
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
@@ -51,6 +44,13 @@ from packages.valory.contracts.velodrome_non_fungible_position_manager.contract 
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    DexType,
+    LiquidityTraderBaseBehaviour,
+    PORTFOLIO_UPDATE_INTERVAL,
+    PositionStatus,
+    TradingType,
+)
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesPayload,
     FetchStrategiesRound,
@@ -59,13 +59,7 @@ from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     LiquidityAmounts,
     TickMath,
 )
-from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    LiquidityTraderBaseBehaviour,
-    PositionStatus,
-    DexType,
-    TradingType,
-    PORTFOLIO_UPDATE_INTERVAL
-)
+
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""
@@ -137,7 +131,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Check if enough time has passed since last update."""
         current_time = self._get_current_timestamp()
         last_update_time = self.portfolio_data.get("last_updated", 0)
-        
+
         return (current_time - last_update_time) >= PORTFOLIO_UPDATE_INTERVAL
 
     def _have_positions_changed(self, last_portfolio_data: Dict) -> bool:
@@ -155,9 +149,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Create sets of position identifiers with their status
         current_position_set = {
             (
-                position.get("pool_address", position.get("pool_id")),  # Handle both Balancer and other DEXes
+                position.get(
+                    "pool_address", position.get("pool_id")
+                ),  # Handle both Balancer and other DEXes
                 position.get("dex_type"),
-                position.get("status")
+                position.get("status"),
             )
             for position in current_positions
         }
@@ -166,7 +162,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             (
                 position.get("id"),  # pool_id or pool_address from allocations
                 position.get("type"),  # dex_type in allocations
-                PositionStatus.OPEN.value  # allocations only contain open positions
+                PositionStatus.OPEN.value,  # allocations only contain open positions
             )
             for position in last_positions
         }
@@ -176,11 +172,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         closed_positions = last_position_set - current_position_set
 
         if new_positions:
-            self.context.logger.info(f"Portfolio update needed: New positions opened: {new_positions}")
+            self.context.logger.info(
+                f"Portfolio update needed: New positions opened: {new_positions}"
+            )
             return True
 
         if closed_positions:
-            self.context.logger.info(f"Portfolio update needed: Positions closed: {closed_positions}")
+            self.context.logger.info(
+                f"Portfolio update needed: Positions closed: {closed_positions}"
+            )
             return True
 
         return False
@@ -197,15 +197,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             DexType.BALANCER.value: self._handle_balancer_position,
             DexType.UNISWAP_V3.value: self._handle_uniswap_position,
             DexType.STURDY.value: self._handle_sturdy_position,
-            DexType.VELODROME.value: self._handle_velodrome_position
+            DexType.VELODROME.value: self._handle_velodrome_position,
         }
 
         # Process open positions
-        for position in (p for p in self.current_positions if p.get("status") == PositionStatus.OPEN.value):
+        for position in (
+            p
+            for p in self.current_positions
+            if p.get("status") == PositionStatus.OPEN.value
+        ):
             try:
                 dex_type = position.get("dex_type")
                 chain = position.get("chain")
-                
+
                 if not dex_type or not chain:
                     self.context.logger.error("Missing dex_type or chain")
                     continue
@@ -224,23 +228,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 user_share = yield from self._calculate_position_value(
                     position, chain, user_balances, token_info, portfolio_breakdown
                 )
-                
+
                 if user_share > 0:
                     total_user_share_value_usd += user_share
-                    pool_address = (position.get("pool_id") if dex_type == DexType.BALANCER.value 
-                            else position.get("pool_address"))
-                    
-                    individual_shares.append((
-                        user_share,
-                        dex_type,
-                        chain,
-                        pool_address,
-                        list(token_info.values()),  # token symbols
-                        position.get("apr", 0.0),
-                        details,
-                        self.params.safe_contract_addresses.get(chain),
-                        user_balances
-                    ))
+                    pool_address = (
+                        position.get("pool_id")
+                        if dex_type == DexType.BALANCER.value
+                        else position.get("pool_address")
+                    )
+
+                    individual_shares.append(
+                        (
+                            user_share,
+                            dex_type,
+                            chain,
+                            pool_address,
+                            list(token_info.values()),  # token symbols
+                            position.get("apr", 0.0),
+                            details,
+                            self.params.safe_contract_addresses.get(chain),
+                            user_balances,
+                        )
+                    )
 
             except Exception as e:
                 self.context.logger.error(f"Error processing position: {str(e)}")
@@ -249,81 +258,91 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Calculate final portfolio metrics
         if total_user_share_value_usd > 0:
             yield from self._update_portfolio_metrics(
-                total_user_share_value_usd, individual_shares, portfolio_breakdown, allocations
+                total_user_share_value_usd,
+                individual_shares,
+                portfolio_breakdown,
+                allocations,
             )
-        
+
         # Calculate initial investment value
         initial_investment = yield from self.calculate_initial_investment()
 
         self.portfolio_data = self._create_portfolio_data(
-            total_user_share_value_usd, initial_investment, allocations, portfolio_breakdown
+            total_user_share_value_usd,
+            initial_investment,
+            allocations,
+            portfolio_breakdown,
         )
 
     def _update_portfolio_metrics(
-        self, 
+        self,
         total_user_share_value_usd: Decimal,
         individual_shares: List[Tuple],
         portfolio_breakdown: List[Dict],
-        allocations: List[Dict]
+        allocations: List[Dict],
     ) -> Generator[None, None, None]:
         """Update portfolio metrics including ratios for both breakdown and allocations."""
         # First update portfolio breakdown ratios
-        yield from self._update_portfolio_breakdown_ratios(
+        self._update_portfolio_breakdown_ratios(
             portfolio_breakdown, total_user_share_value_usd
         )
-        
+
         # Then calculate allocation ratios
         yield from self._update_allocation_ratios(
             individual_shares, total_user_share_value_usd, allocations
         )
 
     def _update_portfolio_breakdown_ratios(
-        self, 
-        portfolio_breakdown: List[Dict],
-        total_value: Decimal
-    ) -> Generator[None, None, None]:
+        self, portfolio_breakdown: List[Dict], total_value: Decimal
+    ) -> None:
         """Calculate ratios for portfolio breakdown entries."""
         # Calculate total ratio first
         total_ratio = sum(
             Decimal(str(entry["value_usd"])) / total_value
             for entry in portfolio_breakdown
         )
-        
+
         # Update each entry with its ratio
         for entry in portfolio_breakdown:
             if total_value > 0:
                 entry["ratio"] = round(
-                    Decimal(str(entry["value_usd"])) / total_value / total_ratio,
-                    6
+                    Decimal(str(entry["value_usd"])) / total_value / total_ratio, 6
                 )
             else:
                 entry["ratio"] = 0.0
-                
+
             # Convert values to float for JSON serialization
             entry["value_usd"] = float(entry["value_usd"])
             entry["balance"] = float(entry["balance"])
             entry["price"] = float(entry["price"])
 
-    def _get_tick_ranges(self, position: Dict, chain: str) -> Generator[List[Dict[str, int]], None, None]:
+    def _get_tick_ranges(
+        self, position: Dict, chain: str
+    ) -> Generator[List[Dict[str, int]], None, None]:
         """Get tick ranges for a position."""
-        if position.get("dex_type") not in [DexType.UNISWAP_V3.value, DexType.VELODROME.value]:
+        if position.get("dex_type") not in [
+            DexType.UNISWAP_V3.value,
+            DexType.VELODROME.value,
+        ]:
             return []
-            
+
         # For Velodrome positions, we only get tick ranges if it's a CL pool
-        if position.get("dex_type") == DexType.VELODROME.value and not position.get("is_cl_pool"):
+        if position.get("dex_type") == DexType.VELODROME.value and not position.get(
+            "is_cl_pool"
+        ):
             return []
-            
+
         pool_address = position.get("pool_address")
         if not pool_address:
             return []
-            
+
         # Get current tick from pool
         contract_id = (
-            VelodromeCLPoolContract.contract_id 
-            if position.get("dex_type") == DexType.VELODROME.value 
+            VelodromeCLPoolContract.contract_id
+            if position.get("dex_type") == DexType.VELODROME.value
             else UniswapV3PoolContract.contract_id
         )
-        
+
         slot0_data = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
@@ -332,44 +351,49 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             data_key="slot0",
             chain_id=chain,
         )
-        
+
         if not slot0_data or "tick" not in slot0_data:
-            self.context.logger.error(f"Failed to get current tick for pool {pool_address}")
+            self.context.logger.error(
+                f"Failed to get current tick for pool {pool_address}"
+            )
             return []
-            
+
         current_tick = slot0_data["tick"]
-        
+
         # Get position manager address
         position_manager_address = (
-            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain)
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain
+            )
             if position.get("dex_type") == DexType.VELODROME.value
             else self.params.uniswap_position_manager_contract_addresses.get(chain)
         )
-        
+
         if not position_manager_address:
-            self.context.logger.error(f"No position manager address found for chain {chain}")
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
             return []
-            
+
         # Get contract ID for position manager
         contract_id = (
             VelodromeNonFungiblePositionManagerContract.contract_id
             if position.get("dex_type") == DexType.VELODROME.value
             else UniswapV3NonfungiblePositionManagerContract.contract_id
         )
-        
+
         tick_ranges = []
-        
+
         # Handle both single positions and multiple positions (Velodrome CL)
         positions_to_process = (
-            position["positions"] if position.get("positions")
-            else [position]
+            position["positions"] if position.get("positions") else [position]
         )
-        
+
         for pos in positions_to_process:
             token_id = pos.get("token_id")
             if not token_id:
                 continue
-                
+
             position_data = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=position_manager_address,
@@ -379,29 +403,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 token_id=token_id,
                 chain_id=chain,
             )
-            
+
             if not position_data:
                 continue
-                
+
             tick_lower = position_data.get("tickLower")
             tick_upper = position_data.get("tickUpper")
-            
+
             if tick_lower is not None and tick_upper is not None:
-                tick_ranges.append({
-                    "current_tick": current_tick,
-                    "tick_lower": tick_lower,
-                    "tick_upper": tick_upper,
-                    "token_id": token_id,
-                    "in_range": tick_lower <= current_tick <= tick_upper
-                })
-        
+                tick_ranges.append(
+                    {
+                        "current_tick": current_tick,
+                        "tick_lower": tick_lower,
+                        "tick_upper": tick_upper,
+                        "token_id": token_id,
+                        "in_range": tick_lower <= current_tick <= tick_upper,
+                    }
+                )
+
         return tick_ranges
 
     def _update_allocation_ratios(
         self,
         individual_shares: List[Tuple],
         total_value: Decimal,
-        allocations: List[Dict]
+        allocations: List[Dict],
     ) -> Generator[None, None, None]:
         """Calculate and update allocation ratios."""
         if total_value <= 0:
@@ -415,21 +441,32 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Process each share and create allocation entry
         for (
-            user_share, dex_type, chain, pool_id, 
-            assets, apr, details, user_address, _
+            user_share,
+            dex_type,
+            chain,
+            pool_id,
+            assets,
+            apr,
+            details,
+            user_address,
+            _,
         ) in individual_shares:
-            ratio = round(
-                float(user_share / total_value) * 100 * 100 / total_ratio,
-                2
-            ) if total_ratio > 0 else 0.0
-            
+            ratio = (
+                round(float(user_share / total_value) * 100 * 100 / total_ratio, 2)
+                if total_ratio > 0
+                else 0.0
+            )
+
             # Get tick ranges for concentrated liquidity positions
             position = next(
-                (p for p in self.current_positions if 
-                 (p.get("pool_address") == pool_id or p.get("pool_id") == pool_id)),
-                None
+                (
+                    p
+                    for p in self.current_positions
+                    if (p.get("pool_address") == pool_id or p.get("pool_id") == pool_id)
+                ),
+                None,
             )
-            
+
             tick_ranges = []
             if position:
                 tick_ranges = yield from self._get_tick_ranges(position, chain)
@@ -442,27 +479,29 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "apr": round(float(apr), 2),
                 "details": details,
                 "ratio": float(ratio),
-                "address": user_address
+                "address": user_address,
             }
-            
+
             # Only add tick_ranges if they exist
             if tick_ranges:
                 allocation["tick_ranges"] = tick_ranges
-                
+
             allocations.append(allocation)
-    
+
     def _create_portfolio_data(
         self,
         total_value: Decimal,
         initial_investment: float,
         allocations: List[Dict],
-        portfolio_breakdown: List[Dict]
+        portfolio_breakdown: List[Dict],
     ) -> Dict:
         """Create the final portfolio data structure."""
-        
+
         return {
             "portfolio_value": float(total_value),
-            "initial_investment": float(initial_investment) if initial_investment else None,
+            "initial_investment": float(initial_investment)
+            if initial_investment
+            else None,
             "allocations": [
                 {
                     "chain": allocation["chain"],
@@ -472,7 +511,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "apr": float(allocation["apr"]),
                     "details": allocation["details"],
                     "ratio": float(allocation["ratio"]),
-                    "address": allocation["address"]
+                    "address": allocation["address"],
+                    "tick_ranges": allocation.get("tick_ranges")
                 }
                 for allocation in allocations
             ],
@@ -483,89 +523,99 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "balance": float(entry["balance"]),
                     "price": float(entry["price"]),
                     "value_usd": float(entry["value_usd"]),
-                    "ratio": float(entry["ratio"])
+                    "ratio": float(entry["ratio"]),
                 }
                 for entry in portfolio_breakdown
             ],
             "address": self.params.safe_contract_addresses.get(
                 self.params.target_investment_chains[0]
             ),
-            "last_updated": self._get_current_timestamp()
+            "last_updated": int(self._get_current_timestamp()),
         }
 
-    def _handle_balancer_position(self, position: Dict, chain: str) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
+    def _handle_balancer_position(
+        self, position: Dict, chain: str
+    ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Balancer position processing."""
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
         pool_id = position.get("pool_id")
-        
+
         user_balances = yield from self.get_user_share_value_balancer(
             user_address, pool_id, pool_address, chain
         )
         details = yield from self._get_balancer_pool_name(pool_address, chain)
         token_info = {
             position.get("token0"): position.get("token0_symbol"),
-            position.get("token1"): position.get("token1_symbol")
+            position.get("token1"): position.get("token1_symbol"),
         }
-        
+
         return user_balances, details, token_info
 
-    def _handle_uniswap_position(self, position: Dict, chain: str) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
+    def _handle_uniswap_position(
+        self, position: Dict, chain: str
+    ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Uniswap V3 position processing."""
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
-        
+
         user_balances = yield from self.get_user_share_value_uniswap(
             pool_address, token_id, chain, position
         )
         details = f"Uniswap V3 Pool - {position.get('token0_symbol')}/{position.get('token1_symbol')}"
         token_info = {
             position.get("token0"): position.get("token0_symbol"),
-            position.get("token1"): position.get("token1_symbol")
+            position.get("token1"): position.get("token1_symbol"),
         }
-        
+
         return user_balances, details, token_info
 
-    def _handle_sturdy_position(self, position: Dict, chain: str) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
+    def _handle_sturdy_position(
+        self, position: Dict, chain: str
+    ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Sturdy position processing."""
         user_address = self.params.safe_contract_addresses.get(chain)
         aggregator_address = position.get("pool_address")
         asset_address = position.get("token0")
-        
+
         user_balances = yield from self.get_user_share_value_sturdy(
             user_address, aggregator_address, asset_address, chain
         )
         details = yield from self._get_aggregator_name(aggregator_address, chain)
-        token_info = {
-            position.get("token0"): position.get("token0_symbol")
-        }
-        
+        token_info = {position.get("token0"): position.get("token0_symbol")}
+
         return user_balances, details, token_info
 
-    def _handle_velodrome_position(self, position: Dict, chain: str) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
+    def _handle_velodrome_position(
+        self, position: Dict, chain: str
+    ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Velodrome position processing."""
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
-        
+
         user_balances = yield from self.get_user_share_value_velodrome(
             user_address, pool_address, token_id, chain, position
         )
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
         token_info = {
             position.get("token0"): position.get("token0_symbol"),
-            position.get("token1"): position.get("token1_symbol")
+            position.get("token1"): position.get("token1_symbol"),
         }
-        
+
         return user_balances, details, token_info
 
     def _calculate_position_value(
-        self, position: Dict, chain: str, user_balances: Dict, 
-        token_info: Dict[str, str], portfolio_breakdown: List
+        self,
+        position: Dict,
+        chain: str,
+        user_balances: Dict,
+        token_info: Dict[str, str],
+        portfolio_breakdown: List,
     ) -> Generator[Decimal, None, None]:
         """Calculate total value of a position and update portfolio breakdown."""
         user_share = Decimal(0)
-        
+
         for token_address, token_symbol in token_info.items():
             asset_balance = user_balances.get(token_address)
             if asset_balance is None:
@@ -583,24 +633,32 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Update portfolio breakdown
             existing_asset = next(
-                (entry for entry in portfolio_breakdown if entry["address"] == token_address),
-                None
+                (
+                    entry
+                    for entry in portfolio_breakdown
+                    if entry["address"] == token_address
+                ),
+                None,
             )
-            
+
             if existing_asset:
-                existing_asset.update({
-                    "balance": float(asset_balance),
-                    "value_usd": float(asset_value_usd)
-                })
+                existing_asset.update(
+                    {
+                        "balance": float(asset_balance),
+                        "value_usd": float(asset_value_usd),
+                    }
+                )
             else:
-                portfolio_breakdown.append({
-                    "asset": token_symbol,
-                    "address": token_address,
-                    "balance": float(asset_balance),
-                    "price": float(asset_price),
-                    "value_usd": float(asset_value_usd)
-                })
-        
+                portfolio_breakdown.append(
+                    {
+                        "asset": token_symbol,
+                        "address": token_address,
+                        "balance": float(asset_balance),
+                        "price": float(asset_price),
+                        "value_usd": float(asset_value_usd),
+                    }
+                )
+
         return user_share
 
     def get_user_share_value_velodrome(
@@ -660,7 +718,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Dict[str, Decimal]]:
         """
         Calculate concentrated liquidity position value.
-        
+
         Args:
             pool_address: Address of the pool contract
             chain: Chain identifier
@@ -672,12 +730,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             get_position_callable: Name of the position getter function
             position_data_key: Key for position data in response
             slot0_contract_id: Optional contract ID for slot0 calls
-        
+
         Returns:
             Dictionary mapping token addresses to their quantities
         """
         # Early validation of required parameters
-        if not all([pool_address, chain, position, token0_address, token1_address, position_manager_address]):
+        if not all(
+            [
+                pool_address,
+                chain,
+                position,
+                token0_address,
+                token1_address,
+                position_manager_address,
+            ]
+        ):
             self.context.logger.error("Missing required parameters")
             return {}
 
@@ -690,10 +757,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             data_key="slot0",
             chain_id=chain,
         )
-        
+
         # Early return if slot0 data is invalid
         if not slot0_data:
-            self.context.logger.error(f"Failed to get slot0 data for pool {pool_address}")
+            self.context.logger.error(
+                f"Failed to get slot0 data for pool {pool_address}"
+            )
             return {}
 
         # Extract and validate slot0 data
@@ -704,7 +773,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return {}
 
         # Get token decimals in parallel using a list comprehension
-        token_decimals = yield from self._get_token_decimals_pair(chain, token0_address, token1_address)
+        token_decimals = yield from self._get_token_decimals_pair(
+            chain, token0_address, token1_address
+        )
         if None in token_decimals:
             return {}
         token0_decimals, token1_decimals = token_decimals
@@ -715,7 +786,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Handle position(s)
         positions_to_process = (
-            position.get("positions", []) if isinstance(position.get("positions", []), list)
+            position.get("positions", [])
+            if isinstance(position.get("positions", []), list)
             else [position]
         )
 
@@ -734,23 +806,29 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 token_id=token_id,
                 chain_id=chain,
             )
-            
+
             if not position_details:
-                self.context.logger.error(f"Failed to get position details for token ID {token_id}")
+                self.context.logger.error(
+                    f"Failed to get position details for token ID {token_id}"
+                )
                 continue
 
             # Calculate amounts for this position
-            amount0, amount1 = yield from self._calculate_position_amounts(
+            amount0, amount1 = self._calculate_position_amounts(
                 position_details, current_tick, sqrt_price_x96, pos
             )
-            
+
             total_token0_qty += Decimal(amount0)
             total_token1_qty += Decimal(amount1)
 
         # Calculate final adjusted quantities
         result = {
-            token0_address: self._adjust_for_decimals(total_token0_qty, token0_decimals),
-            token1_address: self._adjust_for_decimals(total_token1_qty, token1_decimals),
+            token0_address: self._adjust_for_decimals(
+                total_token0_qty, token0_decimals
+            ),
+            token1_address: self._adjust_for_decimals(
+                total_token1_qty, token1_decimals
+            ),
         }
 
         # Log results
@@ -759,25 +837,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             f"Token0: {result[token0_address]} {position.get('token0_symbol')}, "
             f"Token1: {result[token1_address]} {position.get('token1_symbol')}"
         )
-        
+
         return result
-    
+
     def _calculate_position_amounts(
-        self, 
-        position_details: Dict[str, Any], 
-        current_tick: int, 
-        sqrt_price_x96: int, 
+        self,
+        position_details: Dict[str, Any],
+        current_tick: int,
+        sqrt_price_x96: int,
         position: Dict[str, Any],
-    ) -> Generator[None, None, Tuple[int, int]]:
+    ) -> Optional[Tuple[int, int]]:
         """
         Calculate token amounts for a position based on whether it's in range or not.
-        
+
         Args:
             position_details: Position details from the contract
             current_tick: Current tick from the pool
             sqrt_price_x96: Current sqrt price from the pool
             position: Position data from our system
-            
+
         Returns:
             Tuple of (amount0, amount1)
         """
@@ -787,27 +865,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         liquidity = int(position_details.get("liquidity"))
         tokens_owed0 = int(position_details.get("tokensOwed0", 0))
         tokens_owed1 = int(position_details.get("tokensOwed1", 0))
-        
+
         # Log position details
         self.context.logger.info(
             f"For position, liquidity range is [{tick_lower}, {tick_upper}] "
             f"and current tick is {current_tick}"
         )
-        
+
         # Check if current tick is within the provided tick range
         if tick_lower <= current_tick <= tick_upper:
             # In range, use getAmountsForLiquidity
             sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
             sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
-            
+
             # Calculate amounts using getAmountsForLiquidity
             amount0, amount1 = LiquidityAmounts.getAmountsForLiquidity(
-                sqrt_price_x96,
-                sqrtA,
-                sqrtB,
-                liquidity
+                sqrt_price_x96, sqrtA, sqrtB, liquidity
             )
-            
+
             self.context.logger.info(
                 f"Position is in range. Current tick: {current_tick}, "
                 f"Range: [{tick_lower}, {tick_upper})"
@@ -816,16 +891,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Out of range, return invested amounts + tokensOwed
             amount0 = position.get("amount0", 0)
             amount1 = position.get("amount1", 0)
-            
+
             # Add uncollected fees (tokensOwed)
             amount0 += tokens_owed0
             amount1 += tokens_owed1
-            
+
             self.context.logger.info(
                 f"Position is out of range. Current tick: {current_tick}, "
                 f"Range: [{tick_lower}, {tick_upper})"
             )
-            
+
         return amount0, amount1
 
     def _get_user_share_value_velodrome_cl(
@@ -847,19 +922,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"No position manager address found for chain {chain}"
             )
             return {}
-            
-        return (yield from self._calculate_cl_position_value(
-            pool_address=pool_address,
-            chain=chain,
-            position=position,
-            token0_address=token0_address,
-            token1_address=token1_address,
-            position_manager_address=position_manager_address,
-            contract_id=VelodromeNonFungiblePositionManagerContract.contract_id,
-            get_position_callable="get_position",
-            position_data_key="data",
-            slot0_contract_id=VelodromeCLPoolContract.contract_id,
-        ))
+
+        return (
+            yield from self._calculate_cl_position_value(
+                pool_address=pool_address,
+                chain=chain,
+                position=position,
+                token0_address=token0_address,
+                token1_address=token1_address,
+                position_manager_address=position_manager_address,
+                contract_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                get_position_callable="get_position",
+                position_data_key="data",
+                slot0_contract_id=VelodromeCLPoolContract.contract_id,
+            )
+        )
 
     def _get_user_share_value_velodrome_non_cl(
         self,
@@ -958,20 +1035,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"No position manager address found for chain {chain}"
             )
             return {}
-            
+
         # Use the common helper function for CL position calculation
-        return (yield from self._calculate_cl_position_value(
-            pool_address=pool_address,
-            chain=chain,
-            position=position,
-            token0_address=token0_address,
-            token1_address=token1_address,
-            position_manager_address=position_manager_address,
-            contract_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
-            get_position_callable="get_position",
-            position_data_key="data",
-            slot0_contract_id=UniswapV3PoolContract.contract_id,
-        ))
+        return (
+            yield from self._calculate_cl_position_value(
+                pool_address=pool_address,
+                chain=chain,
+                position=position,
+                token0_address=token0_address,
+                token1_address=token1_address,
+                position_manager_address=position_manager_address,
+                contract_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+                get_position_callable="get_position",
+                position_data_key="data",
+                slot0_contract_id=UniswapV3PoolContract.contract_id,
+            )
+        )
 
     def get_user_share_value_balancer(
         self, user_address: str, pool_id: str, pool_address: str, chain: str
@@ -1138,64 +1217,73 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 amount1 = position.get("amount1")
                 timestamp = position.get("timestamp")
                 chain = position.get("chain")
-                
+
                 if None in (token0, amount0, timestamp, chain):
                     self.context.logger.error(
                         "Missing token0, amount0, timestamp, or chain in position data."
                     )
                     continue
-                
+
                 # Get token decimals
                 token0_decimals = yield from self._get_token_decimals(chain, token0)
                 if not token0_decimals:
                     continue
-                
+
                 # Calculate adjusted amount for token0
                 initial_amount0 = Decimal(str(amount0)) / Decimal(10**token0_decimals)
-                
+
                 # Calculate adjusted amount for token1 if it exists
                 initial_amount1 = None
                 if token1 is not None and amount1 is not None:
                     token1_decimals = yield from self._get_token_decimals(chain, token1)
                     if not token1_decimals:
                         continue
-                    initial_amount1 = Decimal(str(amount1)) / Decimal(10**token1_decimals)
-                
+                    initial_amount1 = Decimal(str(amount1)) / Decimal(
+                        10**token1_decimals
+                    )
+
                 # Get historical token prices
                 from datetime import datetime
+
                 date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
-                
+
                 tokens = [[position.get("token0_symbol"), token0]]
                 if token1 is not None:
                     tokens.append([position.get("token1_symbol"), token1])
-                
+
                 historical_prices = yield from self._fetch_historical_token_prices(
                     tokens, date_str, chain
                 )
-                
+
                 if not historical_prices:
-                    self.context.logger.error("Failed to fetch historical token prices.")
+                    self.context.logger.error(
+                        "Failed to fetch historical token prices."
+                    )
                     continue
-                
+
                 # Calculate value for token0
                 initial_price0 = historical_prices.get(token0)
                 if initial_price0 is None:
                     self.context.logger.error("Historical price not found for token0.")
                     continue
-                
+
                 position_value = float(initial_amount0 * Decimal(str(initial_price0)))
-                
+
                 # Add value for token1 if it exists
                 if token1 is not None and initial_amount1 is not None:
                     initial_price1 = historical_prices.get(token1)
                     if initial_price1 is None:
-                        self.context.logger.error("Historical price not found for token1.")
+                        self.context.logger.error(
+                            "Historical price not found for token1."
+                        )
                         continue
-                    position_value += float(initial_amount1 * Decimal(str(initial_price1)))
-                
+                    position_value += float(
+                        initial_amount1 * Decimal(str(initial_price1))
+                    )
+
                 initial_value += position_value
                 self.context.logger.info(f"Position initial value: {position_value}")
-        
+
         self.context.logger.info(f"Total initial investment value: {initial_value}")
         return initial_value if initial_value > 0 else None
 
@@ -1204,12 +1292,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Dict[str, float]]:
         """Fetch historical token prices for a specific date."""
         historical_prices = {}
-        
+
         coin_list = yield from self.fetch_coin_list()
         if not coin_list:
             self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
             return historical_prices
-        
+
         for token_symbol, token_address in tokens:
             # Get CoinGecko ID
             coingecko_id = yield from self.get_token_id_from_symbol(
@@ -1220,27 +1308,27 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
                 )
                 continue
-            
+
             price = yield from self._fetch_historical_token_price(
                 coingecko_id, date_str
             )
             if price:
                 historical_prices[token_address] = price
-        
+
         return historical_prices
-    
+
     def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
         """Fetches the list of coins from CoinGecko API."""
         url = "https://api.coingecko.com/api/v3/coins/list"
         response = yield from self.get_http_response("GET", url, None, None)
-        
+
         try:
             response_json = json.loads(response.body)
             return response_json
         except json.decoder.JSONDecodeError as e:
             self.context.logger.error(f"Failed to fetch coin list: {e}")
             return None
-    
+
     def get_token_id_from_symbol(
         self, token_address, symbol, coin_list, chain_name
     ) -> Generator[None, None, Optional[str]]:
@@ -1253,9 +1341,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
             ]
             return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-        
+
         return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-    
+
     def get_token_id_from_symbol_cached(
         self, symbol, token_name, coin_list
     ) -> Optional[str]:
@@ -1266,11 +1354,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ]
         if not candidates:
             return None
-        
+
         # If single candidate, return it
         if len(candidates) == 1:
             return candidates[0]["id"]
-        
+
         # If multiple candidates, match by name if possible
         normalized_token_name = token_name.replace(" ", "").lower()
         for coin in candidates:
@@ -1278,7 +1366,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if coin_name == normalized_token_name or coin_name == symbol.lower():
                 return coin["id"]
         return None
-    
+
     def _fetch_token_name_from_contract(
         self, chain: str, token_address: str
     ) -> Generator[None, None, Optional[str]]:
@@ -1292,7 +1380,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return token_name
-    
+
     def _fetch_historical_token_price(
         self, coingecko_id, date_str
     ) -> Generator[None, None, Optional[float]]:
@@ -1301,11 +1389,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             coin_id=coingecko_id,
             date=date_str,
         )
-        
+
         headers = {"Accept": "application/json"}
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
-        
+
         success, response_json = yield from self._request_with_retries(
             endpoint=endpoint,
             headers=headers,
@@ -1313,7 +1401,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             rate_limited_callback=self.coingecko.rate_limited_status_callback,
             retry_wait=self.params.sleep_time,
         )
-        
+
         if success:
             price = (
                 response_json.get("market_data", {}).get("current_price", {}).get("usd")
@@ -1330,7 +1418,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Failed to fetch historical price for {coingecko_id}"
             )
             return None
-    
+
     def _get_balancer_pool_name(
         self, pool_address: str, chain: str
     ) -> Generator[None, None, Optional[str]]:

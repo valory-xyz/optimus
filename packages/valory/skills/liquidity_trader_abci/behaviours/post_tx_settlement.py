@@ -22,7 +22,7 @@
 from typing import (
     Generator,
 )
-from packages.valory.skills.liquidity_trader_abci.rounds import (
+from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
     CheckStakingKPIMetRound,
     PostTxSettlementPayload,
     PostTxSettlementRound,

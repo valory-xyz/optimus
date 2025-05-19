@@ -35,7 +35,7 @@ from packages.valory.contracts.sturdy_yearn_v3_vault.contract import YearnV3Vaul
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
-from packages.valory.skills.liquidity_trader_abci.rounds import (
+from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
     GetPositionsPayload,
     GetPositionsRound,
 )

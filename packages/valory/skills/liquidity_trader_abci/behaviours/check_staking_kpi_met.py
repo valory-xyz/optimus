@@ -32,7 +32,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     ETHER_VALUE,
     SAFE_TX_GAS)
 from packages.valory.skills.liquidity_trader_abci.payloads import CheckStakingKPIMetPayload
-from packages.valory.skills.liquidity_trader_abci.rounds import CheckStakingKPIMetRound
+from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met import CheckStakingKPIMetRound
 from packages.valory.skills.transaction_settlement_abci.payload_tools import hash_payload_to_hex
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,

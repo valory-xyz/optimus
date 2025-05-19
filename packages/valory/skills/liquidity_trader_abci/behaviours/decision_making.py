@@ -78,8 +78,10 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 
 from packages.valory.skills.liquidity_trader_abci.payloads import DecisionMakingPayload
-from packages.valory.skills.liquidity_trader_abci.rounds import (
+from packages.valory.skills.liquidity_trader_abci.states.decision_making import (
     DecisionMakingRound,
+)
+from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
 )
 from packages.valory.skills.liquidity_trader_abci.utils import hash_payload_to_hex

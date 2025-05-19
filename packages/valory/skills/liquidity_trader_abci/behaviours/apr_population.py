@@ -33,7 +33,7 @@ from typing import (
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
 
-from packages.valory.skills.liquidity_trader_abci.rounds import (
+from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
     APRPopulationPayload,
     APRPopulationRound,
 )

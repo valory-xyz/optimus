@@ -45,7 +45,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import EvaluateStrategyPayload
-from packages.valory.skills.liquidity_trader_abci.rounds import EvaluateStrategyRound
+from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import EvaluateStrategyRound
 from packages.valory.protocols.ipfs import IpfsMessage
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue

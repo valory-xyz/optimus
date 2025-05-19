@@ -7,14 +7,14 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   behaviours/__init__.py: bafybeiguehsbdcqelysju3627o7lpujqeh45zktx5z44yxeh7qmbhanxui
-  behaviours/apr_population.py: bafybeifjyyz73evzvzc4fsqq4lktygduiymfuqkxjw2z4it5wwfnmh2diu
-  behaviours/base.py: bafybeigsvtxi4oexyai55m4mrgzx4wjjo73lrjpz6pm3x2fhdjhsxdl63y
+  behaviours/apr_population.py: bafybeiegtk57nvmzgih2fscrpwnudbmxoqlzheu7453nrr7vwlynkcqxoe
+  behaviours/base.py: bafybeic55s4dsa6pj3wx6gligb2xnjyajhw4d26hxy4cdfaxpvmxoq7gpm
   behaviours/call_checkpoint.py: bafybeid5bndhttmps2oiudna4zq75hdjtilfkcjh3ctxkjebbuuv6n5jyi
   behaviours/check_staking_kpi_met.py: bafybeidb334mxqcazk3e4la2eg6btcri6zq3ng2b4qlfxckc4hfxzlcy6y
   behaviours/decision_making.py: bafybeiazmhv2agqic4x5ifmz3ufmt3pbofesx3ixfdeh54dgzo5d3bg7pa
-  behaviours/evaluate_strategy.py: bafybeifpuwid5zwxg6w2n27kyd4nrsp6qasjnblug2o6l7rbebyjfm2bmi
-  behaviours/fetch_strategies.py: bafybeihupmqrcyztchlblcxq35kqf4xlfwycpy5ayx4p2vf334r2luqmnu
-  behaviours/get_positions.py: bafybeieeymrifbu6kowxmeiifxn6ymy7drqcasybkpsjr6rfxughlqs5he
+  behaviours/evaluate_strategy.py: bafybeigfd3itzn4gcifdanlyxi757umminl2y7mshjbg6yuyjoj6equeae
+  behaviours/fetch_strategies.py: bafybeihi4f2n3leml6jbcbesfaoafn2kril4j6qlu3srpzz4quwl5rr744
+  behaviours/get_positions.py: bafybeie56pprliguym7ewpt4n7amtupivzbn32mjon6hl6sb5vgnywj3lm
   behaviours/post_tx_settlement.py: bafybeiffy62faxqdijjvzu3jdoyv2sffqsrxodfmvxilhauvx23sdxejdq
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeif3aw6wqc573a6hlzummjbs2ccecmso6fwmsqselp2csqbzqqi2he
@@ -27,7 +27,7 @@ fingerprint:
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeib6ftotspu2ojuk5hy6gclq36b2fnftsyi5fxocuyqayjxsgjlueu
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeiby72gzsy4icvce7ttry4crdfflidxzgvtylikehoddsjh26x43he
+  pools/velodrome.py: bafybeiakucrypwfumnmq2k6kovawl4het4tv2wkostogga67iyzgqzvfpy
   rounds.py: bafybeibeqafibrlwuxdqkerd6v4h65mjwhjsgsmfdasrvrjapaoyepmo34
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   states/__init__.py: bafybeige5a5rkfmb56a7im4q4tqxddmut6vacwqgq2g4qvaauk7sqgzlnu
@@ -59,7 +59,7 @@ contracts:
 - valory/balancer_vault:0.1.0:bafybeiff3ltn6xoh3otuywk2j3yxujdlfzcvri66slnufv5t4hkj5musfa
 - valory/erc20:0.1.0:bafybeie2wet3factwc6pwqvqpwqu3prtv75lmbqo5y4onda5y533ufdqhy
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeibr4srhghybxiedyuimnuulwnox4s55hrjapusqyptoizn66nbz3m
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeiauzw6ih36wyyseeazr5q3kzrsc6jozlgsaz4gnbmypeamr5omidu
 - valory/uniswap_v3_pool:0.1.0:bafybeif4rnyk4glac2xeqydkxazvdovu4veo2jp65hwlhxf74ir7yvyl4m
 - valory/merkl_distributor:0.1.0:bafybeidaxrbcrh6icl3cmuxfijaxsobsuonuha754jhl2cjdkhktivjfa4
 - valory/staking_token:0.1.0:bafybeiev3fx5wg4rs5rciqdxemdvt73fwu2nylv23i7g665jzorcyyjape

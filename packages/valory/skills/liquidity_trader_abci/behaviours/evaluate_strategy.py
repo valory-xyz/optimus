@@ -827,90 +827,250 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return exit_pool_action
 
-    def _build_bridge_swap_actions(
-        self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Build bridge and swap actions for the given tokens."""
-        if not opportunity:
-            self.context.logger.error("No pool present.")
-            return None
-
-        bridge_swap_actions = []
-
-        # Get the highest APR pool's tokens
-        # Extract opportunity details
+    def _get_required_tokens(self, opportunity: Dict[str, Any]) -> List[Tuple[str, str]]:
+        """Get the list of required tokens for the opportunity."""
+        required_tokens = []
         dest_token0_address = opportunity.get("token0")
         dest_token0_symbol = opportunity.get("token0_symbol")
-        dest_chain = opportunity.get("chain")
-        dex_type = opportunity.get("dex_type")
-        relative_funds_percentage = opportunity.get("relative_funds_percentage")
-
-        if not dest_token0_address or not dest_token0_symbol or not dest_chain:
-            self.context.logger.error(
-                f"Incomplete data in highest APR pool {opportunity}"
-            )
-            return None
-
-        if dex_type == DexType.STURDY.value:
-            # Handle STURDY dex type
-            for token in tokens:
-                self._add_bridge_swap_action(
-                    bridge_swap_actions,
-                    token,
-                    dest_chain,
-                    dest_token0_address,
-                    dest_token0_symbol,
-                    relative_funds_percentage,
-                )
-        else:
-            # Handle other dex types
+        
+        if dest_token0_address and dest_token0_symbol:
+            required_tokens.append((dest_token0_address, dest_token0_symbol))
+        
+        # For non-STURDY dex types, we need two tokens
+        if opportunity.get("dex_type") != DexType.STURDY.value:
             dest_token1_address = opportunity.get("token1")
             dest_token1_symbol = opportunity.get("token1_symbol")
-
-            if not dest_token1_address or not dest_token1_symbol:
-                self.context.logger.error(
-                    f"Incomplete data in highest APR pool {opportunity}"
-                )
-                return None
-
-            if len(tokens) == 1:
-                # Only one source token, split it in half for two destination tokens
-                self._add_bridge_swap_action(
-                    bridge_swap_actions,
-                    tokens[0],
-                    dest_chain,
-                    dest_token0_address,
-                    dest_token0_symbol,
-                    relative_funds_percentage / 2,
-                )
-                self._add_bridge_swap_action(
-                    bridge_swap_actions,
-                    tokens[0],
-                    dest_chain,
-                    dest_token1_address,
-                    dest_token1_symbol,
-                    relative_funds_percentage,
+            
+            if dest_token1_address and dest_token1_symbol:
+                required_tokens.append((dest_token1_address, dest_token1_symbol))
+                
+        return required_tokens
+    
+    def _group_tokens_by_chain(self, tokens: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        """Group tokens by chain."""
+        tokens_by_chain = {}
+        for token in tokens:
+            chain = token.get("chain")
+            if chain not in tokens_by_chain:
+                tokens_by_chain[chain] = []
+            tokens_by_chain[chain].append(token)
+        return tokens_by_chain
+    
+    def _identify_missing_tokens(
+        self, required_tokens: List[Tuple[str, str]], 
+        available_tokens: Dict[str, Dict[str, Any]], 
+        dest_chain: str
+    ) -> List[Tuple[str, str]]:
+        """Identify which tokens we need but don't have on the destination chain."""
+        tokens_we_need = []
+        for req_token_addr, req_token_symbol in required_tokens:
+            if req_token_addr in available_tokens:
+                self.context.logger.info(
+                    f"Token {req_token_symbol} ({req_token_addr}) already available on {dest_chain}"
                 )
             else:
-                tokens.sort(key=lambda x: x["token"])
-                dest_tokens = sorted(
-                    [
-                        (dest_token0_address, dest_token0_symbol),
-                        (dest_token1_address, dest_token1_symbol),
-                    ],
-                    key=lambda x: x[0],
-                )
-                for idx, token in enumerate(tokens):
-                    dest_token_address, dest_token_symbol = dest_tokens[idx % 2]
+                tokens_we_need.append((req_token_addr, req_token_symbol))
+        return tokens_we_need
+    
+    def _handle_all_tokens_available(
+        self, 
+        tokens: List[Dict[str, Any]], 
+        required_tokens: List[Tuple[str, str]], 
+        dest_chain: str, 
+        relative_funds_percentage: float
+    ) -> List[Dict[str, Any]]:
+        """Handle the case where we have all required tokens on the destination chain."""
+        bridge_swap_actions = []
+        if required_tokens:
+            # Get tokens from other chains
+            other_chain_tokens = [token for token in tokens if token.get("chain") != dest_chain]
+            
+            # If we have tokens from other chains and required tokens
+            if other_chain_tokens and required_tokens:
+                # Distribute tokens from other chains evenly among all required tokens
+                for idx, token in enumerate(other_chain_tokens):
+                    # Get the destination token for this source token
+                    dest_token_address, dest_token_symbol = required_tokens[idx % len(required_tokens)]
+                    
+                    # Calculate percentage based on total required tokens
+                    token_percentage = relative_funds_percentage / len(required_tokens)
+                    
+                    # Add bridge action
                     self._add_bridge_swap_action(
                         bridge_swap_actions,
                         token,
                         dest_chain,
                         dest_token_address,
                         dest_token_symbol,
-                        relative_funds_percentage,
+                        token_percentage,
                     )
+        
         return bridge_swap_actions
+    
+    def _handle_some_tokens_available(
+        self,
+        tokens: List[Dict[str, Any]],
+        required_tokens: List[Tuple[str, str]],
+        tokens_we_need: List[Tuple[str, str]],
+        dest_chain: str,
+        relative_funds_percentage: float
+    ) -> List[Dict[str, Any]]:
+        """Handle the case where we have some but not all required tokens."""
+        bridge_swap_actions = []
+        
+        # First, handle tokens from other chains
+        other_chain_tokens = [token for token in tokens if token.get("chain") != dest_chain]
+        for idx, token in enumerate(other_chain_tokens):
+            dest_token_address, dest_token_symbol = tokens_we_need[idx % len(tokens_we_need)]
+            self._add_bridge_swap_action(
+                bridge_swap_actions,
+                token,
+                dest_chain,
+                dest_token_address,
+                dest_token_symbol,
+                relative_funds_percentage,
+            )
+        
+        # Then, handle tokens on the destination chain that need to be swapped
+        dest_chain_tokens = [token for token in tokens if token.get("chain") == dest_chain]
+        for token in dest_chain_tokens:
+            # Skip if this token is already one of the required tokens
+            if any(token.get("token") == req_token for req_token, _ in required_tokens):
+                continue
+            
+            # Swap to the first missing token
+            dest_token_address, dest_token_symbol = tokens_we_need[0]
+            self._add_bridge_swap_action(
+                bridge_swap_actions,
+                token,
+                dest_chain,
+                dest_token_address,
+                dest_token_symbol,
+                relative_funds_percentage,
+            )
+        
+        # If no actions created yet, use available required tokens to get missing ones
+        if not bridge_swap_actions:
+            available_tokens_on_dest_list = [
+                token for token in dest_chain_tokens 
+                if any(token.get("token") == req_token for req_token, _ in required_tokens)
+            ]
+            
+            if available_tokens_on_dest_list and tokens_we_need:
+                source_token = available_tokens_on_dest_list[0]
+                for dest_token_address, dest_token_symbol in tokens_we_need:
+                    # Skip if this is the same token (no need to swap)
+                    if source_token.get("token") == dest_token_address:
+                        continue
+                    
+                    # Calculate percentage based on total required tokens
+                    token_percentage = relative_funds_percentage / len(required_tokens)
+                    
+                    self._add_bridge_swap_action(
+                        bridge_swap_actions,
+                        source_token,
+                        dest_chain,
+                        dest_token_address,
+                        dest_token_symbol,
+                        token_percentage,
+                    )
+        
+        return bridge_swap_actions
+    
+    def _handle_all_tokens_needed(
+        self,
+        tokens: List[Dict[str, Any]],
+        required_tokens: List[Tuple[str, str]],
+        dest_chain: str,
+        relative_funds_percentage: float
+    ) -> List[Dict[str, Any]]:
+        """Handle the case where we need all tokens."""
+        bridge_swap_actions = []
+        
+        # Handle single source token case
+        if len(tokens) == 1:
+            token = tokens[0]
+            for dest_token_address, dest_token_symbol in required_tokens:
+                # Skip if same token on same chain
+                if token.get("chain") == dest_chain and token.get("token") == dest_token_address:
+                    continue
+                
+                token_percentage = relative_funds_percentage / len(required_tokens)
+                
+                self._add_bridge_swap_action(
+                    bridge_swap_actions,
+                    token,
+                    dest_chain,
+                    dest_token_address,
+                    dest_token_symbol,
+                    token_percentage,
+                )
+        else:
+            # Multiple source tokens case
+            tokens.sort(key=lambda x: x["token"])
+            dest_tokens = sorted(required_tokens, key=lambda x: x[0])
+            
+            for idx, token in enumerate(tokens):
+                dest_token_address, dest_token_symbol = dest_tokens[idx % len(dest_tokens)]
+                
+                # Skip if same token on same chain
+                if token.get("chain") == dest_chain and token.get("token") == dest_token_address:
+                    continue
+                
+                token_percentage = relative_funds_percentage / len(dest_tokens)
+                
+                self._add_bridge_swap_action(
+                    bridge_swap_actions,
+                    token,
+                    dest_chain,
+                    dest_token_address,
+                    dest_token_symbol,
+                    token_percentage,
+                )
+        
+        return bridge_swap_actions
+    
+    def _build_bridge_swap_actions(
+        self, opportunity: Dict[str, Any], tokens: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Build bridge and swap actions for the given tokens."""
+        # Validate input
+        if not opportunity:
+            self.context.logger.error("No pool present.")
+            return None
+            
+        # Extract key opportunity details
+        dest_chain = opportunity.get("chain")
+        relative_funds_percentage = opportunity.get("relative_funds_percentage")
+        
+        if not dest_chain or not opportunity.get("token0"):
+            self.context.logger.error(f"Incomplete data in opportunity {opportunity}")
+            return None
+            
+        # Get required tokens for this opportunity
+        required_tokens = self._get_required_tokens(opportunity)
+        if not required_tokens:
+            self.context.logger.error("No required tokens identified")
+            return None
+            
+        # Group tokens by chain and identify what we have/need
+        tokens_by_chain = self._group_tokens_by_chain(tokens)
+        dest_chain_tokens = tokens_by_chain.get(dest_chain, [])
+        available_tokens_on_dest = {token.get("token"): token for token in dest_chain_tokens}
+        tokens_we_need = self._identify_missing_tokens(required_tokens, available_tokens_on_dest, dest_chain)
+        
+        # Handle different scenarios based on what tokens we have/need
+        if not tokens_we_need:
+            # We have all required tokens, just bridge from other chains
+            return self._handle_all_tokens_available(tokens, required_tokens, dest_chain, relative_funds_percentage)
+        elif len(tokens_we_need) < len(required_tokens):
+            # We have some tokens but not all
+            return self._handle_some_tokens_available(
+                tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage
+            )
+        else:
+            # We need all tokens
+            return self._handle_all_tokens_needed(tokens, required_tokens, dest_chain, relative_funds_percentage)
 
     def _add_bridge_swap_action(
         self,
@@ -934,10 +1094,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Incomplete data in tokens {token}")
             return
 
-        if (
-            source_token_chain != dest_chain
-            or source_token_address != dest_token_address
-        ):
+        # Only add bridge/swap action if:
+        # 1. We need to bridge to a different chain, OR
+        # 2. We need to swap to a different token on the same chain
+        if source_token_chain != dest_chain:
+            # Need to bridge to different chain
+            self.context.logger.info(
+                f"Adding bridge action from {source_token_symbol} on {source_token_chain} "
+                f"to {dest_token_symbol} on {dest_chain}"
+            )
             actions.append(
                 {
                     "action": Action.FIND_BRIDGE_ROUTE.value,
@@ -949,6 +1114,30 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "to_token_symbol": dest_token_symbol,
                     "funds_percentage": relative_funds_percentage,
                 }
+            )
+        elif source_token_address != dest_token_address:
+            # Same chain but different token, need to swap
+            self.context.logger.info(
+                f"Adding swap action from {source_token_symbol} to {dest_token_symbol} "
+                f"on chain {dest_chain}"
+            )
+            actions.append(
+                {
+                    "action": Action.FIND_BRIDGE_ROUTE.value,
+                    "from_chain": source_token_chain,
+                    "to_chain": dest_chain,
+                    "from_token": source_token_address,
+                    "from_token_symbol": source_token_symbol,
+                    "to_token": dest_token_address,
+                    "to_token_symbol": dest_token_symbol,
+                    "funds_percentage": relative_funds_percentage,
+                }
+            )
+        else:
+            # Same token on same chain, no action needed
+            self.context.logger.info(
+                f"No bridge/swap needed for {source_token_symbol} on {source_token_chain} "
+                f"as it's already the required token"
             )
 
     def _build_enter_pool_action(self, opportunity) -> Dict[str, Any]:

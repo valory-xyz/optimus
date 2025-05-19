@@ -671,11 +671,27 @@ def get_epochs_by_address(pool_id, chain, limit=30, offset=0):
         
         # Get epochs data
         try:
-            # Call epochsByAddress function
-            epochs_data = contract_instance.functions.epochsByAddress(limit, offset, pool_id).call()
+            # Convert pool_id to checksum address
+            pool_address = w3.to_checksum_address(pool_id)
+            logger.info(f"Calling epochsByAddress for pool {pool_id} (checksum: {pool_address})")
             
-            if not epochs_data:
-                logger.warning(f"No epochs data found for pool {pool_id}")
+            # Try to get the function directly to check if it exists
+            try:
+                # Check if the function exists
+                fn = contract_instance.functions.epochsByAddress
+                logger.info(f"Function epochsByAddress exists: {fn is not None}")
+                
+                # Log the parameters
+                logger.info(f"Parameters: limit={limit}, offset={offset}, pool={pool_address}")
+                
+                # Call epochsByAddress function with proper types
+                epochs_data = contract_instance.functions.epochsByAddress(limit, offset, pool_address).call()
+                
+                if not epochs_data:
+                    logger.warning(f"No epochs data found for pool {pool_id}")
+                    return None
+            except AttributeError as ae:
+                logger.error(f"Function epochsByAddress not found: {str(ae)}")
                 return None
             
             # Process the epochs data into a simpler format for our calculations
@@ -736,7 +752,8 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         
         # If we couldn't get epochs data, return None
         if not epochs_data:
-            return None
+            logger.warning(f"No epochs data available for pool {pool_id}. Cannot calculate Sharpe ratio.")
+            return None  # Return None to indicate the metric couldn't be calculated
         
         # Process epochs data
         timestamps = []
@@ -917,7 +934,8 @@ def analyze_pool_liquidity(pool_id: str, chain: str, price_impact: float = 0.01)
         
         # If we couldn't get epochs data, return None
         if not epochs_data:
-            return None, None
+            logger.warning(f"No epochs data available for pool {pool_id}. Cannot calculate depth score and max position size.")
+            return None, None  # Return None to indicate the metrics couldn't be calculated
         
         # Process epochs data
         tvl_series = []
@@ -1626,6 +1644,90 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
     
     return top_pools
 
+def calculate_metrics(
+    position: Dict[str, Any],
+    coingecko_api_key: str,
+    coin_list: List[Any],
+    **kwargs,
+) -> Optional[Dict[str, Any]]:
+    """
+    Calculate risk metrics for a specific Velodrome pool position.
+    
+    Args:
+        position: Dictionary containing position details (pool_address, chain, token0, token1, etc.)
+        coingecko_api_key: API key for CoinGecko
+        coin_list: List of coins from CoinGecko API
+        **kwargs: Additional arguments
+        
+    Returns:
+        Dictionary containing calculated metrics or None if calculation fails
+    """
+    try:
+        # Extract position details
+        pool_id = position.get("pool_address")
+        chain = position.get("chain", "").lower()
+        token0_address = position.get("token0", "")
+        token1_address = position.get("token1", "")
+        token0_symbol = position.get("token0_symbol", "")
+        token1_symbol = position.get("token1_symbol", "")
+        
+        if not pool_id or not chain:
+            logger.error("Missing required position details: pool_address or chain")
+            return None
+            
+        # Map chain name to chain ID
+        chain_id = None
+        for cid, cname in CHAIN_NAMES.items():
+            if cname.lower() == chain.lower():
+                chain_id = cid
+                break
+                
+        if chain_id is None:
+            logger.error(f"Unsupported chain: {chain}")
+            return None
+            
+        # Get token IDs for CoinGecko API
+        token_ids = []
+        if token0_address and token0_symbol:
+            token0_id = get_token_id_from_symbol(token0_address, token0_symbol, coin_list, chain)
+            token_ids.append(token0_id)
+            
+        if token1_address and token1_symbol:
+            token1_id = get_token_id_from_symbol(token1_address, token1_symbol, coin_list, chain)
+            token_ids.append(token1_id)
+            
+        # Calculate IL risk score
+        il_risk_score = None
+        valid_token_ids = [tid for tid in token_ids if tid]
+        if len(valid_token_ids) >= 2:
+            il_risk_score = calculate_il_risk_score_multi(
+                valid_token_ids, 
+                coingecko_api_key,
+                pool_id=pool_id,
+                chain=chain
+            )
+            
+        # Calculate Sharpe ratio
+        sharpe_ratio = get_velodrome_pool_sharpe_ratio(
+            pool_id, chain.upper()
+        )
+        
+        # Calculate depth score and max position size
+        depth_score, max_position_size = analyze_pool_liquidity(
+            pool_id, chain.upper()
+        )
+        
+        # Return calculated metrics
+        return {
+            "il_risk_score": il_risk_score,
+            "sharpe_ratio": sharpe_ratio,
+            "depth_score": depth_score,
+            "max_position_size": max_position_size,
+        }
+    except Exception as e:
+        logger.error(f"Error calculating metrics for position {position.get('pool_address')}: {str(e)}")
+        return None
+
 def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[str, Any]]]]:
     """Main function to run the Velodrome pool analysis.
     
@@ -1639,6 +1741,8 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             rpc_url: RPC URL for the Mode chain (optional, uses default if not provided)
             top_n: Number of top pools by APR to return (default: 10)
             cl_filter: Filter for concentrated liquidity pools (True=CL only, False=non-CL only, None=all)
+            get_metrics: If True, calculate metrics for a specific position instead of finding opportunities
+            position: Position details when get_metrics is True
             
     Returns:
         Dict containing either error messages or result data
@@ -1653,6 +1757,14 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
     
     start_time = time.time()
     
+    # Check if we're calculating metrics for a specific position
+    get_metrics = kwargs.get("get_metrics", False)
+    
+    # Define required fields based on mode
+    required_fields = list(REQUIRED_FIELDS)
+    if get_metrics:
+        required_fields.append("position")
+    
     # Check for missing required fields
     missing = check_missing_fields(kwargs)
     if missing:
@@ -1661,6 +1773,35 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         errors.append(error_msg)
         return {"error": errors}
     
+    # Fetch coin list for token ID resolution (needed for IL risk score)
+    coin_list = fetch_coin_list()
+    if coin_list is None:
+        logger.warning("Failed to fetch coin list from CoinGecko. IL risk score calculation will be skipped.")
+    
+    # If we're calculating metrics for a specific position
+    if get_metrics:
+        if "position" not in kwargs:
+            error_msg = "Position details required for metrics calculation."
+            logger.error(error_msg)
+            errors.append(error_msg)
+            return {"error": errors}
+            
+        # Calculate metrics for the position
+        metrics = calculate_metrics(
+            position=kwargs["position"],
+            coingecko_api_key=kwargs["coingecko_api_key"],
+            coin_list=coin_list
+        )
+        
+        if metrics is None:
+            error_msg = "Failed to calculate metrics for position."
+            logger.error(error_msg)
+            errors.append(error_msg)
+            return {"error": errors}
+            
+        return metrics
+    
+    # If we're finding opportunities (default behavior)
     # Get chains from kwargs
     chains = kwargs.get("chains", [])
     if not chains:
@@ -1668,11 +1809,6 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         logger.error(error_msg)
         errors.append(error_msg)
         return {"error": errors}
-    
-    # Fetch coin list for token ID resolution (needed for IL risk score)
-    coin_list = fetch_coin_list()
-    if coin_list is None:
-        logger.warning("Failed to fetch coin list from CoinGecko. IL risk score calculation will be skipped.")
     
     # Process each chain
     all_results = []

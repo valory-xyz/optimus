@@ -67,6 +67,7 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.update_position_amounts()
 
             yield from self.check_and_update_zero_liquidity_positions()
+            self.context.logger.info(f"Current Positions: {self.current_positions}")
             
             self.context.logger.info(f"POSITIONS: {positions}")
             sender = self.context.agent_address

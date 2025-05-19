@@ -21,7 +21,6 @@
 
 import json
 from decimal import Decimal
-from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type, cast
 
 from eth_abi import decode

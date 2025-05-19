@@ -21,7 +21,7 @@
 
 import json
 from decimal import Context, Decimal, getcontext
-from typing import Any, Dict, Generator, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
 from eth_utils import to_checksum_address
 
@@ -716,23 +716,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         position_data_key: str = "data",
         slot0_contract_id: Any = None,
     ) -> Generator[None, None, Dict[str, Decimal]]:
-        """
-        Calculate concentrated liquidity position value.
+        """Calculate concentrated liquidity position value.
 
-        Args:
-            pool_address: Address of the pool contract
-            chain: Chain identifier
-            position: Position data dictionary
-            token0_address: Address of token0
-            token1_address: Address of token1
-            position_manager_address: Address of position manager contract
-            contract_id: Contract identifier
-            get_position_callable: Name of the position getter function
-            position_data_key: Key for position data in response
-            slot0_contract_id: Optional contract ID for slot0 calls
+        Calculate the value of a concentrated liquidity position by fetching
+        position details and computing token amounts.
 
-        Returns:
-            Dictionary mapping token addresses to their quantities
+        :param pool_address: Address of the pool contract.
+        :param chain: Chain identifier.
+        :param position: Position data dictionary.
+        :param token0_address: Address of token0.
+        :param token1_address: Address of token1.
+        :param position_manager_address: Address of position manager contract.
+        :param contract_id: Contract identifier.
+        :param get_position_callable: Name of the position getter function.
+        :param position_data_key: Key for position data in response.
+        :param slot0_contract_id: Optional contract ID for slot0 calls.
+        :yield: Steps in the contract interaction process.
+        :return: Dictionary mapping token addresses to their quantities.
         """
         # Early validation of required parameters
         if not all(
@@ -847,17 +847,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         sqrt_price_x96: int,
         position: Dict[str, Any],
     ) -> Optional[Tuple[int, int]]:
-        """
-        Calculate token amounts for a position based on whether it's in range or not.
+        """Calculate token amounts for a position based on whether it's in range or not.
 
-        Args:
-            position_details: Position details from the contract
-            current_tick: Current tick from the pool
-            sqrt_price_x96: Current sqrt price from the pool
-            position: Position data from our system
+        Determines the token amounts for a liquidity position by checking if the
+        current tick is within the position's range and calculating accordingly.
 
-        Returns:
-            Tuple of (amount0, amount1)
+        :param position_details: Position details from the contract.
+        :param current_tick: Current tick from the pool.
+        :param sqrt_price_x96: Current sqrt price from the pool.
+        :param position: Position data from our system.
+        :return: Tuple of (amount0, amount1) representing token amounts.
         """
         # Extract position details
         tick_lower = int(position_details.get("tickLower"))

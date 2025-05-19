@@ -20,7 +20,7 @@
 """This module contains the behaviour for fetching the positions for the 'liquidity_trader_abci' skill."""
 
 import json
-from typing import Any, Dict, Generator, List, Optional, Type
+from typing import Any, Dict, Generator, Type
 
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,

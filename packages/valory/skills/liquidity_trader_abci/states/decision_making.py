@@ -20,7 +20,7 @@
 """This module contains the DecisionMakingRound of LiquidityTraderAbciApp."""
 
 import json
-from typing import Dict, Optional, Tuple, cast
+from typing import Optional, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,

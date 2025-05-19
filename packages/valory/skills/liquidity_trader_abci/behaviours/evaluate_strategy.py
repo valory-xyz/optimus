@@ -40,14 +40,7 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_utils import to_checksum_address
 
-from packages.valory.contracts.balancer_vault.contract import VaultContract
-from packages.valory.contracts.balancer_weighted_pool.contract import (
-    WeightedPoolContract,
-)
 from packages.valory.contracts.erc20.contract import ERC20
-from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
-    YearnV3VaultContract,
-)
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound

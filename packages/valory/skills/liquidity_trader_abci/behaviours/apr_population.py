@@ -20,13 +20,10 @@
 """This module contains the behaviour for writing apr related data to database for the 'liquidity_trader_abci' skill."""
 
 import json
-import math
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Generator, List, Optional, Type
+from typing import Any, Dict, Generator, Optional, Type
 
-from packages.valory.contracts.erc20.contract import ERC20
-from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     AGENT_TYPE,
@@ -34,7 +31,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
     METRICS_NAME,
     METRICS_TYPE,
-    PositionStatus,
 )
 from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
     APRPopulationPayload,

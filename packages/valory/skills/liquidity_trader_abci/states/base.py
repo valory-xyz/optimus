@@ -21,28 +21,12 @@
 
 import json
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
+from typing import Any, Dict, List, Optional, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp,
-    AbciAppTransitionFunction,
-    AppState,
     BaseSynchronizedData,
-    CollectSameUntilThresholdRound,
     CollectionRound,
-    DegenerateRound,
     DeserializedCollection,
-    get_name,
-)
-from packages.valory.skills.liquidity_trader_abci.payloads import (
-    APRPopulationPayload,
-    CallCheckpointPayload,
-    CheckStakingKPIMetPayload,
-    DecisionMakingPayload,
-    EvaluateStrategyPayload,
-    FetchStrategiesPayload,
-    GetPositionsPayload,
-    PostTxSettlementPayload,
 )
 
 

@@ -27,18 +27,7 @@ from abc import ABC
 from collections import defaultdict
 from datetime import datetime
 from enum import Enum
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    cast,
-)
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
 
 from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message

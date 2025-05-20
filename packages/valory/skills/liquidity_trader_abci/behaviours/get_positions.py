@@ -20,27 +20,11 @@
 """This module contains the behaviour for fetching the positions for the 'liquidity_trader_abci' skill."""
 
 import json
-from typing import Any, Dict, Generator, Type
+from typing import Generator, Type
 
-from packages.valory.contracts.balancer_weighted_pool.contract import (
-    WeightedPoolContract,
-)
-from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
-    YearnV3VaultContract,
-)
-from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import (
-    UniswapV3NonfungiblePositionManagerContract,
-)
-from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
-    VelodromeNonFungiblePositionManagerContract,
-)
-from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
-from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    DexType,
     LiquidityTraderBaseBehaviour,
-    PositionStatus,
 )
 from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
     GetPositionsPayload,

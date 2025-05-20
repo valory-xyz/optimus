@@ -193,7 +193,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.DONE.value, {}
 
         if decision == Decision.CONTINUE:
-            res = yield from self._update_assets_after_swap(actions, last_executed_action_index)
+            res = yield from self._update_assets_after_swap(
+                actions, last_executed_action_index
+            )
             return res
 
     def _wait_for_swap_confirmation(self) -> Generator[None, None, Optional[Decision]]:
@@ -212,7 +214,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
-        
+
         # Add tokens to assets
         self._add_token_to_assets(
             action.get("from_chain"),
@@ -224,19 +226,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             action.get("to_token"),
             action.get("to_token_symbol"),
         )
-        
+
         # If this was an ETH swap, update the remaining ETH amount in kv_store
         if action.get("from_token") == ZERO_ADDRESS:
             # Get the amount that was swapped
             amount_used = action.get("amount", 0)
             if amount_used > 0:
-                self.context.logger.info(f"Updating remaining ETH amount after swap. Amount used: {amount_used}")
+                self.context.logger.info(
+                    f"Updating remaining ETH amount after swap. Amount used: {amount_used}"
+                )
                 yield from self.update_eth_remaining_amount(amount_used)
-                
+
                 # Log the new remaining amount
                 remaining_eth = yield from self.get_eth_remaining_amount()
-                self.context.logger.info(f"Remaining ETH amount after swap: {remaining_eth}")
-        
+                self.context.logger.info(
+                    f"Remaining ETH amount after swap: {remaining_eth}"
+                )
+
         fee_details = {
             "remaining_fee_allowance": action.get("remaining_fee_allowance"),
             "remaining_gas_allowance": action.get("remaining_gas_allowance"),
@@ -872,22 +878,25 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if assets[0] == ZERO_ADDRESS:
             # For ETH (token0), get the remaining ETH amount from kv_store
             eth_remaining = yield from self.get_eth_remaining_amount()
-            
+
             # Use the tracked ETH amount
             max_amounts_in = [
-                int(min(eth_remaining, token0_balance) * relative_funds_percentage),  # Don't exceed available balance
+                int(
+                    min(eth_remaining, token0_balance) * relative_funds_percentage
+                ),  # Don't exceed available balance
                 int(token1_balance * relative_funds_percentage),
             ]
-            
-                
+
         elif assets[1] == ZERO_ADDRESS:
             # For ETH (token1), get the remaining ETH amount from kv_store
             eth_remaining = yield from self.get_eth_remaining_amount()
-                
+
             # Use the tracked ETH amount
             max_amounts_in = [
                 int(token0_balance * relative_funds_percentage),
-                int(min(eth_remaining, token1_balance) * relative_funds_percentage),  # Don't exceed available balance
+                int(
+                    min(eth_remaining, token1_balance) * relative_funds_percentage
+                ),  # Don't exceed available balance
             ]
 
         else:
@@ -896,7 +905,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 int(token0_balance * relative_funds_percentage),
                 int(token1_balance * relative_funds_percentage),
             ]
-        
+
         # Ensure that allocated amounts do not exceed available balances.
         max_amounts_in = [
             min(max_amounts_in[0], token0_balance),
@@ -1429,7 +1438,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "remaining_gas_allowance": remaining_gas_allowance
             - tx_info.get("gas_cost"),
             "remaining_fee_allowance": remaining_fee_allowance - tx_info.get("fee"),
-            "amount": tx_info.get("amount", 0),  # Store the amount for later use in _update_assets_after_swap
+            "amount": tx_info.get(
+                "amount", 0
+            ),  # Store the amount for later use in _update_assets_after_swap
         }
         return bridge_and_swap_action
 
@@ -1781,25 +1792,24 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         available_amount = self._get_balance(from_chain, from_token_address, positions)
-        
-        
+
         # Apply ETH limit if the token is ETH (ZERO_ADDRESS)
         if from_token_address == ZERO_ADDRESS:
             # Get the remaining ETH amount from kv_store
-            eth_remaining = yield from self.get_eth_remaining_amount()           
+            eth_remaining = yield from self.get_eth_remaining_amount()
             # Subsequent ETH swap - use what's left in our tracking
             available_amount = min(eth_remaining, available_amount)
             self.context.logger.info(
                 f"Subsequent ETH swap - using remaining tracked amount: {available_amount} wei"
             )
-        
+
         # Calculate the amount to swap based on the available amount and funds percentage
         amount = min(
             available_amount, int(available_amount * action.get("funds_percentage", 1))
         )
-        
+
         action["amount"] = amount
-        
+
         self.context.logger.info(
             f"Available balance: {available_amount} | Amount to swap: {amount} {from_token_symbol}"
         )

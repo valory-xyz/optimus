@@ -174,8 +174,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return
 
         # Get agent_hash from environment
-        agent_config = os.environ.get('AEA_AGENT', '')
-        agent_hash = agent_config.split(':')[-1] if agent_config else 'Not found'
+        agent_config = os.environ.get("AEA_AGENT", "")
+        agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
         # Store APR data
         timestamp = self._get_current_timestamp()
@@ -187,7 +187,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             "calculation_metrics": self._get_apr_calculation_metrics(),
             "first_investment_timestamp": self.current_positions[0].get("timestamp"),
             "agent_hash": agent_hash,
-            "volume": self.portfolio_data.get("volume")
+            "volume": self.portfolio_data.get("volume"),
         }
 
         agent_attr = yield from self.create_agent_attribute(
@@ -516,12 +516,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             timestamp = position.get("timestamp")
             if timestamp is not None:
                 return timestamp
-            
-        #quite a few early positions don't have any timestamp
-        if not first_investment_timestamp:
-            first_investment_timestamp = self._get_current_timestamp()
 
-        return None
+        # quite a few early positions don't have any timestamp
+        return self._get_current_timestamp()
 
     def _calculate_apr(
         self,

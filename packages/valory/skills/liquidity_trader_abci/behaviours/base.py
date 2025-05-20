@@ -106,6 +106,7 @@ ETH_INITIAL_AMOUNT = 0.005 * 10**18
 # Key for tracking remaining ETH in kv_store
 ETH_REMAINING_KEY = "eth_remaining_amount"
 
+
 class DexType(Enum):
     """DexType"""
 
@@ -1068,7 +1069,9 @@ class LiquidityTraderBaseBehaviour(
                     pool_id = position.get("pool_address", position.get("pool_id"))
                     tx_hash = position.get("tx_hash")
                     position_key = f"{pool_id}_{tx_hash}"
-                    self.initial_investment_values_per_pool[position_key] = position_value
+                    self.initial_investment_values_per_pool[
+                        position_key
+                    ] = position_value
 
                 else:
                     self.context.logger.warning(
@@ -1213,7 +1216,7 @@ class LiquidityTraderBaseBehaviour(
         except json.decoder.JSONDecodeError as e:
             self.context.logger.error(f"Failed to fetch coin list: {e}")
             return None
-        
+
     def get_eth_remaining_amount(self) -> Generator[None, None, int]:
         """Get the remaining ETH amount for swaps from kv_store."""
         result = yield from self._read_kv((ETH_REMAINING_KEY,))
@@ -1221,24 +1224,32 @@ class LiquidityTraderBaseBehaviour(
             # If not found in kv_store, initialize it
             yield from self.reset_eth_remaining_amount()
             return ETH_INITIAL_AMOUNT
-        
+
         try:
             return int(result[ETH_REMAINING_KEY])
         except (ValueError, TypeError):
-            self.context.logger.error(f"Invalid ETH remaining amount in kv_store: {result[ETH_REMAINING_KEY]}")
+            self.context.logger.error(
+                f"Invalid ETH remaining amount in kv_store: {result[ETH_REMAINING_KEY]}"
+            )
             yield from self.reset_eth_remaining_amount()
             return ETH_INITIAL_AMOUNT
-        
-    def update_eth_remaining_amount(self, amount_used: int) -> Generator[None, None, None]:
+
+    def update_eth_remaining_amount(
+        self, amount_used: int
+    ) -> Generator[None, None, None]:
         """Update the remaining ETH amount after a swap in kv_store."""
         current_remaining = yield from self.get_eth_remaining_amount()
         new_remaining = max(0, current_remaining - amount_used)
-        self.context.logger.info(f"Updating ETH remaining amount in kv_store: {current_remaining} -> {new_remaining}")
+        self.context.logger.info(
+            f"Updating ETH remaining amount in kv_store: {current_remaining} -> {new_remaining}"
+        )
         yield from self._write_kv({ETH_REMAINING_KEY: str(new_remaining)})
-        
+
     def reset_eth_remaining_amount(self) -> Generator[None, None, None]:
         """Reset the remaining ETH amount to the initial value in kv_store."""
-        self.context.logger.info(f"Resetting ETH remaining amount in kv_store to {ETH_INITIAL_AMOUNT}")
+        self.context.logger.info(
+            f"Resetting ETH remaining amount in kv_store to {ETH_INITIAL_AMOUNT}"
+        )
         yield from self._write_kv({ETH_REMAINING_KEY: str(ETH_INITIAL_AMOUNT)})
 
 

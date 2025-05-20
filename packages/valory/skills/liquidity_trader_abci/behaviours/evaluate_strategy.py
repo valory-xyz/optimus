@@ -21,7 +21,6 @@
 
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime
 from typing import (
     Any,
     Callable,
@@ -40,8 +39,6 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_utils import to_checksum_address
 
-from packages.valory.contracts.erc20.contract import ERC20
-from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -455,31 +452,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _merge_duplicate_bridge_swap_actions(
         self, actions: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """
-        Identify and merge duplicate bridge swap actions.
-        
-        A duplicate is defined as having the same from_token, to_token, from_chain, and to_chain.
-        When duplicates are found, their funds_percentage values are summed and only one action is kept.
-        
-        Args:
-            actions: List of actions to check for duplicates
-            
-        Returns:
-            List of actions with duplicates merged
-        """
+        """Identify and merge duplicate bridge swap actions"""
         try:
             if not actions:
                 return actions
-                
+
             # Find all bridge swap actions
             bridge_swap_actions = [
-                (i, action) for i, action in enumerate(actions) 
+                (i, action)
+                for i, action in enumerate(actions)
                 if action.get("action") == Action.FIND_BRIDGE_ROUTE.value
             ]
-            
+
             if len(bridge_swap_actions) <= 1:
                 return actions  # No duplicates possible with 0 or 1 bridge actions
-                
+
             # Group bridge swap actions by their key attributes
             action_groups = {}
             for idx, action in bridge_swap_actions:
@@ -489,13 +476,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     to_chain = action.get("to_chain", "")
                     from_token = action.get("from_token", "")
                     to_token = action.get("to_token", "")
-                    
+
                     # Generate a unique identifier for logging and debugging
-                    action_id = f"{from_chain}_{to_chain}_{from_token[:8]}_{to_token[:8]}"
+                    action_id = (
+                        f"{from_chain}_{to_chain}_{from_token[:8]}_{to_token[:8]}"
+                    )
                     action["bridge_action_id"] = action_id
-                    
+
                     key = (from_chain, to_chain, from_token, to_token)
-                    
+
                     if key not in action_groups:
                         action_groups[key] = []
                     action_groups[key].append((idx, action))
@@ -503,21 +492,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(
                         f"Error processing bridge swap action: {e}. Action: {action}"
                     )
-                
+
             # If no groups have more than one action, there are no duplicates
             if all(len(group) <= 1 for group in action_groups.values()):
                 return actions
-                
+
             # Process groups with duplicates
             indices_to_remove = []
-            for key, group in action_groups.items():
+            for _key, group in action_groups.items():
                 if len(group) > 1:
                     try:
                         # Keep the first action and update its funds_percentage
                         base_idx, base_action = group[0]
                         total_percentage = base_action.get("funds_percentage", 0)
                         action_ids = [base_action.get("bridge_action_id", "unknown")]
-                        
+
                         # Sum up percentages from duplicates and mark them for removal
                         for idx, action in group[1:]:
                             action_id = action.get("bridge_action_id", "unknown")
@@ -525,11 +514,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             percentage = action.get("funds_percentage", 0)
                             total_percentage += percentage
                             indices_to_remove.append(idx)
-                        
+
                         # Update the base action with the combined percentage
                         actions[base_idx]["funds_percentage"] = total_percentage
                         actions[base_idx]["merged_from"] = action_ids
-                        
+
                         self.context.logger.info(
                             f"Merged {len(group)} duplicate bridge swap actions (IDs: {', '.join(action_ids)}) from "
                             f"{base_action.get('from_token_symbol', 'unknown')} on {base_action.get('from_chain', 'unknown')} "
@@ -540,14 +529,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         self.context.logger.error(
                             f"Error merging duplicate bridge swap actions: {e}. Group: {group}"
                         )
-            
+
             # Create a new list without the removed actions
             if indices_to_remove:
-                return [action for i, action in enumerate(actions) if i not in indices_to_remove]
-            
+                return [
+                    action
+                    for i, action in enumerate(actions)
+                    if i not in indices_to_remove
+                ]
+
             return actions
         except Exception as e:
-            self.context.logger.error(f"Error in _merge_duplicate_bridge_swap_actions: {e}")
+            self.context.logger.error(
+                f"Error in _merge_duplicate_bridge_swap_actions: {e}"
+            )
             # In case of error, return the original actions to avoid breaking the workflow
             return actions
 

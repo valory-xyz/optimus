@@ -21,9 +21,10 @@
 
 import json
 import os
+from datetime import datetime
 from decimal import Context, Decimal, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
-from datetime import datetime
+
 from eth_utils import to_checksum_address
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
@@ -67,7 +68,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round: Type[AbstractRound] = FetchStrategiesRound
     strategies = None
-    
+
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
@@ -287,30 +288,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             allocations,
             portfolio_breakdown,
         )
-
-    def _update_portfolio_breakdown_ratios(
-        self, portfolio_breakdown: List[Dict], total_value: Decimal
-    ) -> None:
-        """Calculate ratios for portfolio breakdown entries."""
-        # Calculate total ratio first
-        total_ratio = sum(
-            Decimal(str(entry["value_usd"])) / total_value
-            for entry in portfolio_breakdown
-        )
-
-        # Update each entry with its ratio
-        for entry in portfolio_breakdown:
-            if total_value > 0:
-                entry["ratio"] = round(
-                    Decimal(str(entry["value_usd"])) / total_value / total_ratio, 6
-                )
-            else:
-                entry["ratio"] = 0.0
-
-            # Convert values to float for JSON serialization
-            entry["value_usd"] = float(entry["value_usd"])
-            entry["balance"] = float(entry["balance"])
-            entry["price"] = float(entry["price"])
 
     def _update_portfolio_metrics(
         self,
@@ -535,11 +512,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         portfolio_breakdown: List[Dict],
     ) -> Dict:
         """Create the final portfolio data structure."""
-        
+
         # Get agent_hash from environment
-        agent_config = os.environ.get('AEA_AGENT', '')
-        agent_hash = agent_config.split(':')[-1] if agent_config else 'Not found'
-        
+        agent_config = os.environ.get("AEA_AGENT", "")
+        agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
+
         return {
             "portfolio_value": float(total_value),
             "initial_investment": float(initial_investment)
@@ -582,11 +559,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Balancer position processing."""
-        self.context.logger.info(f"Calculating Balancer position for pool {position.get('pool_id')}")
+        self.context.logger.info(
+            f"Calculating Balancer position for pool {position.get('pool_id')}"
+        )
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
         pool_id = position.get("pool_id")
-        
+
         user_balances = yield from self.get_user_share_value_balancer(
             user_address, pool_id, pool_address, chain
         )
@@ -604,7 +583,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Handle Uniswap V3 position processing."""
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
-        self.context.logger.info(f"Calculating Uniswap V3 position for pool {pool_address} with token ID {token_id}")
+        self.context.logger.info(
+            f"Calculating Uniswap V3 position for pool {pool_address} with token ID {token_id}"
+        )
 
         user_balances = yield from self.get_user_share_value_uniswap(
             pool_address, token_id, chain, position
@@ -621,7 +602,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Sturdy position processing."""
-        self.context.logger.info(f"Calculating Sturdy position for aggregator {position.get('pool_address')}")
+        self.context.logger.info(
+            f"Calculating Sturdy position for aggregator {position.get('pool_address')}"
+        )
         user_address = self.params.safe_contract_addresses.get(chain)
         aggregator_address = position.get("pool_address")
         asset_address = position.get("token0")
@@ -638,7 +621,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Velodrome position processing."""
-        self.context.logger.info(f"Calculating Velodrome position for pool {position.get('pool_address')} with token ID {position.get('token_id')}")
+        self.context.logger.info(
+            f"Calculating Velodrome position for pool {position.get('pool_address')} with token ID {position.get('token_id')}"
+        )
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
@@ -1256,30 +1241,38 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _calculate_total_volume(self) -> Generator[None, None, Optional[float]]:
         """Calculate the total volume (total initial investment including closed positions)."""
         total_volume = 0.0
-        
+
         # Load cached investment values from KV store
         cached_values = yield from self._read_kv(keys=("initial_investment_values",))
         if cached_values and cached_values.get("initial_investment_values"):
             try:
-                self.initial_investment_values_per_pool = json.loads(cached_values.get("initial_investment_values"))
-                self.context.logger.info(f"Loaded {len(self.initial_investment_values_per_pool)} cached position values from KV store")
+                self.initial_investment_values_per_pool = json.loads(
+                    cached_values.get("initial_investment_values")
+                )
+                self.context.logger.info(
+                    f"Loaded {len(self.initial_investment_values_per_pool)} cached position values from KV store"
+                )
             except json.JSONDecodeError:
-                self.context.logger.warning("Failed to parse cached investment values from KV store")
-            
+                self.context.logger.warning(
+                    "Failed to parse cached investment values from KV store"
+                )
+
         # Process all positions (both open and closed)
         for position in self.current_positions:
             # Create a unique key for this position
             pool_id = position.get("pool_address", position.get("pool_id"))
             tx_hash = position.get("tx_hash")
             position_key = f"{pool_id}_{tx_hash}"
-            
+
             # Check if we already calculated the value for this position
             if position_key in self.initial_investment_values_per_pool:
                 position_value = self.initial_investment_values_per_pool[position_key]
-                self.context.logger.info(f"Using cached position value: {position_value} for {position_key}")
+                self.context.logger.info(
+                    f"Using cached position value: {position_value} for {position_key}"
+                )
                 total_volume += position_value
                 continue
-                
+
             # Get token addresses and amounts
             token0 = position.get("token0")
             token1 = position.get("token1")
@@ -1308,10 +1301,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 token1_decimals = yield from self._get_token_decimals(chain, token1)
                 if not token1_decimals:
                     continue
-                initial_amount1 = Decimal(str(amount1)) / Decimal(
-                    10**token1_decimals
-                )
-
+                initial_amount1 = Decimal(str(amount1)) / Decimal(10**token1_decimals)
 
             date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
@@ -1324,9 +1314,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if not historical_prices:
-                self.context.logger.error(
-                    "Failed to fetch historical token prices."
-                )
+                self.context.logger.error("Failed to fetch historical token prices.")
                 continue
 
             # Calculate value for token0
@@ -1341,26 +1329,30 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if token1 is not None and initial_amount1 is not None:
                 initial_price1 = historical_prices.get(token1)
                 if initial_price1 is None:
-                    self.context.logger.error(
-                        "Historical price not found for token1."
-                    )
+                    self.context.logger.error("Historical price not found for token1.")
                     continue
-                position_value += float(
-                    initial_amount1 * Decimal(str(initial_price1))
-                )
+                position_value += float(initial_amount1 * Decimal(str(initial_price1)))
 
             # Cache the calculated value
             self.initial_investment_values_per_pool[position_key] = position_value
-            
+
             # Save the updated cache to KV store
             yield from self._write_kv(
-                {"initial_investment_values": json.dumps(self.initial_investment_values_per_pool)}
+                {
+                    "initial_investment_values": json.dumps(
+                        self.initial_investment_values_per_pool
+                    )
+                }
             )
-            
-            total_volume += position_value
-            self.context.logger.info(f"Position value for volume calculation: {position_value}")
 
-        self.context.logger.info(f"Total volume (including closed positions): {total_volume}")
+            total_volume += position_value
+            self.context.logger.info(
+                f"Position value for volume calculation: {position_value}"
+            )
+
+        self.context.logger.info(
+            f"Total volume (including closed positions): {total_volume}"
+        )
         return total_volume if total_volume > 0 else None
 
     def _get_balancer_pool_name(
@@ -1376,7 +1368,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return pool_name
-    
+
     def check_and_update_zero_liquidity_positions(self) -> None:
         """Check for positions with zero liquidity and mark them as closed."""
         if not self.current_positions:
@@ -1657,4 +1649,3 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning(
                 f"Failed to get balance for Sturdy position: {position}"
             )
-

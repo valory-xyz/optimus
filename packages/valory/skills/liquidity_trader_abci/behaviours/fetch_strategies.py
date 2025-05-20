@@ -264,17 +264,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
         # Calculate final portfolio metrics
-        if total_user_share_value_usd > 0:
-            # Update portfolio breakdown ratios BEFORE creating portfolio data
-            self._update_portfolio_breakdown_ratios(
-                portfolio_breakdown, total_user_share_value_usd
-            )
-            yield from self._update_portfolio_metrics(
-                total_user_share_value_usd,
-                individual_shares,
-                portfolio_breakdown,
-                allocations,
-            )
+        yield from self._update_portfolio_metrics(
+            total_user_share_value_usd,
+            individual_shares,
+            portfolio_breakdown,
+            allocations,
+        )
 
         # Calculate initial investment value
         initial_investment = yield from self.calculate_initial_investment()
@@ -302,24 +297,32 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             portfolio_breakdown, total_user_share_value_usd
         )
 
-        # Then calculate allocation ratios
-        yield from self._update_allocation_ratios(
-            individual_shares, total_user_share_value_usd, allocations
-        )
+        # Then calculate allocation ratios if total value is positive
+        if total_user_share_value_usd > 0:
+            yield from self._update_allocation_ratios(
+                individual_shares, total_user_share_value_usd, allocations
+            )
 
     def _update_portfolio_breakdown_ratios(
         self, portfolio_breakdown: List[Dict], total_value: Decimal
     ) -> None:
         """Calculate ratios for portfolio breakdown entries."""
-        # Calculate total ratio first
-        total_ratio = sum(
-            Decimal(str(entry["value_usd"])) / total_value
-            for entry in portfolio_breakdown
-        )
+        # Handle empty portfolio breakdown
+        if not portfolio_breakdown:
+            return
+
+        # Calculate total ratio first, safely handling zero or negative total_value
+        if total_value > 0:
+            total_ratio = sum(
+                Decimal(str(entry["value_usd"])) / total_value
+                for entry in portfolio_breakdown
+            )
+        else:
+            total_ratio = Decimal(0)
 
         # Update each entry with its ratio
         for entry in portfolio_breakdown:
-            if total_value > 0:
+            if total_value > 0 and total_ratio > 0:
                 entry["ratio"] = round(
                     Decimal(str(entry["value_usd"])) / total_value / total_ratio, 6
                 )

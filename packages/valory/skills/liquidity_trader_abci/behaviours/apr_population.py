@@ -20,6 +20,7 @@
 """This module contains the behaviour for writing apr related data to database for the 'liquidity_trader_abci' skill."""
 
 import json
+import os
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, Generator, Optional, Type
@@ -172,6 +173,10 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         if not total_actual_apr:
             return
 
+        # Get agent_hash from environment
+        agent_config = os.environ.get('AEA_AGENT', '')
+        agent_hash = agent_config.split(':')[-1] if agent_config else 'Not found'
+
         # Store APR data
         timestamp = self._get_current_timestamp()
         enhanced_data = {
@@ -181,6 +186,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             "portfolio_snapshot": portfolio_snapshot,
             "calculation_metrics": self._get_apr_calculation_metrics(),
             "first_investment_timestamp": self.current_positions[0].get("timestamp"),
+            "agent_hash": agent_hash,
+            "volume": self.portfolio_data.get("volume")
         }
 
         agent_attr = yield from self.create_agent_attribute(
@@ -557,74 +564,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             result["current_price"] = current_eth_price
             result["initial_price"] = start_eth_price
             self.context.logger.info(f"Adjusted APR: {result['adjusted_apr']}%")
-
-    def calculate_initial_investment_value(
-        self, position: Dict[str, Any]
-    ) -> Generator[None, None, Optional[float]]:
-        """Calculate the initial investment value based on the initial transaction."""
-
-        chain = position.get("chain")
-        token0 = position.get("token0")
-        token1 = position.get("token1")
-        amount0 = position.get("amount0")
-        amount1 = position.get("amount1")
-        timestamp = position.get("timestamp")
-
-        if None in (token0, amount0, timestamp):
-            self.context.logger.error(
-                "Missing token0, amount0, or timestamp in position data."
-            )
-            return None
-
-        token0_decimals = yield from self._get_token_decimals(chain, token0)
-        if not token0_decimals:
-            return None
-
-        initial_amount0 = amount0 / (10**token0_decimals)
-        self.context.logger.info(f"initial_amount0 : {initial_amount0}")
-
-        if token1 is not None and amount1 is not None:
-            token1_decimals = yield from self._get_token_decimals(chain, token1)
-            if not token1_decimals:
-                return None
-            initial_amount1 = amount1 / (10**token1_decimals)
-            self.context.logger.info(f"initial_amount1 : {initial_amount1}")
-
-        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
-        tokens = []
-        # Fetch historical prices
-        tokens.append([position.get("token0_symbol"), position.get("token0")])
-        if position.get("token1") is not None:
-            tokens.append([position.get("token1_symbol"), position.get("token1")])
-
-        historical_prices = yield from self._fetch_historical_token_prices(
-            tokens, date_str, chain
-        )
-
-        if not historical_prices:
-            self.context.logger.error("Failed to fetch historical token prices.")
-            return None
-
-        # Get the price for token0
-        initial_price0 = historical_prices.get(position.get("token0"))
-        if initial_price0 is None:
-            self.context.logger.error("Historical price not found for token0.")
-            return None
-
-        # Calculate initial investment value for token0
-        V_initial = initial_amount0 * initial_price0
-        self.context.logger.info(f"V_initial : {V_initial}")
-
-        # If token1 exists, include it in the calculations
-        if position.get("token1") is not None and initial_amount1 is not None:
-            initial_price1 = historical_prices.get(position.get("token1"))
-            if initial_price1 is None:
-                self.context.logger.error("Historical price not found for token1.")
-                return None
-            V_initial += initial_amount1 * initial_price1
-            self.context.logger.info(f"V_initial : {V_initial}")
-
-        return V_initial
 
     def generate_phonetic_syllable(self, seed):
         """Generates phonetic syllable"""

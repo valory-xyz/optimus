@@ -198,6 +198,7 @@ class LiquidityTraderBaseBehaviour(
         self.gas_cost_tracker = GasCostTracker(
             file_path=self.params.store_path / self.params.gas_cost_info_filename
         )
+        self.initial_investment_values_per_pool = {}
 
         # Read the assets and current pool
         self.read_current_positions()
@@ -1061,6 +1062,11 @@ class LiquidityTraderBaseBehaviour(
                 self.context.logger.info(f"Position value: {position_value}")
                 if position_value is not None:
                     initial_value += float(position_value)
+                    pool_id = position.get("pool_address", position.get("pool_id"))
+                    tx_hash = position.get("tx_hash")
+                    position_key = f"{pool_id}_{tx_hash}"
+                    self.initial_investment_values_per_pool[position_key] = position_value
+
                 else:
                     self.context.logger.warning(
                         f"Skipping position with null value: {position.get('id', 'unknown')}"

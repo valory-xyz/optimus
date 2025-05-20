@@ -99,6 +99,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
 
+            # Update the amounts of all open positions
+            yield from self.update_position_amounts()
+
+            self.check_and_update_zero_liquidity_positions()
+            self.context.logger.info(f"Current Positions: {self.current_positions}")
+
             # Check if we need to recalculate the portfolio
             if self.should_recalculate_portfolio(self.portfolio_data):
                 yield from self.calculate_user_share_values()
@@ -548,10 +554,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Balancer position processing."""
+        self.context.logger.info(f"Calculating Balancer position for pool {position.get('pool_id')}")
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
         pool_id = position.get("pool_id")
-
+        
         user_balances = yield from self.get_user_share_value_balancer(
             user_address, pool_id, pool_address, chain
         )
@@ -569,6 +576,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Handle Uniswap V3 position processing."""
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
+        self.context.logger.info(f"Calculating Uniswap V3 position for pool {pool_address} with token ID {token_id}")
 
         user_balances = yield from self.get_user_share_value_uniswap(
             pool_address, token_id, chain, position
@@ -585,6 +593,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Sturdy position processing."""
+        self.context.logger.info(f"Calculating Sturdy position for aggregator {position.get('pool_address')}")
         user_address = self.params.safe_contract_addresses.get(chain)
         aggregator_address = position.get("pool_address")
         asset_address = position.get("token0")
@@ -601,6 +610,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Velodrome position processing."""
+        self.context.logger.info(f"Calculating Velodrome position for pool {position.get('pool_address')} with token ID {position.get('token_id')}")
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
@@ -1338,3 +1348,285 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return pool_name
+    
+    def check_and_update_zero_liquidity_positions(self) -> None:
+        """Check for positions with zero liquidity and mark them as closed."""
+        if not self.current_positions:
+            return
+
+        for position in self.current_positions:
+            if position.get("status") != PositionStatus.OPEN:
+                continue
+
+            dex_type = position.get("dex_type")
+
+            if dex_type == DexType.VELODROME.value and position.get("is_cl_pool"):
+                # For Velodrome CL pools, check all sub-positions
+                all_positions_zero = True
+                for pos in position.get("positions", []):
+                    if (
+                        pos.get("current_liquidity", 1) != 0
+                    ):  # Default to 1 if not found to avoid false closures
+                        all_positions_zero = False
+                        break
+
+                if all_positions_zero and position.get(
+                    "positions"
+                ):  # Only update if there are positions
+                    position["status"] = PositionStatus.CLOSED
+                    self.context.logger.info(
+                        f"Marked Velodrome CL position as closed due to zero liquidity in all positions: {position}"
+                    )
+            else:
+                # For all other position types
+                if (
+                    position.get("current_liquidity", 1) == 0
+                ):  # Default to 1 if not found to avoid false closures
+                    position["status"] = PositionStatus.CLOSED
+                    self.context.logger.info(
+                        f"Marked {dex_type} position as closed due to zero liquidity: {position}"
+                    )
+
+        # Store the updated positions
+        self.store_current_positions()
+
+    def update_position_amounts(self) -> Generator[None, None, None]:
+        """Update the amounts of all open positions."""
+        if not self.current_positions:
+            self.context.logger.info("No positions to update.")
+            return
+
+        for position in self.current_positions:
+            # Only update open positions
+            if position.get("status") != PositionStatus.OPEN:
+                continue
+
+            dex_type = position.get("dex_type")
+            chain = position.get("chain")
+
+            if not dex_type or not chain:
+                self.context.logger.warning(
+                    f"Position missing dex_type or chain: {position}"
+                )
+                continue
+
+            self.context.logger.info(
+                f"Updating position of type {dex_type} on chain {chain}"
+            )
+
+            # Update based on the type of position
+            if dex_type == DexType.BALANCER.value:
+                yield from self._update_balancer_position(position)
+            elif dex_type == DexType.UNISWAP_V3.value:
+                yield from self._update_uniswap_position(position)
+            elif dex_type == DexType.VELODROME.value:
+                yield from self._update_velodrome_position(position)
+            elif dex_type == DexType.STURDY.value:
+                yield from self._update_sturdy_position(position)
+            else:
+                self.context.logger.warning(f"Unknown position type: {dex_type}")
+
+        # Store the updated positions
+        self.store_current_positions()
+
+    def _update_balancer_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update a Balancer position."""
+        pool_address = position.get("pool_address")
+        safe_address = self.params.safe_contract_addresses.get(position.get("chain"))
+        chain = position.get("chain")
+
+        if not all([pool_address, safe_address, chain]):
+            self.context.logger.warning(
+                f"Missing required parameters for Balancer position: {position}"
+            )
+            return
+
+        # Get the current balance of LP tokens
+        balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=WeightedPoolContract.contract_id,
+            contract_callable="get_balance",
+            data_key="balance",
+            account=safe_address,
+            chain_id=chain,
+        )
+
+        if balance is not None:
+            # Update the position with the current liquidity
+            position["current_liquidity"] = balance
+            self.context.logger.info(f"Updated Balancer position amount: {balance}")
+        else:
+            self.context.logger.warning(
+                f"Failed to get balance for Balancer position: {position}"
+            )
+
+    def _update_uniswap_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update a Uniswap V3 position."""
+        token_id = position.get("token_id")
+        chain = position.get("chain")
+
+        if not all([token_id, chain]):
+            self.context.logger.warning(
+                f"Missing required parameters for Uniswap position: {position}"
+            )
+            return
+
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
+        if not position_manager_address:
+            self.context.logger.warning(
+                f"No position manager address found for chain {chain}"
+            )
+            return
+
+        # Get the current liquidity
+        position_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="get_position",
+            data_key="data",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if position_data and position_data.get("liquidity"):
+            # Update the position with the current liquidity
+            position["current_liquidity"] = position_data.get("liquidity")
+            self.context.logger.info(
+                f"Updated Uniswap position liquidity: {position['current_liquidity']}"
+            )
+        else:
+            self.context.logger.warning(
+                f"Failed to get liquidity for Uniswap position: {position}"
+            )
+
+    def _update_velodrome_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update a Velodrome position."""
+        chain = position.get("chain")
+        is_cl_pool = position.get("is_cl_pool", False)
+
+        if not chain:
+            self.context.logger.warning(
+                f"Missing required parameters for Velodrome position: {position}"
+            )
+            return
+
+        if is_cl_pool:
+            # Handle Velodrome concentrated liquidity pool
+            for pos in position.get("positions"):
+                token_id = pos.get("token_id")
+                if not token_id:
+                    self.context.logger.warning(
+                        f"Missing token_id for Velodrome CL position: {pos}"
+                    )
+                    return
+
+                position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                    chain
+                )
+                if not position_manager_address:
+                    self.context.logger.warning(
+                        f"No position manager address found for chain {chain}"
+                    )
+                    return
+
+                # Get the current liquidity
+                position_data = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=position_manager_address,
+                    contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                    contract_callable="get_position",
+                    data_key="data",
+                    token_id=token_id,
+                    chain_id=chain,
+                )
+
+                if position_data and position_data.get("liquidity"):
+                    # Update the position with the current liquidity
+                    pos["current_liquidity"] = position_data.get("liquidity")
+                    self.context.logger.info(
+                        f"Updated Uniswap position liquidity: {pos['current_liquidity']}"
+                    )
+                else:
+                    self.context.logger.warning(
+                        f"Failed to get liquidity for Uniswap position: {pos}"
+                    )
+        else:
+            # Handle Velodrome stable/volatile pool
+            pool_address = position.get("pool_address")
+            safe_address = self.params.safe_contract_addresses.get(
+                position.get("chain")
+            )
+
+            if not all([pool_address, safe_address]):
+                self.context.logger.warning(
+                    f"Missing required parameters for Velodrome pool position: {position}"
+                )
+                return
+
+            # Get the current balance of LP tokens
+            balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromePoolContract.contract_id,
+                contract_callable="get_balance",
+                data_key="balance",
+                account=safe_address,
+                chain_id=chain,
+            )
+
+            if balance is not None:
+                # Update the position with the current amount
+                position["current_liquidity"] = balance
+                self.context.logger.info(
+                    f"Updated Velodrome pool position amount: {balance}"
+                )
+            else:
+                self.context.logger.warning(
+                    f"Failed to get balance for Velodrome pool position: {position}"
+                )
+
+    def _update_sturdy_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update a Sturdy position."""
+        # For Sturdy positions, we need to call balance_of on the relevant contract
+        pool_address = position.get("pool_address")
+        safe_address = self.params.safe_contract_addresses.get(position.get("chain"))
+        chain = position.get("chain")
+
+        if not all([pool_address, safe_address, chain]):
+            self.context.logger.warning(
+                f"Missing required parameters for Sturdy position: {position}"
+            )
+            return
+
+        # Get the current balance
+        balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=YearnV3VaultContract.contract_id,
+            contract_callable="balance_of",
+            data_key="amount",
+            account=safe_address,
+            chain_id=chain,
+        )
+
+        if balance is not None:
+            # Update the position with the current amount
+            position["current_liquidity"] = balance
+            self.context.logger.info(f"Updated Sturdy position amount: {balance}")
+        else:
+            self.context.logger.warning(
+                f"Failed to get balance for Sturdy position: {position}"
+            )
+

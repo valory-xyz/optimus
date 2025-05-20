@@ -20,6 +20,7 @@
 """This module contains the behaviour for fetching the strategies to execute for 'liquidity_trader_abci' skill."""
 
 import json
+import os
 from decimal import Context, Decimal, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
@@ -70,6 +71,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            agent_config = os.environ.get('AEA_AGENT', '')
+            agent_hash = agent_config.split(':')[-1] if agent_config else 'Not found'
+            self.context.logger.info(f"{agent_hash}")
+
             sender = self.context.agent_address
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")

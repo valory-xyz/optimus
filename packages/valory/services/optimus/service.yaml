@@ -103,7 +103,7 @@ models:
       service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://optimism.autonolas.tech/}
       max_pools: ${MAX_POOLS:int:1}
       init_fallback_gas: ${INIT_FALLBACK_GAS:int:0}
-      available_strategies: ${AVAILABLE_STRATEGIES:str:{"mode":["balancer_pools_search","asset_lending","velodrome_pools_search"],"optimism":["balancer_pools_search","uniswap_pools_search","velodrome_pools_search"]}}
+      available_strategies: ${AVAILABLE_STRATEGIES:str:{"mode":["balancer_pools_search","asset_lending","velodrome_pools_search"],"optimism":["balancer_pools_search","uniswap_pools_search","velodrome_pools_search"],"base":["balancer_pools_search","uniswap_pools_search"]}}
       default_acceptance_time: ${DEFAULT_ACCEPTANCE_TIME:int:5}
       genai_api_key: ${GENAI_API_KEY:str:""}
   coingecko:

@@ -1171,10 +1171,26 @@ class LiquidityTraderBaseBehaviour(
         self, symbol, token_name, coin_list
     ) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's symbol and name."""
-        # Try to find coins matching the symbol.
+
+        self.context.logger.info(f"Type of coin_list: {type(coin_list)}")
+
+        # Check the type before accessing by index.
+        if isinstance(coin_list, dict):
+            self.context.logger.info(
+                f"Coin list is a dict with keys: {list(coin_list.keys())}"
+            )
+            coin_list = list(coin_list.values())
+        elif isinstance(coin_list, list) and coin_list:
+            self.context.logger.info(f"First element of coin_list: {coin_list[0]}")
+
+        # Build candidates ensuring that each element is a dict.
         candidates = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+            coin
+            for coin in coin_list
+            if isinstance(coin, dict)
+            and coin.get("symbol", "").lower() == symbol.lower()
         ]
+
         if not candidates:
             return None
 
@@ -1182,7 +1198,6 @@ class LiquidityTraderBaseBehaviour(
         if len(candidates) == 1:
             return candidates[0]["id"]
 
-        # If multiple candidates, match by name if possible.
         normalized_token_name = token_name.replace(" ", "").lower()
         for coin in candidates:
             coin_name = coin["name"].replace(" ", "").lower()
@@ -1194,14 +1209,36 @@ class LiquidityTraderBaseBehaviour(
         self, token_address, symbol, coin_list, chain_name
     ) -> Generator[None, None, Optional[str]]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        # Check if coin_list is valid
+        if not coin_list or not isinstance(coin_list, list):
+            self.context.logger.error(f"Invalid coin_list: {type(coin_list)}")
+            return None
+
         token_name = yield from self._fetch_token_name_from_contract(
             chain_name, token_address
         )
         if not token_name:
-            matching_coins = [
-                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-            ]
-            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+            # Check the structure of coin_list before processing
+            if (
+                coin_list
+                and isinstance(coin_list[0], dict)
+                and "symbol" in coin_list[0]
+            ):
+                try:
+                    matching_coins = [
+                        coin
+                        for coin in coin_list
+                        if coin["symbol"].lower() == symbol.lower()
+                    ]
+                    return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+                except (TypeError, IndexError, KeyError) as e:
+                    self.context.logger.error(f"Error processing coin_list: {e}")
+                    return None
+            else:
+                self.context.logger.error(
+                    f"Unexpected coin_list structure: {coin_list[:2]}"
+                )
+                return None
 
         return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
 

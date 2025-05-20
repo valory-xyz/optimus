@@ -23,7 +23,7 @@
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiernnvsbhtndg74ita7hd75xmknlz5n7pzjoaiwc66ywvs2p7crdi",
         "skill/valory/optimus_abci/0.1.0": "bafybeiefmcnnfll64s6kiqwnn4assiqifr5rck66pstceqzx6psl7byyqi",
         "agent/valory/optimus/0.1.0": "bafybeibspzeppo2vo5ttz7ydybp6qf4j3olx4j5jdocm47gfl4tm5lotau",
-        "service/valory/optimus/0.1.0": "bafybeiewum5oranfuotaafksarfdxo67blq7pv4qmiijuxsgsnydh56wam"
+        "service/valory/optimus/0.1.0": "bafybeidmcwzihbgvi7w3vukzqvu6kpvq72aigik7nx66dldfcah3senmku"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",

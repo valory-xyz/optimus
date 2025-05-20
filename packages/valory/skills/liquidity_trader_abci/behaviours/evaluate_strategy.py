@@ -452,6 +452,105 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.shared_state.strategy_to_filehash.pop(strategy_req)
         self._inflight_strategy_req = None
 
+    def _merge_duplicate_bridge_swap_actions(
+        self, actions: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Identify and merge duplicate bridge swap actions.
+        
+        A duplicate is defined as having the same from_token, to_token, from_chain, and to_chain.
+        When duplicates are found, their funds_percentage values are summed and only one action is kept.
+        
+        Args:
+            actions: List of actions to check for duplicates
+            
+        Returns:
+            List of actions with duplicates merged
+        """
+        try:
+            if not actions:
+                return actions
+                
+            # Find all bridge swap actions
+            bridge_swap_actions = [
+                (i, action) for i, action in enumerate(actions) 
+                if action.get("action") == Action.FIND_BRIDGE_ROUTE.value
+            ]
+            
+            if len(bridge_swap_actions) <= 1:
+                return actions  # No duplicates possible with 0 or 1 bridge actions
+                
+            # Group bridge swap actions by their key attributes
+            action_groups = {}
+            for idx, action in bridge_swap_actions:
+                try:
+                    # Create a key based on the attributes that define a duplicate
+                    from_chain = action.get("from_chain", "")
+                    to_chain = action.get("to_chain", "")
+                    from_token = action.get("from_token", "")
+                    to_token = action.get("to_token", "")
+                    
+                    # Generate a unique identifier for logging and debugging
+                    action_id = f"{from_chain}_{to_chain}_{from_token[:8]}_{to_token[:8]}"
+                    action["bridge_action_id"] = action_id
+                    
+                    key = (from_chain, to_chain, from_token, to_token)
+                    
+                    if key not in action_groups:
+                        action_groups[key] = []
+                    action_groups[key].append((idx, action))
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error processing bridge swap action: {e}. Action: {action}"
+                    )
+                
+            # If no groups have more than one action, there are no duplicates
+            if all(len(group) <= 1 for group in action_groups.values()):
+                return actions
+                
+            # Process groups with duplicates
+            indices_to_remove = []
+            for key, group in action_groups.items():
+                if len(group) > 1:
+                    try:
+                        # Keep the first action and update its funds_percentage
+                        base_idx, base_action = group[0]
+                        total_percentage = base_action.get("funds_percentage", 0)
+                        action_ids = [base_action.get("bridge_action_id", "unknown")]
+                        
+                        # Sum up percentages from duplicates and mark them for removal
+                        for idx, action in group[1:]:
+                            action_id = action.get("bridge_action_id", "unknown")
+                            action_ids.append(action_id)
+                            percentage = action.get("funds_percentage", 0)
+                            total_percentage += percentage
+                            indices_to_remove.append(idx)
+                        
+                        # Update the base action with the combined percentage
+                        actions[base_idx]["funds_percentage"] = total_percentage
+                        actions[base_idx]["merged_from"] = action_ids
+                        
+                        self.context.logger.info(
+                            f"Merged {len(group)} duplicate bridge swap actions (IDs: {', '.join(action_ids)}) from "
+                            f"{base_action.get('from_token_symbol', 'unknown')} on {base_action.get('from_chain', 'unknown')} "
+                            f"to {base_action.get('to_token_symbol', 'unknown')} on {base_action.get('to_chain', 'unknown')} "
+                            f"with combined percentage {total_percentage}"
+                        )
+                    except Exception as e:
+                        self.context.logger.error(
+                            f"Error merging duplicate bridge swap actions: {e}. Group: {group}"
+                        )
+            
+            # Create a new list without the removed actions
+            if indices_to_remove:
+                return [action for i, action in enumerate(actions) if i not in indices_to_remove]
+            
+            return actions
+        except Exception as e:
+            self.context.logger.error(f"Error in _merge_duplicate_bridge_swap_actions: {e}")
+            # In case of error, return the original actions to avoid breaking the workflow
+            return actions
+
     def get_order_of_transactions(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
@@ -494,7 +593,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
             actions.append(enter_pool_action)
 
-        return actions
+        try:
+            # Merge duplicate bridge swap actions
+            merged_actions = self._merge_duplicate_bridge_swap_actions(actions)
+            return merged_actions
+        except Exception as e:
+            self.context.logger.error(f"Error while merging bridge swap actions: {e}")
+            # Return original actions if merging fails to avoid breaking the workflow
+            return actions
 
     def _process_rewards(self, actions: List[Dict[str, Any]]) -> Generator:
         """Process reward claims and add actions."""

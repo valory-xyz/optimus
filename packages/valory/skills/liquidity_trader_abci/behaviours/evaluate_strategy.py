@@ -21,7 +21,6 @@
 
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime
 from typing import (
     Any,
     Callable,
@@ -40,8 +39,6 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_utils import to_checksum_address
 
-from packages.valory.contracts.erc20.contract import ERC20
-from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -169,7 +166,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
-
+    
     
     def calculate_velodrome_cl_token_requirements(self, tick_bands, current_price, tick_spacing=1):
         """
@@ -490,200 +487,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info("Velodrome position analysis complete")
         return results
 
-    def calculate_initial_investment_value(
-        self, position: Dict[str, Any]
-    ) -> Generator[None, None, Optional[float]]:
-        """Calculate the initial investment value based on the initial transaction."""
-
-        chain = position.get("chain")
-        initial_amount0 = position.get("amount0")
-        initial_amount1 = position.get("amount1")
-        timestamp = position.get("timestamp")
-
-        if None in (initial_amount0, initial_amount1, timestamp):
-            self.context.logger.error(
-                "Missing initial amounts or timestamp in position data."
-            )
-            return None
-
-        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
-        tokens = []
-        # Fetch historical prices
-        tokens.append([position.get("token0_symbol"), position.get("token0")])
-        if position.get("token1") is not None:
-            tokens.append([position.get("token1_symbol"), position.get("token1")])
-
-        historical_prices = yield from self._fetch_historical_token_prices(
-            tokens, date_str, chain
-        )
-
-        if not historical_prices:
-            self.context.logger.error("Failed to fetch historical token prices.")
-            return None
-
-        # Get the price for token0
-        initial_price0 = historical_prices.get(position.get("token0"))
-        if initial_price0 is None:
-            self.context.logger.error("Historical price not found for token0.")
-            return None
-
-        # Calculate initial investment value for token0
-        token0_decimals = yield from self._get_token_decimals(
-            chain, (position.get("token0"))
-        )
-        V_initial = (initial_amount0 / (10**token0_decimals)) * initial_price0
-
-        # If token1 exists, include it in the calculations
-        if position.get("token1") is not None and initial_amount1 is not None:
-            initial_price1 = historical_prices.get(position.get("token1"))
-            if initial_price1 is None:
-                self.context.logger.error("Historical price not found for token1.")
-                return None
-            token1_decimals = yield from self._get_token_decimals(
-                chain, (position.get("token1"))
-            )
-            V_initial += (initial_amount1 / (10**token1_decimals)) * initial_price1
-
-        return V_initial
-
-    def _fetch_historical_token_prices(
-        self, tokens: List[List[str]], date_str: str, chain: str
-    ) -> Generator[None, None, Dict[str, float]]:
-        """Fetch historical token prices for a specific date."""
-        historical_prices = {}
-
-        coin_list = yield from self.fetch_coin_list()
-        if not coin_list:
-            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
-            return historical_prices
-
-        headers = {"Accept": "application/json"}
-        if self.coingecko.api_key:
-            headers["x-cg-api-key"] = self.coingecko.api_key
-
-        for token_symbol, token_address in tokens:
-            # Get CoinGecko ID.
-            coingecko_id = yield from self.get_token_id_from_symbol(
-                token_address, token_symbol, coin_list, chain
-            )
-            if not coingecko_id:
-                self.context.logger.error(
-                    f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
-                )
-                continue
-
-            endpoint = self.coingecko.historical_price_endpoint.format(
-                coin_id=coingecko_id,
-                date=date_str,
-            )
-
-            success, response_json = yield from self._request_with_retries(
-                endpoint=endpoint,
-                headers=headers,
-                rate_limited_code=self.coingecko.rate_limited_code,
-                rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                retry_wait=self.params.sleep_time,
-            )
-
-            if success:
-                price = (
-                    response_json.get("market_data", {})
-                    .get("current_price", {})
-                    .get("usd")
-                )
-                if price:
-                    historical_prices[token_address] = price
-                else:
-                    self.context.logger.error(
-                        f"No price in response for token {token_address}"
-                    )
-            else:
-                self.context.logger.error(
-                    f"Failed to fetch historical price for {token_address}"
-                )
-
-        return historical_prices
-
-    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
-        """Fetches the list of coins from CoinGecko API only once."""
-        url = "https://api.coingecko.com/api/v3/coins/list"
-        response = yield from self.get_http_response("GET", url, None, None)
-
-        try:
-            response_json = json.loads(response.body)
-            return response_json
-        except json.decoder.JSONDecodeError as e:
-            self.context.logger.error(f"Failed to fetch coin list: {e}")
-            return None
-
-    def get_token_id_from_symbol_cached(
-        self, symbol, token_name, coin_list
-    ) -> Optional[str]:
-        """Retrieve the CoinGecko token ID using the token's symbol and name."""
-
-        self.context.logger.info(f"Type of coin_list: {type(coin_list)}")
-
-        # Check the type before accessing by index.
-        if isinstance(coin_list, dict):
-            self.context.logger.info(
-                f"Coin list is a dict with keys: {list(coin_list.keys())}"
-            )
-            coin_list = list(coin_list.values())
-        elif isinstance(coin_list, list) and coin_list:
-            self.context.logger.info(f"First element of coin_list: {coin_list[0]}")
-
-        # Build candidates ensuring that each element is a dict.
-        candidates = [
-            coin
-            for coin in coin_list
-            if isinstance(coin, dict)
-            and coin.get("symbol", "").lower() == symbol.lower()
-        ]
-
-        if not candidates:
-            return None
-
-        # If single candidate, return it.
-        if len(candidates) == 1:
-            return candidates[0]["id"]
-
-        normalized_token_name = token_name.replace(" ", "").lower()
-        for coin in candidates:
-            coin_name = coin["name"].replace(" ", "").lower()
-            if coin_name == normalized_token_name or coin_name == symbol.lower():
-                return coin["id"]
-        return None
-
-    def get_token_id_from_symbol(
-        self, token_address, symbol, coin_list, chain_name
-    ) -> Generator[None, None, Optional[str]]:
-        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
-        token_name = yield from self._fetch_token_name_from_contract(
-            chain_name, token_address
-        )
-        if not token_name:
-            matching_coins = [
-                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-            ]
-            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-
-        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-
-    def _fetch_token_name_from_contract(
-        self, chain: str, token_address: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Fetch the token name from the ERC20 contract."""
-
-        token_name = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=token_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="get_name",
-            data_key="data",
-            chain_id=chain,
-        )
-        return token_name
-
     def execute_hyper_strategy(self) -> None:
         """Executes hyper strategy"""
         hyper_strategy = self.params.selected_hyper_strategy
@@ -965,7 +768,108 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         )
         self.shared_state.strategy_to_filehash.pop(strategy_req)
         self._inflight_strategy_req = None
-    
+
+    def _merge_duplicate_bridge_swap_actions(
+        self, actions: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Identify and merge duplicate bridge swap actions"""
+        try:
+            if not actions:
+                return actions
+
+            # Find all bridge swap actions
+            bridge_swap_actions = [
+                (i, action)
+                for i, action in enumerate(actions)
+                if action.get("action") == Action.FIND_BRIDGE_ROUTE.value
+            ]
+
+            if len(bridge_swap_actions) <= 1:
+                return actions  # No duplicates possible with 0 or 1 bridge actions
+
+            # Group bridge swap actions by their key attributes
+            action_groups = {}
+            for idx, action in bridge_swap_actions:
+                try:
+                    # Create a key based on the attributes that define a duplicate
+                    from_chain = action.get("from_chain", "")
+                    to_chain = action.get("to_chain", "")
+                    from_token = action.get("from_token", "")
+                    to_token = action.get("to_token", "")
+
+                    # Generate a unique identifier for logging and debugging
+                    action_id = (
+                        f"{from_chain}_{to_chain}_{from_token[:8]}_{to_token[:8]}"
+                    )
+                    action["bridge_action_id"] = action_id
+
+                    key = (from_chain, to_chain, from_token, to_token)
+
+                    if key not in action_groups:
+                        action_groups[key] = []
+                    action_groups[key].append((idx, action))
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error processing bridge swap action: {e}. Action: {action}"
+                    )
+
+            # If no groups have more than one action, there are no duplicates
+            if all(len(group) <= 1 for group in action_groups.values()):
+                return actions
+
+            # Process groups with duplicates
+            indices_to_remove = []
+            for _key, group in action_groups.items():
+                if len(group) > 1:
+                    try:
+                        # Keep the first action and update its funds_percentage
+                        base_idx, base_action = group[0]
+                        if total_percentage > 1.0:
+                            self.context.logger.warning(
+                                f"Total percentage {total_percentage:.2%} exceeds 100%, capping at 100%"
+                            )
+                            total_percentage = 1.0
+                        action_ids = [base_action.get("bridge_action_id", "unknown")]
+
+                        # Sum up percentages from duplicates and mark them for removal
+                        for idx, action in group[1:]:
+                            action_id = action.get("bridge_action_id", "unknown")
+                            action_ids.append(action_id)
+                            percentage = action.get("funds_percentage", 0)
+                            total_percentage += percentage
+                            indices_to_remove.append(idx)
+
+                        # Update the base action with the combined percentage
+                        actions[base_idx]["funds_percentage"] = total_percentage
+                        actions[base_idx]["merged_from"] = action_ids
+
+                        self.context.logger.info(
+                            f"Merged {len(group)} duplicate bridge swap actions (IDs: {', '.join(action_ids)}) from "
+                            f"{base_action.get('from_token_symbol', 'unknown')} on {base_action.get('from_chain', 'unknown')} "
+                            f"to {base_action.get('to_token_symbol', 'unknown')} on {base_action.get('to_chain', 'unknown')} "
+                            f"with combined percentage {total_percentage}"
+                        )
+                    except Exception as e:
+                        self.context.logger.error(
+                            f"Error merging duplicate bridge swap actions: {e}. Group: {group}"
+                        )
+
+            # Create a new list without the removed actions
+            if indices_to_remove:
+                return [
+                    action
+                    for i, action in enumerate(actions)
+                    if i not in indices_to_remove
+                ]
+
+            return actions
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in _merge_duplicate_bridge_swap_actions: {e}"
+            )
+            # In case of error, return the original actions to avoid breaking the workflow
+            return actions
+
     def get_order_of_transactions(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
@@ -975,21 +879,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Process rewards
         # if self._can_claim_rewards():
         #     yield from self._process_rewards(actions)
-        # if (  # noqa: E800
-        #     self.synchronized_data.period_count != 0  # noqa: E800
-        #     and self.synchronized_data.period_count % self.params.pnl_check_interval  # noqa: E800
-        #     == 0  # noqa: E800
-        #     and self.current_positions  # noqa: E800
-        # ):  # noqa: E800
-        #     tokens = yield from self._process_pnl(actions)  # noqa: E800
         if not self.selected_opportunities:
             return actions
-        
-        for opportunity in self.selected_opportunities:
-            if opportunity.get("dex_type") == "velodrome":
-                result2 = yield from self.get_velodrome_position_requirements()
-                self.context.logger.info(f"result2: {result2}")
-               
+
         # Prepare tokens for exit or investment
         available_tokens = yield from self._prepare_tokens_for_investment()
         if available_tokens is None:
@@ -1019,11 +911,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error("Error building enter pool action")
                 return None
             actions.append(enter_pool_action)
-
-        # actions = [{'dex_type': 'velodrome', 'pool_address': '0xf7f575F2c0f6C99fa9EfE1bDE9E11fA10BE4FEF9', 'pool_id': '0xf7f575F2c0f6C99fa9EfE1bDE9E11fA10BE4FEF9', 'has_incentives': False, 'total_apr': 87.16823152296979, 'organic_apr': 87.16823152296979, 'depth_score_300bp': 130913.59803529015, 'depth_score_400bp': 98185.19852646762, 'depth_score_500bp': 78548.15882117409, 'token0': '0x01bFF41798a0BcF287b996046Ca68b395DbC1071', 'token0_symbol': 'USDT0', 'token1': '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', 'token1_symbol': 'USDC', 'composite_score': 3083224557.4765472, 'funds_percentage': 67.33122596959345, 'relative_funds_percentage': 1, 'is_cl_pool': True, 'is_stable': True, 'chain': 'optimism', 'token_requirements': {'position_requirements': [{'tick_range': [10, 11], 'current_tick': -2, 'status': 'BELOW_RANGE', 'allocation': 0.985860526340258, 'token0_ratio': 1.0, 'token1_ratio': 0.0}, {'tick_range': [9, 11], 'current_tick': -2, 'status': 'BELOW_RANGE', 'allocation': 0.014139473659741997, 'token0_ratio': 1.0, 'token1_ratio': 0.0}], 'current_price': 0.9997373580161597, 'current_tick': -2, 'overall_token0_ratio': np.float64(1.0), 'overall_token1_ratio': np.float64(0.0), 'recommendation': 'Provide 100% token0, 0% token1 for all positions', 'warnings': []}, 'max_amounts_in': [0, 0], 'action': 'EnterPool'}]
-         
-        # After actions.append(enter_pool_action)
-        # Check for Velodrome positions with 100% allocation to one token
+        
+         # Check for Velodrome positions with 100% allocation to one token
         if enter_pool_action.get("dex_type") == "velodrome" and "token_requirements" in enter_pool_action:
                     token_requirements = enter_pool_action.get("token_requirements", {})
                     
@@ -1101,7 +990,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             # Add to the beginning of actions instead of trying to find enter_pool_action's index
                             actions.insert(0, new_bridge_route)
     
-        return actions
+        try:
+            # Merge duplicate bridge swap actions
+            merged_actions = self._merge_duplicate_bridge_swap_actions(actions)
+            return merged_actions
+        except Exception as e:
+            self.context.logger.error(f"Error while merging bridge swap actions: {e}")
+            # Return original actions if merging fails to avoid breaking the workflow
+            return actions
 
     def _process_rewards(self, actions: List[Dict[str, Any]]) -> Generator:
         """Process reward claims and add actions."""

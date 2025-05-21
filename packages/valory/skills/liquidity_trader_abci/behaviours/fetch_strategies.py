@@ -20,6 +20,8 @@
 """This module contains the behaviour for fetching the strategies to execute for 'liquidity_trader_abci' skill."""
 
 import json
+import os
+from datetime import datetime
 from decimal import Context, Decimal, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
@@ -97,6 +99,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
+
+            # Update the amounts of all open positions
+            yield from self.update_position_amounts()
+
+            self.check_and_update_zero_liquidity_positions()
+            self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             # Check if we need to recalculate the portfolio
             if self.should_recalculate_portfolio(self.portfolio_data):
@@ -256,20 +264,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
         # Calculate final portfolio metrics
-        if total_user_share_value_usd > 0:
-            yield from self._update_portfolio_metrics(
-                total_user_share_value_usd,
-                individual_shares,
-                portfolio_breakdown,
-                allocations,
-            )
+        yield from self._update_portfolio_metrics(
+            total_user_share_value_usd,
+            individual_shares,
+            portfolio_breakdown,
+            allocations,
+        )
 
         # Calculate initial investment value
         initial_investment = yield from self.calculate_initial_investment()
+        # Calculate total volume (total initial investment including closed positions)
+        volume = yield from self._calculate_total_volume()
 
         self.portfolio_data = self._create_portfolio_data(
             total_user_share_value_usd,
             initial_investment,
+            volume,
             allocations,
             portfolio_breakdown,
         )
@@ -287,24 +297,32 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             portfolio_breakdown, total_user_share_value_usd
         )
 
-        # Then calculate allocation ratios
-        yield from self._update_allocation_ratios(
-            individual_shares, total_user_share_value_usd, allocations
-        )
+        # Then calculate allocation ratios if total value is positive
+        if total_user_share_value_usd > 0:
+            yield from self._update_allocation_ratios(
+                individual_shares, total_user_share_value_usd, allocations
+            )
 
     def _update_portfolio_breakdown_ratios(
         self, portfolio_breakdown: List[Dict], total_value: Decimal
     ) -> None:
         """Calculate ratios for portfolio breakdown entries."""
-        # Calculate total ratio first
-        total_ratio = sum(
-            Decimal(str(entry["value_usd"])) / total_value
-            for entry in portfolio_breakdown
-        )
+        # Handle empty portfolio breakdown
+        if not portfolio_breakdown:
+            return
+
+        # Calculate total ratio first, safely handling zero or negative total_value
+        if total_value > 0:
+            total_ratio = sum(
+                Decimal(str(entry["value_usd"])) / total_value
+                for entry in portfolio_breakdown
+            )
+        else:
+            total_ratio = Decimal(0)
 
         # Update each entry with its ratio
         for entry in portfolio_breakdown:
-            if total_value > 0:
+            if total_value > 0 and total_ratio > 0:
                 entry["ratio"] = round(
                     Decimal(str(entry["value_usd"])) / total_value / total_ratio, 6
                 )
@@ -492,16 +510,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self,
         total_value: Decimal,
         initial_investment: float,
+        volume: float,
         allocations: List[Dict],
         portfolio_breakdown: List[Dict],
     ) -> Dict:
         """Create the final portfolio data structure."""
+
+        # Get agent_hash from environment
+        agent_config = os.environ.get("AEA_AGENT", "")
+        agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
         return {
             "portfolio_value": float(total_value),
             "initial_investment": float(initial_investment)
             if initial_investment
             else None,
+            "volume": float(volume) if volume else None,
+            "agent_hash": agent_hash,
             "allocations": [
                 {
                     "chain": allocation["chain"],
@@ -537,6 +562,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Balancer position processing."""
+        self.context.logger.info(
+            f"Calculating Balancer position for pool {position.get('pool_id')}"
+        )
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
         pool_id = position.get("pool_id")
@@ -558,6 +586,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Handle Uniswap V3 position processing."""
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
+        self.context.logger.info(
+            f"Calculating Uniswap V3 position for pool {pool_address} with token ID {token_id}"
+        )
 
         user_balances = yield from self.get_user_share_value_uniswap(
             pool_address, token_id, chain, position
@@ -574,6 +605,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Sturdy position processing."""
+        self.context.logger.info(
+            f"Calculating Sturdy position for aggregator {position.get('pool_address')}"
+        )
         user_address = self.params.safe_contract_addresses.get(chain)
         aggregator_address = position.get("pool_address")
         asset_address = position.get("token0")
@@ -590,6 +624,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
         """Handle Velodrome position processing."""
+        self.context.logger.info(
+            f"Calculating Velodrome position for pool {position.get('pool_address')} with token ID {position.get('token_id')}"
+        )
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
         token_id = position.get("token_id")
@@ -1204,219 +1241,122 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
         return aggreator_name
 
-    def _calculate_initial_investment(self) -> Generator[None, None, Optional[float]]:
-        """Calculate the initial investment value for all open positions."""
-        initial_value = 0.0
-        for position in self.current_positions:
-            if position.get("status") == PositionStatus.OPEN.value:
-                # Get token addresses and amounts
-                token0 = position.get("token0")
-                token1 = position.get("token1")
-                amount0 = position.get("amount0")
-                amount1 = position.get("amount1")
-                timestamp = position.get("timestamp")
-                chain = position.get("chain")
+    def _calculate_total_volume(self) -> Generator[None, None, Optional[float]]:
+        """Calculate the total volume (total initial investment including closed positions)."""
+        total_volume = 0.0
 
-                if None in (token0, amount0, timestamp, chain):
-                    self.context.logger.error(
-                        "Missing token0, amount0, timestamp, or chain in position data."
-                    )
-                    continue
-
-                # Get token decimals
-                token0_decimals = yield from self._get_token_decimals(chain, token0)
-                if not token0_decimals:
-                    continue
-
-                # Calculate adjusted amount for token0
-                initial_amount0 = Decimal(str(amount0)) / Decimal(10**token0_decimals)
-
-                # Calculate adjusted amount for token1 if it exists
-                initial_amount1 = None
-                if token1 is not None and amount1 is not None:
-                    token1_decimals = yield from self._get_token_decimals(chain, token1)
-                    if not token1_decimals:
-                        continue
-                    initial_amount1 = Decimal(str(amount1)) / Decimal(
-                        10**token1_decimals
-                    )
-
-                # Get historical token prices
-                from datetime import datetime
-
-                date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
-
-                tokens = [[position.get("token0_symbol"), token0]]
-                if token1 is not None:
-                    tokens.append([position.get("token1_symbol"), token1])
-
-                historical_prices = yield from self._fetch_historical_token_prices(
-                    tokens, date_str, chain
+        # Load cached investment values from KV store
+        cached_values = yield from self._read_kv(keys=("initial_investment_values",))
+        if cached_values and cached_values.get("initial_investment_values"):
+            try:
+                self.initial_investment_values_per_pool = json.loads(
+                    cached_values.get("initial_investment_values")
+                )
+                self.context.logger.info(
+                    f"Loaded {len(self.initial_investment_values_per_pool)} cached position values from KV store"
+                )
+            except json.JSONDecodeError:
+                self.context.logger.warning(
+                    "Failed to parse cached investment values from KV store"
                 )
 
-                if not historical_prices:
-                    self.context.logger.error(
-                        "Failed to fetch historical token prices."
-                    )
-                    continue
+        # Process all positions (both open and closed)
+        for position in self.current_positions:
+            # Create a unique key for this position
+            pool_id = position.get("pool_address", position.get("pool_id"))
+            tx_hash = position.get("tx_hash")
+            position_key = f"{pool_id}_{tx_hash}"
 
-                # Calculate value for token0
-                initial_price0 = historical_prices.get(token0)
-                if initial_price0 is None:
-                    self.context.logger.error("Historical price not found for token0.")
-                    continue
+            # Check if we already calculated the value for this position
+            if position_key in self.initial_investment_values_per_pool:
+                position_value = self.initial_investment_values_per_pool[position_key]
+                self.context.logger.info(
+                    f"Using cached position value: {position_value} for {position_key}"
+                )
+                total_volume += position_value
+                continue
 
-                position_value = float(initial_amount0 * Decimal(str(initial_price0)))
+            # Get token addresses and amounts
+            token0 = position.get("token0")
+            token1 = position.get("token1")
+            amount0 = position.get("amount0")
+            amount1 = position.get("amount1")
+            timestamp = position.get("timestamp")
+            chain = position.get("chain")
 
-                # Add value for token1 if it exists
-                if token1 is not None and initial_amount1 is not None:
-                    initial_price1 = historical_prices.get(token1)
-                    if initial_price1 is None:
-                        self.context.logger.error(
-                            "Historical price not found for token1."
-                        )
-                        continue
-                    position_value += float(
-                        initial_amount1 * Decimal(str(initial_price1))
-                    )
-
-                initial_value += position_value
-                self.context.logger.info(f"Position initial value: {position_value}")
-
-        self.context.logger.info(f"Total initial investment value: {initial_value}")
-        return initial_value if initial_value > 0 else None
-
-    def _fetch_historical_token_prices(
-        self, tokens: List[List[str]], date_str: str, chain: str
-    ) -> Generator[None, None, Dict[str, float]]:
-        """Fetch historical token prices for a specific date."""
-        historical_prices = {}
-
-        coin_list = yield from self.fetch_coin_list()
-        if not coin_list:
-            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
-            return historical_prices
-
-        for token_symbol, token_address in tokens:
-            # Get CoinGecko ID
-            coingecko_id = yield from self.get_token_id_from_symbol(
-                token_address, token_symbol, coin_list, chain
-            )
-            if not coingecko_id:
+            if None in (token0, amount0, timestamp, chain):
                 self.context.logger.error(
-                    f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
+                    "Missing token0, amount0, timestamp, or chain in position data."
                 )
                 continue
 
-            price = yield from self._fetch_historical_token_price(
-                coingecko_id, date_str
+            # Get token decimals
+            token0_decimals = yield from self._get_token_decimals(chain, token0)
+            if not token0_decimals:
+                continue
+
+            # Calculate adjusted amount for token0
+            initial_amount0 = Decimal(str(amount0)) / Decimal(10**token0_decimals)
+
+            # Calculate adjusted amount for token1 if it exists
+            initial_amount1 = None
+            if token1 is not None and amount1 is not None:
+                token1_decimals = yield from self._get_token_decimals(chain, token1)
+                if not token1_decimals:
+                    continue
+                initial_amount1 = Decimal(str(amount1)) / Decimal(10**token1_decimals)
+
+            date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+
+            tokens = [[position.get("token0_symbol"), token0]]
+            if token1 is not None:
+                tokens.append([position.get("token1_symbol"), token1])
+
+            historical_prices = yield from self._fetch_historical_token_prices(
+                tokens, date_str, chain
             )
-            if price:
-                historical_prices[token_address] = price
 
-        return historical_prices
+            if not historical_prices:
+                self.context.logger.error("Failed to fetch historical token prices.")
+                continue
 
-    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
-        """Fetches the list of coins from CoinGecko API."""
-        url = "https://api.coingecko.com/api/v3/coins/list"
-        response = yield from self.get_http_response("GET", url, None, None)
+            # Calculate value for token0
+            initial_price0 = historical_prices.get(token0)
+            if initial_price0 is None:
+                self.context.logger.error("Historical price not found for token0.")
+                continue
 
-        try:
-            response_json = json.loads(response.body)
-            return response_json
-        except json.decoder.JSONDecodeError as e:
-            self.context.logger.error(f"Failed to fetch coin list: {e}")
-            return None
+            position_value = float(initial_amount0 * Decimal(str(initial_price0)))
 
-    def get_token_id_from_symbol(
-        self, token_address, symbol, coin_list, chain_name
-    ) -> Generator[None, None, Optional[str]]:
-        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
-        token_name = yield from self._fetch_token_name_from_contract(
-            chain_name, token_address
-        )
-        if not token_name:
-            matching_coins = [
-                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-            ]
-            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+            # Add value for token1 if it exists
+            if token1 is not None and initial_amount1 is not None:
+                initial_price1 = historical_prices.get(token1)
+                if initial_price1 is None:
+                    self.context.logger.error("Historical price not found for token1.")
+                    continue
+                position_value += float(initial_amount1 * Decimal(str(initial_price1)))
 
-        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
+            # Cache the calculated value
+            self.initial_investment_values_per_pool[position_key] = position_value
 
-    def get_token_id_from_symbol_cached(
-        self, symbol, token_name, coin_list
-    ) -> Optional[str]:
-        """Retrieve the CoinGecko token ID using the token's symbol and name."""
-        # Try to find coins matching the symbol
-        candidates = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-        ]
-        if not candidates:
-            return None
-
-        # If single candidate, return it
-        if len(candidates) == 1:
-            return candidates[0]["id"]
-
-        # If multiple candidates, match by name if possible
-        normalized_token_name = token_name.replace(" ", "").lower()
-        for coin in candidates:
-            coin_name = coin["name"].replace(" ", "").lower()
-            if coin_name == normalized_token_name or coin_name == symbol.lower():
-                return coin["id"]
-        return None
-
-    def _fetch_token_name_from_contract(
-        self, chain: str, token_address: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Fetch the token name from the ERC20 contract."""
-        token_name = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=token_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="get_name",
-            data_key="data",
-            chain_id=chain,
-        )
-        return token_name
-
-    def _fetch_historical_token_price(
-        self, coingecko_id, date_str
-    ) -> Generator[None, None, Optional[float]]:
-        """Fetch historical token price for a specific date."""
-        endpoint = self.coingecko.historical_price_endpoint.format(
-            coin_id=coingecko_id,
-            date=date_str,
-        )
-
-        headers = {"Accept": "application/json"}
-        if self.coingecko.api_key:
-            headers["x-cg-api-key"] = self.coingecko.api_key
-
-        success, response_json = yield from self._request_with_retries(
-            endpoint=endpoint,
-            headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
-        )
-
-        if success:
-            price = (
-                response_json.get("market_data", {}).get("current_price", {}).get("usd")
+            # Save the updated cache to KV store
+            yield from self._write_kv(
+                {
+                    "initial_investment_values": json.dumps(
+                        self.initial_investment_values_per_pool
+                    )
+                }
             )
-            if price:
-                return price
-            else:
-                self.context.logger.error(
-                    f"No price in response for token {coingecko_id}"
-                )
-                return None
-        else:
-            self.context.logger.error(
-                f"Failed to fetch historical price for {coingecko_id}"
+
+            total_volume += position_value
+            self.context.logger.info(
+                f"Position value for volume calculation: {position_value}"
             )
-            return None
+
+        self.context.logger.info(
+            f"Total volume (including closed positions): {total_volume}"
+        )
+        return total_volume if total_volume > 0 else None
 
     def _get_balancer_pool_name(
         self, pool_address: str, chain: str
@@ -1431,3 +1371,284 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain_id=chain,
         )
         return pool_name
+
+    def check_and_update_zero_liquidity_positions(self) -> None:
+        """Check for positions with zero liquidity and mark them as closed."""
+        if not self.current_positions:
+            return
+
+        for position in self.current_positions:
+            if position.get("status") != PositionStatus.OPEN:
+                continue
+
+            dex_type = position.get("dex_type")
+
+            if dex_type == DexType.VELODROME.value and position.get("is_cl_pool"):
+                # For Velodrome CL pools, check all sub-positions
+                all_positions_zero = True
+                for pos in position.get("positions", []):
+                    if (
+                        pos.get("current_liquidity", 1) != 0
+                    ):  # Default to 1 if not found to avoid false closures
+                        all_positions_zero = False
+                        break
+
+                if all_positions_zero and position.get(
+                    "positions"
+                ):  # Only update if there are positions
+                    position["status"] = PositionStatus.CLOSED
+                    self.context.logger.info(
+                        f"Marked Velodrome CL position as closed due to zero liquidity in all positions: {position}"
+                    )
+            else:
+                # For all other position types
+                if (
+                    position.get("current_liquidity", 1) == 0
+                ):  # Default to 1 if not found to avoid false closures
+                    position["status"] = PositionStatus.CLOSED
+                    self.context.logger.info(
+                        f"Marked {dex_type} position as closed due to zero liquidity: {position}"
+                    )
+
+        # Store the updated positions
+        self.store_current_positions()
+
+    def update_position_amounts(self) -> Generator[None, None, None]:
+        """Update the amounts of all open positions."""
+        if not self.current_positions:
+            self.context.logger.info("No positions to update.")
+            return
+
+        for position in self.current_positions:
+            # Only update open positions
+            if position.get("status") != PositionStatus.OPEN:
+                continue
+
+            dex_type = position.get("dex_type")
+            chain = position.get("chain")
+
+            if not dex_type or not chain:
+                self.context.logger.warning(
+                    f"Position missing dex_type or chain: {position}"
+                )
+                continue
+
+            self.context.logger.info(
+                f"Updating position of type {dex_type} on chain {chain}"
+            )
+
+            # Update based on the type of position
+            if dex_type == DexType.BALANCER.value:
+                yield from self._update_balancer_position(position)
+            elif dex_type == DexType.UNISWAP_V3.value:
+                yield from self._update_uniswap_position(position)
+            elif dex_type == DexType.VELODROME.value:
+                yield from self._update_velodrome_position(position)
+            elif dex_type == DexType.STURDY.value:
+                yield from self._update_sturdy_position(position)
+            else:
+                self.context.logger.warning(f"Unknown position type: {dex_type}")
+
+        # Store the updated positions
+        self.store_current_positions()
+
+    def _update_balancer_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update a Balancer position."""
+        pool_address = position.get("pool_address")
+        safe_address = self.params.safe_contract_addresses.get(position.get("chain"))
+        chain = position.get("chain")
+
+        if not all([pool_address, safe_address, chain]):
+            self.context.logger.warning(
+                f"Missing required parameters for Balancer position: {position}"
+            )
+            return
+
+        # Get the current balance of LP tokens
+        balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=WeightedPoolContract.contract_id,
+            contract_callable="get_balance",
+            data_key="balance",
+            account=safe_address,
+            chain_id=chain,
+        )
+
+        if balance is not None:
+            # Update the position with the current liquidity
+            position["current_liquidity"] = balance
+            self.context.logger.info(f"Updated Balancer position amount: {balance}")
+        else:
+            self.context.logger.warning(
+                f"Failed to get balance for Balancer position: {position}"
+            )
+
+    def _update_uniswap_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update a Uniswap V3 position."""
+        token_id = position.get("token_id")
+        chain = position.get("chain")
+
+        if not all([token_id, chain]):
+            self.context.logger.warning(
+                f"Missing required parameters for Uniswap position: {position}"
+            )
+            return
+
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
+        if not position_manager_address:
+            self.context.logger.warning(
+                f"No position manager address found for chain {chain}"
+            )
+            return
+
+        # Get the current liquidity
+        position_data = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+            contract_callable="get_position",
+            data_key="data",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if position_data and position_data.get("liquidity"):
+            # Update the position with the current liquidity
+            position["current_liquidity"] = position_data.get("liquidity")
+            self.context.logger.info(
+                f"Updated Uniswap position liquidity: {position['current_liquidity']}"
+            )
+        else:
+            self.context.logger.warning(
+                f"Failed to get liquidity for Uniswap position: {position}"
+            )
+
+    def _update_velodrome_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update a Velodrome position."""
+        chain = position.get("chain")
+        is_cl_pool = position.get("is_cl_pool", False)
+
+        if not chain:
+            self.context.logger.warning(
+                f"Missing required parameters for Velodrome position: {position}"
+            )
+            return
+
+        if is_cl_pool:
+            # Handle Velodrome concentrated liquidity pool
+            for pos in position.get("positions"):
+                token_id = pos.get("token_id")
+                if not token_id:
+                    self.context.logger.warning(
+                        f"Missing token_id for Velodrome CL position: {pos}"
+                    )
+                    return
+
+                position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                    chain
+                )
+                if not position_manager_address:
+                    self.context.logger.warning(
+                        f"No position manager address found for chain {chain}"
+                    )
+                    return
+
+                # Get the current liquidity
+                position_data = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=position_manager_address,
+                    contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                    contract_callable="get_position",
+                    data_key="data",
+                    token_id=token_id,
+                    chain_id=chain,
+                )
+
+                if position_data and position_data.get("liquidity"):
+                    # Update the position with the current liquidity
+                    pos["current_liquidity"] = position_data.get("liquidity")
+                    self.context.logger.info(
+                        f"Updated Uniswap position liquidity: {pos['current_liquidity']}"
+                    )
+                else:
+                    self.context.logger.warning(
+                        f"Failed to get liquidity for Uniswap position: {pos}"
+                    )
+        else:
+            # Handle Velodrome stable/volatile pool
+            pool_address = position.get("pool_address")
+            safe_address = self.params.safe_contract_addresses.get(
+                position.get("chain")
+            )
+
+            if not all([pool_address, safe_address]):
+                self.context.logger.warning(
+                    f"Missing required parameters for Velodrome pool position: {position}"
+                )
+                return
+
+            # Get the current balance of LP tokens
+            balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromePoolContract.contract_id,
+                contract_callable="get_balance",
+                data_key="balance",
+                account=safe_address,
+                chain_id=chain,
+            )
+
+            if balance is not None:
+                # Update the position with the current amount
+                position["current_liquidity"] = balance
+                self.context.logger.info(
+                    f"Updated Velodrome pool position amount: {balance}"
+                )
+            else:
+                self.context.logger.warning(
+                    f"Failed to get balance for Velodrome pool position: {position}"
+                )
+
+    def _update_sturdy_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update a Sturdy position."""
+        # For Sturdy positions, we need to call balance_of on the relevant contract
+        pool_address = position.get("pool_address")
+        safe_address = self.params.safe_contract_addresses.get(position.get("chain"))
+        chain = position.get("chain")
+
+        if not all([pool_address, safe_address, chain]):
+            self.context.logger.warning(
+                f"Missing required parameters for Sturdy position: {position}"
+            )
+            return
+
+        # Get the current balance
+        balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=pool_address,
+            contract_public_id=YearnV3VaultContract.contract_id,
+            contract_callable="balance_of",
+            data_key="amount",
+            account=safe_address,
+            chain_id=chain,
+        )
+
+        if balance is not None:
+            # Update the position with the current amount
+            position["current_liquidity"] = balance
+            self.context.logger.info(f"Updated Sturdy position amount: {balance}")
+        else:
+            self.context.logger.warning(
+                f"Failed to get balance for Sturdy position: {position}"
+            )

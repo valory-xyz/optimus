@@ -101,6 +101,10 @@ METRICS_TYPE = "json"
 PORTFOLIO_UPDATE_INTERVAL = 3600  # 1hr
 APR_UPDATE_INTERVAL = 3600  # 1hr
 METRICS_UPDATE_INTERVAL = 21600  # 6hr
+# Initial available amount for ETH (0.005 ETH)
+ETH_INITIAL_AMOUNT = 0.005 * 10**18
+# Key for tracking remaining ETH in kv_store
+ETH_REMAINING_KEY = "eth_remaining_amount"
 
 
 class DexType(Enum):
@@ -198,6 +202,7 @@ class LiquidityTraderBaseBehaviour(
         self.gas_cost_tracker = GasCostTracker(
             file_path=self.params.store_path / self.params.gas_cost_info_filename
         )
+        self.initial_investment_values_per_pool = {}
 
         # Read the assets and current pool
         self.read_current_positions()
@@ -1061,6 +1066,13 @@ class LiquidityTraderBaseBehaviour(
                 self.context.logger.info(f"Position value: {position_value}")
                 if position_value is not None:
                     initial_value += float(position_value)
+                    pool_id = position.get("pool_address", position.get("pool_id"))
+                    tx_hash = position.get("tx_hash")
+                    position_key = f"{pool_id}_{tx_hash}"
+                    self.initial_investment_values_per_pool[
+                        position_key
+                    ] = position_value
+
                 else:
                     self.context.logger.warning(
                         f"Skipping position with null value: {position.get('id', 'unknown')}"
@@ -1159,10 +1171,26 @@ class LiquidityTraderBaseBehaviour(
         self, symbol, token_name, coin_list
     ) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's symbol and name."""
-        # Try to find coins matching the symbol.
+
+        self.context.logger.info(f"Type of coin_list: {type(coin_list)}")
+
+        # Check the type before accessing by index.
+        if isinstance(coin_list, dict):
+            self.context.logger.info(
+                f"Coin list is a dict with keys: {list(coin_list.keys())}"
+            )
+            coin_list = list(coin_list.values())
+        elif isinstance(coin_list, list) and coin_list:
+            self.context.logger.info(f"First element of coin_list: {coin_list[0]}")
+
+        # Build candidates ensuring that each element is a dict.
         candidates = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
+            coin
+            for coin in coin_list
+            if isinstance(coin, dict)
+            and coin.get("symbol", "").lower() == symbol.lower()
         ]
+
         if not candidates:
             return None
 
@@ -1170,7 +1198,6 @@ class LiquidityTraderBaseBehaviour(
         if len(candidates) == 1:
             return candidates[0]["id"]
 
-        # If multiple candidates, match by name if possible.
         normalized_token_name = token_name.replace(" ", "").lower()
         for coin in candidates:
             coin_name = coin["name"].replace(" ", "").lower()
@@ -1182,14 +1209,36 @@ class LiquidityTraderBaseBehaviour(
         self, token_address, symbol, coin_list, chain_name
     ) -> Generator[None, None, Optional[str]]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        # Check if coin_list is valid
+        if not coin_list or not isinstance(coin_list, list):
+            self.context.logger.error(f"Invalid coin_list: {type(coin_list)}")
+            return None
+
         token_name = yield from self._fetch_token_name_from_contract(
             chain_name, token_address
         )
         if not token_name:
-            matching_coins = [
-                coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-            ]
-            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+            # Check the structure of coin_list before processing
+            if (
+                coin_list
+                and isinstance(coin_list[0], dict)
+                and "symbol" in coin_list[0]
+            ):
+                try:
+                    matching_coins = [
+                        coin
+                        for coin in coin_list
+                        if coin["symbol"].lower() == symbol.lower()
+                    ]
+                    return matching_coins[0]["id"] if len(matching_coins) == 1 else None
+                except (TypeError, IndexError, KeyError) as e:
+                    self.context.logger.error(f"Error processing coin_list: {e}")
+                    return None
+            else:
+                self.context.logger.error(
+                    f"Unexpected coin_list structure: {coin_list[:2]}"
+                )
+                return None
 
         return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
 
@@ -1204,6 +1253,41 @@ class LiquidityTraderBaseBehaviour(
         except json.decoder.JSONDecodeError as e:
             self.context.logger.error(f"Failed to fetch coin list: {e}")
             return None
+
+    def get_eth_remaining_amount(self) -> Generator[None, None, int]:
+        """Get the remaining ETH amount for swaps from kv_store."""
+        result = yield from self._read_kv((ETH_REMAINING_KEY,))
+        if not result or not result.get(ETH_REMAINING_KEY):
+            # If not found in kv_store, initialize it
+            yield from self.reset_eth_remaining_amount()
+            return ETH_INITIAL_AMOUNT
+
+        try:
+            return int(result[ETH_REMAINING_KEY])
+        except (ValueError, TypeError):
+            self.context.logger.error(
+                f"Invalid ETH remaining amount in kv_store: {result[ETH_REMAINING_KEY]}"
+            )
+            yield from self.reset_eth_remaining_amount()
+            return ETH_INITIAL_AMOUNT
+
+    def update_eth_remaining_amount(
+        self, amount_used: int
+    ) -> Generator[None, None, None]:
+        """Update the remaining ETH amount after a swap in kv_store."""
+        current_remaining = yield from self.get_eth_remaining_amount()
+        new_remaining = max(0, current_remaining - amount_used)
+        self.context.logger.info(
+            f"Updating ETH remaining amount in kv_store: {current_remaining} -> {new_remaining}"
+        )
+        yield from self._write_kv({ETH_REMAINING_KEY: str(new_remaining)})
+
+    def reset_eth_remaining_amount(self) -> Generator[None, None, None]:
+        """Reset the remaining ETH amount to the initial value in kv_store."""
+        self.context.logger.info(
+            f"Resetting ETH remaining amount in kv_store to {ETH_INITIAL_AMOUNT}"
+        )
+        yield from self._write_kv({ETH_REMAINING_KEY: str(ETH_INITIAL_AMOUNT)})
 
 
 def execute_strategy(

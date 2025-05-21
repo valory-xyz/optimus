@@ -193,7 +193,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.DONE.value, {}
 
         if decision == Decision.CONTINUE:
-            return self._update_assets_after_swap(actions, last_executed_action_index)
+            res = yield from self._update_assets_after_swap(
+                actions, last_executed_action_index
+            )
+            return res
 
     def _wait_for_swap_confirmation(self) -> Generator[None, None, Optional[Decision]]:
         """Wait for swap confirmation."""
@@ -208,9 +211,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _update_assets_after_swap(
         self, actions, last_executed_action_index
-    ) -> Tuple[Optional[str], Optional[Dict]]:
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
+
+        # Add tokens to assets
         self._add_token_to_assets(
             action.get("from_chain"),
             action.get("from_token"),
@@ -221,6 +226,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             action.get("to_token"),
             action.get("to_token_symbol"),
         )
+
+        # If this was an ETH swap, update the remaining ETH amount in kv_store
+        if action.get("from_token") == ZERO_ADDRESS:
+            # Get the amount that was swapped
+            amount_used = action.get("amount", 0)
+            if amount_used > 0:
+                self.context.logger.info(
+                    f"Updating remaining ETH amount after swap. Amount used: {amount_used}"
+                )
+                yield from self.update_eth_remaining_amount(amount_used)
+
+                # Log the new remaining amount
+                remaining_eth = yield from self.get_eth_remaining_amount()
+                self.context.logger.info(
+                    f"Remaining ETH amount after swap: {remaining_eth}"
+                )
+
         fee_details = {
             "remaining_fee_allowance": action.get("remaining_fee_allowance"),
             "remaining_gas_allowance": action.get("remaining_gas_allowance"),
@@ -801,6 +823,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_type = action.get("pool_type")
         is_stable = action.get("is_stable")
         is_cl_pool = action.get("is_cl_pool")
+        max_investment_amounts = action.get("max_investment_amounts")
         
         # Validate essential parameters
         if not all([dex_type, chain, assets, pool_address, safe_address]):
@@ -838,52 +861,89 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 int(token1_balance * float(token1_percentage) / 100),
             ]
         else:
-            # For other dex types
-            max_investment_amounts = action.get("max_investment_amounts")
+            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+            max_investment_amounts[0] = int(
+                Decimal(str(max_investment_amounts[0]))
+                * (Decimal(10) ** Decimal(token0_decimals))
+            )
+            max_investment_amounts[1] = int(
+                Decimal(str(max_investment_amounts[1]))
+                * (Decimal(10) ** Decimal(token1_decimals))
+            )
+
+            self.context.logger.info(
+                f"Max investment amounts according to strategy: {max_investment_amounts}."
+            )
+    
             relative_funds_percentage = action.get("relative_funds_percentage")
-            
             if not relative_funds_percentage:
-                self.context.logger.error("Missing relative_funds_percentage parameter")
+                self.context.logger.error(
+                    f"relative_funds_percentage not define: {relative_funds_percentage}"
+                )
                 return None, None, None
-                
+    
             token0_balance = self._get_balance(chain, assets[0], positions)
             token1_balance = self._get_balance(chain, assets[1], positions)
-            
+    
             if token0_balance is None or token1_balance is None:
                 self.context.logger.error("Balance for one or more tokens is None")
-                return None, None, None
-                
-            # Calculate max amounts based on balances and percentage
-            max_amounts_in = [
-                int(token0_balance * relative_funds_percentage),
-                int(token1_balance * relative_funds_percentage),
-            ]
-            
-            # Ensure amounts don't exceed balances
+                return None, None, None  # Or handle the error as appropriate
+    
+            # Calculate max_amounts_in with special handling for ETH
+            if assets[0] == ZERO_ADDRESS:
+                # For ETH (token0), get the remaining ETH amount from kv_store
+                eth_remaining = yield from self.get_eth_remaining_amount()
+    
+                # Use the tracked ETH amount
+                max_amounts_in = [
+                    int(
+                        min(eth_remaining, token0_balance) * relative_funds_percentage
+                    ),  # Don't exceed available balance
+                    int(token1_balance * relative_funds_percentage),
+                ]
+    
+            elif assets[1] == ZERO_ADDRESS:
+                # For ETH (token1), get the remaining ETH amount from kv_store
+                eth_remaining = yield from self.get_eth_remaining_amount()
+    
+                # Use the tracked ETH amount
+                max_amounts_in = [
+                    int(token0_balance * relative_funds_percentage),
+                    int(
+                        min(eth_remaining, token1_balance) * relative_funds_percentage
+                    ),  # Don't exceed available balance
+                ]
+    
+            else:
+                # For non-ETH tokens, use the original calculation
+                max_amounts_in = [
+                    int(token0_balance * relative_funds_percentage),
+                    int(token1_balance * relative_funds_percentage),
+                ]
+    
+            # Ensure that allocated amounts do not exceed available balances.
             max_amounts_in = [
                 min(max_amounts_in[0], token0_balance),
                 min(max_amounts_in[1], token1_balance),
             ]
-            
-            # Apply max investment amounts if provided
-            if max_investment_amounts and isinstance(max_investment_amounts, list) and len(max_investment_amounts) >= 2:
-                token0_decimals = yield from self._get_token_decimals(chain, assets[0])
-                token1_decimals = yield from self._get_token_decimals(chain, assets[1])
-                
-                if token0_decimals is not None and token1_decimals is not None:
-                    scaled_max_amounts = [
-                        int(Decimal(str(max_investment_amounts[0])) * (Decimal(10) ** Decimal(token0_decimals))),
-                        int(Decimal(str(max_investment_amounts[1])) * (Decimal(10) ** Decimal(token1_decimals)))
-                    ]
-                    
-                    max_amounts_in = [
-                        min(max_amounts_in[0], scaled_max_amounts[0]),
-                        min(max_amounts_in[1], scaled_max_amounts[1])
-                    ]
-        
-        self.context.logger.info(f"Final investment amounts: {max_amounts_in}")
-        
-        # Validate investment amounts
+            self.context.logger.info(
+                f"Adjusted max amounts in after comparing with balances: {max_amounts_in}"
+            )
+    
+            # Adjust max_amounts_in based on max_investment_amounts
+            if max_investment_amounts and (
+                type(max_investment_amounts) == type(max_amounts_in)
+            ):
+                max_amounts_in = [
+                    min(max_amounts_in[i], max_investment_amounts[i])
+                    for i in range(len(max_amounts_in))
+                ]
+           
+            self.context.logger.info(
+                f"Adjusted max amounts in after comparing with max investment amounts: {max_amounts_in}"
+            )
+
         if dex_type != DexType.VELODROME.value and any(amount <= 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error(f"Insufficient balance for entering pool: {max_amounts_in}")
             return None, None, None
@@ -1401,6 +1461,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "remaining_gas_allowance": remaining_gas_allowance
             - tx_info.get("gas_cost"),
             "remaining_fee_allowance": remaining_fee_allowance - tx_info.get("fee"),
+            "amount": tx_info.get(
+                "amount", 0
+            ),  # Store the amount for later use in _update_assets_after_swap
         }
         return bridge_and_swap_action
 
@@ -1741,12 +1804,37 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         from_address = self.params.safe_contract_addresses.get(from_chain)
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
-        # If there is only one asset and we need to obtain two different assets,
-        # we split the available amount in half, converting one half to the first asset
-        # and the other half to the second asset.
+        self.context.logger.info(
+            f"Attempting swap/bridge from {from_chain} (chain ID: {from_chain_id}) to {to_chain} (chain ID: {to_chain_id})"
+        )
+        self.context.logger.info(
+            f"Token swap: {from_token_symbol} ({from_token_address}) -> {to_token_symbol} ({to_token_address})"
+        )
+        self.context.logger.info(
+            f"From address: {from_address} | To address: {to_address}"
+        )
+
         available_amount = self._get_balance(from_chain, from_token_address, positions)
+
+        # Apply ETH limit if the token is ETH (ZERO_ADDRESS)
+        if from_token_address == ZERO_ADDRESS:
+            # Get the remaining ETH amount from kv_store
+            eth_remaining = yield from self.get_eth_remaining_amount()
+            # Subsequent ETH swap - use what's left in our tracking
+            available_amount = min(eth_remaining, available_amount)
+            self.context.logger.info(
+                f"Subsequent ETH swap - using remaining tracked amount: {available_amount} wei"
+            )
+
+        # Calculate the amount to swap based on the available amount and funds percentage
         amount = min(
             available_amount, int(available_amount * action.get("funds_percentage", 1))
+        )
+
+        action["amount"] = amount
+
+        self.context.logger.info(
+            f"Available balance: {available_amount} | Amount to swap: {amount} {from_token_symbol}"
         )
         if amount <= 0:
             self.context.logger.error(

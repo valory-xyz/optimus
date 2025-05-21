@@ -221,6 +221,26 @@ class UniswapV3PoolContract(Contract):
         return dict(data=tick_spacing)
 
     @classmethod
+    def slot0(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the current state of the pool from slot0."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.slot0().call()
+        return dict(slot0={
+            "sqrt_price_x96": result[0],
+            "tick": result[1],
+            "observation_index": result[2],
+            "observation_cardinality": result[3],
+            "observation_cardinality_next": result[4],
+            "fee_protocol": result[5],
+            "unlocked": result[6],
+            }
+        )
+    
+    @classmethod
     def get_reserves_and_balances(
         cls,
         ledger_api: EthereumApi,

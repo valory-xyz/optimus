@@ -25,7 +25,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
-from packages.valory.skills.liquidity_trader_abci.behaviours import (
+from packages.valory.skills.liquidity_trader_abci.behaviours.round_behaviour import (
     LiquidityTraderRoundBehaviour,
 )
 from packages.valory.skills.optimus_abci.composition import OptimusAbciApp

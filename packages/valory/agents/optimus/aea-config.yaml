@@ -180,7 +180,7 @@ models:
     args:
       token_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
       coin_price_endpoint: ${str:https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
-      api_key: ${str:null}
+      api_key: ${str:""}
       requests_per_minute: ${int:30}
       credits: ${int:10000}
       rate_limited_code: ${int:429}

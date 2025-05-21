@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiefxsx4zo3eefe6iyxflho4l3gx2ge7hjm7c62eiyw7zaag4ifbty
   build/NonfungiblePositionManager.json: bafybeihspdbkcgw2mo245bpblhgu3srl3ywynp7eeipzoczqlzcslu7t6y
-  contract.py: bafybeieg7mqwcnuol7rxsmu4o4u3qbvlxyyyeeur46cggg663apgfhblai
+  contract.py: bafybeigg5cxxgkpeogyyzuyjhstlqfpai2tpn55vhit75bimusth6zz64u
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: UniswapV3NonfungiblePositionManagerContract
@@ -16,6 +16,6 @@ contract_interface_paths:
   ethereum: build/NonfungiblePositionManager.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.64.0
+    version: ==1.65.0
   web3:
     version: <7,>=6.0.0

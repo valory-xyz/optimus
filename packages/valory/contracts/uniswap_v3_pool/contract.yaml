@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihdocjce5kvnpad5xhrc2ad7i3gftajix5z6f4zhpvmnk6blsmlza
   build/UniswapV3Pool.json: bafybeids5lo3axsd6aplyywwi43xwdxj3njnrke5m7gsp3mg74svcodr4i
-  contract.py: bafybeihvkjzq4fwq6uy5kamigbx6t3jgvwhjbu3n7r6dzmkk7fezc6puum
+  contract.py: bafybeihuk6jyppan7fzvhqjjrcpbfnj7735myeimzq4wooev4mmvafcxzu
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: UniswapV3PoolContract
@@ -16,6 +16,6 @@ contract_interface_paths:
   ethereum: build/UniswapV3Pool.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.64.0
+    version: ==1.65.0
   web3:
     version: <7,>=6.0.0

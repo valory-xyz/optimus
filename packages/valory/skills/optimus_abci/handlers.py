@@ -71,7 +71,7 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
-from packages.valory.skills.liquidity_trader_abci.behaviours import (
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
     TradingType,
 )
@@ -101,10 +101,17 @@ IpfsHandler = BaseIpfsHandler
 STRATEGY_TO_PROTOCOL = {
     "balancer_pools_search": "balancerPool",
     "asset_lending": "sturdy",
+    "uniswap_pools_search": "UniswapV3",
     "velodrome_pools_search": "velodrome",
 }
 # Reverse mapping for converting protocol names back to strategy names
 PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
+PROTOCOL_DEFINITIONS = {
+    "balancerPool": "protocol for investing in liquidity positions",
+    "sturdy": "protocol for lending assets",
+    "UniswapV3": "protocol for investing in liquidity positions",
+    "velodrome": "protocol for investing in liquidity positions",
+}
 
 
 def load_fsm_spec() -> Dict:
@@ -290,7 +297,10 @@ class HttpHandler(BaseHttpHandler):
             ] = camel_to_snake(target_round)
         self.json_content_header = "Content-Type: application/json\n"
         self.html_content_header = "Content-Type: text/html\n"
-        self.function_entry_count = 0
+        self.available_strategies = []
+        for chain in self.context.params.target_investment_chains:
+            chain_strategies = self.context.params.available_strategies.get(chain, [])
+            self.available_strategies.extend(chain_strategies)
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -530,8 +540,7 @@ class HttpHandler(BaseHttpHandler):
         selected_protocols = (
             json.loads(self.context.state.selected_protocols)
             if isinstance(self.context.state.selected_protocols, str)
-            else self.context.state.selected_protocols
-            or self.context.params.available_strategies
+            else self.context.state.selected_protocols or self.available_strategies
         )
 
         # Convert strategy names to protocol names
@@ -690,19 +699,23 @@ class HttpHandler(BaseHttpHandler):
             previous_selected_protocols = (
                 json.loads(self.context.state.selected_protocols)
                 if isinstance(self.context.state.selected_protocols, str)
-                else self.context.state.selected_protocols
-                or self.context.params.available_strategies
+                else self.context.state.selected_protocols or self.available_strategies
             )
 
             available_trading_types = [
                 trading_type.value for trading_type in TradingType
             ]
             last_selected_threshold = THRESHOLDS.get(previous_trading_type)
+
             # Convert strategy names to protocol names for LLM
-            available_protocols_for_llm = {
-                "balancerPool": "protocol for investing in liquidity positions",
-                "sturdy": "protocol for lending assets",
-                "velodrome": "protocol for investing in liquidity positions",
+            available_protocols = [
+                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+                for strategy in self.available_strategies
+            ]
+
+            available_protocols_definitons = {
+                protocol: PROTOCOL_DEFINITIONS.get(protocol, "")
+                for protocol in available_protocols
             }
 
             # Convert previous selected protocols to their protocol names
@@ -716,7 +729,7 @@ class HttpHandler(BaseHttpHandler):
                 USER_PROMPT=user_prompt,
                 PREVIOUS_TRADING_TYPE=previous_trading_type,
                 TRADING_TYPES=available_trading_types,
-                AVAILABLE_PROTOCOLS=available_protocols_for_llm,
+                AVAILABLE_PROTOCOLS=available_protocols_definitons,
                 LAST_THRESHOLD=last_selected_threshold,
                 PREVIOUS_SELECTED_PROTOCOLS=previous_protocols_for_llm,
                 THRESHOLDS=THRESHOLDS,
@@ -977,8 +990,7 @@ class HttpHandler(BaseHttpHandler):
         selected_protocols = selected_protocols = (
             json.loads(self.context.state.selected_protocols)
             if isinstance(self.context.state.selected_protocols, str)
-            else self.context.state.selected_protocols
-            or self.context.params.available_strategies
+            else self.context.state.selected_protocols or self.available_strategies
         )
 
         selected_protocols = [

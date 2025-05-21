@@ -390,12 +390,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None, None
 
         # Get or calculate sqrt_price_x96
-        sqrt_price_x96 = yield from self._get_sqrt_price_x96(pool_address, chain)
+        sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
         if sqrt_price_x96 is None:
             self.context.logger.error(
                 f"Could not determine sqrt_price_x96 for pool {pool_address}"
             )
-            sqrt_price_x96 = 0  # Default value
+            return None, None
 
         # TO-DO: add slippage protection
         amount0_min = 0

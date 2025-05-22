@@ -64,7 +64,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the Velodrome pool behaviour."""
         super().__init__(**kwargs)
-
+    
     def enter(
         self, **kwargs: Any
     ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
@@ -76,13 +76,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         max_amounts_in = kwargs.get("max_amounts_in")
         is_cl_pool = kwargs.get("is_cl_pool", False)
         is_stable = kwargs.get("is_stable")
-
-        if not all([pool_address, safe_address, assets, chain, max_amounts_in]):
+        tick_ranges=kwargs.get("tick_ranges"),  # Pass pre-calculated tick ranges if available
+        tick_spacing=kwargs.get("tick_spacing")  # Pass tick spacing if available
+    
+        if not all([pool_address, safe_address, assets, chain, max_amounts_in, tick_ranges, tick_spacing]):
             self.context.logger.error(
                 "Missing required parameters for entering the pool. Here are the kwargs: {kwargs}"
             )
             return None, None
-
+        
         # Determine the pool type and call the appropriate method
         if is_cl_pool:
             return (
@@ -94,6 +96,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     max_amounts_in=max_amounts_in,
                     is_stable=is_stable,
                     pool_fee=kwargs.get("pool_fee"),
+                    tick_ranges=tick_ranges,
+                    tick_spacing=tick_spacing,
                 )
             )
         else:
@@ -342,7 +346,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
-
+    
     def _enter_cl_pool(
         self,
         pool_address: str,
@@ -352,6 +356,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         max_amounts_in: list,
         is_stable: bool,
         pool_fee: Optional[int] = None,
+        tick_ranges: Optional[List[Dict]] = None,
+        tick_spacing: Optional[int] = None,
     ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
         """Add liquidity to a Velodrome Concentrated Liquidity pool."""
         # Get NonFungiblePositionManager contract address
@@ -366,53 +372,55 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # we provide in 50/50 ratio
-        # works only for stablecoins for now (because the decimals are same, for non-stablecoins this won't work)
-        if max_amounts_in and len(max_amounts_in) == 2:
-            min_amount = min(max_amounts_in)
-            max_amounts_in = [min_amount, min_amount]
+        # Note: The 50/50 ratio adjustment code has been removed as token percentages
+        # are now handled in get_enter_pool_tx_hash
         # Calculate tick ranges based on pool's tick spacing
-        tick_ranges = yield from self._calculate_tick_lower_and_upper_velodrome(
-            chain=chain, pool_address=pool_address, is_stable=is_stable
-        )
+        # Calculate tick ranges if not provided
+    
+        if not tick_ranges:
+            self.context.logger.info("No tick ranges provided, calculating from pool data")
+            tick_ranges = yield from self._calculate_tick_lower_and_upper_velodrome(
+                chain=chain, pool_address=pool_address, is_stable=is_stable
+            )
+            if not tick_ranges:
+                self.context.logger.error(
+                    f"Failed to calculate tick ranges for pool {pool_address}"
+                )
+                return None, None
+
         if not tick_ranges:
             self.context.logger.error(
-                "Failed to calculate tick ranges for pool " + str(pool_address)
+                f"Failed to calculate tick ranges for pool {pool_address}"
             )
             return None, None
 
-        # Get tick spacing for the pool
-        tick_spacing = yield from self._get_tick_spacing_velodrome(pool_address, chain)
+        # Get tick spacing if not provided
         if not tick_spacing:
-            self.context.logger.error(
-                f"Could not get tick spacing for pool {pool_address}"
-            )
-            return None, None
+            self.context.logger.info("No tick spacing provided, fetching from contract")
+            tick_spacing = yield from self._get_tick_spacing_velodrome(pool_address, chain)
+            if not tick_spacing:
+                self.context.logger.error(
+                    f"Could not get tick spacing for pool {pool_address}"
+                )
+                return None, None
 
         # Get or calculate sqrt_price_x96
-        sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
+        sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain,pool_address)
         if sqrt_price_x96 is None:
             self.context.logger.error(
                 f"Could not determine sqrt_price_x96 for pool {pool_address}"
             )
-            return None, None
-
+            sqrt_price_x96 = 0  # Default value
+    
         # TO-DO: add slippage protection
         amount0_min = 0
         amount1_min = 0
-
+    
         # deadline is set to be 20 minutes from current time
         last_update_time = cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
         deadline = int(last_update_time) + (20 * 60)
-
-        # If no positions, return error
-        if not tick_ranges:
-            self.context.logger.error(
-                f"No valid positions calculated for pool {pool_address}"
-            )
-            return None, None
 
         self.context.logger.info(
             f"Using max amounts: {max_amounts_in[0]} token0, {max_amounts_in[1]} token1"
@@ -422,20 +430,22 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # Track total allocated to ensure we don't exceed max_amounts_in
         total_allocated_0 = 0
         total_allocated_1 = 0
-
+        
         # First pass: calculate desired amounts
-        for position in tick_ranges:
+        for position in tick_ranges[0]:
             allocation = position.get("allocation", 0)
             if allocation <= 0:
                 position["amount0_desired"] = 0
                 position["amount1_desired"] = 0
                 continue
-
+    
             # Calculate amounts based on allocation directly
             # We allocate the same percentage of each token based on the band allocation
             amount0_desired = int(max_amounts_in[0] * allocation)
             amount1_desired = int(max_amounts_in[1] * allocation)
-
+        
+            self.context.logger.info(f"amount0_desired,amount1_desired :{amount0_desired,amount1_desired}")
+        
             # Store in position for second pass
             position["amount0_desired"] = amount0_desired
             position["amount1_desired"] = amount1_desired
@@ -459,7 +469,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
 
             # Apply scaling
-            for position in tick_ranges:
+            for position in tick_ranges[0]:
                 position["amount0_desired"] = int(
                     position["amount0_desired"] * scale_factor
                 )
@@ -471,7 +481,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         tx_hashes = []
 
         # Process each position
-        for position in tick_ranges:
+        for position in tick_ranges[0]:
             amount0_desired = position.get("amount0_desired", 0)
             amount1_desired = position.get("amount1_desired", 0)
 
@@ -479,12 +489,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Position allocation: {position.get('allocation', 0):.1%}, "
                 f"Amounts: {amount0_desired}/{amount1_desired}"
             )
-
-            if amount0_desired <= 0 or amount1_desired <= 0:
-                self.context.logger.warning(
-                    f"Skipping position with too small allocation: {position.get('allocation', 0):.1%}"
-                )
-                continue
 
             # Call mint on the CLPoolManager contract
             mint_tx_hash = yield from self.contract_interact(
@@ -520,7 +524,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         if not tx_hashes:
             self.context.logger.error("No valid mint transactions created")
             return None, None
-
+        
+        self.context.logger.info(f"tx_hashes, position_manager_address :{tx_hashes, position_manager_address}")
         # Return the list of transaction hashes
         return tx_hashes, position_manager_address
 

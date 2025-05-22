@@ -1594,3 +1594,5 @@ e6b3765d47cabc6640f6ac8b8874a00f1441b572:packages/valory/skills/optimus_abci/mod
 e3709c09ce7a8b1dfb0cf7c71568d5c317ed3f14:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.46a95d1c.js.map:generic-api-key:2
 e3709c09ce7a8b1dfb0cf7c71568d5c317ed3f14:packages/valory/skills/optimus_abci/modius-ui-build/static/js/main.46a95d1c.js.map:generic-api-key:2
 a9f84277541065ae3812e54206810d438646e3b5:packages/valory/skills/liquidity_trader_abci/behaviours/decision_making.py:generic-api-key:1754
+d27ae0d3cd969d614928cf948674ebf32401f8fe:packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py:generic-api-key:1023
+d27ae0d3cd969d614928cf948674ebf32401f8fe:packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py:generic-api-key:1023

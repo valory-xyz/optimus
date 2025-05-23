@@ -313,7 +313,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # We have multiple positions for the same pool
                     # Create a single entry with nested positions
                     current_position["status"] = PositionStatus.OPEN.value
-                    current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
+                    current_position[
+                        "enter_tx_hash"
+                    ] = self.synchronized_data.final_tx_hash
                     current_position["enter_timestamp"] = positions_data[0][
                         4
                     ]  # Use timestamp from first position
@@ -363,7 +365,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     current_position["enter_timestamp"] = timestamp
                     current_position["status"] = PositionStatus.OPEN.value
-                    current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
+                    current_position[
+                        "enter_tx_hash"
+                    ] = self.synchronized_data.final_tx_hash
 
                     # For consistency, also add a positions list with a single entry
                     current_position["positions"] = [

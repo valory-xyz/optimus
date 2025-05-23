@@ -47,11 +47,11 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     HTTP_OK,
     LiquidityTraderBaseBehaviour,
     METRICS_UPDATE_INTERVAL,
+    MIN_TIME_IN_POSITION,
     PositionStatus,
     THRESHOLDS,
     ZERO_ADDRESS,
     execute_strategy,
-    MIN_TIME_IN_POSITION
 )
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
@@ -72,7 +72,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     selected_opportunities = None
     position_to_exit = None
     trading_opportunities = []
-
 
     def async_act(self) -> Generator:
         """Execute the behaviour's async action."""
@@ -100,19 +99,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Send final actions
             yield from self.send_actions(actions)
-            
+
     def send_actions(self, actions: Optional[List[Any]] = None) -> Generator:
-        """Send actions and complete the round.
-        
-        Args:
-            actions: List of actions to send. Defaults to empty list.
-        """
+        """Send actions and complete the round."""
         if actions is None:
             actions = []
-        
+
         payload = EvaluateStrategyPayload(
-            sender=self.context.agent_address,
-            actions=json.dumps(actions)
+            sender=self.context.agent_address, actions=json.dumps(actions)
         )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
@@ -122,24 +116,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.set_done()
 
     def check_minimum_hold_period(self) -> bool:
-        """Check if any position is still in minimum hold period.
-        
-        Returns:
-            Tuple of (should_return, actions)
-        """
+        """Check if any position is still in minimum hold period."""
         if not self.current_positions:
             return False
 
         open_position = next(
-            (pos for pos in self.current_positions 
-            if pos.get("status") == PositionStatus.OPEN.value), 
-            None
+            (
+                pos
+                for pos in self.current_positions
+                if pos.get("status") == PositionStatus.OPEN.value
+            ),
+            None,
         )
-        
+
         if not open_position:
             return False
 
-        time_in_position = int(self._get_current_timestamp()) - open_position.get("timestamp", 0)
+        time_in_position = int(self._get_current_timestamp()) - open_position.get(
+            "timestamp", 0
+        )
         if time_in_position < MIN_TIME_IN_POSITION:
             remaining_time = MIN_TIME_IN_POSITION - time_in_position
             days, hours = divmod(remaining_time, 24 * 3600)
@@ -149,7 +144,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"Waiting for {days} days and {hours} hours before closing it."
             )
             return True
-        
+
         return False
 
     def check_funds(self) -> bool:
@@ -162,7 +157,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 for asset in position.get("assets", [])
             )
             return has_funds
-        
+
         return True
 
     def update_position_metrics(self) -> None:
@@ -172,14 +167,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         current_timestamp = self._get_current_timestamp()
         open_positions = [
-            pos for pos in self.current_positions 
+            pos
+            for pos in self.current_positions
             if pos.get("status") == PositionStatus.OPEN.value
         ]
-        
+
         for position in open_positions:
             dex_type = position.get("dex_type")
             strategy = self.params.dex_type_to_strategy.get(dex_type)
-            
+
             if not strategy:
                 self.context.logger.error(f"No strategy found for dex type {dex_type}")
                 continue
@@ -192,7 +188,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Recalculating metrics for position {position.get('pool_address')} - "
                     f"last update was {time_since_update / 3600:.2f} hours ago"
                 )
-                if metrics := self.get_returns_metrics_for_opportunity(position, strategy):
+                if metrics := self.get_returns_metrics_for_opportunity(
+                    position, strategy
+                ):
                     metrics["last_metrics_update"] = current_timestamp
                     position.update(metrics)
             else:
@@ -204,11 +202,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.store_current_positions()
 
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
-        """Execute strategy and prepare actions.
-        
-        Returns:
-            List of actions to execute.
-        """
+        """Execute strategy and prepare actions."""
         self.execute_hyper_strategy()
         actions = (
             yield from self.get_order_of_transactions()
@@ -219,7 +213,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"Actions: {actions}" if actions else "No actions prepared"
         )
-        
+
         return actions
 
     def execute_hyper_strategy(self) -> None:

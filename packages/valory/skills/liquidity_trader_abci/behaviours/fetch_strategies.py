@@ -265,7 +265,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
         # Calculate safe balances value
-        total_safe_value_usd = yield from self._calculate_safe_balances_value(portfolio_breakdown)
+        total_safe_value_usd = yield from self._calculate_safe_balances_value(
+            portfolio_breakdown
+        )
 
         # Calculate final portfolio metrics
         yield from self._update_portfolio_metrics(
@@ -1243,44 +1245,47 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[Decimal, None, None]:
         """Calculate the USD value of funds in the safe across all chains."""
         total_safe_value = Decimal(0)
-        
+
         for chain in self.params.target_investment_chains:
             safe_address = self.params.safe_contract_addresses.get(chain)
             if not safe_address:
                 self.context.logger.warning(f"No safe address found for chain {chain}")
                 continue
-                
+
             chain_assets = self.assets.get(chain, {})
             if not chain_assets:
                 self.context.logger.warning(f"No assets found for chain {chain}")
                 continue
-                
+
             self.context.logger.info(f"Calculating safe balances for chain {chain}")
-            
+
             for token_address, token_symbol in chain_assets.items():
-                
                 # Handle ETH (zero address) separately using get_eth_remaining_amount
                 if token_address == ZERO_ADDRESS:
                     eth_balance_wei = yield from self.get_eth_remaining_amount()
-                    adjusted_balance = Decimal(str(eth_balance_wei)) / Decimal(10**18)  # ETH has 18 decimals
-                    
+                    adjusted_balance = Decimal(str(eth_balance_wei)) / Decimal(
+                        10**18
+                    )  # ETH has 18 decimals
+
                     if adjusted_balance <= 0:
                         continue
-                        
+
                     # Get ETH price
                     token_price = yield from self._fetch_zero_address_price()
                     if token_price is None:
-                        self.context.logger.warning(f"Could not fetch price for {token_symbol}")
+                        self.context.logger.warning(
+                            f"Could not fetch price for {token_symbol}"
+                        )
                         continue
-                        
+
                     token_price = Decimal(str(token_price))
                     token_value_usd = adjusted_balance * token_price
                     total_safe_value += token_value_usd
-                    
+
                     self.context.logger.info(
                         f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
                     )
-                    
+
                 else:
                     # Handle ERC20 tokens
                     token_balance = yield from self.contract_interact(
@@ -1292,35 +1297,43 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         account=safe_address,
                         chain_id=chain,
                     )
-                    
+
                     if token_balance is None or token_balance == 0:
                         continue
-                        
+
                     # Get token decimals
-                    token_decimals = yield from self._get_token_decimals(chain, token_address)
+                    token_decimals = yield from self._get_token_decimals(
+                        chain, token_address
+                    )
                     if token_decimals is None:
                         continue
-                        
+
                     # Adjust balance for decimals
-                    adjusted_balance = Decimal(str(token_balance)) / Decimal(10**token_decimals)
-                    
+                    adjusted_balance = Decimal(str(token_balance)) / Decimal(
+                        10**token_decimals
+                    )
+
                     if adjusted_balance <= 0:
                         continue
-                        
+
                     # Get token price
-                    token_price = yield from self._fetch_token_price(token_address, chain)
+                    token_price = yield from self._fetch_token_price(
+                        token_address, chain
+                    )
                     if token_price is None:
-                        self.context.logger.warning(f"Could not fetch price for {token_symbol}")
+                        self.context.logger.warning(
+                            f"Could not fetch price for {token_symbol}"
+                        )
                         continue
-                        
+
                     token_price = Decimal(str(token_price))
                     token_value_usd = adjusted_balance * token_price
                     total_safe_value += token_value_usd
-                    
+
                     self.context.logger.info(
                         f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
                     )
-                
+
                 # Add to portfolio breakdown if not already present
                 existing_asset = next(
                     (
@@ -1330,11 +1343,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     ),
                     None,
                 )
-                
+
                 if existing_asset:
                     # Update existing entry by adding safe balance
-                    existing_asset["balance"] = float(Decimal(str(existing_asset["balance"])) + adjusted_balance)
-                    existing_asset["value_usd"] = float(Decimal(str(existing_asset["value_usd"])) + token_value_usd)
+                    existing_asset["balance"] = float(
+                        Decimal(str(existing_asset["balance"])) + adjusted_balance
+                    )
+                    existing_asset["value_usd"] = float(
+                        Decimal(str(existing_asset["value_usd"])) + token_value_usd
+                    )
                 else:
                     # Add new entry for safe balance
                     portfolio_breakdown.append(
@@ -1346,7 +1363,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             "value_usd": float(token_value_usd),
                         }
                     )
-        
+
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value
 

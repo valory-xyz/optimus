@@ -51,6 +51,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
     ZERO_ADDRESS,
     execute_strategy,
+    MIN_TIME_IN_POSITION
 )
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
@@ -75,6 +76,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+
+            if self.current_positions:
+                # Get first open position if any exist
+                open_position = next((pos for pos in self.current_positions 
+                                   if pos.get("status") == PositionStatus.OPEN.value), None)
+                
+                if open_position:
+                    time_in_position = int(self._get_current_timestamp()) - open_position.get("timestamp", 0)
+                    if time_in_position < MIN_TIME_IN_POSITION:
+                        remaining_time = MIN_TIME_IN_POSITION - time_in_position
+                        days = remaining_time // (24 * 3600)
+                        hours = (remaining_time % (24 * 3600)) // 3600
+                        self.context.logger.info(
+                            f"Position {open_position.get('pool_address')} is still in minimum hold period."
+                            f"Waiting for {days} days and {hours} hours before closing it."
+                        )
+                        # Create empty payload since we're not taking any action
+                        payload = EvaluateStrategyPayload(
+                            sender=self.context.agent_address,
+                            actions=json.dumps([])
+                        )
+                        yield from self.send_a2a_transaction(payload)
+                        
+                        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+                            yield from self.wait_until_round_end()
+                        self.set_done()
+
             if not self.current_positions:
                 has_funds = any(
                     asset.get("balance", 0) > 0

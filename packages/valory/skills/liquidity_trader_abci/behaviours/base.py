@@ -105,6 +105,7 @@ METRICS_UPDATE_INTERVAL = 21600  # 6hr
 ETH_INITIAL_AMOUNT = 0.005 * 10**18
 # Key for tracking remaining ETH in kv_store
 ETH_REMAINING_KEY = "eth_remaining_amount"
+MIN_TIME_IN_POSITION = 604800  # 1 week
 
 
 class DexType(Enum):

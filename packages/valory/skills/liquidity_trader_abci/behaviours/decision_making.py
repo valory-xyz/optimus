@@ -295,9 +295,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["liquidity"] = liquidity
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
-            current_position["timestamp"] = timestamp
+            current_position["enter_timestamp"] = timestamp
             current_position["status"] = PositionStatus.OPEN.value
-            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
             self.current_positions.append(current_position)
 
         elif action.get("dex_type") == DexType.VELODROME.value:
@@ -313,8 +313,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # We have multiple positions for the same pool
                     # Create a single entry with nested positions
                     current_position["status"] = PositionStatus.OPEN.value
-                    current_position["tx_hash"] = self.synchronized_data.final_tx_hash
-                    current_position["timestamp"] = positions_data[0][
+                    current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
+                    current_position["enter_timestamp"] = positions_data[0][
                         4
                     ]  # Use timestamp from first position
 
@@ -361,9 +361,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     ) = yield from self._get_data_from_mint_tx_receipt(
                         self.synchronized_data.final_tx_hash, action.get("chain")
                     )
-                    current_position["timestamp"] = timestamp
+                    current_position["enter_timestamp"] = timestamp
                     current_position["status"] = PositionStatus.OPEN.value
-                    current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+                    current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
 
                     # For consistency, also add a positions list with a single entry
                     current_position["positions"] = [
@@ -387,9 +387,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 current_position["amount0"] = amount0
                 current_position["amount1"] = amount1
-                current_position["timestamp"] = timestamp
+                current_position["enter_timestamp"] = timestamp
                 current_position["status"] = PositionStatus.OPEN.value
-                current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+                current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
                 self.current_positions.append(current_position)
 
         elif action.get("dex_type") == DexType.BALANCER.value:
@@ -402,9 +402,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             current_position["amount0"] = amount0
             current_position["amount1"] = amount1
-            current_position["timestamp"] = timestamp
+            current_position["enter_timestamp"] = timestamp
             current_position["status"] = PositionStatus.OPEN.value
-            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
             self.current_positions.append(current_position)
 
         elif action.get("dex_type") == DexType.STURDY.value:
@@ -417,9 +417,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             current_position["amount0"] = amount
             current_position["shares"] = shares
-            current_position["timestamp"] = timestamp
+            current_position["enter_timestamp"] = timestamp
             current_position["status"] = PositionStatus.OPEN.value
-            current_position["tx_hash"] = self.synchronized_data.final_tx_hash
+            current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
             self.current_positions.append(current_position)
 
         self.store_current_positions()
@@ -438,7 +438,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         for position in self.current_positions:
             if position.get("pool_address") == pool_address:
                 position["status"] = PositionStatus.CLOSED.value
-                position["tx_hash"] = self.synchronized_data.final_tx_hash
+                position["exit_tx_hash"] = self.synchronized_data.final_tx_hash
+                position["exit_timestamp"] = int(self._get_current_timestamp())
 
                 # For Velodrome CL pools, log all the positions that were exited
                 if (

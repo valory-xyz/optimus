@@ -1404,7 +1404,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             token1 = position.get("token1")
             amount0 = position.get("amount0")
             amount1 = position.get("amount1")
-            timestamp = position.get("timestamp")
+            timestamp = position.get("timestamp") or position.get("enter_timestamp")
             chain = position.get("chain")
 
             if None in (token0, amount0, timestamp, chain):

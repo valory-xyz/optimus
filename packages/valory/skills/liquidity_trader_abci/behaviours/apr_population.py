@@ -513,12 +513,12 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def _get_first_investment_timestamp(self) -> Optional[int]:
         """Get the first available timestamp from positions."""
         for position in self.current_positions:
-            timestamp = position.get("timestamp")
-            if timestamp is not None:
+            timestamp = position.get("timestamp") or position.get("enter_timestamp")
+            if timestamp:
                 return timestamp
 
         # quite a few early positions don't have any timestamp
-        return self._get_current_timestamp()
+        return int(self._get_current_timestamp())
 
     def _calculate_apr(
         self,

@@ -1261,7 +1261,7 @@ class LiquidityTraderBaseBehaviour(
         if not result or not result.get(ETH_REMAINING_KEY):
             # If not found in kv_store, initialize it
             yield from self.reset_eth_remaining_amount()
-            return ETH_INITIAL_AMOUNT
+            return int(ETH_INITIAL_AMOUNT)
 
         try:
             return int(result[ETH_REMAINING_KEY])
@@ -1270,7 +1270,7 @@ class LiquidityTraderBaseBehaviour(
                 f"Invalid ETH remaining amount in kv_store: {result[ETH_REMAINING_KEY]}"
             )
             yield from self.reset_eth_remaining_amount()
-            return ETH_INITIAL_AMOUNT
+            return int(ETH_INITIAL_AMOUNT)
 
     def update_eth_remaining_amount(
         self, amount_used: int
@@ -1281,14 +1281,14 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(
             f"Updating ETH remaining amount in kv_store: {current_remaining} -> {new_remaining}"
         )
-        yield from self._write_kv({ETH_REMAINING_KEY: str(new_remaining)})
+        yield from self._write_kv({ETH_REMAINING_KEY: int(new_remaining)})
 
     def reset_eth_remaining_amount(self) -> Generator[None, None, None]:
         """Reset the remaining ETH amount to the initial value in kv_store."""
         self.context.logger.info(
             f"Resetting ETH remaining amount in kv_store to {ETH_INITIAL_AMOUNT}"
         )
-        yield from self._write_kv({ETH_REMAINING_KEY: str(ETH_INITIAL_AMOUNT)})
+        yield from self._write_kv({ETH_REMAINING_KEY: int(ETH_INITIAL_AMOUNT)})
 
 
 def execute_strategy(

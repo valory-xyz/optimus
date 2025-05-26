@@ -12,8 +12,8 @@ fingerprint:
   behaviours/base.py: bafybeigvsgsjwbcvxa7qrrt2ps3eg7fd4c3q74hf3ngcgnmdqsbr4zlkxe
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeidpwkm4v72ent4khspjpodrclv23nwobtdudjwuamjwzksczkb2ca
-  behaviours/evaluate_strategy.py: bafybeigpx2524eb5dpkdb7gcjp5hj54sljh46vsmmumb2lvbpobqrlwiaa
+  behaviours/decision_making.py: bafybeidgq5ahtuv3tuu2oixxm6344kumtfu7mb2iimpiswzxlgx5qse2ti
+  behaviours/evaluate_strategy.py: bafybeiez6wrrtqb6ugysmtgwrzbaxmopob3td4maf6az3sxpigwuub76ma
   behaviours/fetch_strategies.py: bafybeif44l2waikvf5h663dt2jmyvks44txjhdlo4n32qyj56livnbk4w4
   behaviours/get_positions.py: bafybeia32hziqapjhvwrtqtf6u4n6aovdm2gi4ejmlwbg7cc6vbokzbbum
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
@@ -29,7 +29,7 @@ fingerprint:
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeib6ftotspu2ojuk5hy6gclq36b2fnftsyi5fxocuyqayjxsgjlueu
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeihzu2tj35qcl5t43bcjfa3abcfkaxx42rs25bwybzu5hdpxetv4hq
+  pools/velodrome.py: bafybeiewpyj76fkyaw6v2fwualssssjpixkgijcuxopkccjkbwcyl4drz4
   rounds.py: bafybeianvex6vrb7azphyaggvmbcknu6qwryk2mwltxhxjunwi5h2zp3mm
   rounds_info.py: bafybeihtcevahm4nnq3iqcx7vsgvp3klpul4iy5yevkvlfi63dqh3r5pwq
   states/__init__.py: bafybeige5a5rkfmb56a7im4q4tqxddmut6vacwqgq2g4qvaauk7sqgzlnu

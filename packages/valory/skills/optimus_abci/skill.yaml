@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
   dialogues.py: bafybeifojr2urrwkm6rpm3wbytvcy54ks7x7qashwphyrlkrnaem6jaswy
   fsm_specification.yaml: bafybeifszjb2yzllrnoiij4jpz2wbrfsa4ybib7hfpf5wo2tkb4yho4nlu
-  handlers.py: bafybeiaihxaqukwkn7zzmzzauqw4ihwhdivppxyfm6bjkjgbb5keqvh5te
+  handlers.py: bafybeia6sohyddtbisnj5zyxyakbb4cywejfauiuj4yzlpgxbbyxob2zri
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
   modius-ui-build/asset-manifest.json: bafybeigplj7aatra2wdwomjkdclhfwlccbhz4awtqf46to4u2g2m7l6mdq
@@ -44,7 +44,7 @@ fingerprint:
   modius-ui-build/static/js/main.a5dd0b36.js: bafybeiglvg6x6die7vy3xdjgq334i5wq6vvherqgpinrj6td2cqraudpbe
   modius-ui-build/static/js/main.a5dd0b36.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
   modius-ui-build/static/js/main.a5dd0b36.js.map: bafybeicrjkrkshqpxtkyohjrukfn5bahljtw4b54wjdwf75di7kcdgrum4
-  prompts.py: bafybeigqxufmc5vpem5osqe3bzuwrckv2zle7o4rzodbkggwmpdvzj6idu
+  prompts.py: bafybeifqjb33isifdmdx4jmmj2q55ylior2oxqyieco2s774lrgf5eahxa
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -60,7 +60,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeigt7bmrfhet7fyafqojl2i5uhzvpaz5wfv6kuk5ojwhhnhmg3qihu
 - valory/reset_pause_abci:0.1.0:bafybeicskv7u3mtfhi7nnoyw3bppwjof63izs4jgqdddtxicoea26t2n7i
 - valory/termination_abci:0.1.0:bafybeianygjbwmt4xrq77pfl3yzcokbjfzxmuru6j2k7a3boqc2qfb7shi
-- valory/liquidity_trader_abci:0.1.0:bafybeibwbajtgob6ohmvykuiycx4imulffizbxzjzc4462l5dqrhqoy4iu
+- valory/liquidity_trader_abci:0.1.0:bafybeiaffjh5wigttk2liomhex2bikwruhnyjv2ymjnstcvfucwf2hflqu
 - valory/transaction_settlement_abci:0.1.0:bafybeid4alawv3oz4gdyom5uevrgzfsahbwabi37r7gomsetwqiq66g6cm
 behaviours:
   main:

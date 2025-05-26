@@ -97,7 +97,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         yield from self.wait_until_round_end()
                     self.set_done()
 
-            yield from self.fetch_all_trading_opportunities()
+            # yield from self.fetch_all_trading_opportunities()
 
             if self.current_positions:
                 for position in (
@@ -145,13 +145,47 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     self.store_current_positions()
 
-            yield from self.execute_hyper_strategy()
+            # yield from self.execute_hyper_strategy()
+
+            # actions = (
+            #     yield from self.get_order_of_transactions()
+            #     if self.selected_opportunities is not None
+            #     else []
+            # )
+            self.selected_opportunities = [{
+                        "dex_type": "velodrome",
+                        "pool_address": "0xf7f575F2c0f6C99fa9EfE1bDE9E11fA10BE4FEF9",
+                        "pool_id": "0xf7f575F2c0f6C99fa9EfE1bDE9E11fA10BE4FEF9",
+                        "has_incentives": False,
+                        "total_apr": 87.16823152296979,
+                        "organic_apr": 87.16823152296979,
+                        "depth_score_300bp": 130913.59803529015,
+                        "depth_score_400bp": 98185.19852646762,
+                        "depth_score_500bp": 78548.15882117409,
+                        "token0": "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
+                        "token0_symbol": "USDT0",
+                        "token1": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                        "token1_symbol": "USDC",
+                        "composite_score": 3083224557.4765472,
+                        "funds_percentage": 67.33122596959345,
+                        "relative_funds_percentage": 0.6733122597,
+                        "is_cl_pool": True,
+                        # "token_id": 2164758,
+                        # "liquidity": 4117368573026,
+                        # "amount0": 1897817,
+                        # "amount1": 8932751203375952221,
+                        # "timestamp": 1745836746,
+                        "is_stable": True,
+                        "chain":"optimism",
+                        "relative_funds_percentage":1
+                        }]
+            
             actions = (
                 yield from self.get_order_of_transactions()
                 if self.selected_opportunities is not None
                 else []
             )
-
+            
             if actions:
                 self.context.logger.info(f"Actions: {actions}")
             else:
@@ -1005,6 +1039,58 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         
                         # Add to the beginning of actions instead of trying to find enter_pool_action's index
                         actions.insert(0, new_bridge_route)
+        
+        if self.current_positions:
+            yield from self.sleep(20)
+            self.context.logger.info(f"self.current_positions in order transaction: {self.current_positions}")
+            invested_amount = 0
+            invested_positions = False
+            for position in self.current_positions:
+                if position.get('status') == 'open':
+                    self.context.logger.info("1")
+                    invested_positions = True
+                    retries = 3
+                    delay = 10  # initial delay in seconds
+                    V_initial = None
+                    while retries > 0:
+                        V_initial = yield from self.calculate_initial_investment_value(position)
+                        if V_initial is not None:
+                            break
+                        else:
+                            self.context.logger.warning("V_initial is None (possible rate limit). Retrying after delay...")
+                            yield from self.sleep(delay)
+                            retries -= 1
+                            delay *= 2  # exponential backoff
+        
+                    self.context.logger.info(f"V_initial amount: {V_initial}")
+                    if V_initial:
+                        invested_amount += V_initial
+                        self.context.logger.info(f"Accumulated invested_amount: {invested_amount}")
+                    yield from self.sleep(10)  # Additional sleep if needed
+        
+            self.context.logger.info(f"Final invested_amount: {invested_amount}")
+
+            THRESHOLD_INVESTED_AMOUNT = 950
+            global_cap = 1000
+            
+            if invested_amount >= THRESHOLD_INVESTED_AMOUNT or invested_amount == 0 and invested_positions:
+                self.context.logger.info("2")
+                exit_pool_found = False
+                for action in actions[:]:
+                    if action.get('action') == 'ExitPool':
+                        exit_pool_found = True
+                        for sub_item in actions[:]:
+                            if sub_item.get('action') == 'EnterPool':
+                                actions.remove(sub_item)
+                        break    
+                
+                if not exit_pool_found:
+                   actions = []  # Clear actions only if no 'ExitPool' was found and invested_amount greate than 1000 dollar
+            elif invested_amount:
+                self.context.logger.info("3")
+                for action in actions:
+                    if action.get('action') == 'EnterPool':
+                        action['invested_amount'] = (global_cap - invested_amount)
 
         try:
             # Merge duplicate bridge swap actions

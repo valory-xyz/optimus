@@ -842,6 +842,75 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         
         # Calculate investment amounts based on dex type
         max_amounts_in = []
+        max_amounts = []
+
+        if self.current_positions and action.get("invested_amount", 0) != 0:
+            invested_amount = action.get("invested_amount")
+            if not invested_amount:
+                self.context.logger.error(f"invested_amount not defined: {invested_amount}")
+                return None, None, None
+        
+            token0 = action.get("token0")
+            token1 = action.get("token1")  
+            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+            sleep_time = 10 # Configurable sleep time 
+            retries = 3  # Number of API call retries
+        
+            # Fetch token0 price with retry handling
+            token0_price = None
+            for attempt in range(1, retries + 1):
+                try:
+                    token0_price = yield from self._fetch_token_price(token0, chain)
+                    break  # Success, break out of loop
+                except Exception as e:
+                    self.context.logger.error(f"Attempt {attempt} - Error fetching price for {token0}: {e}")
+                    if attempt < retries:
+                        yield from self.sleep(sleep_time)
+            if token0_price is None:
+                self.context.logger.error(f"Failed to fetch price for token: {token0}")
+                return None, None, None
+        
+            yield from self.sleep(sleep_time)  # Sleep to respect API rate limits
+        
+            # Fetch token1 price with retry handling
+            token1_price = None
+            for attempt in range(1, retries + 1):
+                try:
+                    token1_price = yield from self._fetch_token_price(token1, chain)
+                    break
+                except Exception as e:
+                    self.context.logger.error(f"Attempt {attempt} - Error fetching price for {token1}: {e}")
+                    if attempt < retries:
+                        yield from self.sleep(sleep_time)
+            if token1_price is None:
+                self.context.logger.error(f"Failed to fetch price for token: {token1}")
+                return None, None, None
+            
+            relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+            if not relative_funds_percentage:
+                self.context.logger.error(
+                    f"relative_funds_percentage not define: {relative_funds_percentage}"
+                )
+                return None, None, None
+        
+            allocated_fund_per_strategy = invested_amount / relative_funds_percentage
+        
+            token0_amount = (allocated_fund_per_strategy / 2) / token0_price
+            token1_amount = (allocated_fund_per_strategy / 2) / token1_price
+        
+            if token0_amount <= 0 or token1_amount <= 0:
+                self.context.logger.error(f"Invalid token amounts: token0_amount={token0_amount}, token1_amount={token1_amount}")
+                return None, None, None
+            
+            self.context.logger.info(f"token0_amount,token1_amount:{token0_amount,token1_amount}")
+        
+            max_amounts = [
+                int(Decimal(str(token0_amount)) * (Decimal(10) ** Decimal(token0_decimals))),
+                int(Decimal(str(token1_amount)) * (Decimal(10) ** Decimal(token1_decimals))),
+            ]
+        
+            self.context.logger.info(f"max amounts in after calculation: {max_amounts}")
         
         # Handle Velodrome-specific parameters
         if dex_type == DexType.VELODROME.value:
@@ -852,7 +921,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             token0_percentage = action.get("token0_percentage")
             token1_percentage = action.get("token1_percentage")
             
-            if token0_balance is None or token1_balance is None:
+            if token0_balance is None or token1_balance is None or token0_percentage is None or token1_percentage is None:
                 self.context.logger.error("Balance for one or more tokens is None")
                 return None, None, None
                 
@@ -860,21 +929,44 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 int(token0_balance * float(token0_percentage) / 100),
                 int(token1_balance * float(token1_percentage) / 100),
             ]
+
+            if len(max_amounts) >= 2:
+                max_amounts_in = [
+                    min(max_amounts_in[0], max_amounts[0]),
+                    min(max_amounts_in[1], max_amounts[1]),
+                ]
             
             self.context.logger.info(f"max_amounts_in for velodrome : {max_amounts_in}")
-
         else:
-            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
-            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
-            max_investment_amounts[0] = int(
-                Decimal(str(max_investment_amounts[0]))
-                * (Decimal(10) ** Decimal(token0_decimals))
-            )
-            max_investment_amounts[1] = int(
-                Decimal(str(max_investment_amounts[1]))
-                * (Decimal(10) ** Decimal(token1_decimals))
-            )
-
+            if not max_investment_amounts:
+                token0_balance = self._get_balance(chain, assets[0], positions)
+                token1_balance = self._get_balance(chain, assets[1], positions)
+                relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+                if not relative_funds_percentage:
+                    self.context.logger.error(
+                        f"relative_funds_percentage not define: {relative_funds_percentage}"
+                    )
+                    return None, None, None
+                max_amounts_in = [
+                    int(token0_balance * relative_funds_percentage),
+                    int(token1_balance * relative_funds_percentage),
+                ]
+                max_amounts_in = [
+                    min(max_amounts_in[0], token0_balance),
+                    min(max_amounts_in[1], token1_balance),
+                ]
+            else:
+                token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+                token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+                max_investment_amounts[0] = int(
+                    Decimal(str(max_investment_amounts[0]))
+                    * (Decimal(10) ** Decimal(token0_decimals))
+                )
+                max_investment_amounts[1] = int(
+                    Decimal(str(max_investment_amounts[1]))
+                    * (Decimal(10) ** Decimal(token1_decimals))
+                )
+    
             self.context.logger.info(
                 f"Max investment amounts according to strategy: {max_investment_amounts}."
             )
@@ -942,11 +1034,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     min(max_amounts_in[i], max_investment_amounts[i])
                     for i in range(len(max_amounts_in))
                 ]
-           
+
+            if len(max_amounts) >= 2:
+                max_amounts_in = [
+                    min(max_amounts_in[0], max_amounts[0]),
+                    min(max_amounts_in[1], max_amounts[1]),
+                ] 
+
             self.context.logger.info(
                 f"Adjusted max amounts in after comparing with max investment amounts: {max_amounts_in}"
             )
-
+    
+            if any(amount == 0 or amount is None for amount in max_amounts_in):
+                self.context.logger.error(
+                    f"Insufficient balance for entering pool: {max_amounts_in}"
+                )
+                return None, None, None
+        
         if dex_type != DexType.VELODROME.value and any(amount <= 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error(f"Insufficient balance for entering pool: {max_amounts_in}")
             return None, None, None
@@ -978,12 +1082,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         result = yield from pool.enter(self, **kwargs)
         if not result or len(result) < 2:
             return None, None, None
-
+        
         # Unpack the result
         tx_hash_or_hashes, contract_address = result[:2]
         if not tx_hash_or_hashes or not contract_address:
             return None, None, None
-
+        
         multi_send_txs = []
         value = 0
         if not assets[0] == ZERO_ADDRESS:
@@ -994,7 +1098,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 spender=contract_address,
                 chain=chain,
             )
-
+         
             if not token0_approval_tx_payload:
                 self.context.logger.error("Error preparing approval tx payload")
                 return None, None, None

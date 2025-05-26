@@ -21,7 +21,6 @@
 
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
-import numpy as np
 from typing import (
     Any,
     Callable,
@@ -97,7 +96,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         yield from self.wait_until_round_end()
                     self.set_done()
 
-            # yield from self.fetch_all_trading_opportunities()
+            yield from self.fetch_all_trading_opportunities()
 
             if self.current_positions:
                 for position in (
@@ -145,52 +144,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     self.store_current_positions()
 
-            # yield from self.execute_hyper_strategy()
-
-            # actions = (
-            #     yield from self.get_order_of_transactions()
-            #     if self.selected_opportunities is not None
-            #     else []
-            # )
-            self.selected_opportunities = [{
-                        "dex_type": "velodrome",
-                        "pool_address": "0xf7f575F2c0f6C99fa9EfE1bDE9E11fA10BE4FEF9",
-                        "pool_id": "0xf7f575F2c0f6C99fa9EfE1bDE9E11fA10BE4FEF9",
-                        "has_incentives": False,
-                        "total_apr": 87.16823152296979,
-                        "organic_apr": 87.16823152296979,
-                        "depth_score_300bp": 130913.59803529015,
-                        "depth_score_400bp": 98185.19852646762,
-                        "depth_score_500bp": 78548.15882117409,
-                        "token0": "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
-                        "token0_symbol": "USDT0",
-                        "token1": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-                        "token1_symbol": "USDC",
-                        "composite_score": 3083224557.4765472,
-                        "funds_percentage": 67.33122596959345,
-                        "relative_funds_percentage": 0.6733122597,
-                        "is_cl_pool": True,
-                        # "token_id": 2164758,
-                        # "liquidity": 4117368573026,
-                        # "amount0": 1897817,
-                        # "amount1": 8932751203375952221,
-                        # "timestamp": 1745836746,
-                        "is_stable": True,
-                        "chain":"optimism",
-                        "relative_funds_percentage":1
-                        }]
-            
+            yield from self.execute_hyper_strategy()
             actions = (
                 yield from self.get_order_of_transactions()
                 if self.selected_opportunities is not None
                 else []
             )
-            
+
             if actions:
                 self.context.logger.info(f"Actions: {actions}")
             else:
                 self.context.logger.info("No actions prepared")
-    
+
             sender = self.context.agent_address
             payload = EvaluateStrategyPayload(
                 sender=sender, actions=json.dumps(actions)
@@ -201,72 +166,73 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
-       
-    def calculate_velodrome_cl_token_requirements(self, tick_bands, current_price, tick_spacing=1):
-        """
-        Determines token requirements for Velodrome CL positions based on current price.
-        
-        Args:
-            tick_bands: List of dictionaries containing position tick ranges and allocations
-            current_price: Current pool price as a float
-            tick_spacing: The tick spacing for the pool (default=1)
-            
-        Returns:
-            Dictionary with token requirement details and recommendation
-        """
+
+    def calculate_velodrome_cl_token_requirements(
+        self, tick_bands, current_price, tick_spacing=1
+    ):
+        """Determines token requirements for Velodrome CL positions based on current price."""
         # Input validation
         if not tick_bands:
             self.context.logger.error("No tick bands provided")
             return None
-        
+
         if current_price <= 0:
-            self.context.logger.error(f"Invalid price: {current_price}. Price must be positive.")
+            self.context.logger.error(
+                f"Invalid price: {current_price}. Price must be positive."
+            )
             return None
-        
+
         # Convert current price to tick
         try:
             import math
+
             current_tick = int(math.log(current_price) / math.log(1.0001))
         except (ValueError, TypeError) as e:
-            self.context.logger.error(f"Error converting price {current_price} to tick: {str(e)}")
+            self.context.logger.error(
+                f"Error converting price {current_price} to tick: {str(e)}"
+            )
             return None
-        
+
         # Validate tick spacing alignment
         for band in tick_bands:
-            if (band.get('tick_lower') % tick_spacing != 0 or 
-                band.get('tick_upper') % tick_spacing != 0):
+            if (
+                band.get("tick_lower") % tick_spacing != 0
+                or band.get("tick_upper") % tick_spacing != 0
+            ):
                 self.context.logger.warning(
                     f"Tick range [{band.get('tick_lower')}, {band.get('tick_upper')}] "
                     f"not aligned with tick spacing {tick_spacing}"
                 )
-        
+
         # Filter out zero allocation bands
-        valid_bands = [band for band in tick_bands if band.get('allocation', 0) > 0]
+        valid_bands = [band for band in tick_bands if band.get("allocation", 0) > 0]
         if not valid_bands:
             self.context.logger.error("No bands with positive allocation")
             return None
-        
+
         # Process each band separately
         position_requirements = []
         total_weighted_token0 = 0
         total_weighted_token1 = 0
         total_allocation = 0
         warnings = []
-        
+
         for band in valid_bands:
             tick_lower = band.get("tick_lower")
             tick_upper = band.get("tick_upper")
             allocation = band.get("allocation")
-            
+
             # Check if band is valid
             if tick_lower >= tick_upper:
-                warnings.append(f"Invalid band: tick_lower ({tick_lower}) >= tick_upper ({tick_upper})")
+                warnings.append(
+                    f"Invalid band: tick_lower ({tick_lower}) >= tick_upper ({tick_upper})"
+                )
                 continue
-                
+
             # Convert ticks to prices
-            lower_bound_price = 1.0001 ** tick_lower
-            upper_bound_price = 1.0001 ** tick_upper
-            
+            lower_bound_price = 1.0001**tick_lower
+            upper_bound_price = 1.0001**tick_upper
+
             # Apply the formula from the document - CORRECTED VERSION
             if current_price <= lower_bound_price:
                 # Price below range - need 100% token0 (per diagram)
@@ -282,65 +248,79 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 # Price in range - calculate using the formula from the document
                 try:
                     # This formula now matches the diagram
-                    token1_ratio = min(max((current_price - lower_bound_price) / 
-                                         (upper_bound_price - lower_bound_price), 0), 1)
+                    token1_ratio = min(
+                        max(
+                            (current_price - lower_bound_price)
+                            / (upper_bound_price - lower_bound_price),
+                            0,
+                        ),
+                        1,
+                    )
                     token0_ratio = 1.0 - token1_ratio
                     status = "IN_RANGE"
                 except Exception as e:
-                    warnings.append(f"Error calculating ratios for band [{tick_lower}, {tick_upper}]: {str(e)}")
+                    warnings.append(
+                        f"Error calculating ratios for band [{tick_lower}, {tick_upper}]: {str(e)}"
+                    )
                     # Default to 50/50 in case of calculation error
                     token0_ratio = 0.5
                     token1_ratio = 0.5
                     status = "ERROR"
-            
+
             # Track the weighted token ratios
             total_weighted_token0 += token0_ratio * allocation
             total_weighted_token1 += token1_ratio * allocation
             total_allocation += allocation
-            
-            position_requirements.append({
-                "tick_range": [tick_lower, tick_upper],
-                "current_tick": current_tick,
-                "status": status,
-                "allocation": float(allocation),
-                "token0_ratio": token0_ratio,
-                "token1_ratio": token1_ratio
-            })
-        
+
+            position_requirements.append(
+                {
+                    "tick_range": [tick_lower, tick_upper],
+                    "current_tick": current_tick,
+                    "status": status,
+                    "allocation": float(allocation),
+                    "token0_ratio": token0_ratio,
+                    "token1_ratio": token1_ratio,
+                }
+            )
+
         # If no valid positions after filtering
         if not position_requirements:
             self.context.logger.error("No valid positions after filtering")
             return None
-        
+
         # Calculate overall ratios
-        overall_token0_ratio = total_weighted_token0 / total_allocation if total_allocation > 0 else 0
-        overall_token1_ratio = total_weighted_token1 / total_allocation if total_allocation > 0 else 0
-        
+        overall_token0_ratio = (
+            total_weighted_token0 / total_allocation if total_allocation > 0 else 0
+        )
+        overall_token1_ratio = (
+            total_weighted_token1 / total_allocation if total_allocation > 0 else 0
+        )
+
         # Determine if all positions have the same requirement
         all_same_status = all(
-            pos["status"] == position_requirements[0]["status"] 
+            pos["status"] == position_requirements[0]["status"]
             for pos in position_requirements
         )
-        
+
         if all_same_status:
             if position_requirements[0]["status"] == "BELOW_RANGE":
-                recommendation = f"Provide 100% token0, 0% token1 for all positions"
+                recommendation = "Provide 100% token0, 0% token1 for all positions"
             elif position_requirements[0]["status"] == "ABOVE_RANGE":
-                recommendation = f"Provide 0% token0, 100% token1 for all positions"
+                recommendation = "Provide 0% token0, 100% token1 for all positions"
             else:
                 recommendation = f"Provide {overall_token0_ratio*100:.2f}% token0, {overall_token1_ratio*100:.2f}% token1 for all positions"
         else:
             recommendation = f"Mixed position requirements. Overall: {overall_token0_ratio*100:.2f}% token0, {overall_token1_ratio*100:.2f}% token1"
-        
+
         # Log any warnings
         for warning in warnings:
             self.context.logger.warning(warning)
-        
+
         self.context.logger.info(
             f"Position analysis complete - Current tick: {current_tick}, "
             f"Token0 ratio: {overall_token0_ratio:.4f}, Token1 ratio: {overall_token1_ratio:.4f}"
         )
-        
+
         return {
             "position_requirements": position_requirements,
             "current_price": current_price,
@@ -348,28 +328,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "overall_token0_ratio": overall_token0_ratio,
             "overall_token1_ratio": overall_token1_ratio,
             "recommendation": recommendation,
-            "warnings": warnings
+            "warnings": warnings,
         }
 
-    def get_velodrome_position_requirements(self) -> Generator[None, None, Dict[str, Any]]:
-        """
-        Generator function to determine token requirements for Velodrome CL positions.
-        
-        Yields during contract interactions and calculates token requirements.
-        
-        Returns:
-            Dictionary mapping pool addresses to their token requirements
-        """
-        self.context.logger.info("Starting Velodrome position analysis")
-        
+    def get_velodrome_position_requirements(
+        self,
+    ) -> Generator[None, None, Dict[str, Any]]:
+        """Generator function to determine token requirements for Velodrome CL positions."""
         results = {}
-        
         for opportunity in self.selected_opportunities:
-            if opportunity.get("dex_type") == "velodrome" and opportunity.get("is_cl_pool"):
+            if opportunity.get("dex_type") == "velodrome" and opportunity.get(
+                "is_cl_pool"
+            ):
                 try:
                     # Get the necessary parameters
-                    self.context.logger.info(f"Analyzing Velodrome CL pool: {opportunity.get('pool_address')}")
-                    
+                    self.context.logger.info(
+                        f"Analyzing Velodrome CL pool: {opportunity.get('pool_address')}"
+                    )
+
                     chain = opportunity["chain"]
                     self.context.logger.info(f"chain: {chain}")
                     pool_address = opportunity["pool_address"]
@@ -378,112 +354,146 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         "pool_address": pool_address,
                         "is_stable": opportunity["is_stable"],
                     }
-                
+
                     pool = self.pools.get(opportunity["dex_type"])
-                    
+
                     # Get tick spacing for the pool
-                    tick_spacing = yield from pool._get_tick_spacing_velodrome(self, pool_address, chain)
+                    tick_spacing = yield from pool._get_tick_spacing_velodrome(
+                        self, pool_address, chain
+                    )
                     if not tick_spacing:
-                        self.context.logger.error(f"Failed to get tick spacing for pool {pool_address}")
+                        self.context.logger.error(
+                            f"Failed to get tick spacing for pool {pool_address}"
+                        )
                         continue
-                    
+
                     # Calculate tick bands and get current price
-                    tick_bands = yield from pool._calculate_tick_lower_and_upper_velodrome(self, **kwargs)
+                    tick_bands = (
+                        yield from pool._calculate_tick_lower_and_upper_velodrome(
+                            self, **kwargs
+                        )
+                    )
                     self.context.logger.info(f"tick_bands : {tick_bands}")
                     if not tick_bands:
-                        self.context.logger.error(f"Failed to calculate tick bands for pool {pool_address}")
+                        self.context.logger.error(
+                            f"Failed to calculate tick bands for pool {pool_address}"
+                        )
                         continue
-                        
+
                     current_price = yield from pool._get_current_pool_price(
                         self, pool_address, chain
                     )
                     if current_price is None:
-                        self.context.logger.error(f"Failed to get current price for pool {pool_address}")
+                        self.context.logger.error(
+                            f"Failed to get current price for pool {pool_address}"
+                        )
                         continue
-                    
+
                     # Calculate token requirements
                     requirements = self.calculate_velodrome_cl_token_requirements(
                         tick_bands, current_price, tick_spacing
                     )
                     if not requirements:
-                        self.context.logger.error("Failed to calculate token requirements")
+                        self.context.logger.error(
+                            "Failed to calculate token requirements"
+                        )
                         continue
-                    
+
                     token0_symbol = opportunity.get("token0_symbol", "token0")
                     token1_symbol = opportunity.get("token1_symbol", "token1")
-                    
+
                     self.context.logger.info(
                         f"Velodrome position requirements for {token0_symbol}/{token1_symbol}: "
                         f"{requirements['recommendation']}"
                     )
-                    
+
                     # Extract token ratios as percentages
                     token0_ratio = float(requirements["overall_token0_ratio"])
                     token1_ratio = float(requirements["overall_token1_ratio"])
-                    
+
                     # Add percentage values to the opportunity
                     opportunity["token0_percentage"] = token0_ratio * 100
                     opportunity["token1_percentage"] = token1_ratio * 100
-                    
+
                     self.context.logger.info(
                         f"Token allocation percentages: {opportunity['token0_percentage']:.2f}% {token0_symbol}, "
                         f"{opportunity['token1_percentage']:.2f}% {token1_symbol}"
                     )
-                
+
                     # Store these requirements
                     opportunity["token_requirements"] = requirements
                     # IMPORTANT: Add tick_spacing and tick_bands to the opportunity
                     opportunity["tick_spacing"] = tick_spacing
                     opportunity["tick_ranges"] = tick_bands
-                    
+
                     # Get available balances
                     token0 = opportunity["token0"]
                     token1 = opportunity["token1"]
-                    
-                    token0_balance = yield from self._get_token_balance(
-                        chain, 
-                        self.params.safe_contract_addresses.get(chain), 
-                        token0
-                    ) or 0
-                    
-                    token1_balance = yield from self._get_token_balance(
-                        chain, 
-                        self.params.safe_contract_addresses.get(chain), 
-                        token1
-                    ) or 0
-                    
+
+                    token0_balance = (
+                        yield from self._get_token_balance(
+                            chain,
+                            self.params.safe_contract_addresses.get(chain),
+                            token0,
+                        )
+                        or 0
+                    )
+
+                    token1_balance = (
+                        yield from self._get_token_balance(
+                            chain,
+                            self.params.safe_contract_addresses.get(chain),
+                            token1,
+                        )
+                        or 0
+                    )
+
                     # Apply relative_funds_percentage if specified
-                    relative_funds_percentage = opportunity.get("relative_funds_percentage", 1.0)
+                    relative_funds_percentage = opportunity.get(
+                        "relative_funds_percentage", 1.0
+                    )
                     token0_balance = int(token0_balance * relative_funds_percentage)
                     token1_balance = int(token1_balance * relative_funds_percentage)
-                    
+
                     # Update max_amounts_in based on the requirements and actual balances
                     # Using the weighted ratios from all the bands
                     if requirements["overall_token0_ratio"] > 0.99:
                         # Only need token0
                         opportunity["max_amounts_in"] = [token0_balance, 0]
-                        self.context.logger.info(f"Using only token0: {token0_balance} {token0_symbol}")
+                        self.context.logger.info(
+                            f"Using only token0: {token0_balance} {token0_symbol}"
+                        )
                     elif requirements["overall_token1_ratio"] > 0.99:
                         # Only need token1
                         opportunity["max_amounts_in"] = [0, token1_balance]
-                        self.context.logger.info(f"Using only token1: {token1_balance} {token1_symbol}")
+                        self.context.logger.info(
+                            f"Using only token1: {token1_balance} {token1_symbol}"
+                        )
                     else:
                         # Need both tokens in specific ratio
                         # Find which token is limiting based on the required ratio
                         max_amount0 = token0_balance
                         max_amount1 = token1_balance
-                        
+
                         # Check if either ratio is zero to avoid division by zero
-                        if requirements["overall_token0_ratio"] <= 0 or requirements["overall_token1_ratio"] <= 0:
-                            self.context.logger.warning("One of the token ratios is zero, using default 50/50 split")
+                        if (
+                            requirements["overall_token0_ratio"] <= 0
+                            or requirements["overall_token1_ratio"] <= 0
+                        ):
+                            self.context.logger.warning(
+                                "One of the token ratios is zero, using default 50/50 split"
+                            )
                             # Fall back to 50/50 if we hit this edge case
                             max_amount0 = int(token0_balance * 0.5)
                             max_amount1 = int(token1_balance * 0.5)
                         else:
                             # Calculate what amount of token1 we would need given our token0
-                            required_token1 = int(max_amount0 * requirements["overall_token1_ratio"] / 
-                                                requirements["overall_token0_ratio"])
-                            
+                            required_token1 = int(
+                                max_amount0
+                                * requirements["overall_token1_ratio"]
+                                / requirements["overall_token0_ratio"]
+                            )
+
                             # If required token1 is more than we have, scale both tokens down
                             if required_token1 > max_amount1 and required_token1 > 0:
                                 scale_factor = max_amount1 / required_token1
@@ -492,9 +502,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             elif required_token1 < max_amount1:
                                 # If we have excess token1, calculate how much token0 we need
                                 # to maintain the ratio
-                                required_token0 = int(max_amount1 * requirements["overall_token0_ratio"] / 
-                                                requirements["overall_token1_ratio"])
-                                
+                                required_token0 = int(
+                                    max_amount1
+                                    * requirements["overall_token0_ratio"]
+                                    / requirements["overall_token1_ratio"]
+                                )
+
                                 if required_token0 < max_amount0:
                                     # We have excess of both tokens, so use the calculated amounts
                                     max_amount0 = required_token0
@@ -503,21 +516,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                     # We have excess token1 but not enough token0
                                     scale_factor = max_amount0 / required_token0
                                     max_amount1 = int(max_amount1 * scale_factor)
-                        
+
                         opportunity["max_amounts_in"] = [max_amount0, max_amount1]
                         self.context.logger.info(
                             f"Using both tokens: {max_amount0} {token0_symbol} ({requirements['overall_token0_ratio']*100:.2f}%), "
                             f"{max_amount1} {token1_symbol} ({requirements['overall_token1_ratio']*100:.2f}%)"
                         )
-                    
+
                     # Store results for this pool
                     results[pool_address] = requirements
-                    
+
                 except Exception as e:
-                    self.context.logger.error(f"Error analyzing Velodrome position: {str(e)}")
+                    self.context.logger.error(
+                        f"Error analyzing Velodrome position: {str(e)}"
+                    )
                     import traceback
+
                     self.context.logger.error(traceback.format_exc())
-                    
+
         self.context.logger.info("Velodrome position analysis complete")
         return results
 
@@ -914,7 +930,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             # In case of error, return the original actions to avoid breaking the workflow
             return actions
-    
+
     def get_order_of_transactions(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
@@ -926,18 +942,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         #     yield from self._process_rewards(actions)
         if not self.selected_opportunities:
             return actions
-        
+
         for opportunity in self.selected_opportunities:
             if opportunity.get("dex_type") == "velodrome":
                 result2 = yield from self.get_velodrome_position_requirements()
                 self.context.logger.info(f"result2: {result2}")
-        
+
         # Prepare tokens for exit or investment
         available_tokens = yield from self._prepare_tokens_for_investment()
         if available_tokens is None:
             return actions
         tokens.extend(available_tokens)
-        
+
         if self.position_to_exit:
             dex_type = self.position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
@@ -962,135 +978,172 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error("Error building enter pool action")
                 return None
             actions.append(enter_pool_action)
-        
-        # Check for Velodrome positions with 100% allocation to one token
-        if enter_pool_action.get("dex_type") == "velodrome" and "token_requirements" in enter_pool_action:
-                token_requirements = enter_pool_action.get("token_requirements", {})
-                
-                # Extract token ratios, handling potential NumPy types
-                try:
-                    overall_token0_ratio = float(token_requirements.get("overall_token0_ratio", 0.5))
-                    overall_token1_ratio = float(token_requirements.get("overall_token1_ratio", 0.5))
-                except (TypeError, ValueError):
-                    # Fall back to checking recommendation text
-                    recommendation = token_requirements.get("recommendation", "")
-                    if "100% token0" in recommendation:
-                        overall_token0_ratio = 1.0
-                        overall_token1_ratio = 0.0
-                    elif "100% token1" in recommendation:
-                        overall_token0_ratio = 0.0
-                        overall_token1_ratio = 1.0
-                    else:
-                        overall_token0_ratio = 0.5
-                        overall_token1_ratio = 0.5
-                
-                self.context.logger.info(f"Velodrome position requirements: token0_ratio={overall_token0_ratio}, token1_ratio={overall_token1_ratio}")
-                
-                # Check if all funds should go to one token (using 0.99 threshold to handle floating point)
-                if (overall_token0_ratio >= 1.00 and overall_token1_ratio <= 0.00) or \
-                   (overall_token0_ratio <= 0.00 and overall_token1_ratio >= 1.00):
-                    
-                    # Determine which token gets 100%
-                    is_token0_full = overall_token0_ratio >= 0.99
-                    target_token = enter_pool_action.get("token0") if is_token0_full else enter_pool_action.get("token1")
-                    target_symbol = enter_pool_action.get("token0_symbol") if is_token0_full else enter_pool_action.get("token1_symbol")
-                    
-                    self.context.logger.info(f"Extreme allocation detected: 100% to {target_symbol}")
-                    
-                    # Track if we found any bridge routes to modify
-                    bridge_routes_found = False
-                    
-                    # Check and modify existing FindBridgeRoute actions
-                    for action in actions:
-                        if action.get("action") == "FindBridgeRoute" and \
-                           action.get("to_chain") == enter_pool_action.get("chain"):
-                            
-                            bridge_routes_found = True
-                            
-                            # Redirect all bridge routes to the target token
-                            if action.get("to_token") != target_token:
-                                self.context.logger.info(f"Redirecting bridge route to {target_symbol}")
-                                action["to_token"] = target_token
-                                action["to_token_symbol"] = target_symbol
-                    
-                    # If no FindBridgeRoute actions were found, add one
-                    if not bridge_routes_found and available_tokens:
-                        self.context.logger.info("No bridge routes found, adding a new one")
-                        
-                        source_token = None
-                        for token in available_tokens:
-                            if token.get("token") != target_token:
-                                source_token = token
-                                break
 
-                        # Use the first available token as source
-                        new_bridge_route = {
-                            "action": "FindBridgeRoute",
-                            "from_chain": source_token.get("chain"),
-                            "to_chain": enter_pool_action.get("chain"),
-                            "from_token": source_token.get("token"),
-                            "from_token_symbol": source_token.get("token_symbol"),
-                            "to_token": target_token,
-                            "to_token_symbol": target_symbol,
-                            "funds_percentage": 1.0  # Use 100% allocation
-                        }
-                        
-                        self.context.logger.info(f"Added new bridge route: {source_token.get('token_symbol')} -> {target_symbol}")
-                        
-                        # Add to the beginning of actions instead of trying to find enter_pool_action's index
-                        actions.insert(0, new_bridge_route)
-        
+        # Check for Velodrome positions with 100% allocation to one token
+        if (
+            enter_pool_action.get("dex_type") == "velodrome"
+            and "token_requirements" in enter_pool_action
+        ):
+            token_requirements = enter_pool_action.get("token_requirements", {})
+
+            # Extract token ratios, handling potential NumPy types
+            try:
+                overall_token0_ratio = float(
+                    token_requirements.get("overall_token0_ratio", 0.5)
+                )
+                overall_token1_ratio = float(
+                    token_requirements.get("overall_token1_ratio", 0.5)
+                )
+            except (TypeError, ValueError):
+                # Fall back to checking recommendation text
+                recommendation = token_requirements.get("recommendation", "")
+                if "100% token0" in recommendation:
+                    overall_token0_ratio = 1.0
+                    overall_token1_ratio = 0.0
+                elif "100% token1" in recommendation:
+                    overall_token0_ratio = 0.0
+                    overall_token1_ratio = 1.0
+                else:
+                    overall_token0_ratio = 0.5
+                    overall_token1_ratio = 0.5
+
+            self.context.logger.info(
+                f"Velodrome position requirements: token0_ratio={overall_token0_ratio}, token1_ratio={overall_token1_ratio}"
+            )
+
+            # Check if all funds should go to one token (using 0.99 threshold to handle floating point)
+            if (overall_token0_ratio >= 1.00 and overall_token1_ratio <= 0.00) or (
+                overall_token0_ratio <= 0.00 and overall_token1_ratio >= 1.00
+            ):
+                # Determine which token gets 100%
+                is_token0_full = overall_token0_ratio >= 0.99
+                target_token = (
+                    enter_pool_action.get("token0")
+                    if is_token0_full
+                    else enter_pool_action.get("token1")
+                )
+                target_symbol = (
+                    enter_pool_action.get("token0_symbol")
+                    if is_token0_full
+                    else enter_pool_action.get("token1_symbol")
+                )
+
+                self.context.logger.info(
+                    f"Extreme allocation detected: 100% to {target_symbol}"
+                )
+
+                # Track if we found any bridge routes to modify
+                bridge_routes_found = False
+
+                # Check and modify existing FindBridgeRoute actions
+                for action in actions:
+                    if action.get("action") == "FindBridgeRoute" and action.get(
+                        "to_chain"
+                    ) == enter_pool_action.get("chain"):
+                        bridge_routes_found = True
+
+                        # Redirect all bridge routes to the target token
+                        if action.get("to_token") != target_token:
+                            self.context.logger.info(
+                                f"Redirecting bridge route to {target_symbol}"
+                            )
+                            action["to_token"] = target_token
+                            action["to_token_symbol"] = target_symbol
+
+                # If no FindBridgeRoute actions were found, add one
+                if not bridge_routes_found and available_tokens:
+                    self.context.logger.info("No bridge routes found, adding a new one")
+
+                    source_token = None
+                    for token in available_tokens:
+                        if token.get("token") != target_token:
+                            source_token = token
+                            break
+
+                    # Use the first available token as source
+                    new_bridge_route = {
+                        "action": "FindBridgeRoute",
+                        "from_chain": source_token.get("chain"),
+                        "to_chain": enter_pool_action.get("chain"),
+                        "from_token": source_token.get("token"),
+                        "from_token_symbol": source_token.get("token_symbol"),
+                        "to_token": target_token,
+                        "to_token_symbol": target_symbol,
+                        "funds_percentage": 1.0,  # Use 100% allocation
+                    }
+
+                    self.context.logger.info(
+                        f"Added new bridge route: {source_token.get('token_symbol')} -> {target_symbol}"
+                    )
+
+                    # Add to the beginning of actions instead of trying to find enter_pool_action's index
+                    actions.insert(0, new_bridge_route)
+
         if self.current_positions:
             yield from self.sleep(20)
-            self.context.logger.info(f"self.current_positions in order transaction: {self.current_positions}")
+            self.context.logger.info(
+                f"self.current_positions in order transaction: {self.current_positions}"
+            )
             invested_amount = 0
             invested_positions = False
             for position in self.current_positions:
-                if position.get('status') == 'open':
+                if position.get("status") == "open":
                     self.context.logger.info("1")
                     invested_positions = True
                     retries = 3
                     delay = 10  # initial delay in seconds
                     V_initial = None
                     while retries > 0:
-                        V_initial = yield from self.calculate_initial_investment_value(position)
+                        V_initial = yield from self.calculate_initial_investment_value(
+                            position
+                        )
                         if V_initial is not None:
                             break
                         else:
-                            self.context.logger.warning("V_initial is None (possible rate limit). Retrying after delay...")
+                            self.context.logger.warning(
+                                "V_initial is None (possible rate limit). Retrying after delay..."
+                            )
                             yield from self.sleep(delay)
                             retries -= 1
                             delay *= 2  # exponential backoff
-        
+
                     self.context.logger.info(f"V_initial amount: {V_initial}")
                     if V_initial:
                         invested_amount += V_initial
-                        self.context.logger.info(f"Accumulated invested_amount: {invested_amount}")
+                        self.context.logger.info(
+                            f"Accumulated invested_amount: {invested_amount}"
+                        )
                     yield from self.sleep(10)  # Additional sleep if needed
-        
+
             self.context.logger.info(f"Final invested_amount: {invested_amount}")
 
             THRESHOLD_INVESTED_AMOUNT = 950
             global_cap = 1000
-            
-            if invested_amount >= THRESHOLD_INVESTED_AMOUNT or invested_amount == 0 and invested_positions:
+
+            if (
+                invested_amount >= THRESHOLD_INVESTED_AMOUNT
+                or invested_amount == 0
+                and invested_positions
+            ):
                 self.context.logger.info("2")
                 exit_pool_found = False
                 for action in actions[:]:
-                    if action.get('action') == 'ExitPool':
+                    if action.get("action") == "ExitPool":
                         exit_pool_found = True
                         for sub_item in actions[:]:
-                            if sub_item.get('action') == 'EnterPool':
+                            if sub_item.get("action") == "EnterPool":
                                 actions.remove(sub_item)
-                        break    
-                
+                        break
+
                 if not exit_pool_found:
-                   actions = []  # Clear actions only if no 'ExitPool' was found and invested_amount greate than 1000 dollar
+                    actions = (
+                        []
+                    )  # Clear actions only if no 'ExitPool' was found and invested_amount greate than 1000 dollar
             elif invested_amount:
                 self.context.logger.info("3")
                 for action in actions:
-                    if action.get('action') == 'EnterPool':
-                        action['invested_amount'] = (global_cap - invested_amount)
+                    if action.get("action") == "EnterPool":
+                        action["invested_amount"] = global_cap - invested_amount
 
         try:
             # Merge duplicate bridge swap actions
@@ -1101,7 +1154,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error while merging bridge swap actions: {e}")
             # Return original actions if merging fails to avoid breaking the workflow
             return actions
-    
+
     def _process_rewards(self, actions: List[Dict[str, Any]]) -> Generator:
         """Process reward claims and add actions."""
         allowed_chains = self.params.target_investment_chains

@@ -41,7 +41,6 @@ WHITELISTED_ASSETS = {
         "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "msDAI",
         "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
-        "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": "iUSDC",
     },
     "optimism": {
         # Optimism tokens - stablecoins

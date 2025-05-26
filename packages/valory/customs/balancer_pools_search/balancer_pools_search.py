@@ -79,12 +79,16 @@ WHITELISTED_ASSETS = {
 @lru_cache(None)
 def fetch_coin_list():
     """Fetches the list of coins from CoinGecko API only once."""
+    logger.info("Fetching coin list from CoinGecko API")
     url = "https://api.coingecko.com/api/v3/coins/list"
     try:
         response = requests.get(url)
         response.raise_for_status()
-        return response.json()
+        coin_list = response.json()
+        logger.info(f"Successfully fetched {len(coin_list)} coins from CoinGecko")
+        return coin_list
     except requests.RequestException as e:
+        logger.error(f"Failed to fetch coin list: {e}")
         errors.append((f"Failed to fetch coin list: {e}"))
         return None
 
@@ -97,16 +101,20 @@ def remove_irrelevant_fields(
     return {key: value for key, value in kwargs.items() if key in required_fields}
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
+    logger.info(f"Executing GraphQL query to endpoint: {graphql_endpoint}")
     headers = {"Content-Type": "application/json"}
     payload = {"query": query, "variables": variables or {}}
     response = requests.post(graphql_endpoint, json=payload, headers=headers)
     if response.status_code != 200:
+        logger.error(f"GraphQL query failed with status code {response.status_code}")
         return {
             "error": f"GraphQL query failed with status code {response.status_code}"
         }
     result = response.json()
     if "errors" in result:
+        logger.error(f"GraphQL Errors: {result['errors']}")
         return {"error": f"GraphQL Errors: {result['errors']}"}
+    logger.info("GraphQL query executed successfully")
     return result["data"]
 
 def get_total_apr(pool) -> float:
@@ -150,6 +158,7 @@ def fetch_token_name_from_contract(chain_name, token_address):
 def get_balancer_pools(
     chains, graphql_endpoint
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    logger.info(f"Fetching Balancer pools for chains: {chains}")
     chain_list_str = ", ".join(chain.upper() for chain in chains)
     graphql_query = f"""
     {{
@@ -174,10 +183,14 @@ def get_balancer_pools(
     """
     data = run_query(graphql_query, graphql_endpoint)
     if "error" in data:
+        logger.error(f"Error fetching Balancer pools: {data['error']}")
         return data
-    return data.get("poolGetPools", [])
+    pools = data.get("poolGetPools", [])
+    logger.info(f"Successfully fetched {len(pools)} Balancer pools")
+    return pools
 
 def get_filtered_pools(pools, current_positions):
+    logger.info(f"Starting pool filtering with {len(pools)} initial pools")
     # Filter by type and token count - removing the 2-token restriction
     qualifying_pools = []
     for pool in pools:
@@ -204,7 +217,10 @@ def get_filtered_pools(pools, current_positions):
             pool["tvl"] = pool.get("dynamicData", {}).get("totalLiquidity", 0)
             qualifying_pools.append(pool)
 
+    logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
+
     if len(qualifying_pools) <= 5:
+        logger.info("Returning all qualifying pools (5 or fewer found)")
         return qualifying_pools
 
     tvl_list = [float(p.get("tvl", 0)) for p in qualifying_pools]
@@ -214,6 +230,8 @@ def get_filtered_pools(pools, current_positions):
     apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
     max_tvl = max(tvl_list) if tvl_list else 1
     max_apr = max(apr_list) if apr_list else 1
+
+    logger.info(f"Filtering thresholds - TVL: {tvl_threshold:.2f}, APR: {apr_threshold:.4f}")
 
     # Score and filter
     scored_pools = []
@@ -225,7 +243,10 @@ def get_filtered_pools(pools, current_positions):
             p["score"] = score
             scored_pools.append(p)
 
+    logger.info(f"Found {len(scored_pools)} pools meeting TVL and APR thresholds")
+
     if not scored_pools:
+        logger.warning("No pools met the scoring criteria")
         return []
 
     score_threshold = np.percentile(
@@ -234,6 +255,7 @@ def get_filtered_pools(pools, current_positions):
     filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
     filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
 
+    logger.info(f"Final filtered pools: {len(filtered_scored_pools[:10])} (top 10)")
     return filtered_scored_pools[:10]
 
 def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
@@ -411,19 +433,25 @@ def fetch_liquidity_metrics(
     client: Optional[Client] = None,
     price_impact: float = 0.01,
 ) -> Optional[Dict[str, Any]]:
+    logger.info(f"Fetching liquidity metrics for pool {pool_id} on chain {chain}")
     if client is None:
         client = create_graphql_client()
     try:
         query = create_pool_snapshots_query(pool_id, chain)
+        logger.info(f"Executing pool snapshots query for pool {pool_id}")
         response = client.execute(query)
         pool_snapshots = response["poolGetSnapshots"]
         if not pool_snapshots:
+            logger.warning(f"No pool snapshots found for pool {pool_id}")
             return None
 
+        logger.info(f"Found {len(pool_snapshots)} snapshots for pool {pool_id}")
         avg_tvl = statistics.mean(float(s["totalLiquidity"]) for s in pool_snapshots)
         avg_volume = statistics.mean(
             float(s.get("volume24h", 0)) for s in pool_snapshots
         )
+        
+        logger.info(f"Pool {pool_id} - Average TVL: {avg_tvl:.2f}, Average Volume: {avg_volume:.2f}")
 
         depth_score = (
             (np.log1p(avg_tvl) * np.log1p(avg_volume)) / (price_impact * 100)
@@ -435,6 +463,8 @@ def fetch_liquidity_metrics(
         )
         max_position_size = 50 * (avg_tvl * liquidity_risk_multiplier) / 100
 
+        logger.info(f"Pool {pool_id} - Depth Score: {depth_score:.2f}, Max Position Size: {max_position_size:.2f}")
+
         return {
             "Average TVL": avg_tvl,
             "Average Daily Volume": avg_volume,
@@ -444,7 +474,8 @@ def fetch_liquidity_metrics(
             "Meets Depth Score Threshold": depth_score > 50,
         }
 
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching liquidity metrics for pool {pool_id}: {str(e)}")
         return None
 
 def analyze_pool_liquidity(
@@ -469,14 +500,19 @@ def fetch_liquidity_metrics(
     client: Optional[Client] = None,
     price_impact: float = 0.01,
 ) -> Optional[Dict[str, Any]]:
+    logger.info(f"Fetching enhanced liquidity metrics for pool {pool_id} on chain {chain}")
     if client is None:
         client = create_graphql_client()
     try:
         query = create_pool_snapshots_query(pool_id, chain)
+        logger.info(f"Executing enhanced pool snapshots query for pool {pool_id}")
         response = client.execute(query)
         pool_snapshots = response.get("poolGetSnapshots", [])
         if not pool_snapshots:
+            logger.warning(f"No pool snapshots found for enhanced metrics calculation for pool {pool_id}")
             return None
+
+        logger.info(f"Found {len(pool_snapshots)} snapshots for enhanced processing of pool {pool_id}")
 
         # Filter out potentially corrupted data
         filtered_snapshots = []
@@ -487,24 +523,32 @@ def fetch_liquidity_metrics(
                 
                 # Skip extreme values that could cause numerical issues
                 if liquidity_value > 1e16 or volume_value > 1e16:
+                    logger.warning(f"Skipping extreme value snapshot for pool {pool_id}: TVL={liquidity_value}, Volume={volume_value}")
                     continue
                     
                 filtered_snapshots.append(snapshot)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Skipping invalid snapshot for pool {pool_id}: {str(e)}")
                 continue
                 
         if not filtered_snapshots:
+            logger.error(f"No valid snapshots remaining after filtering for pool {pool_id}")
             return None
+        
+        logger.info(f"Pool {pool_id} - {len(filtered_snapshots)} valid snapshots after filtering")
                 
         # Calculate metrics on filtered data
         try:
             avg_tvl = statistics.mean(float(s.get("totalLiquidity", 0)) for s in filtered_snapshots)
             avg_volume = statistics.mean(float(s.get("volume24h", 0)) for s in filtered_snapshots)
-        except statistics.StatisticsError:
+            logger.info(f"Pool {pool_id} - Enhanced metrics: Average TVL: {avg_tvl:.2f}, Average Volume: {avg_volume:.2f}")
+        except statistics.StatisticsError as e:
+            logger.error(f"Statistics error calculating averages for pool {pool_id}: {str(e)}")
             return None
 
         # Handle potential division by zero or very small values
         if price_impact <= 0.001:  # Avoid division by extremely small values
+            logger.warning(f"Adjusting price impact from {price_impact} to 0.001 for pool {pool_id}")
             price_impact = 0.001
             
         # Calculate depth score with safeguards
@@ -514,6 +558,8 @@ def fetch_liquidity_metrics(
                 if avg_tvl > 0 and avg_volume > 0
                 else 0
             )
+            
+            logger.info(f"Pool {pool_id} - Raw depth score calculation: {depth_score}")
             
             # Cap depth score at reasonable values
             depth_score = min(depth_score, 1e6)
@@ -532,7 +578,10 @@ def fetch_liquidity_metrics(
             # Cap max position size to reasonable values
             max_position_size = min(max_position_size, 1e7)
             
+            logger.info(f"Pool {pool_id} - Final enhanced metrics: Depth Score: {depth_score:.2f}, Risk Multiplier: {liquidity_risk_multiplier:.4f}, Max Position: {max_position_size:.2f}")
+            
         except (ZeroDivisionError, OverflowError, ValueError) as e:
+            logger.error(f"Error calculating enhanced metrics for pool {pool_id}: {str(e)}")
             errors.append(f"Error calculating metrics for pool {pool_id}: {str(e)}")
             return None
 
@@ -546,10 +595,12 @@ def fetch_liquidity_metrics(
         }
 
     except Exception as e:
+        logger.error(f"Error fetching enhanced liquidity metrics for pool {pool_id}: {str(e)}")
         errors.append(f"Error fetching liquidity metrics for pool {pool_id}: {str(e)}")
         return None
 
 def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
+    logger.info(f"Calculating Sharpe ratio for pool {pool_id} on chain {chain} with timerange {timerange}")
     query = """
     {
         poolGetSnapshots(
@@ -569,10 +620,14 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
         timerange,
     )
     try:
+        logger.info(f"Executing Sharpe ratio query for pool {pool_id}")
         response = requests.post("https://api-v3.balancer.fi/", json={"query": query})
         data = response.json().get("data", {}).get("poolGetSnapshots", [])
         if not data:
+            logger.warning(f"No snapshot data found for Sharpe ratio calculation for pool {pool_id}")
             return None
+
+        logger.info(f"Found {len(data)} snapshots for Sharpe ratio calculation for pool {pool_id}")
 
         # Create DataFrame
         df = pd.DataFrame(data)
@@ -587,10 +642,15 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
             df["fees24h"] = pd.to_numeric(df["fees24h"], errors='coerce')
             df["totalLiquidity"] = pd.to_numeric(df["totalLiquidity"], errors='coerce')
             
+            logger.info(f"Pool {pool_id} - Data conversion completed, processing {len(df)} rows")
+            
             # Filter out extreme values that could cause numerical issues
             for col in ["sharePrice", "fees24h", "totalLiquidity"]:
                 if col in df.columns:
                     # Replace extreme values with NaN
+                    extreme_count = ((df[col] > 1e16) | (df[col] < -1e16)).sum()
+                    if extreme_count > 0:
+                        logger.warning(f"Pool {pool_id} - Filtering {extreme_count} extreme values in {col}")
                     df[col] = df[col].mask(df[col] > 1e16, np.nan)
                     df[col] = df[col].mask(df[col] < -1e16, np.nan)
             
@@ -605,7 +665,12 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
             # Combine returns
             total_returns = (price_returns + fee_returns).dropna()
             
+            logger.info(f"Pool {pool_id} - Combined returns calculated, {len(total_returns)} valid returns")
+            
             # Replace infinity and extreme values
+            inf_count = (total_returns == np.inf).sum() + (total_returns == -np.inf).sum()
+            if inf_count > 0:
+                logger.warning(f"Pool {pool_id} - Replacing {inf_count} infinite values")
             total_returns = total_returns.replace([np.inf, -np.inf], np.nan)
             total_returns = total_returns.mask(total_returns > 1.0, np.nan)  # Cap at 100% daily return
             total_returns = total_returns.mask(total_returns < -1.0, np.nan)  # Cap at -100% daily return
@@ -613,27 +678,37 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
             # Remove NaN values
             total_returns = total_returns.dropna()
             
+            logger.info(f"Pool {pool_id} - Final returns data: {len(total_returns)} valid returns after filtering")
+            
             # Check if we have enough data
             if len(total_returns) < 5:  # Need at least a few data points
+                logger.warning(f"Pool {pool_id} - Insufficient data for Sharpe ratio: {len(total_returns)} returns")
                 return None
                 
             # Calculate Sharpe ratio with error handling
+            logger.info(f"Pool {pool_id} - Computing Sharpe ratio with {len(total_returns)} returns")
             sharpe_ratio = pf.timeseries.sharpe_ratio(total_returns)
+            
+            logger.info(f"Pool {pool_id} - Raw Sharpe ratio: {sharpe_ratio}")
             
             # Cap the Sharpe ratio to reasonable bounds
             if np.isnan(sharpe_ratio) or np.isinf(sharpe_ratio):
+                logger.warning(f"Pool {pool_id} - Invalid Sharpe ratio (NaN or Inf): {sharpe_ratio}")
                 return None
                 
             # Cap at reasonable values
             sharpe_ratio = max(min(sharpe_ratio, 10), -10)
             
+            logger.info(f"Pool {pool_id} - Final Sharpe ratio: {sharpe_ratio}")
             return sharpe_ratio
             
         except Exception as e:
+            logger.error(f"Error processing Sharpe ratio data for pool {pool_id}: {str(e)}")
             errors.append(f"Error processing Sharpe ratio data: {str(e)}")
             return None
             
     except Exception as e:
+        logger.error(f"Error calculating Sharpe ratio for pool {pool_id}: {str(e)}")
         errors.append(f"Error calculating Sharpe ratio: {str(e)}")
         return None
 
@@ -1015,30 +1090,42 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str) -> Lis
 
 def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, coin_list):
     """Get and format pool opportunities with investment calculations."""
+    logger.info(f"Starting opportunity search for chains: {chains}")
+    logger.info(f"Current positions to exclude: {len(current_positions)}")
+    
     # Get initial pools
     pools = get_balancer_pools(chains, graphql_endpoint)
     if isinstance(pools, dict) and "error" in pools:
+        logger.error(f"Failed to get pools: {pools['error']}")
         return pools
 
     # Filter pools
     filtered_pools = get_filtered_pools(pools, current_positions)
     if not filtered_pools:
+        logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}
 
+    logger.info(f"Processing metrics for {len(filtered_pools)} filtered pools")
+    
     # Process basic metrics for each pool
-    for pool in filtered_pools:
+    for i, pool in enumerate(filtered_pools):
+        logger.info(f"Processing pool {i+1}/{len(filtered_pools)}: {pool['id']}")
         pool["chain"] = pool["chain"].lower()
         pool["trading_type"] = LP
         
         # Calculate metrics
+        logger.info(f"Calculating Sharpe ratio for pool {pool['id']}")
         pool["sharpe_ratio"] = get_balancer_pool_sharpe_ratio(
             pool["id"], pool["chain"].upper()
         )
+        
+        logger.info(f"Analyzing liquidity for pool {pool['id']}")
         pool["depth_score"], pool["max_position_size"] = analyze_pool_liquidity(
             pool["id"], pool["chain"].upper()
         )
         
         # Calculate IL risk score for all tokens in the pool
+        logger.info(f"Calculating IL risk score for pool {pool['id']}")
         token_ids = []
         for token in pool["poolTokens"]:
             token_id = get_token_id_from_symbol(
@@ -1055,15 +1142,20 @@ def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api
             pool["il_risk_score"] = calculate_il_risk_score_multi(
                 valid_token_ids, coingecko_api_key
             )
+            logger.info(f"IL risk score calculated: {pool['il_risk_score']}")
         else:
             pool["il_risk_score"] = None
+            logger.warning(f"Insufficient valid token IDs for IL calculation: {len(valid_token_ids)}")
 
     # Format pools with investment calculations
+    logger.info("Formatting pool data with investment calculations")
     formatted_pools = format_pool_data(filtered_pools, coingecko_api_key)
     
     # Filter pools to only include those with valid investments in both token0 and token1
+    logger.info("Filtering pools for valid investments")
     valid_investment_pools = filter_valid_investment_pools(formatted_pools)
     
+    logger.info(f"Final result: {len(valid_investment_pools)} pools with valid investments")
     return valid_investment_pools
 
 def calculate_metrics(
@@ -1138,13 +1230,19 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
     return False
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
+    logger.info("Starting Balancer pools search execution")
+    logger.info(f"Input parameters: {list(kwargs.keys())}")
+    
     missing = check_missing_fields(kwargs)
     if missing:
+        logger.error(f"Missing required fields: {missing}")
         errors.append(f"Required kwargs {missing} were not provided.")
         return {"error": errors}
 
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
+    logger.info(f"Mode: {'metrics calculation' if get_metrics else 'opportunity search'}")
+    
     if get_metrics:
         required_fields.append("position")
 
@@ -1152,20 +1250,36 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
 
     coin_list = fetch_coin_list()
     if coin_list is None:
+        logger.error("Failed to fetch coin list, aborting execution")
         errors.append("Failed to fetch coin list.")
         return {"error": errors}
 
     kwargs.update({"coin_list": coin_list})
 
     if get_metrics:
+        logger.info("Calculating metrics for position")
         metrics = calculate_metrics(**kwargs)
         if metrics is None:
+            logger.error("Failed to calculate metrics")
             errors.append("Failed to calculate metrics.")
+        else:
+            logger.info("Metrics calculation completed successfully")
         return {"error": errors} if errors else metrics
     else:
+        logger.info("Searching for investment opportunities")
         result = get_opportunities(**kwargs)
         if isinstance(result, dict) and "error" in result:
+            logger.error(f"Error in opportunity search: {result['error']}")
             errors.append(result["error"])
-        if not result:
+        elif not result:
+            logger.warning("No suitable pools with valid investments found")
             errors.append("No suitable pools with valid investments found")
-        return {"error": errors} if errors else {"result": result}
+        else:
+            logger.info(f"Opportunity search completed successfully with results: {result}")
+        
+        if errors:
+            logger.error(f"Execution completed with errors: {errors}")
+        else:
+            logger.info("Execution completed successfully")
+            
+        return {"result": result, "errors": errors}

@@ -188,6 +188,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             "first_investment_timestamp": self.current_positions[0].get("timestamp"),
             "agent_hash": agent_hash,
             "volume": self.portfolio_data.get("volume"),
+            "trading_type": self.shared_state.trading_type,
+            "selected_protocols": self.shared_state.selected_protocols,
         }
 
         agent_attr = yield from self.create_agent_attribute(
@@ -202,10 +204,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
     def _should_calculate_apr(self) -> Generator[bool, None, None]:
         """Check if enough time has passed since last APR calculation or if any investment has been made."""
-
-        if len(self.current_positions) == 0:
-            self.context.logger.info("No investments made by agent yet")
-            return False
 
         # Get last calculation time from DB
         data = yield from self._read_kv(keys=("last_apr_calculation",))
@@ -502,7 +500,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
     def _has_valid_portfolio_data(self) -> bool:
         if (
-            not self.current_positions
+            not self.portfolio_data
             or not hasattr(self, "portfolio_data")
             or "portfolio_value" not in self.portfolio_data
         ):

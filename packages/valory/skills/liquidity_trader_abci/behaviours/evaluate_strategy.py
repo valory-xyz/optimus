@@ -203,6 +203,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""
+        if not self.trading_opportunities:
+            self.context.logger.info("No trading opportunities found")
+            return []
+        
         self.execute_hyper_strategy()
         actions = (
             yield from self.get_order_of_transactions()
@@ -322,6 +326,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
             )
             strategy_kwargs_list.append(kwargs)
+            self.context.logger.info(f"Strategy kwargs: {kwargs}")
 
         strategies_executables = self.shared_state.strategies_executables
 
@@ -361,7 +366,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         self.context.logger.error(
                             f"Error in strategy {next_strategy}: {error}"
                         )
-                    continue
 
                 opportunities = result.get("result", [])
                 if opportunities:

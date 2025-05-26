@@ -206,7 +206,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not self.trading_opportunities:
             self.context.logger.info("No trading opportunities found")
             return []
-        
+
         self.execute_hyper_strategy()
         actions = (
             yield from self.get_order_of_transactions()
@@ -680,7 +680,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-        
         available_tokens = yield from self._get_available_tokens()
         if available_tokens:
             tokens.extend(available_tokens)
@@ -732,7 +731,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 asset_address = asset.get("address")
                 balance = asset.get("balance", 0)
                 # Track ETH balance separately to maintain minimum threshold in Safe and prevent refunds
-                # because in Pearl we need to maintain a threshold amount of ETH in agent safe to avoid safe from being refunded  
+                # because in Pearl we need to maintain a threshold amount of ETH in agent safe to avoid safe from being refunded
                 if chain and asset_address:
                     if asset_address == ZERO_ADDRESS:
                         balance = yield from self.get_eth_remaining_amount()

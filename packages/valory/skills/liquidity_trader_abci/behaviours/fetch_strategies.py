@@ -1263,7 +1263,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Handle ETH (zero address) separately using get_eth_remaining_amount
                 if token_address == ZERO_ADDRESS:
                     eth_balance_wei = yield from self.get_eth_remaining_amount()
-                    self.context.logger.info(f"Token balance for {token_symbol} is {eth_balance_wei}.")
+                    self.context.logger.info(
+                        f"Token balance for {token_symbol} is {eth_balance_wei}."
+                    )
                     adjusted_balance = Decimal(str(eth_balance_wei)) / Decimal(
                         10**18
                     )  # ETH has 18 decimals
@@ -1298,7 +1300,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         account=safe_address,
                         chain_id=chain,
                     )
-                    self.context.logger.info(f"Token balance for {token_symbol} is {token_balance}.")
+                    self.context.logger.info(
+                        f"Token balance for {token_symbol} is {token_balance}."
+                    )
 
                     if token_balance is None or token_balance == 0:
                         continue

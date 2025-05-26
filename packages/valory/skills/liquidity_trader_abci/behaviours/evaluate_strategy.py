@@ -730,15 +730,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for asset in position.get("assets", []):
                 asset_address = asset.get("address")
                 balance = asset.get("balance", 0)
-                if chain and asset_address and balance > 0:
-                    token_balances.append(
-                        {
-                            "chain": chain,
-                            "token": asset_address,
-                            "token_symbol": asset.get("asset_symbol"),
-                            "balance": balance,
-                        }
-                    )
+                # Track ETH balance separately to maintain minimum threshold in Safe and prevent refunds
+                # because in Pearl we need to maintain a threshold amount of ETH in agent safe to avoid safe from being refunded  
+                if chain and asset_address:
+                    if asset_address == ZERO_ADDRESS:
+                        balance = yield from self.get_eth_remaining_amount()
+                    if balance > 0:
+                        token_balances.append(
+                            {
+                                "chain": chain,
+                                "token": asset_address,
+                                "token_symbol": asset.get("asset_symbol"),
+                                "balance": balance,
+                            }
+                        )
 
         # Sort tokens by balance in descending order
         token_balances.sort(key=lambda x: x["balance"], reverse=True)

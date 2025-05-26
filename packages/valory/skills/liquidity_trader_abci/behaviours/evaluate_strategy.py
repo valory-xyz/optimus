@@ -680,9 +680,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-        else:
-            # Get available tokens and extend tokens list
-            tokens = yield from self._get_available_tokens()
+        
+        available_tokens = yield from self._get_available_tokens()
+        if available_tokens:
+            tokens.extend(available_tokens)
 
         if not tokens:
             self.context.logger.error("No tokens available for investment")

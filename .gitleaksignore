@@ -1601,3 +1601,5 @@ e0b27e214a26f00de99911ce4d975790f216173c:packages/valory/skills/liquidity_trader
 2fa97ba8aeb06048f3df67c2e4344e9996be155d:packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py:generic-api-key:167
 2fa97ba8aeb06048f3df67c2e4344e9996be155d:packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py:generic-api-key:165
 2fa97ba8aeb06048f3df67c2e4344e9996be155d:packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py:generic-api-key:165
+6b4c0741b2eef0323289765d4decd542dbc963d4:packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py:generic-api-key:165
+6b4c0741b2eef0323289765d4decd542dbc963d4:packages/valory/skills/liquidity_trader_abci/behaviours/evaluate_strategy.py:generic-api-key:167

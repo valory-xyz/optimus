@@ -808,131 +808,357 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             return status, sub_status
 
+    def _calculate_investment_amounts_from_dollar_cap(
+        self, action, chain, assets
+    ) -> Generator[None, None, Optional[List[int]]]:
+        """Calculate token amounts to invest based on a dollar value cap."""
+        if not action.get("invested_amount", 0):
+            self.context.logger.error(
+                f"invested_amount not defined or zero: {action.get('invested_amount')}"
+            )
+            return None
+
+        invested_amount = action.get("invested_amount")
+        token0 = action.get("token0")
+        token1 = action.get("token1")
+
+        # Fetch token decimals
+        token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+        token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error("Failed to get token decimals")
+            return None
+
+        # Configure retry parameters
+        sleep_time = 10  # Configurable sleep time
+        retries = 3  # Number of API call retries
+
+        # Fetch token0 price with retry handling
+        token0_price = None
+        for attempt in range(1, retries + 1):
+            try:
+                token0_price = yield from self._fetch_token_price(token0, chain)
+                break  # Success, break out of loop
+            except Exception as e:
+                self.context.logger.error(
+                    f"Attempt {attempt} - Error fetching price for {token0}: {e}"
+                )
+                if attempt < retries:
+                    yield from self.sleep(sleep_time)
+
+        if token0_price is None:
+            self.context.logger.error(f"Failed to fetch price for token: {token0}")
+            return None
+
+        yield from self.sleep(sleep_time)  # Sleep to respect API rate limits
+
+        # Fetch token1 price with retry handling
+        token1_price = None
+        for attempt in range(1, retries + 1):
+            try:
+                token1_price = yield from self._fetch_token_price(token1, chain)
+                break
+            except Exception as e:
+                self.context.logger.error(
+                    f"Attempt {attempt} - Error fetching price for {token1}: {e}"
+                )
+                if attempt < retries:
+                    yield from self.sleep(sleep_time)
+
+        if token1_price is None:
+            self.context.logger.error(f"Failed to fetch price for token: {token1}")
+            return None
+
+        # Handle funds percentage to determine allocation per strategy
+        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+        if not relative_funds_percentage:
+            self.context.logger.error(
+                f"relative_funds_percentage not defined: {relative_funds_percentage}"
+            )
+            return None
+
+        # Calculate how much to allocate to this strategy based on its relative percentage
+        allocated_fund_per_strategy = invested_amount / relative_funds_percentage
+
+        # Calculate token amounts (default 50/50 split)
+        token0_amount = (allocated_fund_per_strategy / 2) / token0_price
+        token1_amount = (allocated_fund_per_strategy / 2) / token1_price
+
+        # Check for valid amounts
+        if token0_amount <= 0 or token1_amount <= 0:
+            self.context.logger.error(
+                f"Invalid token amounts: token0_amount={token0_amount}, token1_amount={token1_amount}"
+            )
+            return None
+
+        self.context.logger.info(
+            f"Token amounts calculated from dollar cap - token0: {token0_amount}, token1: {token1_amount}"
+        )
+
+        # Convert to token units with proper decimal precision
+        max_amounts = [
+            int(
+                Decimal(str(token0_amount)) * (Decimal(10) ** Decimal(token0_decimals))
+            ),
+            int(
+                Decimal(str(token1_amount)) * (Decimal(10) ** Decimal(token1_decimals))
+            ),
+        ]
+
+        self.context.logger.info(
+            f"Calculated max amounts from dollar cap: {max_amounts}"
+        )
+        return max_amounts
+
+    def _calculate_velodrome_investment_amounts(
+        self, action, chain, assets, positions, max_amounts
+    ) -> Generator[None, None, Optional[List[int]]]:
+        """Calculate investment amounts for Velodrome positions based on token percentages."""
+        # Get token balances
+        token0_balance = self._get_balance(chain, assets[0], positions)
+        token1_balance = self._get_balance(chain, assets[1], positions)
+
+        # Use token percentages if provided
+        token0_percentage = action.get("token0_percentage")
+        token1_percentage = action.get("token1_percentage")
+
+        # Validate required data
+        if (
+            token0_balance is None
+            or token1_balance is None
+            or token0_percentage is None
+            or token1_percentage is None
+        ):
+            self.context.logger.error(
+                f"Missing required data: token0_balance={token0_balance}, "
+                f"token1_balance={token1_balance}, token0_percentage={token0_percentage}, "
+                f"token1_percentage={token1_percentage}"
+            )
+            yield None
+            return None
+
+        # Convert percentages to floats if needed
+        try:
+            token0_percentage = float(token0_percentage)
+            token1_percentage = float(token1_percentage)
+        except (ValueError, TypeError):
+            self.context.logger.error(
+                f"Invalid percentage values: token0_percentage={token0_percentage}, "
+                f"token1_percentage={token1_percentage}"
+            )
+            return None
+
+        # Calculate max amounts based on percentages
+        max_amounts_in = [
+            int(token0_balance * token0_percentage / 100),
+            int(token1_balance * token1_percentage / 100),
+        ]
+
+        # Apply additional caps if provided
+        if len(max_amounts) >= 2:
+            max_amounts_in = [
+                min(max_amounts_in[0], max_amounts[0]),
+                min(max_amounts_in[1], max_amounts[1]),
+            ]
+
+        self.context.logger.info(
+            f"Calculated Velodrome investment amounts: {max_amounts_in} "
+            f"based on percentages: {token0_percentage}%, {token1_percentage}%"
+        )
+
+        # Validate the calculated amounts
+        if any(amount < 0 for amount in max_amounts_in):
+            self.context.logger.error(
+                f"Invalid negative amounts calculated: {max_amounts_in}"
+            )
+            return None
+
+        return max_amounts_in
+
     def get_enter_pool_tx_hash(
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
         """Get enter pool tx hash"""
-        max_amounts_in = []
-        self.context.logger.info(f"action here: {action}")
+        self.context.logger.info(f"Processing enter pool action: {action}")
+
+        # Extract common parameters
         dex_type = action.get("dex_type")
         chain = action.get("chain")
         assets = [action.get("token0"), action.get("token1")]
-        max_investment_amounts = action.get("max_investment_amounts")
-        if not assets or len(assets) < 2:
-            self.context.logger.error(f"2 assets required, provided: {assets}")
-            return None, None, None
         pool_address = action.get("pool_address")
-        safe_address = self.params.safe_contract_addresses.get(action.get("chain"))
+        safe_address = self.params.safe_contract_addresses.get(chain)
         pool_type = action.get("pool_type")
         is_stable = action.get("is_stable")
         is_cl_pool = action.get("is_cl_pool")
+        max_investment_amounts = action.get("max_investment_amounts")
 
+        # Validate essential parameters
+        if not all([dex_type, chain, assets, pool_address, safe_address]):
+            self.context.logger.error(f"Missing required parameters: {action}")
+            return None, None, None
+
+        if len(assets) < 2:
+            self.context.logger.error(f"2 assets required, provided: {assets}")
+            return None, None, None
+
+        # Get corresponding pool handler
         pool = self.pools.get(dex_type)
         if not pool:
             self.context.logger.error(f"Unknown dex type: {dex_type}")
             return None, None, None
 
-        if not max_investment_amounts:
+        # Calculate investment amounts based on dex type
+        max_amounts_in = []
+        max_amounts = []
+
+        # Calculate investment amounts based on dollar cap if needed
+        if self.current_positions and action.get("invested_amount", 0) != 0:
+            max_amounts = yield from self._calculate_investment_amounts_from_dollar_cap(
+                action, chain, assets
+            )
+            self.context.logger.info(
+                f"Calculated max amounts from dollar cap: {max_amounts}"
+            )
+            if max_amounts is None:
+                return None, None, None
+
+        # Handle Velodrome-specific parameters
+        if dex_type == DexType.VELODROME.value:
+            max_amounts_in = yield from self._calculate_velodrome_investment_amounts(
+                action, chain, assets, positions, max_amounts
+            )
+            if max_amounts_in is None:
+                return None, None, None
+            self.context.logger.info(f"max_amounts_in for velodrome : {max_amounts_in}")
+        else:
+            if not max_investment_amounts:
+                token0_balance = self._get_balance(chain, assets[0], positions)
+                token1_balance = self._get_balance(chain, assets[1], positions)
+                relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+                if not relative_funds_percentage:
+                    self.context.logger.error(
+                        f"relative_funds_percentage not define: {relative_funds_percentage}"
+                    )
+                    return None, None, None
+                max_amounts_in = [
+                    int(token0_balance * relative_funds_percentage),
+                    int(token1_balance * relative_funds_percentage),
+                ]
+                max_amounts_in = [
+                    min(max_amounts_in[0], token0_balance),
+                    min(max_amounts_in[1], token1_balance),
+                ]
+            else:
+                token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+                token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+                max_investment_amounts[0] = int(
+                    Decimal(str(max_investment_amounts[0]))
+                    * (Decimal(10) ** Decimal(token0_decimals))
+                )
+                max_investment_amounts[1] = int(
+                    Decimal(str(max_investment_amounts[1]))
+                    * (Decimal(10) ** Decimal(token1_decimals))
+                )
+
+            self.context.logger.info(
+                f"Max investment amounts according to strategy: {max_investment_amounts}."
+            )
+
+            relative_funds_percentage = action.get("relative_funds_percentage")
+            if not relative_funds_percentage:
+                self.context.logger.error(
+                    f"relative_funds_percentage not define: {relative_funds_percentage}"
+                )
+                return None, None, None
+
+            self.context.logger.info(
+                f"chain, assets[0], positions:{chain, assets[0],assets[1], positions}"
+            )
+
             token0_balance = self._get_balance(chain, assets[0], positions)
             token1_balance = self._get_balance(chain, assets[1], positions)
-            relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
-            max_amounts_in = [
-                int(token0_balance * relative_funds_percentage),
-                int(token1_balance * relative_funds_percentage),
-            ]
+
+            self.context.logger.info(
+                f"token0_balance,token1_balance:{token0_balance,token1_balance}"
+            )
+
+            if token0_balance is None or token1_balance is None:
+                self.context.logger.error("Balance for one or more tokens is None")
+                return None, None, None  # Or handle the error as appropriate
+
+            # Calculate max_amounts_in with special handling for ETH
+            if assets[0] == ZERO_ADDRESS:
+                # For ETH (token0), get the remaining ETH amount from kv_store
+                eth_remaining = yield from self.get_eth_remaining_amount()
+
+                # Use the tracked ETH amount
+                max_amounts_in = [
+                    int(
+                        min(eth_remaining, token0_balance) * relative_funds_percentage
+                    ),  # Don't exceed available balance
+                    int(token1_balance * relative_funds_percentage),
+                ]
+            elif assets[1] == ZERO_ADDRESS:
+                # For ETH (token1), get the remaining ETH amount from kv_store
+                eth_remaining = yield from self.get_eth_remaining_amount()
+
+                # Use the tracked ETH amount
+                max_amounts_in = [
+                    int(token0_balance * relative_funds_percentage),
+                    int(
+                        min(eth_remaining, token1_balance) * relative_funds_percentage
+                    ),  # Don't exceed available balance
+                ]
+            else:
+                # For non-ETH tokens, use the original calculation
+                max_amounts_in = [
+                    int(token0_balance * relative_funds_percentage),
+                    int(token1_balance * relative_funds_percentage),
+                ]
+
+            # Ensure that allocated amounts do not exceed available balances.
             max_amounts_in = [
                 min(max_amounts_in[0], token0_balance),
                 min(max_amounts_in[1], token1_balance),
             ]
-        else:
-            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
-            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
-            max_investment_amounts[0] = int(
-                Decimal(str(max_investment_amounts[0]))
-                * (Decimal(10) ** Decimal(token0_decimals))
-            )
-            max_investment_amounts[1] = int(
-                Decimal(str(max_investment_amounts[1]))
-                * (Decimal(10) ** Decimal(token1_decimals))
+            self.context.logger.info(
+                f"Adjusted max amounts in after comparing with balances: {max_amounts_in}"
             )
 
-        self.context.logger.info(
-            f"Max investment amounts according to strategy: {max_investment_amounts}."
-        )
+            # Adjust max_amounts_in based on max_investment_amounts
+            if max_investment_amounts and (
+                type(max_investment_amounts) == type(max_amounts_in)
+            ):
+                max_amounts_in = [
+                    min(max_amounts_in[i], max_investment_amounts[i])
+                    for i in range(len(max_amounts_in))
+                ]
 
-        relative_funds_percentage = action.get("relative_funds_percentage")
-        if not relative_funds_percentage:
-            self.context.logger.error(
-                f"relative_funds_percentage not define: {relative_funds_percentage}"
+            if len(max_amounts) >= 2:
+                max_amounts_in = [
+                    min(max_amounts_in[0], max_amounts[0]),
+                    min(max_amounts_in[1], max_amounts[1]),
+                ]
+
+            self.context.logger.info(
+                f"Adjusted max amounts in after comparing with max investment amounts: {max_amounts_in}"
             )
-            return None, None, None
 
-        token0_balance = self._get_balance(chain, assets[0], positions)
-        token1_balance = self._get_balance(chain, assets[1], positions)
+            if any(amount == 0 or amount is None for amount in max_amounts_in):
+                self.context.logger.error(
+                    f"Insufficient balance for entering pool: {max_amounts_in}"
+                )
+                return None, None, None
 
-        if token0_balance is None or token1_balance is None:
-            self.context.logger.error("Balance for one or more tokens is None")
-            return None, None, None  # Or handle the error as appropriate
-
-        # Calculate max_amounts_in with special handling for ETH
-        if assets[0] == ZERO_ADDRESS:
-            # For ETH (token0), get the remaining ETH amount from kv_store
-            eth_remaining = yield from self.get_eth_remaining_amount()
-
-            # Use the tracked ETH amount
-            max_amounts_in = [
-                int(
-                    min(eth_remaining, token0_balance) * relative_funds_percentage
-                ),  # Don't exceed available balance
-                int(token1_balance * relative_funds_percentage),
-            ]
-
-        elif assets[1] == ZERO_ADDRESS:
-            # For ETH (token1), get the remaining ETH amount from kv_store
-            eth_remaining = yield from self.get_eth_remaining_amount()
-
-            # Use the tracked ETH amount
-            max_amounts_in = [
-                int(token0_balance * relative_funds_percentage),
-                int(
-                    min(eth_remaining, token1_balance) * relative_funds_percentage
-                ),  # Don't exceed available balance
-            ]
-
-        else:
-            # For non-ETH tokens, use the original calculation
-            max_amounts_in = [
-                int(token0_balance * relative_funds_percentage),
-                int(token1_balance * relative_funds_percentage),
-            ]
-
-        # Ensure that allocated amounts do not exceed available balances.
-        max_amounts_in = [
-            min(max_amounts_in[0], token0_balance),
-            min(max_amounts_in[1], token1_balance),
-        ]
-        self.context.logger.info(
-            f"Adjusted max amounts in after comparing with balances: {max_amounts_in}"
-        )
-
-        # Adjust max_amounts_in based on max_investment_amounts
-        if max_investment_amounts and (
-            type(max_investment_amounts) == type(max_amounts_in)
+        if dex_type != DexType.VELODROME.value and any(
+            amount <= 0 or amount is None for amount in max_amounts_in
         ):
-            max_amounts_in = [
-                min(max_amounts_in[i], max_investment_amounts[i])
-                for i in range(len(max_amounts_in))
-            ]
-
-        self.context.logger.info(
-            f"Adjusted max amounts in after comparing with max investment amounts: {max_amounts_in}"
-        )
-
-        if any(amount == 0 or amount is None for amount in max_amounts_in):
             self.context.logger.error(
                 f"Insufficient balance for entering pool: {max_amounts_in}"
             )
             return None, None, None
+
         # Prepare kwargs for pool.enter
         kwargs = {
             "pool_address": pool_address,
@@ -945,8 +1171,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "is_cl_pool": is_cl_pool,
         }
 
+        # Add Velodrome-specific parameters if applicable
+        if dex_type == DexType.VELODROME.value:
+            tick_spacing = action.get("tick_spacing")
+            tick_ranges = action.get("tick_ranges")
+            if tick_spacing:
+                kwargs["tick_spacing"] = tick_spacing
+            if tick_ranges:
+                kwargs["tick_ranges"] = tick_ranges
         # Add pool_fee for non-Velodrome pools
-        if dex_type != DexType.VELODROME:
+        elif action.get("pool_fee") is not None:
             kwargs["pool_fee"] = action.get("pool_fee")
 
         result = yield from pool.enter(self, **kwargs)

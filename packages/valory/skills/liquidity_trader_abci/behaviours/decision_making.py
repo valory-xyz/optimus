@@ -808,6 +808,174 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             return status, sub_status
 
+    def _calculate_investment_amounts_from_dollar_cap(
+        self, action, chain, assets
+    ) -> Generator[None, None, Optional[List[int]]]:
+        """Calculate token amounts to invest based on a dollar value cap."""
+        if not action.get("invested_amount", 0):
+            self.context.logger.error(
+                f"invested_amount not defined or zero: {action.get('invested_amount')}"
+            )
+            return None
+
+        invested_amount = action.get("invested_amount")
+        token0 = action.get("token0")
+        token1 = action.get("token1")
+
+        # Fetch token decimals
+        token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+        token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error("Failed to get token decimals")
+            return None
+
+        # Configure retry parameters
+        sleep_time = 10  # Configurable sleep time
+        retries = 3  # Number of API call retries
+
+        # Fetch token0 price with retry handling
+        token0_price = None
+        for attempt in range(1, retries + 1):
+            try:
+                token0_price = yield from self._fetch_token_price(token0, chain)
+                break  # Success, break out of loop
+            except Exception as e:
+                self.context.logger.error(
+                    f"Attempt {attempt} - Error fetching price for {token0}: {e}"
+                )
+                if attempt < retries:
+                    yield from self.sleep(sleep_time)
+
+        if token0_price is None:
+            self.context.logger.error(f"Failed to fetch price for token: {token0}")
+            return None
+
+        yield from self.sleep(sleep_time)  # Sleep to respect API rate limits
+
+        # Fetch token1 price with retry handling
+        token1_price = None
+        for attempt in range(1, retries + 1):
+            try:
+                token1_price = yield from self._fetch_token_price(token1, chain)
+                break
+            except Exception as e:
+                self.context.logger.error(
+                    f"Attempt {attempt} - Error fetching price for {token1}: {e}"
+                )
+                if attempt < retries:
+                    yield from self.sleep(sleep_time)
+
+        if token1_price is None:
+            self.context.logger.error(f"Failed to fetch price for token: {token1}")
+            return None
+
+        # Handle funds percentage to determine allocation per strategy
+        relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
+        if not relative_funds_percentage:
+            self.context.logger.error(
+                f"relative_funds_percentage not defined: {relative_funds_percentage}"
+            )
+            return None
+
+        # Calculate how much to allocate to this strategy based on its relative percentage
+        allocated_fund_per_strategy = invested_amount / relative_funds_percentage
+
+        # Calculate token amounts (default 50/50 split)
+        token0_amount = (allocated_fund_per_strategy / 2) / token0_price
+        token1_amount = (allocated_fund_per_strategy / 2) / token1_price
+
+        # Check for valid amounts
+        if token0_amount <= 0 or token1_amount <= 0:
+            self.context.logger.error(
+                f"Invalid token amounts: token0_amount={token0_amount}, token1_amount={token1_amount}"
+            )
+            return None
+
+        self.context.logger.info(
+            f"Token amounts calculated from dollar cap - token0: {token0_amount}, token1: {token1_amount}"
+        )
+
+        # Convert to token units with proper decimal precision
+        max_amounts = [
+            int(
+                Decimal(str(token0_amount)) * (Decimal(10) ** Decimal(token0_decimals))
+            ),
+            int(
+                Decimal(str(token1_amount)) * (Decimal(10) ** Decimal(token1_decimals))
+            ),
+        ]
+
+        self.context.logger.info(
+            f"Calculated max amounts from dollar cap: {max_amounts}"
+        )
+        return max_amounts
+
+    def _calculate_velodrome_investment_amounts(
+        self, action, chain, assets, positions, max_amounts
+    ) -> Generator[None, None, Optional[List[int]]]:
+        """Calculate investment amounts for Velodrome positions based on token percentages."""
+        # Get token balances
+        token0_balance = self._get_balance(chain, assets[0], positions)
+        token1_balance = self._get_balance(chain, assets[1], positions)
+
+        # Use token percentages if provided
+        token0_percentage = action.get("token0_percentage")
+        token1_percentage = action.get("token1_percentage")
+
+        # Validate required data
+        if (
+            token0_balance is None
+            or token1_balance is None
+            or token0_percentage is None
+            or token1_percentage is None
+        ):
+            self.context.logger.error(
+                f"Missing required data: token0_balance={token0_balance}, "
+                f"token1_balance={token1_balance}, token0_percentage={token0_percentage}, "
+                f"token1_percentage={token1_percentage}"
+            )
+            yield None
+            return None
+
+        # Convert percentages to floats if needed
+        try:
+            token0_percentage = float(token0_percentage)
+            token1_percentage = float(token1_percentage)
+        except (ValueError, TypeError):
+            self.context.logger.error(
+                f"Invalid percentage values: token0_percentage={token0_percentage}, "
+                f"token1_percentage={token1_percentage}"
+            )
+            return None
+
+        # Calculate max amounts based on percentages
+        max_amounts_in = [
+            int(token0_balance * token0_percentage / 100),
+            int(token1_balance * token1_percentage / 100),
+        ]
+
+        # Apply additional caps if provided
+        if len(max_amounts) >= 2:
+            max_amounts_in = [
+                min(max_amounts_in[0], max_amounts[0]),
+                min(max_amounts_in[1], max_amounts[1]),
+            ]
+
+        self.context.logger.info(
+            f"Calculated Velodrome investment amounts: {max_amounts_in} "
+            f"based on percentages: {token0_percentage}%, {token1_percentage}%"
+        )
+
+        # Validate the calculated amounts
+        if any(amount < 0 for amount in max_amounts_in):
+            self.context.logger.error(
+                f"Invalid negative amounts calculated: {max_amounts_in}"
+            )
+            return None
+
+        return max_amounts_in
+
     def get_enter_pool_tx_hash(
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
@@ -844,119 +1012,24 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         max_amounts_in = []
         max_amounts = []
 
+        # Calculate investment amounts based on dollar cap if needed
         if self.current_positions and action.get("invested_amount", 0) != 0:
-            invested_amount = action.get("invested_amount")
-            if not invested_amount:
-                self.context.logger.error(
-                    f"invested_amount not defined: {invested_amount}"
-                )
-                return None, None, None
-
-            token0 = action.get("token0")
-            token1 = action.get("token1")
-            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
-            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
-            sleep_time = 10  # Configurable sleep time
-            retries = 3  # Number of API call retries
-
-            # Fetch token0 price with retry handling
-            token0_price = None
-            for attempt in range(1, retries + 1):
-                try:
-                    token0_price = yield from self._fetch_token_price(token0, chain)
-                    break  # Success, break out of loop
-                except Exception as e:
-                    self.context.logger.error(
-                        f"Attempt {attempt} - Error fetching price for {token0}: {e}"
-                    )
-                    if attempt < retries:
-                        yield from self.sleep(sleep_time)
-            if token0_price is None:
-                self.context.logger.error(f"Failed to fetch price for token: {token0}")
-                return None, None, None
-
-            yield from self.sleep(sleep_time)  # Sleep to respect API rate limits
-
-            # Fetch token1 price with retry handling
-            token1_price = None
-            for attempt in range(1, retries + 1):
-                try:
-                    token1_price = yield from self._fetch_token_price(token1, chain)
-                    break
-                except Exception as e:
-                    self.context.logger.error(
-                        f"Attempt {attempt} - Error fetching price for {token1}: {e}"
-                    )
-                    if attempt < retries:
-                        yield from self.sleep(sleep_time)
-            if token1_price is None:
-                self.context.logger.error(f"Failed to fetch price for token: {token1}")
-                return None, None, None
-
-            relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
-            if not relative_funds_percentage:
-                self.context.logger.error(
-                    f"relative_funds_percentage not define: {relative_funds_percentage}"
-                )
-                return None, None, None
-
-            allocated_fund_per_strategy = invested_amount / relative_funds_percentage
-
-            token0_amount = (allocated_fund_per_strategy / 2) / token0_price
-            token1_amount = (allocated_fund_per_strategy / 2) / token1_price
-
-            if token0_amount <= 0 or token1_amount <= 0:
-                self.context.logger.error(
-                    f"Invalid token amounts: token0_amount={token0_amount}, token1_amount={token1_amount}"
-                )
-                return None, None, None
-
-            self.context.logger.info(
-                f"token0_amount,token1_amount:{token0_amount,token1_amount}"
+            max_amounts = yield from self._calculate_investment_amounts_from_dollar_cap(
+                action, chain, assets
             )
-
-            max_amounts = [
-                int(
-                    Decimal(str(token0_amount))
-                    * (Decimal(10) ** Decimal(token0_decimals))
-                ),
-                int(
-                    Decimal(str(token1_amount))
-                    * (Decimal(10) ** Decimal(token1_decimals))
-                ),
-            ]
-
-            self.context.logger.info(f"max amounts in after calculation: {max_amounts}")
+            self.context.logger.info(
+                f"Calculated max amounts from dollar cap: {max_amounts}"
+            )
+            if max_amounts is None:
+                return None, None, None
 
         # Handle Velodrome-specific parameters
         if dex_type == DexType.VELODROME.value:
-            token0_balance = self._get_balance(chain, assets[0], positions)
-            token1_balance = self._get_balance(chain, assets[1], positions)
-
-            # Use token percentages if provided, otherwise use relative funds percentage
-            token0_percentage = action.get("token0_percentage")
-            token1_percentage = action.get("token1_percentage")
-
-            if (
-                token0_balance is None
-                or token1_balance is None
-                or token0_percentage is None
-                or token1_percentage is None
-            ):
-                self.context.logger.error("Balance for one or more tokens is None")
+            max_amounts_in = yield from self._calculate_velodrome_investment_amounts(
+                action, chain, assets, positions, max_amounts
+            )
+            if max_amounts_in is None:
                 return None, None, None
-
-            max_amounts_in = [
-                int(token0_balance * float(token0_percentage) / 100),
-                int(token1_balance * float(token1_percentage) / 100),
-            ]
-
-            if len(max_amounts) >= 2:
-                max_amounts_in = [
-                    min(max_amounts_in[0], max_amounts[0]),
-                    min(max_amounts_in[1], max_amounts[1]),
-                ]
-
             self.context.logger.info(f"max_amounts_in for velodrome : {max_amounts_in}")
         else:
             if not max_investment_amounts:
@@ -999,8 +1072,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None, None, None
 
+            self.context.logger.info(
+                f"chain, assets[0], positions:{chain, assets[0],assets[1], positions}"
+            )
+
             token0_balance = self._get_balance(chain, assets[0], positions)
             token1_balance = self._get_balance(chain, assets[1], positions)
+
+            self.context.logger.info(
+                f"token0_balance,token1_balance:{token0_balance,token1_balance}"
+            )
 
             if token0_balance is None or token1_balance is None:
                 self.context.logger.error("Balance for one or more tokens is None")
@@ -1018,7 +1099,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     ),  # Don't exceed available balance
                     int(token1_balance * relative_funds_percentage),
                 ]
-
             elif assets[1] == ZERO_ADDRESS:
                 # For ETH (token1), get the remaining ETH amount from kv_store
                 eth_remaining = yield from self.get_eth_remaining_amount()
@@ -1030,7 +1110,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                         min(eth_remaining, token1_balance) * relative_funds_percentage
                     ),  # Don't exceed available balance
                 ]
-
             else:
                 # For non-ETH tokens, use the original calculation
                 max_amounts_in = [

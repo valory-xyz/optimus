@@ -387,7 +387,7 @@ class LiquidityTraderBaseBehaviour(
         for position in positions:
             if position.get("chain") == chain:
                 for asset in position.get("assets", {}):
-                    if asset.get("address") == token:
+                    if asset.get("address").lower() == token.lower():
                         return asset.get("balance")
 
         return None

@@ -47,6 +47,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     HTTP_OK,
     LiquidityTraderBaseBehaviour,
     METRICS_UPDATE_INTERVAL,
+    MIN_TIME_IN_POSITION,
     PositionStatus,
     THRESHOLDS,
     ZERO_ADDRESS,
@@ -73,99 +74,151 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     trading_opportunities = []
 
     def async_act(self) -> Generator:
-        """Async act"""
+        """Execute the behaviour's async action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            if not self.current_positions:
-                has_funds = any(
-                    asset.get("balance", 0) > 0
-                    for position in self.synchronized_data.positions
-                    for asset in position.get("assets", [])
-                )
-                if not has_funds:
-                    actions = []
-                    self.context.logger.info("No funds available.")
-                    sender = self.context.agent_address
-                    payload = EvaluateStrategyPayload(
-                        sender=sender, actions=json.dumps(actions)
-                    )
-                    yield from self.send_a2a_transaction(payload)
-                    # Then move to consensus block
-                    with self.context.benchmark_tool.measure(
-                        self.behaviour_id
-                    ).consensus():
-                        yield from self.wait_until_round_end()
-                    self.set_done()
+            # Check minimum hold period
+            should_hold = self.check_minimum_hold_period()
+            if should_hold:
+                yield from self.send_actions()
+                return
 
+            # Check for funds
+            are_funds_available = self.check_funds()
+            if not are_funds_available:
+                yield from self.send_actions()
+                return
+
+            # Fetch trading opportunities
             yield from self.fetch_all_trading_opportunities()
 
-            if self.current_positions:
-                for position in (
-                    pos
-                    for pos in self.current_positions
-                    if pos.get("status") == PositionStatus.OPEN.value
-                ):
-                    dex_type = position.get("dex_type")
-                    strategy = self.params.dex_type_to_strategy.get(dex_type)
-                    if strategy:
-                        if (
-                            position.get("status", PositionStatus.CLOSED.value)
-                            != PositionStatus.OPEN.value
-                        ):
-                            continue
+            # Update metrics for open positions
+            self.update_position_metrics()
 
-                        # Check when metrics were last calculated
-                        current_timestamp = self._get_current_timestamp()
-                        last_metrics_update = position.get("last_metrics_update", 0)
+            # Execute strategy and prepare actions
+            actions = yield from self.prepare_strategy_actions()
 
-                        # Only recalculate metrics every 6 hours (21600 seconds)
-                        # This reduces API calls while still keeping metrics reasonably up-to-date
-                        if (
-                            current_timestamp - last_metrics_update
-                            >= METRICS_UPDATE_INTERVAL
-                        ):
-                            self.context.logger.info(
-                                f"Recalculating metrics for position {position.get('pool_address')} - last update was {(current_timestamp - last_metrics_update) / 3600:.2f} hours ago"
-                            )
-                            metrics = self.get_returns_metrics_for_opportunity(
-                                position, strategy
-                            )
-                            if metrics:
-                                # Add the timestamp of this update
-                                metrics["last_metrics_update"] = current_timestamp
-                                position.update(metrics)
-                        else:
-                            self.context.logger.info(
-                                f"Skipping metrics calculation for position {position.get('pool_address')} - last update was {(current_timestamp - last_metrics_update) / 3600:.2f} hours ago"
-                            )
-                    else:
-                        self.context.logger.error(
-                            f"No strategy found for dex type {dex_type}"
-                        )
+            # Send final actions
+            yield from self.send_actions(actions)
 
-                    self.store_current_positions()
+    def send_actions(self, actions: Optional[List[Any]] = None) -> Generator:
+        """Send actions and complete the round."""
+        if actions is None:
+            actions = []
 
-            self.execute_hyper_strategy()
-            actions = (
-                yield from self.get_order_of_transactions()
-                if self.selected_opportunities is not None
-                else []
-            )
-
-            if actions:
-                self.context.logger.info(f"Actions: {actions}")
-            else:
-                self.context.logger.info("No actions prepared")
-
-            sender = self.context.agent_address
-            payload = EvaluateStrategyPayload(
-                sender=sender, actions=json.dumps(actions)
-            )
+        payload = EvaluateStrategyPayload(
+            sender=self.context.agent_address, actions=json.dumps(actions)
+        )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
         self.set_done()
+
+    def check_minimum_hold_period(self) -> bool:
+        """Check if any position is still in minimum hold period."""
+        if not self.current_positions:
+            return False
+
+        open_position = next(
+            (
+                pos
+                for pos in self.current_positions
+                if pos.get("status") == PositionStatus.OPEN.value
+            ),
+            None,
+        )
+
+        if not open_position:
+            return False
+
+        time_in_position = int(self._get_current_timestamp()) - open_position.get(
+            "timestamp", 0
+        )
+        if time_in_position < MIN_TIME_IN_POSITION:
+            remaining_time = MIN_TIME_IN_POSITION - time_in_position
+            days, hours = divmod(remaining_time, 24 * 3600)
+            hours //= 3600
+            self.context.logger.info(
+                f"Position {open_position.get('pool_address')} is still in minimum hold period. "
+                f"Waiting for {days} days and {hours} hours before closing it."
+            )
+            return True
+
+        return False
+
+    def check_funds(self) -> bool:
+        """Check if there are any funds available."""
+
+        if not self.current_positions:
+            has_funds = any(
+                asset.get("balance", 0) > 0
+                for position in self.synchronized_data.positions
+                for asset in position.get("assets", [])
+            )
+            return has_funds
+
+        return True
+
+    def update_position_metrics(self) -> None:
+        """Update metrics for all open positions."""
+        if not self.current_positions:
+            return
+
+        current_timestamp = self._get_current_timestamp()
+        open_positions = [
+            pos
+            for pos in self.current_positions
+            if pos.get("status") == PositionStatus.OPEN.value
+        ]
+
+        for position in open_positions:
+            dex_type = position.get("dex_type")
+            strategy = self.params.dex_type_to_strategy.get(dex_type)
+
+            if not strategy:
+                self.context.logger.error(f"No strategy found for dex type {dex_type}")
+                continue
+
+            last_metrics_update = position.get("last_metrics_update", 0)
+            time_since_update = current_timestamp - last_metrics_update
+
+            if time_since_update >= METRICS_UPDATE_INTERVAL:
+                self.context.logger.info(
+                    f"Recalculating metrics for position {position.get('pool_address')} - "
+                    f"last update was {time_since_update / 3600:.2f} hours ago"
+                )
+                if metrics := self.get_returns_metrics_for_opportunity(
+                    position, strategy
+                ):
+                    metrics["last_metrics_update"] = current_timestamp
+                    position.update(metrics)
+            else:
+                self.context.logger.info(
+                    f"Skipping metrics calculation for position {position.get('pool_address')} - "
+                    f"last update was {time_since_update / 3600:.2f} hours ago"
+                )
+
+        self.store_current_positions()
+
+    def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
+        """Execute strategy and prepare actions."""
+        if not self.trading_opportunities:
+            self.context.logger.info("No trading opportunities found")
+            return []
+
+        self.execute_hyper_strategy()
+        actions = (
+            yield from self.get_order_of_transactions()
+            if self.selected_opportunities is not None
+            else []
+        )
+
+        self.context.logger.info(
+            f"Actions: {actions}" if actions else "No actions prepared"
+        )
+
+        return actions
 
     def execute_hyper_strategy(self) -> None:
         """Executes hyper strategy"""
@@ -273,6 +326,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
             )
             strategy_kwargs_list.append(kwargs)
+            self.context.logger.info(f"Strategy kwargs: {kwargs}")
 
         strategies_executables = self.shared_state.strategies_executables
 
@@ -312,7 +366,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         self.context.logger.error(
                             f"Error in strategy {next_strategy}: {error}"
                         )
-                    continue
 
                 opportunities = result.get("result", [])
                 if opportunities:
@@ -627,9 +680,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-        else:
-            # Get available tokens and extend tokens list
-            tokens = yield from self._get_available_tokens()
+        available_tokens = yield from self._get_available_tokens()
+        if available_tokens:
+            tokens.extend(available_tokens)
 
         if not tokens:
             self.context.logger.error("No tokens available for investment")
@@ -677,15 +730,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for asset in position.get("assets", []):
                 asset_address = asset.get("address")
                 balance = asset.get("balance", 0)
-                if chain and asset_address and balance > 0:
-                    token_balances.append(
-                        {
-                            "chain": chain,
-                            "token": asset_address,
-                            "token_symbol": asset.get("asset_symbol"),
-                            "balance": balance,
-                        }
-                    )
+                # Track ETH balance separately to maintain minimum threshold in Safe and prevent refunds
+                # because in Pearl we need to maintain a threshold amount of ETH in agent safe to avoid safe from being refunded
+                if chain and asset_address:
+                    if asset_address == ZERO_ADDRESS:
+                        balance = yield from self.get_eth_remaining_amount()
+                    if balance > 0:
+                        token_balances.append(
+                            {
+                                "chain": chain,
+                                "token": asset_address,
+                                "token_symbol": asset.get("asset_symbol"),
+                                "balance": balance,
+                            }
+                        )
 
         # Sort tokens by balance in descending order
         token_balances.sort(key=lambda x: x["balance"], reverse=True)

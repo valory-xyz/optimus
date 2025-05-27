@@ -1511,26 +1511,8 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, coin_list=None, cl_filter=None):
-    """
-    Get and format pool opportunities.
-    
-    Args:
-        current_positions: List of current position IDs to exclude
-        coingecko_api_key: API key for CoinGecko
-        chain_id: Chain ID to determine which method to use
-        lp_sugar_address: Address of the LpSugar contract
-        ledger_api: Ethereum API instance or RPC URL
-        top_n: Number of top pools by APR to return (default: 10)
-        coin_list: List of coins from CoinGecko API (optional)
-        cl_filter: Filter for concentrated liquidity pools
-                   True = only CL pools
-                   False = only non-CL pools
-                   None = include all pools (default)
-    
-    Returns:
-        List of formatted pool opportunities
-    """
+def get_opportunities_from_velodrome(current_positions, coingecko_api_key, chain_id, lp_sugar_address, ledger_api, top_n, coin_list, cl_filter):
+    """ Get and format pool opportunities. """
     start_time = time.time()
     logger.info(f"Starting opportunity discovery for chain ID {chain_id}")
     
@@ -1846,17 +1828,18 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             errors.append(error_msg)
             continue
         
+        args = {
+            "current_positions": kwargs.get("current_positions", []),
+            "coingecko_api_key": kwargs["coingecko_api_key"],
+            "chain_id": chain_id,
+            "lp_sugar_address": sugar_address,
+            "ledger_api": rpc_url,
+            "top_n": kwargs.get("top_n", 10),
+            "coin_list": coin_list,
+            "cl_filter": kwargs.get("cl_filter")
+        }
         # Get opportunities for the chain using Sugar contract
-        result = get_opportunities(
-            kwargs.get("current_positions", []),
-            kwargs["coingecko_api_key"],
-            chain_id,
-            sugar_address,
-            rpc_url,
-            kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
-            coin_list=coin_list,  # Pass coin list for token ID resolution
-            cl_filter=kwargs.get("cl_filter")  # Pass cl_filter to get_top_n_pools_by_apr
-        )
+        result = get_opportunities_from_velodrome(**args)
         
         # Process results
         if isinstance(result, dict) and "error" in result:
@@ -1881,9 +1864,9 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
     
     execution_time = time.time() - start_time
     logger.info(f"Full execution completed in {execution_time:.2f} seconds")
-    logger.info(f"Found {len(all_results)} valid opportunities across all chains")
+    logger.info(f"Found opportunities across all chains: {all_results}")
     
     # Log cache metrics
     log_cache_metrics()
     
-    return {"result": all_results}
+    return {"result": all_results, "errors": errors}

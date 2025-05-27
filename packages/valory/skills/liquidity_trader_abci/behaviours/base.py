@@ -105,6 +105,7 @@ METRICS_UPDATE_INTERVAL = 21600  # 6hr
 ETH_INITIAL_AMOUNT = 0.005 * 10**18
 # Key for tracking remaining ETH in kv_store
 ETH_REMAINING_KEY = "eth_remaining_amount"
+MIN_TIME_IN_POSITION = 604800  # 1 week
 
 
 class DexType(Enum):
@@ -997,7 +998,7 @@ class LiquidityTraderBaseBehaviour(
         token1 = position.get("token1")
         amount0 = position.get("amount0")
         amount1 = position.get("amount1")
-        timestamp = position.get("timestamp")
+        timestamp = position.get("timestamp") or position.get("enter_timestamp")
 
         if None in (token0, amount0, timestamp):
             self.context.logger.error(
@@ -1260,7 +1261,7 @@ class LiquidityTraderBaseBehaviour(
         if not result or not result.get(ETH_REMAINING_KEY):
             # If not found in kv_store, initialize it
             yield from self.reset_eth_remaining_amount()
-            return ETH_INITIAL_AMOUNT
+            return int(ETH_INITIAL_AMOUNT)
 
         try:
             return int(result[ETH_REMAINING_KEY])
@@ -1269,7 +1270,7 @@ class LiquidityTraderBaseBehaviour(
                 f"Invalid ETH remaining amount in kv_store: {result[ETH_REMAINING_KEY]}"
             )
             yield from self.reset_eth_remaining_amount()
-            return ETH_INITIAL_AMOUNT
+            return int(ETH_INITIAL_AMOUNT)
 
     def update_eth_remaining_amount(
         self, amount_used: int
@@ -1280,14 +1281,14 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(
             f"Updating ETH remaining amount in kv_store: {current_remaining} -> {new_remaining}"
         )
-        yield from self._write_kv({ETH_REMAINING_KEY: str(new_remaining)})
+        yield from self._write_kv({ETH_REMAINING_KEY: int(new_remaining)})
 
     def reset_eth_remaining_amount(self) -> Generator[None, None, None]:
         """Reset the remaining ETH amount to the initial value in kv_store."""
         self.context.logger.info(
             f"Resetting ETH remaining amount in kv_store to {ETH_INITIAL_AMOUNT}"
         )
-        yield from self._write_kv({ETH_REMAINING_KEY: str(ETH_INITIAL_AMOUNT)})
+        yield from self._write_kv({ETH_REMAINING_KEY: int(ETH_INITIAL_AMOUNT)})
 
 
 def execute_strategy(

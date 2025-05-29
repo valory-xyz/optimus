@@ -372,14 +372,29 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"
                     )
+                    valid_opportunities = []
                     for opportunity in opportunities:
-                        self.context.logger.info(
-                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                            f"Chain: {opportunity.get('chain', 'N/A')}, "
-                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                        # Check if opportunity is a dictionary
+                        if isinstance(opportunity, dict):
+                            self.context.logger.info(
+                                f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                                f"Chain: {opportunity.get('chain', 'N/A')}, "
+                                f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                                f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                            )
+                            valid_opportunities.append(opportunity)
+                        else:
+                            self.context.logger.error(
+                                f"Invalid opportunity format from {next_strategy} strategy. "
+                                f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
+                            )
+                    
+                    if valid_opportunities:
+                        self.trading_opportunities.extend(valid_opportunities)
+                    else:
+                        self.context.logger.warning(
+                            f"No valid opportunities found using {next_strategy} strategy - all opportunities had invalid format"
                         )
-                    self.trading_opportunities.extend(opportunities)
                 else:
                     self.context.logger.warning(
                         f"No opportunity found using {next_strategy} strategy"

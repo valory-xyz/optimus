@@ -11,16 +11,19 @@ fingerprint:
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
   dialogues.py: bafybeifojr2urrwkm6rpm3wbytvcy54ks7x7qashwphyrlkrnaem6jaswy
   fsm_specification.yaml: bafybeifszjb2yzllrnoiij4jpz2wbrfsa4ybib7hfpf5wo2tkb4yho4nlu
-  handlers.py: bafybeihw6qombmu4abi7fcem5hhtmtdaoculxokcnh5ddhhdf5g2pkqhb4
+  handlers.py: bafybeihop6jq3t65eosra3xjwzdw5lkuu6vlj4hmn7oqbn2ctblbal3e5a
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
-  modius-ui-build/asset-manifest.json: bafybeigplj7aatra2wdwomjkdclhfwlccbhz4awtqf46to4u2g2m7l6mdq
+  modius-ui-build/asset-manifest.json: bafybeib6futqqtsevzhj4pyzzuxbav7fmru37mjsyrya4uju7kwzoi3otq
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
   modius-ui-build/globals.css: bafybeidikaeijb6i5kupnzjtvh55dsyi7xjn56t6owo4lhg4gqj3l4ibly
-  modius-ui-build/index.html: bafybeicoewtywidgviuup33eozof6vywr4bzk4ze5mwyhl3p2barzx5tjy
+  modius-ui-build/index.html: bafybeieutixqn3iqp6v7tdbirmz5totk43a3fntoyn4c3btnafuu4omlpu
   modius-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/networks/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
+  modius-ui-build/logos/networks/optimism-network.png: bafybeier5eew7564zbiwer7n76xpd5g6xhmuctm7e4cbjg247np75d6ayq
+  modius-ui-build/logos/optimus-chat.png: bafybeiessqtxhcnh7ll34sw7ihg7ijbhcp4hbyngm4lqgx6sjppjuyaja4
+  modius-ui-build/logos/optimus.png: bafybeic62cx3jpzabw2cpxi7x53wwd6lbuks6emv24sbrnui7knxhbieou
   modius-ui-build/logos/protocols/balancer.png: bafybeifffu2b22hfra5ojt2femrtzkj4irlegmd5tfxg7dnmxagrnqmlki
   modius-ui-build/logos/protocols/sturdy.png: bafybeiaipwep7gx6yxpzm7koklknr6clykkrepscfatb6qxnz4flcufx4u
   modius-ui-build/logos/protocols/velodrome.png: bafybeia42nydstgpohanlncbn6zzbrdj5gexu7fq3qiot6evit5j6hmilm
@@ -41,9 +44,43 @@ fingerprint:
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   modius-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
   modius-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
-  modius-ui-build/static/js/main.a5dd0b36.js: bafybeiglvg6x6die7vy3xdjgq334i5wq6vvherqgpinrj6td2cqraudpbe
-  modius-ui-build/static/js/main.a5dd0b36.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
-  modius-ui-build/static/js/main.a5dd0b36.js.map: bafybeicrjkrkshqpxtkyohjrukfn5bahljtw4b54wjdwf75di7kcdgrum4
+  modius-ui-build/static/js/main.bf22b6c3.js: bafybeiaccquyv74m7fngb5s547oyy62bpac6nho3ec65h3mxnthyha6uxy
+  modius-ui-build/static/js/main.bf22b6c3.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
+  modius-ui-build/static/js/main.bf22b6c3.js.map: bafybeiaxwiehpntk5qal3iw3i2e5efxc4dhzg4l2logw7b5x546gcfvrhm
+  optimus-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
+  optimus-ui-build/asset-manifest.json: bafybeidmgjd2or2frcfoxdm5kontka42ranloa665pl5bwrwwm47cw4fv4
+  optimus-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
+  optimus-ui-build/globals.css: bafybeidikaeijb6i5kupnzjtvh55dsyi7xjn56t6owo4lhg4gqj3l4ibly
+  optimus-ui-build/index.html: bafybeiert6da3e6qezhrswr2mdi3ssovfb5n3epygbwewgai2mgplavue4
+  optimus-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
+  optimus-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
+  optimus-ui-build/logos/networks/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
+  optimus-ui-build/logos/networks/optimism-network.png: bafybeier5eew7564zbiwer7n76xpd5g6xhmuctm7e4cbjg247np75d6ayq
+  optimus-ui-build/logos/optimus-chat.png: bafybeiessqtxhcnh7ll34sw7ihg7ijbhcp4hbyngm4lqgx6sjppjuyaja4
+  optimus-ui-build/logos/optimus.png: bafybeic62cx3jpzabw2cpxi7x53wwd6lbuks6emv24sbrnui7knxhbieou
+  optimus-ui-build/logos/protocols/balancer.png: bafybeifffu2b22hfra5ojt2femrtzkj4irlegmd5tfxg7dnmxagrnqmlki
+  optimus-ui-build/logos/protocols/sturdy.png: bafybeiaipwep7gx6yxpzm7koklknr6clykkrepscfatb6qxnz4flcufx4u
+  optimus-ui-build/logos/protocols/velodrome.png: bafybeia42nydstgpohanlncbn6zzbrdj5gexu7fq3qiot6evit5j6hmilm
+  optimus-ui-build/logos/tokens/bal.png: bafybeidnd5afsjcevrmyd4ucf74auemv5c7lzyurieemmdv4ht4idzp6qi
+  optimus-ui-build/logos/tokens/dai.png: bafybeifysdjm4t6mnzqvwrh5snqxbsiubvoa2akizyb5oiqaluxpwpqu7i
+  optimus-ui-build/logos/tokens/eth.png: bafybeiejj4gaj2ahgr6kavbg5rd5cnrpuxaicobfcd4ffxmlob664ouyrq
+  optimus-ui-build/logos/tokens/ezeth.png: bafybeigknvkgjfidvpr2mkj7pfpt5dy2ecbn7z2kosdo2xc53crqh2bqe4
+  optimus-ui-build/logos/tokens/mode.png: bafybeiakyu4lwlzqgjluol6gpfbydezwh7cosj5mncpmorbwbe46c6ck3a
+  optimus-ui-build/logos/tokens/olas.png: bafybeiguddvyhbusz6hya4rysexr45sn2nk5yn7mlwf34qdfrknxzxgfmi
+  optimus-ui-build/logos/tokens/op.png: bafybeiejhf2onv6i3gjj4busavchwr2246br277bi7t5r2yugsfgkiou3e
+  optimus-ui-build/logos/tokens/pxeth.png: bafybeidzbxp6eu3577tdhyjtxpezwegdi2l6norylg3lp2lzkkpd5rzoiq
+  optimus-ui-build/logos/tokens/reth.png: bafybeihgvupiwdhxy75id46lgd6o4kccppgsixveglymjtiefditsa2b2e
+  optimus-ui-build/logos/tokens/steth.png: bafybeifdxeuui5pjngbeku6rjgxewxieqcxtr2ggwmbmrn7pxhu3gt6apu
+  optimus-ui-build/logos/tokens/stone.png: bafybeia255ikjhe4azvdc6d6bnndfdp3jtduzr7jwibacvvpp6o5qxx5jq
+  optimus-ui-build/logos/tokens/tbtc.png: bafybeigmbnetcoo7yfacmxmzfej4aerqg4clpvabekfjdl7doaorrygley
+  optimus-ui-build/logos/tokens/usdc.png: bafybeiddabigc6c5ga27grotfy2bfr247eah2qs3nsjzup7z3l4r2kvggm
+  optimus-ui-build/logos/tokens/usdt.png: bafybeibx7p2cckrjejds6cwvu23wco5uqgnlmqmdumxytlyqarx5v4j2zy
+  optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
+  optimus-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
+  optimus-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
+  optimus-ui-build/static/js/main.d1adfc06.js: bafybeibertkgmqjtifnedljj56geg64j5oeieaoelch4phnl2nqryom6wy
+  optimus-ui-build/static/js/main.d1adfc06.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
+  optimus-ui-build/static/js/main.d1adfc06.js.map: bafybeiajcvw32lsple623reeqri7eqwnxhvmthh6m53ovzur2kgifrcl4e
   prompts.py: bafybeigqxufmc5vpem5osqe3bzuwrckv2zle7o4rzodbkggwmpdvzj6idu
 fingerprint_ignore_patterns: []
 connections:

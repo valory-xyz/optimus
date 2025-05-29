@@ -114,6 +114,7 @@ PROTOCOL_DEFINITIONS = {
 MODIUS_AGENT_PROFILE_PATH = "modius-ui-build"
 OPTIMUS_AGENT_PROFILE_PATH = "optimus-ui-build"
 
+
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
 
@@ -294,8 +295,12 @@ class HttpHandler(BaseHttpHandler):
         for chain in self.context.params.target_investment_chains:
             chain_strategies = self.context.params.available_strategies.get(chain, [])
             self.available_strategies.extend(chain_strategies)
-        
-        self.agent_profile_path = OPTIMUS_AGENT_PROFILE_PATH if self.context.params.target_investment_chains[0] == "optimism" else MODIUS_AGENT_PROFILE_PATH
+
+        self.agent_profile_path = (
+            OPTIMUS_AGENT_PROFILE_PATH
+            if self.context.params.target_investment_chains[0] == "optimism"
+            else MODIUS_AGENT_PROFILE_PATH
+        )
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -347,7 +352,9 @@ class HttpHandler(BaseHttpHandler):
             requested_path = urlparse(http_msg.url).path.lstrip("/")
 
             # Construct the file path
-            file_path = Path(Path(__file__).parent, self.agent_profile_path, requested_path)
+            file_path = Path(
+                Path(__file__).parent, self.agent_profile_path, requested_path
+            )
 
             # If the file exists and is a file, send it as a response
             if file_path.exists() and file_path.is_file():

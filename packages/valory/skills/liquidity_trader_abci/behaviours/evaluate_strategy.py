@@ -388,7 +388,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                 f"Invalid opportunity format from {next_strategy} strategy. "
                                 f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
                             )
-                    
+
                     if valid_opportunities:
                         self.trading_opportunities.extend(valid_opportunities)
                     else:

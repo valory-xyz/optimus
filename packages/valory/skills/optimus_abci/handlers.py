@@ -350,12 +350,23 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Extract the requested path from the URL
             requested_path = urlparse(http_msg.url).path.lstrip("/")
-
+            
             # Construct the file path
             file_path = Path(
                 Path(__file__).parent, self.agent_profile_path, requested_path
             )
+            # Log requested path and constructed file path
+            self.context.logger.info(f"Requested path: {requested_path}")
+            self.context.logger.info(f"Constructed file path: {file_path}")
 
+            # Get operating chain from shared state if available
+            try:
+                operating_chain = self.context.params.target_investment_chains[0]
+            except (AttributeError, IndexError) as e:
+                self.context.logger.warning(f"Could not get operating chain: {str(e)}")
+                operating_chain = None
+            
+            self.context.logger.info(f"Operating chain: {operating_chain}")
             # If the file exists and is a file, send it as a response
             if file_path.exists() and file_path.is_file():
                 with open(file_path, "rb") as file:
@@ -621,34 +632,6 @@ class HttpHandler(BaseHttpHandler):
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
-
-    def _handle_get_static_js(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a HTTP GET request for the main.js file.
-
-        :param http_msg: the HTTP message
-        :param http_dialogue: the HTTP dialogue
-        """
-        try:
-            # Read the main.js file
-            with open(
-                Path(
-                    Path(__file__).parent,
-                    self.agent_profile_path,
-                    "static",
-                    "js",
-                    "main.d1485dfa.js",
-                ),
-                "rb",
-            ) as file:
-                file_content = file.read()
-
-            # Send the file content as a response
-            self._send_ok_response(http_msg, http_dialogue, file_content)
-        except FileNotFoundError:
-            self._handle_not_found(http_msg, http_dialogue)
 
     def _handle_not_found(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

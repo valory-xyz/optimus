@@ -20,6 +20,7 @@
 """This module contains the behaviour for evaluating opportunities and forming actions for the 'liquidity_trader_abci' skill."""
 
 import json
+import numpy as np
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import (
     Any,
@@ -34,7 +35,7 @@ from typing import (
     cast,
 )
 from urllib.parse import urlencode
-
+import traceback
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_utils import to_checksum_address
@@ -45,6 +46,8 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     DexType,
     HTTP_OK,
+    SLEEP_TIME,
+    RETRIES,
     LiquidityTraderBaseBehaviour,
     METRICS_UPDATE_INTERVAL,
     PositionStatus,
@@ -97,6 +100,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.set_done()
 
             yield from self.fetch_all_trading_opportunities()
+
+            self.context.logger.info(f"sleep_time,retries:{SLEEP_TIME,RETRIES}")
 
             if self.current_positions:
                 for position in (
@@ -167,10 +172,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def calculate_velodrome_cl_token_requirements(
+    def validate_and_prepare_velodrome_inputs(
         self, tick_bands, current_price, tick_spacing=1
     ):
-        """Determines token requirements for Velodrome CL positions based on current price."""
+        """Validates inputs and prepares data for Velodrome CL position analysis."""
+
         # Input validation
         if not tick_bands:
             self.context.logger.error("No tick bands provided")
@@ -194,12 +200,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Validate tick spacing alignment
+        warnings = []
         for band in tick_bands:
             if (
                 band.get("tick_lower") % tick_spacing != 0
                 or band.get("tick_upper") % tick_spacing != 0
             ):
-                self.context.logger.warning(
+                warnings.append(
                     f"Tick range [{band.get('tick_lower')}, {band.get('tick_upper')}] "
                     f"not aligned with tick spacing {tick_spacing}"
                 )
@@ -210,13 +217,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("No bands with positive allocation")
             return None
 
-        # Process each band separately
-        position_requirements = []
-        total_weighted_token0 = 0
-        total_weighted_token1 = 0
-        total_allocation = 0
-        warnings = []
-
+        # Additional validation for each band
+        validated_bands = []
         for band in valid_bands:
             tick_lower = band.get("tick_lower")
             tick_upper = band.get("tick_upper")
@@ -229,25 +231,66 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 continue
 
+            validated_bands.append(
+                {
+                    "tick_lower": tick_lower,
+                    "tick_upper": tick_upper,
+                    "allocation": allocation,
+                }
+            )
+
+        if not validated_bands:
+            self.context.logger.error("No valid bands after validation")
+            return None
+
+        return {
+            "validated_bands": validated_bands,
+            "current_price": current_price,
+            "current_tick": current_tick,
+            "tick_spacing": tick_spacing,
+            "warnings": warnings,
+        }
+
+    def calculate_velodrome_token_ratios(self, validated_data):
+        """Calculates token ratios and requirements for Velodrome CL positions."""
+
+        if not validated_data:
+            return None
+
+        validated_bands = validated_data["validated_bands"]
+        current_price = validated_data["current_price"]
+        current_tick = validated_data["current_tick"]
+        warnings = validated_data["warnings"].copy()
+
+        # Process each band to calculate token ratios
+        position_requirements = []
+        total_weighted_token0 = 0
+        total_weighted_token1 = 0
+        total_allocation = 0
+
+        for band in validated_bands:
+            tick_lower = band["tick_lower"]
+            tick_upper = band["tick_upper"]
+            allocation = band["allocation"]
+
             # Convert ticks to prices
             lower_bound_price = 1.0001**tick_lower
             upper_bound_price = 1.0001**tick_upper
 
-            # Apply the formula from the document - CORRECTED VERSION
+            # Calculate token ratios based on current price position
             if current_price <= lower_bound_price:
-                # Price below range - need 100% token0 (per diagram)
+                # Price below range - need 100% token0
                 token0_ratio = 1.0
                 token1_ratio = 0.0
                 status = "BELOW_RANGE"
             elif current_price >= upper_bound_price:
-                # Price above range - need 100% token1 (per diagram)
+                # Price above range - need 100% token1
                 token0_ratio = 0.0
                 token1_ratio = 1.0
                 status = "ABOVE_RANGE"
             else:
-                # Price in range - calculate using the formula from the document
+                # Price in range - calculate using interpolation formula
                 try:
-                    # This formula now matches the diagram
                     token1_ratio = min(
                         max(
                             (current_price - lower_bound_price)
@@ -283,11 +326,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
             )
 
-        # If no valid positions after filtering
-        if not position_requirements:
-            self.context.logger.error("No valid positions after filtering")
-            return None
-
         # Calculate overall ratios
         overall_token0_ratio = (
             total_weighted_token0 / total_allocation if total_allocation > 0 else 0
@@ -296,7 +334,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             total_weighted_token1 / total_allocation if total_allocation > 0 else 0
         )
 
-        # Determine if all positions have the same requirement
+        # Generate recommendations
         all_same_status = all(
             pos["status"] == position_requirements[0]["status"]
             for pos in position_requirements
@@ -331,11 +369,30 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "warnings": warnings,
         }
 
+    def calculate_velodrome_cl_token_requirements(
+        self, tick_bands, current_price, tick_spacing=1
+    ):
+        """Determines token requirements for Velodrome CL positions based on current price.
+
+        This is the main function that orchestrates the validation and calculation process.
+        """
+        # Step 1: Validate and prepare inputs
+        validated_data = self.validate_and_prepare_velodrome_inputs(
+            tick_bands, current_price, tick_spacing
+        )
+
+        if not validated_data:
+            return None
+
+        # Step 2: Calculate token ratios and generate recommendations
+        return self.calculate_velodrome_token_ratios(validated_data)
+
     def get_velodrome_position_requirements(
         self,
     ) -> Generator[None, None, Dict[str, Any]]:
         """Generator function to determine token requirements for Velodrome CL positions."""
         results = {}
+        max_ration = 1.0
         for opportunity in self.selected_opportunities:
             if opportunity.get("dex_type") == "velodrome" and opportunity.get(
                 "is_cl_pool"
@@ -457,13 +514,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Update max_amounts_in based on the requirements and actual balances
                     # Using the weighted ratios from all the bands
-                    if requirements["overall_token0_ratio"] > 0.99:
+                    if requirements["overall_token0_ratio"] > max_ration:
                         # Only need token0
                         opportunity["max_amounts_in"] = [token0_balance, 0]
                         self.context.logger.info(
                             f"Using only token0: {token0_balance} {token0_symbol}"
                         )
-                    elif requirements["overall_token1_ratio"] > 0.99:
+                    elif requirements["overall_token1_ratio"] > max_ration:
                         # Only need token1
                         opportunity["max_amounts_in"] = [0, token1_balance]
                         self.context.logger.info(
@@ -530,7 +587,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(
                         f"Error analyzing Velodrome position: {str(e)}"
                     )
-                    import traceback
 
                     self.context.logger.error(traceback.format_exc())
 

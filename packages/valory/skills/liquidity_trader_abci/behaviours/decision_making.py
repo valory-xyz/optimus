@@ -49,6 +49,8 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     ERC20_DECIMALS,
     ETHER_VALUE,
     HTTP_NOT_FOUND,
+    SLEEP_TIME,
+    RETRIES,
     HTTP_OK,
     INTEGRATOR,
     LiquidityTraderBaseBehaviour,
@@ -831,8 +833,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Configure retry parameters
-        sleep_time = 10  # Configurable sleep time
-        retries = 3  # Number of API call retries
+        sleep_time = SLEEP_TIME
+        # Configurable sleep time
+        retries = RETRIES
+        # Number of API call retries
 
         # Fetch token0 price with retry handling
         token0_price = None
@@ -976,6 +980,126 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return max_amounts_in
 
+    def _get_token_balances_and_calculate_amounts(
+        self,
+        chain: str,
+        assets: List[str],
+        positions: List[Dict[str, Any]],
+        relative_funds_percentage: float = 1.0,
+        max_investment_amounts: Optional[List[int]] = None,
+        eth_handling: bool = False,
+    ) -> Generator[
+        None, None, Tuple[Optional[List[int]], Optional[int], Optional[int]]
+    ]:
+        """Helper function to get token balances and calculate investment amounts."""
+        try:
+            # Get token balances
+            token0_balance = self._get_balance(chain, assets[0], positions)
+            token1_balance = self._get_balance(chain, assets[1], positions)
+
+            if token0_balance is None or token1_balance is None:
+                self.context.logger.error("Balance for one or more tokens is None")
+                return None, None, None
+
+            # Calculate max_amounts_in based on whether max_investment_amounts are provided
+            if max_investment_amounts:
+                # Convert max_investment_amounts to proper decimal representation
+                token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+                token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+
+                if token0_decimals is None or token1_decimals is None:
+                    self.context.logger.error("Failed to get token decimals")
+                    return None, None, None
+
+                max_investment_amounts = [
+                    int(
+                        Decimal(str(max_investment_amounts[0]))
+                        * (Decimal(10) ** Decimal(token0_decimals))
+                    ),
+                    int(
+                        Decimal(str(max_investment_amounts[1]))
+                        * (Decimal(10) ** Decimal(token1_decimals))
+                    ),
+                ]
+
+            # Handle ETH special case if enabled
+            if eth_handling:
+                if assets[0] == ZERO_ADDRESS:
+                    # For ETH (token0), get the remaining ETH amount from kv_store
+                    eth_remaining = yield from self.get_eth_remaining_amount()
+                    max_amounts_in = [
+                        int(
+                            min(eth_remaining, token0_balance)
+                            * relative_funds_percentage
+                        ),
+                        int(token1_balance * relative_funds_percentage),
+                    ]
+                elif assets[1] == ZERO_ADDRESS:
+                    # For ETH (token1), get the remaining ETH amount from kv_store
+                    eth_remaining = yield from self.get_eth_remaining_amount()
+                    max_amounts_in = [
+                        int(token0_balance * relative_funds_percentage),
+                        int(
+                            min(eth_remaining, token1_balance)
+                            * relative_funds_percentage
+                        ),
+                    ]
+                else:
+                    # For non-ETH tokens, use the original calculation
+                    max_amounts_in = [
+                        int(token0_balance * relative_funds_percentage),
+                        int(token1_balance * relative_funds_percentage),
+                    ]
+            else:
+                # Standard calculation without ETH handling
+                max_amounts_in = [
+                    int(token0_balance * relative_funds_percentage),
+                    int(token1_balance * relative_funds_percentage),
+                ]
+
+            # Ensure that allocated amounts do not exceed available balances
+            max_amounts_in = [
+                min(max_amounts_in[0], token0_balance),
+                min(max_amounts_in[1], token1_balance),
+            ]
+
+            # Apply max_investment_amounts constraint if provided
+            if max_investment_amounts:
+                max_amounts_in = [
+                    min(max_amounts_in[i], max_investment_amounts[i])
+                    for i in range(len(max_amounts_in))
+                ]
+
+            self.context.logger.info(
+                f"Calculated amounts - Token0: {max_amounts_in[0]}, Token1: {max_amounts_in[1]}"
+            )
+
+            return max_amounts_in, token0_balance, token1_balance
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating token balances and amounts: {str(e)}"
+            )
+            return None, None, None
+
+    def _get_token_balances(
+        self, chain: str, assets: List[str], positions: List[Dict[str, Any]]
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """Simple helper to get token balances for two assets."""
+        try:
+            token0_balance = self._get_balance(chain, assets[0], positions)
+            token1_balance = self._get_balance(chain, assets[1], positions)
+
+            if token0_balance is None or token1_balance is None:
+                self.context.logger.error("Balance for one or more tokens is None")
+                return None, None
+
+            return token0_balance, token1_balance
+
+        except Exception as e:
+            self.context.logger.error(f"Error getting token balances: {str(e)}")
+            return None, None
+
     def get_enter_pool_tx_hash(
         self, positions, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
@@ -1032,108 +1156,28 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return None, None, None
             self.context.logger.info(f"max_amounts_in for velodrome : {max_amounts_in}")
         else:
-            if not max_investment_amounts:
-                token0_balance = self._get_balance(chain, assets[0], positions)
-                token1_balance = self._get_balance(chain, assets[1], positions)
-                relative_funds_percentage = action.get("relative_funds_percentage", 1.0)
-                if not relative_funds_percentage:
-                    self.context.logger.error(
-                        f"relative_funds_percentage not define: {relative_funds_percentage}"
-                    )
-                    return None, None, None
-                max_amounts_in = [
-                    int(token0_balance * relative_funds_percentage),
-                    int(token1_balance * relative_funds_percentage),
-                ]
-                max_amounts_in = [
-                    min(max_amounts_in[0], token0_balance),
-                    min(max_amounts_in[1], token1_balance),
-                ]
-            else:
-                token0_decimals = yield from self._get_token_decimals(chain, assets[0])
-                token1_decimals = yield from self._get_token_decimals(chain, assets[1])
-                max_investment_amounts[0] = int(
-                    Decimal(str(max_investment_amounts[0]))
-                    * (Decimal(10) ** Decimal(token0_decimals))
-                )
-                max_investment_amounts[1] = int(
-                    Decimal(str(max_investment_amounts[1]))
-                    * (Decimal(10) ** Decimal(token1_decimals))
-                )
-
-            self.context.logger.info(
-                f"Max investment amounts according to strategy: {max_investment_amounts}."
-            )
-
             relative_funds_percentage = action.get("relative_funds_percentage")
             if not relative_funds_percentage:
                 self.context.logger.error(
                     f"relative_funds_percentage not define: {relative_funds_percentage}"
                 )
                 return None, None, None
-
-            self.context.logger.info(
-                f"chain, assets[0], positions:{chain, assets[0],assets[1], positions}"
+            # Use the helper function to get balances and calculate amounts
+            (
+                max_amounts_in,
+                token0_balance,
+                token1_balance,
+            ) = yield from self._get_token_balances_and_calculate_amounts(
+                chain=chain,
+                assets=assets,
+                positions=positions,
+                relative_funds_percentage=relative_funds_percentage,
+                max_investment_amounts=max_investment_amounts,
+                eth_handling=True,  # Enable ETH special handling
             )
 
-            token0_balance = self._get_balance(chain, assets[0], positions)
-            token1_balance = self._get_balance(chain, assets[1], positions)
-
-            self.context.logger.info(
-                f"token0_balance,token1_balance:{token0_balance,token1_balance}"
-            )
-
-            if token0_balance is None or token1_balance is None:
-                self.context.logger.error("Balance for one or more tokens is None")
-                return None, None, None  # Or handle the error as appropriate
-
-            # Calculate max_amounts_in with special handling for ETH
-            if assets[0] == ZERO_ADDRESS:
-                # For ETH (token0), get the remaining ETH amount from kv_store
-                eth_remaining = yield from self.get_eth_remaining_amount()
-
-                # Use the tracked ETH amount
-                max_amounts_in = [
-                    int(
-                        min(eth_remaining, token0_balance) * relative_funds_percentage
-                    ),  # Don't exceed available balance
-                    int(token1_balance * relative_funds_percentage),
-                ]
-            elif assets[1] == ZERO_ADDRESS:
-                # For ETH (token1), get the remaining ETH amount from kv_store
-                eth_remaining = yield from self.get_eth_remaining_amount()
-
-                # Use the tracked ETH amount
-                max_amounts_in = [
-                    int(token0_balance * relative_funds_percentage),
-                    int(
-                        min(eth_remaining, token1_balance) * relative_funds_percentage
-                    ),  # Don't exceed available balance
-                ]
-            else:
-                # For non-ETH tokens, use the original calculation
-                max_amounts_in = [
-                    int(token0_balance * relative_funds_percentage),
-                    int(token1_balance * relative_funds_percentage),
-                ]
-
-            # Ensure that allocated amounts do not exceed available balances.
-            max_amounts_in = [
-                min(max_amounts_in[0], token0_balance),
-                min(max_amounts_in[1], token1_balance),
-            ]
-            self.context.logger.info(
-                f"Adjusted max amounts in after comparing with balances: {max_amounts_in}"
-            )
-
-            # Adjust max_amounts_in based on max_investment_amounts
-            if max_investment_amounts and (
-                type(max_investment_amounts) == type(max_amounts_in)
-            ):
-                max_amounts_in = [
-                    min(max_amounts_in[i], max_investment_amounts[i])
-                    for i in range(len(max_amounts_in))
-                ]
+            if max_amounts_in is None:
+                return None, None, None
 
             if len(max_amounts) >= 2:
                 max_amounts_in = [

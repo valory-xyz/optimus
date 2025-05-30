@@ -105,6 +105,8 @@ METRICS_UPDATE_INTERVAL = 21600  # 6hr
 ETH_INITIAL_AMOUNT = 0.005 * 10**18
 # Key for tracking remaining ETH in kv_store
 ETH_REMAINING_KEY = "eth_remaining_amount"
+SLEEP_TIME = 10  # Configurable sleep time
+RETRIES = 3  # Number of API call retries
 
 
 class DexType(Enum):

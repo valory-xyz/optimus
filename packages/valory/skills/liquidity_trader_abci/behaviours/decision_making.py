@@ -839,18 +839,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # Number of API call retries
 
         # Fetch token0 price with retry handling
-        token0_price = None
-        for attempt in range(1, retries + 1):
-            try:
-                token0_price = yield from self._fetch_token_price(token0, chain)
-                break  # Success, break out of loop
-            except Exception as e:
-                self.context.logger.error(
-                    f"Attempt {attempt} - Error fetching price for {token0}: {e}"
-                )
-                if attempt < retries:
-                    yield from self.sleep(sleep_time)
-
+        token0_price = yield from self._fetch_token_price(token0, chain)
         if token0_price is None:
             self.context.logger.error(f"Failed to fetch price for token: {token0}")
             return None
@@ -858,18 +847,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         yield from self.sleep(sleep_time)  # Sleep to respect API rate limits
 
         # Fetch token1 price with retry handling
-        token1_price = None
-        for attempt in range(1, retries + 1):
-            try:
-                token1_price = yield from self._fetch_token_price(token1, chain)
-                break
-            except Exception as e:
-                self.context.logger.error(
-                    f"Attempt {attempt} - Error fetching price for {token1}: {e}"
-                )
-                if attempt < retries:
-                    yield from self.sleep(sleep_time)
-
+        token1_price = yield from self._fetch_token_price(token1, chain)
         if token1_price is None:
             self.context.logger.error(f"Failed to fetch price for token: {token1}")
             return None

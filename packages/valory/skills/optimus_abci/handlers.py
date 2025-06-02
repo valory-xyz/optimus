@@ -101,7 +101,7 @@ IpfsHandler = BaseIpfsHandler
 STRATEGY_TO_PROTOCOL = {
     "balancer_pools_search": "balancerPool",
     "asset_lending": "sturdy",
-    "uniswap_pools_search": "UniswapV3",
+    "uniswap_pools_search": "uniswapV3",
     "velodrome_pools_search": "velodrome",
 }
 # Reverse mapping for converting protocol names back to strategy names

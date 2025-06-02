@@ -56,6 +56,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
+    COIN_ID_MAPPING
 )
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
@@ -764,6 +765,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "coingecko_api_key": self.coingecko.api_key,
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
+                    "coin_id_mapping": COIN_ID_MAPPING
                 }
             )
             strategy_kwargs_list.append(kwargs)
@@ -875,6 +877,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
                 "current_positions": self.current_positions,
                 "whitelisted_assets": WHITELISTED_ASSETS,
+                "coin_id_mapping": COIN_ID_MAPPING
             }
         )
 

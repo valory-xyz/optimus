@@ -108,7 +108,8 @@ ETH_REMAINING_KEY = "eth_remaining_amount"
 SLEEP_TIME = 10  # Configurable sleep time
 RETRIES = 3  # Number of API call retries
 MIN_TIME_IN_POSITION = 604800 * 3  # 3 weeks
-
+PRICE_CACHE_KEY_PREFIX = "token_price_cache_"
+CACHE_TTL = 3600  # 1 hour in seconds
 
 class DexType(Enum):
     """DexType"""
@@ -845,13 +846,9 @@ class LiquidityTraderBaseBehaviour(
         self, token_address: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
         """Fetch the price for a specific token, with in-memory caching."""
-        now = self._get_current_timestamp()
-        cache_key = (token_address, chain)
-        cache_entry = self.shared_state._token_price_cache.get(cache_key)
-        if cache_entry:
-            price, timestamp = cache_entry
-            if now - timestamp < self.shared_state._token_price_cache_ttl:
-                return price  # Return cached value
+        cached_price = yield from self._get_cached_price(token_address, chain)
+        if cached_price is not None:
+            return cached_price
 
         headers = {
             "Accept": "application/json",
@@ -877,9 +874,68 @@ class LiquidityTraderBaseBehaviour(
         if success:
             token_data = response_json.get(token_address.lower(), {})
             price = token_data.get("usd", 0)
-            self.shared_state._token_price_cache[cache_key] = (price, now)
+            # Cache the price
+            yield from self._cache_price(token_address, chain, price)
             return price
+        
         return None
+
+    def _get_price_cache_key(self, token_address: str, chain: str) -> str:
+        """Get the cache key for a token's price data."""
+        return f"{PRICE_CACHE_KEY_PREFIX}{chain}_{token_address.lower()}"
+
+    def _get_cached_price(
+        self, token_address: str, chain: str, date: Optional[str] = None
+    ) -> Generator[None, None, Optional[float]]:
+        """Get cached price for a token."""
+        cache_key = self._get_price_cache_key(token_address, chain)
+        result = yield from self._read_kv((cache_key,))
+        
+        if not result or not result.get(cache_key):
+            return None
+            
+        try:
+            price_data = json.loads(result[cache_key])
+            if date:
+                # For historical price
+                return price_data.get(date)
+            else:
+                # For current price, use "current" as key
+                current_data = price_data.get("current")
+                if not current_data:
+                    return None
+                price, timestamp = current_data
+                if self._get_current_timestamp() - timestamp < CACHE_TTL:
+                    return price
+            return None
+        except (json.JSONDecodeError, TypeError):
+            self.context.logger.error(f"Invalid cache data for token {token_address}")
+            return None
+
+    def _cache_price(
+        self, token_address: str, chain: str, price: float, date: Optional[str] = None
+    ) -> Generator[None, None, None]:
+        """Cache price for a token."""
+        cache_key = self._get_price_cache_key(token_address, chain)
+        
+        # First read existing cache
+        result = yield from self._read_kv((cache_key,))
+        price_data = {}
+        
+        if result and result.get(cache_key):
+            try:
+                price_data = json.loads(result[cache_key])
+            except json.JSONDecodeError:
+                self.context.logger.error(f"Invalid cache data for token {token_address}, resetting cache")
+        
+        if date:
+            # For historical price
+            price_data[date] = price
+        else:
+            # For current price, store with timestamp
+            price_data["current"] = (price, self._get_current_timestamp())
+        
+        yield from self._write_kv({cache_key: json.dumps(price_data)})
 
     def _request_with_retries(
         self,
@@ -1168,7 +1224,7 @@ class LiquidityTraderBaseBehaviour(
 
         for token_symbol, token_address in tokens:
             # Get CoinGecko ID.
-            coingecko_id = yield from self.get_coin_id_from_symbol(
+            coingecko_id = self.get_coin_id_from_symbol(
                 token_symbol, chain
             )
             if not coingecko_id:
@@ -1188,6 +1244,11 @@ class LiquidityTraderBaseBehaviour(
     def _fetch_historical_token_price(
         self, coingecko_id, date_str
     ) -> Generator[None, None, Optional[float]]:
+        # First check the cache
+        cached_price = yield from self._get_cached_price(coingecko_id, "historical", date_str)
+        if cached_price is not None:
+            return cached_price
+        
         endpoint = self.coingecko.historical_price_endpoint.format(
             coin_id=coingecko_id,
             date=date_str,
@@ -1206,15 +1267,13 @@ class LiquidityTraderBaseBehaviour(
         )
 
         if success:
-            price = (
-                response_json.get("market_data", {}).get("current_price", {}).get("usd")
-            )
+            price = response_json.get("market_data", {}).get("current_price", {}).get("usd")
             if price:
+                # Cache the historical price
+                yield from self._cache_price(coingecko_id, "historical", price, date_str)
                 return price
             else:
-                self.context.logger.error(
-                    f"No price in response for token {coingecko_id}"
-                )
+                self.context.logger.error(f"No price in response for token {coingecko_id}")
                 return None
         else:
             self.context.logger.error(
@@ -1239,7 +1298,7 @@ class LiquidityTraderBaseBehaviour(
 
     def get_coin_id_from_symbol(
         self, symbol, chain_name
-    ) -> Generator[None, None, Optional[str]]:
+    ) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
         # Check if coin_list is valid
         if symbol.lower() in COIN_ID_MAPPING.get(chain_name, {}):

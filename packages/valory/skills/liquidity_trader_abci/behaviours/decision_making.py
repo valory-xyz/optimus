@@ -49,8 +49,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     ERC20_DECIMALS,
     ETHER_VALUE,
     HTTP_NOT_FOUND,
-    SLEEP_TIME,
-    RETRIES,
     HTTP_OK,
     INTEGRATOR,
     LiquidityTraderBaseBehaviour,
@@ -58,6 +56,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     MAX_STEP_COST_RATIO,
     PositionStatus,
     SAFE_TX_GAS,
+    SLEEP_TIME,
     SwapStatus,
     WAITING_PERIOD_FOR_BALANCE_TO_REFLECT,
     ZERO_ADDRESS,
@@ -839,8 +838,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # Configure retry parameters
         sleep_time = SLEEP_TIME
-        # Configurable sleep time
-        retries = RETRIES
         # Number of API call retries
 
         # Fetch token0 price with retry handling

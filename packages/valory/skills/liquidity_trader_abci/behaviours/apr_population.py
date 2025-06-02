@@ -553,7 +553,11 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             coingecko_id="ethereum", date_str=date_str
         )
 
-        if current_eth_price is not None and start_eth_price is not None and result["total_actual_apr"]:
+        if (
+            current_eth_price is not None
+            and start_eth_price is not None
+            and result["total_actual_apr"]
+        ):
             adjustment_factor = Decimal("1") - (
                 Decimal(str(current_eth_price)) / Decimal(str(start_eth_price))
             )

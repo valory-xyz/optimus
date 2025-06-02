@@ -111,6 +111,7 @@ MIN_TIME_IN_POSITION = 604800 * 3  # 3 weeks
 PRICE_CACHE_KEY_PREFIX = "token_price_cache_"
 CACHE_TTL = 3600  # 1 hour in seconds
 
+
 class DexType(Enum):
     """DexType"""
 
@@ -183,8 +184,8 @@ WHITELISTED_ASSETS = {
         # MODE tokens - stablecoins
         "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
         "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "msDAI",
-        "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT", 
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT", 
+        "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
     },
     "optimism": {
         # Optimism tokens - stablecoins
@@ -204,37 +205,37 @@ WHITELISTED_ASSETS = {
         "0x73cb180bf0521828d8849bc8cf2b920918e23032": "USD+",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
         "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "USDGLO",
-    }
+    },
 }
 
 COIN_ID_MAPPING = {
-    "mode":{
-        "usdc" : "mode-bridged-usdc-mode",
-        "msdai" : None, 
-        "usdt" : "mode-bridged-usdt-mode",
-        "ousdt" : "openusdt",
-        "weth" : "l2-standard-bridged-weth-modee",
+    "mode": {
+        "usdc": "mode-bridged-usdc-mode",
+        "msdai": None,
+        "usdt": "mode-bridged-usdt-mode",
+        "ousdt": "openusdt",
+        "weth": "l2-standard-bridged-weth-modee",
         "ezeth": "renzo-restaked-eth",
-        "mode": "mode"
+        "mode": "mode",
     },
     "optimism": {
         "usdc": "usd-coin",
         "alusd": "alchemix-usd",
-        "usdt0": "usdt0", 
+        "usdt0": "usdt0",
         "usdt": "bridged-usdt",
         "msusd": None,
         "usdc.e": "bridged-usd-coin-optimism",
         "usx": "token-dforce-usd",
         "dola": "dola-usd",
-        "lusd": "liquity-usd", 
+        "lusd": "liquity-usd",
         "dai": "makerdao-optimism-bridged-dai-optimism",
         "bold": "liquity-bold",
         "frax": "frax",
         "sdai": "savings-dai",
         "usd+": "overnight-fi-usd-optimism",
         "ousdt": "openusdt",
-        "usdglo": "glo-dollar"
-    }
+        "usdglo": "glo-dollar",
+    },
 }
 
 
@@ -611,7 +612,11 @@ class LiquidityTraderBaseBehaviour(
 
     def store_whitelisted_assets(self) -> None:
         """Store the list of assets as JSON."""
-        self._store_data(self.whitelisted_assets, "whitelisted_assets", self.whitelisted_assets_filepath)
+        self._store_data(
+            self.whitelisted_assets,
+            "whitelisted_assets",
+            self.whitelisted_assets_filepath,
+        )
 
     def read_whitelisted_assets(self) -> None:
         """Read the list of assets as JSON."""
@@ -619,7 +624,9 @@ class LiquidityTraderBaseBehaviour(
 
     def store_funding_events(self) -> None:
         """Store the list of assets as JSON."""
-        self._store_data(self.funding_events, "funding_events", self.funding_events_filepath)
+        self._store_data(
+            self.funding_events, "funding_events", self.funding_events_filepath
+        )
 
     def read_funding_events(self) -> None:
         """Read the list of assets as JSON."""
@@ -889,7 +896,7 @@ class LiquidityTraderBaseBehaviour(
             # Cache the price
             yield from self._cache_price(token_address, chain, price)
             return price
-        
+
         return None
 
     def _get_price_cache_key(self, token_address: str, chain: str) -> str:
@@ -902,10 +909,10 @@ class LiquidityTraderBaseBehaviour(
         """Get cached price for a token."""
         cache_key = self._get_price_cache_key(token_address, chain)
         result = yield from self._read_kv((cache_key,))
-        
+
         if not result or not result.get(cache_key):
             return None
-            
+
         try:
             price_data = json.loads(result[cache_key])
             if date:
@@ -929,24 +936,26 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, None]:
         """Cache price for a token."""
         cache_key = self._get_price_cache_key(token_address, chain)
-        
+
         # First read existing cache
         result = yield from self._read_kv((cache_key,))
         price_data = {}
-        
+
         if result and result.get(cache_key):
             try:
                 price_data = json.loads(result[cache_key])
             except json.JSONDecodeError:
-                self.context.logger.error(f"Invalid cache data for token {token_address}, resetting cache")
-        
+                self.context.logger.error(
+                    f"Invalid cache data for token {token_address}, resetting cache"
+                )
+
         if date:
             # For historical price
             price_data[date] = price
         else:
             # For current price, store with timestamp
             price_data["current"] = (price, self._get_current_timestamp())
-        
+
         yield from self._write_kv({cache_key: json.dumps(price_data)})
 
     def _request_with_retries(
@@ -1236,9 +1245,7 @@ class LiquidityTraderBaseBehaviour(
 
         for token_symbol, token_address in tokens:
             # Get CoinGecko ID.
-            coingecko_id = self.get_coin_id_from_symbol(
-                token_symbol, chain
-            )
+            coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
             if not coingecko_id:
                 self.context.logger.error(
                     f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
@@ -1257,10 +1264,12 @@ class LiquidityTraderBaseBehaviour(
         self, coingecko_id, date_str
     ) -> Generator[None, None, Optional[float]]:
         # First check the cache
-        cached_price = yield from self._get_cached_price(coingecko_id, "historical", date_str)
+        cached_price = yield from self._get_cached_price(
+            coingecko_id, "historical", date_str
+        )
         if cached_price is not None:
             return cached_price
-        
+
         endpoint = self.coingecko.historical_price_endpoint.format(
             coin_id=coingecko_id,
             date=date_str,
@@ -1279,13 +1288,19 @@ class LiquidityTraderBaseBehaviour(
         )
 
         if success:
-            price = response_json.get("market_data", {}).get("current_price", {}).get("usd")
+            price = (
+                response_json.get("market_data", {}).get("current_price", {}).get("usd")
+            )
             if price:
                 # Cache the historical price
-                yield from self._cache_price(coingecko_id, "historical", price, date_str)
+                yield from self._cache_price(
+                    coingecko_id, "historical", price, date_str
+                )
                 return price
             else:
-                self.context.logger.error(f"No price in response for token {coingecko_id}")
+                self.context.logger.error(
+                    f"No price in response for token {coingecko_id}"
+                )
                 return None
         else:
             self.context.logger.error(
@@ -1308,9 +1323,7 @@ class LiquidityTraderBaseBehaviour(
         )
         return token_name
 
-    def get_coin_id_from_symbol(
-        self, symbol, chain_name
-    ) -> Optional[str]:
+    def get_coin_id_from_symbol(self, symbol, chain_name) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
         # Check if coin_list is valid
         symbol = symbol.lower()
@@ -1319,7 +1332,6 @@ class LiquidityTraderBaseBehaviour(
             return COIN_ID_MAPPING[chain_name][symbol]
 
         return None
-
 
     def get_eth_remaining_amount(self) -> Generator[None, None, int]:
         """Get the remaining ETH amount for swaps from kv_store."""
@@ -1332,10 +1344,10 @@ class LiquidityTraderBaseBehaviour(
         try:
             chain = self.params.target_investment_chains[0]
             account = self.params.safe_contract_addresses.get(chain)
-            amount =  yield from self._get_native_balance(chain, account)
+            amount = yield from self._get_native_balance(chain, account)
             if amount:
                 return min(int(result[ETH_REMAINING_KEY]), amount)
-            
+
             return int(result[ETH_REMAINING_KEY])
         except (ValueError, TypeError):
             self.context.logger.error(

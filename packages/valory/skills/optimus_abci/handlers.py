@@ -358,7 +358,7 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Extract the requested path from the URL
             requested_path = urlparse(http_msg.url).path.lstrip("/")
-            
+
             # Construct the file path
             file_path = Path(
                 Path(__file__).parent, self.agent_profile_path, requested_path

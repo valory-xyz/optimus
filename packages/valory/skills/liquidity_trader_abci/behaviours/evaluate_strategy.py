@@ -20,7 +20,7 @@
 """This module contains the behaviour for evaluating opportunities and forming actions for the 'liquidity_trader_abci' skill."""
 
 import json
-import numpy as np
+import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import (
     Any,
@@ -35,7 +35,7 @@ from typing import (
     cast,
 )
 from urllib.parse import urlencode
-import traceback
+
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_utils import to_checksum_address
@@ -44,10 +44,9 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
+    COIN_ID_MAPPING,
     DexType,
     HTTP_OK,
-    SLEEP_TIME,
-    RETRIES,
     LiquidityTraderBaseBehaviour,
     METRICS_UPDATE_INTERVAL,
     MIN_TIME_IN_POSITION,
@@ -56,7 +55,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
-    COIN_ID_MAPPING
 )
 from packages.valory.skills.liquidity_trader_abci.io_.loader import (
     ComponentPackageLoader,
@@ -320,10 +318,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def calculate_velodrome_cl_token_requirements(
         self, tick_bands, current_price, tick_spacing=1
     ):
-        """Determines token requirements for Velodrome CL positions based on current price.
-
-        This is the main function that orchestrates the validation and calculation process.
-        """
+        """Determines token requirements for Velodrome CL positions based on current price."""
         # Step 1: Validate and prepare inputs
         validated_data = self.validate_and_prepare_velodrome_inputs(
             tick_bands, current_price, tick_spacing
@@ -765,7 +760,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "coingecko_api_key": self.coingecko.api_key,
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
-                    "coin_id_mapping": COIN_ID_MAPPING
+                    "coin_id_mapping": COIN_ID_MAPPING,
                 }
             )
             strategy_kwargs_list.append(kwargs)
@@ -877,7 +872,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
                 "current_positions": self.current_positions,
                 "whitelisted_assets": WHITELISTED_ASSETS,
-                "coin_id_mapping": COIN_ID_MAPPING
+                "coin_id_mapping": COIN_ID_MAPPING,
             }
         )
 

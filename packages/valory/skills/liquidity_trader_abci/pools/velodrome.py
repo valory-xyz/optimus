@@ -1618,7 +1618,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Check stablecoin mappings first
             stablecoin_mappings = {
                 "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "usd-coin",
-                "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alchemix-usd", 
+                "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alchemix-usd",
                 "0x01bff41798a0bcf287b996046ca68b395dbc1071": "usdt0",
                 "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "bridged-usdt",
                 "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": None,

@@ -8,13 +8,13 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeiguehsbdcqelysju3627o7lpujqeh45zktx5z44yxeh7qmbhanxui
-  behaviours/apr_population.py: bafybeifpuzkr6mgxfkvl4m2w4raisv7xbkl6efisyqmjjsnrmchejb32yy
-  behaviours/base.py: bafybeiemzdznkfwlgf2egcs367pbhipjhojltbitasdhnajthsewy56bne
+  behaviours/apr_population.py: bafybeidvr37xardvlqjcgpw42f25gc4gj7zly7ecihnuvkisxsdw3rq2fa
+  behaviours/base.py: bafybeicg4hftccdw5yvgyh4l7rp6bcv6y5mm5qlmvhjnfuu2netlcwm7jy
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeicalz5er6uygbwfdohskd5bfxh4qztoolpbeq6qjorrzeuxvetzly
-  behaviours/evaluate_strategy.py: bafybeico7ant5224vyei5ltxdc6k5vkopemyecogzcr5vre22dd53myb5u
-  behaviours/fetch_strategies.py: bafybeife45l5b42qngtm52k5cwx54zhnbipbvtus5leutexxt6rtvd4j6i
+  behaviours/decision_making.py: bafybeigqinj6cfqskhgua7tyzqxlwf6sl2k6hvvfguqzdv43bq4z4agbou
+  behaviours/evaluate_strategy.py: bafybeido4gftx2ojqx3tat4t7tnksuzrqpliyfbq4qkclnbg3dhpdn7sfm
+  behaviours/fetch_strategies.py: bafybeigesev76zpptvgz3j6kehenkzqr35vm6usiodu4ofhb5aollmnamq
   behaviours/get_positions.py: bafybeia32hziqapjhvwrtqtf6u4n6aovdm2gi4ejmlwbg7cc6vbokzbbum
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeial6l547l3qtymegdb3u6izkkave4fx5xn4bszl77uee376qxhdry
@@ -29,7 +29,7 @@ fingerprint:
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeib6ftotspu2ojuk5hy6gclq36b2fnftsyi5fxocuyqayjxsgjlueu
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeiau6a4my7dmqog53yevbntpuzzqerxa26fuo2wa7qcu3z5n3hf2vu
+  pools/velodrome.py: bafybeiglmjl6trnfq45xonxqih5iidhbtf4x72h56lv3yinivsihj5aqlq
   rounds.py: bafybeianvex6vrb7azphyaggvmbcknu6qwryk2mwltxhxjunwi5h2zp3mm
   rounds_info.py: bafybeidxi5qrpvtslr7sti4xmzc7tr4humbmwragffnd75u3ixq3c7kyma
   states/__init__.py: bafybeige5a5rkfmb56a7im4q4tqxddmut6vacwqgq2g4qvaauk7sqgzlnu

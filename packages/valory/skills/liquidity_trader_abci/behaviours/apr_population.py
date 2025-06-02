@@ -469,10 +469,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         # Use the stored initial investment value if available
         initial_value = self.get_stored_initial_investment()
         if not initial_value:
-            # Fall back to calculating it if not available
-            initial_value = yield from self.calculate_initial_investment()
-            if not initial_value:
-                return None
+            self.context.logger.error("No current investment")
+            return None
 
         self._initial_value = initial_value
         self.context.logger.info(f"Using initial investment value: {initial_value}")

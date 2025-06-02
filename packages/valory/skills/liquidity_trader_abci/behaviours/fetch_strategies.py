@@ -230,7 +230,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 return (yield from self._fetch_historical_eth_price(date_str))
             
             # Get CoinGecko ID for the token
-            coingecko_id = yield from self.get_coin_id_from_symbol(
+            coingecko_id = self.get_coin_id_from_symbol(
                 token_symbol, chain
             )
             
@@ -2013,7 +2013,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_symbol == "ETH":
                         price = yield from self._fetch_historical_eth_price(date_str)
                     else:
-                        coingecko_id = yield from self.get_coin_id_from_symbol(
+                        coingecko_id = self.get_coin_id_from_symbol(
                             token_symbol, chain
                         )
                         if coingecko_id:

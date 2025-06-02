@@ -35,6 +35,7 @@ REQUIRED_FIELDS = (
     "current_positions",
     "coingecko_api_key",
     "whitelisted_assets",
+    "coin_id_mapping"
 )
 BALANCER = "balancerPool"
 FEE_RATE_DIVISOR = 1000000
@@ -55,21 +56,6 @@ EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_
 LP = "lp"
 errors = []
 
-@lru_cache(None)
-def fetch_coin_list():
-    """Fetches the list of coins from CoinGecko API only once."""
-    logger.info("Fetching coin list from CoinGecko API")
-    url = "https://api.coingecko.com/api/v3/coins/list"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        coin_list = response.json()
-        logger.info(f"Successfully fetched {len(coin_list)} coins from CoinGecko")
-        return coin_list
-    except requests.RequestException as e:
-        logger.error(f"Failed to fetch coin list: {e}")
-        errors.append((f"Failed to fetch coin list: {e}"))
-        return None
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
@@ -236,35 +222,16 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets):
     logger.info(f"Final filtered pools: {len(filtered_scored_pools[:10])} (top 10)")
     return filtered_scored_pools[:10]
 
-def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
-    # Try to find a coin matching symbol first.
-    candidates = [
-        coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-    ]
-    if not candidates:
+def get_coin_id_from_symbol(
+        self, coin_id_mapping, symbol, chain_name
+    ) -> Optional[str]:
+        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        # Check if coin_list is valid
+        if symbol.lower() in coin_id_mapping.get(chain_name, {}):
+            self.context.logger.info(f"Found coin id for {symbol} in {chain_name}")
+            return coin_id_mapping[chain_name][symbol]
+
         return None
-
-    # If single candidate, return it
-    if len(candidates) == 1:
-        return candidates[0]["id"]
-
-    # If multiple candidates, match by name if possible
-    normalized_token_name = token_name.replace(" ", "").lower()
-    for coin in candidates:
-        coin_name = coin["name"].replace(" ", "").lower()
-        if coin_name == normalized_token_name or coin_name == symbol.lower():
-            return coin["id"]
-    return None
-
-def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
-    token_name = fetch_token_name_from_contract(chain_name, token_address)
-    if not token_name:
-        matching_coins = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-        ]
-        return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-
-    return get_token_id_from_symbol_cached(symbol, token_name, coin_list)
 
 def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     """
@@ -1066,7 +1033,7 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str) -> Lis
         
     return formatted_pools
 
-def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, coin_list, whitelisted_assets):
+def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, **kwargs):
     """Get and format pool opportunities with investment calculations."""
     logger.info(f"Starting opportunity search for chains: {chains}")
     logger.info(f"Current positions to exclude: {len(current_positions)}")
@@ -1106,10 +1073,9 @@ def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api
         logger.info(f"Calculating IL risk score for pool {pool['id']}")
         token_ids = []
         for token in pool["poolTokens"]:
-            token_id = get_token_id_from_symbol(
-                token["address"],
+            token_id = get_coin_id_from_symbol(
+                coin_id_mapping,
                 token["symbol"],
-                coin_list,
                 pool["chain"]
             )
             token_ids.append(token_id)
@@ -1137,7 +1103,7 @@ def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api
     return valid_investment_pools
 
 def calculate_metrics(
-    position: Dict[str, Any], coingecko_api_key: str, coin_list: List[Any], **kwargs
+    position: Dict[str, Any], coingecko_api_key: str, coin_id_mapping: dict, **kwargs
 ) -> Optional[Dict[str, Any]]:
     # Dynamic handling of tokens
     token_ids = []
@@ -1150,20 +1116,19 @@ def calculate_metrics(
             token_symbol_key = f"token{i}_symbol"
             
             if token_address_key in position and token_symbol_key in position:
-                token_id = get_token_id_from_symbol(
-                    position[token_address_key], 
+                token_id = get_coin_id_from_symbol(
+                    coin_id_mapping,
                     position[token_symbol_key], 
-                    coin_list,
                     position["chain"]
                 )
                 token_ids.append(token_id)
     # Fallback to the old token0/token1 format
     elif "token0" in position and "token1" in position:
-        token0_id = get_token_id_from_symbol(
-            position["token0"], position["token0_symbol"], coin_list, position["chain"]
+        token0_id = get_coin_id_from_symbol(
+            coin_id_mapping, position["token0_symbol"], position["chain"]
         )
-        token1_id = get_token_id_from_symbol(
-            position["token1"], position["token1_symbol"], coin_list, position["chain"]
+        token1_id = get_coin_id_from_symbol(
+            coin_id_mapping, position["token1_symbol"], position["chain"]
         )
         token_ids = [token0_id, token1_id]
     
@@ -1224,15 +1189,6 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     if get_metrics:
         required_fields.append("position")
 
-    kwargs = remove_irrelevant_fields(kwargs, required_fields)
-
-    coin_list = fetch_coin_list()
-    if coin_list is None:
-        logger.error("Failed to fetch coin list, aborting execution")
-        errors.append("Failed to fetch coin list.")
-        return {"error": errors}
-
-    kwargs.update({"coin_list": coin_list})
 
     if get_metrics:
         logger.info("Calculating metrics for position")

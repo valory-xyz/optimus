@@ -182,8 +182,8 @@ WHITELISTED_ASSETS = {
         # MODE tokens - stablecoins
         "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
         "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "msDAI",
-        "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT", 
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT", 
     },
     "optimism": {
         # Optimism tokens - stablecoins
@@ -203,6 +203,36 @@ WHITELISTED_ASSETS = {
         "0x73cb180bf0521828d8849bc8cf2b920918e23032": "USD+",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
         "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "USDGLO",
+    }
+}
+
+COIN_ID_MAPPING = {
+    "mode":{
+        "usdc" : "mode-bridged-usdc-mode",
+        "msdai" : None, 
+        "usdt" : "mode-bridged-usdt-mode",
+        "ousdt" : "openusdt",
+        "weth" : "l2-standard-bridged-weth-modee",
+        "ezeth": "renzo-restaked-eth",
+        "mode": "mode"
+    },
+    "optimism": {
+        "usdc": "usd-coin",
+        "alusd": "alchemix-usd",
+        "usdt0": "usdt0", 
+        "usdt": "bridged-usdt",
+        "msusd": None,
+        "usdc.e": "bridged-usd-coin-optimism",
+        "usx": "token-dforce-usd",
+        "dola": "dola-usd",
+        "lusd": "liquity-usd", 
+        "dai": "makerdao-optimism-bridged-dai-optimism",
+        "bold": "liquity-bold",
+        "frax": "frax",
+        "sdai": "savings-dai",
+        "usd+": "overnight-fi-usd-optimism",
+        "ousdt": "openusdt",
+        "usdglo": "glo-dollar"
     }
 }
 
@@ -1136,15 +1166,10 @@ class LiquidityTraderBaseBehaviour(
         """Fetch historical token prices for a specific date."""
         historical_prices = {}
 
-        coin_list = yield from self.fetch_coin_list()
-        if not coin_list:
-            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
-            return historical_prices
-
         for token_symbol, token_address in tokens:
             # Get CoinGecko ID.
-            coingecko_id = yield from self.get_token_id_from_symbol(
-                token_address, token_symbol, coin_list, chain
+            coingecko_id = yield from self.get_coin_id_from_symbol(
+                token_symbol, chain
             )
             if not coingecko_id:
                 self.context.logger.error(
@@ -1212,92 +1237,17 @@ class LiquidityTraderBaseBehaviour(
         )
         return token_name
 
-    def get_token_id_from_symbol_cached(
-        self, symbol, token_name, coin_list
-    ) -> Optional[str]:
-        """Retrieve the CoinGecko token ID using the token's symbol and name."""
-
-        self.context.logger.info(f"Type of coin_list: {type(coin_list)}")
-
-        # Check the type before accessing by index.
-        if isinstance(coin_list, dict):
-            self.context.logger.info(
-                f"Coin list is a dict with keys: {list(coin_list.keys())}"
-            )
-            coin_list = list(coin_list.values())
-        elif isinstance(coin_list, list) and coin_list:
-            self.context.logger.info(f"First element of coin_list: {coin_list[0]}")
-
-        # Build candidates ensuring that each element is a dict.
-        candidates = [
-            coin
-            for coin in coin_list
-            if isinstance(coin, dict)
-            and coin.get("symbol", "").lower() == symbol.lower()
-        ]
-
-        if not candidates:
-            return None
-
-        # If single candidate, return it.
-        if len(candidates) == 1:
-            return candidates[0]["id"]
-
-        normalized_token_name = token_name.replace(" ", "").lower()
-        for coin in candidates:
-            coin_name = coin["name"].replace(" ", "").lower()
-            if coin_name == normalized_token_name or coin_name == symbol.lower():
-                return coin["id"]
-        return None
-
-    def get_token_id_from_symbol(
-        self, token_address, symbol, coin_list, chain_name
+    def get_coin_id_from_symbol(
+        self, symbol, chain_name
     ) -> Generator[None, None, Optional[str]]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
         # Check if coin_list is valid
-        if not coin_list or not isinstance(coin_list, list):
-            self.context.logger.error(f"Invalid coin_list: {type(coin_list)}")
-            return None
+        if symbol.lower() in COIN_ID_MAPPING.get(chain_name, {}):
+            self.context.logger.info(f"Found coin id for {symbol} in {chain_name}")
+            return COIN_ID_MAPPING[chain_name][symbol]
 
-        token_name = yield from self._fetch_token_name_from_contract(
-            chain_name, token_address
-        )
-        if not token_name:
-            # Check the structure of coin_list before processing
-            if (
-                coin_list
-                and isinstance(coin_list[0], dict)
-                and "symbol" in coin_list[0]
-            ):
-                try:
-                    matching_coins = [
-                        coin
-                        for coin in coin_list
-                        if coin["symbol"].lower() == symbol.lower()
-                    ]
-                    return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-                except (TypeError, IndexError, KeyError) as e:
-                    self.context.logger.error(f"Error processing coin_list: {e}")
-                    return None
-            else:
-                self.context.logger.error(
-                    f"Unexpected coin_list structure: {coin_list[:2]}"
-                )
-                return None
+        return None
 
-        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-
-    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
-        """Fetches the list of coins from CoinGecko API only once."""
-        url = "https://api.coingecko.com/api/v3/coins/list"
-        response = yield from self.get_http_response("GET", url, None, None)
-
-        try:
-            response_json = json.loads(response.body)
-            return response_json
-        except json.decoder.JSONDecodeError as e:
-            self.context.logger.error(f"Failed to fetch coin list: {e}")
-            return None
 
     def get_eth_remaining_amount(self) -> Generator[None, None, int]:
         """Get the remaining ETH amount for swaps from kv_store."""

@@ -194,18 +194,6 @@ CACHE_METRICS = {
 
 errors = []
 
-@lru_cache(None)
-def fetch_coin_list():
-    """Fetches the list of coins from CoinGecko API only once."""
-    url = "https://api.coingecko.com/api/v3/coins/list"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        errors.append((f"Failed to fetch coin list: {e}"))
-        return None
-
 def get_cached_data(cache_type, key=None):
     """Get data from cache if it exists and is not expired."""
     if cache_type not in CACHE:
@@ -322,88 +310,16 @@ def fetch_token_name_from_contract(chain_name, token_address):
         logger.error(f"Error fetching token name for {token_address}: {str(e)}")
         return None
 
-def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
-    """Get token ID from symbol with caching."""
-    # Try to find a coin matching symbol first
-    candidates = [
-        coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-    ]
-    if not candidates:
+def get_coin_id_from_symbol(
+        self, coin_id_mapping, symbol, chain_name
+    ) -> Optional[str]:
+        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        # Check if coin_list is valid
+        if symbol.lower() in coin_id_mapping.get(chain_name, {}):
+            self.context.logger.info(f"Found coin id for {symbol} in {chain_name}")
+            return coin_id_mapping[chain_name][symbol]
+
         return None
-
-    # If single candidate, return it
-    if len(candidates) == 1:
-        return candidates[0]["id"]
-
-    # If multiple candidates, match by name if possible
-    normalized_token_name = token_name.replace(" ", "").lower()
-    for coin in candidates:
-        coin_name = coin["name"].replace(" ", "").lower()
-        if coin_name == normalized_token_name or coin_name == symbol.lower():
-            return coin["id"]
-    return None
-
-def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
-    """Get token ID from symbol."""
-    # Hard-coded mappings for common stablecoins
-    stablecoin_mappings = {
-        # USDC
-        "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "usd-coin",
-        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "bridged-usd-coin-optimism",
-        # Mode USDC
-        "0xd988097fb8612cc24eec14542bc03424c656005f": "usd-coin",
-        "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": "ironclad-usd", # iUSDC
-        # USDT
-        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "tether",
-        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "usdt0",
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
-        # Mode USDT
-        "0xf0f161fda2712db8b566946122a5af183995e2ed": "tether",
-        # DAI
-        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "dai",
-        "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "dai",
-        # Mode DAI
-        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "dai", # msDAI
-        # Other stablecoins
-        "0x73cb180bf0521828d8849bc8cf2b920918e23032": "usd-plus",
-        "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "dola-usd",
-        "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "liquity-usd",
-        "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "frax",
-        "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "usd-glo",
-        # Adding missing stablecoins
-        "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": "dai", # Metronome Synth USD - map to DAI as it's a stablecoin
-        "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alchemix-usd", # Alchemix USD
-        "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "dai", # USX - map to DAI as it's a stablecoin
-        "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "dai", # BOLD - map to DAI as it's a stablecoin
-    }
-    
-    # Check if token address is in the hard-coded mappings
-    token_address_lower = token_address.lower()
-    if token_address_lower in stablecoin_mappings:
-        logger.info(f"Using hard-coded mapping for {token_address_lower}: {stablecoin_mappings[token_address_lower]}")
-        return stablecoin_mappings[token_address_lower]
-    
-    # Try to get token name from contract
-    token_name = fetch_token_name_from_contract(chain_name, token_address)
-    if not token_name:
-        logger.info(f"Could not fetch token name for {token_address}, symbol: {symbol}")
-        matching_coins = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-        ]
-        if matching_coins:
-            logger.info(f"Found {len(matching_coins)} matching coins for symbol {symbol}")
-            return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-        else:
-            logger.info(f"No matching coins found for symbol {symbol}")
-            return None
-
-    # Try to get token ID from symbol and name
-    token_id = get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-    if token_id:
-        logger.info(f"Found token ID {token_id} for {token_name} ({symbol})")
-    else:
-        logger.info(f"Could not find token ID for {token_name} ({symbol})")
-    return token_id
 
 def is_pro_api_key(coingecko_api_key: str) -> bool:
     """Check if the provided CoinGecko API key is a pro key."""
@@ -1349,7 +1265,7 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets):
     logger.info(f"Identified {len(qualifying_pools)} qualifying pools after filtering")
     return qualifying_pools
 
-def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_list=None) -> List[Dict[str, Any]]:
+def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
@@ -1397,7 +1313,7 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
             formatted_pool["token1_symbol"] = tokens[1]["symbol"]
         
         # Calculate advanced metrics if we have the necessary data
-        if coingecko_api_key and coin_list and len(tokens) >= 2:
+        if coingecko_api_key and len(tokens) >= 2:
             # Calculate Sharpe ratio
             try:
                 sharpe_ratio = get_velodrome_pool_sharpe_ratio(
@@ -1425,10 +1341,9 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
                 # Get token IDs for CoinGecko API
                 token_ids = []
                 for token in tokens:
-                    token_id = get_token_id_from_symbol(
-                        token["id"],
+                    token_id = get_coin_id_from_symbol(
+                        coin_id_mapping,
                         token["symbol"] or "",
-                        coin_list,
                         chain_name
                     )
                     token_ids.append(token_id)
@@ -1482,7 +1397,7 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, coin_list=None, cl_filter=None, whitelisted_assets=None):
+def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, cl_filter=None, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
     """
     Get and format pool opportunities.
     
@@ -1493,7 +1408,6 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
         lp_sugar_address: Address of the LpSugar contract
         ledger_api: Ethereum API instance or RPC URL
         top_n: Number of top pools by APR to return (default: 10)
-        coin_list: List of coins from CoinGecko API (optional)
         cl_filter: Filter for concentrated liquidity pools
                    True = only CL pools
                    False = only non-CL pools
@@ -1521,7 +1435,8 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
     # Format pools with basic data (without advanced metrics)
     formatted_pools = format_pool_data(
         filtered_pools, 
-        chain_id
+        chain_id,
+        coin_id_mapping
     )
     
     # Get top N pools by APR, with optional CL filtering
@@ -1533,7 +1448,7 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
         top_pools = formatted_pools
     
     # Now calculate advanced metrics only for the top N pools
-    if coingecko_api_key and coin_list and top_pools:
+    if coingecko_api_key and top_pools:
         logger.info(f"Calculating advanced metrics for top {len(top_pools)} pools")
         for pool in top_pools:
             # Get token information and fetch token symbols
@@ -1580,10 +1495,9 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
                     # Get token IDs for CoinGecko API
                     token_ids = []
                     for token in tokens:
-                        token_id = get_token_id_from_symbol(
-                            token["id"],
+                        token_id = get_coin_id_from_symbol(
+                            coin_id_mapping,
                             token["symbol"] or "",
-                            coin_list,
                             pool["chain"]
                         )
                         token_ids.append(token_id)
@@ -1617,7 +1531,7 @@ def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CH
 def calculate_metrics(
     position: Dict[str, Any],
     coingecko_api_key: str,
-    coin_list: List[Any],
+    coin_id_mapping: List[Any],
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
     """
@@ -1626,7 +1540,6 @@ def calculate_metrics(
     Args:
         position: Dictionary containing position details (pool_address, chain, token0, token1, etc.)
         coingecko_api_key: API key for CoinGecko
-        coin_list: List of coins from CoinGecko API
         **kwargs: Additional arguments
         
     Returns:
@@ -1659,11 +1572,11 @@ def calculate_metrics(
         # Get token IDs for CoinGecko API
         token_ids = []
         if token0_address and token0_symbol:
-            token0_id = get_token_id_from_symbol(token0_address, token0_symbol, coin_list, chain)
+            token0_id = get_coin_id_from_symbol(coin_id_mapping, token0_symbol, chain)
             token_ids.append(token0_id)
             
         if token1_address and token1_symbol:
-            token1_id = get_token_id_from_symbol(token1_address, token1_symbol, coin_list, chain)
+            token1_id = get_coin_id_from_symbol(coin_id_mapping, token1_symbol, chain)
             token_ids.append(token1_id)
             
         # Calculate IL risk score
@@ -1743,11 +1656,6 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         errors.append(error_msg)
         return {"error": errors}
     
-    # Fetch coin list for token ID resolution (needed for IL risk score)
-    coin_list = fetch_coin_list()
-    if coin_list is None:
-        logger.warning("Failed to fetch coin list from CoinGecko. IL risk score calculation will be skipped.")
-    
     # If we're calculating metrics for a specific position
     if get_metrics:
         if "position" not in kwargs:
@@ -1760,7 +1668,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         metrics = calculate_metrics(
             position=kwargs["position"],
             coingecko_api_key=kwargs["coingecko_api_key"],
-            coin_list=coin_list
+            coin_id_mapping=kwargs["coin_id_mapping"]
         )
         
         if metrics is None:
@@ -1817,16 +1725,6 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             errors.append(error_msg)
             continue
         
-        args = {
-            "current_positions": kwargs.get("current_positions", []),
-            "coingecko_api_key": kwargs["coingecko_api_key"],
-            "chain_id": chain_id,
-            "lp_sugar_address": sugar_address,
-            "ledger_api": rpc_url,
-            "top_n": kwargs.get("top_n", 10),
-            "coin_list": coin_list,
-            "cl_filter": kwargs.get("cl_filter")
-        }
         # Get opportunities for the chain using Sugar contract
         result = get_opportunities(
             kwargs.get("current_positions", []),
@@ -1835,9 +1733,9 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             sugar_address,
             rpc_url,
             kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
-            coin_list=coin_list,  # Pass coin list for token ID resolution
             cl_filter=kwargs.get("cl_filter"),
-            whitelisted_assets=kwargs.get("whitelisted_assets")  # Pass cl_filter to get_top_n_pools_by_apr
+            whitelisted_assets=kwargs.get("whitelisted_assets"), # Pass cl_filter to get_top_n_pools_by_apr
+            coin_id_mapping=kwargs.get("coin_id_mapping")
         )
         
         # Process results

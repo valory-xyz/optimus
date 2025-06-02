@@ -229,15 +229,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if token_address == ZERO_ADDRESS:
                 return (yield from self._fetch_historical_eth_price(date_str))
             
-            # Fetch coin list for token ID resolution
-            coin_list = yield from self.fetch_coin_list()
-            if not coin_list:
-                self.context.logger.error("Failed to fetch coin list from CoinGecko")
-                return None
-            
             # Get CoinGecko ID for the token
-            coingecko_id = yield from self.get_token_id_from_symbol(
-                token_address, token_symbol, coin_list, chain
+            coingecko_id = yield from self.get_coin_id_from_symbol(
+                token_symbol, chain
             )
             
             if not coingecko_id:
@@ -2019,16 +2013,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_symbol == "ETH":
                         price = yield from self._fetch_historical_eth_price(date_str)
                     else:
-                        # Fetch coin list and get token price
-                        coin_list = yield from self.fetch_coin_list()
-                        if coin_list:
-                            coingecko_id = yield from self.get_token_id_from_symbol(
-                                token_address, token_symbol, coin_list, chain
-                            )
-                            if coingecko_id:
-                                price = yield from self._fetch_historical_token_price(coingecko_id, date_str)
-                            else:
-                                price = None
+                        coingecko_id = yield from self.get_coin_id_from_symbol(
+                            token_symbol, chain
+                        )
+                        if coingecko_id:
+                            price = yield from self._fetch_historical_token_price(coingecko_id, date_str)
                         else:
                             price = None
                     

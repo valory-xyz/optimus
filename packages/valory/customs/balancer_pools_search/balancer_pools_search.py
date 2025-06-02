@@ -34,6 +34,7 @@ REQUIRED_FIELDS = (
     "graphql_endpoint",
     "current_positions",
     "coingecko_api_key",
+    "whitelisted_assets",
 )
 BALANCER = "balancerPool"
 FEE_RATE_DIVISOR = 1000000
@@ -53,28 +54,6 @@ CHAIN_URLS = {
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
 LP = "lp"
 errors = []
-WHITELISTED_ASSETS = {
-    "mode": [],
-    "optimism": [
-        "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",  # USDC
-        "0xCB8FA9a76b8e203D8C3797bF438d8FB81Ea3326A",  # alUSD
-        "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",  # USDT0
-        "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",  # USDT
-        "0x9dAbAE7274D28A45F0B65Bf8ED201A5731492ca0",  # msUSD
-        "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",  # USDC.e
-        "0xbfD291DA8A403DAAF7e5E9DC1ec0aCEaCd4848B9",  # USX
-        "0x8aE125E8653821E851F12A49F7765db9a9ce7384",  # DOLA
-        "0xc40F949F8a4e094D1b49a23ea9241D289B7b2819",  # LUSD
-        "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",  # DAI
-        "0x087C440F251Ff6Cfe62B86DdE1bE558B95b4bb9b",  # BOLD
-        "0x2E3D870790dC77A83DD1d18184Acc7439A53f475",  # FRAX
-        "0x2218a117083f5B482B0bB821d27056Ba9c04b1D3",  # sDAI
-        "0x73cb180bf0521828d8849bc8CF2B920918e23032",  # USD+
-        "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",  # oUSDT
-        "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3"   # USDGLO
-    ],
-    "base": []
-}
 
 @lru_cache(None)
 def fetch_coin_list():
@@ -189,8 +168,7 @@ def get_balancer_pools(
     logger.info(f"Successfully fetched {len(pools)} Balancer pools")
     return pools
 
-def get_filtered_pools(pools, current_positions):
-    logger.info(f"Starting pool filtering with {len(pools)} initial pools")
+def get_filtered_pools(pools, current_positions, whitelisted_assets):
     # Filter by type and token count - removing the 2-token restriction
     qualifying_pools = []
     for pool in pools:
@@ -198,12 +176,12 @@ def get_filtered_pools(pools, current_positions):
         # Accept pools with 3-8 tokens (we're removing the 2-token restriction)
         mapped_type = SUPPORTED_POOL_TYPES.get(pool.get("type"))
         chain = pool["chain"].lower()
-        whitelisted_tokens = WHITELISTED_ASSETS.get(chain, [])
+        whitelisted_tokens = list(whitelisted_assets.get(chain, {}).keys())
         if (
             mapped_type
             and 2 <= token_count 
             and Web3.to_checksum_address(pool.get("address")) not in current_positions
-            and chain in WHITELISTED_ASSETS
+            and chain in whitelisted_assets
             and (
                 not whitelisted_tokens
                 or (
@@ -1088,7 +1066,7 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str) -> Lis
         
     return formatted_pools
 
-def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, coin_list):
+def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, coin_list, whitelisted_assets):
     """Get and format pool opportunities with investment calculations."""
     logger.info(f"Starting opportunity search for chains: {chains}")
     logger.info(f"Current positions to exclude: {len(current_positions)}")
@@ -1100,7 +1078,7 @@ def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api
         return pools
 
     # Filter pools
-    filtered_pools = get_filtered_pools(pools, current_positions)
+    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets)
     if not filtered_pools:
         logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}

@@ -53,6 +53,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     MIN_TIME_IN_POSITION,
     PositionStatus,
     THRESHOLDS,
+    WHITELISTED_ASSETS,
     ZERO_ADDRESS,
     execute_strategy,
 )
@@ -761,6 +762,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         else []
                     ),
                     "coingecko_api_key": self.coingecko.api_key,
+                    "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
                 }
             )
@@ -811,14 +813,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Opportunities found using {next_strategy} strategy"
                     )
+                    valid_opportunities = []
                     for opportunity in opportunities:
-                        self.context.logger.info(
-                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                            f"Chain: {opportunity.get('chain', 'N/A')}, "
-                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                        if isinstance(opportunity, dict):
+                            self.context.logger.info(
+                                f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                                f"Chain: {opportunity.get('chain', 'N/A')}, "
+                                f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                                f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                            )
+                            valid_opportunities.append(opportunity)
+                        else:
+                            self.context.logger.error(
+                                f"Invalid opportunity format from {next_strategy} strategy. "
+                                f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
+                            )
+
+                    if valid_opportunities:
+                        self.trading_opportunities.extend(valid_opportunities)
+                    else:
+                        self.context.logger.warning(
+                            f"No valid opportunities found using {next_strategy} strategy - all opportunities had invalid format"
                         )
-                    self.trading_opportunities.extend(opportunities)
                 else:
                     self.context.logger.warning(
                         f"No opportunity found using {next_strategy} strategy"
@@ -858,6 +874,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "protocols": self.params.available_protocols,
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
                 "current_positions": self.current_positions,
+                "whitelisted_assets": WHITELISTED_ASSETS,
             }
         )
 

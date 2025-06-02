@@ -107,7 +107,7 @@ ETH_INITIAL_AMOUNT = 0.005 * 10**18
 ETH_REMAINING_KEY = "eth_remaining_amount"
 SLEEP_TIME = 10  # Configurable sleep time
 RETRIES = 3  # Number of API call retries
-MIN_TIME_IN_POSITION = 604800  # 1 week
+MIN_TIME_IN_POSITION = 604800 * 3  # 3 weeks
 
 
 class DexType(Enum):
@@ -175,6 +175,36 @@ ASSETS_FILENAME = "assets.json"
 POOL_FILENAME = "current_pool.json"
 READ_MODE = "r"
 WRITE_MODE = "w"
+
+# Whitelist of allowed token addresses for each chain with their symbols
+WHITELISTED_ASSETS = {
+    "mode": {
+        # MODE tokens - stablecoins
+        "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
+        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "msDAI",
+        "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+    },
+    "optimism": {
+        # Optimism tokens - stablecoins
+        "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "USDC",
+        "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alUSD",
+        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
+        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
+        "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": "msUSD",
+        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
+        "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "USX",
+        "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "DOLA",
+        "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "LUSD",
+        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",
+        "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "BOLD",
+        "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "FRAX",
+        "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
+        "0x73cb180bf0521828d8849bc8cf2b920918e23032": "USD+",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "USDGLO",
+    }
+}
 
 
 class LiquidityTraderBaseBehaviour(

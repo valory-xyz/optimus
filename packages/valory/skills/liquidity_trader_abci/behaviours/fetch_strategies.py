@@ -21,7 +21,7 @@
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Context, Decimal, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
@@ -52,6 +52,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
     TradingType,
+    WHITELISTED_ASSETS,
     ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
@@ -101,6 +102,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
 
+            # Filter whitelisted assets based on price changes
+            yield from self._filter_whitelisted_assets_by_price()
+
             # Update the amounts of all open positions
             yield from self.update_position_amounts()
 
@@ -129,6 +133,153 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
+
+    def _filter_whitelisted_assets_by_price(self) -> Generator[None, None, None]:
+        """Filter whitelisted assets based on price changes over the last day."""
+        self.context.logger.info("Starting price-based filtering of whitelisted assets")
+        
+        # Get current timestamp and calculate yesterday's timestamp
+        current_time = datetime.now()
+        yesterday = current_time - timedelta(days=1)
+        
+        # Format dates for historical price API
+        today_str = current_time.strftime("%d-%m-%Y")
+        yesterday_str = yesterday.strftime("%d-%m-%Y")
+        
+        # Track assets to remove
+        assets_to_remove = {}
+        
+        for chain, assets in WHITELISTED_ASSETS.items():
+            if chain not in self.params.target_investment_chains:
+                continue
+                
+            self.context.logger.info(f"Checking price changes for {chain} assets")
+            assets_to_remove[chain] = []
+            
+            for token_address, token_symbol in assets.items():
+                try:
+                    # Get historical prices for yesterday and today
+                    yesterday_price = yield from self._get_historical_price_for_date(
+                        token_address, token_symbol, yesterday_str, chain
+                    )
+                    today_price = yield from self._get_historical_price_for_date(
+                        token_address, token_symbol, today_str, chain
+                    )
+                    
+                    if yesterday_price is None or today_price is None:
+                        self.context.logger.warning(
+                            f"Could not fetch prices for {token_symbol} ({token_address}) on {chain}"
+                        )
+                        continue
+                    
+                    # Calculate price change percentage
+                    price_change_percent = ((today_price - yesterday_price) / yesterday_price) * 100
+                    
+                    self.context.logger.info(
+                        f"{token_symbol} price change: {price_change_percent:.2f}% "
+                        f"(Yesterday: ${yesterday_price:.6f}, Today: ${today_price:.6f})"
+                    )
+                    
+                    # Check if price has dropped more than 5%
+                    if price_change_percent < -5.0:
+                        self.context.logger.warning(
+                            f"Removing {token_symbol} from whitelist due to {price_change_percent:.2f}% price drop"
+                        )
+                        assets_to_remove[chain].append(token_address)
+                    
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error checking price for {token_symbol} ({token_address}): {str(e)}"
+                    )
+                    continue
+        
+        # Update the assets by removing the filtered ones
+        for chain, addresses_to_remove in assets_to_remove.items():
+            if addresses_to_remove:
+                self.context.logger.info(
+                    f"Removing {len(addresses_to_remove)} assets from {chain} whitelist"
+                )
+                # Update the assets in memory
+                if chain in self.assets:
+                    for address in addresses_to_remove:
+                        if address in self.assets[chain]:
+                            removed_symbol = self.assets[chain].pop(address)
+                            self.context.logger.info(
+                                f"Removed {removed_symbol} ({address}) from {chain} assets"
+                            )
+                
+                # Store the updated assets
+                self.store_assets()
+        
+        self.context.logger.info("Completed price-based filtering of whitelisted assets")
+
+    def _get_historical_price_for_date(
+        self, token_address: str, token_symbol: str, date_str: str, chain: str
+    ) -> Generator[None, None, Optional[float]]:
+        """Get historical price for a specific token on a specific date."""
+        try:
+            # For zero address (ETH), use a different approach
+            if token_address == ZERO_ADDRESS:
+                return (yield from self._fetch_historical_eth_price(date_str))
+            
+            # Fetch coin list for token ID resolution
+            coin_list = yield from self.fetch_coin_list()
+            if not coin_list:
+                self.context.logger.error("Failed to fetch coin list from CoinGecko")
+                return None
+            
+            # Get CoinGecko ID for the token
+            coingecko_id = yield from self.get_token_id_from_symbol(
+                token_address, token_symbol, coin_list, chain
+            )
+            
+            if not coingecko_id:
+                self.context.logger.error(
+                    f"Could not find CoinGecko ID for {token_symbol} ({token_address})"
+                )
+                return None
+            
+            # Fetch historical price
+            price = yield from self._fetch_historical_token_price(coingecko_id, date_str)
+            return price
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error fetching historical price for {token_symbol}: {str(e)}"
+            )
+            return None
+
+    def _fetch_historical_eth_price(self, date_str: str) -> Generator[None, None, Optional[float]]:
+        """Fetch historical ETH price for a specific date."""
+        endpoint = self.coingecko.historical_price_endpoint.format(
+            coin_id="ethereum",
+            date=date_str,
+        )
+
+        headers = {"Accept": "application/json"}
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers=headers,
+            rate_limited_code=self.coingecko.rate_limited_code,
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
+            retry_wait=self.params.sleep_time,
+        )
+
+        if success:
+            price = (
+                response_json.get("market_data", {}).get("current_price", {}).get("usd")
+            )
+            if price:
+                return price
+            else:
+                self.context.logger.error("No ETH price in response")
+                return None
+        else:
+            self.context.logger.error("Failed to fetch historical ETH price")
+            return None
 
     def should_recalculate_portfolio(self, last_portfolio_data: Dict) -> bool:
         """Determine if the portfolio should be recalculated."""
@@ -1524,7 +1675,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return
 
         for position in self.current_positions:
-            if position.get("status") != PositionStatus.OPEN:
+            if position.get("status") != PositionStatus.OPEN.value:
                 continue
 
             dex_type = position.get("dex_type")
@@ -1542,7 +1693,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if all_positions_zero and position.get(
                     "positions"
                 ):  # Only update if there are positions
-                    position["status"] = PositionStatus.CLOSED
+                    position["status"] = PositionStatus.CLOSED.value
                     self.context.logger.info(
                         f"Marked Velodrome CL position as closed due to zero liquidity in all positions: {position}"
                     )
@@ -1551,7 +1702,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if (
                     position.get("current_liquidity", 1) == 0
                 ):  # Default to 1 if not found to avoid false closures
-                    position["status"] = PositionStatus.CLOSED
+                    position["status"] = PositionStatus.CLOSED.value
                     self.context.logger.info(
                         f"Marked {dex_type} position as closed due to zero liquidity: {position}"
                     )
@@ -1567,7 +1718,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         for position in self.current_positions:
             # Only update open positions
-            if position.get("status") != PositionStatus.OPEN:
+            if position.get("status") != PositionStatus.OPEN.value:
                 continue
 
             dex_type = position.get("dex_type")

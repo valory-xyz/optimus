@@ -23,6 +23,7 @@ REQUIRED_FIELDS = (
     "graphql_endpoints",
     "current_positions",
     "coingecko_api_key",
+    "whitelisted_assets",
 )
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
@@ -42,28 +43,6 @@ CHAIN_URLS = {
 
 LP = "lp"
 errors = []
-WHITELISTED_ASSETS = {
-    "base": [],
-    "optimism": [
-        "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",  # USDC
-        "0xCB8FA9a76b8e203D8C3797bF438d8FB81Ea3326A",  # alUSD
-        "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",  # USDT0
-        "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",  # USDT
-        "0x9dAbAE7274D28A45F0B65Bf8ED201A5731492ca0",  # msUSD
-        "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",  # USDC.e
-        "0xbfD291DA8A403DAAF7e5E9DC1ec0aCEaCd4848B9",  # USX
-        "0x8aE125E8653821E851F12A49F7765db9a9ce7384",  # DOLA
-        "0xc40F949F8a4e094D1b49a23ea9241D289B7b2819",  # LUSD
-        "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",  # DAI
-        "0x087C440F251Ff6Cfe62B86DdE1bE558B95b4bb9b",  # BOLD
-        "0x2E3D870790dC77A83DD1d18184Acc7439A53f475",  # FRAX
-        "0x2218a117083f5B482B0bB821d27056Ba9c04b1D3",  # sDAI
-        "0x73cb180bf0521828d8849bc8CF2B920918e23032",  # USD+
-        "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",  # oUSDT
-        "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3"   # USDGLO
-    ]
-}
-
 ERC20_ABI = [
     {
         "constant": True,
@@ -199,7 +178,7 @@ def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
     return get_token_id_from_symbol_cached(symbol, token_name, coin_list)
 
 
-def get_filtered_pools(pools, current_positions) -> List[Dict[str, Any]]:
+def get_filtered_pools(pools, current_positions, whitelisted_assets) -> List[Dict[str, Any]]:
     qualifying_pools = []
     for pool in pools:
         fee_rate = float(pool["feeTier"]) / FEE_RATE_DIVISOR
@@ -210,10 +189,10 @@ def get_filtered_pools(pools, current_positions) -> List[Dict[str, Any]]:
         pool["tvl"] = tvl
         
         chain = pool["chain"].lower()
-        whitelisted_tokens = WHITELISTED_ASSETS.get(chain, [])
+        whitelisted_tokens = list(whitelisted_assets.get(chain, {}).keys())
         
         if (Web3.to_checksum_address(pool["id"]) not in current_positions
-            and chain in WHITELISTED_ASSETS
+            and chain in whitelisted_assets
             and (
                 not whitelisted_tokens
                 or (
@@ -516,13 +495,13 @@ def format_pool_data(pool) -> Dict[str, Any]:
 
 
 def get_opportunities(
-    chains, graphql_endpoints, current_positions, coingecko_api_key, coin_list
+    chains, graphql_endpoints, current_positions, coingecko_api_key, coin_list, whitelisted_assets
 ) -> List[Dict[str, Any]]:
     pools = fetch_graphql_data(chains, graphql_endpoints)
     if isinstance(pools, dict) and "error" in pools:
         return pools
 
-    filtered_pools = get_filtered_pools(pools, current_positions)
+    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
 

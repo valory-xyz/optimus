@@ -22,6 +22,7 @@ REQUIRED_FIELDS = (
     "chains",
     "current_positions",
     "coingecko_api_key",
+    "whitelisted_assets",
 )
 VELODROME = "velodrome"
 
@@ -31,36 +32,6 @@ MODE_CHAIN_ID = 34443
 CHAIN_NAMES = {
     OPTIMISM_CHAIN_ID: "optimism",
     MODE_CHAIN_ID: "mode",
-}
-
-# Whitelist of allowed token addresses for each chain with their symbols
-WHITELISTED_ASSETS = {
-    "mode": {
-        # MODE tokens - stablecoins
-        "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
-        "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "msDAI",
-        "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
-    },
-    "optimism": {
-        # Optimism tokens - stablecoins
-        "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "USDC",
-        "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alUSD",
-        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
-        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
-        "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": "msUSD",
-        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
-        "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "USX",
-        "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "DOLA",
-        "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "LUSD",
-        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",
-        "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "BOLD",
-        "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "FRAX",
-        "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
-        "0x73cb180bf0521828d8849bc8cf2b920918e23032": "USD+",
-        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
-        "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "USDGLO",
-    }
 }
 
 # Sugar contract addresses
@@ -1325,7 +1296,7 @@ def calculate_apr(pool_data):
     else:
         return 0
 
-def get_filtered_pools(pools, current_positions):
+def get_filtered_pools(pools, current_positions, whitelisted_assets):
     """Filter pools based on criteria and exclude current positions."""
     qualifying_pools = []
     
@@ -1342,7 +1313,7 @@ def get_filtered_pools(pools, current_positions):
         
         # Get chain name from the pool data or use a default
         chain_name = pool.get("chain", "unknown").lower()
-        whitelisted_tokens = WHITELISTED_ASSETS.get(chain_name, {})
+        whitelisted_tokens = whitelisted_assets.get(chain_name, {})
         
         # Check if we have at least 2 tokens
         if token_count >= 2:
@@ -1511,8 +1482,26 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities_from_velodrome(current_positions, coingecko_api_key, chain_id, lp_sugar_address, ledger_api, top_n, coin_list, cl_filter):
-    """ Get and format pool opportunities. """
+def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, coin_list=None, cl_filter=None, whitelisted_assets=None):
+    """
+    Get and format pool opportunities.
+    
+    Args:
+        current_positions: List of current position IDs to exclude
+        coingecko_api_key: API key for CoinGecko
+        chain_id: Chain ID to determine which method to use
+        lp_sugar_address: Address of the LpSugar contract
+        ledger_api: Ethereum API instance or RPC URL
+        top_n: Number of top pools by APR to return (default: 10)
+        coin_list: List of coins from CoinGecko API (optional)
+        cl_filter: Filter for concentrated liquidity pools
+                   True = only CL pools
+                   False = only non-CL pools
+                   None = include all pools (default)
+    
+    Returns:
+        List of formatted pool opportunities
+    """
     start_time = time.time()
     logger.info(f"Starting opportunity discovery for chain ID {chain_id}")
     
@@ -1524,7 +1513,7 @@ def get_opportunities_from_velodrome(current_positions, coingecko_api_key, chain
         return pools
 
     # Filter pools
-    filtered_pools = get_filtered_pools(pools, current_positions)
+    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets)
     if not filtered_pools:
         logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}
@@ -1839,7 +1828,17 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             "cl_filter": kwargs.get("cl_filter")
         }
         # Get opportunities for the chain using Sugar contract
-        result = get_opportunities_from_velodrome(**args)
+        result = get_opportunities(
+            kwargs.get("current_positions", []),
+            kwargs["coingecko_api_key"],
+            chain_id,
+            sugar_address,
+            rpc_url,
+            kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
+            coin_list=coin_list,  # Pass coin list for token ID resolution
+            cl_filter=kwargs.get("cl_filter"),
+            whitelisted_assets=kwargs.get("whitelisted_assets")  # Pass cl_filter to get_top_n_pools_by_apr
+        )
         
         # Process results
         if isinstance(result, dict) and "error" in result:

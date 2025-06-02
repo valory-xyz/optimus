@@ -193,6 +193,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             f"Removing {token_symbol} from whitelist due to {price_change_percent:.2f}% price drop"
                         )
                         assets_to_remove[chain].append(token_address)
+
+                    yield from self.sleep(5)
                     
                 except Exception as e:
                     self.context.logger.error(
@@ -1951,7 +1953,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Failed to get balance for Sturdy position: {position}"
             )
 
-    # Blockchain transfer fetching methods (Mode and Optimism)
     def calculate_initial_investment_value_from_funding_events(self) -> Generator[None, None, Optional[float]]:
         """Calculate initial investment value using transfers."""
         total_investment = 0.0
@@ -2044,8 +2045,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _fetch_all_transfers_until_date_mode(self, address: str, end_date: str) -> Generator[None, None, Dict]:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
-        funding_events = yield from self._load_funding_events_data()
-        existing_mode_data = funding_events.get("mode", {})
+        self.funding_events = self.read_funding_events()
+        if self.funding_events:
+            existing_mode_data = self.funding_events.get("mode", {})
+        else:
+            existing_mode_data = {}
         
         all_transfers_by_date = defaultdict(list)
         end_datetime = datetime.strptime(end_date, '%Y-%m-%d')
@@ -2068,8 +2072,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     existing_mode_data[date] = transfers
             
             # Update unified data structure
-            funding_events["mode"] = existing_mode_data
-            yield from self._save_funding_events_data(funding_events)
+            if not self.funding_events:
+                self.funding_events = {}
+            self.funding_events["mode"] = existing_mode_data
+            self.store_funding_events()
             
             # Print summary
             total_dates = len(all_transfers_by_date)
@@ -2086,8 +2092,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _fetch_all_transfers_until_date_optimism(self, address: str, end_date: str) -> Generator[None, None, Dict]:
         """Fetch all Optimism transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
-        funding_events = yield from self._load_funding_events_data()
-        existing_optimism_data = funding_events.get("optimism", {})
+        self.funding_events = self.read_funding_events()
+        if self.funding_events:
+            existing_optimism_data = self.funding_events.get("optimism", {})
+        else:
+            existing_optimism_data = {}
         
         all_transfers_by_date = defaultdict(list)
         
@@ -2103,8 +2112,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     existing_optimism_data[date] = transfers
             
             # Update unified data structure
-            funding_events["optimism"] = existing_optimism_data
-            yield from self._save_funding_events_data(funding_events)
+            if not self.funding_events:
+                self.funding_events = {}
+            self.funding_events["optimism"] = existing_optimism_data
+            self.store_funding_events()
             
             # Print summary
             total_dates = len(all_transfers_by_date)
@@ -2122,73 +2133,61 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch token transfers from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         page_params = {'filter': 'to'}
-        next_page_params = None
         processed_count = 0
         
-        while True:
-            if next_page_params:
-                page_params.update(next_page_params)
             
-            endpoint = f"{base_url}/addresses/{address}/token-transfers"
-            success, response_json = yield from self._request_with_retries(
-                endpoint=endpoint,
-                params=page_params,
-                headers={"Accept": "application/json"},
-                rate_limited_code=429,
-                rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
-                retry_wait=self.params.sleep_time,
-            )
+        endpoint = f"{base_url}/addresses/{address}/token-transfers"
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers={"Accept": "application/json"},
+            rate_limited_code=429,
+            rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
+            retry_wait=self.params.sleep_time,
+        )
+        
+        if not success:
+            self.context.logger.error("Failed to fetch token transfers")
+            return None
+        
+        transfers = response_json.get('items', [])
+        if not transfers:
+            return None
+        
+        for tx in transfers:
+            tx_datetime = self._get_datetime_from_timestamp(tx.get('timestamp'))
+            tx_date = tx_datetime.strftime('%Y-%m-%d') if tx_datetime else None
             
-            if not success:
-                self.context.logger.error("Failed to fetch token transfers")
-                break
+            # Stop if we've gone past our end date
+            if tx_datetime and tx_datetime > end_datetime:
+                continue
             
-            transfers = response_json.get('items', [])
-            if not transfers:
-                break
+            # Skip if date already exists in stored data
+            if tx_date and tx_date in existing_data:
+                continue
             
-            for tx in transfers:
-                tx_datetime = self._get_datetime_from_timestamp(tx.get('timestamp'))
-                tx_date = tx_datetime.strftime('%Y-%m-%d') if tx_datetime else None
-                
-                # Stop if we've gone past our end date
-                if tx_datetime and tx_datetime > end_datetime:
-                    continue
-                
-                # Skip if date already exists in stored data
-                if tx_date and tx_date in existing_data:
-                    continue
-                
-                if tx_date and tx_date <= end_datetime.strftime('%Y-%m-%d'):
-                    from_address = tx.get('from', {})
-                    if self._should_include_transfer(from_address, tx, is_eth_transfer=False):
-                        token = tx.get('token', {})
-                        symbol = token.get('symbol', 'Unknown')
-                        total = tx.get('total', {})
-                        value_raw = int(total.get('value', '0'))
-                        decimals = int(token.get('decimals', 18))
-                        amount = value_raw / (10 ** decimals)
-                        
-                        transfer_data = {
-                            'from_address': from_address.get('hash', ''),
-                            'amount': amount,
-                            'token_address': token.get('address', ''),
-                            'symbol': symbol,
-                            'timestamp': tx.get('timestamp', ''),
-                            'tx_hash': tx.get('transaction_hash', ''),
-                            'type': 'token'
-                        }
-                        
-                        all_transfers_by_date[tx_date].append(transfer_data)
-                        processed_count += 1
-            
-            # Show progress
-            if processed_count % 100 == 0:
-                self.context.logger.info(f"Processed {processed_count} token transfers...")
-            
-            next_page_params = response_json.get('next_page_params')
-            if not next_page_params:
-                break
+            if tx_date and tx_date <= end_datetime.strftime('%Y-%m-%d'):
+                from_address = tx.get('from', {})
+                if self._should_include_transfer(from_address, tx, is_eth_transfer=False):
+                    token = tx.get('token', {})
+                    symbol = token.get('symbol', 'Unknown')
+                    total = tx.get('total', {})
+                    value_raw = int(total.get('value', '0'))
+                    decimals = int(token.get('decimals', 18))
+                    amount = value_raw / (10 ** decimals)
+                    
+                    transfer_data = {
+                        'from_address': from_address.get('hash', ''),
+                        'amount': amount,
+                        'token_address': token.get('address', ''),
+                        'symbol': symbol,
+                        'timestamp': tx.get('timestamp', ''),
+                        'tx_hash': tx.get('transaction_hash', ''),
+                        'type': 'token'
+                    }
+                    
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+        
         
         self.context.logger.info(f"Completed token transfers: {processed_count} found")
 
@@ -2196,69 +2195,55 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch ETH transfers from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         page_params = {'filter': 'to'}
-        next_page_params = None
         processed_count = 0
+            
+        endpoint = f"{base_url}/addresses/{address}/transactions"
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers={"Accept": "application/json"},
+            rate_limited_code=429,
+            rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
+            retry_wait=self.params.sleep_time,
+        )
         
-        while True:
-            if next_page_params:
-                page_params.update(next_page_params)
+        if not success:
+            self.context.logger.error("Failed to fetch ETH transfers")
+            return None
+        
+        eth_transactions = response_json.get('items', [])
+        if not eth_transactions:
+            return None
+        
+        for tx in eth_transactions:
+            tx_datetime = self._get_datetime_from_timestamp(tx.get('timestamp'))
+            tx_date = tx_datetime.strftime('%Y-%m-%d') if tx_datetime else None
             
-            endpoint = f"{base_url}/addresses/{address}/transactions"
-            success, response_json = yield from self._request_with_retries(
-                endpoint=endpoint,
-                params=page_params,
-                headers={"Accept": "application/json"},
-                rate_limited_code=429,
-                rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
-                retry_wait=self.params.sleep_time,
-            )
+            # Stop if we've gone past our end date
+            if tx_datetime and tx_datetime > end_datetime:
+                continue
             
-            if not success:
-                self.context.logger.error("Failed to fetch ETH transfers")
-                break
+            # Skip if date already exists in stored data
+            if tx_date and tx_date in existing_data:
+                continue
             
-            eth_transactions = response_json.get('items', [])
-            if not eth_transactions:
-                break
-            
-            for tx in eth_transactions:
-                tx_datetime = self._get_datetime_from_timestamp(tx.get('timestamp'))
-                tx_date = tx_datetime.strftime('%Y-%m-%d') if tx_datetime else None
-                
-                # Stop if we've gone past our end date
-                if tx_datetime and tx_datetime > end_datetime:
-                    continue
-                
-                # Skip if date already exists in stored data
-                if tx_date and tx_date in existing_data:
-                    continue
-                
-                if tx_date and tx_date <= end_datetime.strftime('%Y-%m-%d'):
-                    from_address = tx.get('from', {})
-                    if self._should_include_transfer(from_address, tx, is_eth_transfer=True):
-                        value_wei = int(tx.get('value', '0'))
-                        amount_eth = value_wei / 10**18
-                        
-                        transfer_data = {
-                            'from_address': from_address.get('hash', ''),
-                            'amount': amount_eth,
-                            'token_address': '',
-                            'symbol': 'ETH',
-                            'timestamp': tx.get('timestamp', ''),
-                            'tx_hash': tx.get('hash', ''),
-                            'type': 'eth'
-                        }
-                        
-                        all_transfers_by_date[tx_date].append(transfer_data)
-                        processed_count += 1
-            
-            # Show progress
-            if processed_count % 100 == 0:
-                self.context.logger.info(f"Processed {processed_count} ETH transfers...")
-            
-            next_page_params = response_json.get('next_page_params')
-            if not next_page_params:
-                break
+            if tx_date and tx_date <= end_datetime.strftime('%Y-%m-%d'):
+                from_address = tx.get('from', {})
+                if self._should_include_transfer(from_address, tx, is_eth_transfer=True):
+                    value_wei = int(tx.get('value', '0'))
+                    amount_eth = value_wei / 10**18
+                    
+                    transfer_data = {
+                        'from_address': from_address.get('hash', ''),
+                        'amount': amount_eth,
+                        'token_address': '',
+                        'symbol': 'ETH',
+                        'timestamp': tx.get('timestamp', ''),
+                        'tx_hash': tx.get('hash', ''),
+                        'type': 'eth'
+                    }
+                    
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
         
         self.context.logger.info(f"Completed ETH transfers: {processed_count} found")
 
@@ -2291,17 +2276,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except:
             return None
 
-    def _load_transfer_data(self) -> Generator[None, None, Dict]:
-        """Load transfer data from kv_store."""
-        cached_data = yield from self._read_kv(keys=("total_funding",))
-        if cached_data and cached_data.get("total_funding"):
-            try:
-                return json.loads(cached_data.get("total_funding"))
-            except json.JSONDecodeError:
-                self.context.logger.warning("Failed to parse cached transfer data")
-                return {}
-        return {}
-
     def _save_transfer_data(self, data: Dict) -> Generator[None, None, None]:
         """Save transfer data to kv_store."""
         yield from self._write_kv({"total_funding": json.dumps(data)})
@@ -2311,73 +2285,63 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch token transfers from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         page_params = {'filter': 'to'}
-        next_page_params = None
         processed_count = 0
         
-        while True:
-            if next_page_params:
-                page_params.update(next_page_params)
+        endpoint = f"{base_url}/addresses/{address}/token-transfers"
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers={"Accept": "application/json"},
+            rate_limited_code=429,
+            rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
+            retry_wait=self.params.sleep_time,
+        )
+        
+        if not success:
+            self.context.logger.error("Failed to fetch Mode token transfers")
+            return None
+        
+        transfers = response_json.get('items', [])
+        if not transfers:
+            return None
+        
+        for tx in transfers:
+            tx_datetime = self._get_datetime_from_timestamp(tx.get('timestamp'))
+            tx_date = tx_datetime.strftime('%Y-%m-%d') if tx_datetime else None
+            from_address = tx.get('from', {})
+
+            if from_address.lower() == address.lower():
+                continue
+
+            # Stop if we've gone past our end date
+            if tx_datetime and tx_datetime > end_datetime:
+                continue
             
-            endpoint = f"{base_url}/addresses/{address}/token-transfers"
-            success, response_json = yield from self._request_with_retries(
-                endpoint=endpoint,
-                params=page_params,
-                headers={"Accept": "application/json"},
-                rate_limited_code=429,
-                rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
-                retry_wait=self.params.sleep_time,
-            )
+            # Skip if date already exists in stored data
+            if tx_date and tx_date in existing_data:
+                continue
             
-            if not success:
-                self.context.logger.error("Failed to fetch Mode token transfers")
-                break
-            
-            transfers = response_json.get('items', [])
-            if not transfers:
-                break
-            
-            for tx in transfers:
-                tx_datetime = self._get_datetime_from_timestamp(tx.get('timestamp'))
-                tx_date = tx_datetime.strftime('%Y-%m-%d') if tx_datetime else None
-                
-                # Stop if we've gone past our end date
-                if tx_datetime and tx_datetime > end_datetime:
-                    continue
-                
-                # Skip if date already exists in stored data
-                if tx_date and tx_date in existing_data:
-                    continue
-                
-                if tx_date and tx_date <= end_datetime.strftime('%Y-%m-%d'):
-                    from_address = tx.get('from', {})
-                    if self._should_include_transfer_mode(from_address, tx, is_eth_transfer=False):
-                        token = tx.get('token', {})
-                        symbol = token.get('symbol', 'Unknown')
-                        total = tx.get('total', {})
-                        value_raw = int(total.get('value', '0'))
-                        decimals = int(token.get('decimals', 18))
-                        amount = value_raw / (10 ** decimals)
-                        
-                        transfer_data = {
-                            'from_address': from_address.get('hash', ''),
-                            'amount': amount,
-                            'token_address': token.get('address', ''),
-                            'symbol': symbol,
-                            'timestamp': tx.get('timestamp', ''),
-                            'tx_hash': tx.get('transaction_hash', ''),
-                            'type': 'token'
-                        }
-                        
-                        all_transfers_by_date[tx_date].append(transfer_data)
-                        processed_count += 1
-            
-            # Show progress
-            if processed_count % 100 == 0:
-                self.context.logger.info(f"Processed {processed_count} Mode token transfers...")
-            
-            next_page_params = response_json.get('next_page_params')
-            if not next_page_params:
-                break
+            if tx_date and tx_date <= end_datetime.strftime('%Y-%m-%d'):
+                if self._should_include_transfer_mode(from_address, tx, is_eth_transfer=False):
+                    token = tx.get('token', {})
+                    symbol = token.get('symbol', 'Unknown')
+                    total = tx.get('total', {})
+                    value_raw = int(total.get('value', '0'))
+                    decimals = int(token.get('decimals', 18))
+                    amount = value_raw / (10 ** decimals)
+                    
+                    transfer_data = {
+                        'from_address': from_address.get('hash', ''),
+                        'amount': amount,
+                        'token_address': token.get('address', ''),
+                        'symbol': symbol,
+                        'timestamp': tx.get('timestamp', ''),
+                        'tx_hash': tx.get('transaction_hash', ''),
+                        'type': 'token'
+                    }
+                    
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+        
         
         self.context.logger.info(f"Completed Mode token transfers: {processed_count} found")
 
@@ -2385,69 +2349,59 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch ETH transfers from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         page_params = {'filter': 'to'}
-        next_page_params = None
         processed_count = 0
         
-        while True:
-            if next_page_params:
-                page_params.update(next_page_params)
+
+        endpoint = f"{base_url}/addresses/{address}/transactions"
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers={"Accept": "application/json"},
+            rate_limited_code=429,
+            rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
+            retry_wait=self.params.sleep_time,
+        )
+        
+        if not success:
+            self.context.logger.error("Failed to fetch Mode ETH transfers")
+            return None
+        
+        eth_transactions = response_json.get('items', [])
+        if not eth_transactions:
+            return None
+        
+        for tx in eth_transactions:
+            tx_datetime = self._get_datetime_from_timestamp(tx.get('timestamp'))
+            tx_date = tx_datetime.strftime('%Y-%m-%d') if tx_datetime else None
+            from_address = tx.get('from', {})
+
+            if from_address.lower() == address.lower():
+                continue
+
+            # Stop if we've gone past our end date
+            if tx_datetime and tx_datetime > end_datetime:
+                continue
             
-            endpoint = f"{base_url}/addresses/{address}/transactions"
-            success, response_json = yield from self._request_with_retries(
-                endpoint=endpoint,
-                params=page_params,
-                headers={"Accept": "application/json"},
-                rate_limited_code=429,
-                rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
-                retry_wait=self.params.sleep_time,
-            )
+            # Skip if date already exists in stored data
+            if tx_date and tx_date in existing_data:
+                continue
             
-            if not success:
-                self.context.logger.error("Failed to fetch Mode ETH transfers")
-                break
-            
-            eth_transactions = response_json.get('items', [])
-            if not eth_transactions:
-                break
-            
-            for tx in eth_transactions:
-                tx_datetime = self._get_datetime_from_timestamp(tx.get('timestamp'))
-                tx_date = tx_datetime.strftime('%Y-%m-%d') if tx_datetime else None
-                
-                # Stop if we've gone past our end date
-                if tx_datetime and tx_datetime > end_datetime:
-                    continue
-                
-                # Skip if date already exists in stored data
-                if tx_date and tx_date in existing_data:
-                    continue
-                
-                if tx_date and tx_date <= end_datetime.strftime('%Y-%m-%d'):
-                    from_address = tx.get('from', {})
-                    if self._should_include_transfer_mode(from_address, tx, is_eth_transfer=True):
-                        value_wei = int(tx.get('value', '0'))
-                        amount_eth = value_wei / 10**18
-                        
-                        transfer_data = {
-                            'from_address': from_address.get('hash', ''),
-                            'amount': amount_eth,
-                            'token_address': '',
-                            'symbol': 'ETH',
-                            'timestamp': tx.get('timestamp', ''),
-                            'tx_hash': tx.get('hash', ''),
-                            'type': 'eth'
-                        }
-                        
-                        all_transfers_by_date[tx_date].append(transfer_data)
-                        processed_count += 1
-            
-            # Show progress
-            if processed_count % 100 == 0:
-                self.context.logger.info(f"Processed {processed_count} Mode ETH transfers...")
-            
-            next_page_params = response_json.get('next_page_params')
-            if not next_page_params:
-                break
+            if tx_date and tx_date <= end_datetime.strftime('%Y-%m-%d'):
+                if self._should_include_transfer_mode(from_address, tx, is_eth_transfer=True):
+                    value_wei = int(tx.get('value', '0'))
+                    amount_eth = value_wei / 10**18
+                    
+                    transfer_data = {
+                        'from_address': from_address.get('hash', ''),
+                        'amount': amount_eth,
+                        'token_address': '',
+                        'symbol': 'ETH',
+                        'timestamp': tx.get('timestamp', ''),
+                        'tx_hash': tx.get('hash', ''),
+                        'type': 'eth'
+                    }
+                    
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
         
         self.context.logger.info(f"Completed Mode ETH transfers: {processed_count} found")
 
@@ -2466,17 +2420,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         
         return not from_address.get('is_contract') or self._is_gnosis_safe(from_address)
 
-    def _load_transfer_data_mode(self) -> Generator[None, None, Dict]:
-        """Load Mode transfer data from kv_store."""
-        cached_data = yield from self._read_kv(keys=("mode_transfer_data",))
-        if cached_data and cached_data.get("mode_transfer_data"):
-            try:
-                return json.loads(cached_data.get("mode_transfer_data"))
-            except json.JSONDecodeError:
-                self.context.logger.warning("Failed to parse cached Mode transfer data")
-                return {}
-        return {}
-
     def _save_transfer_data_mode(self, data: Dict) -> Generator[None, None, None]:
         """Save Mode transfer data to kv_store."""
         yield from self._write_kv({"mode_transfer_data": json.dumps(data)})
@@ -2492,18 +2435,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Fetch incoming transfers
             transfers_url = f"{base_url}/safes/{address}/incoming-transfers/"
             
-            # SafeGlobal API uses cursor-based pagination
-            cursor = None
             processed_count = 0
             
             while True:
-                params = {'limit': 100}  # Max limit for SafeGlobal API
-                if cursor:
-                    params['cursor'] = cursor
                 
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
-                    params=params,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
                     rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
@@ -2541,6 +2478,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # Process the transfer
                     from_address = transfer.get('from', '')
                     transfer_type = transfer.get('type', '')
+                    
+                    if from_address.lower() == address.lower():
+                        continue
                     
                     # Filter from address - only include EOAs and GnosisSafe contracts
                     if not self._should_include_transfer_optimism(from_address):
@@ -2614,7 +2554,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error fetching Optimism transfers: {e}")
 
-    def _should_include_transfer_optimism(self, from_address: str) -> bool:
+    def _should_include_transfer_optimism(self, from_address: str) -> Generator[None, None, bool]:
         """Determine if an Optimism transfer should be included based on from address type."""
         if not from_address:
             return False
@@ -2623,20 +2563,53 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if from_address.lower() in ['0x0000000000000000000000000000000000000000', '0x0', '']:
             return False
         
-        # For Optimism, we use a simplified approach since SafeGlobal API already filters appropriately
-        # The SafeGlobal API typically only returns transfers from EOAs and known Safe contracts
-        return True
-
-    def _load_transfer_data_optimism(self) -> Generator[None, None, Dict]:
-        """Load Optimism transfer data from kv_store."""
-        cached_data = yield from self._read_kv(keys=("optimism_transfer_data",))
-        if cached_data and cached_data.get("optimism_transfer_data"):
-            try:
-                return json.loads(cached_data.get("optimism_transfer_data"))
-            except json.JSONDecodeError:
-                self.context.logger.warning("Failed to parse cached Optimism transfer data")
-                return {}
-        return {}
+        try:
+            # Use Optimism RPC to check if address is a contract
+            payload = {
+                "jsonrpc": "2.0", 
+                "method": "eth_getCode",
+                "params": [from_address, "latest"],
+                "id": 1
+            }
+            
+            success, result = yield from self._request_with_retries(
+                endpoint="https://mainnet.optimism.io",
+                method="POST",
+                json=payload,
+                rate_limited_code=429,
+                rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
+                retry_wait=self.params.sleep_time,
+            )
+            
+            if not success:
+                self.context.logger.error("Failed to check contract code")
+                return False
+                
+            code = result.get('result', '0x')
+            
+            # If code is '0x', it's an EOA
+            if code == '0x':
+                return True
+            
+            # If it has code, check if it's a GnosisSafe
+            safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{from_address}/"
+            success, _ = yield from self._request_with_retries(
+                endpoint=safe_check_url,
+                headers={"Accept": "application/json"},
+                rate_limited_code=429,
+                rate_limited_callback=lambda: self.context.logger.warning("Rate limited, waiting..."),
+                retry_wait=self.params.sleep_time,
+            )
+            
+            if success:
+                return True
+                
+            self.context.logger.info(f"Excluding transfer from contract: {from_address}")
+            return False
+            
+        except Exception as e:
+            self.context.logger.error(f"Error checking address {from_address}: {e}")
+            return False
 
     def _save_transfer_data_optimism(self, data: Dict) -> Generator[None, None, None]:
         """Save Optimism transfer data to kv_store."""
@@ -2669,7 +2642,3 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning("Failed to parse cached unified transfer data")
                 return {}
         return {}
-
-    def _save_funding_events_data(self, data: Dict) -> Generator[None, None, None]:
-        """Save unified transfer data to kv_store."""
-        yield from self._write_kv({"funding_events": json.dumps(data)})

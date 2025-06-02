@@ -102,7 +102,7 @@ PORTFOLIO_UPDATE_INTERVAL = 3600  # 1hr
 APR_UPDATE_INTERVAL = 3600  # 1hr
 METRICS_UPDATE_INTERVAL = 21600  # 6hr
 # Initial available amount for ETH (0.005 ETH)
-ETH_INITIAL_AMOUNT = 0.005 * 10**18
+ETH_INITIAL_AMOUNT = int(0.005 * 10**18)
 # Key for tracking remaining ETH in kv_store
 ETH_REMAINING_KEY = "eth_remaining_amount"
 SLEEP_TIME = 10  # Configurable sleep time
@@ -260,6 +260,10 @@ class LiquidityTraderBaseBehaviour(
         self.whitelisted_assets: Dict[str, Any] = {}
         self.whitelisted_assets_filepath: str = (
             self.params.store_path / self.params.whitelisted_assets_filename
+        )
+        self.funding_events: Dict[str, Any] = {}
+        self.funding_events_filepath: str = (
+            self.params.store_path / self.params.funding_events_filename
         )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
@@ -612,6 +616,14 @@ class LiquidityTraderBaseBehaviour(
     def read_whitelisted_assets(self) -> None:
         """Read the list of assets as JSON."""
         self._read_data("whitelisted_assets", self.whitelisted_assets_filepath)
+
+    def store_funding_events(self) -> None:
+        """Store the list of assets as JSON."""
+        self._store_data(self.funding_events, "funding_events", self.funding_events_filepath)
+
+    def read_funding_events(self) -> None:
+        """Read the list of assets as JSON."""
+        self._read_data("funding_events", self.funding_events_filepath)
 
     def store_gas_costs(self) -> None:
         """Store the gas costs as JSON."""
@@ -1301,7 +1313,8 @@ class LiquidityTraderBaseBehaviour(
     ) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
         # Check if coin_list is valid
-        if symbol.lower() in COIN_ID_MAPPING.get(chain_name, {}):
+        symbol = symbol.lower()
+        if symbol in COIN_ID_MAPPING.get(chain_name, {}):
             self.context.logger.info(f"Found coin id for {symbol} in {chain_name}")
             return COIN_ID_MAPPING[chain_name][symbol]
 
@@ -1317,6 +1330,12 @@ class LiquidityTraderBaseBehaviour(
             return int(ETH_INITIAL_AMOUNT)
 
         try:
+            chain = self.params.target_investment_chains[0]
+            account = self.params.safe_contract_addresses.get(chain)
+            amount =  yield from self._get_native_balance(chain, account)
+            if amount:
+                return min(int(result[ETH_REMAINING_KEY]), amount)
+            
             return int(result[ETH_REMAINING_KEY])
         except (ValueError, TypeError):
             self.context.logger.error(
@@ -1341,7 +1360,7 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(
             f"Resetting ETH remaining amount in kv_store to {ETH_INITIAL_AMOUNT}"
         )
-        yield from self._write_kv({ETH_REMAINING_KEY: int(ETH_INITIAL_AMOUNT)})
+        yield from self._write_kv({ETH_REMAINING_KEY: str(ETH_INITIAL_AMOUNT)})
 
 
 def execute_strategy(

@@ -315,7 +315,8 @@ def get_coin_id_from_symbol(
     ) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
         # Check if coin_list is valid
-        if symbol.lower() in coin_id_mapping.get(chain_name, {}):
+        symbol = symbol.lower()
+        if symbol in coin_id_mapping.get(chain_name, {}):
             self.context.logger.info(f"Found coin id for {symbol} in {chain_name}")
             return coin_id_mapping[chain_name][symbol]
 

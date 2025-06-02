@@ -8,13 +8,13 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeiguehsbdcqelysju3627o7lpujqeh45zktx5z44yxeh7qmbhanxui
-  behaviours/apr_population.py: bafybeic6kjast354q4oadrnn4qgshjlivetx3fnrkqsdocs5fo7ajbebe4
-  behaviours/base.py: bafybeihf74udi6d7sc3ldxxalnw62umw2mo7nxii6et27rqwroasq23uxa
+  behaviours/apr_population.py: bafybeifpuzkr6mgxfkvl4m2w4raisv7xbkl6efisyqmjjsnrmchejb32yy
+  behaviours/base.py: bafybeiemzdznkfwlgf2egcs367pbhipjhojltbitasdhnajthsewy56bne
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeicalz5er6uygbwfdohskd5bfxh4qztoolpbeq6qjorrzeuxvetzly
   behaviours/evaluate_strategy.py: bafybeico7ant5224vyei5ltxdc6k5vkopemyecogzcr5vre22dd53myb5u
-  behaviours/fetch_strategies.py: bafybeibazskgeg4kdtc7dcnjhwilrettixaay6rtz6zs4dne4a4tiahtdy
+  behaviours/fetch_strategies.py: bafybeife45l5b42qngtm52k5cwx54zhnbipbvtus5leutexxt6rtvd4j6i
   behaviours/get_positions.py: bafybeia32hziqapjhvwrtqtf6u4n6aovdm2gi4ejmlwbg7cc6vbokzbbum
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeial6l547l3qtymegdb3u6izkkave4fx5xn4bszl77uee376qxhdry
@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeicabrgjol5ifixe4vukzxfbj3wlofysa2dodt34kgly7h34imkch4
+  models.py: bafybeiaiubhgjn47fpzy56hqzwy5lcvc6uzxhz7uofpye62jjn5rsdr46y
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
@@ -241,6 +241,7 @@ models:
       portfolio_info_filename: portfolio.json
       gas_cost_info_filename: gas_costs.json
       whitelisted_assets_filename: whitelisted_assets.json
+      funding_events_filename: funding_events.json
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       min_investment_amount: 1
       max_fee_percentage: 0.02

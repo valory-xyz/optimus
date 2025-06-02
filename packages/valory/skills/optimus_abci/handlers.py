@@ -112,6 +112,8 @@ PROTOCOL_DEFINITIONS = {
     "UniswapV3": "protocol for investing in liquidity positions",
     "velodrome": "protocol for investing in liquidity positions",
 }
+MODIUS_AGENT_PROFILE_PATH = "modius-ui-build"
+OPTIMUS_AGENT_PROFILE_PATH = "optimus-ui-build"
 
 
 def load_fsm_spec() -> Dict:
@@ -302,6 +304,12 @@ class HttpHandler(BaseHttpHandler):
             chain_strategies = self.context.params.available_strategies.get(chain, [])
             self.available_strategies.extend(chain_strategies)
 
+        self.agent_profile_path = (
+            OPTIMUS_AGENT_PROFILE_PATH
+            if self.context.params.target_investment_chains[0] == "optimism"
+            else MODIUS_AGENT_PROFILE_PATH
+        )
+
     @property
     def synchronized_data(self) -> SynchronizedData:
         """Return the synchronized data."""
@@ -350,10 +358,11 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Extract the requested path from the URL
             requested_path = urlparse(http_msg.url).path.lstrip("/")
-
+            
             # Construct the file path
-            file_path = Path(Path(__file__).parent, "modius-ui-build", requested_path)
-
+            file_path = Path(
+                Path(__file__).parent, self.agent_profile_path, requested_path
+            )
             # If the file exists and is a file, send it as a response
             if file_path.exists() and file_path.is_file():
                 with open(file_path, "rb") as file:
@@ -364,7 +373,7 @@ class HttpHandler(BaseHttpHandler):
             else:
                 # If the file doesn't exist or is not a file, return the index.html file
                 with open(
-                    Path(Path(__file__).parent, "modius-ui-build", "index.html"),
+                    Path(Path(__file__).parent, self.agent_profile_path, "index.html"),
                     "r",
                     encoding="utf-8",
                 ) as file:
@@ -620,34 +629,6 @@ class HttpHandler(BaseHttpHandler):
 
         self._send_ok_response(http_msg, http_dialogue, data)
 
-    def _handle_get_static_js(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a HTTP GET request for the main.js file.
-
-        :param http_msg: the HTTP message
-        :param http_dialogue: the HTTP dialogue
-        """
-        try:
-            # Read the main.js file
-            with open(
-                Path(
-                    Path(__file__).parent,
-                    "modius-ui-build",
-                    "static",
-                    "js",
-                    "main.d1485dfa.js",
-                ),
-                "rb",
-            ) as file:
-                file_content = file.read()
-
-            # Send the file content as a response
-            self._send_ok_response(http_msg, http_dialogue, file_content)
-        except FileNotFoundError:
-            self._handle_not_found(http_msg, http_dialogue)
-
     def _handle_not_found(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -752,6 +733,7 @@ class HttpHandler(BaseHttpHandler):
                 self._handle_llm_response,
                 callback_kwargs,
             )
+
         except (json.JSONDecodeError, ValueError) as e:
             self.context.logger.info(f"Error processing prompt: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)

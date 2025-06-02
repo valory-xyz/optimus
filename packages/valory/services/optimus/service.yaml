@@ -86,6 +86,7 @@ models:
       pool_info_filename: ${POOL_INFO_FILENAME:str:current_pool.json}
       portfolio_info_filename: ${PORTFOLIO_INFO_FILENAME:str:portfolio.json}
       gas_cost_info_filename: ${GAS_COST_INFO_FILENAME:str:gas_costs.json}
+      whitelisted_assets_filename: ${WHITELISTED_ASSETS_FILENAME:str:whitelisted_assets.json}
       merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
       min_investment_amount: ${MIN_INVESTMENT_AMOUNT:int:1}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}

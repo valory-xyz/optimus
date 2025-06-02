@@ -216,6 +216,7 @@ models:
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
       portfolio_info_filename: portfolio.json
+      whitelisted_assets_filename: whitelisted_assets.json
       gas_cost_info_filename: gas_costs.json
       min_investment_amount: 1
       max_fee_percentage: 0.02

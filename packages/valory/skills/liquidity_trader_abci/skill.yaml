@@ -240,6 +240,7 @@ models:
       pool_info_filename: current_pool.json
       portfolio_info_filename: portfolio.json
       gas_cost_info_filename: gas_costs.json
+      whitelisted_assets_filename: whitelisted_assets.json
       merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
       min_investment_amount: 1
       max_fee_percentage: 0.02

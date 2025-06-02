@@ -103,7 +103,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.shared_state.selected_protocols = selected_protocols
 
             # Filter whitelisted assets based on price changes
-            yield from self._filter_whitelisted_assets_by_price()
+            if not self.whitelisted_assets:
+                self.whitelisted_assets = WHITELISTED_ASSETS
+                self.store_whitelisted_assets()
+            else:
+                self.read_whitelisted_assets()
+
+            yield from self._track_whitelisted_assets()
 
             # Update the amounts of all open positions
             yield from self.update_position_amounts()
@@ -134,8 +140,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
-    def _filter_whitelisted_assets_by_price(self) -> Generator[None, None, None]:
-        """Filter whitelisted assets based on price changes over the last day."""
+    def _track_whitelisted_assets(self) -> Generator[None, None, None]:
+        """Track whitelisted assets based on price changes over the last day and remove if the price has dropped"""
         self.context.logger.info("Starting price-based filtering of whitelisted assets")
         
         # Get current timestamp and calculate yesterday's timestamp
@@ -200,16 +206,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Removing {len(addresses_to_remove)} assets from {chain} whitelist"
                 )
                 # Update the assets in memory
-                if chain in self.assets:
+                if chain in self.whitelisted_assets:
                     for address in addresses_to_remove:
-                        if address in self.assets[chain]:
-                            removed_symbol = self.assets[chain].pop(address)
+                        if address in self.whitelisted_assets[chain]:
+                            removed_symbol = self.whitelisted_assets[chain].pop(address)
                             self.context.logger.info(
                                 f"Removed {removed_symbol} ({address}) from {chain} assets"
                             )
                 
                 # Store the updated assets
-                self.store_assets()
+                self.store_whitelisted_assets()
         
         self.context.logger.info("Completed price-based filtering of whitelisted assets")
 

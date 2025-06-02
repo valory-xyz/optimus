@@ -226,6 +226,10 @@ class LiquidityTraderBaseBehaviour(
         self.portfolio_data_filepath: str = (
             self.params.store_path / self.params.portfolio_info_filename
         )
+        self.whitelisted_assets: Dict[str, Any] = {}
+        self.whitelisted_assets_filepath: str = (
+            self.params.store_path / self.params.whitelisted_assets_filename
+        )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
@@ -569,6 +573,14 @@ class LiquidityTraderBaseBehaviour(
     def read_current_positions(self) -> None:
         """Read the current pool as JSON."""
         self._read_data("current_positions", self.current_positions_filepath)
+
+    def store_whitelisted_assets(self) -> None:
+        """Store the list of assets as JSON."""
+        self._store_data(self.whitelisted_assets, "whitelisted_assets", self.whitelisted_assets_filepath)
+
+    def read_whitelisted_assets(self) -> None:
+        """Read the list of assets as JSON."""
+        self._read_data("whitelisted_assets", self.whitelisted_assets_filepath)
 
     def store_gas_costs(self) -> None:
         """Store the gas costs as JSON."""

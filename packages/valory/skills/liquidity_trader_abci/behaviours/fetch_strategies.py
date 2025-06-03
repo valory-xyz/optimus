@@ -2036,7 +2036,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # Get historical price for the transfer date
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
 
-                    if token_symbol == "ETH":
+                    if token_symbol == "ETH":  # nosec B105
                         price = yield from self._fetch_historical_eth_price(date_str)
                     else:
                         coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)

@@ -75,6 +75,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            agent_config = os.environ.get("AEA_AGENT", "")
+            agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
+            self.context.logger.info(f"Agent hash: {agent_hash}")
+            
             sender = self.context.agent_address
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")
@@ -2081,7 +2085,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         all_transfers_by_date = defaultdict(list)
         end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
         end_datetime = end_datetime.replace(tzinfo=timezone.utc)
-
         try:
             self.context.logger.info(f"Fetching all Mode transfers until {end_date}...")
 
@@ -2190,9 +2193,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             endpoint=endpoint,
             headers={"Accept": "application/json"},
             rate_limited_code=429,
-            rate_limited_callback=lambda: self.context.logger.warning(
-                "Rate limited, waiting..."
-            ),
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
             retry_wait=self.params.sleep_time,
         )
 
@@ -2259,9 +2260,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             endpoint=endpoint,
             headers={"Accept": "application/json"},
             rate_limited_code=429,
-            rate_limited_callback=lambda: self.context.logger.warning(
-                "Rate limited, waiting..."
-            ),
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
             retry_wait=self.params.sleep_time,
         )
 
@@ -2351,15 +2350,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch token transfers from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         processed_count = 0
-
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
         success, response_json = yield from self._request_with_retries(
             endpoint=endpoint,
             headers={"Accept": "application/json"},
             rate_limited_code=429,
-            rate_limited_callback=lambda: self.context.logger.warning(
-                "Rate limited, waiting..."
-            ),
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
             retry_wait=self.params.sleep_time,
         )
 
@@ -2376,7 +2372,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
             from_address = tx.get("from", {})
 
-            if from_address.lower() == address.lower():
+            if from_address.get("hash", address).lower() == address.lower():
                 continue
 
             # Stop if we've gone past our end date
@@ -2431,9 +2427,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             endpoint=endpoint,
             headers={"Accept": "application/json"},
             rate_limited_code=429,
-            rate_limited_callback=lambda: self.context.logger.warning(
-                "Rate limited, waiting..."
-            ),
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
             retry_wait=self.params.sleep_time,
         )
 
@@ -2450,7 +2444,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
             from_address = tx.get("from", {})
 
-            if from_address.lower() == address.lower():
+            if from_address.get("hash", address).lower() == address.lower():
                 continue
 
             # Stop if we've gone past our end date
@@ -2530,15 +2524,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers_url = f"{base_url}/safes/{address}/incoming-transfers/"
 
             processed_count = 0
-
             while True:
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
                     headers={"Accept": "application/json"},
                     rate_limited_code=429,
-                    rate_limited_callback=lambda: self.context.logger.warning(
-                        "Rate limited, waiting..."
-                    ),
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
                     retry_wait=self.params.sleep_time,
                 )
 
@@ -2571,25 +2562,34 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Process the transfer
-                    from_address = transfer.get("from", "")
+                    from_address = transfer.get("from", address)
                     transfer_type = transfer.get("type", "")
 
                     if from_address.lower() == address.lower():
                         continue
 
                     # Filter from address - only include EOAs and GnosisSafe contracts
-                    if not self._should_include_transfer_optimism(from_address):
+                    should_include = yield from self._should_include_transfer_optimism(from_address)
+                    if not should_include:
                         continue
 
                     # Check transfer type
                     if transfer_type == "ERC20_TRANSFER":
                         # Token transfer
                         token_info = transfer.get("tokenInfo", {})
-                        symbol = token_info.get("symbol", "Unknown")
-                        decimals = int(token_info.get("decimals", 18) or 18)
+                        token_address = transfer.get("tokenAddress", "")
+                        if not token_info:
+                            if token_address:
+                                decimals = yield from self._get_token_decimals("optimism", token_address)
+                                symbol = yield from self._get_token_symbol("optimism", token_address)
+                            else:
+                                continue
+                        else:
+                            symbol = token_info.get("symbol", "Unknown")
+                            decimals = int(token_info.get("decimals", 18) or 18)
+                        
                         value_raw = int(transfer.get("value", "0") or "0")
                         amount = value_raw / (10**decimals)
-                        token_address = transfer.get("tokenAddress", "")
 
                         transfer_data = {
                             "from_address": from_address,
@@ -2682,11 +2682,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             success, result = yield from self._request_with_retries(
                 endpoint="https://mainnet.optimism.io",
                 method="POST",
-                json=payload,
+                body=payload,
                 rate_limited_code=429,
-                rate_limited_callback=lambda: self.context.logger.warning(
-                    "Rate limited, waiting..."
-                ),
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
                 retry_wait=self.params.sleep_time,
             )
 
@@ -2706,9 +2704,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 endpoint=safe_check_url,
                 headers={"Accept": "application/json"},
                 rate_limited_code=429,
-                rate_limited_callback=lambda: self.context.logger.warning(
-                    "Rate limited, waiting..."
-                ),
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
                 retry_wait=self.params.sleep_time,
             )
 

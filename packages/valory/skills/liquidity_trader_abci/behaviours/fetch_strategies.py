@@ -78,7 +78,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
             self.context.logger.info(f"Agent hash: {agent_hash}")
-            
+
             sender = self.context.agent_address
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")
@@ -2569,7 +2569,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Filter from address - only include EOAs and GnosisSafe contracts
-                    should_include = yield from self._should_include_transfer_optimism(from_address)
+                    should_include = yield from self._should_include_transfer_optimism(
+                        from_address
+                    )
                     if not should_include:
                         continue
 
@@ -2580,14 +2582,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         token_address = transfer.get("tokenAddress", "")
                         if not token_info:
                             if token_address:
-                                decimals = yield from self._get_token_decimals("optimism", token_address)
-                                symbol = yield from self._get_token_symbol("optimism", token_address)
+                                decimals = yield from self._get_token_decimals(
+                                    "optimism", token_address
+                                )
+                                symbol = yield from self._get_token_symbol(
+                                    "optimism", token_address
+                                )
                             else:
                                 continue
                         else:
                             symbol = token_info.get("symbol", "Unknown")
                             decimals = int(token_info.get("decimals", 18) or 18)
-                        
+
                         value_raw = int(transfer.get("value", "0") or "0")
                         amount = value_raw / (10**decimals)
 

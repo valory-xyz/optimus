@@ -960,25 +960,26 @@ class LiquidityTraderBaseBehaviour(
 
     def _calculate_rate_limit_wait_time(self) -> int:
         """Calculate the wait time for rate limiting based on the rate limiter state."""
-        if not hasattr(self.coingecko, 'rate_limiter'):
+        if not hasattr(self.coingecko, "rate_limiter"):
             return 0
-        
+
         rate_limiter = self.coingecko.rate_limiter
-        
+
         # If we have no credits left, return 0 (will be handled by caller)
         if rate_limiter.no_credits:
             return 0
-        
+
         # If we're rate limited, calculate time until next minute
         if rate_limiter.rate_limited:
             from time import time
+
             current_time = time()
             time_since_last_request = current_time - rate_limiter.last_request_time
-            
+
             # Wait for the remainder of the current minute
             wait_time = max(0, 60 - int(time_since_last_request))
             return min(wait_time, 60)  # Cap at 60 seconds
-        
+
         return 0
 
     def _request_with_retries(
@@ -999,7 +1000,9 @@ class LiquidityTraderBaseBehaviour(
 
         # Add delay before CoinGecko API calls to respect rate limits (20 calls/minute = 3 seconds between calls)
         if "coingecko.com" in endpoint:
-            self.context.logger.warning("Adding 2-second delay for CoinGecko API rate limiting")
+            self.context.logger.warning(
+                "Adding 2-second delay for CoinGecko API rate limiting"
+            )
             yield from self.sleep(2)
 
         retries = 0
@@ -1019,15 +1022,21 @@ class LiquidityTraderBaseBehaviour(
 
             # Handle rate limiting as a retryable error
             if response.status_code == rate_limited_code:
-                self.context.logger.warning(f"Rate limited (attempt {retries + 1}/{max_retries})")
+                self.context.logger.warning(
+                    f"Rate limited (attempt {retries + 1}/{max_retries})"
+                )
                 rate_limited_callback()
                 retries += 1
                 if retries >= max_retries:
-                    self.context.logger.error(f"Request failed after {retries} rate limit retries.")
+                    self.context.logger.error(
+                        f"Request failed after {retries} rate limit retries."
+                    )
                     return False, response_json
-                
+
                 # Wait 60 seconds for rate limit to reset
-                self.context.logger.info("Waiting 60 seconds before retrying rate-limited request")
+                self.context.logger.info(
+                    "Waiting 60 seconds before retrying rate-limited request"
+                )
                 yield from self.sleep(60)
                 continue
 

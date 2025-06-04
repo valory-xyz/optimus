@@ -614,4 +614,4 @@ def run(*_args, **kwargs) -> Any:
         
         
         logger.info(f"Successfully found opportunities: {result}")
-        return {"result": result, "errors": errors}
+        return {"result": result, "error": errors}

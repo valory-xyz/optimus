@@ -1034,7 +1034,7 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str) -> Lis
         
     return formatted_pools
 
-def get_opportunities(chains, graphql_endpoint, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, **kwargs):
+def get_opportunities_for_balancer(chains, graphql_endpoint, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, **kwargs):
     """Get and format pool opportunities with investment calculations."""
     logger.info(f"Starting opportunity search for chains: {chains}")
     logger.info(f"Current positions to exclude: {len(current_positions)}")
@@ -1202,7 +1202,7 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
         return {"error": errors} if errors else metrics
     else:
         logger.info("Searching for investment opportunities")
-        result = get_opportunities(**kwargs)
+        result = get_opportunities_for_balancer(**kwargs)
         if isinstance(result, dict) and "error" in result:
             logger.error(f"Error in opportunity search: {result['error']}")
             errors.append(result["error"])
@@ -1217,4 +1217,4 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
         else:
             logger.info("Execution completed successfully")
             
-        return {"result": result, "errors": errors}
+        return {"result": result, "error": errors}

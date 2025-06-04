@@ -79,6 +79,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
             self.context.logger.info(f"Agent hash: {agent_hash}")
 
+            if self.current_positions:
+                self.context.logger.info(
+                    f"Current Positions - {self.current_positions}"
+                )
+
             sender = self.context.agent_address
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")

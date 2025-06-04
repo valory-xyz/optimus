@@ -553,18 +553,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not open_position:
             return False
 
-        time_in_position = int(self._get_current_timestamp()) - open_position.get(
-            "timestamp", 0
+        timestamp = (
+            open_position.get("timestamp") or open_position.get("enter_timestamp") or 0
         )
-        if time_in_position < MIN_TIME_IN_POSITION:
-            remaining_time = MIN_TIME_IN_POSITION - time_in_position
-            days, hours = divmod(remaining_time, 24 * 3600)
-            hours //= 3600
-            self.context.logger.info(
-                f"Position {open_position.get('pool_address')} is still in minimum hold period. "
-                f"Waiting for {days} days and {hours} hours before closing it."
-            )
-            return True
+        time_in_position = int(self._get_current_timestamp()) - timestamp
+
+        try:
+            if time_in_position < MIN_TIME_IN_POSITION:
+                remaining_time = MIN_TIME_IN_POSITION - time_in_position
+                days, hours = divmod(remaining_time, 24 * 3600)
+                hours //= 3600
+                self.context.logger.info(
+                    f"Position {open_position.get('pool_address')} is still in minimum hold period. "
+                    f"Waiting for {days} days and {hours} hours before closing it."
+                )
+                return True
+        except Exception as e:
+            self.context.logger.error(f"Error checking minimum hold period: {str(e)}")
+            return False
 
         return False
 
@@ -828,10 +834,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     if valid_opportunities:
                         self.trading_opportunities.extend(valid_opportunities)
-                    else:
-                        self.context.logger.warning(
-                            f"No valid opportunities found using {next_strategy} strategy - all opportunities had invalid format"
-                        )
+
                 else:
                     self.context.logger.warning(
                         f"No opportunity found using {next_strategy} strategy"

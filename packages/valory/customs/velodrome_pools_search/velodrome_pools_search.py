@@ -1398,7 +1398,7 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, cl_filter=None, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
+def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, cl_filter=None, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
     """
     Get and format pool opportunities.
     
@@ -1727,7 +1727,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             continue
         
         # Get opportunities for the chain using Sugar contract
-        result = get_opportunities(
+        result = get_opportunities_for_velodrome(
             kwargs.get("current_positions", []),
             kwargs["coingecko_api_key"],
             chain_id,
@@ -1767,4 +1767,4 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
     # Log cache metrics
     log_cache_metrics()
     
-    return {"result": all_results, "errors": errors}
+    return {"result": all_results, "error": errors}

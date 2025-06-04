@@ -438,7 +438,7 @@ def format_pool_data(pool) -> Dict[str, Any]:
     }
 
 
-def get_opportunities(
+def get_opportunities_for_uniswap(
     chains, graphql_endpoints, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, *kwargs
 ) -> List[Dict[str, Any]]:
     pools = fetch_graphql_data(chains, graphql_endpoints)
@@ -546,9 +546,9 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
             errors.append("Failed to calculate metrics.")
         return {"error": errors} if errors else metrics
     else:
-        result = get_opportunities(**kwargs)
+        result = get_opportunities_for_uniswap(**kwargs)
         if isinstance(result, dict) and "error" in result:
             errors.append(result["error"])
         if not result:
             errors.append("No suitable aggregators found")
-        return {"error": errors} if errors else {"result": result}
+        return {"result": result, "error": errors}

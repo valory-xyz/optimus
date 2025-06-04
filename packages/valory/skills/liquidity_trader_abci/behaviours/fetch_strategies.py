@@ -122,17 +122,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check if one day has passed since last whitelist update
             db_data = yield from self._read_kv(keys=("last_whitelisted_updated",))
-            last_updated = db_data.get("last_whitelisted_updated", 0)
+            last_updated = db_data.get("last_whitelisted_updated", "0")
+            if not last_updated:
+                last_updated = 0
 
-            current_time = self._get_current_timestamp()
+            current_time = int(self._get_current_timestamp())
             one_day_in_seconds = 24 * 60 * 60
 
             if not (int(current_time) - int(last_updated) >= one_day_in_seconds):
                 yield from self._track_whitelisted_assets()
                 # Store current timestamp as last updated
-                yield from self._write_kv(
-                    {"last_whitelisted_updated": str(current_time)}
-                )
+                yield from self._write_kv({"last_whitelisted_updated": current_time})
 
             # Update the amounts of all open positions
             if self.synchronized_data.period_count == 0:

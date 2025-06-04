@@ -667,9 +667,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if position:
                 tick_ranges = yield from self._get_tick_ranges(position, chain)
 
+            #UI supports only camel case names, but our strategies have different name for dex
+            dex_type_mapping = {
+                DexType.UNISWAP_V3.value: "uniswapV3",
+                DexType.STURDY.value: "sturdy",
+                DexType.VELODROME.value: "velodrome",
+                DexType.BALANCER.value: "balancerPool"
+            }
+            
             allocation = {
                 "chain": chain,
-                "type": dex_type,
+                "type": dex_type_mapping.get(dex_type, dex_type),
                 "id": pool_id,
                 "assets": assets,
                 "apr": round(float(apr), 2),

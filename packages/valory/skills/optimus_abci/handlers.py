@@ -109,7 +109,7 @@ PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
 PROTOCOL_DEFINITIONS = {
     "balancerPool": "protocol for investing in liquidity positions",
     "sturdy": "protocol for lending assets",
-    "UniswapV3": "protocol for investing in liquidity positions",
+    "uniswapV3": "protocol for investing in liquidity positions",
     "velodrome": "protocol for investing in liquidity positions",
 }
 MODIUS_AGENT_PROFILE_PATH = "modius-ui-build"

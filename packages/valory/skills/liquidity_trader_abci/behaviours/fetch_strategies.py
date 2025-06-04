@@ -2008,13 +2008,38 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Calculating initial investment from {chain} transfers for address: {safe_address}"
             )
 
-            # Use "all" mode to fetch all transfers until current date
             current_date = datetime.now().strftime("%Y-%m-%d")
+
+            # Default to not fetching full history
+            fetch_till_date = False
+
+            # Check when we last calculated initial value
+            last_calculated_timestamp = yield from self._read_kv(
+                keys=("last_initial_value_calculated_timestamp",)
+            )
+
+            if last_calculated_timestamp and (
+                timestamp := last_calculated_timestamp.get(
+                    "last_initial_value_calculated_timestamp"
+                )
+            ):
+                last_date = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+
+                # If last calculation was today, return cached value
+                if last_date == current_date:
+                    return (yield self._load_chain_total_investment(chain))
+
+                # Otherwise need to calculate new value but not full history
+                fetch_till_date = False
+
+            # No previous calculation, need to fetch full history
+            else:
+                fetch_till_date = True
 
             # Fetch all transfers until current date based on chain
             if chain == "mode":
                 all_transfers = self._fetch_all_transfers_until_date_mode(
-                    safe_address, current_date
+                    safe_address, current_date, fetch_till_date
                 )
             elif chain == "optimism":
                 all_transfers = (
@@ -2035,6 +2060,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             total_investment += chain_investment
 
+        timestamp = int(self._get_current_timestamp())
+        yield from self._write_kv(
+            {"last_initial_value_calculated_timestamp": str(timestamp)}
+        )
         self.context.logger.info(
             f"Total initial investment from all chains: ${total_investment}"
         )
@@ -2046,11 +2075,27 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Calculate investment value for a specific chain and update stored total."""
         # Load existing total investment for this chain
         existing_total = yield from self._load_chain_total_investment(chain)
+        if not existing_total:
+            last_calculated_date = "1970-01-01"
+        else:
+            mode_events = self.funding_events.get("mode", {})
+            if not mode_events:
+                last_calculated_date = "1970-01-01"
+            else:
+                try:
+                    last_calculated_date = list(mode_events.keys())[0]
+                except IndexError:
+                    last_calculated_date = "1970-01-01"
 
         # Only calculate value for new transfers (all_transfers contains only new dates)
         new_investment = 0.0
 
         for date, transfers in all_transfers.items():
+            current_date = datetime.strptime(date, "%Y-%m-%d")
+            last_date = datetime.strptime(last_calculated_date, "%Y-%m-%d")
+            if current_date <= last_date:
+                continue
+
             for transfer in transfers:
                 try:
                     # Get token price for the transfer date
@@ -2098,31 +2143,36 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return updated_total
 
-    def _fetch_all_transfers_until_date_mode(self, address: str, end_date: str) -> Dict:
+    def _fetch_all_transfers_until_date_mode(
+        self, address: str, end_date: str, fetch_till_date: bool
+    ) -> Dict:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
         if self.funding_events:
             existing_mode_data = self.funding_events.get("mode", {})
         else:
+            self.funding_events = {}
             existing_mode_data = {}
 
         all_transfers_by_date = defaultdict(list)
         end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
         end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+
         try:
             self.context.logger.info(f"Fetching all Mode transfers until {end_date}...")
 
             # Fetch token transfers
             self.context.logger.info("Fetching Mode token transfers...")
+
             self._fetch_token_transfers_mode(
-                address, end_datetime, all_transfers_by_date, existing_mode_data
+                address, end_datetime, all_transfers_by_date, fetch_till_date
             )
 
             # Fetch ETH transfers
             self.context.logger.info("Fetching Mode ETH transfers...")
             self._fetch_eth_transfers_mode(
-                address, end_datetime, all_transfers_by_date, existing_mode_data
+                address, end_datetime, all_transfers_by_date, fetch_till_date
             )
 
             # Merge with existing data and save
@@ -2364,47 +2414,78 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Convert timestamp string to datetime object."""
         return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
 
-    # Mode-specific transfer methods
     def _fetch_token_transfers_mode(
         self,
         address: str,
-        end_datetime: datetime,
+        target_date: str,
         all_transfers_by_date: dict,
-        existing_data: dict,
+        fetch_all_till_date: bool = False,
     ) -> None:
-        """Fetch token transfers from Mode blockchain explorer."""
+        """
+        Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date.
+
+        Args:
+            address: The address to fetch transfers for
+            target_date: The specific date to fetch transfers for (format: "YYYY-MM-DD")
+            all_transfers_by_date: Dictionary to store transfers by date
+            fetch_all_till_date: If True, fetch all transfers up to target_date. If False, fetch only target_date transfers
+        """
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
-        response = requests.get(
-            endpoint, headers={"Accept": "application/json"}, verify=False, timeout=30
-        )
 
-        if not response.status_code == 200:
-            self.context.logger.error("Failed to fetch Mode token transfers")
-            return None
+        has_more_pages = True
+        params = {"filter": "to"}  # Only fetch incoming transfers
 
-        transfers = response.json().get("items", [])
-        if not transfers:
-            return None
+        # Check if we have existing mode events and get latest date
+        mode_events = self.funding_events.get("mode", {})
+        if mode_events:
+            try:
+                latest_date = list(mode_events.keys())[0]
+                latest_datetime = datetime.strptime(latest_date, "%Y-%m-%d")
+            except (IndexError, ValueError):
+                latest_datetime = datetime(1970, 1, 1)
+        else:
+            latest_datetime = datetime(1970, 1, 1)
 
-        for tx in transfers:
-            tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
-            tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
-            from_address = tx.get("from", {})
+        while has_more_pages:
+            response = requests.get(
+                endpoint,
+                params=params,
+                headers={"Accept": "application/json"},
+                verify=False,
+                timeout=30,
+            )
 
-            if from_address.get("hash", address).lower() == address.lower():
-                continue
+            if not response.status_code == 200:
+                self.context.logger.error("Failed to fetch Mode token transfers")
+                return None
 
-            # Stop if we've gone past our end date
-            if tx_datetime and tx_datetime > end_datetime:
-                continue
+            response_data = response.json()
+            transfers = response_data.get("items", [])
+            if not transfers:
+                break
 
-            # Skip if date already exists in stored data
-            if tx_date and tx_date in existing_data:
-                continue
+            passed_target_date = False
 
-            if tx_date and tx_date <= end_datetime.strftime("%Y-%m-%d"):
+            for tx in transfers:
+                tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
+                if not tx_datetime:
+                    continue
+
+                tx_date = tx_datetime.strftime("%Y-%m-%d")
+
+                if not fetch_all_till_date:
+                    if tx_datetime < latest_datetime:
+                        # We've gone past our latest stored date, stop processing
+                        has_more_pages = False
+                        passed_target_date = True
+                        break
+
+                from_address = tx.get("from", {})
+                if from_address.get("hash", address).lower() == address.lower():
+                    continue
+
                 if self._should_include_transfer_mode(
                     from_address, tx, is_eth_transfer=False
                 ):
@@ -2414,6 +2495,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     value_raw = int(total.get("value", "0"))
                     decimals = int(token.get("decimals", 18))
                     amount = value_raw / (10**decimals)
+
+                    if amount == 0:
+                        continue
 
                     transfer_data = {
                         "from_address": from_address.get("hash", ""),
@@ -2425,76 +2509,143 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         "type": "token",
                     }
 
+                    if tx_date not in all_transfers_by_date:
+                        all_transfers_by_date[tx_date] = []
                     all_transfers_by_date[tx_date].append(transfer_data)
                     processed_count += 1
 
+            # Stop pagination based on fetch mode
+            if passed_target_date:
+                break
+
+            # Handle pagination
+            next_page_params = response_data.get("next_page_params")
+            if next_page_params:
+                # Update params for next page
+                params.update(
+                    {
+                        "block_number": next_page_params.get("block_number"),
+                        "index": next_page_params.get("index"),
+                    }
+                )
+                has_more_pages = True
+            else:
+                has_more_pages = False
+
+        date_range = (
+            f"for {target_date}" if not fetch_all_till_date else f"till {target_date}"
+        )
         self.context.logger.info(
-            f"Completed Mode token transfers: {processed_count} found"
+            f"Completed Mode token transfers {date_range}: {processed_count} found"
         )
 
     def _fetch_eth_transfers_mode(
         self,
         address: str,
-        end_datetime: datetime,
+        target_date: str,
         all_transfers_by_date: dict,
-        existing_data: dict,
-    ) -> None:
-        """Fetch ETH transfers from Mode blockchain explorer."""
+        fetch_till_date: bool,
+    ) -> float:
+        """Fetch ETH balance history from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
-        processed_count = 0
+        endpoint = f"{base_url}/addresses/{address}/coin-balance-history"
 
-        endpoint = f"{base_url}/addresses/{address}/transactions"
-        response = requests.get(
-            endpoint, headers={"Accept": "application/json"}, verify=False, timeout=30
-        )
+        has_more_pages = True
+        params = {}
+        highest_amount = 0
 
-        if not response.status_code == 200:
-            self.context.logger.error("Failed to fetch Mode token transfers")
-            return None
+        # Check if we have existing mode events and get latest date
+        mode_events = self.funding_events.get("mode", {})
+        if mode_events:
+            try:
+                latest_date = list(mode_events.keys())[0]
+                latest_datetime = datetime.strptime(latest_date, "%Y-%m-%d")
+            except (IndexError, ValueError):
+                latest_datetime = datetime(1970, 1, 1)
+        else:
+            latest_datetime = datetime(1970, 1, 1)
 
-        eth_transactions = response.json().get("items", [])
-        if not eth_transactions:
-            return None
+        while has_more_pages:
+            response = requests.get(
+                endpoint,
+                params=params,
+                headers={"Accept": "application/json"},
+                verify=False,
+                timeout=30,
+            )
 
-        for tx in eth_transactions:
-            tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
-            tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
-            from_address = tx.get("from", {})
+            if not response.status_code == 200:
+                self.context.logger.error("Failed to fetch Mode coin balance history")
+                return highest_amount
 
-            if from_address.get("hash", address).lower() == address.lower():
-                continue
+            response_data = response.json()
+            balance_history = response_data.get("items", [])
 
-            # Stop if we've gone past our end date
-            if tx_datetime and tx_datetime > end_datetime:
-                continue
+            if not balance_history:
+                break
 
-            # Skip if date already exists in stored data
-            if tx_date and tx_date in existing_data:
-                continue
+            passed_target_date = False
+            for entry in balance_history:
+                current_value = int(entry.get("value", "0")) / 10**18
+                if current_value <= 0:
+                    continue
 
-            if tx_date and tx_date <= end_datetime.strftime("%Y-%m-%d"):
-                if self._should_include_transfer_mode(
-                    from_address, tx, is_eth_transfer=True
-                ):
-                    value_wei = int(tx.get("value", "0"))
-                    amount_eth = value_wei / 10**18
+                tx_datetime = datetime.strptime(
+                    entry.get("block_timestamp", ""), "%Y-%m-%dT%H:%M:%SZ"
+                )
+                # Convert from wei to ETH
+                tx_date = tx_datetime.strftime("%Y-%m-%d")
 
-                    transfer_data = {
-                        "from_address": from_address.get("hash", ""),
-                        "amount": amount_eth,
-                        "token_address": "",
-                        "symbol": "ETH",
-                        "timestamp": tx.get("timestamp", ""),
-                        "tx_hash": tx.get("hash", ""),
-                        "type": "eth",
+                # Store balance data
+                transfer_data = {
+                    "amount": current_value,
+                    "delta": int(entry.get("delta", "0"))
+                    / 10**18,  # Convert delta to ETH
+                    "timestamp": entry.get("block_timestamp"),
+                    "tx_hash": entry.get("transaction_hash"),
+                    "type": "eth",
+                    "block_number": entry.get("block_number"),
+                    "symbol": "ETH",
+                }
+
+                if not fetch_till_date:
+                    if tx_datetime < latest_datetime:
+                        # We've gone past our latest stored date, stop processing
+                        passed_target_date = True
+                        has_more_pages = False
+                        break
+
+                if tx_date not in all_transfers_by_date:
+                    all_transfers_by_date[tx_date] = []
+                all_transfers_by_date[tx_date].append(transfer_data)
+                highest_amount = max(highest_amount, current_value)
+
+            # Stop pagination based on fetch mode
+            if passed_target_date:
+                break
+
+            # Handle pagination
+            next_page_params = response_data.get("next_page_params")
+            if next_page_params and passed_target_date:
+                # Update params for next page
+                params.update(
+                    {
+                        "block_number": next_page_params.get("block_number"),
+                        "index": next_page_params.get("index"),
                     }
+                )
+                has_more_pages = True
+            else:
+                has_more_pages = False
 
-                    all_transfers_by_date[tx_date].append(transfer_data)
-                    processed_count += 1
-
-        self.context.logger.info(
-            f"Completed Mode ETH transfers: {processed_count} found"
+        date_range = (
+            f"for {target_date}" if not fetch_till_date else f"till {target_date}"
         )
+        self.context.logger.info(
+            f"Completed Mode coin balance history {date_range}: highest amount {highest_amount} ETH"
+        )
+
+        return highest_amount
 
     def _should_include_transfer_mode(
         self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False

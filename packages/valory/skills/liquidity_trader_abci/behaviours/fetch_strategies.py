@@ -25,7 +25,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Context, Decimal, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
-
+import requests
 from eth_utils import to_checksum_address
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
@@ -121,12 +121,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check if one day has passed since last whitelist update
             db_data = yield from self._read_kv(keys=("last_whitelisted_updated",))
-            last_updated = db_data.get("last_whitelisted_updated")
+            last_updated = db_data.get("last_whitelisted_updated",0)
             
             current_time = self._get_current_timestamp()
             one_day_in_seconds = 24 * 60 * 60
             
-            if not last_updated or current_time - int(last_updated) >= one_day_in_seconds:
+            if not (int(current_time) - int(last_updated) >= one_day_in_seconds):
                 yield from self._track_whitelisted_assets()
                 # Store current timestamp as last updated
                 yield from self._write_kv({"last_whitelisted_updated": str(current_time)})
@@ -2010,7 +2010,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Fetch all transfers until current date based on chain
             if chain == "mode":
-                all_transfers = yield from self._fetch_all_transfers_until_date_mode(
+                all_transfers = self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date
                 )
             elif chain == "optimism":
@@ -2097,7 +2097,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _fetch_all_transfers_until_date_mode(
         self, address: str, end_date: str
-    ) -> Generator[None, None, Dict]:
+    ) -> Dict:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
@@ -2120,7 +2120,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Fetch ETH transfers
             self.context.logger.info("Fetching Mode ETH transfers...")
-            yield from self._fetch_eth_transfers_mode(
+            self._fetch_eth_transfers_mode(
                 address, end_datetime, all_transfers_by_date, existing_mode_data
             )
 
@@ -2370,24 +2370,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         end_datetime: datetime,
         all_transfers_by_date: dict,
         existing_data: dict,
-    ) -> Generator[None, None, None]:
+    ) -> None:
         """Fetch token transfers from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
-        success, response_json = yield from self._request_with_retries(
-            endpoint=endpoint,
-            headers={"Accept": "application/json"},
-            rate_limited_code=429,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
-        )
-
-        if not success:
+        response = requests.get(
+                endpoint, 
+                headers={"Accept": "application/json"}, 
+                timeout=30
+            )
+        
+        if not response.status_code == 200:
             self.context.logger.error("Failed to fetch Mode token transfers")
             return None
 
-        transfers = response_json.get("items", [])
+        transfers = response.json().get("items", [])
         if not transfers:
             return None
 
@@ -2441,25 +2439,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         end_datetime: datetime,
         all_transfers_by_date: dict,
         existing_data: dict,
-    ) -> Generator[None, None, None]:
+    ) -> None:
         """Fetch ETH transfers from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         processed_count = 0
 
         endpoint = f"{base_url}/addresses/{address}/transactions"
-        success, response_json = yield from self._request_with_retries(
-            endpoint=endpoint,
-            headers={"Accept": "application/json"},
-            rate_limited_code=429,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
-        )
-
-        if not success:
-            self.context.logger.error("Failed to fetch Mode ETH transfers")
+        response = requests.get(
+                endpoint, 
+                headers={"Accept": "application/json"}, 
+                timeout=30
+            )
+        
+        if not response.status_code == 200:
+            self.context.logger.error("Failed to fetch Mode token transfers")
             return None
-
-        eth_transactions = response_json.get("items", [])
+        
+        eth_transactions = response.json().get("items", [])
         if not eth_transactions:
             return None
 

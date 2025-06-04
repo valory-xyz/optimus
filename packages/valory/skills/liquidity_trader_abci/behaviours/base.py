@@ -1385,8 +1385,8 @@ class LiquidityTraderBaseBehaviour(
         result = yield from self._read_kv((ETH_REMAINING_KEY,))
         if not result or not result.get(ETH_REMAINING_KEY):
             # If not found in kv_store, initialize it
-            yield from self.reset_eth_remaining_amount()
-            return int(ETH_INITIAL_AMOUNT)
+            amount = yield from self.reset_eth_remaining_amount()
+            return int(amount)
 
         try:
             chain = self.params.target_investment_chains[0]
@@ -1400,8 +1400,8 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.error(
                 f"Invalid ETH remaining amount in kv_store: {result[ETH_REMAINING_KEY]}"
             )
-            yield from self.reset_eth_remaining_amount()
-            return int(ETH_INITIAL_AMOUNT)
+            amount = yield from self.reset_eth_remaining_amount()
+            return int(amount)
 
     def update_eth_remaining_amount(
         self, amount_used: int
@@ -1414,12 +1414,20 @@ class LiquidityTraderBaseBehaviour(
         )
         yield from self._write_kv({ETH_REMAINING_KEY: int(new_remaining)})
 
-    def reset_eth_remaining_amount(self) -> Generator[None, None, None]:
+    def reset_eth_remaining_amount(self) -> Generator[None, None, int]:
         """Reset the remaining ETH amount to the initial value in kv_store."""
+        chain = self.params.target_investment_chains[0]
+        account = self.params.safe_contract_addresses.get(chain)
+        amount = yield from self._get_native_balance(chain, account)
+        if amount:
+            amount = min(int(ETH_INITIAL_AMOUNT), amount)
+        else:
+            amount = 0
         self.context.logger.info(
-            f"Resetting ETH remaining amount in kv_store to {ETH_INITIAL_AMOUNT}"
+            f"Resetting ETH remaining amount in kv_store to {amount}"
         )
-        yield from self._write_kv({ETH_REMAINING_KEY: str(ETH_INITIAL_AMOUNT)})
+        yield from self._write_kv({ETH_REMAINING_KEY: str(amount)})
+        return amount
 
 
 def execute_strategy(

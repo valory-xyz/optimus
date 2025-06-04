@@ -2377,7 +2377,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
         response = requests.get(
-            endpoint, headers={"Accept": "application/json"}, timeout=30
+            endpoint, headers={"Accept": "application/json"}, verify=False, timeout=30
         )
 
         if not response.status_code == 200:
@@ -2445,7 +2445,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         endpoint = f"{base_url}/addresses/{address}/transactions"
         response = requests.get(
-            endpoint, headers={"Accept": "application/json"}, timeout=30
+            endpoint, headers={"Accept": "application/json"}, verify=False, timeout=30
         )
 
         if not response.status_code == 200:

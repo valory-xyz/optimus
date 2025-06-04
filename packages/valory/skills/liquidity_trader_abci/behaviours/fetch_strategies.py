@@ -119,12 +119,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 self.read_whitelisted_assets()
 
-            yield from self._track_whitelisted_assets()
+            # Check if one day has passed since last whitelist update
+            db_data = yield from self._read_kv(keys=("last_whitelisted_updated",))
+            last_updated = db_data.get("last_whitelisted_updated")
+            
+            current_time = self._get_current_timestamp()
+            one_day_in_seconds = 24 * 60 * 60
+            
+            if not last_updated or current_time - int(last_updated) >= one_day_in_seconds:
+                yield from self._track_whitelisted_assets()
+                # Store current timestamp as last updated
+                yield from self._write_kv({"last_whitelisted_updated": str(current_time)})
 
             # Update the amounts of all open positions
-            yield from self.update_position_amounts()
+            if self.synchronized_data.period_count == 0:
+                yield from self.update_position_amounts()
+                self.check_and_update_zero_liquidity_positions()
 
-            self.check_and_update_zero_liquidity_positions()
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             # Check if we need to recalculate the portfolio
@@ -230,7 +241,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 # Store the updated assets
                 self.store_whitelisted_assets()
-
+        
         self.context.logger.info(
             "Completed price-based filtering of whitelisted assets"
         )
@@ -1965,7 +1976,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=YearnV3VaultContract.contract_id,
             contract_callable="balance_of",
             data_key="amount",
-            account=safe_address,
+            owner=safe_address,
             chain_id=chain,
         )
 

@@ -75,6 +75,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            self.context.logger.info("This is Optimus")
+
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
             self.context.logger.info(f"Agent hash: {agent_hash}")

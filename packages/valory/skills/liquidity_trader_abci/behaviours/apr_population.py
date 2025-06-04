@@ -172,7 +172,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         if not total_actual_apr:
             return
-        
+
         # Get agent_hash from environment
         agent_config = os.environ.get("AEA_AGENT", "")
         agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
@@ -185,7 +185,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             "timestamp": timestamp,
             "portfolio_snapshot": portfolio_snapshot,
             "calculation_metrics": self._get_apr_calculation_metrics(),
-            "first_investment_timestamp": self.current_positions[0].get("timestamp") if self.current_positions else None,
+            "first_investment_timestamp": self.current_positions[0].get("timestamp")
+            if self.current_positions
+            else None,
             "agent_hash": agent_hash,
             "volume": self.portfolio_data.get("volume"),
             "trading_type": self.shared_state.trading_type,

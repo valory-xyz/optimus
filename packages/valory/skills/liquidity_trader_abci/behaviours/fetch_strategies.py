@@ -25,6 +25,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Context, Decimal, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
+
 import requests
 from eth_utils import to_checksum_address
 
@@ -121,15 +122,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check if one day has passed since last whitelist update
             db_data = yield from self._read_kv(keys=("last_whitelisted_updated",))
-            last_updated = db_data.get("last_whitelisted_updated",0)
-            
+            last_updated = db_data.get("last_whitelisted_updated", 0)
+
             current_time = self._get_current_timestamp()
             one_day_in_seconds = 24 * 60 * 60
-            
+
             if not (int(current_time) - int(last_updated) >= one_day_in_seconds):
                 yield from self._track_whitelisted_assets()
                 # Store current timestamp as last updated
-                yield from self._write_kv({"last_whitelisted_updated": str(current_time)})
+                yield from self._write_kv(
+                    {"last_whitelisted_updated": str(current_time)}
+                )
 
             # Update the amounts of all open positions
             if self.synchronized_data.period_count == 0:
@@ -241,7 +244,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 # Store the updated assets
                 self.store_whitelisted_assets()
-        
+
         self.context.logger.info(
             "Completed price-based filtering of whitelisted assets"
         )
@@ -678,14 +681,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if position:
                 tick_ranges = yield from self._get_tick_ranges(position, chain)
 
-            #UI supports only camel case names, but our strategies have different name for dex
+            # UI supports only camel case names, but our strategies have different name for dex
             dex_type_mapping = {
                 DexType.UNISWAP_V3.value: "uniswapV3",
                 DexType.STURDY.value: "sturdy",
                 DexType.VELODROME.value: "velodrome",
-                DexType.BALANCER.value: "balancerPool"
+                DexType.BALANCER.value: "balancerPool",
             }
-            
+
             allocation = {
                 "chain": chain,
                 "type": dex_type_mapping.get(dex_type, dex_type),
@@ -2095,9 +2098,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return updated_total
 
-    def _fetch_all_transfers_until_date_mode(
-        self, address: str, end_date: str
-    ) -> Dict:
+    def _fetch_all_transfers_until_date_mode(self, address: str, end_date: str) -> Dict:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
@@ -2114,7 +2115,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Fetch token transfers
             self.context.logger.info("Fetching Mode token transfers...")
-            yield from self._fetch_token_transfers_mode(
+            self._fetch_token_transfers_mode(
                 address, end_datetime, all_transfers_by_date, existing_mode_data
             )
 
@@ -2376,11 +2377,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
         response = requests.get(
-                endpoint, 
-                headers={"Accept": "application/json"}, 
-                timeout=30
-            )
-        
+            endpoint, headers={"Accept": "application/json"}, timeout=30
+        )
+
         if not response.status_code == 200:
             self.context.logger.error("Failed to fetch Mode token transfers")
             return None
@@ -2446,15 +2445,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         endpoint = f"{base_url}/addresses/{address}/transactions"
         response = requests.get(
-                endpoint, 
-                headers={"Accept": "application/json"}, 
-                timeout=30
-            )
-        
+            endpoint, headers={"Accept": "application/json"}, timeout=30
+        )
+
         if not response.status_code == 200:
             self.context.logger.error("Failed to fetch Mode token transfers")
             return None
-        
+
         eth_transactions = response.json().get("items", [])
         if not eth_transactions:
             return None

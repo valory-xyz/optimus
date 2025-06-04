@@ -311,13 +311,12 @@ def fetch_token_name_from_contract(chain_name, token_address):
         return None
 
 def get_coin_id_from_symbol(
-        self, coin_id_mapping, symbol, chain_name
+        coin_id_mapping, symbol, chain_name
     ) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
         # Check if coin_list is valid
         symbol = symbol.lower()
         if symbol in coin_id_mapping.get(chain_name, {}):
-            self.context.logger.info(f"Found coin id for {symbol} in {chain_name}")
             return coin_id_mapping[chain_name][symbol]
 
         return None

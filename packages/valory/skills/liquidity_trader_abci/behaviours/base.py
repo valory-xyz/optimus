@@ -98,7 +98,7 @@ ERC20_DECIMALS = 18
 AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus"}
 METRICS_NAME = "APR"
 METRICS_TYPE = "json"
-PORTFOLIO_UPDATE_INTERVAL = 3600 * 6  # 6hr
+PORTFOLIO_UPDATE_INTERVAL = 3600 * 2  # 2hr
 APR_UPDATE_INTERVAL = 3600  # 1hr
 METRICS_UPDATE_INTERVAL = 21600  # 6hr
 # Initial available amount for ETH (0.005 ETH)

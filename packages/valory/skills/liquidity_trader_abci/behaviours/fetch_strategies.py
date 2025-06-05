@@ -2222,6 +2222,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.funding_events = {}
             existing_mode_data = {}
 
+        # Check for backward compatibility - if any ETH transfers don't have "delta" field
+        # then we need to refetch everything with the new format
+        needs_refetch = False
+        if existing_mode_data:
+            for date, transfers in existing_mode_data.items():
+                for transfer in transfers:
+                    if transfer.get("type") == "eth" and "delta" not in transfer:
+                        self.context.logger.info(
+                            f"Found ETH transfer without delta field on {date}. "
+                            "Setting fetch_till_date=True and clearing funding_events for refetch."
+                        )
+                        needs_refetch = True
+                        break
+                if needs_refetch:
+                    break
+
+        if needs_refetch:
+            # Clear existing data and force full refetch
+            existing_mode_data = {}
+            self.funding_events = {}
+            fetch_till_date = True
+            self.context.logger.info(
+                "Cleared funding_events for backward compatibility refetch"
+            )
+
         all_transfers_by_date = defaultdict(list)
         end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
         end_datetime = end_datetime.replace(tzinfo=timezone.utc)

@@ -2160,7 +2160,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 try:
                     # Get token price for the transfer date
                     token_symbol = transfer.get("symbol", "Unknown")
-                    amount = transfer.get("amount", 0)
+                    amount = transfer.get("delta", transfer.get("amount", 0))
 
                     if amount <= 0:
                         continue
@@ -2577,7 +2577,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if amount == 0:
                         continue
 
-                    if symbol != "USDC" or "usdc":
+                    if symbol.lower() != "usdc":
                         continue
                     transfer_data = {
                         "from_address": from_address.get("hash", ""),
@@ -2625,14 +2625,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         target_date: str,
         all_transfers_by_date: dict,
         fetch_till_date: bool,
-    ) -> float:
+    ) -> None:
         """Fetch ETH balance history from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         endpoint = f"{base_url}/addresses/{address}/coin-balance-history"
 
         has_more_pages = True
         params = {}
-        highest_amount = 0
+        processed_count = 0
 
         # Check if we have existing mode events and get latest date
         mode_events = self.funding_events.get("mode", {})
@@ -2656,7 +2656,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             if not response.status_code == 200:
                 self.context.logger.error("Failed to fetch Mode coin balance history")
-                return highest_amount
+                return
 
             response_data = response.json()
             balance_history = response_data.get("items", [])
@@ -2670,6 +2670,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if current_value <= 0:
                     continue
 
+                # Calculate delta value
+                delta_value = int(entry.get("delta", "0")) / 10**18
+
+                # Get tx_hash
+                tx_hash = entry.get("transaction_hash")
+
+                # Filter: only include if delta > 0 and tx_hash is null/empty
+                if delta_value <= 0:
+                    continue
+
+                if tx_hash is not None and tx_hash != "":
+                    continue
+
                 tx_datetime = datetime.strptime(
                     entry.get("block_timestamp", ""), "%Y-%m-%dT%H:%M:%SZ"
                 )
@@ -2681,10 +2694,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Store balance data
                 transfer_data = {
                     "amount": current_value,
-                    "delta": int(entry.get("delta", "0"))
-                    / 10**18,  # Convert delta to ETH
+                    "delta": delta_value,
                     "timestamp": entry.get("block_timestamp"),
-                    "tx_hash": entry.get("transaction_hash"),
+                    "tx_hash": tx_hash,
                     "type": "eth",
                     "block_number": entry.get("block_number"),
                     "symbol": "ETH",
@@ -2700,7 +2712,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if tx_date not in all_transfers_by_date:
                     all_transfers_by_date[tx_date] = []
                 all_transfers_by_date[tx_date].append(transfer_data)
-                highest_amount = max(highest_amount, current_value)
+                processed_count += 1
 
             # Stop pagination based on fetch mode
             if passed_target_date:
@@ -2708,7 +2720,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Handle pagination
             next_page_params = response_data.get("next_page_params")
-            if next_page_params and passed_target_date:
+            if next_page_params and not passed_target_date:
                 # Update params for next page
                 params.update(
                     {
@@ -2724,10 +2736,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             f"for {target_date}" if not fetch_till_date else f"till {target_date}"
         )
         self.context.logger.info(
-            f"Completed Mode coin balance history {date_range}: highest amount {highest_amount} ETH"
+            f"Completed Mode coin balance history {date_range}: {processed_count} filtered transfers found"
         )
-
-        return highest_amount
 
     def _should_include_transfer_mode(
         self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False
@@ -2843,6 +2853,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         else:
                             symbol = token_info.get("symbol", "Unknown")
                             decimals = int(token_info.get("decimals", 18) or 18)
+
+                        if symbol.lower() != "usdc":
+                            continue
 
                         value_raw = int(transfer.get("value", "0") or "0")
                         amount = value_raw / (10**decimals)

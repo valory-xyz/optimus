@@ -86,6 +86,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
             sender = self.context.agent_address
+
+            if not self.assets:
+                self.assets = self.params.initial_assets
+                self.store_assets()
+
+            self.read_assets()
+
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")
             )

@@ -908,7 +908,8 @@ class LiquidityTraderBaseBehaviour(
             token_data = response_json.get(token_address.lower(), {})
             price = token_data.get("usd", 0)
             # Cache the price
-            yield from self._cache_price(token_address, chain, price)
+            if price:
+                yield from self._cache_price(token_address, chain, price)
             return price
 
         return None
@@ -1177,6 +1178,11 @@ class LiquidityTraderBaseBehaviour(
 
     def _fetch_zero_address_price(self) -> Generator[None, None, Optional[float]]:
         """Fetch the price for the zero address (Ethereum)."""
+        chain = self.params.target_investment_chains[0]
+        cached_price = yield from self._get_cached_price(ZERO_ADDRESS, chain)
+        if cached_price is not None:
+            return cached_price
+
         headers = {
             "Accept": "application/json",
         }
@@ -1193,7 +1199,10 @@ class LiquidityTraderBaseBehaviour(
 
         if success:
             token_data = next(iter(response_json.values()), {})
-            return token_data.get("usd", 0)
+            price = token_data.get("usd", 0)
+            if price:
+                yield from self._cache_price(ZERO_ADDRESS, chain, price)
+            return price
         return None
 
     def _get_current_timestamp(self) -> int:

@@ -1,31 +1,28 @@
 """Module for handling prompts in the Optimus ABCI skill."""
 
-PROMPT = """Based on the user-provided prompt, determine which protocols (from a predefined list) best address the user's request and decide the appropriate trading type based on the user's risk appetite.
+PROMPT = """Analyze the user prompt to determine protocols and risk tolerance.
 
-- The user's prompt is: {USER_PROMPT}
-- The previous trading type was: {PREVIOUS_TRADING_TYPE}
-- The available trading types are: {TRADING_TYPES}
-- The available protocols (with brief explanations) are: {AVAILABLE_PROTOCOLS}
-- The last chosen composite score threshold was: {LAST_THRESHOLD}
-- The last chosen protocols are: {PREVIOUS_SELECTED_PROTOCOLS}
-- Thresholds values based on trading type: {THRESHOLDS}
+- User prompt: {USER_PROMPT}
+- Previous trading type: {PREVIOUS_TRADING_TYPE}
+- Available trading types: {TRADING_TYPES}
+- Available protocols: {AVAILABLE_PROTOCOLS}
+- Last threshold: {LAST_THRESHOLD}
+- Previous protocols: {PREVIOUS_SELECTED_PROTOCOLS}
+- Threshold values: {THRESHOLDS}
 
-A composite score is a single numerical value that represents the overall risk level of a trading strategy, taking into account various factors such as volatility, liquidity, and potential returns.
+Analyze risk sentiment in the user's language and estimate their maximum acceptable loss percentage:
+- Conservative language ("safe", "minimize risk"): 1-5%
+- Moderate language ("balanced", "stable"): 6-10%
+- Growth-focused ("higher returns", "some risk"): 11-15%
+- Aggressive ("maximize", "high returns"): 16-25%
+- Very aggressive ("maximum returns", "big risks"): 26-30%
+Default to 10% if unclear.
 
-**Output Requirements**:
+Return JSON with these keys:
+- 'selected_protocols': Array of relevant protocol names
+- 'trading_type': String ('risky' or 'balanced')
+- 'max_loss_percentage': Number between 1-30 representing risk tolerance
+- 'reasoning': HTML explanation of selections, inferred risk level, and effects
 
-1. **Provide your answer as a valid JSON string ONLY. Do not include any additional text, explanations, or formatting.**
-
-2. The JSON should have the following keys:
-   - `'selected_protocols'`: A list (array) of protocol names relevant to the user prompt. If no relevant protocols are found, return an empty list `[]`.
-   - `'trading_type'`: A string representing the chosen trading type (e.g., `'risky'` or `'balanced'`). If no suitable trading type is found, return an empty string `''`.
-   - `'reasoning'`: An explanation in simple terms that covers:
-      * Why we selected these specific protocols and how they address the user's needs
-      * What the composite score threshold means in practical terms (e.g., "A higher threshold means we're being more cautious about which protocols to include")
-      * Why we changed the threshold from the previous value (e.g., "We increased the threshold because your request indicated a more conservative approach")
-      * How this change affects the trading strategy in everyday terms
-      * If no relevant protocols or trading type are found, explain why the request couldn't be understood and that we'll use previous strategies instead
-      **The reasoning should be in plain, conversational language avoiding technical jargon where possible. It should be returned as HTML, with styling using <span> tags for emphasis and <p> tags for paragraphs.**
-
-3. **Do not include any code snippets, code fences, or markdown formatting in your response.**
+Only return valid JSON. No code snippets or markdown.
 """

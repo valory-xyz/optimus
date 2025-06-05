@@ -185,7 +185,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             "timestamp": timestamp,
             "portfolio_snapshot": portfolio_snapshot,
             "calculation_metrics": self._get_apr_calculation_metrics(),
-            "first_investment_timestamp": self.current_positions[0].get("timestamp"),
+            "first_investment_timestamp": self.current_positions[0].get("timestamp")
+            if self.current_positions
+            else None,
             "agent_hash": agent_hash,
             "volume": self.portfolio_data.get("volume"),
             "trading_type": self.shared_state.trading_type,
@@ -469,10 +471,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         # Use the stored initial investment value if available
         initial_value = self.get_stored_initial_investment()
         if not initial_value:
-            # Fall back to calculating it if not available
-            initial_value = yield from self.calculate_initial_investment()
-            if not initial_value:
-                return None
+            self.context.logger.error("No current investment")
+            return None
 
         self._initial_value = initial_value
         self.context.logger.info(f"Using initial investment value: {initial_value}")
@@ -555,7 +555,11 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             coingecko_id="ethereum", date_str=date_str
         )
 
-        if current_eth_price is not None and start_eth_price is not None:
+        if (
+            current_eth_price is not None
+            and start_eth_price is not None
+            and result["total_actual_apr"]
+        ):
             adjustment_factor = Decimal("1") - (
                 Decimal(str(current_eth_price)) / Decimal(str(start_eth_price))
             )

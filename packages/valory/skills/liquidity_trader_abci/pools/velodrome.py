@@ -76,8 +76,22 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         max_amounts_in = kwargs.get("max_amounts_in")
         is_cl_pool = kwargs.get("is_cl_pool", False)
         is_stable = kwargs.get("is_stable")
+        tick_ranges = (
+            kwargs.get("tick_ranges"),
+        )  # Pass pre-calculated tick ranges if available
+        tick_spacing = kwargs.get("tick_spacing")  # Pass tick spacing if available
 
-        if not all([pool_address, safe_address, assets, chain, max_amounts_in]):
+        if not all(
+            [
+                pool_address,
+                safe_address,
+                assets,
+                chain,
+                max_amounts_in,
+                tick_ranges,
+                tick_spacing,
+            ]
+        ):
             self.context.logger.error(
                 "Missing required parameters for entering the pool. Here are the kwargs: {kwargs}"
             )
@@ -94,6 +108,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     max_amounts_in=max_amounts_in,
                     is_stable=is_stable,
                     pool_fee=kwargs.get("pool_fee"),
+                    tick_ranges=tick_ranges,
+                    tick_spacing=tick_spacing,
                 )
             )
         else:
@@ -352,6 +368,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         max_amounts_in: list,
         is_stable: bool,
         pool_fee: Optional[int] = None,
+        tick_ranges: Optional[List[Dict]] = None,
+        tick_spacing: Optional[int] = None,
     ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
         """Add liquidity to a Velodrome Concentrated Liquidity pool."""
         # Get NonFungiblePositionManager contract address
@@ -366,28 +384,41 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # we provide in 50/50 ratio
-        # works only for stablecoins for now (because the decimals are same, for non-stablecoins this won't work)
-        if max_amounts_in and len(max_amounts_in) == 2:
-            min_amount = min(max_amounts_in)
-            max_amounts_in = [min_amount, min_amount]
+        # Note: The 50/50 ratio adjustment code has been removed as token percentages
+        # are now handled in get_enter_pool_tx_hash
         # Calculate tick ranges based on pool's tick spacing
-        tick_ranges = yield from self._calculate_tick_lower_and_upper_velodrome(
-            chain=chain, pool_address=pool_address, is_stable=is_stable
-        )
+        # Calculate tick ranges if not provided
+
+        if not tick_ranges:
+            self.context.logger.info(
+                "No tick ranges provided, calculating from pool data"
+            )
+            tick_ranges = yield from self._calculate_tick_lower_and_upper_velodrome(
+                chain=chain, pool_address=pool_address, is_stable=is_stable
+            )
+            if not tick_ranges:
+                self.context.logger.error(
+                    f"Failed to calculate tick ranges for pool {pool_address}"
+                )
+                return None, None
+
         if not tick_ranges:
             self.context.logger.error(
-                "Failed to calculate tick ranges for pool " + str(pool_address)
+                f"Failed to calculate tick ranges for pool {pool_address}"
             )
             return None, None
 
-        # Get tick spacing for the pool
-        tick_spacing = yield from self._get_tick_spacing_velodrome(pool_address, chain)
+        # Get tick spacing if not provided
         if not tick_spacing:
-            self.context.logger.error(
-                f"Could not get tick spacing for pool {pool_address}"
+            self.context.logger.info("No tick spacing provided, fetching from contract")
+            tick_spacing = yield from self._get_tick_spacing_velodrome(
+                pool_address, chain
             )
-            return None, None
+            if not tick_spacing:
+                self.context.logger.error(
+                    f"Could not get tick spacing for pool {pool_address}"
+                )
+                return None, None
 
         # Get or calculate sqrt_price_x96
         sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
@@ -395,7 +426,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Could not determine sqrt_price_x96 for pool {pool_address}"
             )
-            return None, None
+            sqrt_price_x96 = 0  # Default value
 
         # TO-DO: add slippage protection
         amount0_min = 0
@@ -407,13 +438,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         ).round_sequence.last_round_transition_timestamp.timestamp()
         deadline = int(last_update_time) + (20 * 60)
 
-        # If no positions, return error
-        if not tick_ranges:
-            self.context.logger.error(
-                f"No valid positions calculated for pool {pool_address}"
-            )
-            return None, None
-
         self.context.logger.info(
             f"Using max amounts: {max_amounts_in[0]} token0, {max_amounts_in[1]} token1"
         )
@@ -424,7 +448,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         total_allocated_1 = 0
 
         # First pass: calculate desired amounts
-        for position in tick_ranges:
+        for position in tick_ranges[0]:
             allocation = position.get("allocation", 0)
             if allocation <= 0:
                 position["amount0_desired"] = 0
@@ -435,6 +459,10 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # We allocate the same percentage of each token based on the band allocation
             amount0_desired = int(max_amounts_in[0] * allocation)
             amount1_desired = int(max_amounts_in[1] * allocation)
+
+            self.context.logger.info(
+                f"amount0_desired,amount1_desired :{amount0_desired,amount1_desired}"
+            )
 
             # Store in position for second pass
             position["amount0_desired"] = amount0_desired
@@ -459,7 +487,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
 
             # Apply scaling
-            for position in tick_ranges:
+            for position in tick_ranges[0]:
                 position["amount0_desired"] = int(
                     position["amount0_desired"] * scale_factor
                 )
@@ -471,7 +499,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         tx_hashes = []
 
         # Process each position
-        for position in tick_ranges:
+        for position in tick_ranges[0]:
             amount0_desired = position.get("amount0_desired", 0)
             amount1_desired = position.get("amount1_desired", 0)
 
@@ -479,12 +507,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Position allocation: {position.get('allocation', 0):.1%}, "
                 f"Amounts: {amount0_desired}/{amount1_desired}"
             )
-
-            if amount0_desired <= 0 or amount1_desired <= 0:
-                self.context.logger.warning(
-                    f"Skipping position with too small allocation: {position.get('allocation', 0):.1%}"
-                )
-                continue
 
             # Call mint on the CLPoolManager contract
             mint_tx_hash = yield from self.contract_interact(
@@ -521,6 +543,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error("No valid mint transactions created")
             return None, None
 
+        self.context.logger.info(
+            f"tx_hashes, position_manager_address :{tx_hashes, position_manager_address}"
+        )
         # Return the list of transaction hashes
         return tx_hashes, position_manager_address
 
@@ -1592,34 +1617,26 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         try:
             # Check stablecoin mappings first
             stablecoin_mappings = {
-                # USDC
                 "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "usd-coin",
-                "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "bridged-usd-coin-optimism",
-                # Mode USDC
-                "0xd988097fb8612cc24eec14542bc03424c656005f": "usd-coin",
-                "0xa70266c8f8cf33647dcfee763961aff418d9e1e4": "ironclad-usd",  # iUSDC
-                # USDT
-                "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "tether",
+                "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alchemix-usd",
                 "0x01bff41798a0bcf287b996046ca68b395dbc1071": "usdt0",
-                "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
-                # Mode USDT
-                "0xf0f161fda2712db8b566946122a5af183995e2ed": "tether",
-                # DAI
-                "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "dai",
-                "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "dai",
-                # Mode DAI
-                "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": "dai",  # msDAI
-                # Other stablecoins
-                "0x73cb180bf0521828d8849bc8cf2b920918e23032": "usd-plus",
+                "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "bridged-usdt",
+                "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": None,
+                "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "bridged-usd-coin-optimism",
+                "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "token-dforce-usd",
                 "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "dola-usd",
                 "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "liquity-usd",
+                "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "makerdao-optimism-bridged-dai-optimism",
+                "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "liquity-bold",
                 "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "frax",
-                "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "usd-glo",
-                # Adding missing stablecoins
-                "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": "dai",  # Metronome Synth USD - map to DAI as it's a stablecoin
-                "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alchemix-usd",  # Alchemix USD
-                "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "dai",  # USX - map to DAI as it's a stablecoin
-                "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "dai",  # BOLD - map to DAI as it's a stablecoin
+                "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "savings-dai",
+                "0x73cb180bf0521828d8849bc8cf2b920918e23032": "overnight-fi-usd-optimism",
+                "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
+                "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "glo-dollar",
+                "0xd988097fb8612cc24eec14542bc03424c656005f": "mode-bridged-usdc-mode",
+                "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": None,
+                "0xf0f161fda2712db8b566946122a5af183995e2ed": "mode-bridged-usdt-mode",
+                "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
             }
 
             # Check if the address is in the stablecoin mappings

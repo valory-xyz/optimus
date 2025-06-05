@@ -476,7 +476,7 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
 
 
 def get_best_opportunities(
-    chains, lending_asset, current_positions, coingecko_api_key
+    chains, lending_asset, current_positions, coingecko_api_key, **kwargs
 ) -> List[Dict[str, Any]]:
     logger.info(f"Getting best opportunities for chains: {chains}, lending_asset: {lending_asset}")
     
@@ -614,4 +614,4 @@ def run(*_args, **kwargs) -> Any:
         
         
         logger.info(f"Successfully found opportunities: {result}")
-        return {"result": result, "errors": errors}
+        return {"result": result, "error": errors}

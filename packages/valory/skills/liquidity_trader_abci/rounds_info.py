@@ -41,8 +41,8 @@ def get_latest_agent_reasoning() -> str:
 
 ROUNDS_INFO = {
     "APRPopulationRound": {
-        "name": "APR Population in Optimus Dashboard",
-        "description": "APR Population in Optimus Dashboard.",
+        "name": "Calculating APR",
+        "description": "Calculates APR and other relevant trading performance of the agent and writes it to database",
         "transitions": {},
     },
     "CallCheckpointRound": {

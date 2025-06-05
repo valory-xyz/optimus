@@ -98,14 +98,18 @@ ERC20_DECIMALS = 18
 AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus"}
 METRICS_NAME = "APR"
 METRICS_TYPE = "json"
-PORTFOLIO_UPDATE_INTERVAL = 3600  # 1hr
+PORTFOLIO_UPDATE_INTERVAL = 3600 * 6  # 6hr
 APR_UPDATE_INTERVAL = 3600  # 1hr
 METRICS_UPDATE_INTERVAL = 21600  # 6hr
 # Initial available amount for ETH (0.005 ETH)
-ETH_INITIAL_AMOUNT = 0.005 * 10**18
+ETH_INITIAL_AMOUNT = int(0.005 * 10**18)
 # Key for tracking remaining ETH in kv_store
 ETH_REMAINING_KEY = "eth_remaining_amount"
-MIN_TIME_IN_POSITION = 604800  # 1 week
+SLEEP_TIME = 10  # Configurable sleep time
+RETRIES = 3  # Number of API call retries
+MIN_TIME_IN_POSITION = 604800 * 3  # 3 weeks
+PRICE_CACHE_KEY_PREFIX = "token_price_cache_"
+CACHE_TTL = 3600  # 1 hour in seconds
 
 
 class DexType(Enum):
@@ -174,6 +178,80 @@ POOL_FILENAME = "current_pool.json"
 READ_MODE = "r"
 WRITE_MODE = "w"
 
+# Whitelist of allowed token addresses for each chain with their symbols
+WHITELISTED_ASSETS = {
+    "mode": {
+        # MODE tokens - stablecoins
+        "0x4200000000000000000000000000000000000006": "WETH",
+        "0xdfc7c877a950e49d2610114102175a06c2e3167a": "MODE",
+        "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9": "OLAS",
+        "0x2416092f143378750bb29b79ed961ab195cceea5": "ezETH",
+        "0x6b2a01a5f79deb4c2f3c0eda7b01df456fbd726a": "uniBTC",
+        "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A": "weETH.mode",
+        "0x80137510979822322193FC997d400D5A6C747bf7": "STONE",
+        "0xe7903B1F75C534Dd8159b313d92cDCfbC62cB3Cd": "wrsETH",
+        "0x8b2EeA0999876AAB1E7955fe01A5D261b570452C": "wMLT",
+        "0x66eEd5FF1701E6ed8470DC391F05e27B1d0657eb": "BMX",
+        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "XVELO",
+        "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
+        "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+    },
+    "optimism": {
+        # Optimism tokens - stablecoins
+        "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "USDC",
+        "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
+        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
+        "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
+        "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "DOLA",
+        "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "LUSD",
+        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",
+        "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "BOLD",
+        "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "FRAX",
+        "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
+        "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
+        "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "USDGLO",
+    },
+}
+
+COIN_ID_MAPPING = {
+    "mode": {
+        "usdc": "mode-bridged-usdc-mode",
+        "msdai": None,
+        "usdt": "mode-bridged-usdt-mode",
+        "ousdt": "openusdt",
+        "weth": "l2-standard-bridged-weth-modee",
+        "ezeth": "renzo-restaked-eth",
+        "mode": "mode",
+        "olas": "autonolas",
+        "unibtc": "universal-btc",
+        "weeth.mode": None,
+        "stone": "stakestone-ether",
+        "wrseth": "wrapped-rseth",
+        "wmlt": "bmx-wrapped-mode-liquidity-token",
+        "bmx": "bmx",
+        "xvelo": None,
+    },
+    "optimism": {
+        "usdc": "usd-coin",
+        "alusd": "alchemix-usd",
+        "usdt0": "usdt0",
+        "usdt": "bridged-usdt",
+        "msusd": None,
+        "usdc.e": "bridged-usd-coin-optimism",
+        "usx": "token-dforce-usd",
+        "dola": "dola-usd",
+        "lusd": "liquity-usd",
+        "dai": "makerdao-optimism-bridged-dai-optimism",
+        "bold": "liquity-bold",
+        "frax": "frax",
+        "sdai": "savings-dai",
+        "usd+": "overnight-fi-usd-optimism",
+        "ousdt": "openusdt",
+        "usdglo": "glo-dollar",
+    },
+}
+
 
 class LiquidityTraderBaseBehaviour(
     BalancerPoolBehaviour, UniswapPoolBehaviour, VelodromePoolBehaviour, ABC
@@ -193,6 +271,14 @@ class LiquidityTraderBaseBehaviour(
         self.portfolio_data: Dict[str, Any] = {}
         self.portfolio_data_filepath: str = (
             self.params.store_path / self.params.portfolio_info_filename
+        )
+        self.whitelisted_assets: Dict[str, Any] = {}
+        self.whitelisted_assets_filepath: str = (
+            self.params.store_path / self.params.whitelisted_assets_filename
+        )
+        self.funding_events: Dict[str, Any] = {}
+        self.funding_events_filepath: str = (
+            self.params.store_path / self.params.funding_events_filename
         )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
@@ -388,7 +474,7 @@ class LiquidityTraderBaseBehaviour(
         for position in positions:
             if position.get("chain") == chain:
                 for asset in position.get("assets", {}):
-                    if asset.get("address") == token:
+                    if asset.get("address").lower() == token.lower():
                         return asset.get("balance")
 
         return None
@@ -537,6 +623,28 @@ class LiquidityTraderBaseBehaviour(
     def read_current_positions(self) -> None:
         """Read the current pool as JSON."""
         self._read_data("current_positions", self.current_positions_filepath)
+
+    def store_whitelisted_assets(self) -> None:
+        """Store the list of assets as JSON."""
+        self._store_data(
+            self.whitelisted_assets,
+            "whitelisted_assets",
+            self.whitelisted_assets_filepath,
+        )
+
+    def read_whitelisted_assets(self) -> None:
+        """Read the list of assets as JSON."""
+        self._read_data("whitelisted_assets", self.whitelisted_assets_filepath)
+
+    def store_funding_events(self) -> None:
+        """Store the list of assets as JSON."""
+        self._store_data(
+            self.funding_events, "funding_events", self.funding_events_filepath
+        )
+
+    def read_funding_events(self) -> None:
+        """Read the list of assets as JSON."""
+        self._read_data("funding_events", self.funding_events_filepath)
 
     def store_gas_costs(self) -> None:
         """Store the gas costs as JSON."""
@@ -771,13 +879,9 @@ class LiquidityTraderBaseBehaviour(
         self, token_address: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
         """Fetch the price for a specific token, with in-memory caching."""
-        now = self._get_current_timestamp()
-        cache_key = (token_address, chain)
-        cache_entry = self.shared_state._token_price_cache.get(cache_key)
-        if cache_entry:
-            price, timestamp = cache_entry
-            if now - timestamp < self.shared_state._token_price_cache_ttl:
-                return price  # Return cached value
+        cached_price = yield from self._get_cached_price(token_address, chain)
+        if cached_price is not None:
+            return cached_price
 
         headers = {
             "Accept": "application/json",
@@ -803,9 +907,94 @@ class LiquidityTraderBaseBehaviour(
         if success:
             token_data = response_json.get(token_address.lower(), {})
             price = token_data.get("usd", 0)
-            self.shared_state._token_price_cache[cache_key] = (price, now)
+            # Cache the price
+            yield from self._cache_price(token_address, chain, price)
             return price
+
         return None
+
+    def _get_price_cache_key(self, token_address: str, chain: str) -> str:
+        """Get the cache key for a token's price data."""
+        return f"{PRICE_CACHE_KEY_PREFIX}{chain}_{token_address.lower()}"
+
+    def _get_cached_price(
+        self, token_address: str, chain: str, date: Optional[str] = None
+    ) -> Generator[None, None, Optional[float]]:
+        """Get cached price for a token."""
+        cache_key = self._get_price_cache_key(token_address, chain)
+        result = yield from self._read_kv((cache_key,))
+
+        if not result or not result.get(cache_key):
+            return None
+
+        try:
+            price_data = json.loads(result[cache_key])
+            if date:
+                # For historical price
+                return price_data.get(date)
+            else:
+                # For current price, use "current" as key
+                current_data = price_data.get("current")
+                if not current_data:
+                    return None
+                price, timestamp = current_data
+                if self._get_current_timestamp() - timestamp < CACHE_TTL:
+                    return price
+            return None
+        except (json.JSONDecodeError, TypeError):
+            self.context.logger.error(f"Invalid cache data for token {token_address}")
+            return None
+
+    def _cache_price(
+        self, token_address: str, chain: str, price: float, date: Optional[str] = None
+    ) -> Generator[None, None, None]:
+        """Cache price for a token."""
+        cache_key = self._get_price_cache_key(token_address, chain)
+
+        # First read existing cache
+        result = yield from self._read_kv((cache_key,))
+        price_data = {}
+
+        if result and result.get(cache_key):
+            try:
+                price_data = json.loads(result[cache_key])
+            except json.JSONDecodeError:
+                self.context.logger.error(
+                    f"Invalid cache data for token {token_address}, resetting cache"
+                )
+
+        if date:
+            # For historical price
+            price_data[date] = price
+        else:
+            # For current price, store with timestamp
+            price_data["current"] = (price, self._get_current_timestamp())
+
+        yield from self._write_kv({cache_key: json.dumps(price_data)})
+
+    def _calculate_rate_limit_wait_time(self) -> int:
+        """Calculate the wait time for rate limiting based on the rate limiter state."""
+        if not hasattr(self.coingecko, "rate_limiter"):
+            return 0
+
+        rate_limiter = self.coingecko.rate_limiter
+
+        # If we have no credits left, return 0 (will be handled by caller)
+        if rate_limiter.no_credits:
+            return 0
+
+        # If we're rate limited, calculate time until next minute
+        if rate_limiter.rate_limited:
+            from time import time
+
+            current_time = time()
+            time_since_last_request = current_time - rate_limiter.last_request_time
+
+            # Wait for the remainder of the current minute
+            wait_time = max(0, 60 - int(time_since_last_request))
+            return min(wait_time, 60)  # Cap at 60 seconds
+
+        return 0
 
     def _request_with_retries(
         self,
@@ -823,6 +1012,13 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(f"HTTP {method} call: {endpoint}")
         content = json.dumps(body).encode(UTF8) if body else None
 
+        # Add delay before CoinGecko API calls to respect rate limits (20 calls/minute = 3 seconds between calls)
+        if "coingecko.com" in endpoint:
+            self.context.logger.warning(
+                "Adding 2-second delay for CoinGecko API rate limiting"
+            )
+            yield from self.sleep(2)
+
         retries = 0
 
         while True:
@@ -838,16 +1034,32 @@ class LiquidityTraderBaseBehaviour(
                 self.context.logger.info(f"Received response: {response}")
                 response_json = {"exception": str(exc)}
 
+            # Handle rate limiting as a retryable error
             if response.status_code == rate_limited_code:
+                self.context.logger.warning(
+                    f"Rate limited (attempt {retries + 1}/{max_retries})"
+                )
                 rate_limited_callback()
-                return False, response_json
+                retries += 1
+                if retries >= max_retries:
+                    self.context.logger.error(
+                        f"Request failed after {retries} rate limit retries."
+                    )
+                    return False, response_json
+
+                # Wait 60 seconds for rate limit to reset
+                self.context.logger.info(
+                    "Waiting 60 seconds before retrying rate-limited request"
+                )
+                yield from self.sleep(60)
+                continue
 
             if response.status_code not in HTTP_OK or "exception" in response_json:
                 self.context.logger.error(
                     f"Request failed [{response.status_code}]: {response_json}"
                 )
                 retries += 1
-                if retries == max_retries:
+                if retries >= max_retries:
                     break
                 yield from self.sleep(retry_wait)
                 continue
@@ -1092,16 +1304,9 @@ class LiquidityTraderBaseBehaviour(
         """Fetch historical token prices for a specific date."""
         historical_prices = {}
 
-        coin_list = yield from self.fetch_coin_list()
-        if not coin_list:
-            self.context.logger.error("Failed to fetch the coin list from CoinGecko.")
-            return historical_prices
-
         for token_symbol, token_address in tokens:
             # Get CoinGecko ID.
-            coingecko_id = yield from self.get_token_id_from_symbol(
-                token_address, token_symbol, coin_list, chain
-            )
+            coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
             if not coingecko_id:
                 self.context.logger.error(
                     f"CoinGecko ID not found for token {token_address} with symbol {token_symbol}."
@@ -1119,6 +1324,13 @@ class LiquidityTraderBaseBehaviour(
     def _fetch_historical_token_price(
         self, coingecko_id, date_str
     ) -> Generator[None, None, Optional[float]]:
+        # First check the cache
+        cached_price = yield from self._get_cached_price(
+            coingecko_id, "historical", date_str
+        )
+        if cached_price is not None:
+            return cached_price
+
         endpoint = self.coingecko.historical_price_endpoint.format(
             coin_id=coingecko_id,
             date=date_str,
@@ -1141,6 +1353,10 @@ class LiquidityTraderBaseBehaviour(
                 response_json.get("market_data", {}).get("current_price", {}).get("usd")
             )
             if price:
+                # Cache the historical price
+                yield from self._cache_price(
+                    coingecko_id, "historical", price, date_str
+                )
                 return price
             else:
                 self.context.logger.error(
@@ -1168,109 +1384,38 @@ class LiquidityTraderBaseBehaviour(
         )
         return token_name
 
-    def get_token_id_from_symbol_cached(
-        self, symbol, token_name, coin_list
-    ) -> Optional[str]:
-        """Retrieve the CoinGecko token ID using the token's symbol and name."""
-
-        self.context.logger.info(f"Type of coin_list: {type(coin_list)}")
-
-        # Check the type before accessing by index.
-        if isinstance(coin_list, dict):
-            self.context.logger.info(
-                f"Coin list is a dict with keys: {list(coin_list.keys())}"
-            )
-            coin_list = list(coin_list.values())
-        elif isinstance(coin_list, list) and coin_list:
-            self.context.logger.info(f"First element of coin_list: {coin_list[0]}")
-
-        # Build candidates ensuring that each element is a dict.
-        candidates = [
-            coin
-            for coin in coin_list
-            if isinstance(coin, dict)
-            and coin.get("symbol", "").lower() == symbol.lower()
-        ]
-
-        if not candidates:
-            return None
-
-        # If single candidate, return it.
-        if len(candidates) == 1:
-            return candidates[0]["id"]
-
-        normalized_token_name = token_name.replace(" ", "").lower()
-        for coin in candidates:
-            coin_name = coin["name"].replace(" ", "").lower()
-            if coin_name == normalized_token_name or coin_name == symbol.lower():
-                return coin["id"]
-        return None
-
-    def get_token_id_from_symbol(
-        self, token_address, symbol, coin_list, chain_name
-    ) -> Generator[None, None, Optional[str]]:
+    def get_coin_id_from_symbol(self, symbol, chain_name) -> Optional[str]:
         """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
         # Check if coin_list is valid
-        if not coin_list or not isinstance(coin_list, list):
-            self.context.logger.error(f"Invalid coin_list: {type(coin_list)}")
-            return None
+        symbol = symbol.lower()
+        if symbol in COIN_ID_MAPPING.get(chain_name, {}):
+            self.context.logger.info(f"Found coin id for {symbol} in {chain_name}")
+            return COIN_ID_MAPPING[chain_name][symbol]
 
-        token_name = yield from self._fetch_token_name_from_contract(
-            chain_name, token_address
-        )
-        if not token_name:
-            # Check the structure of coin_list before processing
-            if (
-                coin_list
-                and isinstance(coin_list[0], dict)
-                and "symbol" in coin_list[0]
-            ):
-                try:
-                    matching_coins = [
-                        coin
-                        for coin in coin_list
-                        if coin["symbol"].lower() == symbol.lower()
-                    ]
-                    return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-                except (TypeError, IndexError, KeyError) as e:
-                    self.context.logger.error(f"Error processing coin_list: {e}")
-                    return None
-            else:
-                self.context.logger.error(
-                    f"Unexpected coin_list structure: {coin_list[:2]}"
-                )
-                return None
-
-        return self.get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-
-    def fetch_coin_list(self) -> Generator[None, None, Optional[List[Any]]]:
-        """Fetches the list of coins from CoinGecko API only once."""
-        url = "https://api.coingecko.com/api/v3/coins/list"
-        response = yield from self.get_http_response("GET", url, None, None)
-
-        try:
-            response_json = json.loads(response.body)
-            return response_json
-        except json.decoder.JSONDecodeError as e:
-            self.context.logger.error(f"Failed to fetch coin list: {e}")
-            return None
+        return None
 
     def get_eth_remaining_amount(self) -> Generator[None, None, int]:
         """Get the remaining ETH amount for swaps from kv_store."""
         result = yield from self._read_kv((ETH_REMAINING_KEY,))
         if not result or not result.get(ETH_REMAINING_KEY):
             # If not found in kv_store, initialize it
-            yield from self.reset_eth_remaining_amount()
-            return int(ETH_INITIAL_AMOUNT)
+            amount = yield from self.reset_eth_remaining_amount()
+            return int(amount)
 
         try:
+            chain = self.params.target_investment_chains[0]
+            account = self.params.safe_contract_addresses.get(chain)
+            amount = yield from self._get_native_balance(chain, account)
+            if amount:
+                return min(int(result[ETH_REMAINING_KEY]), amount)
+
             return int(result[ETH_REMAINING_KEY])
         except (ValueError, TypeError):
             self.context.logger.error(
                 f"Invalid ETH remaining amount in kv_store: {result[ETH_REMAINING_KEY]}"
             )
-            yield from self.reset_eth_remaining_amount()
-            return int(ETH_INITIAL_AMOUNT)
+            amount = yield from self.reset_eth_remaining_amount()
+            return int(amount)
 
     def update_eth_remaining_amount(
         self, amount_used: int
@@ -1283,12 +1428,20 @@ class LiquidityTraderBaseBehaviour(
         )
         yield from self._write_kv({ETH_REMAINING_KEY: int(new_remaining)})
 
-    def reset_eth_remaining_amount(self) -> Generator[None, None, None]:
+    def reset_eth_remaining_amount(self) -> Generator[None, None, int]:
         """Reset the remaining ETH amount to the initial value in kv_store."""
+        chain = self.params.target_investment_chains[0]
+        account = self.params.safe_contract_addresses.get(chain)
+        amount = yield from self._get_native_balance(chain, account)
+        if amount:
+            amount = min(int(ETH_INITIAL_AMOUNT), amount)
+        else:
+            amount = 0
         self.context.logger.info(
-            f"Resetting ETH remaining amount in kv_store to {ETH_INITIAL_AMOUNT}"
+            f"Resetting ETH remaining amount in kv_store to {amount}"
         )
-        yield from self._write_kv({ETH_REMAINING_KEY: int(ETH_INITIAL_AMOUNT)})
+        yield from self._write_kv({ETH_REMAINING_KEY: str(amount)})
+        return amount
 
 
 def execute_strategy(

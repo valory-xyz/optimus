@@ -21,10 +21,12 @@
 
 import json
 import os
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from decimal import Context, Decimal, getcontext
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type
 
+import requests
 from eth_utils import to_checksum_address
 
 from packages.valory.contracts.balancer_vault.contract import VaultContract
@@ -52,6 +54,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
     TradingType,
+    WHITELISTED_ASSETS,
     ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
@@ -73,6 +76,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            agent_config = os.environ.get("AEA_AGENT", "")
+            agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
+            self.context.logger.info(f"Agent hash: {agent_hash}")
+
+            if self.current_positions:
+                self.context.logger.info(
+                    f"Current Positions - {self.current_positions}"
+                )
+
             sender = self.context.agent_address
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")
@@ -101,16 +113,60 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
 
-            # Update the amounts of all open positions
-            yield from self.update_position_amounts()
+            # Filter whitelisted assets based on price changes
+            if not self.whitelisted_assets:
+                self.whitelisted_assets = WHITELISTED_ASSETS
+                self.store_whitelisted_assets()
+            else:
+                self.read_whitelisted_assets()
 
-            self.check_and_update_zero_liquidity_positions()
+            # Check if one day has passed since last whitelist update
+            db_data = yield from self._read_kv(keys=("last_whitelisted_updated",))
+            last_updated = db_data.get("last_whitelisted_updated", "0")
+            if not last_updated:
+                last_updated = 0
+
+            current_time = int(self._get_current_timestamp())
+            one_day_in_seconds = 24 * 60 * 60
+
+            try:
+                last_updated_int = int(last_updated)
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    "Invalid last updated timestamp, defaulting to 0"
+                )
+                last_updated_int = 0
+
+            time_since_update = int(current_time) - last_updated_int
+            self.context.logger.info(
+                f"Time since last update: {time_since_update} seconds"
+            )
+
+            if not (time_since_update >= one_day_in_seconds):
+                self.context.logger.info("Tracking whitelisted assets")
+                yield from self._track_whitelisted_assets()
+                # Store current timestamp as last updated
+                self.context.logger.info("Updating last whitelist update timestamp")
+                yield from self._write_kv({"last_whitelisted_updated": current_time})
+
+            # Update the amounts of all open positions
+            if self.synchronized_data.period_count == 0:
+                self.context.logger.info("Updating position amounts for period 0")
+                yield from self.update_position_amounts()
+                self.context.logger.info(
+                    "Checking and updating zero liquidity positions"
+                )
+                self.check_and_update_zero_liquidity_positions()
+
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             # Check if we need to recalculate the portfolio
+            self.context.logger.info("Checking if portfolio recalculation is needed")
             if self.should_recalculate_portfolio(self.portfolio_data):
+                self.context.logger.info("Recalculating user share values")
                 yield from self.calculate_user_share_values()
                 # Store the updated portfolio data
+                self.context.logger.info("Storing updated portfolio data")
                 self.store_portfolio_data()
 
             payload = FetchStrategiesPayload(
@@ -123,12 +179,162 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     sort_keys=True,
                 ),
             )
+            self.context.logger.info(f"Created payload with content: {payload.content}")
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
 
         self.set_done()
+
+    def _track_whitelisted_assets(self) -> Generator[None, None, None]:
+        """Track whitelisted assets based on price changes over the last day and remove if the price has dropped"""
+        self.context.logger.info("Starting price-based filtering of whitelisted assets")
+
+        # Get current timestamp and calculate yesterday's timestamp
+        current_time = datetime.now()
+        yesterday = current_time - timedelta(days=1)
+
+        # Format dates for historical price API
+        today_str = current_time.strftime("%d-%m-%Y")
+        yesterday_str = yesterday.strftime("%d-%m-%Y")
+
+        # Track assets to remove
+        assets_to_remove = {}
+
+        for chain, assets in WHITELISTED_ASSETS.items():
+            if chain not in self.params.target_investment_chains:
+                continue
+
+            self.context.logger.info(f"Checking price changes for {chain} assets")
+            assets_to_remove[chain] = []
+
+            for token_address, token_symbol in assets.items():
+                try:
+                    # Get historical prices for yesterday and today
+                    yesterday_price = yield from self._get_historical_price_for_date(
+                        token_address, token_symbol, yesterday_str, chain
+                    )
+                    today_price = yield from self._get_historical_price_for_date(
+                        token_address, token_symbol, today_str, chain
+                    )
+
+                    if yesterday_price is None or today_price is None:
+                        self.context.logger.warning(
+                            f"Could not fetch prices for {token_symbol} ({token_address}) on {chain}"
+                        )
+                        continue
+
+                    # Calculate price change percentage
+                    price_change_percent = (
+                        (today_price - yesterday_price) / yesterday_price
+                    ) * 100
+
+                    self.context.logger.info(
+                        f"{token_symbol} price change: {price_change_percent:.2f}% "
+                        f"(Yesterday: ${yesterday_price:.6f}, Today: ${today_price:.6f})"
+                    )
+
+                    # Check if price has dropped more than 5%
+                    if price_change_percent < -5.0:
+                        self.context.logger.warning(
+                            f"Removing {token_symbol} from whitelist due to {price_change_percent:.2f}% price drop"
+                        )
+                        assets_to_remove[chain].append(token_address)
+
+                    yield from self.sleep(5)
+
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error checking price for {token_symbol} ({token_address}): {str(e)}"
+                    )
+                    continue
+
+        # Update the assets by removing the filtered ones
+        for chain, addresses_to_remove in assets_to_remove.items():
+            if addresses_to_remove:
+                self.context.logger.info(
+                    f"Removing {len(addresses_to_remove)} assets from {chain} whitelist"
+                )
+                # Update the assets in memory
+                if chain in self.whitelisted_assets:
+                    for address in addresses_to_remove:
+                        if address in self.whitelisted_assets[chain]:
+                            removed_symbol = self.whitelisted_assets[chain].pop(address)
+                            self.context.logger.info(
+                                f"Removed {removed_symbol} ({address}) from {chain} assets"
+                            )
+
+                # Store the updated assets
+                self.store_whitelisted_assets()
+
+        self.context.logger.info(
+            "Completed price-based filtering of whitelisted assets"
+        )
+
+    def _get_historical_price_for_date(
+        self, token_address: str, token_symbol: str, date_str: str, chain: str
+    ) -> Generator[None, None, Optional[float]]:
+        """Get historical price for a specific token on a specific date."""
+        try:
+            # For zero address (ETH), use a different approach
+            if token_address == ZERO_ADDRESS:
+                return (yield from self._fetch_historical_eth_price(date_str))
+
+            # Get CoinGecko ID for the token
+            coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
+
+            if not coingecko_id:
+                self.context.logger.error(
+                    f"Could not find CoinGecko ID for {token_symbol} ({token_address})"
+                )
+                return None
+
+            # Fetch historical price
+            price = yield from self._fetch_historical_token_price(
+                coingecko_id, date_str
+            )
+            return price
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error fetching historical price for {token_symbol}: {str(e)}"
+            )
+            return None
+
+    def _fetch_historical_eth_price(
+        self, date_str: str
+    ) -> Generator[None, None, Optional[float]]:
+        """Fetch historical ETH price for a specific date."""
+        endpoint = self.coingecko.historical_price_endpoint.format(
+            coin_id="ethereum",
+            date=date_str,
+        )
+
+        headers = {"Accept": "application/json"}
+        if self.coingecko.api_key:
+            headers["x-cg-api-key"] = self.coingecko.api_key
+
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers=headers,
+            rate_limited_code=self.coingecko.rate_limited_code,
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
+            retry_wait=self.params.sleep_time,
+        )
+
+        if success:
+            price = (
+                response_json.get("market_data", {}).get("current_price", {}).get("usd")
+            )
+            if price:
+                return price
+            else:
+                self.context.logger.error("No ETH price in response")
+                return None
+        else:
+            self.context.logger.error("Failed to fetch historical ETH price")
+            return None
 
     def should_recalculate_portfolio(self, last_portfolio_data: Dict) -> bool:
         """Determine if the portfolio should be recalculated."""
@@ -278,7 +484,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         # Calculate initial investment value
-        initial_investment = yield from self.calculate_initial_investment()
+        initial_investment = (
+            yield from self.calculate_initial_investment_value_from_funding_events()
+        )
         # Calculate total volume (total initial investment including closed positions)
         volume = yield from self._calculate_total_volume()
 
@@ -496,9 +704,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if position:
                 tick_ranges = yield from self._get_tick_ranges(position, chain)
 
+            # UI supports only camel case names, but our strategies have different name for dex
+            dex_type_mapping = {
+                DexType.UNISWAP_V3.value: "uniswapV3",
+                DexType.STURDY.value: "sturdy",
+                DexType.VELODROME.value: "velodrome",
+                DexType.BALANCER.value: "balancerPool",
+            }
+
             allocation = {
                 "chain": chain,
-                "type": dex_type,
+                "type": dex_type_mapping.get(dex_type, dex_type),
                 "id": pool_id,
                 "assets": assets,
                 "apr": round(float(apr), 2),
@@ -909,9 +1125,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :return: Tuple of (amount0, amount1) representing token amounts.
         """
         # Extract position details
-        tick_lower = int(position_details.get("tickLower"))
-        tick_upper = int(position_details.get("tickUpper"))
-        liquidity = int(position_details.get("liquidity"))
+        tick_lower_val = position_details.get("tickLower")
+        tick_upper_val = position_details.get("tickUpper")
+        liquidity_val = position_details.get("liquidity")
+
+        if tick_lower_val is None or tick_upper_val is None or liquidity_val is None:
+            self.context.logger.error("Missing required position details")
+            return 0, 0
+
+        tick_lower = int(tick_lower_val)
+        tick_upper = int(tick_upper_val)
+        liquidity = int(liquidity_val)
         tokens_owed0 = int(position_details.get("tokensOwed0", 0))
         tokens_owed1 = int(position_details.get("tokensOwed1", 0))
 
@@ -1524,7 +1748,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return
 
         for position in self.current_positions:
-            if position.get("status") != PositionStatus.OPEN:
+            if position.get("status") != PositionStatus.OPEN.value:
                 continue
 
             dex_type = position.get("dex_type")
@@ -1542,7 +1766,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if all_positions_zero and position.get(
                     "positions"
                 ):  # Only update if there are positions
-                    position["status"] = PositionStatus.CLOSED
+                    position["status"] = PositionStatus.CLOSED.value
                     self.context.logger.info(
                         f"Marked Velodrome CL position as closed due to zero liquidity in all positions: {position}"
                     )
@@ -1551,7 +1775,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if (
                     position.get("current_liquidity", 1) == 0
                 ):  # Default to 1 if not found to avoid false closures
-                    position["status"] = PositionStatus.CLOSED
+                    position["status"] = PositionStatus.CLOSED.value
                     self.context.logger.info(
                         f"Marked {dex_type} position as closed due to zero liquidity: {position}"
                     )
@@ -1567,7 +1791,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         for position in self.current_positions:
             # Only update open positions
-            if position.get("status") != PositionStatus.OPEN:
+            if position.get("status") != PositionStatus.OPEN.value:
                 continue
 
             dex_type = position.get("dex_type")
@@ -1786,7 +2010,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             contract_public_id=YearnV3VaultContract.contract_id,
             contract_callable="balance_of",
             data_key="amount",
-            account=safe_address,
+            owner=safe_address,
             chain_id=chain,
         )
 
@@ -1798,3 +2022,994 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.warning(
                 f"Failed to get balance for Sturdy position: {position}"
             )
+
+    def calculate_initial_investment_value_from_funding_events(
+        self,
+    ) -> Generator[None, None, Optional[float]]:
+        """Calculate initial investment value using transfers."""
+        total_investment = 0.0
+
+        for chain in self.params.target_investment_chains:
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.warning(f"No safe address found for {chain} chain")
+                continue
+
+            self.context.logger.info(
+                f"Calculating initial investment from {chain} transfers for address: {safe_address}"
+            )
+
+            current_date = datetime.now().strftime("%Y-%m-%d")
+
+            # Default to not fetching full history
+            fetch_till_date = False
+
+            # Check when we last calculated initial value
+            last_calculated_timestamp = yield from self._read_kv(
+                keys=("last_initial_value_calculated_timestamp",)
+            )
+
+            if (
+                last_calculated_timestamp
+                and (
+                    timestamp := last_calculated_timestamp.get(
+                        "last_initial_value_calculated_timestamp"
+                    )
+                )
+                and timestamp is not None
+            ):
+                self.context.logger.info(
+                    f"Found last calculation timestamp: {timestamp}"
+                )
+                try:
+                    last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
+                        "%d-%m-%Y"
+                    )
+                    self.context.logger.info(f"Last calculation date: {last_date}")
+                except (ValueError, TypeError):
+                    self.context.logger.warning(
+                        "Invalid timestamp format, defaulting to 1970-01-01"
+                    )
+                    last_date = "1970-01-01"
+
+                # If last calculation was today, return cached value
+                if last_date == current_date:
+                    self.context.logger.info(
+                        "Last calculation was today, using cached value"
+                    )
+                    return (yield self._load_chain_total_investment(chain))
+
+                # Otherwise need to calculate new value but not full history
+                self.context.logger.info(
+                    "Last calculation was not today, calculating new value without full history"
+                )
+                fetch_till_date = False
+
+            # No previous calculation, need to fetch full history
+            else:
+                self.context.logger.info(
+                    "No previous calculation found, fetching full transfer history"
+                )
+                fetch_till_date = True
+
+            # Fetch all transfers until current date based on chain
+            self.context.logger.info(f"Fetching transfers for chain: {chain}")
+            if chain == "mode":
+                self.context.logger.info("Using Mode-specific transfer fetching")
+                all_transfers = self._fetch_all_transfers_until_date_mode(
+                    safe_address, current_date, fetch_till_date
+                )
+            elif chain == "optimism":
+                self.context.logger.info("Using Optimism-specific transfer fetching")
+                all_transfers = (
+                    yield from self._fetch_all_transfers_until_date_optimism(
+                        safe_address, current_date
+                    )
+                )
+            else:
+                self.context.logger.warning(f"Unsupported chain: {chain}, skipping")
+                continue
+
+            if not all_transfers:
+                self.context.logger.warning(f"No transfers found for {chain} chain")
+                continue
+
+            # Calculate investment value for this chain
+            chain_investment = yield from self._calculate_chain_investment_value(
+                all_transfers, chain
+            )
+            total_investment += chain_investment
+
+        timestamp = int(self._get_current_timestamp())
+        yield from self._write_kv(
+            {"last_initial_value_calculated_timestamp": str(timestamp)}
+        )
+        self.context.logger.info(
+            f"Total initial investment from all chains: ${total_investment}"
+        )
+        return total_investment if total_investment > 0 else None
+
+    def _calculate_chain_investment_value(
+        self, all_transfers: Dict, chain: str
+    ) -> Generator[None, None, float]:
+        """Calculate investment value for a specific chain and update stored total."""
+        # Load existing total investment for this chain
+        existing_total = yield from self._load_chain_total_investment(chain)
+        if not existing_total:
+            last_calculated_date = "1970-01-01"
+        else:
+            mode_events = self.funding_events.get("mode", {})
+            if not mode_events:
+                last_calculated_date = "1970-01-01"
+            else:
+                try:
+                    last_calculated_date = list(mode_events.keys())[0]
+                except IndexError:
+                    last_calculated_date = "1970-01-01"
+
+        # Only calculate value for new transfers (all_transfers contains only new dates)
+        new_investment = 0.0
+
+        for date, transfers in all_transfers.items():
+            current_date = datetime.strptime(date, "%Y-%m-%d")
+            last_date = datetime.strptime(last_calculated_date, "%Y-%m-%d")
+            if current_date <= last_date:
+                continue
+
+            for transfer in transfers:
+                try:
+                    # Get token price for the transfer date
+                    token_symbol = transfer.get("symbol", "Unknown")
+                    amount = transfer.get("amount", 0)
+
+                    if amount <= 0:
+                        continue
+
+                    # Get historical price for the transfer date
+                    date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
+
+                    if token_symbol == "ETH":  # nosec B105
+                        price = yield from self._fetch_historical_eth_price(date_str)
+                    else:
+                        coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
+                        if coingecko_id:
+                            price = yield from self._fetch_historical_token_price(
+                                coingecko_id, date_str
+                            )
+                        else:
+                            price = None
+
+                    if price:
+                        transfer_value = amount * price
+                        new_investment += transfer_value
+                        self.context.logger.info(
+                            f"{chain.upper()} NEW transfer on {date}: {amount} {token_symbol} @ ${price} = ${transfer_value}"
+                        )
+
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error processing {chain} transfer: {str(e)}"
+                    )
+                    continue
+
+        # Update total investment for this chain
+        updated_total = existing_total + new_investment
+        yield from self._save_chain_total_investment(chain, updated_total)
+
+        self.context.logger.info(f"New {chain} investment: ${new_investment}")
+        self.context.logger.info(
+            f"Total {chain} investment (updated): ${updated_total}"
+        )
+
+        return updated_total
+
+    def _fetch_all_transfers_until_date_mode(
+        self, address: str, end_date: str, fetch_till_date: bool
+    ) -> Dict:
+        """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
+        # Load existing unified data from kv_store
+        self.funding_events = self.read_funding_events()
+        if self.funding_events:
+            existing_mode_data = self.funding_events.get("mode", {})
+        else:
+            self.funding_events = {}
+            existing_mode_data = {}
+
+        all_transfers_by_date = defaultdict(list)
+        end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+        end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+
+        try:
+            self.context.logger.info(f"Fetching all Mode transfers until {end_date}...")
+
+            # Fetch token transfers
+            self.context.logger.info("Fetching Mode token transfers...")
+
+            self._fetch_token_transfers_mode(
+                address, end_datetime, all_transfers_by_date, fetch_till_date
+            )
+
+            # Fetch ETH transfers
+            self.context.logger.info("Fetching Mode ETH transfers...")
+            self._fetch_eth_transfers_mode(
+                address, end_datetime, all_transfers_by_date, fetch_till_date
+            )
+
+            # Merge with existing data and save
+            for date, transfers in all_transfers_by_date.items():
+                if date not in existing_mode_data:  # Only store new dates
+                    existing_mode_data[date] = transfers
+
+            # Update unified data structure
+            if not self.funding_events:
+                self.funding_events = {}
+            self.funding_events["mode"] = existing_mode_data
+            self.store_funding_events()
+
+            # Print summary
+            total_dates = len(all_transfers_by_date)
+            total_transfers = sum(
+                len(transfers) for transfers in all_transfers_by_date.values()
+            )
+
+            self.context.logger.info(
+                f"Mode Summary: {total_dates} dates with transfers, {total_transfers} total transfers"
+            )
+
+            return dict(all_transfers_by_date)
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Mode transfers: {e}")
+            return {}
+
+    def _fetch_all_transfers_until_date_optimism(
+        self, address: str, end_date: str
+    ) -> Generator[None, None, Dict]:
+        """Fetch all Optimism transfers from the beginning until a specific date, organized by date."""
+        # Load existing unified data from kv_store
+        self.funding_events = self.read_funding_events()
+        if self.funding_events:
+            existing_optimism_data = self.funding_events.get("optimism", {})
+        else:
+            existing_optimism_data = {}
+
+        all_transfers_by_date = defaultdict(list)
+
+        try:
+            self.context.logger.info(
+                f"Fetching all Optimism transfers until {end_date}..."
+            )
+
+            # Use SafeGlobal API for Optimism
+            yield from self._fetch_optimism_transfers_safeglobal(
+                address, end_date, all_transfers_by_date, existing_optimism_data
+            )
+
+            # Merge with existing data and save
+            for date, transfers in all_transfers_by_date.items():
+                if date not in existing_optimism_data:  # Only store new dates
+                    existing_optimism_data[date] = transfers
+
+            # Update unified data structure
+            if not self.funding_events:
+                self.funding_events = {}
+            self.funding_events["optimism"] = existing_optimism_data
+            self.store_funding_events()
+
+            # Print summary
+            total_dates = len(all_transfers_by_date)
+            total_transfers = sum(
+                len(transfers) for transfers in all_transfers_by_date.values()
+            )
+
+            self.context.logger.info(
+                f"Optimism Summary: {total_dates} dates with transfers, {total_transfers} total transfers"
+            )
+
+            return dict(all_transfers_by_date)
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+            return {}
+
+    def _fetch_token_transfers(
+        self,
+        address: str,
+        end_datetime: datetime,
+        all_transfers_by_date: dict,
+        existing_data: dict,
+    ) -> Generator[None, None, None]:
+        """Fetch token transfers from Mode blockchain explorer."""
+        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        processed_count = 0
+
+        endpoint = f"{base_url}/addresses/{address}/token-transfers"
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers={"Accept": "application/json"},
+            rate_limited_code=429,
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
+            retry_wait=self.params.sleep_time,
+        )
+
+        if not success:
+            self.context.logger.error("Failed to fetch token transfers")
+            return None
+
+        transfers = response_json.get("items", [])
+        if not transfers:
+            return None
+
+        for tx in transfers:
+            tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
+            tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
+
+            # Stop if we've gone past our end date
+            if tx_datetime and tx_datetime > end_datetime:
+                continue
+
+            # Skip if date already exists in stored data
+            if tx_date and tx_date in existing_data:
+                continue
+
+            if tx_date and tx_date <= end_datetime.strftime("%Y-%m-%d"):
+                from_address = tx.get("from", {})
+                if self._should_include_transfer(
+                    from_address, tx, is_eth_transfer=False
+                ):
+                    token = tx.get("token", {})
+                    symbol = token.get("symbol", "Unknown")
+                    total = tx.get("total", {})
+                    value_raw = int(total.get("value", "0"))
+                    decimals = int(token.get("decimals", 18))
+                    amount = value_raw / (10**decimals)
+
+                    transfer_data = {
+                        "from_address": from_address.get("hash", ""),
+                        "amount": amount,
+                        "token_address": token.get("address", ""),
+                        "symbol": symbol,
+                        "timestamp": tx.get("timestamp", ""),
+                        "tx_hash": tx.get("transaction_hash", ""),
+                        "type": "token",
+                    }
+
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+
+        self.context.logger.info(f"Completed token transfers: {processed_count} found")
+
+    def _fetch_eth_transfers(
+        self,
+        address: str,
+        end_datetime: datetime,
+        all_transfers_by_date: dict,
+        existing_data: dict,
+    ) -> Generator[None, None, None]:
+        """Fetch ETH transfers from Mode blockchain explorer."""
+        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        processed_count = 0
+
+        endpoint = f"{base_url}/addresses/{address}/transactions"
+        success, response_json = yield from self._request_with_retries(
+            endpoint=endpoint,
+            headers={"Accept": "application/json"},
+            rate_limited_code=429,
+            rate_limited_callback=self.coingecko.rate_limited_status_callback,
+            retry_wait=self.params.sleep_time,
+        )
+
+        if not success:
+            self.context.logger.error("Failed to fetch ETH transfers")
+            return None
+
+        eth_transactions = response_json.get("items", [])
+        if not eth_transactions:
+            return None
+
+        for tx in eth_transactions:
+            tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
+            tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
+
+            # Stop if we've gone past our end date
+            if tx_datetime and tx_datetime > end_datetime:
+                continue
+
+            # Skip if date already exists in stored data
+            if tx_date and tx_date in existing_data:
+                continue
+
+            if tx_date and tx_date <= end_datetime.strftime("%Y-%m-%d"):
+                from_address = tx.get("from", {})
+                if self._should_include_transfer(
+                    from_address, tx, is_eth_transfer=True
+                ):
+                    value_wei = int(tx.get("value", "0"))
+                    amount_eth = value_wei / 10**18
+
+                    transfer_data = {
+                        "from_address": from_address.get("hash", ""),
+                        "amount": amount_eth,
+                        "token_address": "",
+                        "symbol": "ETH",
+                        "timestamp": tx.get("timestamp", ""),
+                        "tx_hash": tx.get("hash", ""),
+                        "type": "eth",
+                    }
+
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+
+        self.context.logger.info(f"Completed ETH transfers: {processed_count} found")
+
+    def _is_gnosis_safe(self, address_info: dict) -> bool:
+        """Check if an address is a Gnosis Safe."""
+        if not address_info or not address_info.get("is_contract"):
+            return False
+        name = address_info.get("name", "")
+        return name == "GnosisSafeProxy"
+
+    def _should_include_transfer(
+        self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False
+    ) -> bool:
+        """Determine if a transfer should be included based on filtering criteria."""
+        if not from_address:
+            return False
+
+        from_hash = from_address.get("hash", "")
+        if from_hash.lower() in [
+            "0x0000000000000000000000000000000000000000",
+            "0x0",
+            "",
+        ]:
+            return False
+
+        if tx_data and is_eth_transfer:
+            if tx_data.get("status") != "ok" or int(tx_data.get("value", "0")) <= 0:
+                return False
+
+        return not from_address.get("is_contract") or self._is_gnosis_safe(from_address)
+
+    def _get_datetime_from_timestamp(self, timestamp_str: str) -> Optional[datetime]:
+        """Convert timestamp string to datetime object."""
+        try:
+            # Handle different timestamp formats and ensure timezone awareness
+            if timestamp_str.endswith("Z"):
+                # ISO format with Z suffix
+                dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            elif "+" in timestamp_str or timestamp_str.endswith("UTC"):
+                # Already has timezone info
+                dt = datetime.fromisoformat(timestamp_str.replace("UTC", "+00:00"))
+            else:
+                # Assume UTC if no timezone info
+                dt = datetime.fromisoformat(timestamp_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+
+            return dt
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(f"Error parsing timestamp {timestamp_str}: {e}")
+            return None
+
+    def _fetch_token_transfers_mode(
+        self,
+        address: str,
+        target_date: str,
+        all_transfers_by_date: dict,
+        fetch_all_till_date: bool = False,
+    ) -> None:
+        """
+        Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date.
+
+        Args:
+            address: The address to fetch transfers for
+            target_date: The specific date to fetch transfers for (format: "YYYY-MM-DD")
+            all_transfers_by_date: Dictionary to store transfers by date
+            fetch_all_till_date: If True, fetch all transfers up to target_date. If False, fetch only target_date transfers
+        """
+        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        processed_count = 0
+        endpoint = f"{base_url}/addresses/{address}/token-transfers"
+
+        has_more_pages = True
+        params = {"filter": "to"}  # Only fetch incoming transfers
+
+        # Check if we have existing mode events and get latest date
+        mode_events = self.funding_events.get("mode", {})
+        if mode_events:
+            try:
+                latest_date = list(mode_events.keys())[0]
+                latest_datetime = datetime.strptime(latest_date, "%Y-%m-%d")
+                latest_datetime = latest_datetime.replace(tzinfo=timezone.utc)
+            except (IndexError, ValueError):
+                latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        else:
+            latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+        while has_more_pages:
+            response = requests.get(
+                endpoint,
+                params=params,
+                headers={"Accept": "application/json"},
+                verify=False,  # nosec B501
+                timeout=30,
+            )
+
+            if not response.status_code == 200:
+                self.context.logger.error("Failed to fetch Mode token transfers")
+                return None
+
+            response_data = response.json()
+            transfers = response_data.get("items", [])
+            if not transfers:
+                break
+
+            passed_target_date = False
+
+            for tx in transfers:
+                tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
+                if not tx_datetime:
+                    continue
+
+                tx_date = tx_datetime.strftime("%Y-%m-%d")
+
+                if not fetch_all_till_date:
+                    if tx_datetime < latest_datetime:
+                        # We've gone past our latest stored date, stop processing
+                        has_more_pages = False
+                        passed_target_date = True
+                        break
+
+                from_address = tx.get("from", {})
+                if from_address.get("hash", address).lower() == address.lower():
+                    continue
+
+                if self._should_include_transfer_mode(
+                    from_address, tx, is_eth_transfer=False
+                ):
+                    token = tx.get("token", {})
+                    symbol = token.get("symbol", "Unknown")
+                    total = tx.get("total", {})
+                    value_raw = int(total.get("value", "0"))
+                    decimals = int(token.get("decimals", 18))
+                    amount = value_raw / (10**decimals)
+
+                    if amount == 0:
+                        continue
+
+                    if symbol != "USDC" or "usdc":
+                        continue
+                    transfer_data = {
+                        "from_address": from_address.get("hash", ""),
+                        "amount": amount,
+                        "token_address": token.get("address", ""),
+                        "symbol": symbol,
+                        "timestamp": tx.get("timestamp", ""),
+                        "tx_hash": tx.get("transaction_hash", ""),
+                        "type": "token",
+                    }
+
+                    if tx_date not in all_transfers_by_date:
+                        all_transfers_by_date[tx_date] = []
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+
+            # Stop pagination based on fetch mode
+            if passed_target_date:
+                break
+
+            # Handle pagination
+            next_page_params = response_data.get("next_page_params")
+            if next_page_params:
+                # Update params for next page
+                params.update(
+                    {
+                        "block_number": next_page_params.get("block_number"),
+                        "index": next_page_params.get("index"),
+                    }
+                )
+                has_more_pages = True
+            else:
+                has_more_pages = False
+
+        date_range = (
+            f"for {target_date}" if not fetch_all_till_date else f"till {target_date}"
+        )
+        self.context.logger.info(
+            f"Completed Mode token transfers {date_range}: {processed_count} found"
+        )
+
+    def _fetch_eth_transfers_mode(
+        self,
+        address: str,
+        target_date: str,
+        all_transfers_by_date: dict,
+        fetch_till_date: bool,
+    ) -> float:
+        """Fetch ETH balance history from Mode blockchain explorer."""
+        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+        endpoint = f"{base_url}/addresses/{address}/coin-balance-history"
+
+        has_more_pages = True
+        params = {}
+        highest_amount = 0
+
+        # Check if we have existing mode events and get latest date
+        mode_events = self.funding_events.get("mode", {})
+        if mode_events:
+            try:
+                latest_date = list(mode_events.keys())[0]
+                latest_datetime = datetime.strptime(latest_date, "%Y-%m-%d")
+            except (IndexError, ValueError):
+                latest_datetime = datetime(1970, 1, 1)
+        else:
+            latest_datetime = datetime(1970, 1, 1)
+
+        while has_more_pages:
+            response = requests.get(
+                endpoint,
+                params=params,
+                headers={"Accept": "application/json"},
+                verify=False,  # nosec B501
+                timeout=30,
+            )
+
+            if not response.status_code == 200:
+                self.context.logger.error("Failed to fetch Mode coin balance history")
+                return highest_amount
+
+            response_data = response.json()
+            balance_history = response_data.get("items", [])
+
+            if not balance_history:
+                break
+
+            passed_target_date = False
+            for entry in balance_history:
+                current_value = int(entry.get("value", "0")) / 10**18
+                if current_value <= 0:
+                    continue
+
+                tx_datetime = datetime.strptime(
+                    entry.get("block_timestamp", ""), "%Y-%m-%dT%H:%M:%SZ"
+                )
+                # Ensure timezone awareness for comparison
+                tx_datetime = tx_datetime.replace(tzinfo=timezone.utc)
+                # Convert from wei to ETH
+                tx_date = tx_datetime.strftime("%Y-%m-%d")
+
+                # Store balance data
+                transfer_data = {
+                    "amount": current_value,
+                    "delta": int(entry.get("delta", "0"))
+                    / 10**18,  # Convert delta to ETH
+                    "timestamp": entry.get("block_timestamp"),
+                    "tx_hash": entry.get("transaction_hash"),
+                    "type": "eth",
+                    "block_number": entry.get("block_number"),
+                    "symbol": "ETH",
+                }
+
+                if not fetch_till_date:
+                    if tx_datetime < latest_datetime:
+                        # We've gone past our latest stored date, stop processing
+                        passed_target_date = True
+                        has_more_pages = False
+                        break
+
+                if tx_date not in all_transfers_by_date:
+                    all_transfers_by_date[tx_date] = []
+                all_transfers_by_date[tx_date].append(transfer_data)
+                highest_amount = max(highest_amount, current_value)
+
+            # Stop pagination based on fetch mode
+            if passed_target_date:
+                break
+
+            # Handle pagination
+            next_page_params = response_data.get("next_page_params")
+            if next_page_params and passed_target_date:
+                # Update params for next page
+                params.update(
+                    {
+                        "block_number": next_page_params.get("block_number"),
+                        "index": next_page_params.get("index"),
+                    }
+                )
+                has_more_pages = True
+            else:
+                has_more_pages = False
+
+        date_range = (
+            f"for {target_date}" if not fetch_till_date else f"till {target_date}"
+        )
+        self.context.logger.info(
+            f"Completed Mode coin balance history {date_range}: highest amount {highest_amount} ETH"
+        )
+
+        return highest_amount
+
+    def _should_include_transfer_mode(
+        self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False
+    ) -> bool:
+        """Determine if a Mode transfer should be included based on filtering criteria."""
+        if not from_address:
+            return False
+
+        from_hash = from_address.get("hash", "")
+        if from_hash.lower() in [
+            "0x0000000000000000000000000000000000000000",
+            "0x0",
+            "",
+        ]:
+            return False
+
+        if tx_data and is_eth_transfer:
+            if tx_data.get("status") != "ok" or int(tx_data.get("value", "0")) <= 0:
+                return False
+
+        return not from_address.get("is_contract") or self._is_gnosis_safe(from_address)
+
+    def _save_transfer_data_mode(self, data: Dict) -> Generator[None, None, None]:
+        """Save Mode transfer data to kv_store."""
+        yield from self._write_kv({"mode_transfer_data": json.dumps(data)})
+
+    # Optimism-specific transfer methods
+    def _fetch_optimism_transfers_safeglobal(
+        self,
+        address: str,
+        end_date: str,
+        all_transfers_by_date: dict,
+        existing_data: dict,
+    ) -> Generator[None, None, None]:
+        """Fetch Optimism transfers using SafeGlobal API."""
+        base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+
+        try:
+            self.context.logger.info(
+                "Fetching Optimism transfers using SafeGlobal API..."
+            )
+
+            # Fetch incoming transfers
+            transfers_url = f"{base_url}/safes/{address}/incoming-transfers/"
+
+            processed_count = 0
+            while True:
+                success, response_json = yield from self._request_with_retries(
+                    endpoint=transfers_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
+
+                if not success:
+                    self.context.logger.error("Failed to fetch Optimism transfers")
+                    break
+
+                transfers = response_json.get("results", [])
+                if not transfers:
+                    break
+
+                for transfer in transfers:
+                    # Parse timestamp
+                    timestamp = transfer.get("executionDate")
+                    if not timestamp:
+                        continue
+
+                    tx_datetime = self._get_datetime_from_timestamp(timestamp)
+                    tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
+
+                    if not tx_date:
+                        continue
+
+                    # Skip if date already exists in stored data
+                    if tx_date in existing_data:
+                        continue
+
+                    # Only process transfers until end_date
+                    if tx_date > end_date:
+                        continue
+
+                    # Process the transfer
+                    from_address = transfer.get("from", address)
+                    transfer_type = transfer.get("type", "")
+
+                    if from_address.lower() == address.lower():
+                        continue
+
+                    # Filter from address - only include EOAs and GnosisSafe contracts
+                    should_include = yield from self._should_include_transfer_optimism(
+                        from_address
+                    )
+                    if not should_include:
+                        continue
+
+                    # Check transfer type
+                    if transfer_type == "ERC20_TRANSFER":
+                        # Token transfer
+                        token_info = transfer.get("tokenInfo", {})
+                        token_address = transfer.get("tokenAddress", "")
+                        if not token_info:
+                            if token_address:
+                                decimals = yield from self._get_token_decimals(
+                                    "optimism", token_address
+                                )
+                                symbol = yield from self._get_token_symbol(
+                                    "optimism", token_address
+                                )
+                            else:
+                                continue
+                        else:
+                            symbol = token_info.get("symbol", "Unknown")
+                            decimals = int(token_info.get("decimals", 18) or 18)
+
+                        value_raw = int(transfer.get("value", "0") or "0")
+                        amount = value_raw / (10**decimals)
+
+                        transfer_data = {
+                            "from_address": from_address,
+                            "amount": amount,
+                            "token_address": token_address,
+                            "symbol": symbol,
+                            "timestamp": timestamp,
+                            "tx_hash": transfer.get("transactionHash", ""),
+                            "type": "token",
+                        }
+
+                    elif transfer_type == "ETHER_TRANSFER":
+                        # ETH transfer
+                        try:
+                            value_wei = int(transfer.get("value", "0") or "0")
+                            amount_eth = value_wei / 10**18
+
+                            # Skip zero-value ETH transfers
+                            if amount_eth <= 0:
+                                continue
+                        except (ValueError, TypeError):
+                            self.context.logger.warning(
+                                f"Skipping transfer with invalid value: {transfer.get('value')}"
+                            )
+                            continue
+
+                        transfer_data = {
+                            "from_address": from_address,
+                            "amount": amount_eth,
+                            "token_address": "",
+                            "symbol": "ETH",
+                            "timestamp": timestamp,
+                            "tx_hash": transfer.get("transactionHash", ""),
+                            "type": "eth",
+                        }
+
+                    elif transfer_type == "ERC721_TRANSFER":
+                        # NFT transfer - skip for now
+                        continue
+
+                    else:
+                        # Unknown transfer type
+                        continue
+
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+
+                # Show progress
+                if processed_count % 100 == 0:
+                    self.context.logger.info(
+                        f"Processed {processed_count} Optimism transfers..."
+                    )
+
+                # Check for next page
+                cursor = response_json.get("next")
+                if not cursor:
+                    break
+
+            self.context.logger.info(
+                f"Completed Optimism transfers: {processed_count} found"
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Optimism transfers: {e}")
+
+    def _should_include_transfer_optimism(
+        self, from_address: str
+    ) -> Generator[None, None, bool]:
+        """Determine if an Optimism transfer should be included based on from address type."""
+        if not from_address:
+            return False
+
+        # Exclude zero address
+        if from_address.lower() in [
+            "0x0000000000000000000000000000000000000000",
+            "0x0",
+            "",
+        ]:
+            return False
+
+        try:
+            # Use Optimism RPC to check if address is a contract
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "eth_getCode",
+                "params": [from_address, "latest"],
+                "id": 1,
+            }
+
+            success, result = yield from self._request_with_retries(
+                endpoint="https://mainnet.optimism.io",
+                method="POST",
+                body=payload,
+                rate_limited_code=429,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
+            )
+
+            if not success:
+                self.context.logger.error("Failed to check contract code")
+                return False
+
+            code = result.get("result", "0x")
+
+            # If code is '0x', it's an EOA
+            if code == "0x":
+                return True
+
+            # If it has code, check if it's a GnosisSafe
+            safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{from_address}/"
+            success, _ = yield from self._request_with_retries(
+                endpoint=safe_check_url,
+                headers={"Accept": "application/json"},
+                rate_limited_code=429,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
+            )
+
+            if success:
+                return True
+
+            self.context.logger.info(
+                f"Excluding transfer from contract: {from_address}"
+            )
+            return False
+
+        except Exception as e:
+            self.context.logger.error(f"Error checking address {from_address}: {e}")
+            return False
+
+    def _save_transfer_data_optimism(self, data: Dict) -> Generator[None, None, None]:
+        """Save Optimism transfer data to kv_store."""
+        yield from self._write_kv({"optimism_transfer_data": json.dumps(data)})
+
+    def _load_chain_total_investment(self, chain: str) -> Generator[None, None, float]:
+        """Load total investment value for a specific chain from kv_store."""
+        key = f"{chain}_total_investment"
+        cached_data = yield from self._read_kv(keys=(key,))
+        if cached_data and cached_data.get(key):
+            try:
+                return float(cached_data.get(key))
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    f"Failed to parse cached {chain} total investment"
+                )
+                return 0.0
+        return 0.0
+
+    def _save_chain_total_investment(
+        self, chain: str, total: float
+    ) -> Generator[None, None, None]:
+        """Save total investment value for a specific chain to kv_store."""
+        key = f"{chain}_total_investment"
+        yield from self._write_kv({key: str(total)})
+
+    def _load_funding_events_data(self) -> Generator[None, None, Dict]:
+        """Load unified transfer data from kv_store."""
+        cached_data = yield from self._read_kv(keys=("funding_events",))
+        if cached_data and cached_data.get("funding_events"):
+            try:
+                return json.loads(cached_data.get("funding_events"))
+            except json.JSONDecodeError:
+                self.context.logger.warning(
+                    "Failed to parse cached unified transfer data"
+                )
+                return {}
+        return {}

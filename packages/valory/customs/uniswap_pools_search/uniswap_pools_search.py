@@ -23,6 +23,7 @@ REQUIRED_FIELDS = (
     "graphql_endpoints",
     "current_positions",
     "coingecko_api_key",
+    "whitelisted_assets",
 )
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
@@ -42,28 +43,6 @@ CHAIN_URLS = {
 
 LP = "lp"
 errors = []
-WHITELISTED_ASSETS = {
-    "base": [],
-    "optimism": [
-        "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",  # USDC
-        "0xCB8FA9a76b8e203D8C3797bF438d8FB81Ea3326A",  # alUSD
-        "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",  # USDT0
-        "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",  # USDT
-        "0x9dAbAE7274D28A45F0B65Bf8ED201A5731492ca0",  # msUSD
-        "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",  # USDC.e
-        "0xbfD291DA8A403DAAF7e5E9DC1ec0aCEaCd4848B9",  # USX
-        "0x8aE125E8653821E851F12A49F7765db9a9ce7384",  # DOLA
-        "0xc40F949F8a4e094D1b49a23ea9241D289B7b2819",  # LUSD
-        "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",  # DAI
-        "0x087C440F251Ff6Cfe62B86DdE1bE558B95b4bb9b",  # BOLD
-        "0x2E3D870790dC77A83DD1d18184Acc7439A53f475",  # FRAX
-        "0x2218a117083f5B482B0bB821d27056Ba9c04b1D3",  # sDAI
-        "0x73cb180bf0521828d8849bc8CF2B920918e23032",  # USD+
-        "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",  # oUSDT
-        "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3"   # USDGLO
-    ]
-}
-
 ERC20_ABI = [
     {
         "constant": True,
@@ -85,20 +64,6 @@ def remove_irrelevant_fields(
     kwargs: Dict[str, Any], required_fields: Tuple
 ) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in required_fields}
-
-
-@lru_cache(None)
-def fetch_coin_list():
-    """Fetches the list of coins from CoinGecko API only once."""
-    url = "https://api.coingecko.com/api/v3/coins/list"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        errors.append(f"Failed to fetch coin list: {e}")
-        return None
-
 
 @lru_cache(None)
 def create_web3_connection(chain_name: str):
@@ -122,26 +87,16 @@ def fetch_token_name_from_contract(chain_name, token_address):
     except Exception:
         return None
 
+def get_coin_id_from_symbol(
+        coin_id_mapping, symbol, chain_name
+    ) -> Optional[str]:
+        """Retrieve the CoinGecko token ID using the token's address, symbol, and chain name."""
+        # Check if coin_list is valid
+        symbol = symbol.lower()
+        if symbol in coin_id_mapping.get(chain_name, {}):
+            return coin_id_mapping[chain_name][symbol]
 
-def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
-    matching_coins = [c for c in coin_list if c["symbol"].lower() == symbol.lower()]
-    if not matching_coins:
         return None
-    if len(matching_coins) == 1:
-        return matching_coins[0]["id"]
-
-    token_name = fetch_token_name_from_contract(chain_name, token_address)
-    if not token_name:
-        return None
-
-    for coin in matching_coins:
-        # Match after removing spaces and lowering case
-        if (
-            coin["name"].replace(" ", "").lower() == token_name.replace(" ", "").lower()
-            or coin["name"].lower() == symbol.lower()
-        ):
-            return coin["id"]
-    return None
 
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
@@ -166,40 +121,7 @@ def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
         else (daily_volume / tvl) * fee_rate * DAYS_IN_YEAR * PERCENT_CONVERSION
     )
 
-
-def get_token_id_from_symbol_cached(symbol, token_name, coin_list):
-    # Try to find a coin matching symbol first.
-    candidates = [
-        coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-    ]
-    if not candidates:
-        return None
-
-    # If single candidate, return it
-    if len(candidates) == 1:
-        return candidates[0]["id"]
-
-    # If multiple candidates, match by name if possible
-    normalized_token_name = token_name.replace(" ", "").lower()
-    for coin in candidates:
-        coin_name = coin["name"].replace(" ", "").lower()
-        if coin_name == normalized_token_name or coin_name == symbol.lower():
-            return coin["id"]
-    return None
-
-
-def get_token_id_from_symbol(token_address, symbol, coin_list, chain_name):
-    token_name = fetch_token_name_from_contract(chain_name, token_address)
-    if not token_name:
-        matching_coins = [
-            coin for coin in coin_list if coin["symbol"].lower() == symbol.lower()
-        ]
-        return matching_coins[0]["id"] if len(matching_coins) == 1 else None
-
-    return get_token_id_from_symbol_cached(symbol, token_name, coin_list)
-
-
-def get_filtered_pools(pools, current_positions) -> List[Dict[str, Any]]:
+def get_filtered_pools(pools, current_positions, whitelisted_assets) -> List[Dict[str, Any]]:
     qualifying_pools = []
     for pool in pools:
         fee_rate = float(pool["feeTier"]) / FEE_RATE_DIVISOR
@@ -210,10 +132,10 @@ def get_filtered_pools(pools, current_positions) -> List[Dict[str, Any]]:
         pool["tvl"] = tvl
         
         chain = pool["chain"].lower()
-        whitelisted_tokens = WHITELISTED_ASSETS.get(chain, [])
+        whitelisted_tokens = list(whitelisted_assets.get(chain, {}).keys())
         
         if (Web3.to_checksum_address(pool["id"]) not in current_positions
-            and chain in WHITELISTED_ASSETS
+            and chain in whitelisted_assets
             and (
                 not whitelisted_tokens
                 or (
@@ -515,14 +437,14 @@ def format_pool_data(pool) -> Dict[str, Any]:
     }
 
 
-def get_opportunities(
-    chains, graphql_endpoints, current_positions, coingecko_api_key, coin_list
+def get_opportunities_for_uniswap(
+    chains, graphql_endpoints, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, *kwargs
 ) -> List[Dict[str, Any]]:
     pools = fetch_graphql_data(chains, graphql_endpoints)
     if isinstance(pools, dict) and "error" in pools:
         return pools
 
-    filtered_pools = get_filtered_pools(pools, current_positions)
+    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
 
@@ -534,8 +456,8 @@ def get_opportunities(
 
         # Token 0
         if token_0_symbol not in token_id_cache:
-            token_0_id = get_token_id_from_symbol(
-                pool["token0"]["id"], token_0_symbol, coin_list, pool_chain
+            token_0_id = get_coin_id_from_symbol(
+                coin_id_mapping, token_0_symbol, pool_chain
             )
             if token_0_id:
                 token_id_cache[token_0_symbol] = token_0_id
@@ -544,8 +466,8 @@ def get_opportunities(
 
         # Token 1
         if token_1_symbol not in token_id_cache:
-            token_1_id = get_token_id_from_symbol(
-                pool["token1"]["id"], token_1_symbol, coin_list, pool_chain
+            token_1_id = get_coin_id_from_symbol(
+                coin_id_mapping, token_1_symbol, pool_chain
             )
             if token_1_id:
                 token_id_cache[token_1_symbol] = token_1_id
@@ -575,15 +497,15 @@ def get_opportunities(
 def calculate_metrics(
     position: Dict[str, Any],
     coingecko_api_key: str,
-    coin_list: List[Any],
     graphql_endpoints,
+    coin_id_mapping,
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
-    token_0_id = get_token_id_from_symbol(
-        position["token0"], position["token0_symbol"], coin_list, position["chain"]
+    token_0_id = get_coin_id_from_symbol(
+        coin_id_mapping, position["token0_symbol"], position["chain"]
     )
-    token_1_id = get_token_id_from_symbol(
-        position["token1"], position["token1_symbol"], coin_list, position["chain"]
+    token_1_id = get_coin_id_from_symbol(
+        coin_id_mapping, position["token1_symbol"], position["chain"]
     )
     il_risk_score = (
         calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
@@ -617,24 +539,15 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     if get_metrics:
         required_fields.append("position")
 
-    kwargs = remove_irrelevant_fields(kwargs, required_fields)
-
-    coin_list = fetch_coin_list()
-    if coin_list is None:
-        errors.append("Failed to fetch coin list.")
-        return {"error": errors}
-
-    kwargs.update({"coin_list": coin_list})
-
     if get_metrics:
         metrics = calculate_metrics(**kwargs)
         if metrics is None:
             errors.append("Failed to calculate metrics.")
         return {"error": errors} if errors else metrics
     else:
-        result = get_opportunities(**kwargs)
+        result = get_opportunities_for_uniswap(**kwargs)
         if isinstance(result, dict) and "error" in result:
             errors.append(result["error"])
         if not result:
             errors.append("No suitable aggregators found")
-        return {"error": errors} if errors else {"result": result}
+        return {"result": result, "error": errors}

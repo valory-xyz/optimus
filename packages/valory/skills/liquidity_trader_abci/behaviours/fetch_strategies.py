@@ -2453,7 +2453,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 endpoint,
                 params=params,
                 headers={"Accept": "application/json"},
-                verify=False,
+                verify=False,  # nosec B501
                 timeout=30,
             )
 
@@ -2570,7 +2570,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 endpoint,
                 params=params,
                 headers={"Accept": "application/json"},
-                verify=False,
+                verify=False,  # nosec B501
                 timeout=30,
             )
 

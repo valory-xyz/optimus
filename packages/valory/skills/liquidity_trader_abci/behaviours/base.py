@@ -879,7 +879,10 @@ class LiquidityTraderBaseBehaviour(
         self, token_address: str, chain: str
     ) -> Generator[None, None, Optional[float]]:
         """Fetch the price for a specific token, with in-memory caching."""
-        cached_price = yield from self._get_cached_price(token_address, chain)
+        timestamp = int(self._get_current_timestamp())
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+
+        cached_price = yield from self._get_cached_price(token_address, date_str)
         if cached_price is not None:
             return cached_price
 
@@ -909,20 +912,23 @@ class LiquidityTraderBaseBehaviour(
             price = token_data.get("usd", 0)
             # Cache the price
             if price:
-                yield from self._cache_price(token_address, chain, price)
+                yield from self._cache_price(token_address, price, date_str)
             return price
 
         return None
 
-    def _get_price_cache_key(self, token_address: str, chain: str) -> str:
+    def _get_price_cache_key(
+        self, token_address: str, date: Optional[str] = None
+    ) -> str:
         """Get the cache key for a token's price data."""
-        return f"{PRICE_CACHE_KEY_PREFIX}{chain}_{token_address.lower()}"
+        key = f"{PRICE_CACHE_KEY_PREFIX}{token_address.lower()}_{date}"
+        return key
 
     def _get_cached_price(
-        self, token_address: str, chain: str, date: Optional[str] = None
+        self, token_address: str, date: str
     ) -> Generator[None, None, Optional[float]]:
         """Get cached price for a token."""
-        cache_key = self._get_price_cache_key(token_address, chain)
+        cache_key = self._get_price_cache_key(token_address, date)
         result = yield from self._read_kv((cache_key,))
 
         if not result or not result.get(cache_key):
@@ -947,10 +953,10 @@ class LiquidityTraderBaseBehaviour(
             return None
 
     def _cache_price(
-        self, token_address: str, chain: str, price: float, date: Optional[str] = None
+        self, token_address: str, price: float, date: str
     ) -> Generator[None, None, None]:
         """Cache price for a token."""
-        cache_key = self._get_price_cache_key(token_address, chain)
+        cache_key = self._get_price_cache_key(token_address, date)
 
         # First read existing cache
         result = yield from self._read_kv((cache_key,))
@@ -1178,8 +1184,10 @@ class LiquidityTraderBaseBehaviour(
 
     def _fetch_zero_address_price(self) -> Generator[None, None, Optional[float]]:
         """Fetch the price for the zero address (Ethereum)."""
-        chain = self.params.target_investment_chains[0]
-        cached_price = yield from self._get_cached_price(ZERO_ADDRESS, chain)
+        timestamp = int(self._get_current_timestamp())
+        date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+
+        cached_price = yield from self._get_cached_price(ZERO_ADDRESS, date_str)
         if cached_price is not None:
             return cached_price
 
@@ -1201,7 +1209,7 @@ class LiquidityTraderBaseBehaviour(
             token_data = next(iter(response_json.values()), {})
             price = token_data.get("usd", 0)
             if price:
-                yield from self._cache_price(ZERO_ADDRESS, chain, price)
+                yield from self._cache_price(ZERO_ADDRESS, price, date_str)
             return price
         return None
 
@@ -1334,9 +1342,7 @@ class LiquidityTraderBaseBehaviour(
         self, coingecko_id, date_str
     ) -> Generator[None, None, Optional[float]]:
         # First check the cache
-        cached_price = yield from self._get_cached_price(
-            coingecko_id, "historical", date_str
-        )
+        cached_price = yield from self._get_cached_price(coingecko_id, date_str)
         if cached_price is not None:
             return cached_price
 
@@ -1363,9 +1369,7 @@ class LiquidityTraderBaseBehaviour(
             )
             if price:
                 # Cache the historical price
-                yield from self._cache_price(
-                    coingecko_id, "historical", price, date_str
-                )
+                yield from self._cache_price(coingecko_id, price, date_str)
                 return price
             else:
                 self.context.logger.error(

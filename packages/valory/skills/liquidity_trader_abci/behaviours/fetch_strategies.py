@@ -129,22 +129,44 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             current_time = int(self._get_current_timestamp())
             one_day_in_seconds = 24 * 60 * 60
 
-            if not (int(current_time) - int(last_updated) >= one_day_in_seconds):
+            try:
+                last_updated_int = int(last_updated)
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    "Invalid last updated timestamp, defaulting to 0"
+                )
+                last_updated_int = 0
+
+            time_since_update = int(current_time) - last_updated_int
+            self.context.logger.info(
+                f"Time since last update: {time_since_update} seconds"
+            )
+
+            if not (time_since_update >= one_day_in_seconds):
+                self.context.logger.info("Tracking whitelisted assets")
                 yield from self._track_whitelisted_assets()
                 # Store current timestamp as last updated
+                self.context.logger.info("Updating last whitelist update timestamp")
                 yield from self._write_kv({"last_whitelisted_updated": current_time})
 
             # Update the amounts of all open positions
             if self.synchronized_data.period_count == 0:
+                self.context.logger.info("Updating position amounts for period 0")
                 yield from self.update_position_amounts()
+                self.context.logger.info(
+                    "Checking and updating zero liquidity positions"
+                )
                 self.check_and_update_zero_liquidity_positions()
 
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             # Check if we need to recalculate the portfolio
+            self.context.logger.info("Checking if portfolio recalculation is needed")
             if self.should_recalculate_portfolio(self.portfolio_data):
+                self.context.logger.info("Recalculating user share values")
                 yield from self.calculate_user_share_values()
                 # Store the updated portfolio data
+                self.context.logger.info("Storing updated portfolio data")
                 self.store_portfolio_data()
 
             payload = FetchStrategiesPayload(
@@ -157,6 +179,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     sort_keys=True,
                 ),
             )
+            self.context.logger.info(f"Created payload with content: {payload.content}")
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
@@ -1102,9 +1125,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         :return: Tuple of (amount0, amount1) representing token amounts.
         """
         # Extract position details
-        tick_lower = int(position_details.get("tickLower"))
-        tick_upper = int(position_details.get("tickUpper"))
-        liquidity = int(position_details.get("liquidity"))
+        tick_lower_val = position_details.get("tickLower")
+        tick_upper_val = position_details.get("tickUpper")
+        liquidity_val = position_details.get("liquidity")
+
+        if tick_lower_val is None or tick_upper_val is None or liquidity_val is None:
+            self.context.logger.error("Missing required position details")
+            return 0, 0
+
+        tick_lower = int(tick_lower_val)
+        tick_upper = int(tick_upper_val)
+        liquidity = int(liquidity_val)
         tokens_owed0 = int(position_details.get("tokensOwed0", 0))
         tokens_owed1 = int(position_details.get("tokensOwed1", 0))
 
@@ -2018,36 +2049,65 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 keys=("last_initial_value_calculated_timestamp",)
             )
 
-            if last_calculated_timestamp and (
-                timestamp := last_calculated_timestamp.get(
-                    "last_initial_value_calculated_timestamp"
+            if (
+                last_calculated_timestamp
+                and (
+                    timestamp := last_calculated_timestamp.get(
+                        "last_initial_value_calculated_timestamp"
+                    )
                 )
+                and timestamp is not None
             ):
-                last_date = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
+                self.context.logger.info(
+                    f"Found last calculation timestamp: {timestamp}"
+                )
+                try:
+                    last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
+                        "%d-%m-%Y"
+                    )
+                    self.context.logger.info(f"Last calculation date: {last_date}")
+                except (ValueError, TypeError):
+                    self.context.logger.warning(
+                        "Invalid timestamp format, defaulting to 1970-01-01"
+                    )
+                    last_date = "1970-01-01"
 
                 # If last calculation was today, return cached value
                 if last_date == current_date:
+                    self.context.logger.info(
+                        "Last calculation was today, using cached value"
+                    )
                     return (yield self._load_chain_total_investment(chain))
 
                 # Otherwise need to calculate new value but not full history
+                self.context.logger.info(
+                    "Last calculation was not today, calculating new value without full history"
+                )
                 fetch_till_date = False
 
             # No previous calculation, need to fetch full history
             else:
+                self.context.logger.info(
+                    "No previous calculation found, fetching full transfer history"
+                )
                 fetch_till_date = True
 
             # Fetch all transfers until current date based on chain
+            self.context.logger.info(f"Fetching transfers for chain: {chain}")
             if chain == "mode":
+                self.context.logger.info("Using Mode-specific transfer fetching")
                 all_transfers = self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, fetch_till_date
                 )
             elif chain == "optimism":
+                self.context.logger.info("Using Optimism-specific transfer fetching")
                 all_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
                         safe_address, current_date
                     )
                 )
             else:
+                self.context.logger.warning(f"Unsupported chain: {chain}, skipping")
                 continue
 
             if not all_transfers:
@@ -2412,7 +2472,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _get_datetime_from_timestamp(self, timestamp_str: str) -> Optional[datetime]:
         """Convert timestamp string to datetime object."""
-        return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        try:
+            # Handle different timestamp formats and ensure timezone awareness
+            if timestamp_str.endswith("Z"):
+                # ISO format with Z suffix
+                dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            elif "+" in timestamp_str or timestamp_str.endswith("UTC"):
+                # Already has timezone info
+                dt = datetime.fromisoformat(timestamp_str.replace("UTC", "+00:00"))
+            else:
+                # Assume UTC if no timezone info
+                dt = datetime.fromisoformat(timestamp_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+
+            return dt
+        except (ValueError, TypeError) as e:
+            self.context.logger.error(f"Error parsing timestamp {timestamp_str}: {e}")
+            return None
 
     def _fetch_token_transfers_mode(
         self,
@@ -2443,10 +2520,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             try:
                 latest_date = list(mode_events.keys())[0]
                 latest_datetime = datetime.strptime(latest_date, "%Y-%m-%d")
+                latest_datetime = latest_datetime.replace(tzinfo=timezone.utc)
             except (IndexError, ValueError):
-                latest_datetime = datetime(1970, 1, 1)
+                latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
         else:
-            latest_datetime = datetime(1970, 1, 1)
+            latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
             response = requests.get(
@@ -2499,6 +2577,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if amount == 0:
                         continue
 
+                    if symbol != "USDC" or "usdc":
+                        continue
                     transfer_data = {
                         "from_address": from_address.get("hash", ""),
                         "amount": amount,
@@ -2593,6 +2673,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 tx_datetime = datetime.strptime(
                     entry.get("block_timestamp", ""), "%Y-%m-%dT%H:%M:%SZ"
                 )
+                # Ensure timezone awareness for comparison
+                tx_datetime = tx_datetime.replace(tzinfo=timezone.utc)
                 # Convert from wei to ETH
                 tx_date = tx_datetime.strftime("%Y-%m-%d")
 

@@ -224,7 +224,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         if self.current_positions:
             for position in self.current_positions:
                 if position.get("status") == PositionStatus.OPEN.value:
-                    position_timestamp = position.get("enter_timestamp") or position.get("timestamp")
+                    position_timestamp = position.get(
+                        "enter_timestamp"
+                    ) or position.get("timestamp")
                     if position_timestamp and last_calculation_time:
                         if int(position_timestamp) > last_calculation_time:
                             self.context.logger.info(

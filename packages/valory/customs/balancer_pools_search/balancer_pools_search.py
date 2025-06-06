@@ -166,8 +166,16 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3,
     if not pools or not use_composite_filter:
         return pools[:top_n] if pools else []
     
-    # Filter by minimum TVL threshold
-    tvl_filtered = [pool for pool in pools if pool.get('tvl', 0) >= min_tvl_threshold]
+    # Filter by minimum TVL threshold with proper type conversion
+    tvl_filtered = []
+    for pool in pools:
+        try:
+            tvl_value = float(pool.get('tvl', 0))
+            if tvl_value >= float(min_tvl_threshold):
+                tvl_filtered.append(pool)
+        except (ValueError, TypeError):
+            # Skip pools with invalid TVL values
+            continue
     
     if not tvl_filtered:
         return []
@@ -249,7 +257,7 @@ def get_balancer_pools(
     logger.info(f"Successfully fetched {len(pools)} Balancer pools")
     return pools
 
-def get_filtered_pools(pools, current_positions, whitelisted_assets, **kwargs):
+def get_filtered_pools_for_balancer(pools, current_positions, whitelisted_assets, **kwargs):
     # Extract composite filtering parameters
     top_n = kwargs.get('top_n', 10)
     apr_weight = kwargs.get('apr_weight', 0.7)
@@ -1119,7 +1127,7 @@ def get_opportunities_for_balancer(chains, graphql_endpoint, current_positions, 
         return pools
 
     # Filter pools
-    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets, **kwargs)
+    filtered_pools = get_filtered_pools_for_balancer(pools, current_positions, whitelisted_assets, **kwargs)
     if not filtered_pools:
         logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}

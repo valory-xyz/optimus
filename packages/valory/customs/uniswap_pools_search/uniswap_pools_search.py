@@ -3,6 +3,7 @@ import warnings
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import json
+import logging
 import time
 import threading
 import statistics
@@ -14,8 +15,14 @@ import numpy as np
 import pandas as pd
 import pyfolio as pf
 import requests
+from aea.helpers.logging import setup_logger
 from pycoingecko import CoinGeckoAPI
 from web3 import Web3
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 # Constants and mappings
 UNISWAP = "UniswapV3"
@@ -67,7 +74,10 @@ ERC20_ABI = [
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
-    return [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
+    missing = [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
+    if missing:
+        logger.warning(f"Missing required fields: {missing}")
+    return missing
 
 
 def remove_irrelevant_fields(
@@ -110,16 +120,20 @@ def get_coin_id_from_symbol(
 
 
 def run_query(query, graphql_endpoint, variables=None) -> Dict[str, Any]:
+    logger.info(f"Running GraphQL query to endpoint: {graphql_endpoint}")
     headers = {"Content-Type": "application/json"}
     payload = {"query": query, "variables": variables or {}}
     response = requests.post(graphql_endpoint, json=payload, headers=headers)
     if response.status_code != 200:
+        logger.error(f"GraphQL query failed with status code {response.status_code}")
         return {
             "error": f"GraphQL query failed with status code {response.status_code}"
         }
     result = response.json()
     if "errors" in result:
+        logger.error(f"GraphQL Errors: {result['errors']}")
         return {"error": f"GraphQL Errors: {result['errors']}"}
+    logger.info("GraphQL query executed successfully")
     return result.get("data", {})
 
 
@@ -200,8 +214,16 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3,
     if not pools or not use_composite_filter:
         return pools[:top_n] if pools else []
     
-    # Filter by minimum TVL threshold
-    tvl_filtered = [pool for pool in pools if pool.get('tvl', 0) >= min_tvl_threshold]
+    # Filter by minimum TVL threshold with proper type conversion
+    tvl_filtered = []
+    for pool in pools:
+        try:
+            tvl_value = float(pool.get('tvl', 0))
+            if tvl_value >= float(min_tvl_threshold):
+                tvl_filtered.append(pool)
+        except (ValueError, TypeError):
+            # Skip pools with invalid TVL values
+            continue
     
     if not tvl_filtered:
         return []
@@ -217,13 +239,18 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3,
     
     return final_selection
 
-def get_filtered_pools(pools, current_positions, whitelisted_assets, **kwargs) -> List[Dict[str, Any]]:
+def get_filtered_pools_for_uniswap(pools, current_positions, whitelisted_assets, **kwargs) -> List[Dict[str, Any]]:
+    logger.info(f"Filtering Uniswap pools - Total pools: {len(pools)}")
+    logger.info(f"Current positions to exclude: {current_positions}")
+    
     # Extract composite filtering parameters
     top_n = kwargs.get('top_n', 10)
     apr_weight = kwargs.get('apr_weight', 0.7)
     tvl_weight = kwargs.get('tvl_weight', 0.3)
     min_tvl_threshold = kwargs.get('min_tvl_threshold', 1000)
-        
+    
+    logger.info(f"Filtering parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}")
+
     qualifying_pools = []
     for pool in pools:
         fee_rate = float(pool["feeTier"]) / FEE_RATE_DIVISOR
@@ -247,8 +274,12 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets, **kwargs) -
             )
         ):
             qualifying_pools.append(pool)
+            logger.info(f"Added qualifying pool: {pool['id']} with APR: {apr:.2f}%, TVL: ${tvl:,.0f}")
+
+    logger.info(f"After initial filtering: {len(qualifying_pools)} qualifying pools")
 
     if not qualifying_pools:
+        logger.warning("No suitable pools found after initial filtering")
         get_errors().append("No suitable pools found.")
         return []
 
@@ -261,12 +292,14 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets, **kwargs) -
         min_tvl_threshold=min_tvl_threshold,
     )
 
+    logger.info(f"After composite filtering: {len(filtered_pools)} pools selected")
     return filtered_pools
 
 
 def fetch_graphql_data(
     chains, graphql_endpoints
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    logger.info(f"Fetching GraphQL data for chains: {chains}")
     graphql_query = """
     {
         pools(
@@ -300,17 +333,23 @@ def fetch_graphql_data(
     """
     all_pools = []
     for chain in chains:
+        logger.info(f"Fetching pools for chain: {chain}")
         graphql_endpoint = graphql_endpoints.get(chain)
         if not graphql_endpoint:
+            logger.warning(f"No GraphQL endpoint found for chain: {chain}")
             continue
         data = run_query(graphql_query, graphql_endpoint)
         if "error" in data:
+            logger.error(f"Error fetching pools data for {chain}: {data['error']}")
             get_errors().append(f"Error in fetching pools data: {data['error']}")
             continue
         pools = data.get("pools", [])
+        logger.info(f"Fetched {len(pools)} pools for chain {chain}")
         for p in pools:
             p["chain"] = chain
         all_pools.extend(pools)
+    
+    logger.info(f"Total pools fetched across all chains: {len(all_pools)}")
     return all_pools
 
 
@@ -516,16 +555,23 @@ def format_pool_data(pool) -> Dict[str, Any]:
 def get_opportunities_for_uniswap(
     chains, graphql_endpoints, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, **kwargs
 ) -> List[Dict[str, Any]]:
+    logger.info(f"Getting Uniswap opportunities for chains: {chains}")
+    logger.info(f"Current positions to exclude: {current_positions}")
+    
     pools = fetch_graphql_data(chains, graphql_endpoints)
     if isinstance(pools, dict) and "error" in pools:
+        logger.error(f"Error fetching GraphQL data: {pools}")
         return pools
 
-    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets, **kwargs)
+    filtered_pools = get_filtered_pools_for_uniswap(pools, current_positions, whitelisted_assets, **kwargs)
     if not filtered_pools:
+        logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}
 
+    logger.info(f"Processing {len(filtered_pools)} filtered pools for metrics calculation")
     token_id_cache = {}
-    for pool in filtered_pools:
+    for i, pool in enumerate(filtered_pools):
+        logger.info(f"Processing pool {i+1}/{len(filtered_pools)}: {pool['id']}")
         pool_chain = pool["chain"].lower()
         token_0_symbol = pool["token0"]["symbol"].lower()
         token_1_symbol = pool["token1"]["symbol"].lower()
@@ -537,6 +583,7 @@ def get_opportunities_for_uniswap(
             )
             if token_0_id:
                 token_id_cache[token_0_symbol] = token_0_id
+                logger.info(f"Token0 {token_0_symbol} mapped to CoinGecko ID: {token_0_id}")
         else:
             token_0_id = token_id_cache[token_0_symbol]
 
@@ -547,19 +594,26 @@ def get_opportunities_for_uniswap(
             )
             if token_1_id:
                 token_id_cache[token_1_symbol] = token_1_id
+                logger.info(f"Token1 {token_1_symbol} mapped to CoinGecko ID: {token_1_id}")
         else:
             token_1_id = token_id_cache[token_1_symbol]
 
         if token_0_id and token_1_id:
+            logger.info(f"Calculating IL risk score for {token_0_symbol}/{token_1_symbol}")
             pool["il_risk_score"] = calculate_il_risk_score(
                 token_0_id, token_1_id, coingecko_api_key
             )
         else:
+            logger.warning(f"Could not find CoinGecko IDs for {token_0_symbol}/{token_1_symbol}")
             pool["il_risk_score"] = None
+            
+        logger.info(f"Calculating Sharpe ratio for pool {pool['id']}")
         graphql_endpoint = graphql_endpoints.get(pool_chain)
         pool["sharpe_ratio"] = get_uniswap_pool_sharpe_ratio(
             pool["id"], graphql_endpoint
         )
+        
+        logger.info(f"Calculating liquidity metrics for pool {pool['id']}")
         depth_score, max_position_size = assess_pool_liquidity(
             pool["id"], graphql_endpoint
         )
@@ -567,7 +621,9 @@ def get_opportunities_for_uniswap(
         pool["max_position_size"] = max_position_size
         pool["type"] = LP
 
-    return [format_pool_data(pool) for pool in filtered_pools]
+    formatted_results = [format_pool_data(pool) for pool in filtered_pools]
+    logger.info(f"Returning {len(formatted_results)} formatted Uniswap opportunities")
+    return formatted_results
 
 
 def calculate_metrics(
@@ -605,25 +661,38 @@ def calculate_metrics(
 
 
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
+    logger.info("Starting Uniswap pools search strategy execution")
+    logger.info(f"Received kwargs: {list(kwargs.keys())}")
+    
     missing = check_missing_fields(kwargs)
     if missing:
+        logger.error(f"Required kwargs {missing} were not provided")
         get_errors().append(f"Required kwargs {missing} were not provided.")
         return {"error": get_errors()}
 
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
+    logger.info(f"Get metrics mode: {get_metrics}")
+    
     if get_metrics:
         required_fields.append("position")
 
     if get_metrics:
+        logger.info("Calculating metrics for existing position")
         metrics = calculate_metrics(**kwargs)
         if metrics is None:
+            logger.error("Failed to calculate metrics")
             get_errors().append("Failed to calculate metrics.")
         return {"error": get_errors()} if get_errors() else metrics
     else:
+        logger.info("Finding best Uniswap opportunities")
         result = get_opportunities_for_uniswap(**kwargs)
         if isinstance(result, dict) and "error" in result:
+            logger.error(f"Error in get_opportunities_for_uniswap: {result['error']}")
             get_errors().append(result["error"])
         if not result:
+            logger.warning("No suitable pools found")
             get_errors().append("No suitable aggregators found")
+        
+        logger.info(f"Successfully found opportunities: {result}")
         return {"result": result, "error": get_errors()}

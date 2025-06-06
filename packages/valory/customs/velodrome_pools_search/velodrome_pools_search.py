@@ -1141,7 +1141,7 @@ def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_addre
     set_cached_data("tvl", result, cache_key)
     return result
 
-def calculate_apr(pool_data):
+def calculate_apr_for_velodrome(pool_data):
     """
     Calculate APR for a pool based on the official Velodrome formula.
     
@@ -1223,7 +1223,7 @@ def calculate_apr(pool_data):
     else:
         return 0
 
-def get_filtered_pools(pools, current_positions, whitelisted_assets):
+def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_assets):
     """Filter pools based on criteria and exclude current positions."""
     qualifying_pools = []
     
@@ -1298,7 +1298,7 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
         sugar_data = pool.get("sugar_data", {})
         
         # Calculate APR using the Sugar SDK logic
-        apr = calculate_apr(sugar_data)
+        apr = calculate_apr_for_velodrome(sugar_data)
             
         # Get the pool type from sugar data
         pool_type = sugar_data.get("type", 0)
@@ -1475,8 +1475,16 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
     logger.info(f"Starting composite pre-filter with {len(pools)} pools")
     logger.info(f"Parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}")
     
-    # Step 1: Apply minimum TVL filter
-    tvl_filtered_pools = [pool for pool in pools if pool.get('tvl', 0) >= min_tvl_threshold]
+    # Step 1: Apply minimum TVL filter with proper type conversion
+    tvl_filtered_pools = []
+    for pool in pools:
+        try:
+            tvl_value = float(pool.get('tvl', 0))
+            if tvl_value >= float(min_tvl_threshold):
+                tvl_filtered_pools.append(pool)
+        except (ValueError, TypeError):
+            # Skip pools with invalid TVL values
+            continue
     logger.info(f"After TVL filter (>= {min_tvl_threshold}): {len(tvl_filtered_pools)} pools")
     
     if not tvl_filtered_pools:
@@ -1584,7 +1592,7 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         return pools
 
     # Filter pools
-    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets)
+    filtered_pools = get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_assets)
     if not filtered_pools:
         logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}

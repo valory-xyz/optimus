@@ -313,8 +313,17 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3,
     logger.info(f"Starting composite pre-filter with {len(pools)} pools")
     logger.info(f"Parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}")
     
-    # Filter by minimum TVL threshold
-    tvl_filtered = [pool for pool in pools if pool.get('tvl', 0) >= min_tvl_threshold]
+    # Filter by minimum TVL threshold with proper type conversion
+    tvl_filtered = []
+    for pool in pools:
+        try:
+            tvl_value = float(pool.get('tvl', 0))
+            if tvl_value >= float(min_tvl_threshold):
+                tvl_filtered.append(pool)
+        except (ValueError, TypeError):
+            # Skip pools with invalid TVL values
+            logger.warning(f"Skipping pool with invalid TVL: {pool.get('address', 'unknown')}")
+            continue
     logger.info(f"After TVL filter (>= {min_tvl_threshold}): {len(tvl_filtered)} pools")
     
     if not tvl_filtered:

@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeievwo2yoa6vekod333ttto66vpc27lm6wepspnhwyrqxtjx7djzw4
-  balancer_pools_search.py: bafybeigltak5gqglk7falf24n4m5nclb3g64vfoxf3cvhky44lprypshme
+  balancer_pools_search.py: bafybeiaaj72rmtdoyydqqhn2maxgy7pe352jm2c2fyukq4nyqg3tgth5km
 fingerprint_ignore_patterns: []
 entry_point: balancer_pools_search.py
 callable: run

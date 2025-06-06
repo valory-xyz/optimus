@@ -80,6 +80,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Execute the behaviour's async action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # Check minimum hold period
+            # Check if no current positions and uninvested ETH, prepare swap to USDC
+            actions = yield from self.check_and_prepare_eth_to_usdc_swap()
+            if actions:
+                yield from self.send_actions(actions)
+
             should_hold = self.check_minimum_hold_period()
             if should_hold:
                 yield from self.send_actions()
@@ -90,11 +95,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if not are_funds_available:
                 yield from self.send_actions()
                 return
-
-            # Check if no current positions and uninvested ETH, prepare swap to USDC
-            actions = yield from self.check_and_prepare_eth_to_usdc_swap()
-            if actions:
-                yield from self.send_actions(actions)
 
             # Fetch trading opportunities
             yield from self.fetch_all_trading_opportunities()
@@ -633,77 +633,90 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
 
-    def check_and_prepare_eth_to_usdc_swap(
+    def check_and_prepare_non_whitelisted_swaps(
         self,
     ) -> Generator[None, None, Optional[List[Any]]]:
-        """Check if no current positions and ETH worth more than $10, prepare swap to USDC."""
+        """Check all funds in safe and swap non-whitelisted assets to USDC if value > $5."""
         try:
-            # Get the target investment chain (first one)
+            actions = []
             target_chain = self.params.target_investment_chains[0]
+            usdc_address = self._get_usdc_address(target_chain)
 
-            # Get ETH balance on the target chain
-            available_balance = yield from self.get_eth_remaining_amount()
-            if available_balance <= 0:
-                self.context.logger.info("No available ETH balance for swapping")
-                return []
-
-            # Get ETH price using the existing function from base.py
-            eth_price = yield from self._fetch_zero_address_price()
-            if not eth_price:
-                self.context.logger.warning("Could not fetch ETH price")
-                return []
-
-            # Convert balance from wei to ETH (18 decimals)
-            eth_amount = available_balance / (10**18)
-            eth_value_usd = eth_amount * eth_price
-
-            self.context.logger.info(
-                f"Found ETH on {target_chain}: {eth_amount:.6f} ETH (~${eth_value_usd:.2f})"
-            )
-
-            # Check if ETH value is more than $5
-            if eth_value_usd > 5.0:
-                self.context.logger.info(
-                    f"ETH value (${eth_value_usd:.2f}) exceeds $10 threshold. "
-                    "Preparing swap action to USDC."
+            if not usdc_address:
+                self.context.logger.warning(
+                    f"Could not get USDC address for {target_chain}"
                 )
+                return []
 
-                # Get USDC address for the target chain
-                usdc_address = self._get_usdc_address(target_chain)
-                if usdc_address:
-                    actions = [
-                        {
-                            "action": Action.FIND_BRIDGE_ROUTE.value,
-                            "from_chain": target_chain,
-                            "to_chain": target_chain,  # Same chain swap
-                            "from_token": ZERO_ADDRESS,
-                            "from_token_symbol": "ETH",
-                            "to_token": usdc_address,
-                            "to_token_symbol": "USDC",
-                            "funds_percentage": 1.0,  # Use all available ETH
-                        }
-                    ]
+            # Get all positions to check assets in safe
+            for position in self.synchronized_data.positions:
+                chain = position.get("chain")
+
+                for asset in position.get("assets", []):
+                    asset_address = asset.get("address")
+                    asset_symbol = asset.get("asset_symbol")
+                    balance = asset.get("balance", 0)
+
+                    # Skip if no balance or asset is whitelisted
+                    if balance <= 0 or asset_symbol in WHITELISTED_ASSETS:
+                        continue
+
+                    # Get asset price and calculate USD value
+                    if asset_address == ZERO_ADDRESS:
+                        # Handle ETH separately
+                        price = yield from self._fetch_zero_address_price()
+                        decimals = 18
+                    else:
+                        # Get price for other tokens
+                        price = yield from self._fetch_token_price(asset_address)
+                        decimals = yield from self._get_token_decimals(
+                            chain, asset_address
+                        )
+
+                    if not price:
+                        self.context.logger.warning(
+                            f"Could not fetch price for {asset_symbol}"
+                        )
+                        continue
+
+                    # Calculate value in USD
+                    token_amount = balance / (10**decimals)
+                    value_usd = token_amount * price
 
                     self.context.logger.info(
-                        f"Prepared ETH to USDC swap on {target_chain}: "
-                        f"{eth_amount:.6f} ETH -> USDC"
+                        f"Found {asset_symbol} on {chain}: {token_amount:.6f} (~${value_usd:.2f})"
                     )
 
-                    return actions
-                else:
-                    self.context.logger.warning(
-                        f"Could not get USDC address for {target_chain}"
-                    )
-                    return []
-            else:
-                self.context.logger.info(
-                    f"ETH value (${eth_value_usd:.2f}) is below threshold. No swap needed."
-                )
-                return []
+                    # If value > $5 and not whitelisted, prepare swap to USDC
+                    if value_usd > 5.0:
+                        self.context.logger.info(
+                            f"{asset_symbol} value (${value_usd:.2f}) exceeds $5 threshold and is not whitelisted. "
+                            "Preparing swap action to USDC."
+                        )
+
+                        actions.append(
+                            {
+                                "action": Action.FIND_BRIDGE_ROUTE.value,
+                                "from_chain": chain,
+                                "to_chain": chain,  # Same chain swap
+                                "from_token": asset_address,
+                                "from_token_symbol": asset_symbol,
+                                "to_token": usdc_address,
+                                "to_token_symbol": "USDC",
+                                "funds_percentage": 1.0,  # Use all available balance
+                            }
+                        )
+
+                        self.context.logger.info(
+                            f"Prepared {asset_symbol} to USDC swap on {chain}: "
+                            f"{token_amount:.6f} {asset_symbol} -> USDC"
+                        )
+
+            return actions
 
         except Exception as e:
             self.context.logger.error(
-                f"Error in check_and_prepare_eth_to_usdc_swap: {str(e)}"
+                f"Error in check_and_prepare_non_whitelisted_swaps: {str(e)}"
             )
             return []
 

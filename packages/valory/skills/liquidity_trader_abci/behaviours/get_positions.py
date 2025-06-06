@@ -41,10 +41,6 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            if not self.assets:
-                self.assets = self.params.initial_assets
-                self.store_assets()
-
             positions = yield from self.get_positions()
             yield from self._adjust_current_positions_for_backward_compatibility(
                 self.current_positions

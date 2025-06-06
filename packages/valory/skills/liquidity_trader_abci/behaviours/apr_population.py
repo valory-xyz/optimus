@@ -32,6 +32,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
     METRICS_NAME,
     METRICS_TYPE,
+    PositionStatus,
 )
 from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
     APRPopulationPayload,
@@ -219,7 +220,20 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         current_time = int(self._get_current_timestamp())
 
-        # If no last calculation or 30 minutes have passed
+        # Check if any new positions have been opened since last calculation
+        if self.current_positions:
+            for position in self.current_positions:
+                if position.get("status") == PositionStatus.OPEN.value:
+                    position_timestamp = position.get(
+                        "enter_timestamp"
+                    ) or position.get("timestamp")
+                    if position_timestamp and last_calculation_time:
+                        if int(position_timestamp) > last_calculation_time:
+                            self.context.logger.info(
+                                "New position opened since last APR calculation"
+                            )
+                            return True
+
         if (
             not last_calculation_time
             or (current_time - last_calculation_time) >= APR_UPDATE_INTERVAL

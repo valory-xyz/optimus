@@ -80,6 +80,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Execute the behaviour's async action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # Check minimum hold period
+            # Check if no current positions and uninvested ETH, prepare swap to USDC
+            actions = yield from self.check_and_prepare_non_whitelisted_swaps()
+            if actions:
+                yield from self.send_actions(actions)
+
             should_hold = self.check_minimum_hold_period()
             if should_hold:
                 yield from self.send_actions()
@@ -628,13 +633,128 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
 
+    def check_and_prepare_non_whitelisted_swaps(
+        self,
+    ) -> Generator[None, None, Optional[List[Any]]]:
+        """Check all funds in safe and swap non-whitelisted assets to USDC if value > $5."""
+        try:
+            actions = []
+            target_chain = self.params.target_investment_chains[0]
+            usdc_address = self._get_usdc_address(target_chain)
+
+            if not usdc_address:
+                self.context.logger.warning(
+                    f"Could not get USDC address for {target_chain}"
+                )
+                return []
+
+            # Get all positions to check assets in safe
+            for position in self.synchronized_data.positions:
+                chain = position.get("chain")
+
+                for asset in position.get("assets", []):
+                    asset_address = asset.get("address")
+                    asset_symbol = asset.get("asset_symbol")
+                    balance = asset.get("balance", 0)
+
+                    # Skip if no balance or asset is whitelisted
+                    if balance <= 0 or asset_symbol in WHITELISTED_ASSETS:
+                        continue
+
+                    # Get asset price and calculate USD value
+                    if asset_address == ZERO_ADDRESS:
+                        # Handle ETH separately
+                        price = yield from self._fetch_zero_address_price()
+                        decimals = 18
+                    else:
+                        # Get price for other tokens
+                        price = yield from self._fetch_token_price(asset_address)
+                        decimals = yield from self._get_token_decimals(
+                            chain, asset_address
+                        )
+
+                    if not price:
+                        self.context.logger.warning(
+                            f"Could not fetch price for {asset_symbol}"
+                        )
+                        continue
+
+                    # Calculate value in USD
+                    token_amount = balance / (10**decimals)
+                    value_usd = token_amount * price
+
+                    self.context.logger.info(
+                        f"Found {asset_symbol} on {chain}: {token_amount:.6f} (~${value_usd:.2f})"
+                    )
+
+                    # If value > $5 and not whitelisted, prepare swap to USDC
+                    if value_usd > 5.0:
+                        self.context.logger.info(
+                            f"{asset_symbol} value (${value_usd:.2f}) exceeds $5 threshold and is not whitelisted. "
+                            "Preparing swap action to USDC."
+                        )
+
+                        actions.append(
+                            {
+                                "action": Action.FIND_BRIDGE_ROUTE.value,
+                                "from_chain": chain,
+                                "to_chain": chain,  # Same chain swap
+                                "from_token": asset_address,
+                                "from_token_symbol": asset_symbol,
+                                "to_token": usdc_address,
+                                "to_token_symbol": "USDC",
+                                "funds_percentage": 1.0,  # Use all available balance
+                            }
+                        )
+
+                        self.context.logger.info(
+                            f"Prepared {asset_symbol} to USDC swap on {chain}: "
+                            f"{token_amount:.6f} {asset_symbol} -> USDC"
+                        )
+
+            return actions
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in check_and_prepare_non_whitelisted_swaps: {str(e)}"
+            )
+            return []
+
+    def _get_usdc_address(self, chain: str) -> Optional[str]:
+        """Get USDC token address for the specified chain."""
+        try:
+            # Common USDC addresses for different chains
+            usdc_addresses = {
+                "mode": "0xd988097fb8612cc24eeC14542bC03424c656005f",
+                "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+            }
+
+            usdc_address = usdc_addresses.get(chain.lower())
+            if usdc_address:
+                usdc_address = to_checksum_address(usdc_address)
+                self.context.logger.info(
+                    f"Found USDC address for {chain}: {usdc_address}"
+                )
+                return usdc_address
+            else:
+                self.context.logger.warning(
+                    f"No USDC address configured for chain: {chain}"
+                )
+                return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error getting USDC address for {chain}: {str(e)}"
+            )
+            return None
+
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""
         if not self.trading_opportunities:
             self.context.logger.info("No trading opportunities found")
             return []
 
-        self.execute_hyper_strategy()
+        yield from self.execute_hyper_strategy()
         actions = (
             yield from self.get_order_of_transactions()
             if self.selected_opportunities is not None
@@ -647,7 +767,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return actions
 
-    def execute_hyper_strategy(self) -> None:
+    def execute_hyper_strategy(self) -> Generator[None, None, None]:
         """Executes hyper strategy"""
         hyper_strategy = self.params.selected_hyper_strategy
         composite_score = None
@@ -736,6 +856,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.trading_opportunities.clear()
         yield from self.download_strategies()
         strategies = self.synchronized_data.selected_protocols.copy()
+
         tried_strategies: Set[str] = set()
         self.context.logger.info(f"Selected Strategies: {strategies}")
 
@@ -743,10 +864,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategy_kwargs_list = []
         for next_strategy in strategies:
             self.context.logger.info(f"Preparing strategy: {next_strategy}")
+            # Start with strategy-specific kwargs from config
             kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
                 next_strategy, {}
             )
-
             kwargs.update(
                 {
                     "strategy": next_strategy,
@@ -769,15 +890,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "coin_id_mapping": COIN_ID_MAPPING,
                 }
             )
+
             strategy_kwargs_list.append(kwargs)
-            self.context.logger.info(f"Strategy kwargs: {kwargs}")
+            self.context.logger.info(f"Strategy kwargs for {next_strategy}: {kwargs}")
 
         strategies_executables = self.shared_state.strategies_executables
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(
+            max_workers=3, thread_name_prefix="strategy"
+        ) as executor:
             future_to_strategy = {}
             futures = []
-            for kwargs in strategy_kwargs_list:
+            for i, kwargs in enumerate(strategy_kwargs_list):
                 strategy_name = kwargs["strategy"]
                 # Remove 'strategy' from kwargs to avoid passing it twice
                 kwargs_without_strategy = {
@@ -792,6 +916,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 future_to_strategy[future] = strategy_name
                 futures.append(future)
+
+                if (
+                    i < len(strategy_kwargs_list) - 1
+                ):  # Don't sleep after last submission
+                    yield from self.sleep(1)
 
             results = []
 

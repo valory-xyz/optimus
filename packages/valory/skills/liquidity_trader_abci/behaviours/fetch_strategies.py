@@ -748,51 +748,104 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Create the final portfolio data structure."""
 
         # Get agent_hash from environment
-        agent_config = os.environ.get("AEA_AGENT", "")
-        agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
+        try:
+            # Get agent_hash from environment
+            agent_config = os.environ.get("AEA_AGENT", "")
+            agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
-        # Calculate total portfolio value
-        total_portfolio_value = total_pools_value + total_safe_value
+            # Calculate total portfolio value
+            total_portfolio_value = total_pools_value + total_safe_value
 
-        return {
-            "portfolio_value": float(total_portfolio_value),
-            "value_in_pools": float(total_pools_value),
-            "value_in_safe": float(total_safe_value),
-            "initial_investment": float(initial_investment)
-            if initial_investment
-            else None,
-            "volume": float(volume) if volume else None,
-            "agent_hash": agent_hash,
-            "allocations": [
-                {
-                    "chain": allocation["chain"],
-                    "type": allocation["type"],
-                    "id": allocation["id"],
-                    "assets": allocation["assets"],
-                    "apr": float(allocation["apr"]),
-                    "details": allocation["details"],
-                    "ratio": float(allocation["ratio"]),
-                    "address": allocation["address"],
-                    "tick_ranges": allocation.get("tick_ranges"),
-                }
-                for allocation in allocations
-            ],
-            "portfolio_breakdown": [
-                {
-                    "asset": entry["asset"],
-                    "address": entry["address"],
-                    "balance": float(entry["balance"]),
-                    "price": float(entry["price"]),
-                    "value_usd": float(entry["value_usd"]),
-                    "ratio": float(entry["ratio"]),
-                }
-                for entry in portfolio_breakdown
-            ],
-            "address": self.params.safe_contract_addresses.get(
-                self.params.target_investment_chains[0]
-            ),
-            "last_updated": int(self._get_current_timestamp()),
-        }
+            allocation_assets = set()
+            for allocation in allocations:
+                try:
+                    for asset in allocation["assets"]:
+                        # Add both the asset symbol and address to handle either format
+                        allocation_assets.add(asset.get("symbol", ""))
+                        allocation_assets.add(asset.get("address", ""))
+                except (KeyError, TypeError) as e:
+                    self.context.logger.error(
+                        f"Error processing allocation assets: {str(e)}"
+                    )
+                    continue
+
+            # Then filter portfolio_breakdown to only include assets from allocations
+            filtered_portfolio_breakdown = []
+            for entry in portfolio_breakdown:
+                try:
+                    if (
+                        entry["asset"] in allocation_assets
+                        or entry["address"] in allocation_assets
+                    ):
+                        filtered_portfolio_breakdown.append(
+                            {
+                                "asset": entry["asset"],
+                                "address": entry["address"],
+                                "balance": float(entry["balance"]),
+                                "price": float(entry["price"]),
+                                "value_usd": float(entry["value_usd"]),
+                                "ratio": float(entry["ratio"]),
+                            }
+                        )
+                except (KeyError, ValueError, TypeError) as e:
+                    self.context.logger.error(
+                        f"Error processing portfolio breakdown entry: {str(e)}"
+                    )
+                    continue
+
+            # Process allocations with error handling
+            processed_allocations = []
+            for allocation in allocations:
+                try:
+                    processed_allocation = {
+                        "chain": allocation["chain"],
+                        "type": allocation["type"],
+                        "id": allocation["id"],
+                        "assets": allocation["assets"],
+                        "apr": float(allocation["apr"]),
+                        "details": allocation["details"],
+                        "ratio": float(allocation["ratio"]),
+                        "address": allocation["address"],
+                    }
+                    if "tick_ranges" in allocation:
+                        processed_allocation["tick_ranges"] = allocation["tick_ranges"]
+                    processed_allocations.append(processed_allocation)
+                except (KeyError, ValueError, TypeError) as e:
+                    self.context.logger.error(f"Error processing allocation: {str(e)}")
+                    continue
+
+            # Create and return the final portfolio data structure
+            return {
+                "portfolio_value": float(total_portfolio_value),
+                "value_in_pools": float(total_pools_value),
+                "value_in_safe": float(total_safe_value),
+                "initial_investment": float(initial_investment)
+                if initial_investment is not None
+                else None,
+                "volume": float(volume) if volume is not None else None,
+                "agent_hash": agent_hash,
+                "allocations": processed_allocations,
+                "portfolio_breakdown": filtered_portfolio_breakdown,
+                "address": self.params.safe_contract_addresses.get(
+                    self.params.target_investment_chains[0]
+                ),
+                "last_updated": int(self._get_current_timestamp()),
+            }
+        except Exception as e:
+            self.context.logger.error(f"Error creating portfolio data: {str(e)}")
+            # Return a minimal valid response in case of error
+            return {
+                "portfolio_value": 0.0,
+                "value_in_pools": 0.0,
+                "value_in_safe": 0.0,
+                "initial_investment": None,
+                "volume": None,
+                "agent_hash": "Error",
+                "allocations": [],
+                "portfolio_breakdown": [],
+                "address": None,
+                "last_updated": int(self._get_current_timestamp()),
+            }
 
     def _handle_balancer_position(
         self, position: Dict, chain: str

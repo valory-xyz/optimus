@@ -92,9 +92,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return
 
             # Check if no current positions and uninvested ETH, prepare swap to USDC
-            actions = yield from self.check_and_prepare_eth_to_usdc_swap()
-            if actions:
-                yield from self.send_actions(actions)
+            # actions = yield from self.check_and_prepare_eth_to_usdc_swap()
+            # if actions:
+            #     yield from self.send_actions(actions)
 
             # Fetch trading opportunities
             yield from self.fetch_all_trading_opportunities()
@@ -669,25 +669,27 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 # Get USDC address for the target chain
-                usdc_address = yield from self._get_usdc_address(target_chain)
+                usdc_address = self._get_usdc_address(target_chain)
                 if usdc_address:
-                    swap_action = {
-                        "action": Action.FIND_BRIDGE_ROUTE.value,
-                        "from_chain": target_chain,
-                        "to_chain": target_chain,  # Same chain swap
-                        "from_token": ZERO_ADDRESS,
-                        "from_token_symbol": "ETH",
-                        "to_token": usdc_address,
-                        "to_token_symbol": "USDC",
-                        "funds_percentage": 1.0,  # Use all available ETH
-                    }
+                    actions = [
+                        {
+                            "action": Action.FIND_BRIDGE_ROUTE.value,
+                            "from_chain": target_chain,
+                            "to_chain": target_chain,  # Same chain swap
+                            "from_token": ZERO_ADDRESS,
+                            "from_token_symbol": "ETH",
+                            "to_token": usdc_address,
+                            "to_token_symbol": "USDC",
+                            "funds_percentage": 1.0,  # Use all available ETH
+                        }
+                    ]
 
                     self.context.logger.info(
                         f"Prepared ETH to USDC swap on {target_chain}: "
                         f"{eth_amount:.6f} ETH -> USDC"
                     )
 
-                    return swap_action
+                    return actions
                 else:
                     self.context.logger.warning(
                         f"Could not get USDC address for {target_chain}"
@@ -705,7 +707,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return []
 
-    def _get_usdc_address(self, chain: str) -> Generator[None, None, Optional[str]]:
+    def _get_usdc_address(self, chain: str) -> Optional[str]:
         """Get USDC token address for the specified chain."""
         try:
             # Common USDC addresses for different chains
@@ -739,7 +741,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("No trading opportunities found")
             return []
 
-        self.execute_hyper_strategy()
+        yield from self.execute_hyper_strategy()
         actions = (
             yield from self.get_order_of_transactions()
             if self.selected_opportunities is not None
@@ -752,7 +754,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return actions
 
-    def execute_hyper_strategy(self) -> None:
+    def execute_hyper_strategy(self) -> Generator[None, None, None]:
         """Executes hyper strategy"""
         hyper_strategy = self.params.selected_hyper_strategy
         composite_score = None
@@ -841,6 +843,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.trading_opportunities.clear()
         yield from self.download_strategies()
         strategies = self.synchronized_data.selected_protocols.copy()
+        strategies = ["asset_lending","balancer_pools_search","velodrome_pools_search"]
         tried_strategies: Set[str] = set()
         self.context.logger.info(f"Selected Strategies: {strategies}")
 
@@ -848,41 +851,53 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategy_kwargs_list = []
         for next_strategy in strategies:
             self.context.logger.info(f"Preparing strategy: {next_strategy}")
+            # Start with strategy-specific kwargs from config
             kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
                 next_strategy, {}
-            )
+            ).copy()  # Make a copy to avoid modifying the original
 
-            kwargs.update(
-                {
-                    "strategy": next_strategy,
-                    "chains": self.params.target_investment_chains,
-                    "protocols": self.params.available_protocols,
-                    "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                    "current_positions": (
-                        [
-                            to_checksum_address(pos.get("pool_address"))
-                            for pos in self.current_positions
-                            if pos.get("status") == PositionStatus.OPEN.value
-                            and pos.get("pool_address")
-                        ]
-                        if self.current_positions
-                        else []
-                    ),
-                    "coingecko_api_key": self.coingecko.api_key,
-                    "whitelisted_assets": WHITELISTED_ASSETS,
-                    "get_metrics": False,
-                    "coin_id_mapping": COIN_ID_MAPPING,
-                }
-            )
+            # Update with common kwargs, preserving strategy-specific ones
+            common_kwargs = {
+                "strategy": next_strategy,
+                "chains": self.params.target_investment_chains,
+                "protocols": self.params.available_protocols,
+                "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
+                "current_positions": (
+                    [
+                        to_checksum_address(pos.get("pool_address"))
+                        for pos in self.current_positions
+                        if pos.get("status") == PositionStatus.OPEN.value
+                        and pos.get("pool_address")
+                    ]
+                    if self.current_positions
+                    else []
+                ),
+                "coingecko_api_key": self.coingecko.api_key,
+                "whitelisted_assets": WHITELISTED_ASSETS,
+                "get_metrics": False,
+                "coin_id_mapping": COIN_ID_MAPPING,
+            }
+            
+            # Update kwargs with common ones, but don't overwrite strategy-specific ones
+            for key, value in common_kwargs.items():
+                if key not in kwargs:  # Only add if not already present
+                    kwargs[key] = value
+                else:
+                    # For strategy key, always use the common one
+                    if key == "strategy":
+                        kwargs[key] = value
+            
             strategy_kwargs_list.append(kwargs)
-            self.context.logger.info(f"Strategy kwargs: {kwargs}")
+            self.context.logger.info(f"Strategy kwargs for {next_strategy}: {kwargs}")
 
         strategies_executables = self.shared_state.strategies_executables
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="strategy"
+        ) as executor:
             future_to_strategy = {}
             futures = []
-            for kwargs in strategy_kwargs_list:
+            for i, kwargs in enumerate(strategy_kwargs_list):
                 strategy_name = kwargs["strategy"]
                 # Remove 'strategy' from kwargs to avoid passing it twice
                 kwargs_without_strategy = {
@@ -897,6 +912,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 future_to_strategy[future] = strategy_name
                 futures.append(future)
+
+                # if (
+                #     i < len(strategy_kwargs_list) - 1
+                # ):  # Don't sleep after last submission
+                #     yield from self.sleep(0.5)
 
             results = []
 

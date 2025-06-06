@@ -4,6 +4,7 @@ warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import json
 import time
+import threading
 import statistics
 from datetime import datetime, timedelta
 from functools import lru_cache
@@ -28,8 +29,8 @@ REQUIRED_FIELDS = (
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
 PERCENT_CONVERSION = 100
-TVL_WEIGHT = 0.7
-APR_WEIGHT = 0.3
+TVL_WEIGHT = 0.3
+APR_WEIGHT = 0.7
 TVL_PERCENTILE = 50
 APR_PERCENTILE = 50
 SCORE_PERCENTILE = 80
@@ -42,7 +43,16 @@ CHAIN_URLS = {
 }
 
 LP = "lp"
-errors = []
+
+# Thread-local storage for errors
+_thread_local = threading.local()
+
+def get_errors():
+    """Get thread-local error list."""
+    if not hasattr(_thread_local, 'errors'):
+        _thread_local.errors = []
+    return _thread_local.errors
+
 ERC20_ABI = [
     {
         "constant": True,
@@ -121,7 +131,99 @@ def calculate_apr(daily_volume: float, tvl: float, fee_rate: float) -> float:
         else (daily_volume / tvl) * fee_rate * DAYS_IN_YEAR * PERCENT_CONVERSION
     )
 
-def get_filtered_pools(pools, current_positions, whitelisted_assets) -> List[Dict[str, Any]]:
+
+def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
+    """
+    Standardize APR and TVL using Z-score normalization and calculate composite scores.
+    
+    Args:
+        pools: List of pool dictionaries
+        apr_weight: Weight for APR in composite score (0-1)
+        tvl_weight: Weight for TVL in composite score (0-1)
+    
+    Returns:
+        List of pools with added standardized metrics and composite scores
+    """
+    if not pools:
+        return pools
+    
+    # Extract APR and TVL values
+    aprs = [pool.get('apr', 0) for pool in pools]
+    tvls = [pool.get('tvl', 0) for pool in pools]
+    
+    # Calculate means and standard deviations
+    apr_mean = np.mean(aprs) if aprs else 0
+    apr_std = np.std(aprs) if aprs else 1
+    tvl_mean = np.mean(tvls) if tvls else 0
+    tvl_std = np.std(tvls) if tvls else 1
+    
+    # Avoid division by zero
+    if apr_std == 0:
+        apr_std = 1
+    if tvl_std == 0:
+        tvl_std = 1
+    
+    # Standardize metrics and calculate composite scores
+    for pool in pools:
+        apr = pool.get('apr', 0)
+        tvl = pool.get('tvl', 0)
+        
+        # Z-score normalization
+        pool['apr_standardized'] = (apr - apr_mean) / apr_std
+        pool['tvl_standardized'] = (tvl - tvl_mean) / tvl_std
+        
+        # Composite score with configurable weights
+        pool['composite_score'] = (
+            pool['apr_standardized'] * apr_weight + 
+            pool['tvl_standardized'] * tvl_weight
+        )
+    
+    return pools
+
+
+def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
+                              min_tvl_threshold=1000, use_composite_filter=True):
+    """
+    Apply composite pre-filtering to select top pools based on standardized APR and TVL.
+    
+    Args:
+        pools: List of pool dictionaries
+        top_n: Number of top pools to select
+        apr_weight: Weight for APR in composite score
+        tvl_weight: Weight for TVL in composite score
+        min_tvl_threshold: Minimum TVL threshold for inclusion
+        use_composite_filter: Whether to use composite filtering
+    
+    Returns:
+        List of filtered and ranked pools
+    """
+    if not pools or not use_composite_filter:
+        return pools[:top_n] if pools else []
+    
+    # Filter by minimum TVL threshold
+    tvl_filtered = [pool for pool in pools if pool.get('tvl', 0) >= min_tvl_threshold]
+    
+    if not tvl_filtered:
+        return []
+    
+    # Apply standardization and composite scoring
+    standardized_pools = standardize_metrics(tvl_filtered, apr_weight, tvl_weight)
+    
+    # Sort by composite score (descending)
+    standardized_pools.sort(key=lambda x: x.get('composite_score', float('-inf')), reverse=True)
+    
+    # Select top N pools
+    final_selection = standardized_pools[:top_n]
+    
+    return final_selection
+
+def get_filtered_pools(pools, current_positions, whitelisted_assets, **kwargs) -> List[Dict[str, Any]]:
+    # Extract composite filtering parameters
+    top_n = kwargs.get('top_n', 10)
+    apr_weight = kwargs.get('apr_weight', 0.7)
+    tvl_weight = kwargs.get('tvl_weight', 0.3)
+    min_tvl_threshold = kwargs.get('min_tvl_threshold', 1000)
+        
     qualifying_pools = []
     for pool in pools:
         fee_rate = float(pool["feeTier"]) / FEE_RATE_DIVISOR
@@ -147,45 +249,19 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets) -> List[Dic
             qualifying_pools.append(pool)
 
     if not qualifying_pools:
-        errors.append("No suitable pools found.")
+        get_errors().append("No suitable pools found.")
         return []
 
-    if len(qualifying_pools) <= 5:
-        return qualifying_pools
-
-    tvl_list = [p["tvl"] for p in qualifying_pools]
-    apr_list = [p["apr"] for p in qualifying_pools]
-
-    tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
-    apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
-
-    max_tvl = max(tvl_list)
-    max_apr = max(apr_list)
-
-    scored_pools = []
-    for pool in qualifying_pools:
-        tvl = pool["tvl"]
-        apr = pool["apr"]
-        if tvl < tvl_threshold or apr < apr_threshold:
-            continue
-        score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
-        pool["score"] = score
-        scored_pools.append(pool)
-
-    if not scored_pools:
-        return []
-
-    score_threshold = np.percentile(
-        [p["score"] for p in scored_pools], SCORE_PERCENTILE
+    # Apply composite pre-filtering
+    filtered_pools = apply_composite_pre_filter(
+        qualifying_pools,
+        top_n=top_n,
+        apr_weight=apr_weight,
+        tvl_weight=tvl_weight,
+        min_tvl_threshold=min_tvl_threshold,
     )
-    filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
-    filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
 
-    return (
-        filtered_scored_pools[:20]
-        if len(filtered_scored_pools) > 10
-        else filtered_scored_pools
-    )
+    return filtered_pools
 
 
 def fetch_graphql_data(
@@ -229,7 +305,7 @@ def fetch_graphql_data(
             continue
         data = run_query(graphql_query, graphql_endpoint)
         if "error" in data:
-            errors.append(f"Error in fetching pools data: {data['error']}")
+            get_errors().append(f"Error in fetching pools data: {data['error']}")
             continue
         pools = data.get("pools", [])
         for p in pools:
@@ -332,7 +408,7 @@ def calculate_il_risk_score(
             to_timestamp=to_timestamp,
         )
     except Exception as e:
-        errors.append(f"Error fetching price data: {e}")
+        get_errors().append(f"Error fetching price data: {e}")
         return None
 
     prices_1_data = np.array([x[1] for x in prices_1["prices"]])
@@ -387,7 +463,7 @@ def fetch_pool_data(pool_id: str, SUBGRAPH_URL: str) -> Optional[Dict[str, Any]]
         if response.status_code == 200 and "data" in response_json:
             return response_json["data"].get("pool")
     except Exception as e:
-        errors.append(f"Error fetching pool data: {e}")
+        get_errors().append(f"Error fetching pool data: {e}")
     return None
 
 
@@ -408,7 +484,7 @@ def calculate_metrics_liquidity_risk(pool_data: Dict[str, Any]) -> Tuple[float, 
         max_position_size = MAX_POSITION_BASE * (tvl * liquidity_risk_multiplier) / 100
         return depth_score, max_position_size
     except Exception as e:
-        errors.append(f"Error calculating metrics: {e}")
+        get_errors().append(f"Error calculating metrics: {e}")
         return float("nan"), float("nan")
 
 
@@ -438,13 +514,13 @@ def format_pool_data(pool) -> Dict[str, Any]:
 
 
 def get_opportunities_for_uniswap(
-    chains, graphql_endpoints, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, *kwargs
+    chains, graphql_endpoints, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, **kwargs
 ) -> List[Dict[str, Any]]:
     pools = fetch_graphql_data(chains, graphql_endpoints)
     if isinstance(pools, dict) and "error" in pools:
         return pools
 
-    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets)
+    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets, **kwargs)
     if not filtered_pools:
         return {"error": "No suitable pools found"}
 
@@ -531,8 +607,8 @@ def calculate_metrics(
 def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     missing = check_missing_fields(kwargs)
     if missing:
-        errors.append(f"Required kwargs {missing} were not provided.")
-        return {"error": errors}
+        get_errors().append(f"Required kwargs {missing} were not provided.")
+        return {"error": get_errors()}
 
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
@@ -542,12 +618,12 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     if get_metrics:
         metrics = calculate_metrics(**kwargs)
         if metrics is None:
-            errors.append("Failed to calculate metrics.")
-        return {"error": errors} if errors else metrics
+            get_errors().append("Failed to calculate metrics.")
+        return {"error": get_errors()} if get_errors() else metrics
     else:
         result = get_opportunities_for_uniswap(**kwargs)
         if isinstance(result, dict) and "error" in result:
-            errors.append(result["error"])
+            get_errors().append(result["error"])
         if not result:
-            errors.append("No suitable aggregators found")
-        return {"result": result, "error": errors}
+            get_errors().append("No suitable aggregators found")
+        return {"result": result, "error": get_errors()}

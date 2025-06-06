@@ -2,6 +2,7 @@ import warnings
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import time
+import threading
 import statistics
 from typing import Any, Dict, List, Optional, Union, Tuple
 import json
@@ -179,11 +180,14 @@ REWARDS_SUGAR_ABI = [
     }
 ]
 
-# Cache storage with timestamps
+# Cache storage with timestamps - optimized TTLs
 CACHE = {
-    "pools": {"data": {}, "timestamp": 0, "ttl": 7200},  # 2 hours for pool existence
-    "tvl": {"data": {}, "timestamp": 0, "ttl": 600},     # 10 minutes for TVL data
-    "connections": {"data": {}, "timestamp": 0, "ttl": 1800}  # 30 minutes for connections
+    "pools": {"data": {}, "timestamp": 0, "ttl": 3600},     # 1 hour for pool data
+    "tvl": {"data": {}, "timestamp": 0, "ttl": 300},        # 5 minutes for TVL data
+    "connections": {"data": {}, "timestamp": 0, "ttl": 1800}, # 30 minutes for connections
+    "metrics": {"data": {}, "timestamp": 0, "ttl": 1800},   # 30 minutes for metrics
+    "token_symbols": {"data": {}, "timestamp": 0, "ttl": 86400}, # 24 hours for token symbols
+    "formatted_pools": {"data": {}, "timestamp": 0, "ttl": 1800}, # 30 minutes for formatted pools
 }
 
 # Cache metrics for monitoring
@@ -192,7 +196,14 @@ CACHE_METRICS = {
     "misses": {"pools": 0, "tvl": 0, "connections": 0}
 }
 
-errors = []
+# Thread-local storage for errors
+_thread_local = threading.local()
+
+def get_errors():
+    """Get thread-local error list."""
+    if not hasattr(_thread_local, 'errors'):
+        _thread_local.errors = []
+    return _thread_local.errors
 
 def get_cached_data(cache_type, key=None):
     """Get data from cache if it exists and is not expired."""
@@ -503,7 +514,7 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period
         
     except Exception as e:
         error_msg = f"Error calculating IL risk score: {str(e)}"
-        errors.append(error_msg)
+        get_errors().append(error_msg)
         
         # Add error to debug data but don't save to file
         debug_data["errors"].append(error_msg)
@@ -1061,7 +1072,7 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
     except Exception as e:
         error_msg = f"Error fetching pools via Sugar: {str(e)}"
         logger.error(error_msg)
-        errors.append(error_msg)
+        get_errors().append(error_msg)
         return {"error": error_msg}
 
 def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_address, token_prices=None):
@@ -1216,11 +1227,15 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets):
     """Filter pools based on criteria and exclude current positions."""
     qualifying_pools = []
     
+    logger.info(f"Starting pool filtering with {len(pools)} total pools")
+    logger.info(f"Current positions to exclude: {current_positions}")
+    
     for pool in pools:
         pool_id = pool.get("id")
         
         # Skip if this is a current position
         if pool_id in current_positions:
+            logger.debug(f"Skipping pool {pool_id} - current position")
             continue
         
         # Get token information
@@ -1244,6 +1259,7 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets):
                     token_address = token["id"].lower()
                     if token_address not in whitelisted_tokens:
                         all_tokens_whitelisted = False
+                        logger.debug(f"Pool {pool_id} excluded - token {token_address} not whitelisted")
                         break
                     # Store the symbol from the whitelist
                     token_symbols.append(whitelisted_tokens[token_address])
@@ -1261,8 +1277,11 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets):
             pool["token_count"] = token_count
             pool["tvl"] = float(pool.get("totalValueLockedUSD", 0))
             qualifying_pools.append(pool)
+            logger.debug(f"Pool {pool_id} qualified - tokens: {[t['id'] for t in input_tokens]}")
+        else:
+            logger.debug(f"Pool {pool_id} excluded - insufficient tokens ({token_count})")
     
-    logger.info(f"Identified {len(qualifying_pools)} qualifying pools after filtering")
+    logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools
 
 def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None) -> List[Dict[str, Any]]:
@@ -1340,17 +1359,29 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
             try:
                 # Get token IDs for CoinGecko API
                 token_ids = []
-                for token in tokens:
+                logger.info(f"Pool {pool['id']}: Checking CoinGecko mapping for tokens")
+                logger.info(f"Pool {pool['id']}: coin_id_mapping type: {type(coin_id_mapping)}")
+                logger.info(f"Pool {pool['id']}: coin_id_mapping content: {coin_id_mapping}")
+                
+                for i, token in enumerate(tokens):
+                    token_symbol = token["symbol"] or ""
+                    token_address = token["id"]
+                    logger.info(f"Pool {pool['id']}: Token{i} - Address: {token_address}, Symbol: '{token_symbol}', Chain: {chain_name}")
+                    
                     token_id = get_coin_id_from_symbol(
                         coin_id_mapping,
-                        token["symbol"] or "",
+                        token_symbol,
                         chain_name
                     )
                     token_ids.append(token_id)
+                    logger.info(f"Pool {pool['id']}: Token{i} ({token_symbol}) mapped to CoinGecko ID: {token_id}")
+                
                 # Only calculate IL risk if we have at least 2 valid token IDs
                 valid_token_ids = [tid for tid in token_ids if tid]
+                logger.info(f"Pool {pool['id']}: Valid token IDs: {valid_token_ids} (out of {len(token_ids)} total)")
+                
                 if len(valid_token_ids) >= 2:
-                    # No debug data saved to files
+                    logger.info(f"Pool {pool['id']}: Calculating IL risk score with {len(valid_token_ids)} valid token IDs")
                     
                     # Call IL risk score calculation with pool_id and chain
                     il_risk_score = calculate_il_risk_score_multi(
@@ -1360,7 +1391,9 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
                         chain=chain_name
                     )
                     formatted_pool["il_risk_score"] = il_risk_score
+                    logger.info(f"Pool {pool['id']}: IL risk score calculated: {il_risk_score}")
                 else:
+                    logger.warning(f"Pool {pool['id']}: Not enough valid token IDs to calculate IL risk score. Found: {valid_token_ids}")
                     formatted_pool["il_risk_score"] = None
             except Exception as e:
                 logger.error(f"Error calculating IL risk score for pool {pool['id']}: {str(e)}")
@@ -1369,6 +1402,119 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
         formatted_pools.append(formatted_pool)
         
     return formatted_pools
+
+def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
+    """
+    Standardize APR and TVL using Z-score normalization and calculate composite scores.
+    
+    Args:
+        pools: List of pool dictionaries
+        apr_weight: Weight for APR in composite score (0-1)
+        tvl_weight: Weight for TVL in composite score (0-1)
+    
+    Returns:
+        List of pools with added standardized metrics and composite scores
+    """
+    if not pools:
+        return pools
+    
+    # Extract APR and TVL values
+    aprs = [pool.get('apr', 0) for pool in pools]
+    tvls = [pool.get('tvl', 0) for pool in pools]
+    
+    # Calculate means and standard deviations
+    apr_mean = np.mean(aprs) if aprs else 0
+    apr_std = np.std(aprs) if aprs else 1
+    tvl_mean = np.mean(tvls) if tvls else 0
+    tvl_std = np.std(tvls) if tvls else 1
+    
+    # Avoid division by zero
+    if apr_std == 0:
+        apr_std = 1
+    if tvl_std == 0:
+        tvl_std = 1
+    
+    # Standardize metrics and calculate composite scores
+    for pool in pools:
+        apr = pool.get('apr', 0)
+        tvl = pool.get('tvl', 0)
+        
+        # Z-score normalization
+        pool['apr_standardized'] = (apr - apr_mean) / apr_std
+        pool['tvl_standardized'] = (tvl - tvl_mean) / tvl_std
+        
+        # Composite score with configurable weights
+        pool['composite_score'] = (
+            pool['apr_standardized'] * apr_weight + 
+            pool['tvl_standardized'] * tvl_weight
+        )
+    
+    return pools
+
+def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, min_tvl_threshold=1000, cl_filter=None):
+    """
+    Apply composite scoring pre-filter based on standardized APR and TVL.
+    
+    Args:
+        pools: List of pool dictionaries
+        top_n: Number of top pools to return (default: 10)
+        apr_weight: Weight for APR in composite score (default: 0.7)
+        tvl_weight: Weight for TVL in composite score (default: 0.3)
+        min_tvl_threshold: Minimum TVL threshold for inclusion (default: 1000)
+        cl_filter: Filter for concentrated liquidity pools
+                   True = only CL pools
+                   False = only non-CL pools
+                   None = include all pools (default)
+    
+    Returns:
+        List of top N pools sorted by composite score in descending order
+    """
+    if not pools:
+        return pools
+    
+    logger.info(f"Starting composite pre-filter with {len(pools)} pools")
+    logger.info(f"Parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}")
+    
+    # Step 1: Apply minimum TVL filter
+    tvl_filtered_pools = [pool for pool in pools if pool.get('tvl', 0) >= min_tvl_threshold]
+    logger.info(f"After TVL filter (>= {min_tvl_threshold}): {len(tvl_filtered_pools)} pools")
+    
+    if not tvl_filtered_pools:
+        logger.warning("No pools remaining after TVL filtering")
+        return []
+    
+    # Step 2: Apply CL filter if specified
+    if cl_filter is not None:
+        cl_filtered_pools = [pool for pool in tvl_filtered_pools if pool.get("is_cl_pool", False) == cl_filter]
+        cl_status = "CL pools only" if cl_filter is True else "non-CL pools only"
+        logger.info(f"After CL filter ({cl_status}): {len(cl_filtered_pools)} pools")
+    else:
+        cl_filtered_pools = tvl_filtered_pools
+        logger.info(f"No CL filter applied: {len(cl_filtered_pools)} pools")
+    
+    if not cl_filtered_pools:
+        logger.warning("No pools remaining after CL filtering")
+        return []
+    
+    # Step 3: Standardize metrics and calculate composite scores
+    standardized_pools = standardize_metrics(cl_filtered_pools, apr_weight, tvl_weight)
+    
+    # Step 4: Sort by composite score in descending order
+    sorted_pools = sorted(standardized_pools, key=lambda x: x.get('composite_score', 0), reverse=True)
+    
+    # Step 5: Return top N pools
+    result_pools = sorted_pools[:top_n]
+    
+    logger.info(f"Final selection: {len(result_pools)} pools")
+    
+    # Log top pools for debugging
+    for i, pool in enumerate(result_pools[:5]):  # Log top 5
+        logger.info(f"Pool #{i+1}: {pool.get('pool_address', 'N/A')} - "
+                   f"APR: {pool.get('apr', 0):.2f}%, "
+                   f"TVL: ${pool.get('tvl', 0):,.0f}, "
+                   f"Composite Score: {pool.get('composite_score', 0):.3f}")
+    
+    return result_pools
 
 def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     """
@@ -1399,7 +1545,7 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
 
 def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, cl_filter=None, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
     """
-    Get and format pool opportunities.
+    Get and format pool opportunities with optimized caching and performance.
     
     Args:
         current_positions: List of current position IDs to exclude
@@ -1419,6 +1565,17 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
     start_time = time.time()
     logger.info(f"Starting opportunity discovery for chain ID {chain_id}")
     
+    # DEBUG: Log coin_id_mapping parameter
+    logger.info(f"VELODROME DEBUG: get_opportunities_for_velodrome - coin_id_mapping type: {type(coin_id_mapping)}")
+    logger.info(f"VELODROME DEBUG: get_opportunities_for_velodrome - coin_id_mapping value: {coin_id_mapping}")
+    
+    # Check cache for formatted pools first
+    cache_key = f"formatted_pools:{chain_id}:{top_n}:{cl_filter}:{hash(str(sorted(current_positions)))}"
+    cached_result = get_cached_data("formatted_pools", cache_key)
+    if cached_result is not None:
+        logger.info(f"Using cached formatted pools for chain {chain_id}")
+        return cached_result
+    
     # Get pools based on chain
     pools = get_velodrome_pools(chain_id, lp_sugar_address, ledger_api)
     if isinstance(pools, dict) and "error" in pools:
@@ -1432,95 +1589,54 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}
 
+    # Get top N pools using composite scoring (APR + TVL), with optional CL filtering
+    if top_n > 0:
+        # Extract filtering parameters from kwargs
+        apr_weight = kwargs.get('apr_weight', 0.7)
+        tvl_weight = kwargs.get('tvl_weight', 0.3)
+        min_tvl_threshold = kwargs.get('min_tvl_threshold', 1000)
+        
+        # Use new composite scoring method
+        filtered_pools = apply_composite_pre_filter(
+            filtered_pools,
+            top_n=top_n, 
+            apr_weight=apr_weight,
+            tvl_weight=tvl_weight,
+            min_tvl_threshold=min_tvl_threshold,
+            cl_filter=cl_filter
+        )
+        if not filtered_pools:
+                logger.error("No filtered pools available for composite filtering")
+                return {"error": "No filtered pools available"}
+        
+        logger.info(f"Applied composite pre-filter (APR weight: {apr_weight}, TVL weight: {tvl_weight})")
+    
     # Format pools with basic data (without advanced metrics)
     formatted_pools = format_pool_data(
-        filtered_pools, 
+        filtered_pools,
         chain_id,
-        coin_id_mapping
+        coingecko_api_key=coingecko_api_key,
+        coin_id_mapping=coin_id_mapping
     )
     
-    # Get top N pools by APR, with optional CL filtering
-    if top_n > 0:
-        top_pools = get_top_n_pools_by_apr(formatted_pools, top_n, cl_filter)
-        cl_status = "CL pools only" if cl_filter is True else "non-CL pools only" if cl_filter is False else "all pools"
-        logger.info(f"Filtered to top {len(top_pools)} {cl_status} by APR")
-    else:
-        top_pools = formatted_pools
+    # Check if we have any formatted pools before proceeding
+    if not formatted_pools:
+        logger.warning("No pools remaining after formatting")
+        return {"error": "No suitable pools found"}
+        
+    top_pools = formatted_pools if top_n <= 0 else formatted_pools
     
-    # Now calculate advanced metrics only for the top N pools
-    if coingecko_api_key and top_pools:
-        logger.info(f"Calculating advanced metrics for top {len(top_pools)} pools")
-        for pool in top_pools:
-            # Get token information and fetch token symbols
-            tokens = []
-            for i in range(pool.get("token_count", 0)):
-                token_key = f"token{i}"
-                token_symbol_key = f"token{i}_symbol"
-                if token_key in pool:
-                    # Fetch token symbol if it's empty
-                    if not pool.get(token_symbol_key):
-                        token_symbol = fetch_token_name_from_contract(pool["chain"], pool[token_key]) or ""
-                        pool[token_symbol_key] = token_symbol
-                    
-                    tokens.append({
-                        "id": pool[token_key],
-                        "symbol": pool[token_symbol_key]
-                    })
-            
-            if len(tokens) >= 2:
-                # Calculate Sharpe ratio
-                try:
-                    sharpe_ratio = get_velodrome_pool_sharpe_ratio(
-                        pool["pool_id"], pool["chain"].upper()
-                    )
-                    pool["sharpe_ratio"] = sharpe_ratio
-                except Exception as e:
-                    logger.error(f"Error calculating Sharpe ratio for pool {pool['pool_id']}: {str(e)}")
-                    pool["sharpe_ratio"] = None
-                
-                # Calculate depth score
-                try:
-                    depth_score, max_position_size = analyze_pool_liquidity(
-                        pool["pool_id"], pool["chain"].upper()
-                    )
-                    pool["depth_score"] = depth_score
-                    pool["max_position_size"] = max_position_size
-                except Exception as e:
-                    logger.error(f"Error calculating depth score for pool {pool['pool_id']}: {str(e)}")
-                    pool["depth_score"] = None
-                    pool["max_position_size"] = None
-                
-                # Calculate IL risk score
-                try:
-                    # Get token IDs for CoinGecko API
-                    token_ids = []
-                    for token in tokens:
-                        token_id = get_coin_id_from_symbol(
-                            coin_id_mapping,
-                            token["symbol"] or "",
-                            pool["chain"]
-                        )
-                        token_ids.append(token_id)
-                        logger.info(f"Pool {pool['pool_id']}: Token {token['id']} ({token['symbol']}) mapped to CoinGecko ID: {token_id}")
-                    
-                    # Only calculate IL risk if we have at least 2 valid token IDs
-                    valid_token_ids = [tid for tid in token_ids if tid]
-                    if len(valid_token_ids) >= 2:
-                        logger.info(f"Pool {pool['pool_id']}: Calculating IL risk score with {len(valid_token_ids)} valid token IDs: {valid_token_ids}")
-                        il_risk_score = calculate_il_risk_score_multi(
-                            valid_token_ids, 
-                            coingecko_api_key,
-                            pool_id=pool["pool_id"],
-                            chain=pool["chain"]
-                        )
-                        pool["il_risk_score"] = il_risk_score
-                        logger.info(f"Pool {pool['pool_id']}: IL risk score calculated: {il_risk_score}")
-                    else:
-                        logger.warning(f"Pool {pool['pool_id']}: Not enough valid token IDs to calculate IL risk score. Found: {valid_token_ids}")
-                        pool["il_risk_score"] = None
-                except Exception as e:
-                    logger.error(f"Error calculating IL risk score for pool {pool['pool_id']}: {str(e)}")
-                    pool["il_risk_score"] = None
+    # Final check - if no pools after filtering, return early
+    if not top_pools:
+        logger.warning("No pools remaining after APR filtering")
+        return {"error": "No suitable pools found"}
+    
+    # Skip expensive metrics calculation for now to improve performance
+    # Only calculate basic metrics that are already included in format_pool_data
+    logger.info(f"Skipping advanced metrics calculation for performance optimization")
+    
+    # Cache the result
+    set_cached_data("formatted_pools", top_pools, cache_key)
     
     execution_time = time.time() - start_time
     logger.info(f"Opportunity discovery completed in {execution_time:.2f} seconds")
@@ -1631,7 +1747,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         Dict containing either error messages or result data
     """
     # Clear previous errors
-    errors.clear()
+    get_errors().clear()
     
     # Force refresh cache if requested
     if force_refresh:
@@ -1653,16 +1769,16 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
     if missing:
         error_msg = f"Required kwargs {missing} were not provided."
         logger.error(error_msg)
-        errors.append(error_msg)
-        return {"error": errors}
+        get_errors().append(error_msg)
+        return {"error": get_errors()}
     
     # If we're calculating metrics for a specific position
     if get_metrics:
         if "position" not in kwargs:
             error_msg = "Position details required for metrics calculation."
             logger.error(error_msg)
-            errors.append(error_msg)
-            return {"error": errors}
+            get_errors().append(error_msg)
+            return {"error": get_errors()}
             
         # Calculate metrics for the position
         metrics = calculate_metrics(
@@ -1674,8 +1790,8 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         if metrics is None:
             error_msg = "Failed to calculate metrics for position."
             logger.error(error_msg)
-            errors.append(error_msg)
-            return {"error": errors}
+            get_errors().append(error_msg)
+            return {"error": get_errors()}
             
         return metrics
     
@@ -1685,8 +1801,8 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
     if not chains:
         error_msg = "No chains specified for analysis."
         logger.error(error_msg)
-        errors.append(error_msg)
-        return {"error": errors}
+        get_errors().append(error_msg)
+        return {"error": get_errors()}
     
     # Process each chain
     all_results = []
@@ -1703,14 +1819,14 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         if chain_id is None:
             error_msg = f"Unsupported chain: {chain}"
             logger.error(error_msg)
-            errors.append(error_msg)
+            get_errors().append(error_msg)
             continue
         
         # Check if chain is supported
         if chain_id not in SUGAR_CONTRACT_ADDRESSES:
             error_msg = f"Unsupported chain: {chain}"
             logger.error(error_msg)
-            errors.append(error_msg)
+            get_errors().append(error_msg)
             continue
         
         # Get Sugar contract address and RPC URL
@@ -1722,7 +1838,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         if not w3.is_connected():
             error_msg = f"Failed to connect to RPC endpoint for {chain}: {rpc_url}"
             logger.error(error_msg)
-            errors.append(error_msg)
+            get_errors().append(error_msg)
             continue
         
         # Get opportunities for the chain using Sugar contract
@@ -1740,13 +1856,13 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         
         # Process results
         if isinstance(result, dict) and "error" in result:
-            errors.append(result["error"])
+            get_errors().append(result["error"])
             logger.error(f"Error in opportunity discovery for {chain}: {result['error']}")
             continue
         elif not result:
             error_msg = f"No suitable pools found for {chain}"
             logger.warning(error_msg)
-            errors.append(error_msg)
+            get_errors().append(error_msg)
             continue
         
         # Add results to the combined list
@@ -1756,8 +1872,8 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
     if not all_results:
         error_msg = "No suitable pools found across any chains"
         logger.warning(error_msg)
-        errors.append(error_msg)
-        return {"error": errors}
+        get_errors().append(error_msg)
+        return {"error": get_errors()}
     
     execution_time = time.time() - start_time
     logger.info(f"Full execution completed in {execution_time:.2f} seconds")
@@ -1766,4 +1882,4 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
     # Log cache metrics
     log_cache_metrics()
     
-    return {"result": all_results, "error": errors}
+    return {"result": all_results, "error": get_errors()}

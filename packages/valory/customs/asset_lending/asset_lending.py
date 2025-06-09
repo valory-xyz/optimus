@@ -573,11 +573,35 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
     }
 
 
-def get_best_opportunities(
-    chains, lending_asset, current_positions, coingecko_api_key, **kwargs
-) -> List[Dict[str, Any]]:
-    logger.info(f"Getting best opportunities for chains: {chains}, lending_asset: {lending_asset}")
-    
+def get_best_opportunities(**kwargs) -> List[Dict[str, Any]]:
+    chains = kwargs.get("chains")
+    lending_asset = kwargs.get("lending_asset")
+    current_positions = kwargs.get("current_positions")
+    coingecko_api_key = kwargs.get("coingecko_api_key")
+
+    # Explicitly check for missing arguments
+    missing_args = []
+    if chains is None:
+        missing_args.append("chains")
+    if lending_asset is None:
+        missing_args.append("lending_asset")
+    if current_positions is None:
+        missing_args.append("current_positions")
+    if coingecko_api_key is None:
+        missing_args.append("coingecko_api_key")
+
+    if missing_args:
+        error_msg = (
+            f"Missing required arguments in get_best_opportunities: {missing_args}"
+        )
+        logger.error(error_msg)
+        get_errors().append(error_msg)
+        return {"error": get_errors()}
+
+    logger.info(
+        f"Getting best opportunities for chains: {chains}, lending_asset: {lending_asset}"
+    )
+
     data = fetch_aggregators()
     if not data:
         logger.error("Failed to fetch aggregators")
@@ -626,9 +650,17 @@ def calculate_metrics(
 ) -> Optional[Dict[str, Any]]:
     logger.info(f"Calculating metrics for position: {position.get('pool_address')}")
     
+    token0_symbol = position.get("token0_symbol")
+    whitelisted_silos = position.get("whitelistedSilos", [])
+    pool_address = position.get("pool_address")
+
+    if not all([token0_symbol, pool_address]):
+        logger.error("Missing token0_symbol or pool_address in position for metrics calculation.")
+        return None
+
     il_risk_score = calculate_il_risk_score_for_silos(
-        position.get("token0_symbol"),
-        position.get("whitelistedSilos", []),
+        token0_symbol,
+        whitelisted_silos,
         coingecko_api_key,
     )
     historical_data = fetch_historical_data()
@@ -637,7 +669,7 @@ def calculate_metrics(
         return {"error": get_errors()}
 
     sharpe_ratio = get_sharpe_ratio_for_address(
-        historical_data, position["pool_address"]
+        historical_data, pool_address
     )
     depth_score, max_position_size = analyze_vault_liquidity(position)
     
@@ -678,38 +710,26 @@ def run(*_args, **kwargs) -> Any:
     logger.info("Starting asset lending strategy execution")
     logger.info(f"Received kwargs: {list(kwargs.keys())}")
     
-    missing = check_missing_fields(kwargs)
-    if missing:
-        logger.error(f"Required kwargs {missing} were not provided")
-        get_errors().append(f"Required kwargs {missing} were not provided.")
-        return {"error": get_errors()}
-
-    required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
     logger.info(f"Get metrics mode: {get_metrics}")
-    
-    if get_metrics:
-        required_fields.append("position")
-
-    kwargs = remove_irrelevant_fields(kwargs, required_fields)
 
     if get_metrics:
-        logger.info("Calculating metrics for existing position")
-        metrics = calculate_metrics(**kwargs)
-        if metrics is None:
-            logger.error("Failed to calculate metrics")
-            get_errors().append("Failed to calculate metrics.")
-        return {"error": get_errors()} if get_errors() else metrics
-    else:
-        logger.info("Finding best opportunities")
+        logger.info("Calculating metrics for position")
+        position = kwargs.get("position")
+        coingecko_api_key = kwargs.get("coingecko_api_key")
+        if not position or not coingecko_api_key:
+            error_msg = "Missing 'position' or 'coingecko_api_key' for metrics calculation."
+            logger.error(error_msg)
+            get_errors().append(error_msg)
+            return {"error": get_errors()}
+        return calculate_metrics(position, coingecko_api_key, **kwargs)
+
+    logger.info("Finding best opportunities")
+    try:
+        # We pass all kwargs down, get_best_opportunities will pick what it needs.
         result = get_best_opportunities(**kwargs)
-        if isinstance(result, dict) and "error" in result:
-            logger.error(f"Error in get_best_opportunities: {result['error']}")
-            get_errors().append(result["error"])
-        if not result:
-            logger.warning("No suitable aggregators found")
-            get_errors().append("No suitable aggregators found")
-        
-        
-        logger.info(f"Successfully found opportunities: {result}")
-        return {"result": result, "error": get_errors()}
+    except Exception as e:
+        logger.error(f"Error in get_best_opportunities: {e}")
+        get_errors().append(str(e))
+        return {"error": get_errors()}
+    return {"result": result}

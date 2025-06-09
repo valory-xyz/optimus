@@ -35,6 +35,7 @@ from typing import (
     cast,
 )
 from urllib.parse import urlencode
+import asyncio
 
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
@@ -668,7 +669,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         decimals = 18
                     else:
                         # Get price for other tokens
-                        price = yield from self._fetch_token_price(asset_address)
+                        price = yield from self._fetch_token_price(chain, asset_address)
                         decimals = yield from self._get_token_decimals(
                             chain, asset_address
                         )
@@ -852,7 +853,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
 
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
-        """Fetches all the trading opportunities using multiprocessing"""
+        """Fetches all the trading opportunities using asyncio for concurrency."""
         self.trading_opportunities.clear()
         yield from self.download_strategies()
         strategies = self.synchronized_data.selected_protocols.copy()
@@ -864,10 +865,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategy_kwargs_list = []
         for next_strategy in strategies:
             self.context.logger.info(f"Preparing strategy: {next_strategy}")
-            # Start with strategy-specific kwargs from config
-            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
-                next_strategy, {}
-            )
+            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(next_strategy, {})
             kwargs.update(
                 {
                     "strategy": next_strategy,
@@ -890,84 +888,71 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "coin_id_mapping": COIN_ID_MAPPING,
                 }
             )
-
-            strategy_kwargs_list.append(kwargs)
+            strategy_kwargs_list.append((next_strategy, kwargs))
             self.context.logger.info(f"Strategy kwargs for {next_strategy}: {kwargs}")
 
         strategies_executables = self.shared_state.strategies_executables
 
-        with ThreadPoolExecutor(
-            max_workers=3, thread_name_prefix="strategy"
-        ) as executor:
-            future_to_strategy = {}
-            futures = []
-            for i, kwargs in enumerate(strategy_kwargs_list):
-                strategy_name = kwargs["strategy"]
-                # Remove 'strategy' from kwargs to avoid passing it twice
-                kwargs_without_strategy = {
-                    k: v for k, v in kwargs.items() if k != "strategy"
-                }
+        async def async_execute_strategy(strategy_name, strategies_executables, **kwargs):
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None,
+                lambda: execute_strategy(strategy_name, strategies_executables, **kwargs)
+            )
 
-                future = executor.submit(
-                    execute_strategy,
-                    strategy_name,
-                    strategies_executables,
-                    **kwargs_without_strategy,
+        async def run_all_strategies():
+            tasks = []
+            for strategy_name, kwargs in strategy_kwargs_list:
+                kwargs_without_strategy = {k: v for k, v in kwargs.items() if k != "strategy"}
+                tasks.append(
+                    async_execute_strategy(strategy_name, strategies_executables, **kwargs_without_strategy)
                 )
-                future_to_strategy[future] = strategy_name
-                futures.append(future)
+            return await asyncio.gather(*tasks)
 
-                if (
-                    i < len(strategy_kwargs_list) - 1
-                ):  # Don't sleep after last submission
-                    yield from self.sleep(1)
+        loop = asyncio.get_event_loop()
+        future = asyncio.ensure_future(run_all_strategies())
+        while not future.done():
+            yield  # Yield control to the agent loop
+        results = future.result()
 
-            results = []
+        for next_strategy, result in zip(strategies, results):
+            tried_strategies.add(next_strategy)
+            if not result:
+                continue
+            if "error" in result:
+                errors = result.get("error", [])
+                for error in errors:
+                    self.context.logger.error(
+                        f"Error in strategy {next_strategy}: {error}"
+                    )
 
-            for future in futures:
-                result = yield from self.get_result(future)
-                results.append(result)
-
-            for future, result in zip(futures, results):
-                next_strategy = future_to_strategy[future]
-                tried_strategies.add(next_strategy)
-                if not result:
-                    continue
-                if "error" in result:
-                    errors = result.get("error", [])
-                    for error in errors:
+            opportunities = result.get("result", [])
+            if opportunities:
+                self.context.logger.info(
+                    f"Opportunities found using {next_strategy} strategy"
+                )
+                valid_opportunities = []
+                for opportunity in opportunities:
+                    if isinstance(opportunity, dict):
+                        self.context.logger.info(
+                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                            f"Chain: {opportunity.get('chain', 'N/A')}, "
+                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                        )
+                        valid_opportunities.append(opportunity)
+                    else:
                         self.context.logger.error(
-                            f"Error in strategy {next_strategy}: {error}"
+                            f"Invalid opportunity format from {next_strategy} strategy. "
+                            f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
                         )
 
-                opportunities = result.get("result", [])
-                if opportunities:
-                    self.context.logger.info(
-                        f"Opportunities found using {next_strategy} strategy"
-                    )
-                    valid_opportunities = []
-                    for opportunity in opportunities:
-                        if isinstance(opportunity, dict):
-                            self.context.logger.info(
-                                f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                                f"Chain: {opportunity.get('chain', 'N/A')}, "
-                                f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                                f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
-                            )
-                            valid_opportunities.append(opportunity)
-                        else:
-                            self.context.logger.error(
-                                f"Invalid opportunity format from {next_strategy} strategy. "
-                                f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
-                            )
-
-                    if valid_opportunities:
-                        self.trading_opportunities.extend(valid_opportunities)
-
-                else:
-                    self.context.logger.warning(
-                        f"No opportunity found using {next_strategy} strategy"
-                    )
+                if valid_opportunities:
+                    self.trading_opportunities.extend(valid_opportunities)
+            else:
+                self.context.logger.warning(
+                    f"No opportunity found using {next_strategy} strategy"
+                )
 
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""

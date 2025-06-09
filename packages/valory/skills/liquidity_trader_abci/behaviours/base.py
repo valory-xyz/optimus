@@ -1014,7 +1014,7 @@ class LiquidityTraderBaseBehaviour(
         max_retries: int = MAX_RETRIES_FOR_API_CALL,
         retry_wait: int = 0,
     ) -> Generator[None, None, Tuple[bool, Dict]]:
-        """Request wrapped around a retry mechanism"""
+        """Request wrapped around a retry mechanism, now also retries on HTTP 503 (Service Unavailable) with exponential backoff."""
 
         self.context.logger.info(f"HTTP {method} call: {endpoint}")
         content = json.dumps(body).encode(UTF8) if body else None
@@ -1027,6 +1027,7 @@ class LiquidityTraderBaseBehaviour(
             yield from self.sleep(2)
 
         retries = 0
+        backoff = 2  # seconds, for exponential backoff on 503
 
         while True:
             # Make the request
@@ -1059,6 +1060,21 @@ class LiquidityTraderBaseBehaviour(
                     "Waiting 60 seconds before retrying rate-limited request"
                 )
                 yield from self.sleep(60)
+                continue
+
+            # Handle HTTP 503 Service Unavailable with exponential backoff
+            if response.status_code == 503:
+                self.context.logger.warning(
+                    f"503 Service Unavailable (attempt {retries + 1}/{max_retries}). Retrying in {backoff} seconds."
+                )
+                retries += 1
+                if retries >= max_retries:
+                    self.context.logger.error(
+                        f"Request failed after {retries} retries due to repeated 503 errors."
+                    )
+                    return False, response_json
+                yield from self.sleep(backoff)
+                backoff *= 2  # Exponential backoff
                 continue
 
             if response.status_code not in HTTP_OK or "exception" in response_json:

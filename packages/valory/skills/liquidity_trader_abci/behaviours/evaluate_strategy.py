@@ -668,7 +668,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         decimals = 18
                     else:
                         # Get price for other tokens
-                        price = yield from self._fetch_token_price(asset_address)
+                        price = yield from self._fetch_token_price(asset_address, chain)
                         decimals = yield from self._get_token_decimals(
                             chain, asset_address
                         )

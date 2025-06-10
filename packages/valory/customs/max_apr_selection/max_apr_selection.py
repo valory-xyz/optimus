@@ -31,57 +31,107 @@ def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
 
 def calculate_composite_score(pool, max_values):
     """Calculate the composite score for a given pool."""
-    sharpe_ratio = pool.get("sharpe_ratio")
-    depth_score = pool.get("depth_score")
-    il_risk_score = pool.get("il_risk_score")
+    try:
+        # Get values with defaults
+        sharpe_ratio = pool.get("sharpe_ratio", 0)
+        depth_score = pool.get("depth_score", 0)
+        il_risk_score = pool.get("il_risk_score", 0)
 
-    # Ensure all metrics are real numbers, not None or NaN
-    for metric_name in ["sharpe_ratio", "depth_score", "il_risk_score"]:
-        value = locals()[metric_name]
-        if value is None or not isinstance(value, (int, float)) or (isinstance(value, float) and math.isnan(value)):
-            locals()[metric_name] = 0.0
+        # Convert to float and handle None/NaN
+        try:
+            sharpe_ratio = float(sharpe_ratio) if sharpe_ratio is not None else 0.0
+            depth_score = float(depth_score) if depth_score is not None else 0.0
+            il_risk_score = float(il_risk_score) if il_risk_score is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0
 
-    sharpe_ratio = locals()["sharpe_ratio"]
-    depth_score = locals()["depth_score"]
-    il_risk_score = locals()["il_risk_score"]
+        # Get max values with defaults
+        max_sharpe = max_values.get("sharpe_ratio", 1.0)
+        max_depth = max_values.get("depth_score", 1.0)
+        max_il_risk = max_values.get("il_risk_score", 0.0)
 
-    # Normalize metrics
-    normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"] if max_values["sharpe_ratio"] else 0.0
-    normalized_depth_score = depth_score / max_values["depth_score"] if max_values["depth_score"] else 0.0
-    
-    # FIXED: IL Risk normalization - lower (more negative) scores should get higher normalized values
-    # since lower IL risk is better. We invert the normalization so that:
-    # - Lowest risk (closest to 0) gets highest score (close to 1.0)
-    # - Highest risk (most negative) gets lowest score (close to 0.0)
-    if max_values["il_risk_score"] == 0:
-        normalized_il_risk_score = 1.0  # If all pools have zero IL risk, give them max score
-    else:
-        # Invert the normalization: 1 - (current_risk / max_risk)
-        # This ensures lower risk gets higher scores
-        normalized_il_risk_score = 1 - (abs(il_risk_score) / abs(max_values["il_risk_score"]))
-        # Ensure the score is between 0 and 1
-        normalized_il_risk_score = max(0.0, min(1.0, normalized_il_risk_score))
+        # Convert max values to float and handle None/NaN
+        try:
+            max_sharpe = float(max_sharpe) if max_sharpe is not None else 1.0
+            max_depth = float(max_depth) if max_depth is not None else 1.0
+            max_il_risk = float(max_il_risk) if max_il_risk is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0
 
-    # Calculate composite score
-    return (
-        SHARPE_RATIO_WEIGHT * normalized_sharpe_ratio
-        + DEPTH_SCORE_WEIGHT * normalized_depth_score
-        + IL_RISK_SCORE_WEIGHT * normalized_il_risk_score
-    )
+        # Handle division by zero
+        if max_sharpe == 0:
+            max_sharpe = 1.0
+        if max_depth == 0:
+            max_depth = 1.0
+        if max_il_risk == 0:
+            max_il_risk = 1.0
+
+        # Normalize metrics
+        normalized_sharpe_ratio = sharpe_ratio / max_sharpe
+        normalized_depth_score = depth_score / max_depth
+        
+        # IL Risk normalization
+        if max_il_risk == 0:
+            normalized_il_risk_score = 1.0
+        else:
+            normalized_il_risk_score = 1 - (abs(il_risk_score) / abs(max_il_risk))
+            normalized_il_risk_score = max(0.0, min(1.0, normalized_il_risk_score))
+
+        # Calculate composite score
+        return (
+            SHARPE_RATIO_WEIGHT * normalized_sharpe_ratio
+            + DEPTH_SCORE_WEIGHT * normalized_depth_score
+            + IL_RISK_SCORE_WEIGHT * normalized_il_risk_score
+        )
+    except Exception as e:
+        # Log the error and return a default score
+        print(f"Error calculating composite score: {e}")
+        return 0.0
 
 
 def get_max_values(pools):
     """Get maximum values for normalization."""
-    # For IL risk score, we need the maximum absolute value (highest risk)
-    # since IL risk scores are negative, and more negative = higher risk
-    il_risk_scores = [pool.get("il_risk_score", 0) for pool in pools]
-    max_il_risk = max(il_risk_scores, key=abs) if il_risk_scores else 0
-    
-    return {
-        "sharpe_ratio": max((pool.get("sharpe_ratio", 0) for pool in pools)),
-        "depth_score": max((pool.get("depth_score", 0) for pool in pools)),
-        "il_risk_score": max_il_risk,  # This will be the most negative (highest risk) value
-    }
+    try:
+        # For IL risk score, we need the maximum absolute value (highest risk)
+        il_risk_scores = []
+        sharpe_ratios = []
+        depth_scores = []
+        
+        for pool in pools:
+            # Get values with defaults
+            il_risk = pool.get("il_risk_score", 0)
+            sharpe = pool.get("sharpe_ratio", 0)
+            depth = pool.get("depth_score", 0)
+            
+            # Convert to float and handle None/NaN
+            try:
+                il_risk = float(il_risk) if il_risk is not None else 0.0
+                sharpe = float(sharpe) if sharpe is not None else 0.0
+                depth = float(depth) if depth is not None else 0.0
+                
+                il_risk_scores.append(il_risk)
+                sharpe_ratios.append(sharpe)
+                depth_scores.append(depth)
+            except (ValueError, TypeError):
+                continue
+        
+        # Calculate max values with defaults
+        max_il_risk = max(il_risk_scores, key=abs) if il_risk_scores else 0.0
+        max_sharpe = max(sharpe_ratios) if sharpe_ratios else 1.0
+        max_depth = max(depth_scores) if depth_scores else 1.0
+        
+        return {
+            "sharpe_ratio": max_sharpe,
+            "depth_score": max_depth,
+            "il_risk_score": max_il_risk,
+        }
+    except Exception as e:
+        # Return default values if any error occurs
+        return {
+            "sharpe_ratio": 1.0,
+            "depth_score": 1.0,
+            "il_risk_score": 0.0,
+        }
 
 
 def il_risk_descriptor(il_score):

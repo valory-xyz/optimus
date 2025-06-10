@@ -1418,9 +1418,20 @@ def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
     if not pools:
         return pools
     
-    # Extract APR and TVL values
-    aprs = [pool.get('apr', 0) for pool in pools]
-    tvls = [pool.get('tvl', 0) for pool in pools]
+    # Extract APR and TVL values with proper type conversion
+    aprs = []
+    tvls = []
+    
+    for pool in pools:
+        try:
+            apr_value = float(pool.get('apr', 0))
+            tvl_value = float(pool.get('tvl', 0))
+            aprs.append(apr_value)
+            tvls.append(tvl_value)
+        except (ValueError, TypeError):
+            # Use 0 for invalid values
+            aprs.append(0.0)
+            tvls.append(0.0)
     
     # Calculate means and standard deviations
     apr_mean = np.mean(aprs) if aprs else 0
@@ -1435,9 +1446,9 @@ def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
         tvl_std = 1
     
     # Standardize metrics and calculate composite scores
-    for pool in pools:
-        apr = pool.get('apr', 0)
-        tvl = pool.get('tvl', 0)
+    for i, pool in enumerate(pools):
+        apr = aprs[i]
+        tvl = tvls[i]
         
         # Z-score normalization
         pool['apr_standardized'] = (apr - apr_mean) / apr_std

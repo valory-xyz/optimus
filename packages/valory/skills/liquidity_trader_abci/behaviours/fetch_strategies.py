@@ -1679,15 +1679,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         cached_values = yield from self._read_kv(keys=("initial_investment_values",))
         if cached_values and cached_values.get("initial_investment_values"):
             try:
-                self.initial_investment_values_per_pool = json.loads(
-                    cached_values.get("initial_investment_values")
-                )
+                raw_cache = json.loads(cached_values.get("initial_investment_values"))
+                # Ensure all values are floats (not strings)
+                self.initial_investment_values_per_pool = {
+                    k: float(v) for k, v in raw_cache.items()
+                }
                 self.context.logger.info(
                     f"Loaded {len(self.initial_investment_values_per_pool)} cached position values from KV store"
                 )
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
                 self.context.logger.warning(
-                    "Failed to parse cached investment values from KV store"
+                    f"Failed to parse cached investment values from KV store: {e}"
                 )
 
         # Process all positions (both open and closed)
@@ -2725,10 +2727,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             try:
                 latest_date = list(mode_events.keys())[0]
                 latest_datetime = datetime.strptime(latest_date, "%Y-%m-%d")
+                latest_datetime = latest_datetime.replace(tzinfo=timezone.utc)
             except (IndexError, ValueError):
-                latest_datetime = datetime(1970, 1, 1)
+                latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
         else:
-            latest_datetime = datetime(1970, 1, 1)
+            latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
             response = requests.get(

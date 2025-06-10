@@ -788,6 +788,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"Using default threshold for {self.synchronized_data.trading_type}: {composite_score}"
             )
+        # Ensure composite_score is a float
+        try:
+            composite_score = float(composite_score)
+        except (ValueError, TypeError):
+            composite_score = 0.0
         kwargs = {
             "strategy": hyper_strategy,
             "trading_opportunities": self.trading_opportunities,

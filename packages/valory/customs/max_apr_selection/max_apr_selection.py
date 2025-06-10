@@ -31,15 +31,23 @@ def remove_irrelevant_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
 
 def calculate_composite_score(pool, max_values):
     """Calculate the composite score for a given pool."""
-    sharpe_ratio = pool.get("sharpe_ratio", math.nan)
-    depth_score = pool.get("depth_score", math.nan)
-    il_risk_score = pool.get("il_risk_score", math.nan)
-    if math.isnan(depth_score) or math.isnan(il_risk_score) or math.isnan(sharpe_ratio):
-        return 0
+    sharpe_ratio = pool.get("sharpe_ratio")
+    depth_score = pool.get("depth_score")
+    il_risk_score = pool.get("il_risk_score")
+
+    # Ensure all metrics are real numbers, not None or NaN
+    for metric_name in ["sharpe_ratio", "depth_score", "il_risk_score"]:
+        value = locals()[metric_name]
+        if value is None or not isinstance(value, (int, float)) or (isinstance(value, float) and math.isnan(value)):
+            locals()[metric_name] = 0.0
+
+    sharpe_ratio = locals()["sharpe_ratio"]
+    depth_score = locals()["depth_score"]
+    il_risk_score = locals()["il_risk_score"]
 
     # Normalize metrics
-    normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"]
-    normalized_depth_score = depth_score / max_values["depth_score"]
+    normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"] if max_values["sharpe_ratio"] else 0.0
+    normalized_depth_score = depth_score / max_values["depth_score"] if max_values["depth_score"] else 0.0
     
     # FIXED: IL Risk normalization - lower (more negative) scores should get higher normalized values
     # since lower IL risk is better. We invert the normalization so that:
@@ -126,12 +134,26 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         "and impermanent loss risk. A better overall score might not mean better values in all metrics. "
     )
 
+    # Ensure composite_score_threshold is a float
+    try:
+        composite_score_threshold = float(composite_score_threshold)
+    except (ValueError, TypeError):
+        composite_score_threshold = 0.0
+
     # Filter opportunities based on risk thresholds
     filtered_opportunities = []
     for opportunity in trading_opportunities:
-        sharpe_ratio = opportunity.get("sharpe_ratio", 0)
-        depth_score = opportunity.get("depth_score", 0)
-        il_risk_score = opportunity.get("il_risk_score", float("inf"))
+        sharpe_ratio = opportunity.get("sharpe_ratio")
+        depth_score = opportunity.get("depth_score")
+        il_risk_score = opportunity.get("il_risk_score")
+        # Ensure all metrics are real numbers
+        for metric_name in ["sharpe_ratio", "depth_score", "il_risk_score"]:
+            value = locals()[metric_name]
+            if value is None or not isinstance(value, (int, float)) or (isinstance(value, float) and math.isnan(value)):
+                locals()[metric_name] = 0.0
+        sharpe_ratio = locals()["sharpe_ratio"]
+        depth_score = locals()["depth_score"]
+        il_risk_score = locals()["il_risk_score"]
 
         logs.append(f"Evaluating opportunity: {opportunity}")
         if (

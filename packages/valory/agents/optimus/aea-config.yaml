@@ -53,7 +53,7 @@ skills:
 - valory/transaction_settlement_abci:0.1.0:bafybeid4alawv3oz4gdyom5uevrgzfsahbwabi37r7gomsetwqiq66g6cm
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma
-- valory/max_apr_selection:0.1.0:bafybeihp7rx6abzmjtu3f335v2rqsg4porunx4wsrwmd6oizqllgv2bf7u
+- valory/max_apr_selection:0.1.0:bafybeid572a4nzvk56cbeck3bmi5kdtnqo2urfuy7apber354zyg7mbwzy
 - valory/balancer_pools_search:0.1.0:bafybeicodnsjukmockuiunfyzg4zhgbihlfxakw3zibpeywqnlkgzjkfay
 - valory/uniswap_pools_search:0.1.0:bafybeifdp5cwsgpgchd6ogiaa4o2crs3lkhybl2b7c5cbsct5j7qyeny7a
 - valory/asset_lending:0.1.0:bafybeieoholpuadyo3jgf7nx4cpzog7wt2mmgkwgdls7gk5jlnxzicbo5a

@@ -121,7 +121,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeigt7bmrfhet7fyafqojl2i5uhzvpaz5wfv6kuk5ojwhhnhmg3qihu
 - valory/reset_pause_abci:0.1.0:bafybeicskv7u3mtfhi7nnoyw3bppwjof63izs4jgqdddtxicoea26t2n7i
 - valory/termination_abci:0.1.0:bafybeianygjbwmt4xrq77pfl3yzcokbjfzxmuru6j2k7a3boqc2qfb7shi
-- valory/liquidity_trader_abci:0.1.0:bafybeih4fih6slpj6zpqhjy6xxfd5tbn2xh2hxvqfcya3gbovn6qt5ahly
+- valory/liquidity_trader_abci:0.1.0:bafybeie47fz3q2gnfmh6ygxj6ltumshuxdidygr5562w77gyi56vx4iopi
 - valory/transaction_settlement_abci:0.1.0:bafybeid4alawv3oz4gdyom5uevrgzfsahbwabi37r7gomsetwqiq66g6cm
 behaviours:
   main:

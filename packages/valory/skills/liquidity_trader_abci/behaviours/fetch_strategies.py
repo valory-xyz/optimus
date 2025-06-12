@@ -2123,7 +2123,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 try:
                     last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
-                        "%d-%m-%Y"
+                        "%Y-%m-%d"
                     )
                     self.context.logger.info(f"Last calculation date: {last_date}")
                 except (ValueError, TypeError):
@@ -2198,12 +2198,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if not existing_total:
             last_calculated_date = "1970-01-01"
         else:
-            mode_events = self.funding_events.get("mode", {})
-            if not mode_events:
+            chain_events = self.funding_events.get(chain, {})
+            if not chain_events:
                 last_calculated_date = "1970-01-01"
             else:
                 try:
-                    last_calculated_date = list(mode_events.keys())[0]
+                    last_calculated_date = sorted(list(chain_events.keys()))[-1]
                 except IndexError:
                     last_calculated_date = "1970-01-01"
 

@@ -59,8 +59,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
             if payload.get("event") == Event.SETTLE.value:
                 updates = payload.get("updates", {})
                 synchronized_data = synchronized_data.update(
-                    synchronized_data_class=SynchronizedData,
-                    **updates
+                    synchronized_data_class=SynchronizedData, **updates
                 )
                 return synchronized_data, Event.SETTLE
 

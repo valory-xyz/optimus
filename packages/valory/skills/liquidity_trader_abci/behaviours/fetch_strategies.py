@@ -67,12 +67,12 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
     FetchStrategiesPayload,
     FetchStrategiesRound,
 )
-from packages.valory.skills.transaction_settlement_abci.payload_tools import (
-    hash_payload_to_hex,
-)
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     LiquidityAmounts,
     TickMath,
+)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
 )
 
 
@@ -104,19 +104,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             chain = self.params.target_investment_chains[0]
             safe_address = self.params.safe_contract_addresses.get(chain)
-            
-            res = yield from self._track_eth_transfers_and_reversions(safe_address, chain)
+
+            res = yield from self._track_eth_transfers_and_reversions(
+                safe_address, chain
+            )
 
             to_address = res.get("master_safe_address")
-            eth_amount = res.get("reversion_amount",0)
+            eth_amount = res.get("reversion_amount", 0)
 
-            if eth_amount > 0:               
+            if eth_amount > 0:
                 if not to_address:
-                    self.context.logger.error(f"No master safe address found for chain {chain}")
+                    self.context.logger.error(
+                        f"No master safe address found for chain {chain}"
+                    )
                     # Continue with normal flow
                 else:
-                    self.context.logger.info(f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}")
-                    
+                    self.context.logger.info(
+                        f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}"
+                    )
+
                     # Create ETH transfer transaction
                     safe_tx_hash = yield from self.contract_interact(
                         performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -131,7 +137,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         safe_tx_gas=SAFE_TX_GAS,
                         chain_id=chain,
                     )
-                    
+
                     if safe_tx_hash:
                         safe_tx_hash = safe_tx_hash[2:]
                         payload_string = hash_payload_to_hex(
@@ -142,7 +148,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             to_address=to_address,
                             data=b"",
                         )
-                        
+
                         # Create settlement payload
                         payload = FetchStrategiesPayload(
                             sender=sender,
@@ -154,16 +160,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                                         "most_voted_tx_hash": payload_string,
                                         "chain_id": chain,
                                         "safe_contract_address": safe_address,
-                                    }
+                                    },
                                 },
                                 sort_keys=True,
                             ),
                         )
-                        
-                        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+
+                        with self.context.benchmark_tool.measure(
+                            self.behaviour_id
+                        ).consensus():
                             yield from self.send_a2a_transaction(payload)
                             yield from self.wait_until_round_end()
-                        
+
                         self.set_done()
                         return
 
@@ -3194,15 +3202,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         safe_address: str,
         chain: str,
     ) -> Generator[None, None, Dict[str, Any]]:
-        """Track ETH transfers to safe address and handle reversion logic.
-        """
+        """Track ETH transfers to safe address and handle reversion logic."""
         try:
             current_date = datetime.now().strftime("%Y-%m-%d")
             # Get all transfers until date
             all_transfers = {}
             if chain == "optimism":
-                all_transfers = yield from self._fetch_all_transfers_until_date_optimism(
-                    safe_address, current_date
+                all_transfers = (
+                    yield from self._fetch_all_transfers_until_date_optimism(
+                        safe_address, current_date
+                    )
                 )
             elif chain == "mode":
                 all_transfers = self._fetch_all_transfers_until_date_mode(
@@ -3228,7 +3237,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 for transfer in transfers:
                     if isinstance(transfer, dict) and "timestamp" in transfer:
                         sorted_transfers.append(transfer)
-            
+
             sorted_transfers.sort(key=lambda x: x["timestamp"])
 
             # Process transfers
@@ -3242,16 +3251,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             initial_funding = {
                                 "amount": transfer.get("amount", 0),
                                 "from_address": transfer.get("from_address"),
-                                "timestamp": transfer.get("timestamp")
+                                "timestamp": transfer.get("timestamp"),
                             }
                             master_safe_address = transfer.get("from_address")
                             eth_transfers.append(transfer)
                         # If it's from the same address as initial funding
-                        elif transfer.get("from_address", "").lower() == master_safe_address.lower():
+                        elif (
+                            transfer.get("from_address", "").lower()
+                            == master_safe_address.lower()
+                        ):
                             eth_transfers.append(transfer)
                     # Check if it's a transfer from our safe to master safe (reversion)
-                    elif (transfer.get("from_address", "").lower() == safe_address.lower() and 
-                          transfer.get("to_address", "").lower() == master_safe_address.lower()):
+                    elif (
+                        transfer.get("from_address", "").lower() == safe_address.lower()
+                        and transfer.get("to_address", "").lower()
+                        == master_safe_address.lower()
+                    ):
                         reversion_transfers.append(transfer)
 
             # Get current ETH balance
@@ -3295,7 +3310,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             return {
                 "reversion_amount": reversion_amount,
-                "master_safe_address": master_safe_address
+                "master_safe_address": master_safe_address,
             }
 
         except Exception as e:

@@ -19,6 +19,7 @@
 
 """This module contains the behaviour for evaluating opportunities and forming actions for the 'liquidity_trader_abci' skill."""
 
+import asyncio
 import json
 import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -35,7 +36,6 @@ from typing import (
     cast,
 )
 from urllib.parse import urlencode
-import asyncio
 
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
@@ -870,7 +870,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategy_kwargs_list = []
         for next_strategy in strategies:
             self.context.logger.info(f"Preparing strategy: {next_strategy}")
-            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(next_strategy, {})
+            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
+                next_strategy, {}
+            )
             kwargs.update(
                 {
                     "strategy": next_strategy,
@@ -898,66 +900,149 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         strategies_executables = self.shared_state.strategies_executables
 
-        async def async_execute_strategy(strategy_name, strategies_executables, **kwargs):
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None,
-                lambda: execute_strategy(strategy_name, strategies_executables, **kwargs)
-            )
+        async def async_execute_strategy(
+            strategy_name, strategies_executables, **kwargs
+        ):
+            try:
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(
+                    None,
+                    lambda: execute_strategy(
+                        strategy_name, strategies_executables, **kwargs
+                    ),
+                )
+            except TypeError as e:
+                # Handle missing arguments error
+                return {
+                    "error": [
+                        f"Strategy {strategy_name} missing required argument: {str(e)}"
+                    ],
+                    "result": [],
+                }
+            except Exception as e:
+                # Handle any other unexpected errors
+                return {
+                    "error": [
+                        f"Unexpected error in strategy {strategy_name}: {str(e)}"
+                    ],
+                    "result": [],
+                }
 
         async def run_all_strategies():
             tasks = []
+            results = []
+
             for strategy_name, kwargs in strategy_kwargs_list:
-                kwargs_without_strategy = {k: v for k, v in kwargs.items() if k != "strategy"}
-                tasks.append(
-                    async_execute_strategy(strategy_name, strategies_executables, **kwargs_without_strategy)
-                )
-            return await asyncio.gather(*tasks)
-
-        loop = asyncio.get_event_loop()
-        future = asyncio.ensure_future(run_all_strategies())
-        while not future.done():
-            yield  # Yield control to the agent loop
-        results = future.result()
-
-        for next_strategy, result in zip(strategies, results):
-            tried_strategies.add(next_strategy)
-            if not result:
-                continue
-            if "error" in result:
-                errors = result.get("error", [])
-                for error in errors:
+                try:
+                    kwargs_without_strategy = {
+                        k: v for k, v in kwargs.items() if k != "strategy"
+                    }
+                    tasks.append(
+                        async_execute_strategy(
+                            strategy_name,
+                            strategies_executables,
+                            **kwargs_without_strategy,
+                        )
+                    )
+                except Exception as e:
                     self.context.logger.error(
-                        f"Error in strategy {next_strategy}: {error}"
+                        f"Error setting up strategy {strategy_name}: {str(e)}"
+                    )
+                    results.append(
+                        {"error": [f"Strategy setup error: {str(e)}"], "result": []}
                     )
 
-            opportunities = result.get("result", [])
-            if opportunities:
-                self.context.logger.info(
-                    f"Opportunities found using {next_strategy} strategy"
-                )
-                valid_opportunities = []
-                for opportunity in opportunities:
-                    if isinstance(opportunity, dict):
-                        self.context.logger.info(
-                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                            f"Chain: {opportunity.get('chain', 'N/A')}, "
-                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
-                        )
-                        valid_opportunities.append(opportunity)
-                    else:
-                        self.context.logger.error(
-                            f"Invalid opportunity format from {next_strategy} strategy. "
-                            f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
-                        )
+            if tasks:
+                try:
+                    strategy_results = await asyncio.gather(
+                        *tasks, return_exceptions=True
+                    )
+                    for result in strategy_results:
+                        if isinstance(result, Exception):
+                            results.append(
+                                {
+                                    "error": [
+                                        f"Strategy execution error: {str(result)}"
+                                    ],
+                                    "result": [],
+                                }
+                            )
+                        else:
+                            results.append(result)
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error running strategies in parallel: {str(e)}"
+                    )
+                    results.append(
+                        {"error": [f"Parallel execution error: {str(e)}"], "result": []}
+                    )
 
-                if valid_opportunities:
-                    self.trading_opportunities.extend(valid_opportunities)
-            else:
-                self.context.logger.warning(
-                    f"No opportunity found using {next_strategy} strategy"
-                )
+            return results
+
+        # Main execution loop
+        try:
+            loop = asyncio.get_event_loop()
+            future = asyncio.ensure_future(run_all_strategies())
+            while not future.done():
+                yield  # Yield control to the agent loop
+            results = future.result()
+
+            for next_strategy, result in zip(strategies, results):
+                tried_strategies.add(next_strategy)
+                if not result:
+                    self.context.logger.warning(
+                        f"No result returned from strategy {next_strategy}"
+                    )
+                    continue
+
+                if "error" in result:
+                    errors = result.get("error", [])
+                    for error in errors:
+                        self.context.logger.error(
+                            f"Error in strategy {next_strategy}: {error}"
+                        )
+                    # Continue to next strategy if this one had errors
+                    continue
+
+                opportunities = result.get("result", [])
+                if opportunities:
+                    self.context.logger.info(
+                        f"Opportunities found using {next_strategy} strategy"
+                    )
+                    valid_opportunities = []
+                    for opportunity in opportunities:
+                        try:
+                            if isinstance(opportunity, dict):
+                                self.context.logger.info(
+                                    f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                                    f"Chain: {opportunity.get('chain', 'N/A')}, "
+                                    f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                                    f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                                )
+                                valid_opportunities.append(opportunity)
+                            else:
+                                self.context.logger.error(
+                                    f"Invalid opportunity format from {next_strategy} strategy. "
+                                    f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
+                                )
+                        except Exception as e:
+                            self.context.logger.error(
+                                f"Error processing opportunity from {next_strategy}: {str(e)}"
+                            )
+
+                    if valid_opportunities:
+                        self.trading_opportunities.extend(valid_opportunities)
+                else:
+                    self.context.logger.warning(
+                        f"No opportunity found using {next_strategy} strategy"
+                    )
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Critical error in strategy evaluation: {str(e)}"
+            )
+            # Ensure we don't lose the error state
+            self.trading_opportunities = []
 
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""

@@ -3114,3 +3114,116 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return {}
         return {}
+
+    def _track_eth_transfers_and_reversions(
+        self,
+        safe_address: str,
+        chain: str,
+    ) -> Generator[None, None, Dict[str, Any]]:
+        """Track ETH transfers to safe address and handle reversion logic.
+        """
+        try:
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            # Get all transfers until date
+            all_transfers = {}
+            if chain == "optimism":
+                all_transfers = yield from self._fetch_all_transfers_until_date_optimism(
+                    safe_address, current_date
+                )
+            elif chain == "mode":
+                all_transfers = self._fetch_all_transfers_until_date_mode(
+                    safe_address, current_date, True
+                )
+            else:
+                self.context.logger.warning(f"Unsupported chain: {chain}")
+                return {}
+
+            if not all_transfers:
+                self.context.logger.warning(f"No transfers found for {chain} chain")
+                return {}
+
+            # Track ETH transfers
+            eth_transfers = []
+            initial_funding = None
+            master_safe_address = None
+            reversion_transfers = []
+
+            # Sort transfers by timestamp
+            sorted_transfers = []
+            for date, transfers in all_transfers.items():
+                for transfer in transfers:
+                    if isinstance(transfer, dict) and "timestamp" in transfer:
+                        sorted_transfers.append(transfer)
+            
+            sorted_transfers.sort(key=lambda x: x["timestamp"])
+
+            # Process transfers
+            for transfer in sorted_transfers:
+                # Check if it's an ETH transfer
+                if transfer.get("token_address") == ZERO_ADDRESS:
+                    # Check if it's a transfer to our safe
+                    if transfer.get("to_address", "").lower() == safe_address.lower():
+                        # If this is the first transfer, store it as initial funding
+                        if not initial_funding:
+                            initial_funding = {
+                                "amount": transfer.get("amount", 0),
+                                "from_address": transfer.get("from_address"),
+                                "timestamp": transfer.get("timestamp")
+                            }
+                            master_safe_address = transfer.get("from_address")
+                            eth_transfers.append(transfer)
+                        # If it's from the same address as initial funding
+                        elif transfer.get("from_address", "").lower() == master_safe_address.lower():
+                            eth_transfers.append(transfer)
+                    # Check if it's a transfer from our safe to master safe (reversion)
+                    elif (transfer.get("from_address", "").lower() == safe_address.lower() and 
+                          transfer.get("to_address", "").lower() == master_safe_address.lower()):
+                        reversion_transfers.append(transfer)
+
+            # Get current ETH balance
+            current_eth_balance = 0
+            for position in self.synchronized_data.positions:
+                chain = position.get("chain")
+                for asset in position.get("assets", []):
+                    asset_address = asset.get("address")
+                    balance = asset.get("balance", 0)
+
+                    if asset_address == ZERO_ADDRESS:
+                        current_eth_balance = balance
+                        self.context.logger.info(
+                            f"Found additional ETH transfer of {current_eth_balance} that needs reversion"
+                        )
+
+            # Determine if reversion is needed
+            reversion_amount = 0
+
+            if initial_funding and len(eth_transfers) > 1:
+                # If there are additional transfers after initial funding
+                if len(reversion_transfers) == 0:
+                    # No reversion has happened yet, revert the last transfer amount
+                    last_transfer = eth_transfers[-1]
+                    reversion_amount = float(last_transfer.get("amount", 0))
+                    if current_eth_balance < reversion_amount:
+                        reversion_amount = current_eth_balance
+                        self.context.logger.info(
+                            f"Current ETH balance is {current_eth_balance} which is less than the reversion amount {reversion_amount} indicating that some ETH has already been used"
+                        )
+
+                    self.context.logger.info(
+                        f"Found additional ETH transfer of {reversion_amount} that needs reversion"
+                    )
+                else:
+                    # Reversion has already happened, set amount to 0
+                    reversion_amount = 0
+                    self.context.logger.info(
+                        "Additional ETH transfer has already been reverted"
+                    )
+
+            return {
+                "reversion_amount": reversion_amount,
+                "master_safe_address": master_safe_address
+            }
+
+        except Exception as e:
+            self.context.logger.error(f"Error tracking ETH transfers: {str(e)}")
+            return {}

@@ -34,6 +34,10 @@ from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
 from packages.valory.contracts.erc20.contract import ERC20
+from packages.valory.contracts.gnosis_safe.contract import (
+    GnosisSafeContract,
+    SafeOperation,
+)
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
@@ -50,9 +54,11 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     DexType,
+    ETHER_VALUE,
     LiquidityTraderBaseBehaviour,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
+    SAFE_TX_GAS,
     TradingType,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
@@ -60,6 +66,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesPayload,
     FetchStrategiesRound,
+)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
 )
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     LiquidityAmounts,
@@ -92,6 +101,71 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.store_assets()
 
             self.read_assets()
+
+            chain = self.params.target_investment_chains[0]
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            
+            res = yield from self._track_eth_transfers_and_reversions(safe_address, chain)
+
+            to_address = res.get("master_safe_address")
+            eth_amount = res.get("reversion_amount",0)
+
+            if eth_amount > 0:               
+                if not to_address:
+                    self.context.logger.error(f"No master safe address found for chain {chain}")
+                    # Continue with normal flow
+                else:
+                    self.context.logger.info(f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}")
+                    
+                    # Create ETH transfer transaction
+                    safe_tx_hash = yield from self.contract_interact(
+                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                        contract_address=safe_address,
+                        contract_public_id=GnosisSafeContract.contract_id,
+                        contract_callable="get_raw_safe_transaction_hash",
+                        data_key="tx_hash",
+                        to_address=to_address,
+                        value=eth_amount,
+                        data=b"",
+                        operation=SafeOperation.CALL.value,
+                        safe_tx_gas=SAFE_TX_GAS,
+                        chain_id=chain,
+                    )
+                    
+                    if safe_tx_hash:
+                        safe_tx_hash = safe_tx_hash[2:]
+                        payload_string = hash_payload_to_hex(
+                            safe_tx_hash=safe_tx_hash,
+                            ether_value=eth_amount,
+                            safe_tx_gas=SAFE_TX_GAS,
+                            operation=SafeOperation.CALL.value,
+                            to_address=to_address,
+                            data=b"",
+                        )
+                        
+                        # Create settlement payload
+                        payload = FetchStrategiesPayload(
+                            sender=sender,
+                            content=json.dumps(
+                                {
+                                    "event": "settle",
+                                    "updates": {
+                                        "tx_submitter": FetchStrategiesRound.auto_round_id(),
+                                        "most_voted_tx_hash": payload_string,
+                                        "chain_id": chain,
+                                        "safe_contract_address": safe_address,
+                                    }
+                                },
+                                sort_keys=True,
+                            ),
+                        )
+                        
+                        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+                            yield from self.send_a2a_transaction(payload)
+                            yield from self.wait_until_round_end()
+                        
+                        self.set_done()
+                        return
 
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")

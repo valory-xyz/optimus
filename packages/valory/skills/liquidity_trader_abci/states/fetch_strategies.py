@@ -42,6 +42,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     no_majority_event = Event.NO_MAJORITY
     none_event: Event = Event.NONE
+    settle_event = Event.SETTLE
     collection_key = get_name(SynchronizedData.participant_to_strategies_round)
     selection_key = (get_name(SynchronizedData.chain_id),)
 
@@ -54,6 +55,16 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
             payload = json.loads(self.most_voted_payload)
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
+            # Check if this is an ETH transfer settlement event
+            if payload.get("event") == Event.SETTLE.value:
+                updates = payload.get("updates", {})
+                synchronized_data = synchronized_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    **updates
+                )
+                return synchronized_data, Event.SETTLE
+
+            # Original logic for normal strategy selection
             selected_protocols = payload.get("selected_protocols", [])
             trading_type = payload.get("trading_type", "")
 

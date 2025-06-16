@@ -110,7 +110,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             to_address = res.get("master_safe_address")
-            eth_amount = res.get("reversion_amount", 0)
+            eth_amount = res.get("reversion_amount",0) * 10**18
 
             if eth_amount > 0:
                 if not to_address:
@@ -2172,6 +2172,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[float]]:
         """Calculate initial investment value using transfers."""
         total_investment = 0.0
+        total_reversion = 0.0
 
         for chain in self.params.target_investment_chains:
             safe_address = self.params.safe_contract_addresses.get(chain)
@@ -2182,6 +2183,33 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"Calculating initial investment from {chain} transfers for address: {safe_address}"
             )
+
+            # Track ETH transfers and reversions first
+            reversion_info = yield from self._track_eth_transfers_and_reversions(
+                safe_address, chain
+            )
+            reversion_amount = reversion_info.get("reversion_amount", 0)
+            reversion_date = reversion_info.get("reversion_date")
+
+            if reversion_amount > 0:
+                self.context.logger.info(
+                    f"Found reversion amount of {reversion_amount} ETH for {chain} chain from date: {reversion_date}"
+                )
+                # Get ETH price for the reversion date
+                if reversion_date:
+                    date_str = datetime.strptime(reversion_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+                    eth_price = yield from self._fetch_historical_eth_price(date_str)
+                else:
+                    # Fallback to current price if date not available
+                    current_date = datetime.now().strftime("%d-%m-%Y")
+                    eth_price = yield from self._fetch_historical_eth_price(current_date)
+
+                if eth_price:
+                    reversion_value = reversion_amount * eth_price
+                    total_reversion += reversion_value
+                    self.context.logger.info(
+                        f"{chain.upper()} REVERSION: {reversion_amount} ETH @ ${eth_price} = ${reversion_value} (from {reversion_date})"
+                    )
 
             current_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -2264,14 +2292,27 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             total_investment += chain_investment
 
+        # Subtract total reversion value from total investment
+        final_total = total_investment - total_reversion
+        yield from self._save_chain_total_investment(chain, final_total)
+
         timestamp = int(self._get_current_timestamp())
         yield from self._write_kv(
             {"last_initial_value_calculated_timestamp": str(timestamp)}
         )
+
         self.context.logger.info(
             f"Total initial investment from all chains: ${total_investment}"
         )
-        return total_investment if total_investment > 0 else None
+        if total_reversion > 0:
+            self.context.logger.info(
+                f"Total reversion value to be deducted: ${total_reversion}"
+            )
+        self.context.logger.info(
+            f"Final total after reversion deductions: ${final_total}"
+        )
+
+        return final_total if final_total > 0 else None
 
     def _calculate_chain_investment_value(
         self, all_transfers: Dict, chain: str
@@ -3230,6 +3271,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             initial_funding = None
             master_safe_address = None
             reversion_transfers = []
+            reversion_date = None
 
             # Sort transfers by timestamp
             sorted_transfers = []
@@ -3240,44 +3282,36 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             sorted_transfers.sort(key=lambda x: x["timestamp"])
 
+
             # Process transfers
             for transfer in sorted_transfers:
                 # Check if it's an ETH transfer
-                if transfer.get("token_address") == ZERO_ADDRESS:
-                    # Check if it's a transfer to our safe
-                    if transfer.get("to_address", "").lower() == safe_address.lower():
-                        # If this is the first transfer, store it as initial funding
-                        if not initial_funding:
-                            initial_funding = {
-                                "amount": transfer.get("amount", 0),
-                                "from_address": transfer.get("from_address"),
-                                "timestamp": transfer.get("timestamp"),
-                            }
-                            master_safe_address = transfer.get("from_address")
-                            eth_transfers.append(transfer)
-                        # If it's from the same address as initial funding
-                        elif (
-                            transfer.get("from_address", "").lower()
-                            == master_safe_address.lower()
-                        ):
-                            eth_transfers.append(transfer)
-                    # Check if it's a transfer from our safe to master safe (reversion)
-                    elif (
-                        transfer.get("from_address", "").lower() == safe_address.lower()
-                        and transfer.get("to_address", "").lower()
-                        == master_safe_address.lower()
-                    ):
-                        reversion_transfers.append(transfer)
+                if transfer.get("symbol") == "ETH":
+                    # If this is the first transfer, store it as initial funding
+                    if not initial_funding:
+                        initial_funding = {
+                            "amount": transfer.get("amount", 0),
+                            "from_address": transfer.get("from_address"),
+                            "timestamp": transfer.get("timestamp")
+                        }
+                        master_safe_address = transfer.get("from_address")
+                        eth_transfers.append(transfer)
+                    # If it's from the same address as initial funding
+                    elif transfer.get("from_address", "").lower() == master_safe_address.lower():
+                        eth_transfers.append(transfer)
+
+
+            breakpoint()
 
             # Get current ETH balance
             current_eth_balance = 0
             for position in self.synchronized_data.positions:
                 chain = position.get("chain")
                 for asset in position.get("assets", []):
-                    asset_address = asset.get("address")
+                    asset_symbol = asset.get("asset_symbol")
                     balance = asset.get("balance", 0)
 
-                    if asset_address == ZERO_ADDRESS:
+                    if asset_symbol == "ETH":
                         current_eth_balance = balance
                         self.context.logger.info(
                             f"Found additional ETH transfer of {current_eth_balance} that needs reversion"
@@ -3292,6 +3326,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # No reversion has happened yet, revert the last transfer amount
                     last_transfer = eth_transfers[-1]
                     reversion_amount = float(last_transfer.get("amount", 0))
+                    # Get the date of the last transfer that needs reversion
+                    reversion_date = datetime.fromtimestamp(
+                        int(last_transfer.get("timestamp", 0))
+                    ).strftime("%Y-%m-%d")
+
                     if current_eth_balance < reversion_amount:
                         reversion_amount = current_eth_balance
                         self.context.logger.info(
@@ -3299,7 +3338,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         )
 
                     self.context.logger.info(
-                        f"Found additional ETH transfer of {reversion_amount} that needs reversion"
+                        f"Found additional ETH transfer of {reversion_amount} that needs reversion from date: {reversion_date}"
                     )
                 else:
                     # Reversion has already happened, set amount to 0
@@ -3311,6 +3350,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return {
                 "reversion_amount": reversion_amount,
                 "master_safe_address": master_safe_address,
+                "reversion_date": reversion_date
             }
 
         except Exception as e:

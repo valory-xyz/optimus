@@ -2,7 +2,7 @@
     "dev": {
         "custom/valory/merkl_pools_search/0.1.0": "bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma",
         "custom/valory/asset_lending/0.1.0": "bafybeieoholpuadyo3jgf7nx4cpzog7wt2mmgkwgdls7gk5jlnxzicbo5a",
-        "custom/valory/max_apr_selection/0.1.0": "bafybeifwt3r4uwjvgxmwjx7374wuk4sfn3gxyd7bh4hcazjjjro2swy4me",
+        "custom/valory/max_apr_selection/0.1.0": "bafybeid572a4nzvk56cbeck3bmi5kdtnqo2urfuy7apber354zyg7mbwzy",
         "custom/valory/balancer_pools_search/0.1.0": "bafybeicodnsjukmockuiunfyzg4zhgbihlfxakw3zibpeywqnlkgzjkfay",
         "custom/valory/uniswap_pools_search/0.1.0": "bafybeifdp5cwsgpgchd6ogiaa4o2crs3lkhybl2b7c5cbsct5j7qyeny7a",
         "custom/valory/velodrome_pools_search/0.1.0": "bafybeigng6joj4nkxjqfjoanhbhjhfnypvhvnswncfqxd7urnpmnsfugd4",
@@ -20,10 +20,10 @@
         "contract/valory/staking_activity_checker/0.1.0": "bafybeievwpysmimhhjfgetswigoivnkdluj2n6dh342r2iesiqdw3dpvru",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeiflwdffp2zkebx74eeivfz2g7x5w3icwsoflwddt46zzfiuovwuq4",
         "connection/valory/mirror_db/0.1.0": "bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeifnzczka4lhrhxwjf6hucs3v5u2skfpkjtxtcc3csuejyx54om3vy",
-        "skill/valory/optimus_abci/0.1.0": "bafybeicf7pgvwxrqayf63dbubaa3brit5b3fejd6v4ctqrwyjcggel4dvi",
-        "agent/valory/optimus/0.1.0": "bafybeibkncxresqajbkd7s474houn5fdmdaxh2dztawceojsi47jrzi3wi",
-        "service/valory/optimus/0.1.0": "bafybeif3g5ecg3p4hav22wkpplym3xv7pagrfq3i6hz6be2pzvd473ptvu"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeifws7lzhchoqabprx4nyillqjv6sme3lvnr2estwvo4whymtqdoka",
+        "skill/valory/optimus_abci/0.1.0": "bafybeifoh2llogaan4ntc32iiv7rq5plb6r3esaoj2d2fcwlexljbhxu7u",
+        "agent/valory/optimus/0.1.0": "bafybeiacjaxhllaubj63mnz3jcsseh4abku3x7pnxwlcvuajxo5ncfjzzu",
+        "service/valory/optimus/0.1.0": "bafybeibpgsokiesh2oqq74uxazdan7h755m4yhh3yqguy2etrk3u54xurq"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",

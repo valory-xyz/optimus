@@ -4,6 +4,7 @@ warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import statistics
 import time
+import threading
 from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Union, Tuple
@@ -41,8 +42,8 @@ BALANCER = "balancerPool"
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
 PERCENT_CONVERSION = 100
-TVL_WEIGHT = 0.7
-APR_WEIGHT = 0.3
+TVL_WEIGHT = 0.3
+APR_WEIGHT = 0.7
 TVL_PERCENTILE = 50
 APR_PERCENTILE = 50
 SCORE_PERCENTILE = 80
@@ -54,7 +55,15 @@ CHAIN_URLS = {
 
 EXCLUDED_APR_TYPES = {"IB_YIELD", "MERKL", "SWAP_FEE", "SWAP_FEE_7D", "SWAP_FEE_30D"}
 LP = "lp"
-errors = []
+
+# Thread-local storage for errors
+_thread_local = threading.local()
+
+def get_errors():
+    """Get thread-local error list."""
+    if not hasattr(_thread_local, 'errors'):
+        _thread_local.errors = []
+    return _thread_local.errors
 
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
@@ -87,6 +96,111 @@ def get_total_apr(pool) -> float:
     return sum(
         item["apr"] for item in apr_items if item["type"] not in EXCLUDED_APR_TYPES
     )
+
+
+def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
+    """
+    Standardize APR and TVL using Z-score normalization and calculate composite scores.
+    
+    Args:
+        pools: List of pool dictionaries
+        apr_weight: Weight for APR in composite score (0-1)
+        tvl_weight: Weight for TVL in composite score (0-1)
+    
+    Returns:
+        List of pools with added standardized metrics and composite scores
+    """
+    if not pools:
+        return pools
+    
+    # Extract APR and TVL values with proper type conversion
+    aprs = []
+    tvls = []
+    
+    for pool in pools:
+        try:
+            apr_value = float(pool.get('apr', 0))
+            tvl_value = float(pool.get('tvl', 0))
+            aprs.append(apr_value)
+            tvls.append(tvl_value)
+        except (ValueError, TypeError):
+            # Use 0 for invalid values
+            aprs.append(0.0)
+            tvls.append(0.0)
+    
+    # Calculate means and standard deviations
+    apr_mean = np.mean(aprs) if aprs else 0
+    apr_std = np.std(aprs) if aprs else 1
+    tvl_mean = np.mean(tvls) if tvls else 0
+    tvl_std = np.std(tvls) if tvls else 1
+    
+    # Avoid division by zero
+    if apr_std == 0:
+        apr_std = 1
+    if tvl_std == 0:
+        tvl_std = 1
+    
+    # Standardize metrics and calculate composite scores
+    for i, pool in enumerate(pools):
+        apr = aprs[i]
+        tvl = tvls[i]
+        
+        # Z-score normalization
+        pool['apr_standardized'] = (apr - apr_mean) / apr_std
+        pool['tvl_standardized'] = (tvl - tvl_mean) / tvl_std
+        
+        # Composite score with configurable weights
+        pool['composite_score'] = (
+            pool['apr_standardized'] * apr_weight + 
+            pool['tvl_standardized'] * tvl_weight
+        )
+    
+    return pools
+
+
+def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
+                              min_tvl_threshold=1000, use_composite_filter=True):
+    """
+    Apply composite pre-filtering to select top pools based on standardized APR and TVL.
+    
+    Args:
+        pools: List of pool dictionaries
+        top_n: Number of top pools to select
+        apr_weight: Weight for APR in composite score
+        tvl_weight: Weight for TVL in composite score
+        min_tvl_threshold: Minimum TVL threshold for inclusion
+        use_composite_filter: Whether to use composite filtering
+    
+    Returns:
+        List of filtered and ranked pools
+    """
+    if not pools or not use_composite_filter:
+        return pools[:top_n] if pools else []
+    
+    # Filter by minimum TVL threshold with proper type conversion
+    tvl_filtered = []
+    for pool in pools:
+        try:
+            tvl_value = float(pool.get('tvl', 0))
+            if tvl_value >= float(min_tvl_threshold):
+                tvl_filtered.append(pool)
+        except (ValueError, TypeError):
+            # Skip pools with invalid TVL values
+            continue
+    
+    if not tvl_filtered:
+        return []
+    
+    # Apply standardization and composite scoring
+    standardized_pools = standardize_metrics(tvl_filtered, apr_weight, tvl_weight)
+    
+    # Sort by composite score (descending)
+    standardized_pools.sort(key=lambda x: x.get('composite_score', float('-inf')), reverse=True)
+    
+    # Select top N pools
+    final_selection = standardized_pools[:top_n]
+    
+    return final_selection
 
 @lru_cache(None)
 def create_web3_connection(chain_name: str):
@@ -154,7 +268,13 @@ def get_balancer_pools(
     logger.info(f"Successfully fetched {len(pools)} Balancer pools")
     return pools
 
-def get_filtered_pools(pools, current_positions, whitelisted_assets):
+def get_filtered_pools_for_balancer(pools, current_positions, whitelisted_assets, **kwargs):
+    # Extract composite filtering parameters
+    top_n = kwargs.get('top_n', 10)
+    apr_weight = kwargs.get('apr_weight', 0.7)
+    tvl_weight = kwargs.get('tvl_weight', 0.3)
+    min_tvl_threshold = kwargs.get('min_tvl_threshold', 1000)
+
     # Filter by type and token count - removing the 2-token restriction
     qualifying_pools = []
     for pool in pools:
@@ -183,44 +303,17 @@ def get_filtered_pools(pools, current_positions, whitelisted_assets):
 
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
 
-    if len(qualifying_pools) <= 5:
-        logger.info("Returning all qualifying pools (5 or fewer found)")
-        return qualifying_pools
-
-    tvl_list = [float(p.get("tvl", 0)) for p in qualifying_pools]
-    apr_list = [float(p.get("apr", 0)) for p in qualifying_pools]
-
-    tvl_threshold = np.percentile(tvl_list, TVL_PERCENTILE)
-    apr_threshold = np.percentile(apr_list, APR_PERCENTILE)
-    max_tvl = max(tvl_list) if tvl_list else 1
-    max_apr = max(apr_list) if apr_list else 1
-
-    logger.info(f"Filtering thresholds - TVL: {tvl_threshold:.2f}, APR: {apr_threshold:.4f}")
-
-    # Score and filter
-    scored_pools = []
-    for p in qualifying_pools:
-        tvl = float(p["tvl"])
-        apr = float(p["apr"])
-        if tvl >= tvl_threshold and apr >= apr_threshold:
-            score = TVL_WEIGHT * (tvl / max_tvl) + APR_WEIGHT * (apr / max_apr)
-            p["score"] = score
-            scored_pools.append(p)
-
-    logger.info(f"Found {len(scored_pools)} pools meeting TVL and APR thresholds")
-
-    if not scored_pools:
-        logger.warning("No pools met the scoring criteria")
-        return []
-
-    score_threshold = np.percentile(
-        [p["score"] for p in scored_pools], SCORE_PERCENTILE
+    # Apply composite pre-filtering
+    filtered_pools = apply_composite_pre_filter(
+        qualifying_pools,
+        top_n=top_n,
+        apr_weight=apr_weight,
+        tvl_weight=tvl_weight,
+        min_tvl_threshold=min_tvl_threshold,
     )
-    filtered_scored_pools = [p for p in scored_pools if p["score"] >= score_threshold]
-    filtered_scored_pools.sort(key=lambda x: x["score"], reverse=True)
 
-    logger.info(f"Final filtered pools: {len(filtered_scored_pools[:10])} (top 10)")
-    return filtered_scored_pools[:10]
+    logger.info(f"Final filtered pools: {len(filtered_pools)} (top {top_n})")
+    return filtered_pools
 
 def get_coin_id_from_symbol(
        coin_id_mapping, symbol, chain_name
@@ -308,7 +401,7 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period
                 prices_data.append([x[1] for x in prices["prices"]])
                 time.sleep(1)  # Rate limiting
             except Exception as e:
-                errors.append(f"Error fetching price data for {token_id}: {str(e)}")
+                get_errors().append(f"Error fetching price data for {token_id}: {str(e)}")
                 return None
         
         # Find minimum length to align all price series
@@ -346,7 +439,7 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period
         return float(il_impact * avg_correlation * avg_volatility)
         
     except Exception as e:
-        errors.append(f"Error calculating IL risk score: {str(e)}")
+        get_errors().append(f"Error calculating IL risk score: {str(e)}")
         return None
 
 def create_graphql_client(api_url="https://api-v3.balancer.fi") -> Client:
@@ -432,11 +525,11 @@ def analyze_pool_liquidity(
     try:
         metrics = fetch_liquidity_metrics(pool_id, chain, client, price_impact)
         if metrics is None:
-            errors.append(f"Could not retrieve depth score for pool {pool_id}")
+            get_errors().append(f"Could not retrieve depth score for pool {pool_id}")
             return float("nan"), float("nan")
         return metrics["Depth Score"], metrics["Maximum Position Size"]
     except Exception as e:
-        errors.append(f"Error analyzing pool liquidity for {pool_id}: {str(e)}")
+        get_errors().append(f"Error analyzing pool liquidity for {pool_id}: {str(e)}")
         return float("nan"), float("nan")
 
 def fetch_liquidity_metrics(
@@ -527,7 +620,7 @@ def fetch_liquidity_metrics(
             
         except (ZeroDivisionError, OverflowError, ValueError) as e:
             logger.error(f"Error calculating enhanced metrics for pool {pool_id}: {str(e)}")
-            errors.append(f"Error calculating metrics for pool {pool_id}: {str(e)}")
+            get_errors().append(f"Error calculating metrics for pool {pool_id}: {str(e)}")
             return None
 
         return {
@@ -541,7 +634,7 @@ def fetch_liquidity_metrics(
 
     except Exception as e:
         logger.error(f"Error fetching enhanced liquidity metrics for pool {pool_id}: {str(e)}")
-        errors.append(f"Error fetching liquidity metrics for pool {pool_id}: {str(e)}")
+        get_errors().append(f"Error fetching liquidity metrics for pool {pool_id}: {str(e)}")
         return None
 
 def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
@@ -649,12 +742,12 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
             
         except Exception as e:
             logger.error(f"Error processing Sharpe ratio data for pool {pool_id}: {str(e)}")
-            errors.append(f"Error processing Sharpe ratio data: {str(e)}")
+            get_errors().append(f"Error processing Sharpe ratio data: {str(e)}")
             return None
             
     except Exception as e:
         logger.error(f"Error calculating Sharpe ratio for pool {pool_id}: {str(e)}")
-        errors.append(f"Error calculating Sharpe ratio: {str(e)}")
+        get_errors().append(f"Error calculating Sharpe ratio: {str(e)}")
         return None
 
 def get_underlying_token_symbol(symbol: str) -> str:
@@ -1045,7 +1138,7 @@ def get_opportunities_for_balancer(chains, graphql_endpoint, current_positions, 
         return pools
 
     # Filter pools
-    filtered_pools = get_filtered_pools(pools, current_positions, whitelisted_assets)
+    filtered_pools = get_filtered_pools_for_balancer(pools, current_positions, whitelisted_assets, **kwargs)
     if not filtered_pools:
         logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}
@@ -1179,8 +1272,8 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
     missing = check_missing_fields(kwargs)
     if missing:
         logger.error(f"Missing required fields: {missing}")
-        errors.append(f"Required kwargs {missing} were not provided.")
-        return {"error": errors}
+        get_errors().append(f"Required kwargs {missing} were not provided.")
+        return {"error": get_errors()}
 
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
@@ -1195,25 +1288,25 @@ def run(*_args, **kwargs) -> Dict[str, Union[bool, str, List[str]]]:
         metrics = calculate_metrics(**kwargs)
         if metrics is None:
             logger.error("Failed to calculate metrics")
-            errors.append("Failed to calculate metrics.")
+            get_errors().append("Failed to calculate metrics.")
         else:
             logger.info("Metrics calculation completed successfully")
-        return {"error": errors} if errors else metrics
+        return {"error": get_errors()} if get_errors() else metrics
     else:
         logger.info("Searching for investment opportunities")
         result = get_opportunities_for_balancer(**kwargs)
         if isinstance(result, dict) and "error" in result:
             logger.error(f"Error in opportunity search: {result['error']}")
-            errors.append(result["error"])
+            get_errors().append(result["error"])
         elif not result:
             logger.warning("No suitable pools with valid investments found")
-            errors.append("No suitable pools with valid investments found")
+            get_errors().append("No suitable pools with valid investments found")
         else:
             logger.info(f"Opportunity search completed successfully with results: {result}")
         
-        if errors:
-            logger.error(f"Execution completed with errors: {errors}")
+        if get_errors():
+            logger.error(f"Execution completed with errors: {get_errors()}")
         else:
             logger.info("Execution completed successfully")
             
-        return {"result": result, "error": errors}
+        return {"result": result, "error": get_errors()}

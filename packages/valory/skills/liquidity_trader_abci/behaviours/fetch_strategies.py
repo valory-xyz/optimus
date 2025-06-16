@@ -86,6 +86,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
             sender = self.context.agent_address
+
+            if not self.assets:
+                self.assets = self.params.initial_assets
+                self.store_assets()
+
+            self.read_assets()
+
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")
             )
@@ -741,51 +748,104 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Create the final portfolio data structure."""
 
         # Get agent_hash from environment
-        agent_config = os.environ.get("AEA_AGENT", "")
-        agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
+        try:
+            # Get agent_hash from environment
+            agent_config = os.environ.get("AEA_AGENT", "")
+            agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
-        # Calculate total portfolio value
-        total_portfolio_value = total_pools_value + total_safe_value
+            # Calculate total portfolio value
+            total_portfolio_value = total_pools_value + total_safe_value
 
-        return {
-            "portfolio_value": float(total_portfolio_value),
-            "value_in_pools": float(total_pools_value),
-            "value_in_safe": float(total_safe_value),
-            "initial_investment": float(initial_investment)
-            if initial_investment
-            else None,
-            "volume": float(volume) if volume else None,
-            "agent_hash": agent_hash,
-            "allocations": [
-                {
-                    "chain": allocation["chain"],
-                    "type": allocation["type"],
-                    "id": allocation["id"],
-                    "assets": allocation["assets"],
-                    "apr": float(allocation["apr"]),
-                    "details": allocation["details"],
-                    "ratio": float(allocation["ratio"]),
-                    "address": allocation["address"],
-                    "tick_ranges": allocation.get("tick_ranges"),
-                }
-                for allocation in allocations
-            ],
-            "portfolio_breakdown": [
-                {
-                    "asset": entry["asset"],
-                    "address": entry["address"],
-                    "balance": float(entry["balance"]),
-                    "price": float(entry["price"]),
-                    "value_usd": float(entry["value_usd"]),
-                    "ratio": float(entry["ratio"]),
-                }
-                for entry in portfolio_breakdown
-            ],
-            "address": self.params.safe_contract_addresses.get(
-                self.params.target_investment_chains[0]
-            ),
-            "last_updated": int(self._get_current_timestamp()),
-        }
+            allocation_assets = set()
+            for allocation in allocations:
+                try:
+                    for asset in allocation["assets"]:
+                        # Add both the asset symbol and address to handle either format
+                        allocation_assets.add(asset.get("symbol", ""))
+                        allocation_assets.add(asset.get("address", ""))
+                except (KeyError, TypeError) as e:
+                    self.context.logger.error(
+                        f"Error processing allocation assets: {str(e)}"
+                    )
+                    continue
+
+            # Then filter portfolio_breakdown to only include assets from allocations
+            filtered_portfolio_breakdown = []
+            for entry in portfolio_breakdown:
+                try:
+                    if (
+                        entry["asset"] in allocation_assets
+                        or entry["address"] in allocation_assets
+                    ):
+                        filtered_portfolio_breakdown.append(
+                            {
+                                "asset": entry["asset"],
+                                "address": entry["address"],
+                                "balance": float(entry["balance"]),
+                                "price": float(entry["price"]),
+                                "value_usd": float(entry["value_usd"]),
+                                "ratio": float(entry["ratio"]),
+                            }
+                        )
+                except (KeyError, ValueError, TypeError) as e:
+                    self.context.logger.error(
+                        f"Error processing portfolio breakdown entry: {str(e)}"
+                    )
+                    continue
+
+            # Process allocations with error handling
+            processed_allocations = []
+            for allocation in allocations:
+                try:
+                    processed_allocation = {
+                        "chain": allocation["chain"],
+                        "type": allocation["type"],
+                        "id": allocation["id"],
+                        "assets": allocation["assets"],
+                        "apr": float(allocation["apr"]),
+                        "details": allocation["details"],
+                        "ratio": float(allocation["ratio"]),
+                        "address": allocation["address"],
+                    }
+                    if "tick_ranges" in allocation:
+                        processed_allocation["tick_ranges"] = allocation["tick_ranges"]
+                    processed_allocations.append(processed_allocation)
+                except (KeyError, ValueError, TypeError) as e:
+                    self.context.logger.error(f"Error processing allocation: {str(e)}")
+                    continue
+
+            # Create and return the final portfolio data structure
+            return {
+                "portfolio_value": float(total_portfolio_value),
+                "value_in_pools": float(total_pools_value),
+                "value_in_safe": float(total_safe_value),
+                "initial_investment": float(initial_investment)
+                if initial_investment is not None
+                else None,
+                "volume": float(volume) if volume is not None else None,
+                "agent_hash": agent_hash,
+                "allocations": processed_allocations,
+                "portfolio_breakdown": filtered_portfolio_breakdown,
+                "address": self.params.safe_contract_addresses.get(
+                    self.params.target_investment_chains[0]
+                ),
+                "last_updated": int(self._get_current_timestamp()),
+            }
+        except Exception as e:
+            self.context.logger.error(f"Error creating portfolio data: {str(e)}")
+            # Return a minimal valid response in case of error
+            return {
+                "portfolio_value": 0.0,
+                "value_in_pools": 0.0,
+                "value_in_safe": 0.0,
+                "initial_investment": None,
+                "volume": None,
+                "agent_hash": "Error",
+                "allocations": [],
+                "portfolio_breakdown": [],
+                "address": None,
+                "last_updated": int(self._get_current_timestamp()),
+            }
 
     def _handle_balancer_position(
         self, position: Dict, chain: str
@@ -1619,15 +1679,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         cached_values = yield from self._read_kv(keys=("initial_investment_values",))
         if cached_values and cached_values.get("initial_investment_values"):
             try:
-                self.initial_investment_values_per_pool = json.loads(
-                    cached_values.get("initial_investment_values")
-                )
+                raw_cache = json.loads(cached_values.get("initial_investment_values"))
+                # Ensure all values are floats (not strings)
+                self.initial_investment_values_per_pool = {
+                    k: float(v) for k, v in raw_cache.items()
+                }
                 self.context.logger.info(
                     f"Loaded {len(self.initial_investment_values_per_pool)} cached position values from KV store"
                 )
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
                 self.context.logger.warning(
-                    "Failed to parse cached investment values from KV store"
+                    f"Failed to parse cached investment values from KV store: {e}"
                 )
 
         # Process all positions (both open and closed)
@@ -2160,7 +2222,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 try:
                     # Get token price for the transfer date
                     token_symbol = transfer.get("symbol", "Unknown")
-                    amount = transfer.get("amount", 0)
+                    amount = transfer.get("delta", transfer.get("amount", 0))
 
                     if amount <= 0:
                         continue
@@ -2214,6 +2276,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         else:
             self.funding_events = {}
             existing_mode_data = {}
+
+        # Check for backward compatibility - if any ETH transfers don't have "delta" field
+        # then we need to refetch everything with the new format
+        needs_refetch = False
+        if existing_mode_data:
+            for date, transfers in existing_mode_data.items():
+                for transfer in transfers:
+                    if transfer.get("type") == "eth" and "delta" not in transfer:
+                        self.context.logger.info(
+                            f"Found ETH transfer without delta field on {date}. "
+                            "Setting fetch_till_date=True and clearing funding_events for refetch."
+                        )
+                        needs_refetch = True
+                        break
+                if needs_refetch:
+                    break
+
+        if needs_refetch:
+            # Clear existing data and force full refetch
+            existing_mode_data = {}
+            self.funding_events = {}
+            fetch_till_date = True
+            self.context.logger.info(
+                "Cleared funding_events for backward compatibility refetch"
+            )
 
         all_transfers_by_date = defaultdict(list)
         end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
@@ -2577,7 +2664,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if amount == 0:
                         continue
 
-                    if symbol != "USDC" or "usdc":
+                    if symbol.lower() != "usdc":
                         continue
                     transfer_data = {
                         "from_address": from_address.get("hash", ""),
@@ -2625,14 +2712,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         target_date: str,
         all_transfers_by_date: dict,
         fetch_till_date: bool,
-    ) -> float:
+    ) -> None:
         """Fetch ETH balance history from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         endpoint = f"{base_url}/addresses/{address}/coin-balance-history"
 
         has_more_pages = True
         params = {}
-        highest_amount = 0
+        processed_count = 0
 
         # Check if we have existing mode events and get latest date
         mode_events = self.funding_events.get("mode", {})
@@ -2640,10 +2727,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             try:
                 latest_date = list(mode_events.keys())[0]
                 latest_datetime = datetime.strptime(latest_date, "%Y-%m-%d")
+                latest_datetime = latest_datetime.replace(tzinfo=timezone.utc)
             except (IndexError, ValueError):
-                latest_datetime = datetime(1970, 1, 1)
+                latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
         else:
-            latest_datetime = datetime(1970, 1, 1)
+            latest_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         while has_more_pages:
             response = requests.get(
@@ -2656,7 +2744,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             if not response.status_code == 200:
                 self.context.logger.error("Failed to fetch Mode coin balance history")
-                return highest_amount
+                return
 
             response_data = response.json()
             balance_history = response_data.get("items", [])
@@ -2670,6 +2758,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if current_value <= 0:
                     continue
 
+                # Calculate delta value
+                delta_value = int(entry.get("delta", "0")) / 10**18
+
+                # Get tx_hash
+                tx_hash = entry.get("transaction_hash")
+
+                # Filter: only include if delta > 0 and tx_hash is null/empty
+                if delta_value <= 0:
+                    continue
+
+                if tx_hash is not None and tx_hash != "":
+                    continue
+
                 tx_datetime = datetime.strptime(
                     entry.get("block_timestamp", ""), "%Y-%m-%dT%H:%M:%SZ"
                 )
@@ -2681,10 +2782,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Store balance data
                 transfer_data = {
                     "amount": current_value,
-                    "delta": int(entry.get("delta", "0"))
-                    / 10**18,  # Convert delta to ETH
+                    "delta": delta_value,
                     "timestamp": entry.get("block_timestamp"),
-                    "tx_hash": entry.get("transaction_hash"),
+                    "tx_hash": tx_hash,
                     "type": "eth",
                     "block_number": entry.get("block_number"),
                     "symbol": "ETH",
@@ -2700,7 +2800,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if tx_date not in all_transfers_by_date:
                     all_transfers_by_date[tx_date] = []
                 all_transfers_by_date[tx_date].append(transfer_data)
-                highest_amount = max(highest_amount, current_value)
+                processed_count += 1
 
             # Stop pagination based on fetch mode
             if passed_target_date:
@@ -2708,7 +2808,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Handle pagination
             next_page_params = response_data.get("next_page_params")
-            if next_page_params and passed_target_date:
+            if next_page_params and not passed_target_date:
                 # Update params for next page
                 params.update(
                     {
@@ -2724,10 +2824,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             f"for {target_date}" if not fetch_till_date else f"till {target_date}"
         )
         self.context.logger.info(
-            f"Completed Mode coin balance history {date_range}: highest amount {highest_amount} ETH"
+            f"Completed Mode coin balance history {date_range}: {processed_count} filtered transfers found"
         )
-
-        return highest_amount
 
     def _should_include_transfer_mode(
         self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False
@@ -2843,6 +2941,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         else:
                             symbol = token_info.get("symbol", "Unknown")
                             decimals = int(token_info.get("decimals", 18) or 18)
+
+                        if symbol.lower() != "usdc":
+                            continue
 
                         value_raw = int(transfer.get("value", "0") or "0")
                         amount = value_raw / (10**decimals)

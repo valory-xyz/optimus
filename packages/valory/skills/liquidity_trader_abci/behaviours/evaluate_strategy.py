@@ -35,6 +35,7 @@ from typing import (
     cast,
 )
 from urllib.parse import urlencode
+import asyncio
 
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
@@ -80,6 +81,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Execute the behaviour's async action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # Check minimum hold period
+            # Check if no current positions and uninvested ETH, prepare swap to USDC
+            actions = yield from self.check_and_prepare_non_whitelisted_swaps()
+            if actions:
+                yield from self.send_actions(actions)
+
             should_hold = self.check_minimum_hold_period()
             if should_hold:
                 yield from self.send_actions()
@@ -628,13 +634,128 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
 
+    def check_and_prepare_non_whitelisted_swaps(
+        self,
+    ) -> Generator[None, None, Optional[List[Any]]]:
+        """Check all funds in safe and swap non-whitelisted assets to USDC if value > $5."""
+        try:
+            actions = []
+            target_chain = self.params.target_investment_chains[0]
+            usdc_address = self._get_usdc_address(target_chain)
+
+            if not usdc_address:
+                self.context.logger.warning(
+                    f"Could not get USDC address for {target_chain}"
+                )
+                return []
+
+            # Get all positions to check assets in safe
+            for position in self.synchronized_data.positions:
+                chain = position.get("chain")
+
+                for asset in position.get("assets", []):
+                    asset_address = asset.get("address")
+                    asset_symbol = asset.get("asset_symbol")
+                    balance = asset.get("balance", 0)
+
+                    # Skip if no balance or asset is whitelisted
+                    if balance <= 0 or asset_symbol in WHITELISTED_ASSETS:
+                        continue
+
+                    # Get asset price and calculate USD value
+                    if asset_address == ZERO_ADDRESS:
+                        # Handle ETH separately
+                        price = yield from self._fetch_zero_address_price()
+                        decimals = 18
+                    else:
+                        # Get price for other tokens
+                        price = yield from self._fetch_token_price(asset_address, chain)
+                        decimals = yield from self._get_token_decimals(
+                            chain, asset_address
+                        )
+
+                    if not price:
+                        self.context.logger.warning(
+                            f"Could not fetch price for {asset_symbol}"
+                        )
+                        continue
+
+                    # Calculate value in USD
+                    token_amount = balance / (10**decimals)
+                    value_usd = token_amount * price
+
+                    self.context.logger.info(
+                        f"Found {asset_symbol} on {chain}: {token_amount:.6f} (~${value_usd:.2f})"
+                    )
+
+                    # If value > $5 and not whitelisted, prepare swap to USDC
+                    if value_usd > 5.0:
+                        self.context.logger.info(
+                            f"{asset_symbol} value (${value_usd:.2f}) exceeds $5 threshold and is not whitelisted. "
+                            "Preparing swap action to USDC."
+                        )
+
+                        actions.append(
+                            {
+                                "action": Action.FIND_BRIDGE_ROUTE.value,
+                                "from_chain": chain,
+                                "to_chain": chain,  # Same chain swap
+                                "from_token": asset_address,
+                                "from_token_symbol": asset_symbol,
+                                "to_token": usdc_address,
+                                "to_token_symbol": "USDC",
+                                "funds_percentage": 1.0,  # Use all available balance
+                            }
+                        )
+
+                        self.context.logger.info(
+                            f"Prepared {asset_symbol} to USDC swap on {chain}: "
+                            f"{token_amount:.6f} {asset_symbol} -> USDC"
+                        )
+
+            return actions
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in check_and_prepare_non_whitelisted_swaps: {str(e)}"
+            )
+            return []
+
+    def _get_usdc_address(self, chain: str) -> Optional[str]:
+        """Get USDC token address for the specified chain."""
+        try:
+            # Common USDC addresses for different chains
+            usdc_addresses = {
+                "mode": "0xd988097fb8612cc24eeC14542bC03424c656005f",
+                "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+            }
+
+            usdc_address = usdc_addresses.get(chain.lower())
+            if usdc_address:
+                usdc_address = to_checksum_address(usdc_address)
+                self.context.logger.info(
+                    f"Found USDC address for {chain}: {usdc_address}"
+                )
+                return usdc_address
+            else:
+                self.context.logger.warning(
+                    f"No USDC address configured for chain: {chain}"
+                )
+                return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error getting USDC address for {chain}: {str(e)}"
+            )
+            return None
+
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""
         if not self.trading_opportunities:
             self.context.logger.info("No trading opportunities found")
             return []
 
-        self.execute_hyper_strategy()
+        yield from self.execute_hyper_strategy()
         actions = (
             yield from self.get_order_of_transactions()
             if self.selected_opportunities is not None
@@ -647,7 +768,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return actions
 
-    def execute_hyper_strategy(self) -> None:
+    def execute_hyper_strategy(self) -> Generator[None, None, None]:
         """Executes hyper strategy"""
         hyper_strategy = self.params.selected_hyper_strategy
         composite_score = None
@@ -667,6 +788,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"Using default threshold for {self.synchronized_data.trading_type}: {composite_score}"
             )
+        # Ensure composite_score is a float
+        try:
+            composite_score = float(composite_score)
+        except (ValueError, TypeError):
+            composite_score = 0.0
         kwargs = {
             "strategy": hyper_strategy,
             "trading_opportunities": self.trading_opportunities,
@@ -732,10 +858,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
 
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
-        """Fetches all the trading opportunities using multiprocessing"""
+        """Fetches all the trading opportunities using asyncio for concurrency."""
         self.trading_opportunities.clear()
         yield from self.download_strategies()
         strategies = self.synchronized_data.selected_protocols.copy()
+
         tried_strategies: Set[str] = set()
         self.context.logger.info(f"Selected Strategies: {strategies}")
 
@@ -743,10 +870,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         strategy_kwargs_list = []
         for next_strategy in strategies:
             self.context.logger.info(f"Preparing strategy: {next_strategy}")
-            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(
-                next_strategy, {}
-            )
-
+            kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(next_strategy, {})
             kwargs.update(
                 {
                     "strategy": next_strategy,
@@ -769,76 +893,71 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "coin_id_mapping": COIN_ID_MAPPING,
                 }
             )
-            strategy_kwargs_list.append(kwargs)
-            self.context.logger.info(f"Strategy kwargs: {kwargs}")
+            strategy_kwargs_list.append((next_strategy, kwargs))
+            self.context.logger.info(f"Strategy kwargs for {next_strategy}: {kwargs}")
 
         strategies_executables = self.shared_state.strategies_executables
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future_to_strategy = {}
-            futures = []
-            for kwargs in strategy_kwargs_list:
-                strategy_name = kwargs["strategy"]
-                # Remove 'strategy' from kwargs to avoid passing it twice
-                kwargs_without_strategy = {
-                    k: v for k, v in kwargs.items() if k != "strategy"
-                }
+        async def async_execute_strategy(strategy_name, strategies_executables, **kwargs):
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None,
+                lambda: execute_strategy(strategy_name, strategies_executables, **kwargs)
+            )
 
-                future = executor.submit(
-                    execute_strategy,
-                    strategy_name,
-                    strategies_executables,
-                    **kwargs_without_strategy,
+        async def run_all_strategies():
+            tasks = []
+            for strategy_name, kwargs in strategy_kwargs_list:
+                kwargs_without_strategy = {k: v for k, v in kwargs.items() if k != "strategy"}
+                tasks.append(
+                    async_execute_strategy(strategy_name, strategies_executables, **kwargs_without_strategy)
                 )
-                future_to_strategy[future] = strategy_name
-                futures.append(future)
+            return await asyncio.gather(*tasks)
 
-            results = []
+        loop = asyncio.get_event_loop()
+        future = asyncio.ensure_future(run_all_strategies())
+        while not future.done():
+            yield  # Yield control to the agent loop
+        results = future.result()
 
-            for future in futures:
-                result = yield from self.get_result(future)
-                results.append(result)
+        for next_strategy, result in zip(strategies, results):
+            tried_strategies.add(next_strategy)
+            if not result:
+                continue
+            if "error" in result:
+                errors = result.get("error", [])
+                for error in errors:
+                    self.context.logger.error(
+                        f"Error in strategy {next_strategy}: {error}"
+                    )
 
-            for future, result in zip(futures, results):
-                next_strategy = future_to_strategy[future]
-                tried_strategies.add(next_strategy)
-                if not result:
-                    continue
-                if "error" in result:
-                    errors = result.get("error", [])
-                    for error in errors:
+            opportunities = result.get("result", [])
+            if opportunities:
+                self.context.logger.info(
+                    f"Opportunities found using {next_strategy} strategy"
+                )
+                valid_opportunities = []
+                for opportunity in opportunities:
+                    if isinstance(opportunity, dict):
+                        self.context.logger.info(
+                            f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
+                            f"Chain: {opportunity.get('chain', 'N/A')}, "
+                            f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
+                            f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
+                        )
+                        valid_opportunities.append(opportunity)
+                    else:
                         self.context.logger.error(
-                            f"Error in strategy {next_strategy}: {error}"
+                            f"Invalid opportunity format from {next_strategy} strategy. "
+                            f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
                         )
 
-                opportunities = result.get("result", [])
-                if opportunities:
-                    self.context.logger.info(
-                        f"Opportunities found using {next_strategy} strategy"
-                    )
-                    valid_opportunities = []
-                    for opportunity in opportunities:
-                        if isinstance(opportunity, dict):
-                            self.context.logger.info(
-                                f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
-                                f"Chain: {opportunity.get('chain', 'N/A')}, "
-                                f"Token0: {opportunity.get('token0_symbol', 'N/A')}, "
-                                f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
-                            )
-                            valid_opportunities.append(opportunity)
-                        else:
-                            self.context.logger.error(
-                                f"Invalid opportunity format from {next_strategy} strategy. "
-                                f"Expected dict, got {type(opportunity).__name__}: {opportunity}"
-                            )
-
-                    if valid_opportunities:
-                        self.trading_opportunities.extend(valid_opportunities)
-
-                else:
-                    self.context.logger.warning(
-                        f"No opportunity found using {next_strategy} strategy"
-                    )
+                if valid_opportunities:
+                    self.trading_opportunities.extend(valid_opportunities)
+            else:
+                self.context.logger.warning(
+                    f"No opportunity found using {next_strategy} strategy"
+                )
 
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""

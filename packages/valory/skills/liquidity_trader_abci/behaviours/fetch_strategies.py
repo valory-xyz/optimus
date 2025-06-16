@@ -104,10 +104,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             chain = self.params.target_investment_chains[0]
             safe_address = self.params.safe_contract_addresses.get(chain)
-
-            res = yield from self._track_eth_transfers_and_reversions(
-                safe_address, chain
-            )
+            
+            res = yield from self._track_eth_transfers_and_reversions(safe_address, chain)
 
             to_address = res.get("master_safe_address")
             eth_amount = res.get("reversion_amount",0) * 10**18
@@ -3247,22 +3245,26 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         try:
             current_date = datetime.now().strftime("%Y-%m-%d")
             # Get all transfers until date
-            all_transfers = {}
+            all_incoming_transfers = {}
             if chain == "optimism":
-                all_transfers = (
-                    yield from self._fetch_all_transfers_until_date_optimism(
-                        safe_address, current_date
-                    )
+                all_incoming_transfers = yield from self._fetch_all_transfers_until_date_optimism(
+                    safe_address, current_date
+                )
+                all_outgoing_transfers = yield from self._fetch_outgoing_transfers_until_date_optimism(
+                    safe_address, current_date
                 )
             elif chain == "mode":
-                all_transfers = self._fetch_all_transfers_until_date_mode(
+                all_incoming_transfers = self._fetch_all_transfers_until_date_mode(
+                    safe_address, current_date, True
+                )
+                all_outgoing_transfers = self._fetch_outgoing_transfers_until_date_mode(
                     safe_address, current_date, True
                 )
             else:
                 self.context.logger.warning(f"Unsupported chain: {chain}")
                 return {}
-
-            if not all_transfers:
+            
+            if not all_incoming_transfers:
                 self.context.logger.warning(f"No transfers found for {chain} chain")
                 return {}
 
@@ -3274,17 +3276,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             reversion_date = None
 
             # Sort transfers by timestamp
-            sorted_transfers = []
-            for date, transfers in all_transfers.items():
+            sorted_incoming_transfers = []
+            for date, transfers in all_incoming_transfers.items():
                 for transfer in transfers:
                     if isinstance(transfer, dict) and "timestamp" in transfer:
-                        sorted_transfers.append(transfer)
+                        sorted_incoming_transfers.append(transfer)
 
-            sorted_transfers.sort(key=lambda x: x["timestamp"])
+            sorted_incoming_transfers.sort(key=lambda x: x["timestamp"])
 
+            sorted_outgoing_transfers = []
+            for date, transfers in all_outgoing_transfers.items():
+                for transfer in transfers:
+                    if isinstance(transfer, dict) and "timestamp" in transfer:
+                        sorted_outgoing_transfers.append(transfer)
+
+            sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
 
             # Process transfers
-            for transfer in sorted_transfers:
+            for transfer in sorted_incoming_transfers:
                 # Check if it's an ETH transfer
                 if transfer.get("symbol") == "ETH":
                     # If this is the first transfer, store it as initial funding
@@ -3300,22 +3309,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     elif transfer.get("from_address", "").lower() == master_safe_address.lower():
                         eth_transfers.append(transfer)
 
-
-            breakpoint()
+            for transfer in sorted_outgoing_transfers:
+                if transfer.get("symbol") == "ETH":
+                    if transfer.get("to_address", "").lower() == master_safe_address.lower():
+                        reversion_transfers.append(transfer)
 
             # Get current ETH balance
-            current_eth_balance = 0
-            for position in self.synchronized_data.positions:
-                chain = position.get("chain")
-                for asset in position.get("assets", []):
-                    asset_symbol = asset.get("asset_symbol")
-                    balance = asset.get("balance", 0)
-
-                    if asset_symbol == "ETH":
-                        current_eth_balance = balance
-                        self.context.logger.info(
-                            f"Found additional ETH transfer of {current_eth_balance} that needs reversion"
-                        )
+            chain = self.params.target_investment_chains[0]
+            account = self.params.safe_contract_addresses.get(chain)
+            current_eth_balance = yield from self._get_native_balance(chain, account)
 
             # Determine if reversion is needed
             reversion_amount = 0
@@ -3326,11 +3328,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # No reversion has happened yet, revert the last transfer amount
                     last_transfer = eth_transfers[-1]
                     reversion_amount = float(last_transfer.get("amount", 0))
-                    # Get the date of the last transfer that needs reversion
-                    reversion_date = datetime.fromtimestamp(
-                        int(last_transfer.get("timestamp", 0))
-                    ).strftime("%Y-%m-%d")
 
+                    # Get the date of the last transfer that needs reversion
+                    try:
+                        # Handle ISO format timestamp
+                        timestamp = last_transfer.get("timestamp", "")
+                        if timestamp.endswith('Z'):
+                            # Convert ISO format to datetime
+                            tx_datetime = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            reversion_date = tx_datetime.strftime("%Y-%m-%d")
+                        else:
+                            # Try parsing as Unix timestamp
+                            reversion_date = datetime.fromtimestamp(
+                                int(timestamp)
+                            ).strftime("%Y-%m-%d")
+                    except (ValueError, TypeError) as e:
+                        self.context.logger.warning(f"Error parsing timestamp: {e}")
+                        # Use current date as fallback
+                        reversion_date = current_date
+                    
                     if current_eth_balance < reversion_amount:
                         reversion_amount = current_eth_balance
                         self.context.logger.info(
@@ -3356,3 +3372,228 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error tracking ETH transfers: {str(e)}")
             return {}
+
+    def _fetch_outgoing_transfers_until_date_mode(
+        self,
+        address: str,
+        current_date: str,
+    ) -> Dict:
+        """Fetch all outgoing transfers from the safe address on Mode until a specific date.
+
+        Args:
+            address: The safe address to fetch transfers for
+            current_date: The date until which to fetch transfers (format: "YYYY-MM-DD")
+
+        Returns:
+            Dict: Dictionary of transfers organized by date
+        """
+        all_transfers = {}
+
+        if not address:
+            self.context.logger.warning("No address provided for fetching Mode outgoing transfers")
+            return all_transfers
+
+        try:
+            # Use Mode blockchain explorer API
+            base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+            endpoint = f"{base_url}/addresses/{address}/transactions"
+
+            has_more_pages = True
+            params = {
+                "filter": "from",  # Only fetch outgoing transfers
+                "limit": 100  # Maximum items per page
+            }
+            processed_count = 0
+
+            while has_more_pages:
+                response = requests.get(
+                    endpoint,
+                    params=params,
+                    headers={"Accept": "application/json"},
+                    verify=False,
+                    timeout=30,
+                )
+
+                if not response.status_code == 200:
+                    self.context.logger.error(f"Failed to fetch Mode outgoing transfers: {response.status_code}")
+                    break
+
+                response_data = response.json()
+                transactions = response_data.get("items", [])
+                if not transactions:
+                    break
+
+                for tx in transactions:
+                    # Skip if no timestamp
+                    if not tx.get("timestamp"):
+                        continue
+
+                    # Handle ISO format timestamp
+                    try:
+                        tx_datetime = datetime.fromisoformat(tx.get("timestamp").replace('Z', '+00:00'))
+                        tx_date = tx_datetime.strftime("%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        self.context.logger.warning(f"Invalid timestamp format: {tx.get('timestamp')}")
+                        continue
+
+                    if tx_date > current_date:
+                        continue
+
+                    # Process ETH transfers
+                    if tx.get("value"):
+                        try:
+                            value_wei = int(tx.get("value", "0"))
+                            amount_eth = value_wei / 10**18
+
+                            if amount_eth <= 0:
+                                continue
+
+                            # Get to address
+                            to_address = tx.get("to", {}).get("hash", "")
+                            if not to_address or to_address.lower() == address.lower():
+                                continue
+
+                            transfer_data = {
+                                "from_address": address,
+                                "to_address": to_address,
+                                "amount": amount_eth,
+                                "token_address": ZERO_ADDRESS,
+                                "symbol": "ETH",
+                                "timestamp": tx.get("timestamp", ""),
+                                "tx_hash": tx.get("hash", ""),
+                                "type": "eth",
+                            }
+
+                            if tx_date not in all_transfers:
+                                all_transfers[tx_date] = []
+                            all_transfers[tx_date].append(transfer_data)
+                            processed_count += 1
+                        except (ValueError, TypeError) as e:
+                            self.context.logger.warning(f"Error processing transaction: {e}")
+                            continue
+
+                    # Handle pagination
+                    next_page_params = response_data.get("next_page_params")
+                    if next_page_params:
+                        params.update({
+                            "block_number": next_page_params.get("block_number"),
+                            "index": next_page_params.get("index"),
+                        })
+                        has_more_pages = True
+                    else:
+                        has_more_pages = False
+
+                self.context.logger.info(
+                    f"Completed Mode outgoing transfers: {processed_count} found"
+                )
+                return all_transfers
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Mode outgoing transfers: {e}")
+            return {}
+
+    def _fetch_outgoing_transfers_until_date_optimism(
+        self,
+        address: str,
+        current_date: str,
+    ) -> Generator[None, None, Dict]:
+        """Fetch all outgoing transfers from the safe address on Optimism until a specific date.
+
+        Args:
+            address: The safe address to fetch transfers for
+            current_date: The date until which to fetch transfers (format: "YYYY-MM-DD")
+
+        Returns:
+            Dict: Dictionary of transfers organized by date
+        """
+        all_transfers = {}
+
+        if not address:
+            self.context.logger.warning("No address provided for fetching Optimism outgoing transfers")
+            return all_transfers
+
+        try:
+            # Use SafeGlobal API for Optimism transfers
+            base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+            transfers_url = f"{base_url}/safes/{address}/transfers/"
+
+            processed_count = 0
+            while True:
+                success, response_json = yield from self._request_with_retries(
+                    endpoint=transfers_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
+
+                if not success:
+                    self.context.logger.error("Failed to fetch Optimism transfers")
+                    break
+
+                transfers = response_json.get("results", [])
+                if not transfers:
+                    break
+
+                for transfer in transfers:
+                    # Parse timestamp
+                    timestamp = transfer.get("executionDate")
+                    if not timestamp:
+                        continue
+
+                    # Handle ISO format timestamp
+                    try:
+                        tx_datetime = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        tx_date = tx_datetime.strftime("%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        self.context.logger.warning(f"Invalid timestamp format: {timestamp}")
+                        continue
+
+                    if tx_date > current_date:
+                        continue
+
+                    # Only process outgoing transfers (where from address is equal to our safe address)
+                    if transfer.get("from") == address.lower():
+                        transfer_type = transfer.get("type", "")
+
+                        if transfer_type == "ETHER_TRANSFER":
+                            try:
+                                value_wei = int(transfer.get("value", "0") or "0")
+                                amount_eth = value_wei / 10**18
+
+                                if amount_eth <= 0:
+                                    continue
+                            except (ValueError, TypeError):
+                                continue
+
+                            transfer_data = {
+                                "from_address": address,
+                                "to_address": transfer.get("to"),
+                                "amount": amount_eth,
+                                "token_address": ZERO_ADDRESS,
+                                "symbol": "ETH",
+                                "timestamp": timestamp,
+                                "tx_hash": transfer.get("transactionHash", ""),
+                                "type": "eth",
+                            }
+
+                            if tx_date not in all_transfers:
+                                all_transfers[tx_date] = []
+                            all_transfers[tx_date].append(transfer_data)
+                            processed_count += 1
+
+                    # Check for next page
+                    cursor = response_json.get("next")
+                    if not cursor:
+                        break
+
+                self.context.logger.info(
+                    f"Completed Optimism outgoing transfers: {processed_count} found"
+                )
+                return all_transfers
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Optimism outgoing transfers: {e}")
+            return {}
+
+

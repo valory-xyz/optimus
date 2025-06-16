@@ -3256,19 +3256,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     yield from self._fetch_all_transfers_until_date_optimism(
                         safe_address, current_date
                     )
-                )
+                ) or {}
                 all_outgoing_transfers = (
                     yield from self._fetch_outgoing_transfers_until_date_optimism(
                         safe_address, current_date
                     )
-                )
+                ) or {}
             elif chain == "mode":
                 all_incoming_transfers = self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, True
-                )
+                ) or {}
                 all_outgoing_transfers = self._fetch_outgoing_transfers_until_date_mode(
                     safe_address, current_date
-                )
+                ) or {}
             else:
                 self.context.logger.warning(f"Unsupported chain: {chain}")
                 return {}
@@ -3312,12 +3312,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             "from_address": transfer.get("from_address"),
                             "timestamp": transfer.get("timestamp"),
                         }
-                        master_safe_address = transfer.get("from_address")
+                        if transfer.get("from_address"):
+                            master_safe_address = transfer.get("from_address").lower()
                         eth_transfers.append(transfer)
                     # If it's from the same address as initial funding
                     elif (
                         transfer.get("from_address", "").lower()
-                        == master_safe_address.lower()
+                        == master_safe_address
                     ):
                         eth_transfers.append(transfer)
 
@@ -3325,7 +3326,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if transfer.get("symbol") == "ETH":
                     if (
                         transfer.get("to_address", "").lower()
-                        == master_safe_address.lower()
+                        == master_safe_address
                     ):
                         reversion_transfers.append(transfer)
 
@@ -3388,7 +3389,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error tracking ETH transfers: {str(e)}")
-            return {}
+            return {"reversion_amount": 0, "master_safe_address": None, "reversion_date": None}
 
     def _fetch_outgoing_transfers_until_date_mode(
         self,
@@ -3516,6 +3517,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Completed Mode outgoing transfers: {processed_count} found"
                 )
                 return all_transfers
+
+            return all_transfers
 
         except Exception as e:
             self.context.logger.error(f"Error fetching Mode outgoing transfers: {e}")

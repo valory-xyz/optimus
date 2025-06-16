@@ -54,7 +54,6 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     DexType,
-    ETHER_VALUE,
     LiquidityTraderBaseBehaviour,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
@@ -104,11 +103,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             chain = self.params.target_investment_chains[0]
             safe_address = self.params.safe_contract_addresses.get(chain)
-            
-            res = yield from self._track_eth_transfers_and_reversions(safe_address, chain)
+
+            res = yield from self._track_eth_transfers_and_reversions(
+                safe_address, chain
+            )
 
             to_address = res.get("master_safe_address")
-            eth_amount = res.get("reversion_amount",0) * 10**18
+            eth_amount = res.get("reversion_amount", 0) * 10**18
 
             if eth_amount > 0:
                 if not to_address:
@@ -2195,12 +2196,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 # Get ETH price for the reversion date
                 if reversion_date:
-                    date_str = datetime.strptime(reversion_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+                    date_str = datetime.strptime(reversion_date, "%Y-%m-%d").strftime(
+                        "%d-%m-%Y"
+                    )
                     eth_price = yield from self._fetch_historical_eth_price(date_str)
                 else:
                     # Fallback to current price if date not available
                     current_date = datetime.now().strftime("%d-%m-%Y")
-                    eth_price = yield from self._fetch_historical_eth_price(current_date)
+                    eth_price = yield from self._fetch_historical_eth_price(
+                        current_date
+                    )
 
                 if eth_price:
                     reversion_value = reversion_amount * eth_price
@@ -3247,23 +3252,27 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Get all transfers until date
             all_incoming_transfers = {}
             if chain == "optimism":
-                all_incoming_transfers = yield from self._fetch_all_transfers_until_date_optimism(
-                    safe_address, current_date
+                all_incoming_transfers = (
+                    yield from self._fetch_all_transfers_until_date_optimism(
+                        safe_address, current_date
+                    )
                 )
-                all_outgoing_transfers = yield from self._fetch_outgoing_transfers_until_date_optimism(
-                    safe_address, current_date
+                all_outgoing_transfers = (
+                    yield from self._fetch_outgoing_transfers_until_date_optimism(
+                        safe_address, current_date
+                    )
                 )
             elif chain == "mode":
                 all_incoming_transfers = self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, True
                 )
                 all_outgoing_transfers = self._fetch_outgoing_transfers_until_date_mode(
-                    safe_address, current_date, True
+                    safe_address, current_date
                 )
             else:
                 self.context.logger.warning(f"Unsupported chain: {chain}")
                 return {}
-            
+
             if not all_incoming_transfers:
                 self.context.logger.warning(f"No transfers found for {chain} chain")
                 return {}
@@ -3277,7 +3286,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Sort transfers by timestamp
             sorted_incoming_transfers = []
-            for date, transfers in all_incoming_transfers.items():
+            for _, transfers in all_incoming_transfers.items():
                 for transfer in transfers:
                     if isinstance(transfer, dict) and "timestamp" in transfer:
                         sorted_incoming_transfers.append(transfer)
@@ -3285,7 +3294,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             sorted_incoming_transfers.sort(key=lambda x: x["timestamp"])
 
             sorted_outgoing_transfers = []
-            for date, transfers in all_outgoing_transfers.items():
+            for _, transfers in all_outgoing_transfers.items():
                 for transfer in transfers:
                     if isinstance(transfer, dict) and "timestamp" in transfer:
                         sorted_outgoing_transfers.append(transfer)
@@ -3301,17 +3310,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         initial_funding = {
                             "amount": transfer.get("amount", 0),
                             "from_address": transfer.get("from_address"),
-                            "timestamp": transfer.get("timestamp")
+                            "timestamp": transfer.get("timestamp"),
                         }
                         master_safe_address = transfer.get("from_address")
                         eth_transfers.append(transfer)
                     # If it's from the same address as initial funding
-                    elif transfer.get("from_address", "").lower() == master_safe_address.lower():
+                    elif (
+                        transfer.get("from_address", "").lower()
+                        == master_safe_address.lower()
+                    ):
                         eth_transfers.append(transfer)
 
             for transfer in sorted_outgoing_transfers:
                 if transfer.get("symbol") == "ETH":
-                    if transfer.get("to_address", "").lower() == master_safe_address.lower():
+                    if (
+                        transfer.get("to_address", "").lower()
+                        == master_safe_address.lower()
+                    ):
                         reversion_transfers.append(transfer)
 
             # Get current ETH balance
@@ -3333,9 +3348,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     try:
                         # Handle ISO format timestamp
                         timestamp = last_transfer.get("timestamp", "")
-                        if timestamp.endswith('Z'):
+                        if timestamp.endswith("Z"):
                             # Convert ISO format to datetime
-                            tx_datetime = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            tx_datetime = datetime.fromisoformat(
+                                timestamp.replace("Z", "+00:00")
+                            )
                             reversion_date = tx_datetime.strftime("%Y-%m-%d")
                         else:
                             # Try parsing as Unix timestamp
@@ -3346,7 +3363,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         self.context.logger.warning(f"Error parsing timestamp: {e}")
                         # Use current date as fallback
                         reversion_date = current_date
-                    
+
                     if current_eth_balance < reversion_amount:
                         reversion_amount = current_eth_balance
                         self.context.logger.info(
@@ -3366,7 +3383,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return {
                 "reversion_amount": reversion_amount,
                 "master_safe_address": master_safe_address,
-                "reversion_date": reversion_date
+                "reversion_date": reversion_date,
             }
 
         except Exception as e:
@@ -3390,7 +3407,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         all_transfers = {}
 
         if not address:
-            self.context.logger.warning("No address provided for fetching Mode outgoing transfers")
+            self.context.logger.warning(
+                "No address provided for fetching Mode outgoing transfers"
+            )
             return all_transfers
 
         try:
@@ -3401,7 +3420,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             has_more_pages = True
             params = {
                 "filter": "from",  # Only fetch outgoing transfers
-                "limit": 100  # Maximum items per page
+                "limit": 100,  # Maximum items per page
             }
             processed_count = 0
 
@@ -3415,7 +3434,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if not response.status_code == 200:
-                    self.context.logger.error(f"Failed to fetch Mode outgoing transfers: {response.status_code}")
+                    self.context.logger.error(
+                        f"Failed to fetch Mode outgoing transfers: {response.status_code}"
+                    )
                     break
 
                 response_data = response.json()
@@ -3430,10 +3451,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Handle ISO format timestamp
                     try:
-                        tx_datetime = datetime.fromisoformat(tx.get("timestamp").replace('Z', '+00:00'))
+                        tx_datetime = datetime.fromisoformat(
+                            tx.get("timestamp").replace("Z", "+00:00")
+                        )
                         tx_date = tx_datetime.strftime("%Y-%m-%d")
                     except (ValueError, TypeError):
-                        self.context.logger.warning(f"Invalid timestamp format: {tx.get('timestamp')}")
+                        self.context.logger.warning(
+                            f"Invalid timestamp format: {tx.get('timestamp')}"
+                        )
                         continue
 
                     if tx_date > current_date:
@@ -3469,16 +3494,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             all_transfers[tx_date].append(transfer_data)
                             processed_count += 1
                         except (ValueError, TypeError) as e:
-                            self.context.logger.warning(f"Error processing transaction: {e}")
+                            self.context.logger.warning(
+                                f"Error processing transaction: {e}"
+                            )
                             continue
 
                     # Handle pagination
                     next_page_params = response_data.get("next_page_params")
                     if next_page_params:
-                        params.update({
-                            "block_number": next_page_params.get("block_number"),
-                            "index": next_page_params.get("index"),
-                        })
+                        params.update(
+                            {
+                                "block_number": next_page_params.get("block_number"),
+                                "index": next_page_params.get("index"),
+                            }
+                        )
                         has_more_pages = True
                     else:
                         has_more_pages = False
@@ -3509,7 +3538,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         all_transfers = {}
 
         if not address:
-            self.context.logger.warning("No address provided for fetching Optimism outgoing transfers")
+            self.context.logger.warning(
+                "No address provided for fetching Optimism outgoing transfers"
+            )
             return all_transfers
 
         try:
@@ -3543,10 +3574,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Handle ISO format timestamp
                     try:
-                        tx_datetime = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        tx_datetime = datetime.fromisoformat(
+                            timestamp.replace("Z", "+00:00")
+                        )
                         tx_date = tx_datetime.strftime("%Y-%m-%d")
                     except (ValueError, TypeError):
-                        self.context.logger.warning(f"Invalid timestamp format: {timestamp}")
+                        self.context.logger.warning(
+                            f"Invalid timestamp format: {timestamp}"
+                        )
                         continue
 
                     if tx_date > current_date:
@@ -3593,7 +3628,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 return all_transfers
 
         except Exception as e:
-            self.context.logger.error(f"Error fetching Optimism outgoing transfers: {e}")
+            self.context.logger.error(
+                f"Error fetching Optimism outgoing transfers: {e}"
+            )
             return {}
-
-

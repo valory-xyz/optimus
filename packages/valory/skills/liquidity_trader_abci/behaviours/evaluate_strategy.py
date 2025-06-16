@@ -22,7 +22,7 @@
 import asyncio
 import json
 import traceback
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from typing import (
     Any,
     Callable,
@@ -657,7 +657,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     asset_address = asset.get("address")
                     asset_symbol = asset.get("asset_symbol")
                     if asset_address == ZERO_ADDRESS:
-                        balance = self.get_eth_remaining_amount(chain)
+                        balance = self.get_eth_remaining_amount()
                     else:
                         balance = asset.get("balance", 0)
 
@@ -984,7 +984,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Main execution loop
         try:
-            loop = asyncio.get_event_loop()
             future = asyncio.ensure_future(run_all_strategies())
             while not future.done():
                 yield  # Yield control to the agent loop

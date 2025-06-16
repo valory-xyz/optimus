@@ -656,7 +656,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 for asset in position.get("assets", []):
                     asset_address = asset.get("address")
                     asset_symbol = asset.get("asset_symbol")
-                    balance = asset.get("balance", 0)
+                    if asset_address == ZERO_ADDRESS:
+                        balance = self.get_eth_remaining_amount(chain)
+                    else:
+                        balance = asset.get("balance", 0)
 
                     # Skip if no balance or asset is whitelisted
                     if balance <= 0 or asset_symbol in WHITELISTED_ASSETS:

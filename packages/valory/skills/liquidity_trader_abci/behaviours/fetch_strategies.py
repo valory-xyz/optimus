@@ -3323,12 +3323,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             tx_datetime = datetime.fromisoformat(
                                 timestamp.replace("Z", "+00:00")
                             )
-                            reversion_date = tx_datetime.strftime("%Y-%m-%d")
+                            reversion_date = tx_datetime.strftime("%d-%m-%Y")
                         else:
                             # Try parsing as Unix timestamp
                             reversion_date = datetime.fromtimestamp(
                                 int(timestamp)
-                            ).strftime("%Y-%m-%d")
+                            ).strftime("%d-%m-%Y")
                     except (ValueError, TypeError) as e:
                         self.context.logger.warning(f"Error parsing timestamp: {e}")
                         # Use current date as fallback
@@ -3381,7 +3381,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         reversion_date = None
         reversion_value = 0.0
         last_transfer = eth_transfers[-1]
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_date = datetime.now().strftime("%d-%m-%Y")
 
         try:
             # Handle ISO format timestamp
@@ -3389,19 +3389,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if timestamp.endswith("Z"):
                 # Convert ISO format to datetime
                 tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                reversion_date = tx_datetime.strftime("%Y-%m-%d")
+                reversion_date = tx_datetime.strftime("%d-%m-%Y")
             else:
                 # Try parsing as Unix timestamp
                 reversion_date = datetime.fromtimestamp(int(timestamp)).strftime(
-                    "%Y-%m-%d"
+                    "%d-%m-%Y"
                 )
         except (ValueError, TypeError) as e:
             self.context.logger.warning(f"Error parsing timestamp: {e}")
             # Use current date as fallback
             reversion_date = current_date
 
-        date_str = datetime.strptime(reversion_date, "%Y-%m-%d").strftime("%d-%m-%Y")
-        eth_price = yield from self._fetch_historical_eth_price(date_str)
+        eth_price = yield from self._fetch_historical_eth_price(reversion_date)
 
         reversion_amount = reversion_transfer.get("amount", 0)
         reversion_value = reversion_amount * eth_price

@@ -67,6 +67,9 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
     FetchStrategiesPayload,
     FetchStrategiesRound,
 )
+from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
+    PostTxSettlementRound,
+)
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     LiquidityAmounts,
     TickMath,
@@ -107,9 +110,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # update locally stored eth balance in-case it's incorrect
             eth_balance = yield from self._get_native_balance(chain, safe_address)
+            self.context.logger.info(f"Current ETH balance: {eth_balance}")
+
             if eth_balance < ETH_INITIAL_AMOUNT:
+                self.context.logger.info(
+                    f"ETH balance {eth_balance} is below initial amount {ETH_INITIAL_AMOUNT}"
+                )
                 current_remaining = yield from self.get_eth_remaining_amount()
+                self.context.logger.info(
+                    f"Current remaining ETH amount: {current_remaining}"
+                )
                 updated_amount = max(current_remaining, eth_balance)
+                self.context.logger.info(
+                    f"Updating ETH remaining amount to: {updated_amount}"
+                )
                 yield from self.update_eth_remaining_amount(updated_amount)
 
             res = yield from self._track_eth_transfers_and_reversions(
@@ -434,6 +448,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def should_recalculate_portfolio(self, last_portfolio_data: Dict) -> bool:
         """Determine if the portfolio should be recalculated."""
+        last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
+            -1
+        ].round_id
+        if last_round_id == PostTxSettlementRound.auto_round_id():
+            return True
+
         return self._is_time_update_due() or self._have_positions_changed(
             last_portfolio_data
         )

@@ -1457,7 +1457,7 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(
             f"Updating ETH remaining amount in kv_store: {current_remaining} -> {new_remaining}"
         )
-        yield from self._write_kv({ETH_REMAINING_KEY: int(new_remaining)})
+        yield from self._write_kv({ETH_REMAINING_KEY: str(new_remaining)})
 
     def reset_eth_remaining_amount(self) -> Generator[None, None, int]:
         """Reset the remaining ETH amount to the initial value in kv_store."""

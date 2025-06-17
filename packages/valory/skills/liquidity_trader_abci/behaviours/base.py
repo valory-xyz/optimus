@@ -231,6 +231,7 @@ COIN_ID_MAPPING = {
         "wmlt": "bmx-wrapped-mode-liquidity-token",
         "bmx": "bmx",
         "xvelo": None,
+        "iusdc": "ironclad-usd",
     },
     "optimism": {
         "usdc": "usd-coin",
@@ -249,6 +250,7 @@ COIN_ID_MAPPING = {
         "usd+": "overnight-fi-usd-optimism",
         "ousdt": "openusdt",
         "usdglo": "glo-dollar",
+        "iusdc": "ironclad-usd"
     },
 }
 

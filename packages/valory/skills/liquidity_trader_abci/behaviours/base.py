@@ -250,7 +250,7 @@ COIN_ID_MAPPING = {
         "usd+": "overnight-fi-usd-optimism",
         "ousdt": "openusdt",
         "usdglo": "glo-dollar",
-        "iusdc": "ironclad-usd"
+        "iusdc": "ironclad-usd",
     },
 }
 

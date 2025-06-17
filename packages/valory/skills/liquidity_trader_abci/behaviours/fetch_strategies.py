@@ -2288,7 +2288,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             safe_address, chain
         )
         reversion_amount = reversion_info.get("reversion_amount", 0)
-        historical_reversion_value = reversion_info.get("historical_reversion_value", 0.0)
+        historical_reversion_value = reversion_info.get(
+            "historical_reversion_value", 0.0
+        )
         reversion_date = reversion_info.get("reversion_date")
 
         if historical_reversion_value > 0:
@@ -2298,7 +2300,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
         if reversion_amount > 0:
-            date_str = reversion_date if reversion_date else datetime.now().strftime("%d-%m-%Y")
+            date_str = (
+                reversion_date
+                if reversion_date
+                else datetime.now().strftime("%d-%m-%Y")
+            )
             eth_price = yield from self._fetch_historical_eth_price(date_str)
             if eth_price:
                 reversion_value = reversion_amount * eth_price
@@ -3345,7 +3351,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
 
             if len(reversion_transfers) > 0:
-                historical_reversion_value = yield from self._calculate_total_reversion_value(eth_transfers, reversion_transfers[0])
+                historical_reversion_value = (
+                    yield from self._calculate_total_reversion_value(
+                        eth_transfers, reversion_transfers[0]
+                    )
+                )
 
             return {
                 "reversion_amount": reversion_amount,
@@ -3362,8 +3372,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "historical_reversion_value": 0.0,
                 "reversion_date": None,
             }
-        
-    def _calculate_total_reversion_value(self, eth_transfers: List[Dict], reversion_transfer: Dict) -> Generator[None, None, float]:
+
+    def _calculate_total_reversion_value(
+        self, eth_transfers: List[Dict], reversion_transfer: Dict
+    ) -> Generator[None, None, float]:
         """Calculate the total reversion value from the reversion transfers."""
         reversion_amount = 0.0
         reversion_date = None
@@ -3376,15 +3388,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             timestamp = last_transfer.get("timestamp", "")
             if timestamp.endswith("Z"):
                 # Convert ISO format to datetime
-                tx_datetime = datetime.fromisoformat(
-                    timestamp.replace("Z", "+00:00")
-                )
+                tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                 reversion_date = tx_datetime.strftime("%Y-%m-%d")
             else:
                 # Try parsing as Unix timestamp
-                reversion_date = datetime.fromtimestamp(
-                    int(timestamp)
-                ).strftime("%Y-%m-%d")
+                reversion_date = datetime.fromtimestamp(int(timestamp)).strftime(
+                    "%Y-%m-%d"
+                )
         except (ValueError, TypeError) as e:
             self.context.logger.warning(f"Error parsing timestamp: {e}")
             # Use current date as fallback

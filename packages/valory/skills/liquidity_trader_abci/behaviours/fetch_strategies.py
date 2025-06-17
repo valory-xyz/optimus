@@ -2321,29 +2321,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self, all_transfers: Dict, chain: str
     ) -> Generator[None, None, float]:
         """Calculate investment value for a specific chain and update stored total."""
-        # Load existing total investment for this chain
-        existing_total = yield from self._load_chain_total_investment(chain)
-        if not existing_total:
-            last_calculated_date = "1970-01-01"
-        else:
-            chain_events = self.funding_events.get(chain, {})
-            if not chain_events:
-                last_calculated_date = "1970-01-01"
-            else:
-                try:
-                    last_calculated_date = sorted(list(chain_events.keys()))[-1]
-                except IndexError:
-                    last_calculated_date = "1970-01-01"
-
-        # Only calculate value for new transfers (all_transfers contains only new dates)
-        new_investment = 0.0
 
         for date, transfers in all_transfers.items():
-            current_date = datetime.strptime(date, "%Y-%m-%d")
-            last_date = datetime.strptime(last_calculated_date, "%Y-%m-%d")
-            if current_date <= last_date:
-                continue
-
             for transfer in transfers:
                 try:
                     # Get token price for the transfer date
@@ -2381,10 +2360,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
         # Update total investment for this chain
-        updated_total = existing_total + new_investment
+        updated_total = new_investment
         yield from self._save_chain_total_investment(chain, updated_total)
 
-        self.context.logger.info(f"New {chain} investment: ${new_investment}")
         self.context.logger.info(
             f"Total {chain} investment (updated): ${updated_total}"
         )

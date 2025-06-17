@@ -32,6 +32,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
     METRICS_NAME,
     METRICS_TYPE,
+    PositionStatus,
 )
 from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
     APRPopulationPayload,
@@ -185,7 +186,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             "timestamp": timestamp,
             "portfolio_snapshot": portfolio_snapshot,
             "calculation_metrics": self._get_apr_calculation_metrics(),
-            "first_investment_timestamp": self.current_positions[0].get("timestamp"),
+            "first_investment_timestamp": self.current_positions[0].get("timestamp")
+            if self.current_positions
+            else None,
             "agent_hash": agent_hash,
             "volume": self.portfolio_data.get("volume"),
             "trading_type": self.shared_state.trading_type,
@@ -217,7 +220,20 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         current_time = int(self._get_current_timestamp())
 
-        # If no last calculation or 30 minutes have passed
+        # Check if any new positions have been opened since last calculation
+        if self.current_positions:
+            for position in self.current_positions:
+                if position.get("status") == PositionStatus.OPEN.value:
+                    position_timestamp = position.get(
+                        "enter_timestamp"
+                    ) or position.get("timestamp")
+                    if position_timestamp and last_calculation_time:
+                        if int(position_timestamp) > last_calculation_time:
+                            self.context.logger.info(
+                                "New position opened since last APR calculation"
+                            )
+                            return True
+
         if (
             not last_calculation_time
             or (current_time - last_calculation_time) >= APR_UPDATE_INTERVAL
@@ -469,10 +485,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         # Use the stored initial investment value if available
         initial_value = self.get_stored_initial_investment()
         if not initial_value:
-            # Fall back to calculating it if not available
-            initial_value = yield from self.calculate_initial_investment()
-            if not initial_value:
-                return None
+            self.context.logger.error("No current investment")
+            return None
 
         self._initial_value = initial_value
         self.context.logger.info(f"Using initial investment value: {initial_value}")
@@ -555,7 +569,11 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             coingecko_id="ethereum", date_str=date_str
         )
 
-        if current_eth_price is not None and start_eth_price is not None:
+        if (
+            current_eth_price is not None
+            and start_eth_price is not None
+            and result["total_actual_apr"]
+        ):
             adjustment_factor = Decimal("1") - (
                 Decimal(str(current_eth_price)) / Decimal(str(start_eth_price))
             )

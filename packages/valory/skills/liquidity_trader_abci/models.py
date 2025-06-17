@@ -295,6 +295,12 @@ class Params(BaseParams):
         self.gas_cost_info_filename: str = self._ensure(
             "gas_cost_info_filename", kwargs, str
         )
+        self.whitelisted_assets_filename: str = self._ensure(
+            "whitelisted_assets_filename", kwargs, str
+        )
+        self.funding_events_filename: str = self._ensure(
+            "funding_events_filename", kwargs, str
+        )
         self.min_investment_amount = self._ensure("min_investment_amount", kwargs, int)
         self.max_fee_percentage = self._ensure("max_fee_percentage", kwargs, float)
         self.max_gas_percentage = self._ensure("max_gas_percentage", kwargs, float)

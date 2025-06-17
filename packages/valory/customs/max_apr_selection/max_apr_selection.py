@@ -40,10 +40,19 @@ def calculate_composite_score(pool, max_values):
     # Normalize metrics
     normalized_sharpe_ratio = sharpe_ratio / max_values["sharpe_ratio"]
     normalized_depth_score = depth_score / max_values["depth_score"]
+    
+    # FIXED: IL Risk normalization - lower (more negative) scores should get higher normalized values
+    # since lower IL risk is better. We invert the normalization so that:
+    # - Lowest risk (closest to 0) gets highest score (close to 1.0)
+    # - Highest risk (most negative) gets lowest score (close to 0.0)
     if max_values["il_risk_score"] == 0:
-        normalized_il_risk_score = 0
+        normalized_il_risk_score = 1.0  # If all pools have zero IL risk, give them max score
     else:
-        normalized_il_risk_score = abs(il_risk_score) / abs(max_values["il_risk_score"])
+        # Invert the normalization: 1 - (current_risk / max_risk)
+        # This ensures lower risk gets higher scores
+        normalized_il_risk_score = 1 - (abs(il_risk_score) / abs(max_values["il_risk_score"]))
+        # Ensure the score is between 0 and 1
+        normalized_il_risk_score = max(0.0, min(1.0, normalized_il_risk_score))
 
     # Calculate composite score
     return (
@@ -55,10 +64,15 @@ def calculate_composite_score(pool, max_values):
 
 def get_max_values(pools):
     """Get maximum values for normalization."""
+    # For IL risk score, we need the maximum absolute value (highest risk)
+    # since IL risk scores are negative, and more negative = higher risk
+    il_risk_scores = [pool.get("il_risk_score", 0) for pool in pools]
+    max_il_risk = max(il_risk_scores, key=abs) if il_risk_scores else 0
+    
     return {
         "sharpe_ratio": max((pool.get("sharpe_ratio", 0) for pool in pools)),
         "depth_score": max((pool.get("depth_score", 0) for pool in pools)),
-        "il_risk_score": max((pool.get("il_risk_score", 0) for pool in pools)),
+        "il_risk_score": max_il_risk,  # This will be the most negative (highest risk) value
     }
 
 

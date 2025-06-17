@@ -31,62 +31,108 @@ def main() -> None:
     """Main"""
     load_dotenv()
 
+    # Check if data directory exists, create if it doesn't
+    data_dir = Path("data")
+    if data_dir.exists():
+        print(f"Using existing data directory: {data_dir.absolute()}")
+    else:
+        data_dir.mkdir(exist_ok=True)
+        print(f"Created new data directory: {data_dir.absolute()}")
+
     with open(Path("optimus", "aea-config.yaml"), "r", encoding="utf-8") as file:
         config = list(yaml.safe_load_all(file))
 
-        # Ledger RPCs
-        if os.getenv("ETHEREUM_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["ethereum"][
-                "address"
-            ] = f"${{str:{os.getenv('ETHEREUM_LEDGER_RPC')}}}"
+        # Find the ledger connection config (should be at index 4 based on the YAML structure)
+        ledger_config_index = None
+        for i, doc in enumerate(config):
+            if (
+                isinstance(doc, dict)
+                and doc.get("public_id") == "valory/ledger:0.19.0"
+                and doc.get("type") == "connection"
+            ):
+                ledger_config_index = i
+                break
 
-        if os.getenv("BASE_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["base"][
-                "address"
-            ] = f"${{str:{os.getenv('BASE_LEDGER_RPC')}}}"
-
-        if os.getenv("OPTIMISM_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["optimism"][
-                "address"
-            ] = f"${{str:{os.getenv('OPTIMISM_LEDGER_RPC')}}}"
-
-        if os.getenv("MODE_LEDGER_RPC"):
-            config[2]["config"]["ledger_apis"]["mode"][
+        if ledger_config_index is not None and os.getenv("MODE_LEDGER_RPC"):
+            config[ledger_config_index]["config"]["ledger_apis"]["mode"][
                 "address"
             ] = f"${{str:{os.getenv('MODE_LEDGER_RPC')}}}"
 
-        # Params
-        config[5]["models"]["params"]["args"]["setup"][
-            "all_participants"
-        ] = f"${{list:{os.getenv('ALL_PARTICIPANTS')}}}"
+        # Find the optimus_abci skill config (should be at index 7 based on the YAML structure)
+        skill_config_index = None
+        for i, doc in enumerate(config):
+            if (
+                isinstance(doc, dict)
+                and doc.get("public_id") == "valory/optimus_abci:0.1.0"
+                and doc.get("type") == "skill"
+            ):
+                skill_config_index = i
+                break
 
-        config[5]["models"]["params"]["args"][
-            "safe_contract_addresses"
-        ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
+        # Find the kv_store connection config
+        kv_store_config_index = None
+        for i, doc in enumerate(config):
+            if (
+                isinstance(doc, dict)
+                and doc.get("public_id") == "dvilela/kv_store:0.1.0"
+                and doc.get("type") == "connection"
+            ):
+                kv_store_config_index = i
+                break
 
-        config[5]["models"]["params"]["args"][
-            "slippage_for_swap"
-        ] = f"${{float:{os.getenv('SLIPPAGE_FOR_SWAP')}}}"
+        if kv_store_config_index is not None:
+            # Update store_path to point to the local data directory
+            config[kv_store_config_index]["config"][
+                "store_path"
+            ] = f"${{str:{data_dir.absolute()}}}"
+            print(f"Updated store_path to: {data_dir.absolute()}")
 
-        config[5]["models"]["params"]["args"][
-            "tenderly_access_key"
-        ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
+        if skill_config_index is not None:
+            # Update store_path in skill config as well
+            config[skill_config_index]["models"]["params"]["args"][
+                "store_path"
+            ] = f"${{str:{data_dir.absolute()}}}"
 
-        config[5]["models"]["params"]["args"][
-            "tenderly_account_slug"
-        ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
+            # Update log_dir in benchmark_tool to use data directory
+            config[skill_config_index]["models"]["benchmark_tool"]["args"][
+                "log_dir"
+            ] = f"${{str:{data_dir.absolute()}}}"
 
-        config[5]["models"]["params"]["args"][
-            "tenderly_project_slug"
-        ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
+            # Params
+            if os.getenv("ALL_PARTICIPANTS"):
+                config[skill_config_index]["models"]["params"]["args"]["setup"][
+                    "all_participants"
+                ] = f"${{list:{os.getenv('ALL_PARTICIPANTS')}}}"
 
-        config[5]["models"]["coingecko"]["args"][
-            "api_key"
-        ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
+            if os.getenv("SAFE_CONTRACT_ADDRESSES"):
+                config[skill_config_index]["models"]["params"]["args"][
+                    "safe_contract_addresses"
+                ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
 
-        config[5]["models"]["params"]["args"][
-            "staking_chain"
-        ] = f"${{str:{os.getenv('STAKING_CHAIN')}}}"
+            if os.getenv("TENDERLY_ACCESS_KEY"):
+                config[skill_config_index]["models"]["params"]["args"][
+                    "tenderly_access_key"
+                ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
+
+            if os.getenv("TENDERLY_ACCOUNT_SLUG"):
+                config[skill_config_index]["models"]["params"]["args"][
+                    "tenderly_account_slug"
+                ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
+
+            if os.getenv("TENDERLY_PROJECT_SLUG"):
+                config[skill_config_index]["models"]["params"]["args"][
+                    "tenderly_project_slug"
+                ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
+
+            if os.getenv("COINGECKO_API_KEY"):
+                config[skill_config_index]["models"]["coingecko"]["args"][
+                    "api_key"
+                ] = f"${{str:{os.getenv('COINGECKO_API_KEY')}}}"
+
+            if os.getenv("TARGET_INVESTMENT_CHAINS"):
+                config[skill_config_index]["models"]["params"]["args"][
+                    "target_investment_chains"
+                ] = f"${{list:{os.getenv('TARGET_INVESTMENT_CHAINS')}}}"
 
     with open(Path("optimus", "aea-config.yaml"), "w", encoding="utf-8") as file:
         yaml.dump_all(config, file, sort_keys=False)

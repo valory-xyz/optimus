@@ -3251,6 +3251,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             current_date = datetime.now().strftime("%Y-%m-%d")
             # Get all transfers until date
             all_incoming_transfers = {}
+            all_outgoing_transfers = {}
             if chain == "optimism":
                 all_incoming_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
@@ -3263,12 +3264,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                 ) or {}
             elif chain == "mode":
-                all_incoming_transfers = self._fetch_all_transfers_until_date_mode(
-                    safe_address, current_date, True
-                ) or {}
-                all_outgoing_transfers = self._fetch_outgoing_transfers_until_date_mode(
-                    safe_address, current_date
-                ) or {}
+                # Use new Mode-specific tracking function
+                transfers = self._track_eth_transfers_mode(safe_address, current_date)
+                all_incoming_transfers = transfers.get("incoming", {})
+                all_outgoing_transfers = transfers.get("outgoing", {})
             else:
                 self.context.logger.warning(f"Unsupported chain: {chain}")
                 return {}
@@ -3326,7 +3325,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if transfer.get("symbol") == "ETH":
                     if (
                         transfer.get("to_address", "").lower()
-                        == master_safe_address
+                        == master_safe_address and 
+                        transfer.get("from_address", "").lower() != safe_address.lower()
                     ):
                         reversion_transfers.append(transfer)
 
@@ -3635,3 +3635,115 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error fetching Optimism outgoing transfers: {e}"
             )
             return {}
+
+    def _track_eth_transfers_mode(
+        self,
+        safe_address: str,
+        current_date: str,
+    ) -> Dict[str, Dict[str, List[Dict]]]:
+        """Fetch and organize ETH transfers for Mode chain using the Mode explorer API.
+
+        Args:
+            safe_address: The safe address to track transfers for
+            current_date: The current date in YYYY-MM-DD format
+
+        Returns:
+            Dict containing incoming and outgoing transfers organized by timestamp
+        """
+        try:
+            all_transfers = {
+                "incoming": {},
+                "outgoing": {}
+            }
+
+            # Use Mode internal transactions API
+            base_url = "https://explorer.mode.network/api"
+            params = {
+                "module": "account",
+                "action": "txlistinternal",
+                "address": safe_address,
+                "startblock": 0,
+                "endblock": 99999999,
+                "sort": "asc"
+            }
+
+            response = requests.get(
+                base_url,
+                params=params,
+                headers={"Accept": "application/json"},
+                verify=False,  # nosec B501
+                timeout=30,
+            )
+
+            if response.status_code != 200:
+                self.context.logger.error(f"Failed to fetch Mode ETH transfers: {response.status_code}")
+                return all_transfers
+
+            response_data = response.json()
+            if response_data.get("status") != "1":
+                self.context.logger.error(f"Error in Mode API response: {response_data.get('message', 'Unknown error')}")
+                return all_transfers
+
+            transactions = response_data.get("result", [])
+            processed_count = 0
+
+            for tx in transactions:
+                # Skip if no timestamp or value is 0
+                if not tx.get("timeStamp") or int(tx.get("value", "0")) <= 0:
+                    continue
+
+                try:
+                    timestamp = tx.get("timeStamp")
+                    # Convert timestamp to date for comparison with current_date
+                    tx_datetime = datetime.fromtimestamp(int(timestamp))
+                    tx_date = tx_datetime.strftime("%Y-%m-%d")
+
+                    if tx_date > current_date:
+                        continue
+
+                    # Convert value from wei to ETH
+                    value_wei = int(tx.get("value", "0"))
+                    amount_eth = value_wei / 10**18
+
+                    # Check if safe_address is in 'to' or 'from' field
+                    to_address = tx.get("to", "").lower()
+                    from_address = tx.get("from", "").lower()
+                    safe_address_lower = safe_address.lower()
+
+                    transfer_data = {
+                        "from_address": from_address,
+                        "to_address": to_address,
+                        "amount": amount_eth,
+                        "token_address": ZERO_ADDRESS,
+                        "symbol": "ETH",
+                        "timestamp": timestamp,
+                        "tx_hash": tx.get("hash", ""),
+                        "type": "eth",
+                    }
+
+                    # Categorize transfer based on safe_address position
+                    if to_address == safe_address_lower:
+                        # Incoming transfer - safe_address is recipient
+                        if timestamp not in all_transfers["incoming"]:
+                            all_transfers["incoming"][timestamp] = []
+                        all_transfers["incoming"][timestamp].append(transfer_data)
+                        processed_count += 1
+                    elif from_address == safe_address_lower:
+                        # Outgoing transfer - safe_address is sender
+                        if timestamp not in all_transfers["outgoing"]:
+                            all_transfers["outgoing"][timestamp] = []
+                        all_transfers["outgoing"][timestamp].append(transfer_data)
+                        processed_count += 1
+
+                except (ValueError, TypeError) as e:
+                    self.context.logger.warning(f"Error processing transaction: {e}")
+                    continue
+
+            self.context.logger.info(
+                f"Completed Mode ETH transfers: {processed_count} transactions processed"
+            )
+            return all_transfers
+
+        except Exception as e:
+            self.context.logger.error(f"Error tracking Mode ETH transfers: {e}")
+            return {"incoming": {}, "outgoing": {}}

@@ -3315,7 +3315,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if (
                         transfer.get("to_address", "").lower() == master_safe_address
                         and transfer.get("from_address", "").lower()
-                        != safe_address.lower()
+                        == safe_address.lower()
                     ):
                         reversion_transfers.append(transfer)
 
@@ -3373,7 +3373,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if len(reversion_transfers) > 0:
                 historical_reversion_value = (
                     yield from self._calculate_total_reversion_value(
-                        eth_transfers, reversion_transfers[0]
+                        eth_transfers, reversion_transfers
                     )
                 )
 
@@ -3394,7 +3394,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             }
 
     def _calculate_total_reversion_value(
-        self, eth_transfers: List[Dict], reversion_transfer: Dict
+        self, eth_transfers: List[Dict], reversion_transfers: List[Dict]
     ) -> Generator[None, None, float]:
         """Calculate the total reversion value from the reversion transfers."""
         reversion_amount = 0.0
@@ -3420,10 +3420,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Use current date as fallback
             reversion_date = current_date
 
-        eth_price = yield from self._fetch_historical_eth_price(reversion_date)
-
-        reversion_amount = reversion_transfer.get("amount", 0)
-        reversion_value = reversion_amount * eth_price
+        for index, transfer in enumerate(reversion_transfers):
+            if index == 0:
+                eth_price = yield from self._fetch_historical_eth_price(reversion_date)
+            else:
+                eth_price = yield from self._fetch_historical_eth_price(current_date)
+            if eth_price:
+                reversion_amount = transfer.get("amount", 0)
+                reversion_value += reversion_amount * eth_price
 
         return reversion_value
 
@@ -3602,6 +3606,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     break
 
                 transfers = response_json.get("results", [])
+
                 if not transfers:
                     break
 
@@ -3627,7 +3632,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Only process outgoing transfers (where from address is equal to our safe address)
-                    if transfer.get("from") == address.lower():
+                    if transfer.get("from").lower() == address.lower():
                         transfer_type = transfer.get("type", "")
 
                         if transfer_type == "ETHER_TRANSFER":
@@ -3655,11 +3660,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                                 all_transfers[tx_date] = []
                             all_transfers[tx_date].append(transfer_data)
                             processed_count += 1
-
-                    # Check for next page
-                    cursor = response_json.get("next")
-                    if not cursor:
-                        break
+                            continue
+                    else:
+                        continue
 
                 self.context.logger.info(
                     f"Completed Optimism outgoing transfers: {processed_count} found"

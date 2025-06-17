@@ -657,7 +657,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     asset_address = asset.get("address")
                     asset_symbol = asset.get("asset_symbol")
                     if asset_address == ZERO_ADDRESS:
-                        balance = self.get_eth_remaining_amount()
+                        balance = yield from self.get_eth_remaining_amount()
                     else:
                         balance = asset.get("balance", 0)
 

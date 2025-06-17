@@ -3316,17 +3316,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         eth_transfers.append(transfer)
                     # If it's from the same address as initial funding
                     elif (
-                        transfer.get("from_address", "").lower()
-                        == master_safe_address
+                        transfer.get("from_address", "").lower() == master_safe_address
                     ):
                         eth_transfers.append(transfer)
 
             for transfer in sorted_outgoing_transfers:
                 if transfer.get("symbol") == "ETH":
                     if (
-                        transfer.get("to_address", "").lower()
-                        == master_safe_address and 
-                        transfer.get("from_address", "").lower() != safe_address.lower()
+                        transfer.get("to_address", "").lower() == master_safe_address
+                        and transfer.get("from_address", "").lower()
+                        != safe_address.lower()
                     ):
                         reversion_transfers.append(transfer)
 
@@ -3389,7 +3388,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error tracking ETH transfers: {str(e)}")
-            return {"reversion_amount": 0, "master_safe_address": None, "reversion_date": None}
+            return {
+                "reversion_amount": 0,
+                "master_safe_address": None,
+                "reversion_date": None,
+            }
 
     def _fetch_outgoing_transfers_until_date_mode(
         self,
@@ -3430,7 +3433,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     endpoint,
                     params=params,
                     headers={"Accept": "application/json"},
-                    verify=False, # nosec B501
+                    verify=False,  # nosec B501
                     timeout=30,
                 )
 
@@ -3651,10 +3654,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             Dict containing incoming and outgoing transfers organized by timestamp
         """
         try:
-            all_transfers = {
-                "incoming": {},
-                "outgoing": {}
-            }
+            all_transfers = {"incoming": {}, "outgoing": {}}
 
             # Use Mode internal transactions API
             base_url = "https://explorer.mode.network/api"
@@ -3664,7 +3664,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "address": safe_address,
                 "startblock": 0,
                 "endblock": 99999999,
-                "sort": "asc"
+                "sort": "asc",
             }
 
             response = requests.get(
@@ -3676,12 +3676,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if response.status_code != 200:
-                self.context.logger.error(f"Failed to fetch Mode ETH transfers: {response.status_code}")
+                self.context.logger.error(
+                    f"Failed to fetch Mode ETH transfers: {response.status_code}"
+                )
                 return all_transfers
 
             response_data = response.json()
             if response_data.get("status") != "1":
-                self.context.logger.error(f"Error in Mode API response: {response_data.get('message', 'Unknown error')}")
+                self.context.logger.error(
+                    f"Error in Mode API response: {response_data.get('message', 'Unknown error')}"
+                )
                 return all_transfers
 
             transactions = response_data.get("result", [])

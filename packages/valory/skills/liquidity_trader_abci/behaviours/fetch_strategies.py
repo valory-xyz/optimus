@@ -54,6 +54,7 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     DexType,
+    ETH_INITIAL_AMOUNT,
     LiquidityTraderBaseBehaviour,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
@@ -116,7 +117,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             to_address = res.get("master_safe_address")
-            eth_amount = res.get("reversion_amount", 0) * 10**18
+            eth_amount = int(res.get("reversion_amount", 0) * 10**18)
 
             if eth_amount > 0:
                 if not to_address:
@@ -585,7 +586,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Calculate total volume (total initial investment including closed positions)
         volume = yield from self._calculate_total_volume()
 
-        self.portfolio_data = self._create_portfolio_data(
+        portfolio_data = self._create_portfolio_data(
             total_user_share_value_usd,
             total_safe_value_usd,
             initial_investment,
@@ -593,6 +594,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             allocations,
             portfolio_breakdown,
         )
+
+        if portfolio_data:
+            self.portfolio_data = portfolio_data
 
     def _update_portfolio_metrics(
         self,
@@ -903,6 +907,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
             # Create and return the final portfolio data structure
+            safe_address = self.params.safe_contract_addresses.get(
+                self.params.target_investment_chains[0]
+            )
             return {
                 "portfolio_value": float(total_portfolio_value),
                 "value_in_pools": float(total_pools_value),
@@ -914,26 +921,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "agent_hash": agent_hash,
                 "allocations": processed_allocations,
                 "portfolio_breakdown": filtered_portfolio_breakdown,
-                "address": self.params.safe_contract_addresses.get(
-                    self.params.target_investment_chains[0]
-                ),
+                "address": safe_address,
                 "last_updated": int(self._get_current_timestamp()),
             }
         except Exception as e:
             self.context.logger.error(f"Error creating portfolio data: {str(e)}")
-            # Return a minimal valid response in case of error
-            return {
-                "portfolio_value": 0.0,
-                "value_in_pools": 0.0,
-                "value_in_safe": 0.0,
-                "initial_investment": None,
-                "volume": None,
-                "agent_hash": "Error",
-                "allocations": [],
-                "portfolio_breakdown": [],
-                "address": None,
-                "last_updated": int(self._get_current_timestamp()),
-            }
+            return {}
 
     def _handle_balancer_position(
         self, position: Dict, chain: str

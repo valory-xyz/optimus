@@ -652,6 +652,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Get all positions to check assets in safe
             for position in self.synchronized_data.positions:
                 chain = position.get("chain")
+                whitelisted_tokens = list(WHITELISTED_ASSETS.get(chain, {}).keys())
 
                 for asset in position.get("assets", []):
                     asset_address = asset.get("address")
@@ -662,7 +663,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         balance = asset.get("balance", 0)
 
                     # Skip if no balance or asset is whitelisted
-                    if balance <= 0 or asset_symbol in WHITELISTED_ASSETS:
+                    if balance <= 0 or asset_address in whitelisted_tokens:
                         continue
 
                     # Get asset price and calculate USD value

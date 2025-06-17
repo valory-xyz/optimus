@@ -104,6 +104,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain = self.params.target_investment_chains[0]
             safe_address = self.params.safe_contract_addresses.get(chain)
 
+            # update locally stored eth balance in-case it's incorrect
+            eth_balance = yield from self._get_native_balance(chain, safe_address)
+            if eth_balance < ETH_INITIAL_AMOUNT:
+                current_remaining = yield from self.get_eth_remaining_amount()
+                updated_amount = max(current_remaining, eth_balance)
+                yield from self.update_eth_remaining_amount(updated_amount)
+
             res = yield from self._track_eth_transfers_and_reversions(
                 safe_address, chain
             )

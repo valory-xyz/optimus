@@ -51,6 +51,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
     METRICS_UPDATE_INTERVAL,
     MIN_TIME_IN_POSITION,
+    OLAS_ADDRESSES,
     PositionStatus,
     THRESHOLDS,
     WHITELISTED_ASSETS,
@@ -652,8 +653,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Get all positions to check assets in safe
             for position in self.synchronized_data.positions:
                 chain = position.get("chain")
-                whitelisted_tokens = [addr.lower() for addr in WHITELISTED_ASSETS.get(chain, {}).keys()]
-
+                whitelisted_tokens = [
+                    addr.lower() for addr in WHITELISTED_ASSETS.get(chain, {}).keys()
+                ]
+                olas_token_address = OLAS_ADDRESSES.get(chain, "").lower()
                 for asset in position.get("assets", []):
                     asset_address = asset.get("address", "").lower()
                     asset_symbol = asset.get("asset_symbol")
@@ -663,7 +666,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         balance = asset.get("balance", 0)
 
                     # Skip if no balance or asset is whitelisted
-                    if balance <= 0 or asset_address in whitelisted_tokens:
+                    if (
+                        balance <= 0
+                        or asset_address in whitelisted_tokens
+                        or asset_address == olas_token_address
+                    ):
                         continue
 
                     # Get asset price and calculate USD value

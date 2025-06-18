@@ -110,6 +110,10 @@ RETRIES = 3  # Number of API call retries
 MIN_TIME_IN_POSITION = 604800 * 3  # 3 weeks
 PRICE_CACHE_KEY_PREFIX = "token_price_cache_"
 CACHE_TTL = 3600  # 1 hour in seconds
+OLAS_ADDRESSES = {
+    "mode": "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9",
+    "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
+}
 
 
 class DexType(Enum):

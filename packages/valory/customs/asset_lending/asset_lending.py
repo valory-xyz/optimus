@@ -702,7 +702,18 @@ def run(*_args, **kwargs) -> Any:
         return {"error": get_errors()} if get_errors() else metrics
     else:
         logger.info("Finding best opportunities")
-        result = get_best_opportunities(**kwargs)
+        
+        # Extract required positional arguments from kwargs
+        chains = kwargs.pop("chains", [])
+        lending_asset = kwargs.pop("lending_asset", "USDC")
+        current_positions = kwargs.pop("current_positions", [])
+        coingecko_api_key = kwargs.pop("coingecko_api_key", "")
+        
+        # Call get_best_opportunities with positional arguments and remaining kwargs
+        result = get_best_opportunities(
+            chains, lending_asset, current_positions, coingecko_api_key, **kwargs
+        )
+        
         if isinstance(result, dict) and "error" in result:
             logger.error(f"Error in get_best_opportunities: {result['error']}")
             get_errors().append(result["error"])

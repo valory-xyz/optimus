@@ -574,7 +574,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             dex_type,
                             chain,
                             pool_address,
-                            list(token_info.values()),  # token symbols
+                            [
+                                {"symbol": symbol, "address": addr}
+                                for addr, symbol in token_info.items()
+                            ],
                             position.get("apr", 0.0),
                             details,
                             self.params.safe_contract_addresses.get(chain),

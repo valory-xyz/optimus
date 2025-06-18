@@ -62,7 +62,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     TradingType,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
-    ETH_REMAINING_KEY
+    ETH_REMAINING_KEY,
 )
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesPayload,
@@ -575,10 +575,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             dex_type,
                             chain,
                             pool_address,
-                            [
-                                {"symbol": symbol, "address": addr}
-                                for addr, symbol in token_info.items()
-                            ],
+                            list(token_info.values()),  # token symbols
                             position.get("apr", 0.0),
                             details,
                             self.params.safe_contract_addresses.get(chain),
@@ -876,9 +873,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             for allocation in allocations:
                 try:
                     for asset in allocation["assets"]:
-                        # Add both the asset symbol and address to handle either format
-                        allocation_assets.add(asset.get("symbol", ""))
-                        allocation_assets.add(asset.get("address", ""))
+                        allocation_assets.add(asset.lower())
                 except (KeyError, TypeError) as e:
                     self.context.logger.error(
                         f"Error processing allocation assets: {str(e)}"
@@ -889,10 +884,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             filtered_portfolio_breakdown = []
             for entry in portfolio_breakdown:
                 try:
-                    if (
-                        entry["asset"] in allocation_assets
-                        or entry["address"] in allocation_assets
-                    ):
+                    if entry.get("asset", "").lower() in allocation_assets:
                         filtered_portfolio_breakdown.append(
                             {
                                 "asset": entry["asset"],

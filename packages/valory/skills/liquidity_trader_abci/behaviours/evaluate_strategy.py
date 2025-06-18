@@ -652,10 +652,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Get all positions to check assets in safe
             for position in self.synchronized_data.positions:
                 chain = position.get("chain")
-                whitelisted_tokens = list(WHITELISTED_ASSETS.get(chain, {}).keys())
+                whitelisted_tokens = [addr.lower() for addr in WHITELISTED_ASSETS.get(chain, {}).keys()]
 
                 for asset in position.get("assets", []):
-                    asset_address = asset.get("address")
+                    asset_address = asset.get("address", "").lower()
                     asset_symbol = asset.get("asset_symbol")
                     if asset_address == ZERO_ADDRESS:
                         balance = yield from self.get_eth_remaining_amount()

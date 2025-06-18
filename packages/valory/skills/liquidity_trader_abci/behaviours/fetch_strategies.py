@@ -62,6 +62,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     TradingType,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
+    ETH_REMAINING_KEY
 )
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesPayload,
@@ -124,7 +125,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(
                     f"Updating ETH remaining amount to: {updated_amount}"
                 )
-                yield from self.update_eth_remaining_amount(updated_amount)
+                yield from self._write_kv({ETH_REMAINING_KEY: str(updated_amount)})
 
             res = yield from self._track_eth_transfers_and_reversions(
                 safe_address, chain
@@ -2243,7 +2244,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         "Last calculation was today, using cached value"
                     )
-                    return (yield self._load_chain_total_investment(chain))
+                    investment = yield self._load_chain_total_investment(chain)
+                    if investment:
+                        return investment
+                    else:
+                        fetch_till_date = True
 
                 # Otherwise need to calculate new value but not full history
                 self.context.logger.info(

@@ -55,6 +55,7 @@ from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     DexType,
     ETH_INITIAL_AMOUNT,
+    ETH_REMAINING_KEY,
     LiquidityTraderBaseBehaviour,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
@@ -62,7 +63,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     TradingType,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
-    ETH_REMAINING_KEY,
 )
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesPayload,

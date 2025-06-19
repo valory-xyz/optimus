@@ -1562,7 +1562,7 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, cl_filter=None, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
+def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
     """
     Get and format pool opportunities with optimized caching and performance.
     
@@ -1573,10 +1573,9 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         lp_sugar_address: Address of the LpSugar contract
         ledger_api: Ethereum API instance or RPC URL
         top_n: Number of top pools by APR to return (default: 10)
-        cl_filter: Filter for concentrated liquidity pools
-                   True = only CL pools
-                   False = only non-CL pools
-                   None = include all pools (default)
+        whitelisted_assets: List of whitelisted assets
+        coin_id_mapping: Coin ID mapping
+        **kwargs: Additional arguments
     
     Returns:
         List of formatted pool opportunities
@@ -1589,7 +1588,7 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
     logger.info(f"VELODROME DEBUG: get_opportunities_for_velodrome - coin_id_mapping value: {coin_id_mapping}")
     
     # Check cache for formatted pools first
-    cache_key = f"formatted_pools:{chain_id}:{top_n}:{cl_filter}:{hash(str(sorted(current_positions)))}"
+    cache_key = f"formatted_pools:{chain_id}:{top_n}:{hash(str(sorted(current_positions)))}"
     cached_result = get_cached_data("formatted_pools", cache_key)
     if cached_result is not None:
         logger.info(f"Using cached formatted pools for chain {chain_id}")
@@ -1622,7 +1621,6 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
             apr_weight=apr_weight,
             tvl_weight=tvl_weight,
             min_tvl_threshold=min_tvl_threshold,
-            cl_filter=cl_filter
         )
         if not filtered_pools:
                 logger.error("No filtered pools available for composite filtering")
@@ -1758,7 +1756,6 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             lp_sugar_address: Address of the LpSugar contract (if not provided, uses SUGAR_CONTRACT_ADDRESSES)
             rpc_url: RPC URL for the Mode chain (optional, uses default if not provided)
             top_n: Number of top pools by APR to return (default: 10)
-            cl_filter: Filter for concentrated liquidity pools (True=CL only, False=non-CL only, None=all)
             get_metrics: If True, calculate metrics for a specific position instead of finding opportunities
             position: Position details when get_metrics is True
             
@@ -1868,8 +1865,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             sugar_address,
             rpc_url,
             kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
-            cl_filter=kwargs.get("cl_filter"),
-            whitelisted_assets=kwargs.get("whitelisted_assets"), # Pass cl_filter to get_top_n_pools_by_apr
+            whitelisted_assets=kwargs.get("whitelisted_assets"),
             coin_id_mapping=kwargs.get("coin_id_mapping")
         )
         

@@ -12,6 +12,7 @@ alphabet_in:
 - SETTLE
 - STAKING_KPI_MET
 - STAKING_KPI_NOT_MET
+- TRANSFER_COMPLETED
 - UNRECOGNIZED
 - UPDATE
 - VANITY_TX_EXECUTED
@@ -84,6 +85,7 @@ transition_func:
     (FetchStrategiesRound, NONE): FetchStrategiesRound
     (FetchStrategiesRound, NO_MAJORITY): FetchStrategiesRound
     (FetchStrategiesRound, ROUND_TIMEOUT): FetchStrategiesRound
+    (FetchStrategiesRound, SETTLE): FinishedTxPreparationRound
     (FetchStrategiesRound, WAIT): FetchStrategiesRound
     (GetPositionsRound, DONE): APRPopulationRound
     (GetPositionsRound, NONE): GetPositionsRound
@@ -95,5 +97,6 @@ transition_func:
     (PostTxSettlementRound, NONE): PostTxSettlementRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
+    (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound

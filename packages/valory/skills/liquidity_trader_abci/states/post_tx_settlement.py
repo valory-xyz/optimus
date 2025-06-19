@@ -42,6 +42,9 @@ from packages.valory.skills.liquidity_trader_abci.states.check_staking_kpi_met i
 from packages.valory.skills.liquidity_trader_abci.states.decision_making import (
     DecisionMakingRound,
 )
+from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
+    FetchStrategiesRound,
+)
 
 
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
@@ -62,6 +65,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
                 CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
                 CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
                 DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
+                FetchStrategiesRound.auto_round_id(): Event.TRANSFER_COMPLETED,
             }
 
             synced_data = SynchronizedData(self.synchronized_data.db)

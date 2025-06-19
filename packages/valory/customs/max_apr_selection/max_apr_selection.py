@@ -34,6 +34,10 @@ def calculate_composite_score(pool, max_values):
     sharpe_ratio = pool.get("sharpe_ratio", math.nan)
     depth_score = pool.get("depth_score", math.nan)
     il_risk_score = pool.get("il_risk_score", math.nan)
+
+    if any(metric is None for metric in [sharpe_ratio, depth_score, il_risk_score]):
+        return 0
+    
     if math.isnan(depth_score) or math.isnan(il_risk_score) or math.isnan(sharpe_ratio):
         return 0
 

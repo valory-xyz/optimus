@@ -52,6 +52,7 @@ class Event(Enum):
     SERVICE_EVICTED = "service_evicted"
     SERVICE_NOT_STAKED = "service_not_staked"
     SETTLE = "settle"
+    TRANSFER_COMPLETED = "transfer_completed"
     UNRECOGNIZED = "unrecognized"
     UPDATE = "update"
     VANITY_TX_EXECUTED = "vanity_tx_executed"

@@ -915,6 +915,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             strategy_name, strategies_executables, **kwargs
         ):
             try:
+                self.context.logger.info(f"TempLog..., Executing strategy: {strategy_name}")
+                self.context.logger.info(f"TempLog..., kwargs: {kwargs}")
+                breakpoint()
                 loop = asyncio.get_event_loop()
                 return await loop.run_in_executor(
                     None,

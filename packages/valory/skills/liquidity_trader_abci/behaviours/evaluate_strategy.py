@@ -1007,13 +1007,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                 if "error" in result:
                     errors = result.get("error", [])
-                    for error in errors:
-                        self.context.logger.error(
-                            f"Error in strategy {next_strategy}: {error}"
-                        )
-                    # Continue to next strategy if this one had errors
-                    continue
-
+                    if len(errors) > 0:
+                        for error in errors:
+                            self.context.logger.error(
+                                f"Error in strategy {next_strategy}: {error}"
+                            )
+                        # Continue to next strategy if this one had errors
+                        continue
+                
                 opportunities = result.get("result", [])
                 if opportunities:
                     self.context.logger.info(

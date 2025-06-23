@@ -1014,7 +1014,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             )
                         # Continue to next strategy if this one had errors
                         continue
-                
+
                 opportunities = result.get("result", [])
                 if opportunities:
                     self.context.logger.info(

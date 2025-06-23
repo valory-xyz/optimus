@@ -13,7 +13,7 @@ fingerprint:
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeigqinj6cfqskhgua7tyzqxlwf6sl2k6hvvfguqzdv43bq4z4agbou
-  behaviours/evaluate_strategy.py: bafybeigqxy4ol2i6gqsbivrr5mjbu2mlupne4iyelch5eyycfwez4vlr4i
+  behaviours/evaluate_strategy.py: bafybeibrtjmh66hqlzwabswhrndv427rlbs3su7nqeebkujvzt4oercxj4
   behaviours/fetch_strategies.py: bafybeia23cin3i254kekypuvaqiebxldk2wzd6bi7ib3fn3tdce7pmjauq
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
@@ -61,7 +61,7 @@ contracts:
 - valory/balancer_vault:0.1.0:bafybeigb3dd34py2jhixmuhy7o52ex572y4d7yhrauywzn4kwzlipscxai
 - valory/erc20:0.1.0:bafybeidsr442adqzlbinheb4crju3z3uipjjmaxkw5l2cs3qrwsftg4zy4
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeiaepr5txtxefss7ee7q3fxdydfkph6ojjcs75rz3icy33mos7u3ma
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeif5v7ainmqjoqmbux6m7ssrfziaaebaqtxt64qinsujsujihxuie4
 - valory/uniswap_v3_pool:0.1.0:bafybeigipe5aznisrlbbxmbeoyan5ayughp7z57cjxwbx5qigsjgrzqav4
 - valory/merkl_distributor:0.1.0:bafybeieai7iixi6y647yrxrlkusxy3hyjkq3ai2pakudkk7hph4dmshpo4
 - valory/staking_token:0.1.0:bafybeidv2ogn5x2tb2p6ffe64bbsujgfxqxbcgck2nurwzicvsr3ceqloi

@@ -115,9 +115,9 @@ v := $(shell pip -V | grep virtualenvs)
 .PHONY: build-agent-runner
 build-agent-runner:
 	poetry lock
-	poetry install
+	poetry install --no-root
 	poetry run pip install -U pyinstaller
-	poetry run pip install --upgrade setuptools==59.8.0
+	poetry run pip install -U open-autonomy
 	poetry run pyinstaller \
 	--collect-data eth_account \
 	--collect-all aea \
@@ -152,7 +152,7 @@ build-agent-runner:
 	--hidden-import pandas \
 	--hidden-import pyfolio \
 	--hidden-import peewee \
-	--hidden-import google-generativeai \
+	--hidden-import google_generativeai \
 	--hidden-import google.generativeai \
 	--hidden-import distutils.dir_util \
 	--hidden-import distutils \
@@ -166,9 +166,9 @@ build-agent-runner:
 .PHONY: build-agent-runner-mac
 build-agent-runner-mac:
 	poetry lock
-	poetry install
+	poetry install --no-root
 	poetry run pip install -U pyinstaller
-	poetry run pip install --upgrade setuptools==59.8.0
+	poetry run pip install -U open-autonomy
 	poetry run pyinstaller \
 	--collect-data eth_account \
 	--collect-all aea \
@@ -203,7 +203,7 @@ build-agent-runner-mac:
 	--hidden-import pandas \
 	--hidden-import pyfolio \
 	--hidden-import peewee \
-	--hidden-import google-generativeai \
+	--hidden-import google_generativeai \
 	--hidden-import google.generativeai \
 	--hidden-import distutils.dir_util \
 	--hidden-import distutils \

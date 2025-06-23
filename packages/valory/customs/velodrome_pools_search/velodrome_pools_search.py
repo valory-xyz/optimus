@@ -813,7 +813,7 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         logger.error(f"Error calculating Sharpe ratio for pool {pool_id}: {str(e)}")
         return None
 
-def analyze_pool_liquidity(pool_id: str, chain: str, price_impact: float = 0.01):
+def analyze_velodrome_pool_liquidity(pool_id: str, chain: str, price_impact: float = 0.01):
     """
     Analyze pool liquidity and calculate depth score using historical epoch data from RewardsSugar.
     
@@ -1345,7 +1345,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             
             # Calculate depth score
             try:
-                depth_score, max_position_size = analyze_pool_liquidity(
+                depth_score, max_position_size = analyze_velodrome_pool_liquidity(
                     pool["id"], chain_name.upper()
                 )
                 formatted_pool["depth_score"] = depth_score
@@ -1729,7 +1729,7 @@ def calculate_metrics(
         )
         
         # Calculate depth score and max position size
-        depth_score, max_position_size = analyze_pool_liquidity(
+        depth_score, max_position_size = analyze_velodrome_pool_liquidity(
             pool_id, chain.upper()
         )
         

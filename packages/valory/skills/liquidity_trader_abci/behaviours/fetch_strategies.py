@@ -112,16 +112,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # update locally stored eth balance in-case it's incorrect
             eth_balance = yield from self._get_native_balance(chain, safe_address)
             self.context.logger.info(f"Current ETH balance: {eth_balance}")
-
             if eth_balance < ETH_INITIAL_AMOUNT:
-                self.context.logger.info(
-                    f"ETH balance {eth_balance} is below initial amount {ETH_INITIAL_AMOUNT}"
-                )
-                current_remaining = yield from self.get_eth_remaining_amount()
-                self.context.logger.info(
-                    f"Current remaining ETH amount: {current_remaining}"
-                )
-                updated_amount = max(current_remaining, eth_balance)
+                updated_amount = eth_balance
                 self.context.logger.info(
                     f"Updating ETH remaining amount to: {updated_amount}"
                 )
@@ -2703,11 +2695,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """
         Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date.
 
-        Args:
-            address: The address to fetch transfers for
-            target_date: The specific date to fetch transfers for (format: "YYYY-MM-DD")
-            all_transfers_by_date: Dictionary to store transfers by date
-            fetch_all_till_date: If True, fetch all transfers up to target_date. If False, fetch only target_date transfers
+        :param address: The wallet address to fetch token transfers for.
+        :param target_date: The specific date to fetch transfers for (format: "YYYY-MM-DD").
+        :param all_transfers_by_date: Dictionary to store the fetched transfers organized by date.
+        :param fetch_all_till_date: If True, fetch all transfers up to target_date. If False, fetch only target_date transfers.
+        :return: None
         """
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         processed_count = 0
@@ -3436,15 +3428,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         address: str,
         current_date: str,
     ) -> Dict:
-        """Fetch all outgoing transfers from the safe address on Mode until a specific date.
-
-        Args:
-            address: The safe address to fetch transfers for
-            current_date: The date until which to fetch transfers (format: "YYYY-MM-DD")
-
-        Returns:
-            Dict: Dictionary of transfers organized by date
-        """
+        """Fetch all outgoing transfers from the safe address on Mode until a specific date."""
         all_transfers = {}
 
         if not address:
@@ -3569,15 +3553,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         address: str,
         current_date: str,
     ) -> Generator[None, None, Dict]:
-        """Fetch all outgoing transfers from the safe address on Optimism until a specific date.
-
-        Args:
-            address: The safe address to fetch transfers for
-            current_date: The date until which to fetch transfers (format: "YYYY-MM-DD")
-
-        Returns:
-            Dict: Dictionary of transfers organized by date
-        """
+        """Fetch all outgoing transfers from the safe address on Mode until a specific date."""
         all_transfers = {}
 
         if not address:
@@ -3680,15 +3656,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         safe_address: str,
         current_date: str,
     ) -> Dict[str, Dict[str, List[Dict]]]:
-        """Fetch and organize ETH transfers for Mode chain using the Mode explorer API.
-
-        Args:
-            safe_address: The safe address to track transfers for
-            current_date: The current date in YYYY-MM-DD format
-
-        Returns:
-            Dict containing incoming and outgoing transfers organized by timestamp
-        """
+        """Fetch and organize ETH transfers for Mode chain using the Mode explorer API."""
         try:
             all_transfers = {"incoming": {}, "outgoing": {}}
 

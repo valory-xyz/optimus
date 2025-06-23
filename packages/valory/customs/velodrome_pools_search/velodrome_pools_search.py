@@ -396,7 +396,7 @@ def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     return il
 
 
-def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None) -> float:
+def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None) -> float:
     """Calculate IL risk score for multiple tokens."""
     
     # Set up CoinGecko client
@@ -1284,7 +1284,7 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools
 
-def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None) -> List[Dict[str, Any]]:
+def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
@@ -1384,7 +1384,7 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
                     logger.info(f"Pool {pool['id']}: Calculating IL risk score with {len(valid_token_ids)} valid token IDs")
                     
                     # Call IL risk score calculation with pool_id and chain
-                    il_risk_score = calculate_il_risk_score_multi(
+                    il_risk_score = calculate_velodrome_il_risk_score_multi(
                         valid_token_ids, 
                         coingecko_api_key,
                         pool_id=pool["id"],
@@ -1629,11 +1629,11 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         logger.info(f"Applied composite pre-filter (APR weight: {apr_weight}, TVL weight: {tvl_weight})")
     
     # Format pools with basic data (without advanced metrics)
-    formatted_pools = format_pool_data(
+    formatted_pools = format_velodrome_pool_data(
         filtered_pools,
         chain_id,
-        coingecko_api_key=coingecko_api_key,
-        coin_id_mapping=coin_id_mapping
+        coingecko_api_key,
+        coin_id_mapping
     )
     
     # Check if we have any formatted pools before proceeding
@@ -1716,7 +1716,7 @@ def calculate_metrics(
         il_risk_score = None
         valid_token_ids = [tid for tid in token_ids if tid]
         if len(valid_token_ids) >= 2:
-            il_risk_score = calculate_il_risk_score_multi(
+            il_risk_score = calculate_velodrome_il_risk_score_multi(
                 valid_token_ids, 
                 coingecko_api_key,
                 pool_id=pool_id,

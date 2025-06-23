@@ -687,6 +687,9 @@ def run(*_args, **kwargs) -> Any:
     required_fields = list(REQUIRED_FIELDS)
     get_metrics = kwargs.get("get_metrics", False)
     logger.info(f"Get metrics mode: {get_metrics}")
+
+    # Add lending_asset to required fields as during run time it is not present in the REQUIRED_FIELDS tuple
+    required_fields.append("lending_asset")
     
     if get_metrics:
         required_fields.append("position")
@@ -705,7 +708,7 @@ def run(*_args, **kwargs) -> Any:
         
         # Extract required positional arguments from kwargs
         chains = kwargs.pop("chains", [])
-        lending_asset = kwargs.pop("lending_asset", "USDC")
+        lending_asset = kwargs.pop("lending_asset", "0x4200000000000000000000000000000000000006")
         current_positions = kwargs.pop("current_positions", [])
         coingecko_api_key = kwargs.pop("coingecko_api_key", "")
         

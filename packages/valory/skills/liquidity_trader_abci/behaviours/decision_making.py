@@ -1128,7 +1128,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return None, None, None
 
         # Handle Velodrome-specific parameters
-        if dex_type == DexType.VELODROME.value:
+        if dex_type == DexType.VELODROME.value and is_cl_pool:
             max_amounts_in = yield from self._calculate_velodrome_investment_amounts(
                 action, chain, assets, positions, max_amounts
             )

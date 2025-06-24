@@ -396,7 +396,7 @@ def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     return il
 
 
-def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None) -> float:
+def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None) -> float:
     """Calculate IL risk score for multiple tokens."""
     
     # Set up CoinGecko client
@@ -813,7 +813,7 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         logger.error(f"Error calculating Sharpe ratio for pool {pool_id}: {str(e)}")
         return None
 
-def analyze_pool_liquidity(pool_id: str, chain: str, price_impact: float = 0.01):
+def analyze_velodrome_pool_liquidity(pool_id: str, chain: str, price_impact: float = 0.01):
     """
     Analyze pool liquidity and calculate depth score using historical epoch data from RewardsSugar.
     
@@ -1284,7 +1284,7 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools
 
-def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None) -> List[Dict[str, Any]]:
+def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
@@ -1345,7 +1345,7 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
             
             # Calculate depth score
             try:
-                depth_score, max_position_size = analyze_pool_liquidity(
+                depth_score, max_position_size = analyze_velodrome_pool_liquidity(
                     pool["id"], chain_name.upper()
                 )
                 formatted_pool["depth_score"] = depth_score
@@ -1384,7 +1384,7 @@ def format_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, co
                     logger.info(f"Pool {pool['id']}: Calculating IL risk score with {len(valid_token_ids)} valid token IDs")
                     
                     # Call IL risk score calculation with pool_id and chain
-                    il_risk_score = calculate_il_risk_score_multi(
+                    il_risk_score = calculate_velodrome_il_risk_score_multi(
                         valid_token_ids, 
                         coingecko_api_key,
                         pool_id=pool["id"],
@@ -1562,7 +1562,7 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, cl_filter=None, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
+def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
     """
     Get and format pool opportunities with optimized caching and performance.
     
@@ -1573,10 +1573,9 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         lp_sugar_address: Address of the LpSugar contract
         ledger_api: Ethereum API instance or RPC URL
         top_n: Number of top pools by APR to return (default: 10)
-        cl_filter: Filter for concentrated liquidity pools
-                   True = only CL pools
-                   False = only non-CL pools
-                   None = include all pools (default)
+        whitelisted_assets: List of whitelisted assets
+        coin_id_mapping: Coin ID mapping
+        **kwargs: Additional arguments
     
     Returns:
         List of formatted pool opportunities
@@ -1589,7 +1588,7 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
     logger.info(f"VELODROME DEBUG: get_opportunities_for_velodrome - coin_id_mapping value: {coin_id_mapping}")
     
     # Check cache for formatted pools first
-    cache_key = f"formatted_pools:{chain_id}:{top_n}:{cl_filter}:{hash(str(sorted(current_positions)))}"
+    cache_key = f"formatted_pools:{chain_id}:{top_n}:{hash(str(sorted(current_positions)))}"
     cached_result = get_cached_data("formatted_pools", cache_key)
     if cached_result is not None:
         logger.info(f"Using cached formatted pools for chain {chain_id}")
@@ -1622,7 +1621,6 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
             apr_weight=apr_weight,
             tvl_weight=tvl_weight,
             min_tvl_threshold=min_tvl_threshold,
-            cl_filter=cl_filter
         )
         if not filtered_pools:
                 logger.error("No filtered pools available for composite filtering")
@@ -1631,11 +1629,11 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         logger.info(f"Applied composite pre-filter (APR weight: {apr_weight}, TVL weight: {tvl_weight})")
     
     # Format pools with basic data (without advanced metrics)
-    formatted_pools = format_pool_data(
+    formatted_pools = format_velodrome_pool_data(
         filtered_pools,
         chain_id,
-        coingecko_api_key=coingecko_api_key,
-        coin_id_mapping=coin_id_mapping
+        coingecko_api_key,
+        coin_id_mapping
     )
     
     # Check if we have any formatted pools before proceeding
@@ -1718,7 +1716,7 @@ def calculate_metrics(
         il_risk_score = None
         valid_token_ids = [tid for tid in token_ids if tid]
         if len(valid_token_ids) >= 2:
-            il_risk_score = calculate_il_risk_score_multi(
+            il_risk_score = calculate_velodrome_il_risk_score_multi(
                 valid_token_ids, 
                 coingecko_api_key,
                 pool_id=pool_id,
@@ -1731,7 +1729,7 @@ def calculate_metrics(
         )
         
         # Calculate depth score and max position size
-        depth_score, max_position_size = analyze_pool_liquidity(
+        depth_score, max_position_size = analyze_velodrome_pool_liquidity(
             pool_id, chain.upper()
         )
         
@@ -1758,7 +1756,6 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             lp_sugar_address: Address of the LpSugar contract (if not provided, uses SUGAR_CONTRACT_ADDRESSES)
             rpc_url: RPC URL for the Mode chain (optional, uses default if not provided)
             top_n: Number of top pools by APR to return (default: 10)
-            cl_filter: Filter for concentrated liquidity pools (True=CL only, False=non-CL only, None=all)
             get_metrics: If True, calculate metrics for a specific position instead of finding opportunities
             position: Position details when get_metrics is True
             
@@ -1868,8 +1865,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             sugar_address,
             rpc_url,
             kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
-            cl_filter=kwargs.get("cl_filter"),
-            whitelisted_assets=kwargs.get("whitelisted_assets"), # Pass cl_filter to get_top_n_pools_by_apr
+            whitelisted_assets=kwargs.get("whitelisted_assets"),
             coin_id_mapping=kwargs.get("coin_id_mapping")
         )
         

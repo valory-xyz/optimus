@@ -755,8 +755,20 @@ class HttpHandler(BaseHttpHandler):
             if "error" in payload:
                 # Extract the specific error message
                 error_details = payload["error"]
-                error_message = error_details.split('message: "')[1].split('"')[0]
-                reasoning = error_message
+                # Try to extract a more specific error message, but fall back to the full error if parsing fails
+                try:
+                    if 'message: "' in error_details:
+                        error_message = error_details.split('message: "')[1].split('"')[
+                            0
+                        ]
+                    else:
+                        # If the expected pattern isn't found, use the full error details
+                        error_message = error_details
+                except (IndexError, AttributeError):
+                    # Fallback to full error details if parsing fails
+                    error_message = error_details
+
+                reasoning = f"LLM Error: {error_message}"
                 self.context.logger.error(f"Error from LLM: {reasoning}")
                 return [], "", 10.0, reasoning, self.context.state.trading_type
 

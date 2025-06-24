@@ -23,6 +23,7 @@ alphabet_in:
 - STAKING_KPI_MET
 - STAKING_KPI_NOT_MET
 - SUSPICIOUS_ACTIVITY
+- TRANSFER_COMPLETED
 - UNRECOGNIZED
 - UPDATE
 - VALIDATE_TIMEOUT
@@ -109,6 +110,7 @@ transition_func:
     (FetchStrategiesRound, NONE): FetchStrategiesRound
     (FetchStrategiesRound, NO_MAJORITY): FetchStrategiesRound
     (FetchStrategiesRound, ROUND_TIMEOUT): FetchStrategiesRound
+    (FetchStrategiesRound, SETTLE): RandomnessTransactionSubmissionRound
     (FetchStrategiesRound, WAIT): FetchStrategiesRound
     (FinalizationRound, CHECK_HISTORY): CheckTransactionHistoryRound
     (FinalizationRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
@@ -126,6 +128,7 @@ transition_func:
     (PostTxSettlementRound, NONE): PostTxSettlementRound
     (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
     (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
+    (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): ResetAndPauseRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
     (RandomnessTransactionSubmissionRound, DONE): SelectKeeperTransactionSubmissionARound

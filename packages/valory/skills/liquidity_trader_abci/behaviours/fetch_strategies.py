@@ -862,12 +862,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             total_portfolio_value = total_pools_value + total_safe_value
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
+            # Convert to percentage by multiplying by 100
             roi = None
             if initial_investment is not None and initial_investment > 0:
                 try:
-                    roi = (float(total_portfolio_value) / float(initial_investment)) - 1
+                    roi_decimal = (float(total_portfolio_value) / float(initial_investment)) - 1
+                    roi = roi_decimal * 100  # Convert to percentage
                     self.context.logger.info(
-                        f"ROI calculated: {roi:.6f} (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
+                        f"ROI calculated: {roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
                     )
                 except (ValueError, ZeroDivisionError, TypeError) as e:
                     self.context.logger.error(f"Error calculating ROI: {str(e)}")

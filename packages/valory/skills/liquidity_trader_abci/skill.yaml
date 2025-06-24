@@ -78,8 +78,8 @@ protocols:
 - valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeifclzgoyulkyyigcwrqzmydyrj6c5d26xu7jk6cjbsed3pkls4pba
-- valory/transaction_settlement_abci:0.1.0:bafybeid4alawv3oz4gdyom5uevrgzfsahbwabi37r7gomsetwqiq66g6cm
+- valory/abstract_round_abci:0.1.0:bafybeiap4ujlbydi272pqpz556lali4mjpz5pnrmxnn5chinoqgcje32ce
+- valory/transaction_settlement_abci:0.1.0:bafybeie2qxhc3uxuqhe6ce2cp3ywjh27tkdkve5mk6upbbhyx6psqrg4ue
 behaviours:
   main:
     args: {}

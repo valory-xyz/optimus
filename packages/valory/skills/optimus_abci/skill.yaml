@@ -59,11 +59,11 @@ fingerprint:
   modius-ui-build/static/js/main.27142456.js: bafybeigxzgxt5lk3rzvvzadxe4ddurdm6ga6y3m4lewqnuybtpacglosve
   modius-ui-build/static/js/main.27142456.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
   modius-ui-build/static/js/main.27142456.js.map: bafybeigqdljoyg4fukaerszjz2wknm55j656pzc3zg2aarkyfqqxdrlgeq
-  optimus-ui-build/antd-reset.css: bafybeiej7msoezd7b76anzk7uvqpfspctuifl2zyfvfxgevsr62q6jogt4
-  optimus-ui-build/asset-manifest.json: bafybeia7olyccp2qzrzse5susifduksrzhwl2dlnrlahq7knsn73n2cvxa
+  optimus-ui-build/README.md: bafybeidxpfllyebslq5wjgtkendosnewn3jcooxdb2iwaajulv5xeslyru
+  optimus-ui-build/assets/agent-agentsfun-logo-Cl82UKSm.png: bafybeia3nla5pruiurpwvzex6bbsgset4k2foerma2iwy5zxmtjidur454
+  optimus-ui-build/assets/index-BBzOmHL-.js: bafybeigv6k56japlthbgpuwoocwxvodmj23wvwcouefzt4t3qwohztabky
   optimus-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  optimus-ui-build/globals.css: bafybeidikaeijb6i5kupnzjtvh55dsyi7xjn56t6owo4lhg4gqj3l4ibly
-  optimus-ui-build/index.html: bafybeigisdhmd4r2ov2hcutm7vu53mxdoka5s5vqaguij36lhzdmlxzpum
+  optimus-ui-build/index.html: bafybeidml4yfw5s4rn3vp32jnt6mtj5pdvufzy36y2w2yu47kw6xoi4kti
   optimus-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   optimus-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   optimus-ui-build/logos/networks/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -100,11 +100,6 @@ fingerprint:
   optimus-ui-build/logos/tokens/usdt0.png: bafybeig4muixers6emdrg645t46ggkcgwdrdrghwcsnoizpla56d2aj6gq
   optimus-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  optimus-ui-build/manifest.json: bafybeial7amzp5ze4y773v7i67igygm3evylffeqxwr56aw3332ioavks4
-  optimus-ui-build/robots.txt: bafybeifmudop7z45oyjc7jimzav6aqogvpwkobbtscdwidtpuovh6yp5wu
-  optimus-ui-build/static/js/main.b2df20f8.js: bafybeihvxqlnf5xcazlngpt3pnigp3f5ke3uped4cyzikldwij2pdrto6e
-  optimus-ui-build/static/js/main.b2df20f8.js.LICENSE.txt: bafybeidcwgxq34zcydfryuiasf5abexjdxhvmjwbde6rcickpqhh66qiaq
-  optimus-ui-build/static/js/main.b2df20f8.js.map: bafybeigpbqrlv23bgmxzxkevlu25uisqzqasz6z2x5tnqp2nky74yq3fge
   prompts.py: bafybeidrsg3syvlfeuqbfhvnnxuaewt7oi32eu3x6mjpyt7fooaezqf5ou
 fingerprint_ignore_patterns: []
 connections:
@@ -117,12 +112,12 @@ protocols:
 - valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeifclzgoyulkyyigcwrqzmydyrj6c5d26xu7jk6cjbsed3pkls4pba
-- valory/registration_abci:0.1.0:bafybeigt7bmrfhet7fyafqojl2i5uhzvpaz5wfv6kuk5ojwhhnhmg3qihu
-- valory/reset_pause_abci:0.1.0:bafybeicskv7u3mtfhi7nnoyw3bppwjof63izs4jgqdddtxicoea26t2n7i
-- valory/termination_abci:0.1.0:bafybeianygjbwmt4xrq77pfl3yzcokbjfzxmuru6j2k7a3boqc2qfb7shi
-- valory/liquidity_trader_abci:0.1.0:bafybeidkiqxm7ymd6xnkuj633wzzrcn2halb6cdmujcn67yahzwseawy5m
-- valory/transaction_settlement_abci:0.1.0:bafybeid4alawv3oz4gdyom5uevrgzfsahbwabi37r7gomsetwqiq66g6cm
+- valory/abstract_round_abci:0.1.0:bafybeiap4ujlbydi272pqpz556lali4mjpz5pnrmxnn5chinoqgcje32ce
+- valory/registration_abci:0.1.0:bafybeiabk3bsav6xuyw7tdn53ogesfolcuoahdf7pvcrhcsatzd63lfexq
+- valory/reset_pause_abci:0.1.0:bafybeigruvi7uibazchizk7exwdgfoaarpguue73wehror43yknaqi4pdi
+- valory/termination_abci:0.1.0:bafybeih5jqgvrracycrsyyvge5vm6nlmfsshbfez4f4xznzbdohaajxjp4
+- valory/liquidity_trader_abci:0.1.0:bafybeidiac54mlhvj22tyjlqomuaw64im3z27xlacmo4qj2mkrtogrkcta
+- valory/transaction_settlement_abci:0.1.0:bafybeie2qxhc3uxuqhe6ce2cp3ywjh27tkdkve5mk6upbbhyx6psqrg4ue
 behaviours:
   main:
     args: {}

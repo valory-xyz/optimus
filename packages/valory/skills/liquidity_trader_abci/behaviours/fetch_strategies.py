@@ -869,7 +869,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     roi_decimal = (
                         float(total_portfolio_value) / float(initial_investment)
                     ) - 1
-                    roi = roi_decimal * 100  # Convert to percentage
+                    roi = round(roi_decimal * 100, 2)
                     self.context.logger.info(
                         f"ROI calculated: {roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
                     )

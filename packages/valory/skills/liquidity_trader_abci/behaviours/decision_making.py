@@ -1131,12 +1131,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if dex_type == DexType.VELODROME.value:
             if is_cl_pool:
                 # For CL pools, use the specialized method that requires token percentages
-                max_amounts_in = yield from self._calculate_velodrome_investment_amounts(
-                    action, chain, assets, positions, max_amounts
+                max_amounts_in = (
+                    yield from self._calculate_velodrome_investment_amounts(
+                        action, chain, assets, positions, max_amounts
+                    )
                 )
                 if max_amounts_in is None:
                     return None, None, None
-                self.context.logger.info(f"max_amounts_in for velodrome CL pool: {max_amounts_in}")
+                self.context.logger.info(
+                    f"max_amounts_in for velodrome CL pool: {max_amounts_in}"
+                )
             else:
                 # For stable/volatile pools, use the standard method
                 relative_funds_percentage = action.get("relative_funds_percentage")

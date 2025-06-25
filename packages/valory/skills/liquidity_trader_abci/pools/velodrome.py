@@ -81,7 +81,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )  # Pass pre-calculated tick ranges if available
         tick_spacing = kwargs.get("tick_spacing")  # Pass tick spacing if available
 
-                # Check required parameters based on pool type
+        # Check required parameters based on pool type
         if is_cl_pool:
             # For CL pools, tick_ranges and tick_spacing are required
             if not all(

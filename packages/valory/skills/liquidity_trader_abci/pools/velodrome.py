@@ -81,21 +81,39 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )  # Pass pre-calculated tick ranges if available
         tick_spacing = kwargs.get("tick_spacing")  # Pass tick spacing if available
 
-        if not all(
-            [
-                pool_address,
-                safe_address,
-                assets,
-                chain,
-                max_amounts_in,
-                tick_ranges,
-                tick_spacing,
-            ]
-        ):
-            self.context.logger.error(
-                "Missing required parameters for entering the pool. Here are the kwargs: {kwargs}"
-            )
-            return None, None
+                # Check required parameters based on pool type
+        if is_cl_pool:
+            # For CL pools, tick_ranges and tick_spacing are required
+            if not all(
+                [
+                    pool_address,
+                    safe_address,
+                    assets,
+                    chain,
+                    max_amounts_in,
+                    tick_ranges,
+                    tick_spacing,
+                ]
+            ):
+                self.context.logger.error(
+                    f"Missing required parameters for entering CL pool. Here are the kwargs: {kwargs}"
+                )
+                return None, None
+        else:
+            # For stable/volatile pools, tick_ranges and tick_spacing are not required
+            if not all(
+                [
+                    pool_address,
+                    safe_address,
+                    assets,
+                    chain,
+                    max_amounts_in,
+                ]
+            ):
+                self.context.logger.error(
+                    f"Missing required parameters for entering stable/volatile pool. Here are the kwargs: {kwargs}"
+                )
+                return None, None
 
         # Determine the pool type and call the appropriate method
         if is_cl_pool:
@@ -136,7 +154,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         is_stable = kwargs.get("is_stable")
         if not all([pool_address, safe_address, chain]):
             self.context.logger.error(
-                "Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
+                f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
             )
             return None, None, None
 

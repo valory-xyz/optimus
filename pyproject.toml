@@ -16,8 +16,8 @@ include = "packages"
 
 [tool.poetry.dependencies]
 python = "<3.12,>=3.10"
-open-autonomy = "==0.19.7"
-open-aea-test-autonomy = "==0.19.7"
+open-autonomy = "==0.19.11"
+open-aea-test-autonomy = "==0.19.11"
 open-aea = "==1.65.0"
 open-aea-ledger-ethereum = "==1.65.0"
 typing_extensions = "<4.14"

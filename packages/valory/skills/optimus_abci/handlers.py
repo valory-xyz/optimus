@@ -120,6 +120,7 @@ NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
 
+
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
 
@@ -362,42 +363,52 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Extract the requested path from the URL
             requested_path = urlparse(http_msg.url).path.lstrip("/")
-            
+
             # If the path is empty or just "/", serve index.html
             if not requested_path or requested_path == "":
                 requested_path = "index.html"
-            
+
             self.context.logger.info(f"Serving static file: {requested_path}")
 
             # Construct the file path
             file_path = Path(
                 Path(__file__).parent, self.agent_profile_path, requested_path
             )
-            
+
             self.context.logger.info(f"Resolved file path: {file_path}")
-            
+
             # If the file exists and is a file, send it as a response
             if file_path.exists() and file_path.is_file():
                 # Determine content type based on file extension
                 content_type = self._get_content_type(file_path.suffix)
-                
+
                 with open(file_path, "rb") as file:
                     file_content = file.read()
 
-                self.context.logger.info(f"Serving file {file_path} with content-type: {content_type}")
+                self.context.logger.info(
+                    f"Serving file {file_path} with content-type: {content_type}"
+                )
                 # Send the file content as a response
-                self._send_ok_response(http_msg, http_dialogue, file_content, content_type)
+                self._send_ok_response(
+                    http_msg, http_dialogue, file_content, content_type
+                )
             else:
-                self.context.logger.info(f"File not found: {file_path}, serving index.html as fallback")
+                self.context.logger.info(
+                    f"File not found: {file_path}, serving index.html as fallback"
+                )
                 # If the file doesn't exist or is not a file, return the index.html file
-                index_path = Path(Path(__file__).parent, self.agent_profile_path, "index.html")
+                index_path = Path(
+                    Path(__file__).parent, self.agent_profile_path, "index.html"
+                )
                 with open(index_path, "r", encoding="utf-8") as file:
                     index_html = file.read()
 
                 # Send the HTML response
                 self._send_ok_response(http_msg, http_dialogue, index_html, "text/html")
         except FileNotFoundError as e:
-            self.context.logger.error(f"FileNotFoundError when serving static file: {e}")
+            self.context.logger.error(
+                f"FileNotFoundError when serving static file: {e}"
+            )
             self._handle_not_found(http_msg, http_dialogue)
         except Exception as e:
             self.context.logger.error(f"Error serving static file: {e}")

@@ -861,6 +861,26 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Calculate total portfolio value
             total_portfolio_value = total_pools_value + total_safe_value
 
+            # Calculate ROI using the provided formula: (final_value / initial_value) - 1
+            # Convert to percentage by multiplying by 100
+            roi = None
+            if initial_investment is not None and initial_investment > 0:
+                try:
+                    roi_decimal = (
+                        float(total_portfolio_value) / float(initial_investment)
+                    ) - 1
+                    roi = round(roi_decimal * 100, 2)
+                    self.context.logger.info(
+                        f"ROI calculated: {roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
+                    )
+                except (ValueError, ZeroDivisionError, TypeError) as e:
+                    self.context.logger.error(f"Error calculating ROI: {str(e)}")
+                    roi = None
+            else:
+                self.context.logger.info(
+                    f"ROI not calculated - initial_investment: {initial_investment}"
+                )
+
             allocation_assets = set()
             for allocation in allocations:
                 try:
@@ -926,6 +946,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if initial_investment is not None
                 else None,
                 "volume": float(volume) if volume is not None else None,
+                "roi": roi,
                 "agent_hash": agent_hash,
                 "allocations": processed_allocations,
                 "portfolio_breakdown": filtered_portfolio_breakdown,

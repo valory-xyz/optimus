@@ -115,6 +115,11 @@ PROTOCOL_DEFINITIONS = {
 MODIUS_AGENT_PROFILE_PATH = "modius-ui-build"
 OPTIMUS_AGENT_PROFILE_PATH = "optimus-ui-build"
 
+OK_CODE = 200
+NOT_FOUND_CODE = 404
+BAD_REQUEST_CODE = 400
+AVERAGE_PERIOD_SECONDS = 10
+
 
 def load_fsm_spec() -> Dict:
     """Load the chained FSM spec"""
@@ -359,29 +364,54 @@ class HttpHandler(BaseHttpHandler):
             # Extract the requested path from the URL
             requested_path = urlparse(http_msg.url).path.lstrip("/")
 
+            # If the path is empty or just "/", serve index.html
+            if not requested_path or requested_path == "":
+                requested_path = "index.html"
+
+            self.context.logger.info(f"Serving static file: {requested_path}")
+
             # Construct the file path
             file_path = Path(
                 Path(__file__).parent, self.agent_profile_path, requested_path
             )
+
+            self.context.logger.info(f"Resolved file path: {file_path}")
+
             # If the file exists and is a file, send it as a response
             if file_path.exists() and file_path.is_file():
+                # Determine content type based on file extension
+                content_type = self._get_content_type(file_path.suffix)
+
                 with open(file_path, "rb") as file:
                     file_content = file.read()
 
+                self.context.logger.info(
+                    f"Serving file {file_path} with content-type: {content_type}"
+                )
                 # Send the file content as a response
-                self._send_ok_response(http_msg, http_dialogue, file_content)
+                self._send_ok_response(
+                    http_msg, http_dialogue, file_content, content_type
+                )
             else:
+                self.context.logger.info(
+                    f"File not found: {file_path}, serving index.html as fallback"
+                )
                 # If the file doesn't exist or is not a file, return the index.html file
-                with open(
-                    Path(Path(__file__).parent, self.agent_profile_path, "index.html"),
-                    "r",
-                    encoding="utf-8",
-                ) as file:
+                index_path = Path(
+                    Path(__file__).parent, self.agent_profile_path, "index.html"
+                )
+                with open(index_path, "r", encoding="utf-8") as file:
                     index_html = file.read()
 
                 # Send the HTML response
-                self._send_ok_response(http_msg, http_dialogue, index_html)
-        except FileNotFoundError:
+                self._send_ok_response(http_msg, http_dialogue, index_html, "text/html")
+        except FileNotFoundError as e:
+            self.context.logger.error(
+                f"FileNotFoundError when serving static file: {e}"
+            )
+            self._handle_not_found(http_msg, http_dialogue)
+        except Exception as e:
+            self.context.logger.error(f"Error serving static file: {e}")
             self._handle_not_found(http_msg, http_dialogue)
 
     def _get_handler(self, url: str, method: str) -> Tuple[Optional[Callable], Dict]:
@@ -495,32 +525,46 @@ class HttpHandler(BaseHttpHandler):
         self,
         http_msg: HttpMessage,
         http_dialogue: HttpDialogue,
-        data: Union[str, Dict, List, bytes],
+        data: Union[Dict, List, str, bytes],
+        content_type: Optional[str] = None,
     ) -> None:
         """Send an OK response with the provided data"""
-        headers = (
-            self.json_content_header
-            if isinstance(data, (dict, list))
-            else self.html_content_header
-        )
-        headers += http_msg.headers
 
-        # Convert dictionary or list to JSON string
-        if isinstance(data, (dict, list)):
-            data = json.dumps(data)
+        body_bytes: bytes
+        headers: str
+
+        if isinstance(data, bytes):
+            body_bytes = data
+            header_content_type = (
+                f"Content-Type: {content_type}\n"
+                if content_type
+                else self.json_content_header
+            )
+            headers = f"{header_content_type}{http_msg.headers}"
+        elif isinstance(data, str):
+            body_bytes = data.encode("utf-8")
+            header_content_type = (
+                f"Content-Type: {content_type}\n"
+                if content_type
+                else self.html_content_header
+            )
+            headers = f"{header_content_type}{http_msg.headers}"
+        else:
+            body_bytes = json.dumps(data).encode("utf-8")
+            headers = f"{self.json_content_header}{http_msg.headers}"
 
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
             version=http_msg.version,
-            status_code=HttpCode.OK_CODE.value,
+            status_code=OK_CODE,
             status_text="Success",
             headers=headers,
-            body=data.encode("utf-8") if isinstance(data, str) else data,
+            body=body_bytes,
         )
 
         # Send response
-        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.logger.info(f"Responding with {OK_CODE}")
         self.context.outbox.put_message(message=http_response)
 
     def _handle_get_portfolio(
@@ -628,6 +672,33 @@ class HttpHandler(BaseHttpHandler):
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
+
+    def _get_content_type(self, file_extension: str) -> str:
+        """
+        Get the appropriate content type based on file extension.
+
+        :param file_extension: the file extension (including the dot)
+        :return: the content type string
+        """
+        content_types = {
+            ".html": "text/html",
+            ".css": "text/css",
+            ".js": "application/javascript",
+            ".json": "application/json",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".svg": "image/svg+xml",
+            ".ico": "image/x-icon",
+            ".txt": "text/plain",
+            ".pdf": "application/pdf",
+            ".woff": "font/woff",
+            ".woff2": "font/woff2",
+            ".ttf": "font/ttf",
+            ".eot": "application/vnd.ms-fontobject",
+        }
+        return content_types.get(file_extension.lower(), "application/octet-stream")
 
     def _handle_not_found(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

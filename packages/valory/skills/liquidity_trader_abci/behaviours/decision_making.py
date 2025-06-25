@@ -1128,13 +1128,59 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 return None, None, None
 
         # Handle Velodrome-specific parameters
-        if dex_type == DexType.VELODROME.value and is_cl_pool:
-            max_amounts_in = yield from self._calculate_velodrome_investment_amounts(
-                action, chain, assets, positions, max_amounts
-            )
-            if max_amounts_in is None:
-                return None, None, None
-            self.context.logger.info(f"max_amounts_in for velodrome : {max_amounts_in}")
+        if dex_type == DexType.VELODROME.value:
+            if is_cl_pool:
+                # For CL pools, use the specialized method that requires token percentages
+                max_amounts_in = (
+                    yield from self._calculate_velodrome_investment_amounts(
+                        action, chain, assets, positions, max_amounts
+                    )
+                )
+                if max_amounts_in is None:
+                    return None, None, None
+                self.context.logger.info(
+                    f"max_amounts_in for velodrome CL pool: {max_amounts_in}"
+                )
+            else:
+                # For stable/volatile pools, use the standard method
+                relative_funds_percentage = action.get("relative_funds_percentage")
+                if not relative_funds_percentage:
+                    self.context.logger.error(
+                        f"relative_funds_percentage not defined: {relative_funds_percentage}"
+                    )
+                    return None, None, None
+                # Use the helper function to get balances and calculate amounts
+                (
+                    max_amounts_in,
+                    token0_balance,
+                    token1_balance,
+                ) = yield from self._get_token_balances_and_calculate_amounts(
+                    chain=chain,
+                    assets=assets,
+                    positions=positions,
+                    relative_funds_percentage=relative_funds_percentage,
+                    max_investment_amounts=max_investment_amounts,
+                    eth_handling=True,  # Enable ETH special handling
+                )
+
+                if max_amounts_in is None:
+                    return None, None, None
+
+                if len(max_amounts) >= 2:
+                    max_amounts_in = [
+                        min(max_amounts_in[0], max_amounts[0]),
+                        min(max_amounts_in[1], max_amounts[1]),
+                    ]
+
+                self.context.logger.info(
+                    f"Adjusted max amounts in after comparing with max investment amounts: {max_amounts_in}"
+                )
+
+                if any(amount == 0 or amount is None for amount in max_amounts_in):
+                    self.context.logger.error(
+                        f"Insufficient balance for entering pool: {max_amounts_in}"
+                    )
+                    return None, None, None
         else:
             relative_funds_percentage = action.get("relative_funds_percentage")
             if not relative_funds_percentage:

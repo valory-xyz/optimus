@@ -12,9 +12,9 @@ fingerprint:
   behaviours/base.py: bafybeiftdq3wlvsta5m5putut56xtctlw5vyyfrwmsjspsvbsbmmj2arky
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeiggaxcqwhuqgqjsnu5yvchz5kybicnqog7abu4hv53rvqfqtbuxoa
+  behaviours/decision_making.py: bafybeiaqgsejzvk23tmb4nkmdffoaj3khwmitpw6gx6ljsio5lgdjrta6m
   behaviours/evaluate_strategy.py: bafybeibrtjmh66hqlzwabswhrndv427rlbs3su7nqeebkujvzt4oercxj4
-  behaviours/fetch_strategies.py: bafybeicqvixvhteu4gpoxq4wxfuesmayo32jjnnb4lza7g6rrz2dcybpnu
+  behaviours/fetch_strategies.py: bafybeiedq73bed7g7jkogtxslvnsx27uy7orvhjldgff3bssqog4ng3ohy
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeial6l547l3qtymegdb3u6izkkave4fx5xn4bszl77uee376qxhdry
@@ -29,7 +29,7 @@ fingerprint:
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeib6ftotspu2ojuk5hy6gclq36b2fnftsyi5fxocuyqayjxsgjlueu
   pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeiglmjl6trnfq45xonxqih5iidhbtf4x72h56lv3yinivsihj5aqlq
+  pools/velodrome.py: bafybeih354yugtfgbwwuum5qa24lkex7spdzz35cma7qhhsnledyfwvoqu
   rounds.py: bafybeigbugmxzpzmgaouermgztyejmyiedzy2qzbnx22qnuvzauhu2xymi
   rounds_info.py: bafybeidxi5qrpvtslr7sti4xmzc7tr4humbmwragffnd75u3ixq3c7kyma
   states/__init__.py: bafybeige5a5rkfmb56a7im4q4tqxddmut6vacwqgq2g4qvaauk7sqgzlnu
@@ -56,16 +56,16 @@ connections:
 - valory/mirror_db:0.1.0:bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts:
-- valory/gnosis_safe:0.1.0:bafybeidhegkiibxroyvzvsyuh5t3qpq3egj24u2yg2xryf2kir4f36on3u
+- valory/gnosis_safe:0.1.0:bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um
 - valory/balancer_weighted_pool:0.1.0:bafybeiewnxxzzpso2iuqw6sw5rlxj6p3e4cr2czwnmfm3m2pcuihuit7nu
 - valory/balancer_vault:0.1.0:bafybeigb3dd34py2jhixmuhy7o52ex572y4d7yhrauywzn4kwzlipscxai
-- valory/erc20:0.1.0:bafybeidsr442adqzlbinheb4crju3z3uipjjmaxkw5l2cs3qrwsftg4zy4
+- valory/erc20:0.1.0:bafybeiczphtgmlot3tbsqwfstagnuffw6rlzlxpodnvafodwq573q555ye
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeif5v7ainmqjoqmbux6m7ssrfziaaebaqtxt64qinsujsujihxuie4
 - valory/uniswap_v3_pool:0.1.0:bafybeigipe5aznisrlbbxmbeoyan5ayughp7z57cjxwbx5qigsjgrzqav4
 - valory/merkl_distributor:0.1.0:bafybeieai7iixi6y647yrxrlkusxy3hyjkq3ai2pakudkk7hph4dmshpo4
-- valory/staking_token:0.1.0:bafybeidv2ogn5x2tb2p6ffe64bbsujgfxqxbcgck2nurwzicvsr3ceqloi
-- valory/staking_activity_checker:0.1.0:bafybeievwpysmimhhjfgetswigoivnkdluj2n6dh342r2iesiqdw3dpvru
+- valory/staking_token:0.1.0:bafybeiclu2xkt6yzgm2d336wcjid7zrgdnvjnxinksxxw5yvfwvwiqd6ii
+- valory/staking_activity_checker:0.1.0:bafybeibh6fasgz3a6tgr7j4svsbrgzxryhkh6gsf7vf4kpvirs77djxzti
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeiflwdffp2zkebx74eeivfz2g7x5w3icwsoflwddt46zzfiuovwuq4
 - valory/velodrome_router:0.1.0:bafybeieueyt3csn2sxujq3vkmeauxjbdbdyfgz2mpubmq7xc73thspno74
 - valory/velodrome_cl_pool:0.1.0:bafybeiaqs2hbjgckwmys6gqwct2izqf575jbr7xkkkq4hzplmv2qgxe5vm
@@ -78,8 +78,8 @@ protocols:
 - valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeifclzgoyulkyyigcwrqzmydyrj6c5d26xu7jk6cjbsed3pkls4pba
-- valory/transaction_settlement_abci:0.1.0:bafybeid4alawv3oz4gdyom5uevrgzfsahbwabi37r7gomsetwqiq66g6cm
+- valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
+- valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 behaviours:
   main:
     args: {}

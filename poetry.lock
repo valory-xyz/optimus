@@ -3282,15 +3282,15 @@ web3 = ">=6.0.0,<7"
 
 [[package]]
 name = "open-aea-test-autonomy"
-version = "0.19.7"
+version = "0.19.11"
 description = "Plugin containing test tools for open-autonomy packages."
 optional = false
 python-versions = "*"
 groups = ["main"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "open_aea_test_autonomy-0.19.7-py3-none-any.whl", hash = "sha256:317d7012ccb59b3252634bc7f02f618dbb41e5a88bf1d73c0c8b180e649ebac7"},
-    {file = "open_aea_test_autonomy-0.19.7.tar.gz", hash = "sha256:dee5a345e2ece72a313aeccdb4f61ad70510bf70583dc5c7b441d1b859f840f7"},
+    {file = "open_aea_test_autonomy-0.19.11-py3-none-any.whl", hash = "sha256:84ee0f4e078a32e78fd173414febf4523f98a9402070762b535bfcbbbc44b23e"},
+    {file = "open_aea_test_autonomy-0.19.11.tar.gz", hash = "sha256:e430ab334c5c59d6a882294ff599b7a96d71468f33d120f28619f824aab72373"},
 ]
 
 [package.dependencies]
@@ -3301,15 +3301,15 @@ pytest = "7.2.1"
 
 [[package]]
 name = "open-autonomy"
-version = "0.19.7"
+version = "0.19.11"
 description = "A framework for the creation of autonomous agent services."
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "open_autonomy-0.19.7-py3-none-any.whl", hash = "sha256:74458c054a8df2aa08c435f7838cfc18dbbb7967e5bddf4a65344003e907ac24"},
-    {file = "open_autonomy-0.19.7.tar.gz", hash = "sha256:d49cf8605308ff60700d1c28f48eed1241ab06057d47dac41f7e96e6ae81b476"},
+    {file = "open_autonomy-0.19.11-py3-none-any.whl", hash = "sha256:0bf7f7281457092a68995454e985781fb430cd6f01dac076d82d1f874e3417c1"},
+    {file = "open_autonomy-0.19.11.tar.gz", hash = "sha256:e45dec413ec1005484e315be1ff91914ec1630eb35150e32668beb52bd9b525b"},
 ]
 
 [package.dependencies]
@@ -3329,7 +3329,7 @@ python-dotenv = ">=0.14.5,<0.22.0"
 requests = ">=2.28.1,<2.31.2"
 requests-toolbelt = "1.0.0"
 texttable = "1.6.7"
-typing_extensions = ">=3.10.0.2"
+typing_extensions = ">=3.10.0.2,<=4.13.2"
 valory-docker-compose = "1.29.3"
 watchdog = ">=2.1.6"
 werkzeug = "2.0.3"
@@ -5894,4 +5894,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "<3.12,>=3.10"
-content-hash = "5e4df3c557e90284c7779ddf2cddb359b6ed050226b7bc69e10d8e76f9333bf0"
+content-hash = "c75fb33bf99bf470d1cb3fc2299126002754116222c436d40b7d16d42cfe7d56"

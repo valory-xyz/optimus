@@ -46,7 +46,7 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeigyae3cvcfts547w56w6oqoq4z5nq4ypmftoftf4jgtlbndzu45lu
 - valory/abstract_round_abci:0.1.0:bafybeiap4ujlbydi272pqpz556lali4mjpz5pnrmxnn5chinoqgcje32ce
 - valory/liquidity_trader_abci:0.1.0:bafybeidiac54mlhvj22tyjlqomuaw64im3z27xlacmo4qj2mkrtogrkcta
-- valory/optimus_abci:0.1.0:bafybeih37gxgfkcx3um5b6fnkd4hildonl7ksi3cxbho55c62bzdty6c6q
+- valory/optimus_abci:0.1.0:bafybeibbeqsuf3cyyeysimjkwdyqkq6cthy24ohcivbksi4evpqyadmrby
 - valory/registration_abci:0.1.0:bafybeiabk3bsav6xuyw7tdn53ogesfolcuoahdf7pvcrhcsatzd63lfexq
 - valory/reset_pause_abci:0.1.0:bafybeigruvi7uibazchizk7exwdgfoaarpguue73wehror43yknaqi4pdi
 - valory/termination_abci:0.1.0:bafybeih5jqgvrracycrsyyvge5vm6nlmfsshbfez4f4xznzbdohaajxjp4
@@ -251,7 +251,7 @@ models:
       termination_from_block: ${int:34088325}
       allowed_dexs: ${list:["balancerPool", "UniswapV3", "velodrome"]}
       initial_assets: ${str:{"mode":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"}}}
-      safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}}
+      safe_contract_addresses: ${str:{"ethereum":"0x0000000000000000000000000000000000000000","base":"0x0000000000000000000000000000000000000000","optimism":"0x0000000000000000000000000000000000000000","mode":"0xc4ed6F4B3059AD6aa985A9e47C133a45A39db66e"}}
       merkl_fetch_campaigns_args: ${str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
       allowed_chains: ${list:["mode"]}
       gas_reserve: ${str:{"ethereum":1000,"optimism":1000,"base":1000}}

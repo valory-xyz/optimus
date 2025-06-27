@@ -112,12 +112,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # update locally stored eth balance in-case it's incorrect
             eth_balance = yield from self._get_native_balance(chain, safe_address)
             self.context.logger.info(f"Current ETH balance: {eth_balance}")
-            if eth_balance < ETH_INITIAL_AMOUNT:
-                updated_amount = eth_balance
-                self.context.logger.info(
-                    f"Updating ETH remaining amount to: {updated_amount}"
-                )
-                yield from self._write_kv({ETH_REMAINING_KEY: str(updated_amount)})
 
             res = yield from self._track_eth_transfers_and_reversions(
                 safe_address, chain
@@ -894,19 +888,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Then filter portfolio_breakdown to only include assets from allocations
             filtered_portfolio_breakdown = []
+            
+            # Always show all portfolio breakdown entries to display complete portfolio
             for entry in portfolio_breakdown:
                 try:
-                    if entry.get("asset", "").lower() in allocation_assets:
-                        filtered_portfolio_breakdown.append(
-                            {
-                                "asset": entry["asset"],
-                                "address": entry["address"],
-                                "balance": float(entry["balance"]),
-                                "price": float(entry["price"]),
-                                "value_usd": float(entry["value_usd"]),
-                                "ratio": float(entry["ratio"]),
-                            }
-                        )
+                    filtered_portfolio_breakdown.append(
+                        {
+                            "asset": entry["asset"],
+                            "address": entry["address"],
+                            "balance": float(entry["balance"]),
+                            "price": float(entry["price"]),
+                            "value_usd": float(entry["value_usd"]),
+                            "ratio": float(entry["ratio"]),
+                        }
+                    )
                 except (KeyError, ValueError, TypeError) as e:
                     self.context.logger.error(
                         f"Error processing portfolio breakdown entry: {str(e)}"

@@ -888,19 +888,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Then filter portfolio_breakdown to only include assets from allocations
             filtered_portfolio_breakdown = []
+            
+            # Always show all portfolio breakdown entries to display complete portfolio
             for entry in portfolio_breakdown:
                 try:
-                    if entry.get("asset", "").lower() in allocation_assets:
-                        filtered_portfolio_breakdown.append(
-                            {
-                                "asset": entry["asset"],
-                                "address": entry["address"],
-                                "balance": float(entry["balance"]),
-                                "price": float(entry["price"]),
-                                "value_usd": float(entry["value_usd"]),
-                                "ratio": float(entry["ratio"]),
-                            }
-                        )
+                    filtered_portfolio_breakdown.append(
+                        {
+                            "asset": entry["asset"],
+                            "address": entry["address"],
+                            "balance": float(entry["balance"]),
+                            "price": float(entry["price"]),
+                            "value_usd": float(entry["value_usd"]),
+                            "ratio": float(entry["ratio"]),
+                        }
+                    )
                 except (KeyError, ValueError, TypeError) as e:
                     self.context.logger.error(
                         f"Error processing portfolio breakdown entry: {str(e)}"

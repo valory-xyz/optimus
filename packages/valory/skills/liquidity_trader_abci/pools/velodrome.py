@@ -919,7 +919,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # For stablecoin pools, we want narrow ranges
             # For volatile pools, we might adjust parameters
             model_params = {
-                "ema_period": 10,  # Default from the model
+                "ema_period": 18,  # Updated from 10 to 18
                 "std_dev_window": 100,  # Default from the model
                 "verbose": True,
             }
@@ -928,7 +928,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             if is_stable:
                 model_params[
                     "min_width_pct"
-                ] = 0.00001  # Narrower bands for stablecoins
+                ] = 0.0001  # Updated from 0.00001 to 0.0001
 
             # Run the optimization
             result = self.optimize_stablecoin_bands(prices=ratio_prices, **model_params)
@@ -1129,8 +1129,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def optimize_stablecoin_bands(
         self,
         prices: List[float],
-        min_width_pct: float = 0.01,
-        ema_period: int = 14,
+        min_width_pct: float = 0.0001,  # Updated from 0.01 to 0.0001
+        ema_period: int = 18,           # Updated from 14 to 18
         std_dev_window: int = 14,
         verbose: bool = False,
     ) -> Dict[str, Any]:

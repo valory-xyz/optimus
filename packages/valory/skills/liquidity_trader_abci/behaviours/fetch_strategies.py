@@ -112,12 +112,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # update locally stored eth balance in-case it's incorrect
             eth_balance = yield from self._get_native_balance(chain, safe_address)
             self.context.logger.info(f"Current ETH balance: {eth_balance}")
-            if eth_balance < ETH_INITIAL_AMOUNT:
-                updated_amount = eth_balance
-                self.context.logger.info(
-                    f"Updating ETH remaining amount to: {updated_amount}"
-                )
-                yield from self._write_kv({ETH_REMAINING_KEY: str(updated_amount)})
 
             res = yield from self._track_eth_transfers_and_reversions(
                 safe_address, chain

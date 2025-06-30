@@ -1217,9 +1217,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Handle position(s)
         positions_to_process = (
-            position.get("positions", [])
-            if isinstance(position.get("positions", []), list)
-            else [position]
+            position["positions"] if position.get("positions") else [position]
         )
 
         # Process all positions

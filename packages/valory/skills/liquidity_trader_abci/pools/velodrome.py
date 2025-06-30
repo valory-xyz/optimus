@@ -44,8 +44,7 @@ from packages.valory.contracts.velodrome_router.contract import VelodromeRouterC
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
-
-
+from packages.valory.contracts.erc20.contract import ERC20
 # Constants for price history functions
 PRICE_VOLATILITY_THRESHOLD = 0.02  # 2% threshold for stablecoin detection
 DEFAULT_DAYS = 30
@@ -216,6 +215,35 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
+        # For stable pools, we need to get pool reserves and calculate proper amounts
+        if is_stable:
+            # Get pool reserves to calculate proper ratio
+            pool_reserves = yield from self._get_pool_reserves(pool_address, chain)
+            if not pool_reserves:
+                self.context.logger.error(
+                    f"Could not get pool reserves for stable pool {pool_address}"
+                )
+                return None, None
+
+            # Get token decimals
+            token_decimals = yield from self._get_token_decimals_for_assets(assets, chain)
+            if not token_decimals:
+                self.context.logger.error(
+                    f"Could not get token decimals for assets {assets}"
+                )
+                return None, None
+
+            # Calculate proper amounts for stable pool
+            adjusted_amounts = self._calculate_stable_pool_amounts(
+                max_amounts_in, pool_reserves, token_decimals
+            )
+            
+            self.context.logger.info(
+                f"Original amounts: {max_amounts_in}, Adjusted for stable pool: {adjusted_amounts}"
+            )
+        else:
+            adjusted_amounts = max_amounts_in
+
         # Set minimum amounts (with slippage protection)
         # TO-DO: Implement proper slippage protection
         amount_a_min = 0
@@ -237,8 +265,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             token_a=assets[0],
             token_b=assets[1],
             stable=is_stable,
-            amount_a_desired=max_amounts_in[0],
-            amount_b_desired=max_amounts_in[1],
+            amount_a_desired=adjusted_amounts[0],
+            amount_b_desired=adjusted_amounts[1],
             amount_a_min=amount_a_min,
             amount_b_min=amount_b_min,
             to=safe_address,
@@ -1931,3 +1959,200 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 std_dev[i] = 0.001 * prices_array[i]  # Small default value
 
         return std_dev
+
+    def _get_pool_reserves(
+        self, pool_address: str, chain: str
+    ) -> Generator[None, None, Optional[Tuple[int, int]]]:
+        """Get pool reserves for stable pool calculations."""
+        try:
+            reserves_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromePoolContract.contract_id,
+                contract_callable="get_reserves",
+                data_key="data",
+                chain_id=chain,
+            )
+
+            if not reserves_data or len(reserves_data) < 2:
+                self.context.logger.error(
+                    f"Could not get valid reserves for pool {pool_address}"
+                )
+                return None
+
+            return reserves_data[0], reserves_data[1]
+
+        except Exception as e:
+            self.context.logger.error(f"Error getting pool reserves: {str(e)}")
+            return None
+
+    def _get_token_decimals_for_assets(
+        self, assets: List[str], chain: str
+    ) -> Generator[None, None, Optional[List[int]]]:
+        """Get token decimals for the given assets."""
+        try:
+            decimals = []
+            for asset in assets:
+                token_decimals = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=asset,
+                    contract_public_id=ERC20.contract_id,
+                    contract_callable="get_token_decimals",
+                    data_key="data",
+                    chain_id=chain,
+                )
+                
+                if token_decimals is None:
+                    self.context.logger.error(f"Could not get decimals for token {asset}")
+                    return None
+                
+                decimals.append(token_decimals)
+
+            return decimals
+
+        except Exception as e:
+            self.context.logger.error(f"Error getting token decimals: {str(e)}")
+            return None
+
+    def _calculate_stable_pool_amounts(
+        self, 
+        max_amounts_in: List[int], 
+        pool_reserves: Tuple[int, int], 
+        token_decimals: List[int]
+    ) -> List[int]:
+        """Calculate proper amounts for stable pool that satisfy the equal USD value requirement."""
+        try:
+            reserve0, reserve1 = pool_reserves
+            decimals0, decimals1 = token_decimals
+            amount0_desired, amount1_desired = max_amounts_in
+
+            self.context.logger.info(
+                f"Pool reserves: {reserve0}, {reserve1}"
+            )
+            self.context.logger.info(
+                f"Token decimals: {decimals0}, {decimals1}"
+            )
+            self.context.logger.info(
+                f"Available balances: {amount0_desired} token0, {amount1_desired} token1"
+            )
+
+            # Calculate the current pool ratio (normalized for decimals)
+            normalized_reserve0 = reserve0 / (10 ** decimals0)  # USDC amount
+            normalized_reserve1 = reserve1 / (10 ** decimals1)  # MODE amount
+            
+            if normalized_reserve0 == 0 or normalized_reserve1 == 0:
+                self.context.logger.error("Pool reserves contain zero, cannot calculate ratio")
+                return max_amounts_in
+            
+            # Pool ratio: how much token1 per token0 (MODE per USDC)
+            pool_ratio = normalized_reserve1 / normalized_reserve0
+            
+            self.context.logger.info(
+                f"Normalized reserves: {normalized_reserve0:.6f} token0, {normalized_reserve1:.6f} token1"
+            )
+            self.context.logger.info(f"Pool ratio: {pool_ratio:.6f} token1 per token0")
+            
+            # Calculate normalized available amounts
+            normalized_amount0 = amount0_desired / (10 ** decimals0)
+            normalized_amount1 = amount1_desired / (10 ** decimals1)
+            
+            self.context.logger.info(
+                f"Normalized available: {normalized_amount0:.6f} token0, {normalized_amount1:.6f} token1"
+            )
+
+            # Option 1: Use maximum token0, calculate required token1
+            required_normalized_amount1_for_max_amount0 = normalized_amount0 * pool_ratio
+            required_amount1_for_max_amount0 = int(required_normalized_amount1_for_max_amount0 * (10 ** decimals1))
+            
+            # Option 2: Use maximum token1, calculate required token0
+            required_normalized_amount0_for_max_amount1 = normalized_amount1 / pool_ratio
+            required_amount0_for_max_amount1 = int(required_normalized_amount0_for_max_amount1 * (10 ** decimals0))
+
+            self.context.logger.info(
+                f"Option 1 - Use {normalized_amount0:.6f} token0, need {required_normalized_amount1_for_max_amount0:.6f} token1 ({required_amount1_for_max_amount0} raw)"
+            )
+            self.context.logger.info(
+                f"Option 2 - Use {normalized_amount1:.6f} token1, need {required_normalized_amount0_for_max_amount1:.6f} token0 ({required_amount0_for_max_amount1} raw)"
+            )
+
+            # Check which option is feasible within balance limits
+            option1_feasible = required_amount1_for_max_amount0 <= amount1_desired
+            option2_feasible = required_amount0_for_max_amount1 <= amount0_desired
+            
+            self.context.logger.info(
+                f"Option 1 feasible: {option1_feasible} (need {required_amount1_for_max_amount0}, have {amount1_desired})"
+            )
+            self.context.logger.info(
+                f"Option 2 feasible: {option2_feasible} (need {required_amount0_for_max_amount1}, have {amount0_desired})"
+            )
+
+            if option1_feasible and option2_feasible:
+                # Both options are feasible, choose the one that uses more capital
+                # Compare the total USD value of each option
+                option1_value = normalized_amount0  # Using all token0
+                option2_value = required_normalized_amount0_for_max_amount1  # Using partial token0
+                
+                if option1_value >= option2_value:
+                    # Use option 1: all token0
+                    adjusted_amounts = [amount0_desired, required_amount1_for_max_amount0]
+                    self.context.logger.info(f"Both feasible, choosing option 1 (higher value): {adjusted_amounts}")
+                else:
+                    # Use option 2: all token1
+                    adjusted_amounts = [required_amount0_for_max_amount1, amount1_desired]
+                    self.context.logger.info(f"Both feasible, choosing option 2 (higher value): {adjusted_amounts}")
+                    
+            elif option1_feasible:
+                # Only option 1 is feasible
+                adjusted_amounts = [amount0_desired, required_amount1_for_max_amount0]
+                self.context.logger.info(f"Only option 1 feasible: {adjusted_amounts}")
+                
+            elif option2_feasible:
+                # Only option 2 is feasible
+                adjusted_amounts = [required_amount0_for_max_amount1, amount1_desired]
+                self.context.logger.info(f"Only option 2 feasible: {adjusted_amounts}")
+                
+            else:
+                # Neither option is feasible - this shouldn't happen with correct pool ratio
+                self.context.logger.error("Neither option is feasible - using original amounts")
+                return max_amounts_in
+
+            # Verify the amounts satisfy the stable pool constraint
+            # The constraint is: (amount0 * 1e18) / (10^decimals0) == (amount1 * 1e18) / (10^decimals1)
+            scale_factor_0 = 10 ** (18 - decimals0)
+            scale_factor_1 = 10 ** (18 - decimals1)
+            
+            check0 = adjusted_amounts[0] * scale_factor_0
+            check1 = adjusted_amounts[1] * scale_factor_1
+            
+            self.context.logger.info(
+                f"Constraint verification - check0: {check0}, check1: {check1}, equal: {check0 == check1}"
+            )
+            
+            # If they're not exactly equal due to rounding, make a small adjustment
+            if check0 != check1:
+                self.context.logger.info("Making small adjustment for constraint satisfaction...")
+                
+                # Calculate the difference and adjust the smaller amount upward slightly
+                if check0 < check1:
+                    # Increase amount0 slightly
+                    target_amount0 = check1 // scale_factor_0
+                    if target_amount0 <= amount0_desired:
+                        adjusted_amounts[0] = int(target_amount0)
+                else:
+                    # Increase amount1 slightly  
+                    target_amount1 = check0 // scale_factor_1
+                    if target_amount1 <= amount1_desired:
+                        adjusted_amounts[1] = int(target_amount1)
+                
+                # Re-verify
+                check0_final = adjusted_amounts[0] * scale_factor_0
+                check1_final = adjusted_amounts[1] * scale_factor_1
+                self.context.logger.info(
+                    f"After adjustment - check0: {check0_final}, check1: {check1_final}, equal: {check0_final == check1_final}"
+                )
+
+            return adjusted_amounts
+
+        except Exception as e:
+            self.context.logger.error(f"Error calculating stable pool amounts: {str(e)}")
+            return max_amounts_in

@@ -146,6 +146,7 @@ build-agent-runner:
 	--collect-all peewee \
 	--collect-all google-generativeai \
 	--collect-all google.generativeai \
+	--collect-all scipy \
 	--hidden-import requests \
 	--hidden-import pycoingecko \
 	--hidden-import numpy \
@@ -154,6 +155,7 @@ build-agent-runner:
 	--hidden-import peewee \
 	--hidden-import google-generativeai \
 	--hidden-import google.generativeai \
+	--hidden-import scipy \
 	--hidden-import distutils.dir_util \
 	--hidden-import distutils \
 	--collect-all distutils \
@@ -197,6 +199,7 @@ build-agent-runner-mac:
 	--collect-all peewee \
 	--collect-all google-generativeai \
 	--collect-all google.generativeai \
+	--collect-all scipy \
 	--hidden-import requests \
 	--hidden-import pycoingecko \
 	--hidden-import numpy \
@@ -205,6 +208,7 @@ build-agent-runner-mac:
 	--hidden-import peewee \
 	--hidden-import google-generativeai \
 	--hidden-import google.generativeai \
+	--hidden-import scipy \
 	--hidden-import distutils.dir_util \
 	--hidden-import distutils \
 	--collect-all distutils \
@@ -213,4 +217,3 @@ build-agent-runner-mac:
 	--name agent_runner_bin
 	sleep 1
 	./dist/agent_runner_bin --version
-

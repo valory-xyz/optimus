@@ -54,8 +54,6 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     DexType,
-    ETH_INITIAL_AMOUNT,
-    ETH_REMAINING_KEY,
     LiquidityTraderBaseBehaviour,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
@@ -888,7 +886,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Then filter portfolio_breakdown to only include assets from allocations
             filtered_portfolio_breakdown = []
-            
+
             # Always show all portfolio breakdown entries to display complete portfolio
             for entry in portfolio_breakdown:
                 try:

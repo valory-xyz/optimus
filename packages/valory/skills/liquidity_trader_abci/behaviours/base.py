@@ -1442,7 +1442,7 @@ class LiquidityTraderBaseBehaviour(
             account = self.params.safe_contract_addresses.get(chain)
             on_chain_amount = yield from self._get_native_balance(chain, account)
             cached_amount = int(result[ETH_REMAINING_KEY])
-            
+
             if on_chain_amount is not None:
                 # If there's a mismatch, sync the cached value with on-chain balance
                 if cached_amount != on_chain_amount:
@@ -1451,7 +1451,7 @@ class LiquidityTraderBaseBehaviour(
                     )
                     yield from self._write_kv({ETH_REMAINING_KEY: str(on_chain_amount)})
                     return on_chain_amount
-                
+
                 return cached_amount
 
             return cached_amount
@@ -1461,7 +1461,6 @@ class LiquidityTraderBaseBehaviour(
             )
             amount = yield from self.reset_eth_remaining_amount()
             return int(amount)
-
 
     def update_eth_remaining_amount(
         self, amount_used: int

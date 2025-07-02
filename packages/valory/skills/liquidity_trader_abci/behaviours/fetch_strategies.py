@@ -70,8 +70,8 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
     PostTxSettlementRound,
 )
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
-    LiquidityAmounts,
-    TickMath,
+    get_amounts_for_liquidity,
+    get_sqrt_ratio_at_tick,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -1308,14 +1308,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Check if current tick is within the provided tick range
         if tick_lower <= current_tick <= tick_upper:
-            # In range, use getAmountsForLiquidity
-            sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
-            sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
+            # In range, use get_amounts_for_liquidity
+            sqrtA = get_sqrt_ratio_at_tick(tick_lower)
+            sqrtB = get_sqrt_ratio_at_tick(tick_upper)
 
-            # Calculate amounts using getAmountsForLiquidity
-            amount0, amount1 = LiquidityAmounts.getAmountsForLiquidity(
+            # Calculate amounts using get_amounts_for_liquidity
+            amount0, amount1 = get_amounts_for_liquidity(
                 sqrt_price_x96, sqrtA, sqrtB, liquidity
             )
+
+
+            # Add uncollected fees
+            amount0 += tokens_owed0
+            amount1 += tokens_owed1
 
             self.context.logger.info(
                 f"Position is in range. Current tick: {current_tick}, "

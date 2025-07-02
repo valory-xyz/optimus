@@ -109,26 +109,18 @@ def get_amounts_for_liquidity(
     # Calculate amount0
     if sqrtRatioX96 <= sqrtRatioAX96:
         # Current price is below the range, all liquidity is in token0
-        amount0 = _get_amount0_for_liquidity(
-            sqrtRatioAX96, sqrtRatioBX96, liquidity
-        )
+        amount0 = _get_amount0_for_liquidity(sqrtRatioAX96, sqrtRatioBX96, liquidity)
     elif sqrtRatioX96 < sqrtRatioBX96:
         # Current price is within the range
-        amount0 = _get_amount0_for_liquidity(
-            sqrtRatioX96, sqrtRatioBX96, liquidity
-        )
+        amount0 = _get_amount0_for_liquidity(sqrtRatioX96, sqrtRatioBX96, liquidity)
 
     # Calculate amount1
     if sqrtRatioX96 >= sqrtRatioBX96:
         # Current price is above the range, all liquidity is in token1
-        amount1 = _get_amount1_for_liquidity(
-            sqrtRatioAX96, sqrtRatioBX96, liquidity
-        )
+        amount1 = _get_amount1_for_liquidity(sqrtRatioAX96, sqrtRatioBX96, liquidity)
     elif sqrtRatioX96 > sqrtRatioAX96:
         # Current price is within the range
-        amount1 = _get_amount1_for_liquidity(
-            sqrtRatioAX96, sqrtRatioX96, liquidity
-        )
+        amount1 = _get_amount1_for_liquidity(sqrtRatioAX96, sqrtRatioX96, liquidity)
 
     return amount0, amount1
 

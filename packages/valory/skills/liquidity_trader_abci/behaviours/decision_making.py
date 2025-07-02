@@ -228,22 +228,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             action.get("to_token_symbol"),
         )
 
-        # If this was an ETH swap, update the remaining ETH amount in kv_store
-        if action.get("from_token") == ZERO_ADDRESS:
-            # Get the amount that was swapped
-            amount_used = action.get("amount", 0)
-            if amount_used > 0:
-                self.context.logger.info(
-                    f"Updating remaining ETH amount after swap. Amount used: {amount_used}"
-                )
-                yield from self.update_eth_remaining_amount(amount_used)
-
-                # Log the new remaining amount
-                remaining_eth = yield from self.get_eth_remaining_amount()
-                self.context.logger.info(
-                    f"Remaining ETH amount after swap: {remaining_eth}"
-                )
-
         fee_details = {
             "remaining_fee_allowance": action.get("remaining_fee_allowance"),
             "remaining_gas_allowance": action.get("remaining_gas_allowance"),
@@ -967,7 +951,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         positions: List[Dict[str, Any]],
         relative_funds_percentage: float = 1.0,
         max_investment_amounts: Optional[List[int]] = None,
-        eth_handling: bool = False,
     ) -> Generator[
         None, None, Tuple[Optional[List[int]], Optional[int], Optional[int]]
     ]:
@@ -1002,40 +985,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     ),
                 ]
 
-            # Handle ETH special case if enabled
-            if eth_handling:
-                if assets[0] == ZERO_ADDRESS:
-                    # For ETH (token0), get the remaining ETH amount from kv_store
-                    eth_remaining = yield from self.get_eth_remaining_amount()
-                    max_amounts_in = [
-                        int(
-                            min(eth_remaining, token0_balance)
-                            * relative_funds_percentage
-                        ),
-                        int(token1_balance * relative_funds_percentage),
-                    ]
-                elif assets[1] == ZERO_ADDRESS:
-                    # For ETH (token1), get the remaining ETH amount from kv_store
-                    eth_remaining = yield from self.get_eth_remaining_amount()
-                    max_amounts_in = [
-                        int(token0_balance * relative_funds_percentage),
-                        int(
-                            min(eth_remaining, token1_balance)
-                            * relative_funds_percentage
-                        ),
-                    ]
-                else:
-                    # For non-ETH tokens, use the original calculation
-                    max_amounts_in = [
-                        int(token0_balance * relative_funds_percentage),
-                        int(token1_balance * relative_funds_percentage),
-                    ]
-            else:
-                # Standard calculation without ETH handling
-                max_amounts_in = [
-                    int(token0_balance * relative_funds_percentage),
-                    int(token1_balance * relative_funds_percentage),
-                ]
+            # Standard calculation without ETH handling
+            max_amounts_in = [
+                int(token0_balance * relative_funds_percentage),
+                int(token1_balance * relative_funds_percentage),
+            ]
 
             # Ensure that allocated amounts do not exceed available balances
             max_amounts_in = [
@@ -1160,7 +1114,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     positions=positions,
                     relative_funds_percentage=relative_funds_percentage,
                     max_investment_amounts=max_investment_amounts,
-                    eth_handling=True,  # Enable ETH special handling
                 )
 
                 if max_amounts_in is None:
@@ -1199,7 +1152,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 positions=positions,
                 relative_funds_percentage=relative_funds_percentage,
                 max_investment_amounts=max_investment_amounts,
-                eth_handling=True,  # Enable ETH special handling
             )
 
             if max_amounts_in is None:
@@ -2096,16 +2048,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         available_amount = self._get_balance(from_chain, from_token_address, positions)
-
-        # Apply ETH limit if the token is ETH (ZERO_ADDRESS)
-        if from_token_address == ZERO_ADDRESS:
-            # Get the remaining ETH amount from kv_store
-            eth_remaining = yield from self.get_eth_remaining_amount()
-            # Subsequent ETH swap - use what's left in our tracking
-            available_amount = min(eth_remaining, available_amount)
-            self.context.logger.info(
-                f"Subsequent ETH swap - using remaining tracked amount: {available_amount} wei"
-            )
 
         # Calculate the amount to swap based on the available amount and funds percentage
         amount = min(

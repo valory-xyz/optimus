@@ -1317,7 +1317,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 sqrt_price_x96, sqrtA, sqrtB, liquidity
             )
 
-
             # Add uncollected fees
             amount0 += tokens_owed0
             amount1 += tokens_owed1
@@ -1650,9 +1649,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"Calculating safe balances for chain {chain}")
 
             for token_address, token_symbol in chain_assets.items():
-                # Handle ETH (zero address) separately using get_eth_remaining_amount
                 if token_address == ZERO_ADDRESS:
-                    eth_balance_wei = yield from self.get_eth_remaining_amount()
+                    eth_balance_wei = yield from self._get_native_balance(
+                        chain, safe_address
+                    )
                     self.context.logger.info(
                         f"Token balance for {token_symbol} is {eth_balance_wei}."
                     )

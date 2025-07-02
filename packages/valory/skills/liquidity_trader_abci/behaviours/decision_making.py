@@ -2109,10 +2109,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         if routes_response.status_code != 200:
-            response = json.loads(routes_response.body)
-            self.context.logger.error(
-                f"[LiFi API Error Message] Error encountered: {response['message']}"
-            )
+            try:
+                response = json.loads(routes_response.body)
+                self.context.logger.error(
+                    f"[LiFi API Error Message] Error encountered: {response.get('message', 'Unknown error')}"
+                )
+            except (ValueError, TypeError) as e:
+                error_msg = f"API returned status code {routes_response.status_code} with non-JSON response. "
+                if hasattr(routes_response, "body"):
+                    error_msg += f"Response body: {routes_response.body}"
+                else:
+                    error_msg += "Response body is missing"
+                self.context.logger.error(error_msg)
+            return None
+
+        # Check if response body is empty or None
+        if not routes_response.body:
+            self.context.logger.error("API returned empty response body")
             return None
 
         try:
@@ -2120,7 +2133,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         except (ValueError, TypeError) as e:
             self.context.logger.error(
                 f"Could not parse response from api, "
-                f"the following error was encountered {type(e).__name__}: {e}"
+                f"the following error was encountered {type(e).__name__}: {e}. "
+                f"Response body: {routes_response.body[:500]}..."  # Log first 500 chars for debugging
             )
             return None
 

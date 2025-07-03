@@ -660,10 +660,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 for asset in position.get("assets", []):
                     asset_address = asset.get("address", "").lower()
                     asset_symbol = asset.get("asset_symbol")
-                    if asset_address == ZERO_ADDRESS:
-                        balance = yield from self.get_eth_remaining_amount()
-                    else:
-                        balance = asset.get("balance", 0)
+                    balance = asset.get("balance", 0)
 
                     # Skip if no balance or asset is whitelisted
                     if (
@@ -673,56 +670,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     ):
                         continue
 
-                    # Get asset price and calculate USD value
-                    if asset_address == ZERO_ADDRESS:
-                        # Handle ETH separately
-                        price = yield from self._fetch_zero_address_price()
-                        decimals = 18
-                    else:
-                        # Get price for other tokens
-                        price = yield from self._fetch_token_price(asset_address, chain)
-                        decimals = yield from self._get_token_decimals(
-                            chain, asset_address
-                        )
+                    self.context.logger.info("Preparing swap action to USDC.")
 
-                    if not price:
-                        self.context.logger.warning(
-                            f"Could not fetch price for {asset_symbol}"
-                        )
-                        continue
-
-                    # Calculate value in USD
-                    token_amount = balance / (10**decimals)
-                    value_usd = token_amount * price
-
-                    self.context.logger.info(
-                        f"Found {asset_symbol} on {chain}: {token_amount:.6f} (~${value_usd:.2f})"
+                    actions.append(
+                        {
+                            "action": Action.FIND_BRIDGE_ROUTE.value,
+                            "from_chain": chain,
+                            "to_chain": chain,  # Same chain swap
+                            "from_token": asset_address,
+                            "from_token_symbol": asset_symbol,
+                            "to_token": usdc_address,
+                            "to_token_symbol": "USDC",
+                            "funds_percentage": 1.0,  # Use all available balance
+                        }
                     )
 
-                    # If value > $5 and not whitelisted, prepare swap to USDC
-                    if value_usd > 5.0:
-                        self.context.logger.info(
-                            f"{asset_symbol} value (${value_usd:.2f}) exceeds $5 threshold and is not whitelisted. "
-                            "Preparing swap action to USDC."
-                        )
-
-                        actions.append(
-                            {
-                                "action": Action.FIND_BRIDGE_ROUTE.value,
-                                "from_chain": chain,
-                                "to_chain": chain,  # Same chain swap
-                                "from_token": asset_address,
-                                "from_token_symbol": asset_symbol,
-                                "to_token": usdc_address,
-                                "to_token_symbol": "USDC",
-                                "funds_percentage": 1.0,  # Use all available balance
-                            }
-                        )
-
-                        self.context.logger.info(
-                            f"Prepared {asset_symbol} to USDC swap on {chain}: "
-                            f"{token_amount:.6f} {asset_symbol} -> USDC"
-                        )
+                    self.context.logger.info(
+                        f"Prepared {asset_symbol} to USDC swap on {chain}: "
+                        f"{asset_symbol} -> USDC"
+                    )
 
             return actions
 
@@ -1632,11 +1598,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             for asset in position.get("assets", []):
                 asset_address = asset.get("address")
                 balance = asset.get("balance", 0)
-                # Track ETH balance separately to maintain minimum threshold in Safe and prevent refunds
-                # because in Pearl we need to maintain a threshold amount of ETH in agent safe to avoid safe from being refunded
                 if chain and asset_address:
-                    if asset_address == ZERO_ADDRESS:
-                        balance = yield from self.get_eth_remaining_amount()
                     if balance > 0:
                         token_balances.append(
                             {

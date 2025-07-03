@@ -1440,11 +1440,21 @@ class LiquidityTraderBaseBehaviour(
         try:
             chain = self.params.target_investment_chains[0]
             account = self.params.safe_contract_addresses.get(chain)
-            amount = yield from self._get_native_balance(chain, account)
-            if amount:
-                return min(int(result[ETH_REMAINING_KEY]), amount)
+            on_chain_amount = yield from self._get_native_balance(chain, account)
+            cached_amount = int(result[ETH_REMAINING_KEY])
 
-            return int(result[ETH_REMAINING_KEY])
+            if on_chain_amount is not None:
+                # If there's a mismatch, sync the cached value with on-chain balance
+                if cached_amount != on_chain_amount:
+                    self.context.logger.info(
+                        f"Syncing ETH remaining amount from cached {cached_amount} to on-chain {on_chain_amount}"
+                    )
+                    yield from self._write_kv({ETH_REMAINING_KEY: str(on_chain_amount)})
+                    return on_chain_amount
+
+                return cached_amount
+
+            return cached_amount
         except (ValueError, TypeError):
             self.context.logger.error(
                 f"Invalid ETH remaining amount in kv_store: {result[ETH_REMAINING_KEY]}"
@@ -1464,13 +1474,11 @@ class LiquidityTraderBaseBehaviour(
         yield from self._write_kv({ETH_REMAINING_KEY: str(new_remaining)})
 
     def reset_eth_remaining_amount(self) -> Generator[None, None, int]:
-        """Reset the remaining ETH amount to the initial value in kv_store."""
+        """Reset the remaining ETH amount to the on-chain balance in kv_store."""
         chain = self.params.target_investment_chains[0]
         account = self.params.safe_contract_addresses.get(chain)
         amount = yield from self._get_native_balance(chain, account)
-        if amount:
-            amount = min(int(ETH_INITIAL_AMOUNT), amount)
-        else:
+        if amount is None:
             amount = 0
         self.context.logger.info(
             f"Resetting ETH remaining amount in kv_store to {amount}"

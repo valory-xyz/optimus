@@ -54,8 +54,6 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     DexType,
-    ETH_INITIAL_AMOUNT,
-    ETH_REMAINING_KEY,
     LiquidityTraderBaseBehaviour,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
@@ -72,9 +70,10 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
     PostTxSettlementRound,
 )
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
-    LiquidityAmounts,
-    TickMath,
+    get_amounts_for_liquidity,
+    get_sqrt_ratio_at_tick,
 )
+from packages.valory.skills.liquidity_trader_abci.utils import validate_and_fix_protocols
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -85,6 +84,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round: Type[AbstractRound] = FetchStrategiesRound
     strategies = None
+
+
 
     def async_act(self) -> Generator:
         """Async act"""
@@ -112,12 +113,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # update locally stored eth balance in-case it's incorrect
             eth_balance = yield from self._get_native_balance(chain, safe_address)
             self.context.logger.info(f"Current ETH balance: {eth_balance}")
-            if eth_balance < ETH_INITIAL_AMOUNT:
-                updated_amount = eth_balance
-                self.context.logger.info(
-                    f"Updating ETH remaining amount to: {updated_amount}"
-                )
-                yield from self._write_kv({ETH_REMAINING_KEY: str(updated_amount)})
 
             res = yield from self._track_eth_transfers_and_reversions(
                 safe_address, chain
@@ -206,6 +201,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 for chain in self.params.target_investment_chains:
                     chain_strategies = self.params.available_strategies.get(chain, [])
                     serialized_protocols.extend(chain_strategies)
+            
+            # Validate and fix protocols from KV store using shared utility
+            serialized_protocols = validate_and_fix_protocols(
+                serialized_protocols,
+                self.params.target_investment_chains,
+                self.params.available_strategies
+            )
+            
+            # Update KV store if protocols were fixed
+            if serialized_protocols != json.loads(selected_protocols) if selected_protocols else []:
+                self.context.logger.info("Updating KV store with validated protocols")
+                yield from self._write_kv({"selected_protocols": json.dumps(serialized_protocols)})
 
             if not trading_type:
                 trading_type = TradingType.BALANCED.value
@@ -894,19 +901,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Then filter portfolio_breakdown to only include assets from allocations
             filtered_portfolio_breakdown = []
+
+            # Always show all portfolio breakdown entries to display complete portfolio
             for entry in portfolio_breakdown:
                 try:
-                    if entry.get("asset", "").lower() in allocation_assets:
-                        filtered_portfolio_breakdown.append(
-                            {
-                                "asset": entry["asset"],
-                                "address": entry["address"],
-                                "balance": float(entry["balance"]),
-                                "price": float(entry["price"]),
-                                "value_usd": float(entry["value_usd"]),
-                                "ratio": float(entry["ratio"]),
-                            }
-                        )
+                    filtered_portfolio_breakdown.append(
+                        {
+                            "asset": entry["asset"],
+                            "address": entry["address"],
+                            "balance": float(entry["balance"]),
+                            "price": float(entry["price"]),
+                            "value_usd": float(entry["value_usd"]),
+                            "ratio": float(entry["ratio"]),
+                        }
+                    )
                 except (KeyError, ValueError, TypeError) as e:
                     self.context.logger.error(
                         f"Error processing portfolio breakdown entry: {str(e)}"
@@ -1222,9 +1230,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Handle position(s)
         positions_to_process = (
-            position.get("positions", [])
-            if isinstance(position.get("positions", []), list)
-            else [position]
+            position["positions"] if position.get("positions") else [position]
         )
 
         # Process all positions
@@ -1317,14 +1323,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         # Check if current tick is within the provided tick range
         if tick_lower <= current_tick <= tick_upper:
-            # In range, use getAmountsForLiquidity
-            sqrtA = TickMath.getSqrtRatioAtTick(tick_lower)
-            sqrtB = TickMath.getSqrtRatioAtTick(tick_upper)
+            # In range, use get_amounts_for_liquidity
+            sqrtA = get_sqrt_ratio_at_tick(tick_lower)
+            sqrtB = get_sqrt_ratio_at_tick(tick_upper)
 
-            # Calculate amounts using getAmountsForLiquidity
-            amount0, amount1 = LiquidityAmounts.getAmountsForLiquidity(
+            # Calculate amounts using get_amounts_for_liquidity
+            amount0, amount1 = get_amounts_for_liquidity(
                 sqrt_price_x96, sqrtA, sqrtB, liquidity
             )
+
+            # Add uncollected fees
+            amount0 += tokens_owed0
+            amount1 += tokens_owed1
 
             self.context.logger.info(
                 f"Position is in range. Current tick: {current_tick}, "
@@ -1654,9 +1664,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"Calculating safe balances for chain {chain}")
 
             for token_address, token_symbol in chain_assets.items():
-                # Handle ETH (zero address) separately using get_eth_remaining_amount
                 if token_address == ZERO_ADDRESS:
-                    eth_balance_wei = yield from self.get_eth_remaining_amount()
+                    eth_balance_wei = yield from self._get_native_balance(
+                        chain, safe_address
+                    )
                     self.context.logger.info(
                         f"Token balance for {token_symbol} is {eth_balance_wei}."
                     )

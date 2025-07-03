@@ -10,6 +10,14 @@ PROMPT = """Analyze the user prompt to determine protocols and risk tolerance.
 - Previous protocols: {PREVIOUS_SELECTED_PROTOCOLS}
 - Threshold values: {THRESHOLDS}
 
+IMPORTANT: You must use ONLY these exact protocol names (case-sensitive):
+- "balancerPool" (for Balancer protocol)
+- "uniswapV3" (for Uniswap V3 protocol)
+- "velodrome" (for Velodrome protocol)
+- "sturdy" (for Sturdy lending protocol)
+
+DO NOT use abbreviations like "uni", "velo", etc. Use the exact names above.
+
 Analyze risk sentiment in the user's language and estimate their maximum acceptable loss percentage:
 - Conservative language ("safe", "minimize risk"): 1-5%
 - Moderate language ("balanced", "stable"): 6-10%
@@ -19,7 +27,7 @@ Analyze risk sentiment in the user's language and estimate their maximum accepta
 Default to 10% if unclear.
 
 Return JSON with these keys:
-- 'selected_protocols': Array of relevant protocol names
+- 'selected_protocols': Array of valid protocol names (ONLY use: "balancerPool", "uniswapV3", "velodrome", "sturdy")
 - 'trading_type': String ('risky' or 'balanced')
 - 'max_loss_percentage': Number between 1-30 representing risk tolerance
 - 'reasoning': HTML explanation of selections, inferred risk level, and effects

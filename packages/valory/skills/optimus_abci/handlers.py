@@ -87,6 +87,7 @@ from packages.valory.skills.optimus_abci.dialogues import (
 )
 from packages.valory.skills.optimus_abci.models import Params, SharedState
 from packages.valory.skills.optimus_abci.prompts import PROMPT
+from packages.valory.skills.liquidity_trader_abci.utils import validate_and_fix_protocols
 
 
 ABCIHandler = BaseABCIRoundHandler
@@ -326,6 +327,11 @@ class HttpHandler(BaseHttpHandler):
     def shared_state(self) -> SharedState:
         """Get the parameters."""
         return cast(SharedState, self.context.state)
+
+    @property
+    def params(self) -> Params:
+        """Shortcut to access the parameters."""
+        return cast(Params, self.context.params)
 
     def _handle_get_features(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -1019,10 +1025,18 @@ class HttpHandler(BaseHttpHandler):
 
         self.context.logger.info(f"composite_score: {composite_score}")
 
+        # Convert protocol names to strategies
         selected_protocols = [
             PROTOCOL_TO_STRATEGY.get(protocol, protocol)
             for protocol in selected_protocol_names
         ]
+        
+        # Validate and fix protocols before storing using shared utility
+        selected_protocols = validate_and_fix_protocols(
+            selected_protocols, 
+            self.params.target_investment_chains,
+            self.params.available_strategies
+        )
 
         response_data = {
             "selected_protocols": selected_protocol_names,
@@ -1062,6 +1076,13 @@ class HttpHandler(BaseHttpHandler):
             STRATEGY_TO_PROTOCOL.get(strategy, strategy)
             for strategy in selected_protocols
         ]
+        
+        # Validate and fix protocols in fallback using shared utility
+        selected_protocols = validate_and_fix_protocols(
+            selected_protocols,
+            self.params.target_investment_chains,
+            self.params.available_strategies
+        )
 
         trading_type = self.context.state.trading_type
         if not trading_type:

@@ -73,6 +73,7 @@ from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_amounts_for_liquidity,
     get_sqrt_ratio_at_tick,
 )
+from packages.valory.skills.liquidity_trader_abci.utils import validate_and_fix_protocols
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -83,6 +84,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round: Type[AbstractRound] = FetchStrategiesRound
     strategies = None
+
+
 
     def async_act(self) -> Generator:
         """Async act"""
@@ -198,6 +201,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 for chain in self.params.target_investment_chains:
                     chain_strategies = self.params.available_strategies.get(chain, [])
                     serialized_protocols.extend(chain_strategies)
+            
+            # Validate and fix protocols from KV store using shared utility
+            serialized_protocols = validate_and_fix_protocols(
+                serialized_protocols,
+                self.params.target_investment_chains,
+                self.params.available_strategies
+            )
+            
+            # Update KV store if protocols were fixed
+            if serialized_protocols != json.loads(selected_protocols) if selected_protocols else []:
+                self.context.logger.info("Updating KV store with validated protocols")
+                yield from self._write_kv({"selected_protocols": json.dumps(serialized_protocols)})
 
             if not trading_type:
                 trading_type = TradingType.BALANCED.value

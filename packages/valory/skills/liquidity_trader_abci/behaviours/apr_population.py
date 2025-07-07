@@ -19,6 +19,7 @@
 
 """This module contains the behaviour for writing apr related data to database for the 'liquidity_trader_abci' skill."""
 
+import decimal
 import json
 import os
 from datetime import datetime
@@ -256,6 +257,18 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
 
         return snapshot
 
+    def _to_decimal(self, value) -> Optional[Decimal]:
+        """Safely convert a value to Decimal, handling None, float, int, and Decimal inputs."""
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            self.context.logger.warning(f"Could not convert {value} to Decimal")
+            return None
+
     def _convert_decimals(self, data: Any) -> Any:
         """Recursively convert Decimal objects to float in a data structure."""
         if isinstance(data, dict):
@@ -268,33 +281,60 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             return data
 
     def _get_apr_calculation_metrics(self) -> Dict[str, Any]:
-        """Extract and structure the key metrics used in APR calculation."""
+        """Extract and structure the key metrics used in APR calculation with robust handling."""
+
+        initial_decimal = self._to_decimal(self._initial_value)
+        final_decimal = self._to_decimal(self._final_value)
+
         metrics = {
-            "initial_value": (
-                float(self._initial_value) if self._initial_value else None
-            ),
-            "final_value": float(self._final_value) if self._final_value else None,
+            "initial_value": float(initial_decimal)
+            if initial_decimal is not None
+            else None,
+            "final_value": float(final_decimal) if final_decimal is not None else None,
             "f_i_ratio": None,
             "first_investment_timestamp": None,
             "time_ratio": None,
         }
 
-        # Calculate value change percentage if we have both values
-        if metrics["initial_value"] is not None and metrics["final_value"] is not None:
-            metrics["f_i_ratio"] = (
-                float(metrics["final_value"]) / float(metrics["initial_value"])
-            ) - 1
+        # Calculate value change percentage with zero division protection
+        if (
+            initial_decimal is not None
+            and final_decimal is not None
+            and initial_decimal > 0
+        ):
+            f_i_ratio_decimal = (final_decimal / initial_decimal) - Decimal("1")
+            metrics["f_i_ratio"] = float(f_i_ratio_decimal.quantize(Decimal("0.0001")))
 
-        # Calculate time period and annualization factor
+        # Calculate time metrics with improved accuracy
         first_investment_timestamp = self._get_first_investment_timestamp()
         if first_investment_timestamp:
             metrics["first_investment_timestamp"] = first_investment_timestamp
 
             current_timestamp = self._get_current_timestamp()
-            hours = max(1, (current_timestamp - int(first_investment_timestamp)) / 3600)
-            hours_in_year = 8760
+            hours_raw = (current_timestamp - int(first_investment_timestamp)) / 3600
+            hours_decimal = Decimal(str(hours_raw))
+
+            # Use minimum threshold of 1 minute (0.0167 hours) consistent with _calculate_apr
+            MIN_HOURS = Decimal("0.0167")  # 1 minute
+
+            if hours_decimal < MIN_HOURS:
+                hours = MIN_HOURS
+                metrics["volatility_warning"] = "VERY_HIGH"
+            elif hours_decimal < Decimal("1"):
+                hours = hours_decimal
+                metrics["volatility_warning"] = "HIGH"
+            elif hours_decimal < Decimal("24"):
+                hours = hours_decimal
+                metrics["volatility_warning"] = "MEDIUM"
+            else:
+                hours = hours_decimal
+                metrics["volatility_warning"] = "LOW"
+
+            hours_in_year = Decimal("8760")
             time_ratio = hours_in_year / hours
-            metrics["time_ratio"] = float(time_ratio)
+            metrics["time_ratio"] = float(time_ratio.quantize(Decimal("0.0001")))
+            metrics["actual_hours"] = float(hours_raw)
+            metrics["calculation_hours"] = float(hours)
 
         return metrics
 
@@ -538,28 +578,82 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         first_investment_timestamp: int,
         result,
     ):
-        if self._final_value <= 0:
-            self.context.logger.warning("Final value is zero or negative")
+        """Calculate APR with robust error handling and precision."""
+
+        # Convert to Decimal for precise calculation
+        final_value_decimal = self._to_decimal(self._final_value)
+        initial_value_decimal = self._to_decimal(self._initial_value)
+
+        # Comprehensive validation
+        if final_value_decimal is None or final_value_decimal <= 0:
+            self.context.logger.warning("Final value is zero, negative, or invalid")
             return 0.0
 
-        f_i_ratio = (self._final_value / self._initial_value) - 1
-        hours = max(1, (current_timestamp - int(first_investment_timestamp)) / 3600)
-        self.context.logger.info(f"Hours since investment: {hours}")
+        if initial_value_decimal is None or initial_value_decimal <= 0:
+            self.context.logger.error(
+                "Initial value is zero, negative, or invalid - cannot calculate APR"
+            )
+            return 0.0
 
-        hours_in_year = 8760
+        # Perform calculation in Decimal precision
+        f_i_ratio = (final_value_decimal / initial_value_decimal) - Decimal("1")
+
+        # Calculate actual hours with improved accuracy
+        hours_raw = (current_timestamp - int(first_investment_timestamp)) / 3600
+        hours_decimal = Decimal(str(hours_raw))
+
+        # Use minimum threshold of 1 minute (0.0167 hours) with volatility warning
+        MIN_HOURS = Decimal("0.0167")  # 1 minute
+
+        if hours_decimal < MIN_HOURS:
+            self.context.logger.warning(
+                f"Very short investment period: {float(hours_decimal * 60):.1f} minutes. "
+                f"APR calculation may be highly volatile and should be interpreted with caution."
+            )
+            hours = MIN_HOURS
+            volatility_warning = True
+        elif hours_decimal < Decimal("1"):
+            self.context.logger.info(
+                f"Short investment period: {float(hours_decimal * 60):.1f} minutes. "
+                f"APR calculation may show high volatility."
+            )
+            hours = hours_decimal
+            volatility_warning = True
+        else:
+            hours = hours_decimal
+            volatility_warning = False
+
+        self.context.logger.info(
+            f"Hours since investment: {float(hours)} (raw: {hours_raw})"
+        )
+        if volatility_warning:
+            self.context.logger.info(
+                "APR calculation includes volatility warning due to short time period"
+            )
+
+        hours_in_year = Decimal("8760")
         time_ratio = hours_in_year / hours
 
-        apr = float(f_i_ratio * time_ratio * 100)
-        if apr < 0:
-            apr = round(float((self._final_value / self._initial_value) - 1) * 100, 2)
+        apr_decimal = f_i_ratio * time_ratio * Decimal("100")
+
+        # Handle negative APR case
+        if apr_decimal < 0:
+            apr_decimal = (
+                final_value_decimal / initial_value_decimal - Decimal("1")
+            ) * Decimal("100")
+
+        # Convert to float for storage, with proper rounding
+        apr = float(apr_decimal.quantize(Decimal("0.01")))
 
         self.context.logger.info(f"Calculated APR: {apr}")
         if apr:
-            result["total_actual_apr"] = float(round(apr, 2))
+            result["total_actual_apr"] = apr
 
     def _adjust_apr_for_eth_price(
         self, result: Dict[str, float], first_investment_timestamp: int
     ) -> Generator[None, None, None]:
+        """Adjust APR for ETH price changes with robust type handling and zero division protection."""
+
         date_str = datetime.utcfromtimestamp(first_investment_timestamp).strftime(
             "%d-%m-%Y"
         )
@@ -572,20 +666,52 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         if (
             current_eth_price is not None
             and start_eth_price is not None
-            and result["total_actual_apr"]
+            and result.get("total_actual_apr") is not None
         ):
-            adjustment_factor = Decimal("1") - (
-                Decimal(str(current_eth_price)) / Decimal(str(start_eth_price))
-            )
-            result["adjusted_apr"] = round(
-                float(result["total_actual_apr"])
-                + float(adjustment_factor * Decimal("100")),
-                2,
-            )
-            result["adjustment_factor"] = float(adjustment_factor)
-            result["current_price"] = current_eth_price
-            result["initial_price"] = start_eth_price
-            self.context.logger.info(f"Adjusted APR: {result['adjusted_apr']}%")
+            # Convert all values to Decimal for precise calculation
+            current_price_decimal = self._to_decimal(current_eth_price)
+            start_price_decimal = self._to_decimal(start_eth_price)
+            total_apr_decimal = self._to_decimal(result["total_actual_apr"])
+
+            # Validate all conversions succeeded
+            if all(
+                val is not None
+                for val in [
+                    current_price_decimal,
+                    start_price_decimal,
+                    total_apr_decimal,
+                ]
+            ):
+                # Check for zero division in price calculation
+                if start_price_decimal <= 0:
+                    self.context.logger.warning(
+                        "Start ETH price is zero or negative, skipping adjustment"
+                    )
+                    return
+
+                # Perform calculation in Decimal precision
+                adjustment_factor = Decimal("1") - (
+                    current_price_decimal / start_price_decimal
+                )
+                adjusted_apr_decimal = total_apr_decimal + (
+                    adjustment_factor * Decimal("100")
+                )
+
+                # Store results with proper rounding
+                result["adjusted_apr"] = float(
+                    adjusted_apr_decimal.quantize(Decimal("0.01"))
+                )
+                result["adjustment_factor"] = float(
+                    adjustment_factor.quantize(Decimal("0.0001"))
+                )
+                result["current_price"] = float(current_price_decimal)
+                result["initial_price"] = float(start_price_decimal)
+
+                self.context.logger.info(f"Adjusted APR: {result['adjusted_apr']}%")
+            else:
+                self.context.logger.warning(
+                    "Could not convert price data to Decimal, skipping adjustment"
+                )
 
     def generate_phonetic_syllable(self, seed):
         """Generates phonetic syllable"""

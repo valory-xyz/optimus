@@ -3797,12 +3797,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return {"incoming": {}, "outgoing": {}}
 
     def get_master_safe_address(self) -> Generator[None, None, Optional[str]]:
-        """
-        Get the master safe address by checking service staking state.
-
-        Returns:
-            The master safe address if found, None otherwise.
-        """
+        """Get the master safe address by checking service staking state."""
         # Get service_id from params
         service_id = self.params.on_chain_service_id
         if service_id is None:

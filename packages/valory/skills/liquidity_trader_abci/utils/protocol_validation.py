@@ -8,17 +8,7 @@ def validate_and_fix_protocols(
     target_investment_chains: List[str],
     available_strategies: dict,
 ) -> List[str]:
-    """
-    Validate selected protocols and fix invalid ones without resetting to defaults
-
-    Args:
-        selected_protocols: List of protocols to validate
-        target_investment_chains: List of target chains
-        available_strategies: Dictionary of available strategies by chain
-
-    Returns:
-        List of valid protocols
-    """
+    """Validate selected protocols and fix invalid ones without resetting to defaults."""
     # Valid protocol names
     VALID_PROTOCOLS = {
         "balancerPool": "balancer_pools_search",

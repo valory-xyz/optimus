@@ -95,7 +95,7 @@ fingerprint:
   optimus-ui-build/logos/tokens/usdt0.png: bafybeig4muixers6emdrg645t46ggkcgwdrdrghwcsnoizpla56d2aj6gq
   optimus-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  prompts.py: bafybeib2zx57kv2qol42goked5v2qjfmejhodq5oyds3o2cahovqxzeqwa
+  prompts.py: bafybeifql2o6p67kp4g2mmhvps6z5by4ykgjeelxywxh7qkbbqmld4dkg4
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -111,7 +111,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
-- valory/liquidity_trader_abci:0.1.0:bafybeidcrrorhvhiczs3e7nxadnqdulfrbc5xbq4l4x2tagyxbouty5rem
+- valory/liquidity_trader_abci:0.1.0:bafybeidsuud4y6q6debbcn4wwiatpcgq6727wzgblpv3t2byggox5535ha
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 behaviours:
   main:

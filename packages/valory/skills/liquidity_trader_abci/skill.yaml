@@ -12,9 +12,9 @@ fingerprint:
   behaviours/base.py: bafybeiduatpwv525c4zjqqkclwbyxdcwzg5yjforutqr6wv7in2u2bahoi
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeiehqzc7cjx4znu47s22a2kukbfl7hcrckbk2k5jtwx3345cvfehmy
+  behaviours/decision_making.py: bafybeiggozxuuixj73rhtmuvwgbkuxyl5jqmjb7nrecerzadubvh54m5nu
   behaviours/evaluate_strategy.py: bafybeiclouxdtrtfpxczycgpodkctgmnhrlwdxxbr4jinrohjhcssyez6y
-  behaviours/fetch_strategies.py: bafybeidfxbqrjyjwciivej2k32fhwurodnzhtapj52vb7wijbt7htxzaae
+  behaviours/fetch_strategies.py: bafybeigt6cex6ei42aoxg4czqgq2qwqgzu37gge7hqodu52viqojdjtoiu
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeial6l547l3qtymegdb3u6izkkave4fx5xn4bszl77uee376qxhdry
@@ -50,7 +50,7 @@ fingerprint:
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
   utils/__init__.py: bafybeiefmxsdj4kz6b34hdzdc7yxu5hhvqh6pn2koszgr2lt7mhmqdzy6i
-  utils/protocol_validation.py: bafybeihzrysvmrse7hfsrssnmpj6ec2eyccbyfb6uwgkkjgplbplf3hdl4
+  utils/protocol_validation.py: bafybeiefr5db6givmqvjtfgakbrbueqyurii23yvxlt4aoufnbf5nbi3aa
   utils/tick_math.py: bafybeib3ekasvcbsl6d5wibcg44cbgatto446kmzqtvtbrsswkuvo4jgti
 fingerprint_ignore_patterns: []
 connections:

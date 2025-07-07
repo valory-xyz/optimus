@@ -2114,7 +2114,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error(
                     f"[LiFi API Error Message] Error encountered: {response.get('message', 'Unknown error')}"
                 )
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError):
                 error_msg = f"API returned status code {routes_response.status_code} with non-JSON response. "
                 if hasattr(routes_response, "body"):
                     error_msg += f"Response body: {routes_response.body}"

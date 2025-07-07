@@ -350,6 +350,9 @@ class Params(BaseParams):
                 str,
             )
         )
+        self.service_registry_contract_addresses = json.loads(
+            self._ensure("service_registry_contract_addresses", kwargs, str)
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

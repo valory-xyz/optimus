@@ -38,6 +38,7 @@ from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
+from packages.valory.contracts.service_registry.contract import ServiceRegistryContract
 from packages.valory.contracts.sturdy_yearn_v3_vault.contract import (
     YearnV3VaultContract,
 )
@@ -62,6 +63,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
 )
+from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesPayload,
     FetchStrategiesRound,
@@ -69,11 +71,13 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
     PostTxSettlementRound,
 )
+from packages.valory.skills.liquidity_trader_abci.utils import (
+    validate_and_fix_protocols,
+)
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_amounts_for_liquidity,
     get_sqrt_ratio_at_tick,
 )
-from packages.valory.skills.liquidity_trader_abci.utils import validate_and_fix_protocols
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
@@ -84,8 +88,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     matching_round: Type[AbstractRound] = FetchStrategiesRound
     strategies = None
-
-
 
     def async_act(self) -> Generator:
         """Async act"""
@@ -201,18 +203,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 for chain in self.params.target_investment_chains:
                     chain_strategies = self.params.available_strategies.get(chain, [])
                     serialized_protocols.extend(chain_strategies)
-            
+
             # Validate and fix protocols from KV store using shared utility
             serialized_protocols = validate_and_fix_protocols(
                 serialized_protocols,
                 self.params.target_investment_chains,
-                self.params.available_strategies
+                self.params.available_strategies,
             )
-            
+
             # Update KV store if protocols were fixed
-            if serialized_protocols != json.loads(selected_protocols) if selected_protocols else []:
+            if (
+                serialized_protocols != json.loads(selected_protocols)
+                if selected_protocols
+                else []
+            ):
                 self.context.logger.info("Updating KV store with validated protocols")
-                yield from self._write_kv({"selected_protocols": json.dumps(serialized_protocols)})
+                yield from self._write_kv(
+                    {"selected_protocols": json.dumps(serialized_protocols)}
+                )
 
             if not trading_type:
                 trading_type = TradingType.BALANCED.value
@@ -3287,10 +3295,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(f"No transfers found for {chain} chain")
                 return {}
 
+            master_safe_address = yield from self.get_master_safe_address()
+            if not master_safe_address:
+                self.context.logger.error("No master safe address found")
+                return {}
+
+            self.context.logger.info(f"Master safe address: {master_safe_address}")
+
             # Track ETH transfers
             eth_transfers = []
             initial_funding = None
-            master_safe_address = None
             reversion_transfers = []
             historical_reversion_value = 0.0
             reversion_date = None
@@ -3323,8 +3337,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             "from_address": transfer.get("from_address"),
                             "timestamp": transfer.get("timestamp"),
                         }
-                        if transfer.get("from_address"):
-                            master_safe_address = transfer.get("from_address").lower()
                         eth_transfers.append(transfer)
                     # If it's from the same address as initial funding
                     elif (
@@ -3783,3 +3795,75 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error tracking Mode ETH transfers: {e}")
             return {"incoming": {}, "outgoing": {}}
+
+    def get_master_safe_address(self) -> Generator[None, None, Optional[str]]:
+        """
+        Get the master safe address by checking service staking state.
+
+        Returns:
+            The master safe address if found, None otherwise.
+        """
+        # Get service_id from params
+        service_id = self.params.on_chain_service_id
+        if service_id is None:
+            self.context.logger.error("No service ID configured")
+            return None
+
+        if not self.params.target_investment_chains:
+            self.context.logger.error("No target investment chains configured")
+            return None
+
+        operating_chain = self.params.target_investment_chains[0]
+
+        staking_token_address = self.params.staking_token_contract_address
+        staking_chain = self.params.staking_chain
+
+        if staking_token_address and staking_chain:
+            if self.service_staking_state == StakingState.UNSTAKED:
+                yield from self._get_service_staking_state(chain=staking_chain)
+
+            if self.service_staking_state != StakingState.UNSTAKED:
+                service_info = yield from self._get_service_info(staking_chain)
+                if service_info and len(service_info) >= 2:
+                    master_safe_address = service_info[
+                        1
+                    ]  # owner field from service info struct
+                    self.context.logger.info(
+                        f"Master safe address: {master_safe_address}"
+                    )
+                    return master_safe_address
+                else:
+                    self.context.logger.error(
+                        "Failed to get service info from staking contract"
+                    )
+                    return None
+
+        service_registry_address = self.params.service_registry_contract_addresses.get(
+            operating_chain
+        )
+        if not service_registry_address:
+            self.context.logger.error(
+                f"No service registry address configured for operating chain {operating_chain}"
+            )
+            return None
+
+        # Get service owner from service registry
+        service_owner_result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=service_registry_address,
+            contract_public_id=ServiceRegistryContract.contract_id,
+            contract_callable="get_service_owner",
+            data_key="service_owner",
+            service_id=service_id,
+            chain_id=operating_chain,
+        )
+
+        if service_owner_result:
+            master_safe_address = service_owner_result
+            self.context.logger.info(f"Master safe address: {master_safe_address}")
+            return master_safe_address
+        else:
+            self.context.logger.error(
+                "Failed to get service owner from service registry"
+            )
+            return None

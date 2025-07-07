@@ -49,8 +49,8 @@ fingerprint:
   tests/test_models.py: bafybeic75ux6ulgpnf4ndrctgsw7jlbc7zs3ltxtue4o4eoij7fqvfqmfe
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
-  utils/__init__.py: bafybeiguwcr37m3xqomtj7ibrrwkp5qiyewrkcaarmg23vzrzilmplenhu
-  utils/protocol_validation.py: bafybeicjgqm5jaq72kkdcujqhlsrwkwk5acjjvbjfaq7k4wjgiuxhooh54
+  utils/__init__.py: bafybeiefmxsdj4kz6b34hdzdc7yxu5hhvqh6pn2koszgr2lt7mhmqdzy6i
+  utils/protocol_validation.py: bafybeihzrysvmrse7hfsrssnmpj6ec2eyccbyfb6uwgkkjgplbplf3hdl4
   utils/tick_math.py: bafybeib3ekasvcbsl6d5wibcg44cbgatto446kmzqtvtbrsswkuvo4jgti
 fingerprint_ignore_patterns: []
 connections:

@@ -80,6 +80,9 @@ from packages.valory.skills.liquidity_trader_abci.handlers import (
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 from packages.valory.skills.liquidity_trader_abci.rounds_info import ROUNDS_INFO
+from packages.valory.skills.liquidity_trader_abci.utils import (
+    validate_and_fix_protocols,
+)
 from packages.valory.skills.optimus_abci.dialogues import (
     HttpDialogue,
     HttpDialogues,
@@ -87,7 +90,6 @@ from packages.valory.skills.optimus_abci.dialogues import (
 )
 from packages.valory.skills.optimus_abci.models import Params, SharedState
 from packages.valory.skills.optimus_abci.prompts import PROMPT
-from packages.valory.skills.liquidity_trader_abci.utils import validate_and_fix_protocols
 
 
 ABCIHandler = BaseABCIRoundHandler
@@ -1030,12 +1032,12 @@ class HttpHandler(BaseHttpHandler):
             PROTOCOL_TO_STRATEGY.get(protocol, protocol)
             for protocol in selected_protocol_names
         ]
-        
+
         # Validate and fix protocols before storing using shared utility
         selected_protocols = validate_and_fix_protocols(
-            selected_protocols, 
+            selected_protocols,
             self.params.target_investment_chains,
-            self.params.available_strategies
+            self.params.available_strategies,
         )
 
         response_data = {
@@ -1076,12 +1078,12 @@ class HttpHandler(BaseHttpHandler):
             STRATEGY_TO_PROTOCOL.get(strategy, strategy)
             for strategy in selected_protocols
         ]
-        
+
         # Validate and fix protocols in fallback using shared utility
         selected_protocols = validate_and_fix_protocols(
             selected_protocols,
             self.params.target_investment_chains,
-            self.params.available_strategies
+            self.params.available_strategies,
         )
 
         trading_type = self.context.state.trading_type

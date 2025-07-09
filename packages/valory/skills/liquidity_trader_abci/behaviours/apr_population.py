@@ -54,33 +54,40 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             sender = self.context.agent_address
             payload_context = "APR Population"
 
-            try:
-                # Check if we should calculate APR
-                should_calculate = yield from self._should_calculate_apr()
-                if should_calculate:
-                    # Get or create required resources
-                    agent_type = yield from self._get_or_create_agent_type(sender)
-                    type_id = agent_type["type_id"]
-                    self.context.logger.info(f"Using agent type: {agent_type}")
+            # PRIORITY: Check if investing is paused due to withdrawal
+            investing_paused = yield from self._read_kv(keys=("investing_paused",))
+            if investing_paused and investing_paused.get("investing_paused") == "true":
+                self.context.logger.info("Investing paused due to withdrawal - skipping APR calculation")
+                payload_context = "APR Population - Withdrawal Paused"
 
-                    agent_registry = yield from self._get_or_create_agent_registry(
-                        sender, type_id
-                    )
-                    agent_id = agent_registry["agent_id"]
-                    self.context.logger.info(f"Using agent: {agent_id}")
+            else:
+                try:
+                    # Check if we should calculate APR
+                    should_calculate = yield from self._should_calculate_apr()
+                    if should_calculate:
+                        # Get or create required resources
+                        agent_type = yield from self._get_or_create_agent_type(sender)
+                        type_id = agent_type["type_id"]
+                        self.context.logger.info(f"Using agent type: {agent_type}")
 
-                    attr_def = yield from self._get_or_create_attr_def(
-                        type_id, agent_id
-                    )
-                    attr_def_id = attr_def["attr_def_id"]
-                    self.context.logger.info(f"Using attribute definition: {attr_def}")
+                        agent_registry = yield from self._get_or_create_agent_registry(
+                            sender, type_id
+                        )
+                        agent_id = agent_registry["agent_id"]
+                        self.context.logger.info(f"Using agent: {agent_id}")
 
-                    # Calculate and store APR
-                    yield from self._calculate_and_store_apr(agent_id, attr_def_id)
+                        attr_def = yield from self._get_or_create_attr_def(
+                            type_id, agent_id
+                        )
+                        attr_def_id = attr_def["attr_def_id"]
+                        self.context.logger.info(f"Using attribute definition: {attr_def}")
 
-            except Exception as e:
-                self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
-                payload_context = "APR Population Error"
+                        # Calculate and store APR
+                        yield from self._calculate_and_store_apr(agent_id, attr_def_id)
+
+                except Exception as e:
+                    self.context.logger.error(f"Error in APRPopulationBehaviour: {str(e)}")
+                    payload_context = "APR Population Error"
 
             payload = APRPopulationPayload(sender=sender, context=payload_context)
 

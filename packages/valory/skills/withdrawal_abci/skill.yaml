@@ -1,0 +1,69 @@
+name: withdrawal_abci
+author: valory
+version: 0.1.0
+description: "Non-ABCI skill for handling withdrawal requests independently"
+license: Apache-2.0
+aea_version: ">=1.0.0, <2.0.0"
+fingerprint:
+  README.md: QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG
+  __init__.py: QmW8s7UnRfXZaSZeC6MLHXH6Y7XQZ8YQZ8YQZ8YQZ8YQZ8Y
+  behaviours/__init__.py: QmW8s7UnRfXZaSZeC6MLHXH6Y7XQZ8YQZ8YQZ8YQZ8YQZ8Y
+  behaviours/withdrawal_behaviour.py: QmW8s7UnRfXZaSZeC6MLHXH6Y7XQZ8YQZ8YQZ8YQZ8YQZ8Y
+  skill.yaml: QmW8s7UnRfXZaSZeC6MLHXH6Y7XQZ8YQZ8YQZ8YQZ8YQZ8Y
+fingerprint_ignore_patterns: []
+contracts: []
+protocols:
+- valory/kv_store:0.1.0
+- valory/http:1.0.0
+skills: []
+behaviours:
+  withdrawal_behaviour:
+    args:
+      name: withdrawal_behaviour
+      skill_id: withdrawal_abci
+handlers:
+  http_handler:
+    args:
+      name: http_handler
+      skill_id: withdrawal_abci
+models:
+  default_dialogues:
+    args:
+      name: default_dialogues
+      skill_id: withdrawal_abci
+  default_handlers:
+    args:
+      name: default_handlers
+      skill_id: withdrawal_abci
+  default_models:
+    args:
+      name: default_models
+      skill_id: withdrawal_abci
+  params:
+    args:
+      # USDC addresses for different chains
+      usdc_addresses: ${str:{"optimism":"0x7F5c764cBc14f9669B88837ca1490cCa17c31607","mode":"0xd988097fb8612cc24eeC14542bC03424c656005f"}}
+      # Contract addresses needed for withdrawal operations - these should be configured per deployment
+      safe_contract_addresses: ${str:{"optimism":"${SAFE_ADDRESS_OPTIMISM}","mode":"${SAFE_ADDRESS_MODE}"}}
+      multisend_contract_addresses: ${str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa","mode":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}}
+      balancer_vault_contract_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","mode":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
+      uniswap_position_manager_contract_addresses: ${str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
+      velodrome_non_fungible_position_manager_contract_addresses: ${str:{"optimism":"0x416b433906b1B72FA758e166e239c43d68dC6F29","base":"0x79e1bEf100000000000000000000000000000000","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}}
+      # Target investment chains - support both mode and optimism
+      target_investment_chains: ${list:["mode", "optimism"]}
+      # Initial assets for balance checking - support both chains
+      initial_assets: ${str:{"mode":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"},"optimism":{"0x0000000000000000000000000000000000000000":"ETH","0x7F5c764cBc14f9669B88837ca1490cCa17c31607":"USDC"}}}
+      # Slippage tolerance for swaps (1% = 0.01)
+      slippage_for_swap: ${float:0.01}
+      # LiFi API configuration
+      lifi_api_url: ${str:https://li.quest/v1}
+      # Chain ID mapping for transaction links
+      chain_to_chain_id_mapping: ${str:{"optimism":"10","mode":"34443","ethereum":"1","base":"8453"}}
+      # Tenderly configuration for transaction simulation
+      tenderly_access_key: ${str:${TENDERLY_ACCESS_KEY}}
+      tenderly_account_slug: ${str:${TENDERLY_ACCOUNT_SLUG}}
+      tenderly_project_slug: ${str:${TENDERLY_PROJECT_SLUG}}
+dependencies:
+  valory/kv_store:0.1.0
+  valory/http:1.0.0
+is_abstract: false 

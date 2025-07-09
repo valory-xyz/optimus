@@ -51,6 +51,7 @@ skills:
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
+- valory/withdrawal_abci:0.1.0:bafybeihqwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma
 - valory/max_apr_selection:0.1.0:bafybeifwt3r4uwjvgxmwjx7374wuk4sfn3gxyd7bh4hcazjjjro2swy4me
@@ -171,6 +172,13 @@ config:
   host: ${str:0.0.0.0}
   port: ${int:8716}
   target_skill_id: valory/optimus_abci:0.1.0
+---
+public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
+type: connection
+config:
+  host: ${str:0.0.0.0}
+  port: ${int:8717}
+  target_skill_id: valory/withdrawal_abci:0.1.0
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill

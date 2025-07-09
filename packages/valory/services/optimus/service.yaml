@@ -13,6 +13,8 @@ deployment:
     ports:
       0:
         8716: 8716
+      1:
+        8717: 8717
     volumes:
       ./data: /data
 dependencies:
@@ -118,6 +120,36 @@ models:
       rate_limited_code: ${COINGECKO_RATE_LIMITED_CODE:int:429}
       chain_to_platform_id_mapping: ${COINGECKO_CHAIN_TO_PLATFORM_ID_MAPPING:str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum","mode":"mode"}}
 ---
+public_id: valory/withdrawal_abci:0.1.0
+type: skill
+models:
+  params:
+    args:
+      # USDC addresses for different chains
+      usdc_addresses: ${USDC_ADDRESSES:str:{"optimism":"0x7F5c764cBc14f9669B88837ca1490cCa17c31607","mode":"0xd988097fb8612cc24eeC14542bC03424c656005f"}}
+
+      # Contract addresses needed for withdrawal operations - these should be configured per deployment
+      safe_contract_addresses: ${SAFE_CONTRACT_ADDRESSES:str:{"optimism":"${SAFE_ADDRESS_OPTIMISM}","mode":"${SAFE_ADDRESS_MODE}"}}
+      multisend_contract_addresses: ${MULTISEND_CONTRACT_ADDRESSES:str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa","mode":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}}
+      balancer_vault_contract_addresses: ${BALANCER_VAULT_CONTRACT_ADDRESSES:str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","mode":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
+      uniswap_position_manager_contract_addresses: ${UNISWAP_POSITION_MANAGER_CONTRACT_ADDRESSES:str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
+      velodrome_non_fungible_position_manager_contract_addresses: ${VELODROME_NON_FUNGIBLE_POSITION_MANAGER_CONTRACT_ADDRESSES:str:{"optimism":"0x416b433906b1B72FA758e166e239c43d68dC6F29","base":"0x79e1bEf100000000000000000000000000000000","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}}
+      # Target investment chains - support both mode and optimism
+      target_investment_chains: ${TARGET_INVESTMENT_CHAINS:list:["mode", "optimism"]}
+      # Initial assets for balance checking - support both chains
+      initial_assets: ${INITIAL_ASSETS:str:{"mode":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"},"optimism":{"0x0000000000000000000000000000000000000000":"ETH","0x7F5c764cBc14f9669B88837ca1490cCa17c31607":"USDC"}}}
+      # Slippage tolerance for swaps (1% = 0.01)
+      slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.01}
+
+      # LiFi API configuration
+      lifi_api_url: ${LIFI_API_URL:str:https://li.quest/v1}
+      # Chain ID mapping for transaction links
+      chain_to_chain_id_mapping: ${CHAIN_TO_CHAIN_ID_MAPPING:str:{"optimism":"10","mode":"34443","ethereum":"1","base":"8453"}}
+      # Tenderly configuration for transaction simulation
+      tenderly_access_key: ${TENDERLY_ACCESS_KEY:str:}
+      tenderly_account_slug: ${TENDERLY_ACCOUNT_SLUG:str:}
+      tenderly_project_slug: ${TENDERLY_PROJECT_SLUG:str:}
+---
 public_id: valory/ledger:0.19.0
 type: connection
 config:
@@ -176,6 +208,14 @@ type: connection
 config:
   host: ${HTTP_SERVER_HOST:str:0.0.0.0}
   port: ${HTTP_SERVER_PORT:int:8716}
+  target_skill_id: valory/optimus_abci:0.1.0
+---
+public_id: valory/http_server:0.22.0
+type: connection
+config:
+  host: ${HTTP_SERVER_HOST:str:0.0.0.0}
+  port: ${WITHDRAWAL_HTTP_SERVER_PORT:int:8717}
+  target_skill_id: valory/withdrawal_abci:0.1.0
 ---
 public_id: dvilela/kv_store:0.1.0
 type: connection

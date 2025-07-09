@@ -19,6 +19,7 @@
 
 """This module contains the PostTxSettlementRound of LiquidityTraderAbciApp."""
 
+import json
 from typing import Dict, Optional, Tuple
 
 from packages.valory.skills.abstract_round_abci.base import (
@@ -47,6 +48,7 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
 )
 
 
+
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
     """A round that will be called after tx settlement is done."""
 
@@ -61,6 +63,12 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.threshold_reached:
+            # Parse event from payload content
+            event = self._parse_event_from_payload()
+            
+
+            
+            # Handle regular events
             submitter_to_event: Dict[str, Event] = {
                 CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
                 CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
@@ -78,3 +86,19 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
                 )
 
             return synced_data, event
+
+    def _parse_event_from_payload(self) -> str:
+        """Parse event from payload content."""
+        try:
+            # Get the first payload to extract event
+            for payload in self.collection.values():
+                if payload.content:
+                    content_data = json.loads(payload.content)
+                    return content_data.get("event", "TRANSFER_COMPLETED")
+        except (json.JSONDecodeError, KeyError, AttributeError):
+            pass
+        
+        # Fallback to default event
+        return "TRANSFER_COMPLETED"
+
+

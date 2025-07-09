@@ -54,47 +54,55 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Do the action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            vanity_tx_hex = None
-            is_staking_kpi_met = yield from self._is_staking_kpi_met()
-            if is_staking_kpi_met is None:
-                self.context.logger.error("Error checking if staking KPI is met.")
-            elif is_staking_kpi_met is True:
-                self.context.logger.info("KPI already met for the day!")
+            # PRIORITY: Check if investing is paused due to withdrawal
+            investing_paused = yield from self._read_kv(keys=("investing_paused",))
+            if investing_paused and investing_paused.get("investing_paused") == "true":
+                self.context.logger.info("Investing paused due to withdrawal - skipping KPI check")
+                # Skip KPI check during withdrawal
+                vanity_tx_hex = None
+                is_staking_kpi_met = False
             else:
-                is_period_threshold_exceeded = (
-                    self.synchronized_data.period_count
-                    - self.synchronized_data.period_number_at_last_cp
-                    >= self.params.staking_threshold_period
-                )
+                vanity_tx_hex = None
+                is_staking_kpi_met = yield from self._is_staking_kpi_met()
+                if is_staking_kpi_met is None:
+                    self.context.logger.error("Error checking if staking KPI is met.")
+                elif is_staking_kpi_met is True:
+                    self.context.logger.info("KPI already met for the day!")
+                else:
+                    is_period_threshold_exceeded = (
+                        self.synchronized_data.period_count
+                        - self.synchronized_data.period_number_at_last_cp
+                        >= self.params.staking_threshold_period
+                    )
 
-                if is_period_threshold_exceeded:
-                    min_num_of_safe_tx_required = (
-                        self.synchronized_data.min_num_of_safe_tx_required
-                    )
-                    multisig_nonces_since_last_cp = (
-                        yield from self._get_multisig_nonces_since_last_cp(
-                            chain=self.params.staking_chain,
-                            multisig=self.params.safe_contract_addresses.get(
-                                self.params.staking_chain
-                            ),
+                    if is_period_threshold_exceeded:
+                        min_num_of_safe_tx_required = (
+                            self.synchronized_data.min_num_of_safe_tx_required
                         )
-                    )
-                    if (
-                        multisig_nonces_since_last_cp is not None
-                        and min_num_of_safe_tx_required is not None
-                    ):
-                        num_of_tx_left_to_meet_kpi = (
-                            min_num_of_safe_tx_required - multisig_nonces_since_last_cp
+                        multisig_nonces_since_last_cp = (
+                            yield from self._get_multisig_nonces_since_last_cp(
+                                chain=self.params.staking_chain,
+                                multisig=self.params.safe_contract_addresses.get(
+                                    self.params.staking_chain
+                                ),
+                            )
                         )
-                        if num_of_tx_left_to_meet_kpi > 0:
-                            self.context.logger.info(
-                                f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
+                        if (
+                            multisig_nonces_since_last_cp is not None
+                            and min_num_of_safe_tx_required is not None
+                        ):
+                            num_of_tx_left_to_meet_kpi = (
+                                min_num_of_safe_tx_required - multisig_nonces_since_last_cp
                             )
-                            self.context.logger.info("Preparing vanity tx..")
-                            vanity_tx_hex = yield from self._prepare_vanity_tx(
-                                chain=self.params.staking_chain
-                            )
-                            self.context.logger.info(f"tx hash: {vanity_tx_hex}")
+                            if num_of_tx_left_to_meet_kpi > 0:
+                                self.context.logger.info(
+                                    f"Number of tx left to meet KPI: {num_of_tx_left_to_meet_kpi}"
+                                )
+                                self.context.logger.info("Preparing vanity tx..")
+                                vanity_tx_hex = yield from self._prepare_vanity_tx(
+                                    chain=self.params.staking_chain
+                                )
+                                self.context.logger.info(f"tx hash: {vanity_tx_hex}")
 
             tx_submitter = self.matching_round.auto_round_id()
             payload = CheckStakingKPIMetPayload(

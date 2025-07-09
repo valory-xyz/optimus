@@ -33,6 +33,7 @@ packages/valory/skills/*
 !packages/valory/services/optimus_pearl
 !packages/valory/skills/liquidity_trader_abci
 !packages/valory/skills/optimus_abci
+!packages/valory/skills/withdrawal_abci
 
 
 leak_report

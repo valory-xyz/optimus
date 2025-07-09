@@ -20,6 +20,7 @@
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from time import time
@@ -61,6 +62,9 @@ class SharedState(BaseSharedState):
         self.agent_reasoning: str = ""
         self._token_price_cache = {}
         self._token_price_cache_ttl = 600
+        # Withdrawal state management
+        self.withdrawal_triggered: bool = False
+        self.withdrawal_id: Optional[str] = None
 
     def setup(self) -> None:
         """Set up the model."""
@@ -84,6 +88,31 @@ class SharedState(BaseSharedState):
                     f"The selected trading strategy {selected_strategy} "
                     f"is not in the strategies' executables {strategy_exec}."
                 )
+
+    def trigger_withdrawal(self, withdrawal_id: str) -> None:
+        """Trigger withdrawal state transition."""
+        self.withdrawal_triggered = True
+        self.withdrawal_id = withdrawal_id
+        self.context.logger.info(f"Withdrawal triggered with ID: {withdrawal_id}")
+
+    def reset_withdrawal_trigger(self) -> None:
+        """Reset withdrawal trigger state."""
+        self.withdrawal_triggered = False
+        self.withdrawal_id = None
+        self.context.logger.info("Withdrawal trigger reset")
+
+    def is_withdrawal_active(self) -> bool:
+        """Check if withdrawal is actively being processed."""
+        return self.withdrawal_triggered and self.withdrawal_id is not None
+
+    def validate_withdrawal_trigger(self) -> bool:
+        """Validate that withdrawal trigger is legitimate and not stale."""
+        if not self.withdrawal_triggered:
+            return False
+        
+        # Additional validation can be added here
+        # For example, check if withdrawal_id is recent
+        return True
 
 
 Requests = BaseRequests

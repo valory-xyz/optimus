@@ -61,6 +61,7 @@ class Event(Enum):
     STAKING_KPI_MET = "staking_kpi_met"  # nosec
 
 
+
 class SynchronizedData(BaseSynchronizedData):
     """
     Class to represent the synchronized data.
@@ -248,3 +249,35 @@ class SynchronizedData(BaseSynchronizedData):
     def last_action(self) -> Optional[str]:
         """Get the last action."""
         return cast(str, self.db.get("last_action", None))
+
+
+
+    @property
+    def withdrawal_id(self) -> Optional[str]:
+        """Get the withdrawal ID."""
+        return cast(str, self.db.get("withdrawal_id", None))
+
+    @property
+    def withdrawal_target_address(self) -> Optional[str]:
+        """Get the withdrawal target address."""
+        return cast(str, self.db.get("withdrawal_target_address", None))
+
+    @property
+    def withdrawal_status(self) -> Optional[str]:
+        """Get the withdrawal status."""
+        return cast(str, self.db.get("withdrawal_status", None))
+
+    @property
+    def withdrawal_message(self) -> Optional[str]:
+        """Get the withdrawal message."""
+        return cast(str, self.db.get("withdrawal_message", None))
+
+    @property
+    def withdrawal_tx_hashes(self) -> Optional[str]:
+        """Get the withdrawal transaction hashes."""
+        return cast(str, self.db.get("withdrawal_tx_hashes", None))
+
+    @property
+    def withdrawal_completed_at(self) -> Optional[str]:
+        """Get the withdrawal completion timestamp."""
+        return cast(str, self.db.get("withdrawal_completed_at", None))

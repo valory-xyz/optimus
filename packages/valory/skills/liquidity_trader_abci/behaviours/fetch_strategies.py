@@ -92,6 +92,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # PRIORITY: Check if investing is paused due to withdrawal
+            investing_paused = yield from self._read_kv(keys=("investing_paused",))
+            if investing_paused and investing_paused.get("investing_paused") == "true":
+                self.context.logger.info("Investing paused due to withdrawal - skipping strategy fetching")
+                # Still fetch basic info but skip strategy execution
+                yield from self._fetch_basic_info()
+                return
+
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
             self.context.logger.info(f"Agent hash: {agent_hash}")
@@ -3862,3 +3870,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "Failed to get service owner from service registry"
             )
             return None
+
+    def _fetch_basic_info(self) -> Generator:
+        """Fetch basic information when investing is paused."""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # Fetch basic strategies without executing them
+            strategies = yield from self.fetch_strategies()
+            
+            payload = FetchStrategiesPayload(
+                sender=self.context.agent_address,
+                content=json.dumps({
+                    "selected_protocols": [],
+                    "trading_type": "withdrawal_paused"
+                })
+            )
+
+            with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+
+            self.set_done()

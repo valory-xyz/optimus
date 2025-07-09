@@ -141,6 +141,7 @@ class Action(Enum):
     SWITCH_ROUTE = "switch_route"
     WITHDRAW = "withdraw"
     DEPOSIT = "deposit"
+    TRANSFER = "transfer"
 
 
 class SwapStatus(Enum):
@@ -1485,6 +1486,63 @@ class LiquidityTraderBaseBehaviour(
         )
         yield from self._write_kv({ETH_REMAINING_KEY: str(amount)})
         return amount
+
+
+
+    def _get_usdc_address(self, chain: str) -> Optional[str]:
+        """Get USDC address for the given chain."""
+        # USDC addresses for different chains
+        usdc_addresses = {
+            "optimism": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+            "mode": "0xd988097fb8612cc24eec14542bc03424c656005f",
+        }
+        return usdc_addresses.get(chain)
+
+
+
+    def _handle_withdrawal_error(self, error_msg: str, withdrawal_id: str) -> Generator[None, None, None]:
+        """Handle withdrawal errors and update status."""
+        try:
+            error_updates = {
+                "withdrawal_status": "failed",
+                "withdrawal_message": f"Withdrawal failed: {error_msg}",
+                "withdrawal_error": error_msg,
+            }
+            
+            yield from self._write_kv(error_updates)
+            self.context.logger.error(f"Withdrawal {withdrawal_id} failed: {error_msg}")
+            
+        except Exception as e:
+            self.context.logger.error(f"Error handling withdrawal error: {e}")
+
+    def _verify_transaction_success(self, tx_hash: str, chain: str) -> Generator[None, None, bool]:
+        """Verify that a transaction was successful."""
+        try:
+            # Get transaction receipt
+            receipt = yield from self._get_transaction_receipt(tx_hash, chain)
+            if receipt and receipt.get("status") == 1:
+                return True
+            return False
+        except Exception as e:
+            self.context.logger.error(f"Error verifying transaction {tx_hash}: {e}")
+            return False
+
+    def _get_transaction_receipt(self, tx_hash: str, chain: str) -> Generator[None, None, Optional[Dict]]:
+        """Get transaction receipt."""
+        try:
+            chain_id = self.params.chain_to_chain_id_mapping.get(chain)
+            if not chain_id:
+                self.context.logger.error(f"No chain ID found for chain: {chain}")
+                return None
+                
+            response = yield from self.get_transaction_receipt(
+                tx_digest=tx_hash,
+                chain_id=chain_id,
+            )
+            return response
+        except Exception as e:
+            self.context.logger.error(f"Error getting transaction receipt: {e}")
+            return None
 
 
 def execute_strategy(

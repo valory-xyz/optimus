@@ -30,6 +30,9 @@ from aea.skills.base import Handler
 from packages.valory.protocols.http import HttpMessage
 from packages.valory.protocols.kv_store import KvStoreMessage, KvStoreDialogues, KvStoreDialogue
 from packages.valory.connections.kv_store.connection import KV_STORE_CONNECTION_PUBLIC_ID
+from packages.valory.protocols.kv_store.message import KvStoreMessage
+from aea.mail.base import Envelope
+import asyncio
 
 
 class WithdrawalHttpHandler(Handler):
@@ -41,15 +44,15 @@ class WithdrawalHttpHandler(Handler):
         """Set up the handler."""
         self.context.logger.info("Withdrawal HTTP handler setup complete")
 
-    def handle(self, message: Message) -> None:
-        """Handle the HTTP message."""
+    async def handle(self, message: Message) -> None:
+        """Handle the HTTP message asynchronously."""
         if message.performative == HttpMessage.Performative.REQUEST:
-            self._handle_http_request(message)
+            await self._handle_http_request(message)
         else:
             self.context.logger.warning(f"Unexpected HTTP message: {message}")
 
-    def _handle_http_request(self, message: HttpMessage) -> None:
-        """Handle HTTP request."""
+    async def _handle_http_request(self, message: HttpMessage) -> None:
+        """Handle HTTP request asynchronously."""
         try:
             method = message.method
             url = message.url
@@ -58,11 +61,11 @@ class WithdrawalHttpHandler(Handler):
             self.context.logger.info(f"Handling HTTP request: {method} {url}")
 
             if method == "GET" and url == "/withdrawal/amount":
-                response = self._handle_get_withdrawal_amount()
+                response = await self._handle_get_withdrawal_amount()
             elif method == "POST" and url == "/withdrawal/initiate":
-                response = self._handle_initiate_withdrawal(json.loads(body))
+                response = await self._handle_initiate_withdrawal(json.loads(body))
             elif method == "GET" and url == "/withdrawal/status":
-                response = self._handle_get_withdrawal_status()
+                response = await self._handle_get_withdrawal_status()
             else:
                 response = {
                     "error": "Endpoint not found",
@@ -79,11 +82,11 @@ class WithdrawalHttpHandler(Handler):
             }
             self._send_http_response(message, error_response)
 
-    def _handle_get_withdrawal_amount(self) -> Dict[str, Any]:
-        """Handle GET /withdrawal/amount request."""
+    async def _handle_get_withdrawal_amount(self) -> Dict[str, Any]:
+        """Handle GET /withdrawal/amount request asynchronously."""
         try:
             # Get portfolio data from KV store
-            portfolio_data = self._read_kv_sync(keys=("portfolio_data",))
+            portfolio_data = await self._read_kv_async(keys=("portfolio_data",))
             
             if not portfolio_data or not portfolio_data.get("portfolio_data"):
                 return {
@@ -117,8 +120,8 @@ class WithdrawalHttpHandler(Handler):
                 "status_code": 500
             }
 
-    def _handle_initiate_withdrawal(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle POST /withdrawal/initiate request."""
+    async def _handle_initiate_withdrawal(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle POST /withdrawal/initiate request asynchronously."""
         try:
             # Validate request
             target_address = request_data.get("target_address")
@@ -129,7 +132,7 @@ class WithdrawalHttpHandler(Handler):
                 }
 
             # Check if withdrawal is already in progress
-            existing_withdrawal = self._read_kv_sync(keys=("withdrawal_status",))
+            existing_withdrawal = await self._read_kv_async(keys=("withdrawal_status",))
             if existing_withdrawal and existing_withdrawal.get("withdrawal_status") in ["pending", "withdrawing"]:
                 return {
                     "error": "Withdrawal already in progress",
@@ -140,7 +143,7 @@ class WithdrawalHttpHandler(Handler):
             withdrawal_id = str(uuid.uuid4())
             
             # Get portfolio data
-            portfolio_data = self._read_kv_sync(keys=("portfolio_data",))
+            portfolio_data = await self._read_kv_async(keys=("portfolio_data",))
             portfolio = json.loads(portfolio_data.get("portfolio_data", "{}")) if portfolio_data else {}
             total_value = portfolio.get("total_value_usd", 0)
             operating_chain = self.context.params.target_investment_chains[0]
@@ -157,7 +160,7 @@ class WithdrawalHttpHandler(Handler):
             }
 
             # CRITICAL: Set investing_paused immediately to prevent new investments
-            self._write_kv_sync({
+            await self._write_kv_async({
                 "investing_paused": "true"
             })
             
@@ -174,7 +177,7 @@ class WithdrawalHttpHandler(Handler):
                 "withdrawal_safe_address": safe_address
             }
             
-            self._write_kv_sync(withdrawal_data)
+            await self._write_kv_async(withdrawal_data)
 
             self.context.logger.info(f"Withdrawal initiated and execution started: {withdrawal_id} -> {target_address}")
 
@@ -194,11 +197,11 @@ class WithdrawalHttpHandler(Handler):
                 "status_code": 500
             }
 
-    def _handle_get_withdrawal_status(self) -> Dict[str, Any]:
-        """Handle GET /withdrawal/status request."""
+    async def _handle_get_withdrawal_status(self) -> Dict[str, Any]:
+        """Handle GET /withdrawal/status request asynchronously."""
         try:
             # Get withdrawal data from KV store
-            withdrawal_data = self._read_kv_sync(keys=(
+            withdrawal_data = await self._read_kv_async(keys=(
                 "withdrawal_id", "withdrawal_status", "withdrawal_message", 
                 "withdrawal_target_address", "withdrawal_chain", "withdrawal_safe_address",
                 "withdrawal_tx_hashes", "withdrawal_requested_at", "withdrawal_completed_at",
@@ -275,14 +278,53 @@ class WithdrawalHttpHandler(Handler):
                 "status_code": 500
             }
 
+    async def _read_kv_async(self, keys: tuple) -> Dict[str, Any]:
+        """Async KV store read operation."""
+        result = {}
+        for key in keys:
+            # Send a request to the KV store protocol
+            request = KvStoreMessage(
+                performative=KvStoreMessage.Performative.GET,
+                key=key,
+            )
+            envelope = Envelope(
+                to="kv_store",
+                sender=self.context.agent_address,
+                protocol_id=KvStoreMessage.protocol_id,
+                message=request,
+            )
+            self.context.outbox.put(envelope)
+            # Wait for the response (simulate async)
+            # In production, use a proper async event loop and response handler
+            await asyncio.sleep(0.1)  # Simulate async wait
+            value = self.context.shared_state.get(key, "")
+            if value:
+                result[key] = value
+        return result
+
+    async def _write_kv_async(self, data: Dict[str, str]) -> None:
+        """Async KV store write operation."""
+        for key, value in data.items():
+            request = KvStoreMessage(
+                performative=KvStoreMessage.Performative.SET,
+                key=key,
+                value=value,
+            )
+            envelope = Envelope(
+                to="kv_store",
+                sender=self.context.agent_address,
+                protocol_id=KvStoreMessage.protocol_id,
+                message=request,
+            )
+            self.context.outbox.put(envelope)
+            await asyncio.sleep(0.1)  
+            self.context.shared_state.set(key, value)
+
     def _read_kv_sync(self, keys: tuple) -> Dict[str, Any]:
-        """Synchronous KV store read operation."""
+        """Synchronous KV store read operation (fallback)."""
         try:
-            # This is a simplified synchronous read - in production you'd want proper async handling
-            # For now, we'll use a simple approach that works with the current setup
             result = {}
             for key in keys:
-                # Try to get from shared state first (fallback)
                 value = self.context.shared_state.get(key, "")
                 if value:
                     result[key] = value
@@ -292,10 +334,8 @@ class WithdrawalHttpHandler(Handler):
             return {}
 
     def _write_kv_sync(self, data: Dict[str, str]) -> None:
-        """Synchronous KV store write operation."""
+        """Synchronous KV store write operation (fallback)."""
         try:
-            # This is a simplified synchronous write - in production you'd want proper async handling
-            # For now, we'll use a simple approach that works with the current setup
             for key, value in data.items():
                 self.context.shared_state.set(key, value)
         except Exception as e:

@@ -36,6 +36,11 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import DexType
 from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
 from packages.valory.contracts.gnosis_safe.contract import SafeOperation
 from packages.valory.skills.liquidity_trader_abci.payloads import hash_payload_to_hex
+from packages.valory.contracts.balancer_vault.contract import BalancerVaultContract
+from packages.valory.contracts.uniswap_v3_non_fungible_position_manager.contract import UniswapV3NonFungiblePositionManagerContract
+from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
+from packages.valory.contracts.uniswap_v3_router.contract import UniswapV3RouterContract
+from packages.valory.contracts.erc20.contract import ERC20
 
 # Import decision making functions to reuse existing logic
 from packages.valory.skills.liquidity_trader_abci.behaviours.decision_making import DecisionMakingBehaviour
@@ -276,195 +281,228 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         try:
             action_type = action.get("action")
             
-            if action_type == "ExitPool":
-                return (yield from self._execute_exit_pool_action(action))
-            elif action_type == "Swap":
+            if action_type == "exit_pool":
+                return (yield from self._execute_exit_action(action))
+            elif action_type == "swap":
                 return (yield from self._execute_swap_action(action))
-            elif action_type == "Transfer":
+            elif action_type == "transfer":
                 return (yield from self._execute_transfer_action(action))
             else:
                 self.context.logger.error(f"Unknown action type: {action_type}")
                 return None
                 
         except Exception as e:
-            self.context.logger.error(f"Error executing action: {e}")
+            self.context.logger.error(f"Error executing action {action}: {e}")
             return None
 
-    def _execute_exit_pool_action(self, action: Dict[str, Any]) -> Generator[Optional[str], None, None]:
-        """Execute exit pool action by reusing decision making logic."""
+    def _execute_exit_action(self, action: Dict[str, Any]) -> Generator[Optional[str], None, None]:
+        """Execute pool exit action with gas simulation."""
         try:
-            # REUSE: Use the exact same logic from DecisionMakingBehaviour.get_exit_pool_tx_hash
-            payload_string, chain, safe_address = yield from DecisionMakingBehaviour.get_exit_pool_tx_hash(self, action)
+            chain = action.get("chain")
+            pool_address = action.get("pool_address")
+            pool_type = action.get("pool_type")
             
-            if not payload_string:
-                self.context.logger.error("Failed to prepare exit pool transaction")
+            self.context.logger.info(f"Executing exit action for {pool_type} pool {pool_address} on {chain}")
+            
+            # Get exit transaction data
+            if pool_type == "balancer":
+                tx_data = yield from self._get_balancer_exit_tx_data(action)
+            elif pool_type == "uniswap":
+                tx_data = yield from self._get_uniswap_exit_tx_data(action)
+            elif pool_type == "velodrome":
+                tx_data = yield from self._get_velodrome_exit_tx_data(action)
+            else:
+                self.context.logger.error(f"Unsupported pool type: {pool_type}")
                 return None
-
-            self.context.logger.info(f"Exit pool transaction prepared: {payload_string}")
-            
-            # Get signature for the transaction
-            signature = self._get_signature(safe_address)
-            if not signature:
-                self.context.logger.error("Failed to generate signature for exit pool transaction")
+                
+            if not tx_data:
                 return None
+                
+            # Simulate transaction to check gas sufficiency
+            is_ok = yield from self._simulate_transaction(
+                to_address=pool_address,
+                data=tx_data,
+                token="0x0000000000000000000000000000000000000000",  # ETH
+                amount=0,
+                chain=chain,
+            )
             
-            # Submit the transaction to the blockchain
-            tx_hash = yield from self._submit_transaction(payload_string, chain)
-            if not tx_hash:
-                self.context.logger.error("Failed to submit exit pool transaction")
+            if not is_ok:
+                self.context.logger.error("Transaction simulation failed - insufficient gas or other error")
+                yield from self._update_withdrawal_status(
+                    "failed",
+                    "Transaction simulation failed - insufficient gas or other error. Please ensure the safe has sufficient ETH for gas."
+                )
                 return None
+                
+            # Execute the transaction
+            tx_hash = yield from self._execute_safe_transaction(
+                to_address=pool_address,
+                data=tx_data,
+                chain=chain
+            )
             
-            # Wait for transaction confirmation
-            confirmed = yield from self._wait_for_transaction_confirmation(tx_hash, chain)
-            if not confirmed:
-                self.context.logger.error("Exit pool transaction failed or timed out")
-                return None
-            
-            self.context.logger.info(f"Exit pool transaction executed successfully: {tx_hash}")
             return tx_hash
-
+            
         except Exception as e:
-            self.context.logger.error(f"Error executing exit pool action: {e}")
+            self.context.logger.error(f"Error executing exit action: {e}")
             return None
 
     def _execute_swap_action(self, action: Dict[str, Any]) -> Generator[Optional[str], None, None]:
-        """Execute swap action using LiFi routing exactly like the agent does."""
+        """Execute swap action with gas simulation."""
         try:
             chain = action.get("chain")
-            token_in = action.get("token_in")
-            token_out = action.get("token_out")
+            from_token = action.get("from_token")
+            to_token = action.get("to_token")
             amount = action.get("amount")
-            safe_address = self.params.safe_contract_addresses.get(chain)
-
-            if not all([chain, token_in, token_out, amount, safe_address]):
-                self.context.logger.error(f"Missing required parameters for swap: {action}")
-                return None
-
-            # Get token symbols for logging
-            token_in_symbol = yield from self._get_token_symbol(chain, token_in)
-            token_out_symbol = yield from self._get_token_symbol(chain, token_out)
             
-            self.context.logger.info(
-                f"Finding LiFi route for swap: {token_in_symbol}({token_in}) -> {token_out_symbol}({token_out})"
-            )
-
-            # Create action format for LiFi routing (same chain swap)
-            route_action = {
-                "from_chain": chain,
-                "to_chain": chain,  # Same chain swap
-                "from_token": token_in,
-                "to_token": token_out,
-                "from_token_symbol": token_in_symbol,
-                "to_token_symbol": token_out_symbol,
-                "amount": amount,
-                "funds_percentage": 1.0  # Use full amount
-            }
-
-            # Get current positions for balance calculation
-            current_positions = yield from self._read_kv(keys=("current_positions",))
-            positions = current_positions.get("current_positions", []) if current_positions else []
-
-            # REUSE: Fetch LiFi routes using decision making function
-            routes = yield from DecisionMakingBehaviour.fetch_routes(self, positions, route_action)
-            if not routes:
-                self.context.logger.error("Failed to fetch LiFi routes")
-                return None
-
-            # Select the best route (first route is usually the best)
-            best_route = routes[0]
-            self.context.logger.info(f"Selected LiFi route: {best_route.get('id', 'unknown')}")
-
-            # Get the first step (for same-chain swaps, there's usually only one step)
-            steps = best_route.get("steps", [])
-            if not steps:
-                self.context.logger.error("No steps found in LiFi route")
-                return None
-
-            step = steps[0]
+            self.context.logger.info(f"Executing swap action: {amount} {from_token} -> {to_token} on {chain}")
             
-            # REUSE: Set addresses in step using decision making function
-            step = DecisionMakingBehaviour._set_step_addresses(self, step)
-
-            # REUSE: Get step transaction data using decision making function
-            step_data = yield from DecisionMakingBehaviour._get_step_transaction(self, step)
-            if not step_data:
-                self.context.logger.error("Failed to get step transaction data")
+            # Get swap transaction data
+            tx_data = yield from self._get_swap_tx_data(action)
+            if not tx_data:
                 return None
-
-            # REUSE: Build multisend transaction using decision making function
-            multisend_tx_hash = yield from DecisionMakingBehaviour._build_multisend_tx(self, positions, step_data)
-            if not multisend_tx_hash:
-                return None
-
-            multisend_tx_data = bytes.fromhex(multisend_tx_hash[2:])
-            multisend_address = self.params.multisend_contract_addresses.get(chain)
-
-            # REUSE: Simulate transaction using decision making function
-            is_ok = yield from DecisionMakingBehaviour._simulate_transaction(
-                self,
-                to_address=multisend_address,
-                data=multisend_tx_data,
-                token=step_data.get("source_token"),
-                amount=step_data.get("amount"),
+                
+            # Simulate transaction to check gas sufficiency
+            is_ok = yield from self._simulate_transaction(
+                to_address=action.get("router_address"),
+                data=tx_data,
+                token=from_token,
+                amount=amount,
                 chain=chain,
             )
+            
             if not is_ok:
-                self.context.logger.info(
-                    f"Simulation failed for swap tx: {step_data.get('source_token_symbol')}({chain}) "
-                    f"--> {step_data.get('target_token_symbol')}({chain}). Tool used: {step_data.get('tool')}"
+                self.context.logger.error("Transaction simulation failed - insufficient gas or other error")
+                yield from self._update_withdrawal_status(
+                    "failed",
+                    "Transaction simulation failed - insufficient gas or other error. Please ensure the safe has sufficient ETH for gas."
                 )
                 return None
-
-            self.context.logger.info(
-                f"Simulation successful for swap tx: {step_data.get('source_token_symbol')}({chain}) "
-                f"--> {step_data.get('target_token_symbol')}({chain}). Tool used: {step_data.get('tool')}"
+                
+            # Execute the transaction
+            tx_hash = yield from self._execute_safe_transaction(
+                to_address=action.get("router_address"),
+                data=tx_data,
+                chain=chain
             )
-
-            # REUSE: Build safe transaction using decision making function
-            payload_string = yield from DecisionMakingBehaviour._build_safe_tx(self, chain, multisend_tx_hash, multisend_address)
-            if not payload_string:
-                return None
-
-            # Get signature for the transaction
-            signature = self._get_signature(safe_address)
-            if not signature:
-                self.context.logger.error("Failed to generate signature for swap transaction")
-                return None
             
-            # Submit the transaction to the blockchain
-            tx_hash = yield from self._submit_transaction(payload_string, chain)
-            if not tx_hash:
-                self.context.logger.error("Failed to submit swap transaction")
-                return None
-            
-            # Wait for transaction confirmation
-            confirmed = yield from self._wait_for_transaction_confirmation(tx_hash, chain)
-            if not confirmed:
-                self.context.logger.error("Swap transaction failed or timed out")
-                return None
-            
-            self.context.logger.info(f"Swap transaction executed successfully: {tx_hash}")
             return tx_hash
-
+            
         except Exception as e:
             self.context.logger.error(f"Error executing swap action: {e}")
             return None
 
+    def _execute_transfer_action(self, action: Dict[str, Any]) -> Generator[Optional[str], None, None]:
+        """Execute transfer action with gas simulation."""
+        try:
+            chain = action.get("chain")
+            to_address = action.get("to_address")
+            amount = action.get("amount")
+            token = action.get("token")
+            
+            self.context.logger.info(f"Executing transfer action: {amount} {token} to {to_address} on {chain}")
+            
+            # Get transfer transaction data
+            tx_data = yield from self._get_transfer_tx_data(action)
+            if not tx_data:
+                return None
+                
+            # Simulate transaction to check gas sufficiency
+            is_ok = yield from self._simulate_transaction(
+                to_address=to_address,
+                data=tx_data,
+                token=token,
+                amount=amount,
+                chain=chain,
+            )
+            
+            if not is_ok:
+                self.context.logger.error("Transaction simulation failed - insufficient gas or other error")
+                yield from self._update_withdrawal_status(
+                    "failed",
+                    "Transaction simulation failed - insufficient gas or other error. Please ensure the safe has sufficient ETH for gas."
+                )
+                return None
+                
+            # Execute the transaction
+            tx_hash = yield from self._execute_safe_transaction(
+                to_address=to_address,
+                data=tx_data,
+                chain=chain
+            )
+            
+            return tx_hash
+            
+        except Exception as e:
+            self.context.logger.error(f"Error executing transfer action: {e}")
+            return None
 
+    def _simulate_transaction(
+        self,
+        to_address: str,
+        data: bytes,
+        token: str,
+        amount: int,
+        chain: str,
+        **kwargs: Any,
+    ) -> Generator[None, None, bool]:
+        """Simulate transaction using Tenderly to check gas sufficiency (reuse existing function)."""
+        # Reuse the existing simulation function from DecisionMakingBehaviour
+        return (yield from DecisionMakingBehaviour._simulate_transaction(
+            self, to_address, data, token, amount, chain, **kwargs
+        ))
 
+    def _get_signature(self, owner: str) -> str:
+        """Get signature for safe transaction (reuse existing function)."""
+        # Reuse the existing signature function from DecisionMakingBehaviour
+        return DecisionMakingBehaviour._get_signature(self, owner)
 
+    def _execute_safe_transaction(
+        self, to_address: str, data: bytes, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Execute safe transaction and return transaction hash."""
+        try:
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            
+            # Prepare safe transaction hash
+            safe_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=safe_address,
+                contract_public_id=GnosisSafeContract.contract_id,
+                contract_callable="get_raw_safe_transaction_hash",
+                data_key="tx_hash",
+                to_address=to_address,
+                value=ETHER_VALUE,
+                data=data,
+                operation=SafeOperation.DELEGATE_CALL.value,
+                safe_tx_gas=SAFE_TX_GAS,
+                chain_id=chain,
+            )
 
+            if not safe_tx_hash:
+                self.context.logger.error("Error preparing safe transaction")
+                return None
 
-
-
-
-
-
-
-
-
-
-
+            # Create transaction payload
+            safe_tx_hash = safe_tx_hash[2:]
+            tx_params = dict(
+                ether_value=ETHER_VALUE,
+                safe_tx_gas=SAFE_TX_GAS,
+                operation=SafeOperation.DELEGATE_CALL.value,
+                to_address=to_address,
+                data=data,
+                safe_tx_hash=safe_tx_hash,
+            )
+            payload_string = hash_payload_to_hex(**tx_params)
+            
+            # Send transaction
+            tx_hash = yield from self.send_transaction(payload_string, chain)
+            return tx_hash
+            
+        except Exception as e:
+            self.context.logger.error(f"Error executing safe transaction: {e}")
+            return None
 
     def _get_token_decimals(self, chain: str, token_address: str) -> Generator[Optional[int], None, None]:
         """Get token decimals."""
@@ -590,28 +628,6 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error executing transfer action: {e}")
             return None
-
-    def _get_signature(self, owner: str) -> str:
-        """Get signature for safe transaction using the agent's private key."""
-        # Retrieve the safe transaction hash from the context (should be set before calling this)
-        safe_tx_hash = getattr(self, "_last_safe_tx_hash", None)
-        if safe_tx_hash is None:
-            self.context.logger.error("Safe transaction hash not set for signature.")
-            return ""
-
-        # Use the agent's cryptography interface to sign the hash
-        try:
-            # The hash must be bytes
-            if isinstance(safe_tx_hash, str) and safe_tx_hash.startswith("0x"):
-                safe_tx_hash_bytes = bytes.fromhex(safe_tx_hash[2:])
-            else:
-                safe_tx_hash_bytes = safe_tx_hash
-            signature = self.context.agent_context.signing_key.sign_message(safe_tx_hash_bytes)
-            # Format the signature as a hex string
-            return signature.hex()
-        except Exception as e:
-            self.context.logger.error(f"Error generating signature: {e}")
-            return ""
 
     def _get_token_balances(self) -> Generator[Dict[str, int], None, None]:
         """Get current token balances using real infrastructure."""
@@ -846,6 +862,158 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error generating transaction link: {e}")
             return f"https://etherscan.io/tx/{tx_hash}"  # Fallback
+
+    def _get_balancer_exit_tx_data(self, action: Dict[str, Any]) -> Generator[None, None, Optional[bytes]]:
+        """Get Balancer pool exit transaction data."""
+        try:
+            chain = action.get("chain")
+            pool_address = action.get("pool_address")
+            pool_id = action.get("pool_id")
+            
+            # Get exit transaction data from Balancer contract
+            tx_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=BalancerVaultContract.contract_id,
+                contract_callable="exit_pool",
+                data_key="data",
+                pool_id=pool_id,
+                sender=self.params.safe_contract_addresses.get(chain),
+                recipient=self.params.safe_contract_addresses.get(chain),
+                request={
+                    "assets": action.get("assets", []),
+                    "min_amounts_out": action.get("min_amounts_out", []),
+                    "user_data": b"",
+                    "to_internal_balance": False
+                },
+                chain_id=chain,
+            )
+            
+            return tx_data
+            
+        except Exception as e:
+            self.context.logger.error(f"Error getting Balancer exit tx data: {e}")
+            return None
+
+    def _get_uniswap_exit_tx_data(self, action: Dict[str, Any]) -> Generator[None, None, Optional[bytes]]:
+        """Get Uniswap pool exit transaction data."""
+        try:
+            chain = action.get("chain")
+            pool_address = action.get("pool_address")
+            token_id = action.get("token_id")
+            
+            # Get exit transaction data from Uniswap contract
+            tx_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=UniswapV3NonFungiblePositionManagerContract.contract_id,
+                contract_callable="decrease_liquidity",
+                data_key="data",
+                token_id=token_id,
+                liquidity=action.get("liquidity", 0),
+                amount0_min=action.get("amount0_min", 0),
+                amount1_min=action.get("amount1_min", 0),
+                deadline=action.get("deadline", 0),
+                chain_id=chain,
+            )
+            
+            return tx_data
+            
+        except Exception as e:
+            self.context.logger.error(f"Error getting Uniswap exit tx data: {e}")
+            return None
+
+    def _get_velodrome_exit_tx_data(self, action: Dict[str, Any]) -> Generator[None, None, Optional[bytes]]:
+        """Get Velodrome pool exit transaction data."""
+        try:
+            chain = action.get("chain")
+            pool_address = action.get("pool_address")
+            
+            # Get exit transaction data from Velodrome contract
+            tx_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromePoolContract.contract_id,
+                contract_callable="remove_liquidity",
+                data_key="data",
+                lp_amount=action.get("lp_amount", 0),
+                min_token0=action.get("min_token0", 0),
+                min_token1=action.get("min_token1", 0),
+                to=self.params.safe_contract_addresses.get(chain),
+                deadline=action.get("deadline", 0),
+                chain_id=chain,
+            )
+            
+            return tx_data
+            
+        except Exception as e:
+            self.context.logger.error(f"Error getting Velodrome exit tx data: {e}")
+            return None
+
+    def _get_swap_tx_data(self, action: Dict[str, Any]) -> Generator[None, None, Optional[bytes]]:
+        """Get swap transaction data using Uniswap router."""
+        try:
+            chain = action.get("chain")
+            router_address = action.get("router_address")
+            from_token = action.get("from_token")
+            to_token = action.get("to_token")
+            amount = action.get("amount")
+            
+            # Get swap transaction data from Uniswap router
+            tx_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=UniswapV3RouterContract.contract_id,
+                contract_callable="exact_input_single",
+                data_key="data",
+                params={
+                    "token_in": from_token,
+                    "token_out": to_token,
+                    "fee": action.get("fee", 3000),
+                    "recipient": self.params.safe_contract_addresses.get(chain),
+                    "deadline": action.get("deadline", 0),
+                    "amount_in": amount,
+                    "amount_out_minimum": action.get("amount_out_minimum", 0),
+                    "sqrt_price_limit_x96": 0
+                },
+                chain_id=chain,
+            )
+            
+            return tx_data
+            
+        except Exception as e:
+            self.context.logger.error(f"Error getting swap tx data: {e}")
+            return None
+
+    def _get_transfer_tx_data(self, action: Dict[str, Any]) -> Generator[None, None, Optional[bytes]]:
+        """Get transfer transaction data."""
+        try:
+            chain = action.get("chain")
+            to_address = action.get("to_address")
+            amount = action.get("amount")
+            token = action.get("token")
+            
+            if token == "0x0000000000000000000000000000000000000000":
+                # ETH transfer - empty data
+                return b""
+            else:
+                # ERC20 transfer
+                tx_data = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=token,
+                    contract_public_id=ERC20.contract_id,
+                    contract_callable="transfer",
+                    data_key="data",
+                    to=to_address,
+                    amount=amount,
+                    chain_id=chain,
+                )
+                
+                return tx_data
+            
+        except Exception as e:
+            self.context.logger.error(f"Error getting transfer tx data: {e}")
+            return None
 
     def teardown(self) -> None:
         """Tear down the behaviour."""

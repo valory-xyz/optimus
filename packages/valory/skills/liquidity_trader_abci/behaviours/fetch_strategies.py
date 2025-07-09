@@ -1044,10 +1044,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
-        token_id = position.get("token_id")
 
         user_balances = yield from self.get_user_share_value_velodrome(
-            user_address, pool_address, token_id, chain, position
+            user_address, pool_address, position.get("token_id"), chain, position
         )
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
         token_info = {

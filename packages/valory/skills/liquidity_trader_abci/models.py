@@ -357,6 +357,8 @@ class Params(BaseParams):
         self.service_registry_contract_addresses = json.loads(
             self._ensure("service_registry_contract_addresses", kwargs, str)
         )
+        self.safe_api_base_url = self._ensure("safe_api_base_url", kwargs, str)
+        self.safe_api_timeout = self._ensure("safe_api_timeout", kwargs, int)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

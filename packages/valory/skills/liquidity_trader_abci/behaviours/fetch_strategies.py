@@ -54,6 +54,7 @@ from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContr
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
     PORTFOLIO_UPDATE_INTERVAL,
@@ -102,12 +103,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
             sender = self.context.agent_address
-
-            if not self.assets:
-                self.assets = self.params.initial_assets
-                self.store_assets()
-
-            self.read_assets()
 
             chain = self.params.target_investment_chains[0]
             safe_address = self.params.safe_contract_addresses.get(chain)
@@ -1664,94 +1659,69 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(f"No safe address found for chain {chain}")
                 continue
 
-            chain_assets = self.assets.get(chain, {})
-            if not chain_assets:
-                self.context.logger.warning(f"No assets found for chain {chain}")
-                continue
-
             self.context.logger.info(f"Calculating safe balances for chain {chain}")
 
-            for token_address, token_symbol in chain_assets.items():
+            # Get current balances dynamically instead of using static assets
+            if chain == Chain.OPTIMISM.value:
+                balances = yield from self._get_optimism_balances_from_safe_api()
+            else:
+                balances = yield from self._get_contract_based_balances(chain)
+
+            if not balances:
+                self.context.logger.warning(f"No balances found for chain {chain}")
+                continue
+
+            for balance in balances:
+                token_address = balance["address"]
+                token_symbol = balance["asset_symbol"]
+                token_balance = balance["balance"]
+
+                self.context.logger.info(
+                    f"Token balance for {token_symbol} is {token_balance}."
+                )
+
+                if token_balance == 0:
+                    continue
+
+                # Get token decimals and adjust balance
                 if token_address == ZERO_ADDRESS:
-                    eth_balance_wei = yield from self._get_native_balance(
-                        chain, safe_address
-                    )
-                    self.context.logger.info(
-                        f"Token balance for {token_symbol} is {eth_balance_wei}."
-                    )
-                    adjusted_balance = Decimal(str(eth_balance_wei)) / Decimal(
-                        10**18
-                    )  # ETH has 18 decimals
-
-                    if adjusted_balance <= 0:
-                        continue
-
-                    # Get ETH price
-                    token_price = yield from self._fetch_zero_address_price()
-                    if token_price is None:
-                        self.context.logger.warning(
-                            f"Could not fetch price for {token_symbol}"
-                        )
-                        continue
-
-                    token_price = Decimal(str(token_price))
-                    token_value_usd = adjusted_balance * token_price
-                    total_safe_value += token_value_usd
-
-                    self.context.logger.info(
-                        f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
-                    )
-
+                    # ETH has 18 decimals
+                    adjusted_balance = Decimal(str(token_balance)) / Decimal(10**18)
                 else:
-                    # Handle ERC20 tokens
-                    token_balance = yield from self.contract_interact(
-                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                        contract_address=token_address,
-                        contract_public_id=ERC20.contract_id,
-                        contract_callable="check_balance",
-                        data_key="token",
-                        account=safe_address,
-                        chain_id=chain,
-                    )
-                    self.context.logger.info(
-                        f"Token balance for {token_symbol} is {token_balance}."
-                    )
-
-                    if token_balance is None or token_balance == 0:
-                        continue
-
-                    # Get token decimals
+                    # Get token decimals for ERC20 tokens
                     token_decimals = yield from self._get_token_decimals(
                         chain, token_address
                     )
                     if token_decimals is None:
                         continue
-
-                    # Adjust balance for decimals
                     adjusted_balance = Decimal(str(token_balance)) / Decimal(
                         10**token_decimals
                     )
 
-                    if adjusted_balance <= 0:
-                        continue
+                if adjusted_balance <= 0:
+                    continue
 
-                    # Get token price
+                # Get token price
+                if token_address == ZERO_ADDRESS:
+                    token_price = yield from self._fetch_zero_address_price()
+                else:
                     token_price = yield from self._fetch_token_price(
                         token_address, chain
                     )
-                    if token_price is None:
-                        self.context.logger.warning(
-                            f"Could not fetch price for {token_symbol}"
-                        )
-                        continue
 
-                    token_price = Decimal(str(token_price))
-                    token_value_usd = adjusted_balance * token_price
-                    total_safe_value += token_value_usd
-
-                    self.context.logger.info(
-                        f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
+                if token_price is None:
+                    self.context.logger.warning(
+                        f"Could not fetch price for {token_symbol}"
                     )
+                    continue
+
+                token_price = Decimal(str(token_price))
+                token_value_usd = adjusted_balance * token_price
+                total_safe_value += token_value_usd
+
+                self.context.logger.info(
+                    f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
+                )
 
                 # Add to portfolio breakdown if not already present
                 existing_asset = next(
@@ -2289,12 +2259,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Fetch all transfers until current date based on chain
             self.context.logger.info(f"Fetching transfers for chain: {chain}")
-            if chain == "mode":
+            if chain == Chain.MODE.value:
                 self.context.logger.info("Using Mode-specific transfer fetching")
                 all_transfers = self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, fetch_till_date
                 )
-            elif chain == "optimism":
+            elif chain == Chain.OPTIMISM.value:
                 self.context.logger.info("Using Optimism-specific transfer fetching")
                 all_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
@@ -3271,7 +3241,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Get all transfers until date
             all_incoming_transfers = {}
             all_outgoing_transfers = {}
-            if chain == "optimism":
+            if chain == Chain.OPTIMISM.value:
                 all_incoming_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
                         safe_address, current_date
@@ -3282,7 +3252,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         safe_address, current_date
                     )
                 ) or {}
-            elif chain == "mode":
+            elif chain == Chain.MODE.value:
                 # Use new Mode-specific tracking function
                 transfers = self._track_eth_transfers_mode(safe_address, current_date)
                 all_incoming_transfers = transfers.get("incoming", {})

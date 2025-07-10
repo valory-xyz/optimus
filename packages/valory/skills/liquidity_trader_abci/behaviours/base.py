@@ -175,6 +175,13 @@ class TradingType(Enum):
     RISKY = "risky"
 
 
+class Chain(Enum):
+    """Chain Names"""
+
+    OPTIMISM = "optimism"
+    MODE = "mode"
+
+
 THRESHOLDS = {TradingType.BALANCED.value: 0.3374, TradingType.RISKY.value: 0.2892}
 
 ASSETS_FILENAME = "assets.json"
@@ -267,9 +274,6 @@ class LiquidityTraderBaseBehaviour(
     def __init__(self, **kwargs: Any) -> None:
         """Initialize `LiquidityTraderBaseBehaviour`."""
         super().__init__(**kwargs)
-        self.assets: Dict[str, Any] = {}
-        # TO-DO: this will not work if we run it as a service
-        self.assets_filepath = self.params.store_path / self.params.assets_info_filename
         self.current_positions: List[Dict[str, Any]] = []
         self.current_positions_filepath: str = (
             self.params.store_path / self.params.pool_info_filename
@@ -297,9 +301,8 @@ class LiquidityTraderBaseBehaviour(
         )
         self.initial_investment_values_per_pool = {}
 
-        # Read the assets and current pool
+        # Read the current pool and other data
         self.read_current_positions()
-        self.read_assets()
         self.read_gas_costs()
         self.read_portfolio_data()
 
@@ -387,12 +390,16 @@ class LiquidityTraderBaseBehaviour(
         return data
 
     def get_positions(self) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get positions"""
-        asset_balances = yield from self._get_asset_balances()
+        """Get positions using SafeApi for Optimism, contract calls for other chains"""
         all_balances = defaultdict(list)
-        if asset_balances:
-            for chain, assets in asset_balances.items():
-                all_balances[chain].extend(assets)
+
+        for chain in self.params.target_investment_chains:
+            if chain == Chain.OPTIMISM.value:
+                # Use SafeApi for Optimism
+                balances = yield from self._get_optimism_balances_from_safe_api()
+
+            if balances:
+                all_balances[chain].extend(balances)
 
         positions = [
             {"chain": chain, "assets": assets} for chain, assets in all_balances.items()
@@ -400,43 +407,109 @@ class LiquidityTraderBaseBehaviour(
 
         return positions
 
-    def _get_asset_balances(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Get asset balances"""
-        asset_balances_dict: Dict[str, list] = defaultdict(list)
+    def _get_optimism_balances_from_safe_api(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Get Optimism balances using SafeApi with pagination"""
+        safe_address = self.params.safe_contract_addresses.get("optimism")
+        if not safe_address:
+            self.context.logger.error("No safe address set for Optimism chain")
+            return []
 
-        for chain, assets in self.assets.items():
-            account = self.params.safe_contract_addresses.get(chain)
-            if not account:
-                self.context.logger.error(f"No safe address set for chain {chain}")
-                continue
+        self.context.logger.info(
+            f"Fetching Optimism balances from SafeApi for safe: {safe_address}"
+        )
 
-            for asset_address, asset_symbol in assets.items():
-                if asset_address == ZERO_ADDRESS:
-                    balance = yield from self._get_native_balance(chain, account)
-                    decimal = 18
-                else:
-                    balance = yield from self._get_token_balance(
-                        chain, account, asset_address
-                    )
-                    balance = 0 if balance is None else balance
-                    decimal = yield from self._get_token_decimals(chain, asset_address)
+        # Fetch all balances with pagination
+        all_balances = yield from self._fetch_safe_balances_with_pagination(
+            safe_address
+        )
 
-                asset_balances_dict[chain].append(
+        balances = []
+        for balance_data in all_balances:
+            token_address = balance_data.get("tokenAddress")
+            token_info = balance_data.get("token")
+            balance = balance_data.get("balance", "0")
+
+            if token_address is None:
+                # Native ETH
+                balances.append(
                     {
-                        "asset_symbol": asset_symbol,
-                        "asset_type": (
-                            "native" if asset_address == ZERO_ADDRESS else "erc_20"
-                        ),
-                        "address": to_checksum_address(asset_address),
-                        "balance": balance,
+                        "asset_symbol": "ETH",
+                        "asset_type": "native",
+                        "address": to_checksum_address(ZERO_ADDRESS),
+                        "balance": int(balance),
                     }
                 )
+            else:
+                # ERC-20 token
+                if token_info:
+                    balances.append(
+                        {
+                            "asset_symbol": token_info.get("symbol", "UNKNOWN"),
+                            "asset_type": "erc_20",
+                            "address": to_checksum_address(token_address),
+                            "balance": int(balance),
+                        }
+                    )
 
-                self.context.logger.info(
-                    f"Balance of account {account} on {chain} for {asset_symbol}: {self._convert_to_token_units(balance, decimal)}"
+        self.context.logger.info(
+            f"Retrieved {len(balances)} token balances from SafeApi"
+        )
+        return balances
+
+    def _fetch_safe_balances_with_pagination(
+        self, safe_address: str
+    ) -> Generator[None, None, List[Dict]]:
+        """Fetch all balances from SafeApi with pagination support"""
+        all_balances = []
+        offset = 0
+        limit = 100  # Default page size
+
+        while True:
+            url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
+            params = f"?trusted=true&exclude_spam=true&limit={limit}&offset={offset}"
+            endpoint = url + params
+
+            self.context.logger.info(
+                f"Fetching SafeApi page: offset={offset}, limit={limit}"
+            )
+
+            success, response_data = yield from self._request_with_retries(
+                endpoint=endpoint,
+                method="GET",
+                headers={"Accept": "application/json"},
+                rate_limited_callback=lambda: None,  # No specific rate limit callback for SafeApi
+                max_retries=MAX_RETRIES_FOR_API_CALL,
+                retry_wait=2,
+            )
+
+            if not success:
+                self.context.logger.error(
+                    f"Failed to fetch SafeApi data: {response_data}"
                 )
+                break
 
-        return asset_balances_dict
+            breakpoint()
+            results = response_data.get("results", [])
+            if not results:
+                self.context.logger.info("No more results from SafeApi")
+                break
+
+            all_balances.extend(results)
+
+            # Check if there's a next page
+            next_url = response_data.get("next")
+            if not next_url:
+                self.context.logger.info("Reached last page of SafeApi results")
+                break
+
+            offset += limit
+
+        self.context.logger.info(
+            f"Total balances fetched from SafeApi: {len(all_balances)}"
+        )
+        return all_balances
 
     def _get_native_balance(
         self, chain: str, account: str
@@ -611,14 +684,6 @@ class LiquidityTraderBaseBehaviour(
             chain_id=chain,
         )
         return token_symbol
-
-    def store_assets(self) -> None:
-        """Store the list of assets as JSON."""
-        self._store_data(self.assets, "assets", self.assets_filepath)
-
-    def read_assets(self) -> None:
-        """Read the list of assets as JSON."""
-        self._read_data("assets", self.assets_filepath)
 
     def store_current_positions(self) -> None:
         """Store the current pool as JSON."""

@@ -9,7 +9,7 @@ fingerprint:
   __init__.py: bafybeig546nj42vvu3oehrq27ug655uxhmjlbylrigbryypvsuiijufaou
   behaviours/__init__.py: bafybeieobxeiwpg42peg2vrzkao2tpkqxw4wtlua64aqom2ypclezeqx6q
   behaviours/withdrawal_behaviour.py: bafybeiakkuzxhtzy6v3szbohzypq2kziryyr2amdggwhsmlu33bpbyd4eq
-  handlers.py: bafybeibh5nbtd6v3zfoaxbbw65lha63sy4l2rbxhcpnyn7wtmflb5zhgum
+  handlers.py: bafybeietbd57al6ob3bz6spx72gcqjifqdnlj5qjqjzsvloulx55rk2eae
   models.py: bafybeib5d62x3gfxki3z5fw53lzx5aajue7j7ihqnydmd4fdvwhprk2ame
   skill.py: bafybeihrc6oxdvwppewcn2xxggjdo2h4sm6vjahxcnu4t5siqcb5mvubxm
 fingerprint_ignore_patterns: []

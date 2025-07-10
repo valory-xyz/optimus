@@ -85,24 +85,29 @@ class WithdrawalHttpHandler(Handler):
     async def _handle_get_withdrawal_amount(self) -> Dict[str, Any]:
         """Handle GET /withdrawal/amount request asynchronously."""
         try:
-            # Get portfolio data from KV store
-            portfolio_data = await self._read_kv_async(keys=("portfolio_data",))
-            
-            if not portfolio_data or not portfolio_data.get("portfolio_data"):
+            # Define the path to the portfolio data file (same as portfolio endpoint)
+            portfolio_data_filepath: str = (
+                self.context.params.store_path / self.context.params.portfolio_info_filename
+            )
+
+            # Read the portfolio data from the file (same as portfolio endpoint)
+            try:
+                with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
+                    portfolio_data = json.load(file)
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                self.context.logger.info(f"Error reading portfolio data: {str(e)}")
                 return {
                     "error": "Portfolio data not available",
                     "status_code": 404
                 }
 
-            portfolio = json.loads(portfolio_data["portfolio_data"])
-            
             # Extract withdrawal amount data
-            total_value = portfolio.get("total_value_usd", 0)
+            total_value = portfolio_data.get("portfolio_value", 0)
             operating_chain = self.context.params.target_investment_chains[0]
             safe_address = self.context.params.safe_contract_addresses.get(operating_chain)
             
             # Get asset breakdown
-            asset_breakdown = portfolio.get("asset_breakdown", [])
+            asset_breakdown = portfolio_data.get("portfolio_breakdown", [])
 
             return {
                 "amount": int(total_value * 10**6),  # Convert to USDC decimals
@@ -142,10 +147,23 @@ class WithdrawalHttpHandler(Handler):
             # Generate withdrawal ID
             withdrawal_id = str(uuid.uuid4())
             
-            # Get portfolio data
-            portfolio_data = await self._read_kv_async(keys=("portfolio_data",))
-            portfolio = json.loads(portfolio_data.get("portfolio_data", "{}")) if portfolio_data else {}
-            total_value = portfolio.get("total_value_usd", 0)
+            # Define the path to the portfolio data file (same as portfolio endpoint)
+            portfolio_data_filepath: str = (
+                self.context.params.store_path / self.context.params.portfolio_info_filename
+            )
+
+            # Read the portfolio data from the file (same as portfolio endpoint)
+            try:
+                with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
+                    portfolio_data = json.load(file)
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                self.context.logger.info(f"Error reading portfolio data: {str(e)}")
+                return {
+                    "error": "Portfolio data not available",
+                    "status_code": 404
+                }
+
+            total_value = portfolio_data.get("portfolio_value", 0)
             operating_chain = self.context.params.target_investment_chains[0]
             safe_address = self.context.params.safe_contract_addresses.get(operating_chain)
 

@@ -75,7 +75,7 @@ class BalancerQueriesContract(Contract):
         ).call()
         
         # Result contains (bptOut, amountsIn)
-        return dict(bpt_out=result[0], amounts_in=result[1])
+        return {"result":{"bpt_out":result[0], "amounts_in":result[1]}}
 
     @classmethod
     def query_exit(
@@ -112,5 +112,5 @@ class BalancerQueriesContract(Contract):
             exit_request
         ).call()
         
-        # Result contains (bptIn, amountsOut)
-        return dict(bpt_in=result[0], amounts_out=result[1])
+
+        return {"result":{"bpt_in":result[0], "amounts_out":result[1]}}

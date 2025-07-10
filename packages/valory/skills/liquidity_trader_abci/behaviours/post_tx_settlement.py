@@ -52,8 +52,7 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             # Always proceed with normal flow
             event = "TRANSFER_COMPLETED"
             payload = PostTxSettlementPayload(
-                sender=self.context.agent_address, 
-                content=json.dumps({"event": event})
+                sender=self.context.agent_address, content=json.dumps({"event": event})
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():

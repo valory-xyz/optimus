@@ -20,7 +20,6 @@
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
 import json
 import os
-import time
 from datetime import datetime
 from pathlib import Path
 from time import time
@@ -109,7 +108,7 @@ class SharedState(BaseSharedState):
         """Validate that withdrawal trigger is legitimate and not stale."""
         if not self.withdrawal_triggered:
             return False
-        
+
         # Additional validation can be added here
         # For example, check if withdrawal_id is recent
         return True

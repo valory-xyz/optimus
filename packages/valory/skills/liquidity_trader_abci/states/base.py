@@ -61,7 +61,6 @@ class Event(Enum):
     STAKING_KPI_MET = "staking_kpi_met"  # nosec
 
 
-
 class SynchronizedData(BaseSynchronizedData):
     """
     Class to represent the synchronized data.
@@ -249,8 +248,6 @@ class SynchronizedData(BaseSynchronizedData):
     def last_action(self) -> Optional[str]:
         """Get the last action."""
         return cast(str, self.db.get("last_action", None))
-
-
 
     @property
     def withdrawal_id(self) -> Optional[str]:

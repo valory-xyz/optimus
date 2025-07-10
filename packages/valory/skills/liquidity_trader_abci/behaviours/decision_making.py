@@ -110,7 +110,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if investing_paused and investing_paused.get("investing_paused") == "true":
             self.context.logger.info("Investing is paused, skipping action execution")
             return Event.DONE.value, {}
-        
+
         actions = self.synchronized_data.actions
         if not actions:
             self.context.logger.info("No actions to prepare")
@@ -152,9 +152,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._post_execute_exit_pool(
                     actions, last_executed_action_index
                 )
-            if (
-                self.synchronized_data.last_action == Action.TRANSFER.value
-            ):
+            if self.synchronized_data.last_action == Action.TRANSFER.value:
                 yield from self._post_execute_transfer(
                     actions, last_executed_action_index
                 )
@@ -186,9 +184,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             positions, actions, current_action_index, last_round_id
         )
         return res
-
-
-
 
     def _post_execute_step(
         self, actions, last_executed_action_index
@@ -247,7 +242,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "remaining_fee_allowance": action.get("remaining_fee_allowance"),
             "remaining_gas_allowance": action.get("remaining_gas_allowance"),
         }
-        
+
         return Event.UPDATE.value, {
             "last_executed_step_index": (
                 self.synchronized_data.last_executed_step_index + 1
@@ -464,7 +459,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
-        
+
         # When we exit the pool, it may take time to reflect the balance of our assets in the safe
         yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
 
@@ -474,9 +469,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         to_address = action.get("to_address")
         token_address = action.get("token_address")
         amount = action.get("amount")
-        
-        self.context.logger.info(f"Transfer completed: {amount} of token {token_address} to {to_address}")
-        
+
+        self.context.logger.info(
+            f"Transfer completed: {amount} of token {token_address} to {to_address}"
+        )
+
         # Wait a bit for the transfer to be reflected
         yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
 

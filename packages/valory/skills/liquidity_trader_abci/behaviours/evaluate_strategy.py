@@ -84,8 +84,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # PRIORITY: Check if investing is paused due to withdrawal
             investing_paused = yield from self._read_kv(keys=("investing_paused",))
             if investing_paused and investing_paused.get("investing_paused") == "true":
-                self.context.logger.info("Investing paused due to withdrawal - skipping strategy evaluation")
-                yield from self.send_actions([])  # Send empty actions to move to next round
+                self.context.logger.info(
+                    "Investing paused due to withdrawal - skipping strategy evaluation"
+                )
+                yield from self.send_actions(
+                    []
+                )  # Send empty actions to move to next round
                 return
 
             # Check minimum hold period

@@ -48,7 +48,6 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
 )
 
 
-
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
     """A round that will be called after tx settlement is done."""
 
@@ -65,9 +64,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
         if self.threshold_reached:
             # Parse event from payload content
             event = self._parse_event_from_payload()
-            
 
-            
             # Handle regular events
             submitter_to_event: Dict[str, Event] = {
                 CallCheckpointRound.auto_round_id(): Event.CHECKPOINT_TX_EXECUTED,
@@ -97,8 +94,6 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
                     return content_data.get("event", "TRANSFER_COMPLETED")
         except (json.JSONDecodeError, KeyError, AttributeError):
             pass
-        
+
         # Fallback to default event
         return "TRANSFER_COMPLETED"
-
-

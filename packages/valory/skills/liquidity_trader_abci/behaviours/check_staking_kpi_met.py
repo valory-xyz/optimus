@@ -57,7 +57,9 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
             # PRIORITY: Check if investing is paused due to withdrawal
             investing_paused = yield from self._read_kv(keys=("investing_paused",))
             if investing_paused and investing_paused.get("investing_paused") == "true":
-                self.context.logger.info("Investing paused due to withdrawal - skipping KPI check")
+                self.context.logger.info(
+                    "Investing paused due to withdrawal - skipping KPI check"
+                )
                 # Skip KPI check during withdrawal
                 vanity_tx_hex = None
                 is_staking_kpi_met = False
@@ -92,7 +94,8 @@ class CheckStakingKPIMetBehaviour(LiquidityTraderBaseBehaviour):
                             and min_num_of_safe_tx_required is not None
                         ):
                             num_of_tx_left_to_meet_kpi = (
-                                min_num_of_safe_tx_required - multisig_nonces_since_last_cp
+                                min_num_of_safe_tx_required
+                                - multisig_nonces_since_last_cp
                             )
                             if num_of_tx_left_to_meet_kpi > 0:
                                 self.context.logger.info(

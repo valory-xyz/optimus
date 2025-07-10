@@ -52,17 +52,23 @@ class CallCheckpointBehaviour(
             # PRIORITY: Check if investing is paused due to withdrawal
             investing_paused = yield from self._read_kv(keys=("investing_paused",))
             if investing_paused and investing_paused.get("investing_paused") == "true":
-                self.context.logger.info("Investing paused due to withdrawal - skipping checkpoint call")
+                self.context.logger.info(
+                    "Investing paused due to withdrawal - skipping checkpoint call"
+                )
                 # Skip checkpoint call during withdrawal
                 checkpoint_tx_hex = None
                 min_num_of_safe_tx_required = None
-                self.service_staking_state = StakingState.UNSTAKED  # Force unstaked state
+                self.service_staking_state = (
+                    StakingState.UNSTAKED
+                )  # Force unstaked state
             else:
                 checkpoint_tx_hex = None
                 min_num_of_safe_tx_required = None
 
                 if not self.params.staking_chain:
-                    self.context.logger.warning("Service has not been staked on any chain!")
+                    self.context.logger.warning(
+                        "Service has not been staked on any chain!"
+                    )
                     self.service_staking_state = StakingState.UNSTAKED
                 else:
                     yield from self._get_service_staking_state(

@@ -95,7 +95,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # PRIORITY: Check if investing is paused due to withdrawal
             investing_paused = yield from self._read_kv(keys=("investing_paused",))
             if investing_paused and investing_paused.get("investing_paused") == "true":
-                self.context.logger.info("Investing paused due to withdrawal - skipping strategy fetching")
+                self.context.logger.info(
+                    "Investing paused due to withdrawal - skipping strategy fetching"
+                )
                 # Still fetch basic info but skip strategy execution
                 yield from self._fetch_basic_info()
                 return
@@ -1052,10 +1054,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
-        token_id = position.get("token_id")
-
         user_balances = yield from self.get_user_share_value_velodrome(
-            user_address, pool_address, token_id, chain, position
+            user_address, pool_address, position.get("token_id"), chain, position
         )
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
         token_info = {
@@ -3875,14 +3875,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch basic information when investing is paused."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # Fetch basic strategies without executing them
-            strategies = yield from self.fetch_strategies()
-            
+            yield from self.fetch_strategies()
+
             payload = FetchStrategiesPayload(
                 sender=self.context.agent_address,
-                content=json.dumps({
-                    "selected_protocols": [],
-                    "trading_type": "withdrawal_paused"
-                })
+                content=json.dumps(
+                    {"selected_protocols": [], "trading_type": "withdrawal_paused"}
+                ),
             )
 
             with self.context.benchmark_tool.measure(self.behaviour_id).consensus():

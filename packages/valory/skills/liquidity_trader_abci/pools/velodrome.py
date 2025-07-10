@@ -254,10 +254,28 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         else:
             adjusted_amounts = max_amounts_in
 
-        # Set minimum amounts (with slippage protection)
-        # TO-DO: Implement proper slippage protection
-        amount_a_min = 0
-        amount_b_min = 0
+        # Query expected amounts and apply slippage protection
+        expected_amounts = yield from self._query_add_liquidity_velodrome(
+            router_address, assets[0], assets[1], is_stable, adjusted_amounts, chain
+        )
+
+        if expected_amounts:
+            slippage_tolerance = self.params.slippage_tolerance
+            amount_a_min = int(expected_amounts["amount_a"] * (1 - slippage_tolerance))
+            amount_b_min = int(expected_amounts["amount_b"] * (1 - slippage_tolerance))
+
+            amount_a_min = min(amount_a_min, adjusted_amounts[0])
+            amount_b_min = min(amount_b_min, adjusted_amounts[1])
+            self.context.logger.info(
+                f"Velodrome stable/volatile pool slippage protection - "
+                f"Expected: {expected_amounts['amount_a']}/{expected_amounts['amount_b']}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount_a_min}/{amount_b_min}"
+            )
+        else:
+            self.context.logger.warning(
+                "Unable to quote add liquidity amounts, using zero minimums"
+            )
+            return None, None
 
         # Set deadline (20 minutes from now)
         last_update_time = cast(
@@ -321,10 +339,25 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None, None
 
-        # Set minimum amounts (with slippage protection)
-        # TO-DO: Implement proper slippage protection
-        amount_a_min = 0
-        amount_b_min = 0
+        # Query expected amounts and apply slippage protection
+        expected_amounts = yield from self._query_remove_liquidity_velodrome(
+            router_address, assets[0], assets[1], is_stable, liquidity, chain
+        )
+
+        if expected_amounts:
+            slippage_tolerance = self.params.slippage_tolerance
+            amount_a_min = int(expected_amounts["amount_a"] * (1 - slippage_tolerance))
+            amount_b_min = int(expected_amounts["amount_b"] * (1 - slippage_tolerance))
+            self.context.logger.info(
+                f"Velodrome stable/volatile pool exit slippage protection - "
+                f"Expected: {expected_amounts['amount_a']}/{expected_amounts['amount_b']}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount_a_min}/{amount_b_min}"
+            )
+        else:
+            self.context.logger.warning(
+                "Unable to quote remove liquidity amounts, using zero minimums"
+            )
+            return None, None
 
         # Set deadline (20 minutes from now)
         last_update_time = cast(
@@ -2277,6 +2310,118 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Error calculating Velodrome slippage protection when minting: {str(e)}"
             )
             return None, None
+
+    def _query_add_liquidity_velodrome(
+        self,
+        router_address: str,
+        token_a: str,
+        token_b: str,
+        is_stable: bool,
+        amounts: List[int],
+        chain: str,
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Query expected amounts for Velodrome addLiquidity operation."""
+        try:
+            factory = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=VelodromeRouterContract.contract_id,
+                contract_callable="factory",
+                data_key="factory",
+                chain_id=chain,
+            )
+
+            if not factory:
+                self.context.logger.info(
+                    f"No factory address found for router {router_address}"
+                )
+                return None, None, None
+
+            result = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=VelodromeRouterContract.contract_id,
+                contract_callable="quote_add_liquidity",
+                data_key="result",
+                token_a=token_a,
+                token_b=token_b,
+                stable=is_stable,
+                factory=factory,
+                amount_a_desired=amounts[0],
+                amount_b_desired=amounts[1],
+                chain_id=chain,
+            )
+
+            if result:
+                return {
+                    "amount_a": result["amount_a"],
+                    "amount_b": result["amount_b"],
+                    "liquidity": result["liquidity"],
+                }
+            else:
+                self.context.logger.warning("No result from quoteAddLiquidity")
+                return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error querying Velodrome add liquidity: {str(e)}"
+            )
+            return None
+
+    def _query_remove_liquidity_velodrome(
+        self,
+        router_address: str,
+        token_a: str,
+        token_b: str,
+        is_stable: bool,
+        liquidity: int,
+        chain: str,
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Query expected amounts for Velodrome addLiquidity operation."""
+        try:
+            factory = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=VelodromeRouterContract.contract_id,
+                contract_callable="factory",
+                data_key="factory",
+                chain_id=chain,
+            )
+
+            if not factory:
+                self.context.logger.info(
+                    f"No factory address found for router {router_address}"
+                )
+                return None, None, None
+
+            result = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=VelodromeRouterContract.contract_id,
+                contract_callable="quote_remove_liquidity",
+                data_key="result",
+                token_a=token_a,
+                token_b=token_b,
+                stable=is_stable,
+                factory=factory,
+                liquidity=liquidity,
+                chain_id=chain,
+            )
+
+            if result:
+                return {
+                    "amount_a": result["amount_a"],
+                    "amount_b": result["amount_b"],
+                }
+            else:
+                self.context.logger.warning("No result from quoteAddLiquidity")
+                return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error querying Velodrome add liquidity: {str(e)}"
+            )
+            return None
 
     def _calculate_slippage_protection_for_velodrome_decrease(
         self, token_id: int, liquidity: int, chain: str, pool_address: str

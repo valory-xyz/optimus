@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigudv5apwsne7eg2lskro7vei7lbi5wbb3atrw7texli7wj6x7gpy
   build/BalancerQueries.json: bafybeig7jr63urawg7xct3q2xpydruk4ysusi4g6qyygd2f5oiwhbrzxae
-  contract.py: bafybeibaxwfvwwbhykvzqicdd4vpnhdw4emmuofm5qkfzhbh67lunjfkea
+  contract.py: bafybeiextx3x3kgmpiods7tnqjcslnizghya2wudks5qts6cvetj3gz5xe
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: BalancerQueriesContract

@@ -45,13 +45,13 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
-- valory/liquidity_trader_abci:0.1.0:bafybeidsuud4y6q6debbcn4wwiatpcgq6727wzgblpv3t2byggox5535ha
-- valory/optimus_abci:0.1.0:bafybeihxfhizutsv7c3jnas77i65j2t7f3743ktpdhrcsiblvikyu6x24e
+- valory/liquidity_trader_abci:0.1.0:bafybeielcl6liv4vvyhcbfkbvgjrnjjz6mdjxmpbxp6s6ulbaudorjqayi
+- valory/optimus_abci:0.1.0:bafybeif77zrxcgukqtjo5txyv6syxm5uoed3krjlzza4wzwlpy6ip5qqsu
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
-- valory/withdrawal_abci:0.1.0:bafybeihqwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm
+- valory/withdrawal_abci:0.1.0:bafybeibbkv5v6bq2iwmebapmaowfgpujfspqef7bloa47dxuoshtm3nhjq
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma
 - valory/max_apr_selection:0.1.0:bafybeifwt3r4uwjvgxmwjx7374wuk4sfn3gxyd7bh4hcazjjjro2swy4me
@@ -172,13 +172,6 @@ config:
   host: ${str:0.0.0.0}
   port: ${int:8716}
   target_skill_id: valory/optimus_abci:0.1.0
----
-public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
-type: connection
-config:
-  host: ${str:0.0.0.0}
-  port: ${int:8717}
-  target_skill_id: valory/withdrawal_abci:0.1.0
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill

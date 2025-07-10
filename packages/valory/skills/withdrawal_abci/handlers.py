@@ -28,9 +28,9 @@ from aea.protocols.base import Message
 from aea.skills.base import Handler
 
 from packages.valory.protocols.http import HttpMessage
-from packages.valory.protocols.kv_store import KvStoreMessage, KvStoreDialogues, KvStoreDialogue
-from packages.valory.connections.kv_store.connection import KV_STORE_CONNECTION_PUBLIC_ID
-from packages.valory.protocols.kv_store.message import KvStoreMessage
+from packages.dvilela.protocols.kv_store import KvStoreMessage, KvStoreDialogues, KvStoreDialogue
+from packages.dvilela.connections.kv_store.connection import KV_STORE_CONNECTION_PUBLIC_ID
+from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from aea.mail.base import Envelope
 import asyncio
 

@@ -239,9 +239,13 @@ class Params(BaseParams):
         )
         self.lifi_check_status_url = self._ensure("lifi_check_status_url", kwargs, str)
         self.slippage_for_swap = self._ensure("slippage_for_swap", kwargs, float)
+        self.slippage_tolerance = self._ensure("slippage_tolerance", kwargs, float)
         self.allowed_dexs: List[str] = self._ensure("allowed_dexs", kwargs, List[str])
         self.balancer_vault_contract_addresses = json.loads(
             self._ensure("balancer_vault_contract_addresses", kwargs, str)
+        )
+        self.balancer_queries_contract_addresses = json.loads(
+            self._ensure("balancer_queries_contract_addresses", kwargs, str)
         )
         self.uniswap_position_manager_contract_addresses = json.loads(
             self._ensure("uniswap_position_manager_contract_addresses", kwargs, str)

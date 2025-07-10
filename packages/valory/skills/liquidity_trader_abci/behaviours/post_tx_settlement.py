@@ -19,7 +19,6 @@
 
 """This module contains the behaviour for deciding the next round post transaction settlement for the 'liquidity_trader_abci' skill."""
 
-import json
 from typing import Generator
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -49,10 +48,8 @@ class PostTxSettlementBehaviour(LiquidityTraderBaseBehaviour):
             ):
                 yield from self.fetch_and_log_gas_details()
 
-            # Always proceed with normal flow
-            event = "TRANSFER_COMPLETED"
             payload = PostTxSettlementPayload(
-                sender=self.context.agent_address, content=json.dumps({"event": event})
+                sender=self.context.agent_address, content="Transaction settled"
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():

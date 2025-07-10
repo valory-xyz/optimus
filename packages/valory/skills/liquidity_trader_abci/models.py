@@ -23,7 +23,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from time import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from aea.skills.base import Model, SkillContext
 
@@ -36,16 +36,48 @@ from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
-from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
+from packages.valory.skills.liquidity_trader_abci.rounds import (
+    Event as LiquidityTraderEvent,
+)
+from packages.valory.skills.liquidity_trader_abci.states.base import (
+    SynchronizedData as BaseSynchronizedData,
+)
 
 
 MINUTE_UNIX = 60
 
 
+class Coingecko(BaseBenchmarkTool):
+    """Coingecko benchmark tool."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the benchmark tool."""
+        super().__init__(**kwargs)
+        self._token_price_cache = {}
+        self._token_price_cache_ttl = 600
+
+
+class Requests(BaseRequests):
+    """Requests model."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the requests model."""
+        super().__init__(**kwargs)
+
+
+class SynchronizedData(BaseSynchronizedData):
+    """Synchronized data class."""
+
+    @property
+    def params(self) -> Any:
+        """Get the parameters."""
+        return cast(Any, self.context.params)
+
+
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
-    abci_app_cls = LiquidityTraderAbciApp
+    abci_app_cls = LiquidityTraderEvent
 
     def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
         """Initialize the state."""
@@ -61,9 +93,6 @@ class SharedState(BaseSharedState):
         self.agent_reasoning: str = ""
         self._token_price_cache = {}
         self._token_price_cache_ttl = 600
-        # Withdrawal state management
-        self.withdrawal_triggered: bool = False
-        self.withdrawal_id: Optional[str] = None
 
     def setup(self) -> None:
         """Set up the model."""
@@ -87,35 +116,6 @@ class SharedState(BaseSharedState):
                     f"The selected trading strategy {selected_strategy} "
                     f"is not in the strategies' executables {strategy_exec}."
                 )
-
-    def trigger_withdrawal(self, withdrawal_id: str) -> None:
-        """Trigger withdrawal state transition."""
-        self.withdrawal_triggered = True
-        self.withdrawal_id = withdrawal_id
-        self.context.logger.info(f"Withdrawal triggered with ID: {withdrawal_id}")
-
-    def reset_withdrawal_trigger(self) -> None:
-        """Reset withdrawal trigger state."""
-        self.withdrawal_triggered = False
-        self.withdrawal_id = None
-        self.context.logger.info("Withdrawal trigger reset")
-
-    def is_withdrawal_active(self) -> bool:
-        """Check if withdrawal is actively being processed."""
-        return self.withdrawal_triggered and self.withdrawal_id is not None
-
-    def validate_withdrawal_trigger(self) -> bool:
-        """Validate that withdrawal trigger is legitimate and not stale."""
-        if not self.withdrawal_triggered:
-            return False
-
-        # Additional validation can be added here
-        # For example, check if withdrawal_id is recent
-        return True
-
-
-Requests = BaseRequests
-BenchmarkTool = BaseBenchmarkTool
 
 
 class CoingeckoRateLimiter:

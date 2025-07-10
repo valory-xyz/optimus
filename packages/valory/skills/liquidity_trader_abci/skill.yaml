@@ -16,14 +16,14 @@ fingerprint:
   behaviours/evaluate_strategy.py: bafybeih5areamv3bbwp3qddn43wgtgjfkpi7vrli2zhdbwizfilsbqyiau
   behaviours/fetch_strategies.py: bafybeieo6typiiwdmwnzdkvjc7jbnlpnszgj4flrrbpvvp3sejjiln5v4e
   behaviours/get_positions.py: bafybeigwzzkmjdjc55h2elqsxdpqmi67cmnddxltg77vctam5pdpaqn2ce
-  behaviours/post_tx_settlement.py: bafybeiakapjuovdfudut7fnxqos5ce4jshv7d6sxsjhsal2hdjvq5jqf3e
+  behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeial6l547l3qtymegdb3u6izkkave4fx5xn4bszl77uee376qxhdry
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeicqhsjm2smfganutf5ec76ytc3rbslwb6byowfpycpdda3d6bit7y
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeif5yzppsa7k6zp5dswfcowyvqujkpvtpoh2osrqitn3ghbrytwrtq
+  models.py: bafybeig2xdvl6zcg45cngejjd622klpw2yl6mjw4hdfmpy2k5ybor7pzze
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
@@ -34,7 +34,7 @@ fingerprint:
   rounds_info.py: bafybeidxi5qrpvtslr7sti4xmzc7tr4humbmwragffnd75u3ixq3c7kyma
   states/__init__.py: bafybeige5a5rkfmb56a7im4q4tqxddmut6vacwqgq2g4qvaauk7sqgzlnu
   states/apr_population.py: bafybeieujscwr72y2rtty4i7l6vlvwbdcms2frhrz5zruytc5k2dtlhik4
-  states/base.py: bafybeie7je77alztxkfozxqogz65obhmkfw6anwl4253l3pclh2yvsoadq
+  states/base.py: bafybeifjclmkemaistpwjjmeiivxccv5ppkspn7rbou6dvhewlal3l2ame
   states/call_checkpoint.py: bafybeibynzmaondwtdfvn3ioa5xm35oha7le6voma6adntspkwn46vgece
   states/check_staking_kpi_met.py: bafybeienc7fqiisj6hrqp4xnngzgv5vrkklkykuntnnsvbqccbnw2ktor4
   states/decision_making.py: bafybeiheinb454t7kfhkxrp6dkvakqmumpwpquyc36fcllkbkk3wj4ydye
@@ -42,7 +42,7 @@ fingerprint:
   states/fetch_strategies.py: bafybeigfxfkyilxjuyix7xeue5gpkph4vafgkx2x5plzgrmsw2j5amhnda
   states/final_rounds.py: bafybeicpayn6pujpxqduvjbyiwgucyprvbwwww25dzl2ihsb2vmbjoujce
   states/get_positions.py: bafybeib4ykrs6czaxy75qez5eppbyyq3y7bvqwajlms453yvhvoa47j2su
-  states/post_tx_settlement.py: bafybeihmphn6ehg4fown4jho3ez2get5yadgadm77a6tot3z7phz4lo2ta
+  states/post_tx_settlement.py: bafybeigrtlsgk6hehgdv2hxthvadcwtaqzai5y2tfsujmhhtvki735kiem
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju

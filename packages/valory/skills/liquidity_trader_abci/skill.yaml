@@ -9,12 +9,12 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeiguehsbdcqelysju3627o7lpujqeh45zktx5z44yxeh7qmbhanxui
   behaviours/apr_population.py: bafybeiap7eqwakqimjdhyd4fwtmjpdkd6oulccenh3obafgoajnwfs3x6i
-  behaviours/base.py: bafybeialjuns2owznk3gihxmsqgi336mgqx6w6logqxqvehlwuf6tyls3u
+  behaviours/base.py: bafybeicfog32tktanryqdioi6icogtk7u2k4jjcud7uw3jiuy6lkdqv5fi
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeid5nuxzmz3z2hmjuchmfhy35phj6vguj42b46d6zlxv6tapnf7rzq
   behaviours/evaluate_strategy.py: bafybeiclouxdtrtfpxczycgpodkctgmnhrlwdxxbr4jinrohjhcssyez6y
-  behaviours/fetch_strategies.py: bafybeihiazo3p7gzastkevcorhy4jl4jibuh7ovxzi5ixpdoun3rvsfhom
+  behaviours/fetch_strategies.py: bafybeiei4mmi7kom2ntpt5iyiracl7m7xqt2tdd5pkrlmyubvyvwjh2eri
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeial6l547l3qtymegdb3u6izkkave4fx5xn4bszl77uee376qxhdry
@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeiefye2gllzqzwwhyr3nmgt7q5g4vowceef367uvutwjmwpgxudz5u
+  models.py: bafybeih4b3qh7kntxphzan2swrvgaibuocwdon5ykv44mmdson42ln3lge
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
@@ -246,6 +246,8 @@ models:
       pool_info_filename: current_pool.json
       safe_api_base_url: https://safe-transaction-optimism.safe.global/api/v2/safes
       safe_api_timeout: 30
+      mode_explorer_api_base_url: https://explorer-mode-mainnet-0.t.conduit.xyz
+      mode_api_timeout: 30
       portfolio_info_filename: portfolio.json
       gas_cost_info_filename: gas_costs.json
       whitelisted_assets_filename: whitelisted_assets.json

@@ -359,6 +359,10 @@ class Params(BaseParams):
         )
         self.safe_api_base_url = self._ensure("safe_api_base_url", kwargs, str)
         self.safe_api_timeout = self._ensure("safe_api_timeout", kwargs, int)
+        self.mode_explorer_api_base_url = self._ensure(
+            "mode_explorer_api_base_url", kwargs, str
+        )
+        self.mode_api_timeout = self._ensure("mode_api_timeout", kwargs, int)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

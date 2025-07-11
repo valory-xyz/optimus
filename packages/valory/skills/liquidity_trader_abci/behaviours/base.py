@@ -390,13 +390,16 @@ class LiquidityTraderBaseBehaviour(
         return data
 
     def get_positions(self) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get positions using SafeApi for Optimism, contract calls for other chains"""
+        """Get positions using SafeApi for Optimism, Mode Explorer for Mode"""
         all_balances = defaultdict(list)
 
         for chain in self.params.target_investment_chains:
             if chain == Chain.OPTIMISM.value:
                 # Use SafeApi for Optimism
                 balances = yield from self._get_optimism_balances_from_safe_api()
+            elif chain == Chain.MODE.value:
+                # Use Mode Explorer API for Mode
+                balances = yield from self._get_mode_balances_from_explorer_api()
 
             if balances:
                 all_balances[chain].extend(balances)
@@ -490,7 +493,6 @@ class LiquidityTraderBaseBehaviour(
                 )
                 break
 
-            breakpoint()
             results = response_data.get("results", [])
             if not results:
                 self.context.logger.info("No more results from SafeApi")
@@ -510,6 +512,164 @@ class LiquidityTraderBaseBehaviour(
             f"Total balances fetched from SafeApi: {len(all_balances)}"
         )
         return all_balances
+
+    def _get_mode_balances_from_explorer_api(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Get Mode balances using Mode Explorer API for ERC-20 tokens and RPC for ETH"""
+        safe_address = self.params.safe_contract_addresses.get(Chain.MODE.value)
+        if not safe_address:
+            self.context.logger.error("No safe address set for Mode chain")
+            return []
+
+        self.context.logger.info(
+            f"Fetching Mode balances from Explorer API for safe: {safe_address}"
+        )
+
+        balances = []
+
+        # Get native ETH balance using RPC
+        eth_balance = yield from self._get_native_balance("mode", safe_address)
+        if eth_balance and eth_balance > 0:
+            balances.append(
+                {
+                    "asset_symbol": "ETH",
+                    "asset_type": "native",
+                    "address": to_checksum_address(ZERO_ADDRESS),
+                    "balance": eth_balance,
+                }
+            )
+
+        # Get ERC-20 token balances from Mode Explorer API
+        token_balances = yield from self._fetch_mode_token_balances(safe_address)
+        balances.extend(token_balances)
+
+        self.context.logger.info(
+            f"Retrieved {len(balances)} token balances from Mode Explorer API"
+        )
+        return balances
+
+    def _fetch_mode_token_balances(
+        self, safe_address: str
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Fetch ERC-20 token balances from Mode Explorer API with pagination, filtering out LP tokens"""
+        balances = []
+
+        # Get active LP token addresses to filter out
+        active_lp_addresses = self._get_active_lp_addresses()
+
+        # Fetch all token balances with pagination
+        all_tokens = yield from self._fetch_mode_tokens_with_pagination(safe_address)
+
+        # Convert to the expected format and filter out zero balances and LP tokens
+        # because the API also returns LP token balances which are also ERC20 tokens and there is no direct filter available
+        for token_data in all_tokens:
+            token_info = token_data.get("token", {})
+            token_address = token_info.get("address")
+            token_symbol = token_info.get("symbol", "UNKNOWN")
+            balance_value = token_data.get("value", "0")
+
+            if not token_address or not balance_value or balance_value == "0":
+                continue
+
+            # Filter out LP tokens that correspond to active positions
+            if token_address.lower() in active_lp_addresses:
+                self.context.logger.info(
+                    f"Filtering out LP token {token_symbol} ({token_address}) - active position"
+                )
+                continue
+
+            try:
+                balance = int(balance_value)
+                if balance > 0:
+                    balances.append(
+                        {
+                            "asset_symbol": token_symbol,
+                            "asset_type": "erc_20",
+                            "address": to_checksum_address(token_address),
+                            "balance": balance,
+                        }
+                    )
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    f"Invalid balance value for token {token_address}: {balance_value}"
+                )
+                continue
+
+        return balances
+
+    def _get_active_lp_addresses(self) -> set:
+        """Get set of active LP token addresses from current positions"""
+        active_lp_addresses = set()
+
+        for position in self.current_positions:
+            if position.get("status") == PositionStatus.OPEN.value:
+                pool_address = position.get("pool_address")
+                if pool_address:
+                    active_lp_addresses.add(pool_address.lower())
+                    self.context.logger.debug(
+                        f"Added active LP address: {pool_address}"
+                    )
+
+        self.context.logger.info(
+            f"Found {len(active_lp_addresses)} active LP addresses to filter"
+        )
+        return active_lp_addresses
+
+    def _fetch_mode_tokens_with_pagination(
+        self, safe_address: str
+    ) -> Generator[None, None, List[Dict]]:
+        """Fetch all token balances from Mode Explorer API with pagination support"""
+        all_tokens = []
+        next_page_params = None
+        while True:
+            # Build endpoint URL
+            base_url = f"{self.params.mode_explorer_api_base_url}/api/v2/addresses/{safe_address}/tokens"
+            params = "?type=ERC-20"
+
+            if next_page_params:
+                # Add pagination parameters if available
+                for key, value in next_page_params.items():
+                    params += f"&{key}={value}"
+
+            endpoint = base_url + params
+
+            self.context.logger.info(f"Fetching Mode tokens page: {endpoint}")
+
+            success, response_data = yield from self._request_with_retries(
+                endpoint=endpoint,
+                method="GET",
+                headers={"Accept": "application/json"},
+                rate_limited_callback=lambda: None,
+                max_retries=MAX_RETRIES_FOR_API_CALL,
+                retry_wait=2,
+            )
+
+            if not success:
+                self.context.logger.error(
+                    f"Failed to fetch Mode token data: {response_data}"
+                )
+                break
+
+            items = response_data.get("items", [])
+            if not items:
+                self.context.logger.info("No more token results from Mode Explorer API")
+                break
+
+            all_tokens.extend(items)
+
+            # Check if there's a next page
+            next_page_params = response_data.get("next_page_params")
+            if not next_page_params:
+                self.context.logger.info(
+                    "Reached last page of Mode Explorer API results"
+                )
+                break
+
+        self.context.logger.info(
+            f"Total tokens fetched from Mode Explorer API: {len(all_tokens)}"
+        )
+        return all_tokens
 
     def _get_native_balance(
         self, chain: str, account: str

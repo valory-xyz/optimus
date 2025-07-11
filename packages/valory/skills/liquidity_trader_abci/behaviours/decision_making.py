@@ -24,7 +24,7 @@ from decimal import Decimal
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type, cast
 
 from eth_abi import decode
-from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
+from eth_utils import keccak, to_bytes, to_hex
 
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
@@ -215,18 +215,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
-
-        # Add tokens to assets
-        self._add_token_to_assets(
-            action.get("from_chain"),
-            action.get("from_token"),
-            action.get("from_token_symbol"),
-        )
-        self._add_token_to_assets(
-            action.get("to_chain"),
-            action.get("to_token"),
-            action.get("to_token_symbol"),
-        )
 
         fee_details = {
             "remaining_fee_allowance": action.get("remaining_fee_allowance"),
@@ -455,13 +443,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, actions, last_executed_action_index
     ) -> Tuple[Optional[str], Optional[Dict]]:
         """Handle claiming rewards."""
-        action = actions[last_executed_action_index]
-        chain = action.get("chain")
-        for token, token_symbol in zip(
-            action.get("tokens"), action.get("token_symbols")
-        ):
-            self._add_token_to_assets(chain, token, token_symbol)
-
         current_timestamp = cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
@@ -2623,30 +2604,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None
 
         return amount0, amount1, timestamp
-
-    def _add_token_to_assets(self, chain, token, symbol):
-        # Read current assets
-        token = to_checksum_address(token)
-        self.read_assets()
-        current_assets = self.assets
-
-        # Initialize assets if empty
-        if not current_assets:
-            current_assets = self.params.initial_assets
-
-        # Ensure the chain key exists in assets
-        if chain not in current_assets:
-            current_assets[chain] = {}
-
-        # Add token to the specified chain if it doesn't exist
-        if token not in current_assets[chain]:
-            current_assets[chain][token] = symbol
-
-        # Store updated assets
-        self.assets = current_assets
-        self.store_assets()
-
-        self.context.logger.info(f"Updated assets: {self.assets}")
 
     def _get_signature(self, owner: str) -> str:
         signatures = b""

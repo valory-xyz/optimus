@@ -53,6 +53,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     MIN_TIME_IN_POSITION,
     OLAS_ADDRESSES,
     PositionStatus,
+    REWARD_TOKEN_ADDRESSES,
     THRESHOLDS,
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
@@ -1590,21 +1591,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _get_available_tokens(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
-        """Get tokens with the highest balances."""
+        """Get tokens with the highest balances, filtering out reward tokens."""
         token_balances = []
 
         for position in self.synchronized_data.positions:
             chain = position.get("chain")
             for asset in position.get("assets", []):
                 asset_address = asset.get("address")
+                asset_symbol = asset.get("asset_symbol")
                 balance = asset.get("balance", 0)
+
                 if chain and asset_address:
+                    # Filter out reward tokens from investment consideration
+                    reward_addresses = REWARD_TOKEN_ADDRESSES.get(chain, {})
+                    if asset_address.lower() in [
+                        addr.lower() for addr in reward_addresses.keys()
+                    ]:
+                        self.context.logger.info(
+                            f"Filtering out reward token {asset_symbol} ({asset_address}) - not for investment"
+                        )
+                        continue
+
                     if balance > 0:
                         token_balances.append(
                             {
                                 "chain": chain,
                                 "token": asset_address,
-                                "token_symbol": asset.get("asset_symbol"),
+                                "token_symbol": asset_symbol,
                                 "balance": balance,
                             }
                         )

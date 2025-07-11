@@ -115,6 +115,16 @@ OLAS_ADDRESSES = {
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
 }
 
+# Reward tokens that should be excluded from investment consideration
+REWARD_TOKEN_ADDRESSES = {
+    "mode": {
+        "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
+    },
+    "optimism": {
+        "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
+    },
+}
+
 
 class DexType(Enum):
     """DexType"""
@@ -615,6 +625,22 @@ class LiquidityTraderBaseBehaviour(
             f"Found {len(active_lp_addresses)} active LP addresses to filter"
         )
         return active_lp_addresses
+
+    def _get_reward_token_addresses(self, chain: str) -> set:
+        """Get set of reward token addresses to filter out from investment consideration"""
+        reward_addresses = set()
+
+        chain_rewards = REWARD_TOKEN_ADDRESSES.get(chain, {})
+        for address, symbol in chain_rewards.items():
+            reward_addresses.add(address.lower())
+            self.context.logger.debug(
+                f"Added reward token address for {chain}: {symbol} ({address})"
+            )
+
+        self.context.logger.info(
+            f"Found {len(reward_addresses)} reward token addresses to filter for {chain}"
+        )
+        return reward_addresses
 
     def _fetch_mode_tokens_with_pagination(
         self, safe_address: str

@@ -1298,21 +1298,14 @@ class HttpHandler(BaseHttpHandler):
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ):
         try:
-            withdrawal_data = await self._read_kv_async(
-                keys=(
-                    "withdrawal_id",
-                    "withdrawal_status",
-                    "withdrawal_message",
-                    "withdrawal_target_address",
-                    "withdrawal_chain",
-                    "withdrawal_safe_address",
-                    "withdrawal_tx_hashes",
-                    "withdrawal_requested_at",
-                    "withdrawal_completed_at",
-                    "withdrawal_portfolio_value",
-                    "withdrawal_tx_link",
-                )
-            )
+            # Get withdrawal data from KV store
+            withdrawal_data = await self._read_kv_async(keys=(
+                "withdrawal_id", "withdrawal_status", "withdrawal_message", 
+                "withdrawal_target_address", "withdrawal_chain", "withdrawal_safe_address",
+                "withdrawal_tx_hashes", "withdrawal_requested_at", "withdrawal_completed_at",
+                "withdrawal_portfolio_value", "withdrawal_tx_link"
+            ))
+            
             withdrawal_id = withdrawal_data.get("withdrawal_id", "")
             status = withdrawal_data.get("withdrawal_status", "unknown")
             message = withdrawal_data.get("withdrawal_message", "No withdrawal found")
@@ -1324,29 +1317,62 @@ class HttpHandler(BaseHttpHandler):
             completed_at = withdrawal_data.get("withdrawal_completed_at", "")
             portfolio_value = withdrawal_data.get("withdrawal_portfolio_value", "")
             tx_hashes = withdrawal_data.get("withdrawal_tx_hashes", "[]")
+
+            # Map withdrawal status to user-friendly messages
             if status == "unknown":
                 message = "No withdrawal found"
+            elif status == "pending":
+                message = "Withdrawal initiated. Preparing your funds..."
             elif status == "withdrawing":
-                message = "Withdrawal in progress. Preparing your funds..."
+                # Use the message from KV store, which will be one of the specified messages
+                # The withdrawal behaviour sets these specific messages:
+                # - "Withdraw initiated. Preparing your funds..."
+                # - "All active investment positions are closed. Converting assets..."
+                # - "Successfully converted funds to USDC. Transfering funds to user wallet..."
+                pass  # Keep the message from KV store
             elif status == "completed":
-                message = "Withdrawal completed successfully!"
+                message = "Withdrawal complete!"
             elif status == "failed":
-                message = "Withdrawal failed. Please try again."
-            response = {
-                "withdrawal_id": withdrawal_id,
+                message = "Withdrawal failed. Please contact support."
+
+            response_data = {
                 "status": status,
                 "message": message,
                 "target_address": target_address,
                 "chain": chain,
                 "safe_address": safe_address,
-                "tx_link": tx_link,
-                "requested_at": requested_at,
-                "completed_at": completed_at,
-                "portfolio_value": portfolio_value,
-                "tx_hashes": tx_hashes,
-                "status_code": 200,
+                "status_code": 200
             }
-            await self._send_ok_response_async(http_msg, http_dialogue, response)
+
+            # Add timestamps if available
+            if requested_at:
+                response_data["requested_at"] = requested_at
+            if completed_at:
+                response_data["completed_at"] = completed_at
+
+            # Add portfolio value if available
+            if portfolio_value:
+                try:
+                    value = float(portfolio_value)
+                    response_data["estimated_value_usd"] = round(value, 2)
+                except (ValueError, TypeError):
+                    pass
+
+            # Add transaction details if available
+            if tx_hashes and tx_hashes != "[]":
+                try:
+                    tx_hashes_list = json.loads(tx_hashes)
+                    response_data["transaction_hashes"] = tx_hashes_list
+                    response_data["transaction_count"] = len(tx_hashes_list)
+                    
+                    # Add transaction link if available
+                    if tx_link:
+                        response_data["transaction_link"] = tx_link
+                        
+                except json.JSONDecodeError:
+                    pass
+
+            await self._send_ok_response_async(http_msg, http_dialogue, response_data)
         except Exception as e:
             self.context.logger.error(f"Error getting withdrawal status: {e}")
             response = {"error": str(e), "status_code": 500}

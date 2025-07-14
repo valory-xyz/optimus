@@ -28,9 +28,7 @@ from aea.protocols.base import Message
 from aea.skills.base import Handler
 
 from packages.valory.protocols.http import HttpMessage
-from packages.dvilela.protocols.kv_store import KvStoreMessage, KvStoreDialogues, KvStoreDialogue
-from packages.dvilela.connections.kv_store.connection import KV_STORE_CONNECTION_PUBLIC_ID
-from packages.dvilela.protocols.kv_store.message import KvStoreMessage
+from packages.dvilela.protocols.kv_store import KvStoreMessage
 from aea.mail.base import Envelope
 import asyncio
 
@@ -238,15 +236,20 @@ class WithdrawalHttpHandler(Handler):
             portfolio_value = withdrawal_data.get("withdrawal_portfolio_value", "")
             tx_hashes = withdrawal_data.get("withdrawal_tx_hashes", "[]")
 
-            # Provide better default messages for each status
+            # Map withdrawal status to user-friendly messages
             if status == "unknown":
-                message = "No withdrawal found with this ID"
+                message = "No withdrawal found"
             elif status == "pending":
-                message = "Withdraw request received. Waiting for agent to start processing."
+                message = "Withdrawal initiated. Preparing your funds..."
             elif status == "withdrawing":
-                message = "Withdraw initiated. Preparing your funds..."
+                # Use the message from KV store, which will be one of the specified messages
+                # The withdrawal behaviour sets these specific messages:
+                # - "Withdraw initiated. Preparing your funds..."
+                # - "All active investment positions are closed. Converting assets..."
+                # - "Successfully converted funds to USDC. Transfering funds to user wallet..."
+                pass  # Keep the message from KV store
             elif status == "completed":
-                message = "Withdrawal complete."
+                message = "Withdrawal complete!"
             elif status == "failed":
                 message = "Withdrawal failed. Please contact support."
 

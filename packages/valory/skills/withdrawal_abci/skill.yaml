@@ -8,47 +8,32 @@ type: skill
 fingerprint:
   __init__.py: bafybeig546nj42vvu3oehrq27ug655uxhmjlbylrigbryypvsuiijufaou
   behaviours/__init__.py: bafybeieobxeiwpg42peg2vrzkao2tpkqxw4wtlua64aqom2ypclezeqx6q
-  behaviours/withdrawal_behaviour.py: bafybeiakkuzxhtzy6v3szbohzypq2kziryyr2amdggwhsmlu33bpbyd4eq
-  handlers.py: bafybeietbd57al6ob3bz6spx72gcqjifqdnlj5qjqjzsvloulx55rk2eae
+  behaviours/withdrawal_behaviour.py: bafybeih4coq5x4xgowt276jgfttogx5kznzcrrdz267bevbamo5ekcppfi
+  handlers.py: bafybeihnunzvmbwkmujlnfwzon6n7mqy2t5pdcfhjqgylbfspnr4kmhv2i
   models.py: bafybeib5d62x3gfxki3z5fw53lzx5aajue7j7ihqnydmd4fdvwhprk2ame
   skill.py: bafybeihrc6oxdvwppewcn2xxggjdo2h4sm6vjahxcnu4t5siqcb5mvubxm
 fingerprint_ignore_patterns: []
-contracts: []
+contracts:
+- valory/gnosis_safe:0.1.0:bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um
 protocols:
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 - valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
-skills: []
+- valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
+- valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
+skills:
+- valory/liquidity_trader_abci:0.1.0:bafybeif2hfl5iftelltlr5nbqm5xm3ro5iz22ldlx5vfzq2s4xxettmna4
 connections: []
 behaviours:
   withdrawal_behaviour:
     class_name: WithdrawalBehaviour
-    args:
-      name: withdrawal_behaviour
-      skill_id: withdrawal_abci
+    args: {}
 handlers:
   http_handler:
     class_name: WithdrawalHttpHandler
-    args:
-      name: http_handler
-      skill_id: withdrawal_abci
+    args: {}
 models:
-  default_dialogues:
-    class_name: DefaultDialogues
-    args:
-      name: default_dialogues
-      skill_id: withdrawal_abci
-  default_handlers:
-    class_name: DefaultHandlers
-    args:
-      name: default_handlers
-      skill_id: withdrawal_abci
-  default_models:
-    class_name: DefaultModels
-    args:
-      name: default_models
-      skill_id: withdrawal_abci
   params:
-    class_name: Params
+    class_name: WithdrawalParams
     args:
       usdc_addresses: ${str:{"optimism":"0x7F5c764cBc14f9669B88837ca1490cCa17c31607","mode":"0xd988097fb8612cc24eeC14542bC03424c656005f"}}
       safe_contract_addresses: ${str:{"optimism":"${SAFE_ADDRESS_OPTIMISM}","mode":"${SAFE_ADDRESS_MODE}"}}
@@ -64,5 +49,10 @@ models:
       tenderly_access_key: ${str:${TENDERLY_ACCESS_KEY}}
       tenderly_account_slug: ${str:${TENDERLY_ACCOUNT_SLUG}}
       tenderly_project_slug: ${str:${TENDERLY_PROJECT_SLUG}}
+      store_path: ${str:${STORE_PATH}}
+      portfolio_info_filename: ${str:portfolio.json}
+  state:
+    class_name: WithdrawalSharedState
+    args: {}
 is_abstract: false
 dependencies: {}

@@ -30,7 +30,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import DexType, ETHER_VALUE, SAFE_TX_GAS, ZERO_ADDRESS
-from packages.valory.skills.liquidity_trader_abci.payloads import hash_payload_to_hex
 from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
 from packages.valory.contracts.gnosis_safe.contract import SafeOperation
 
@@ -41,6 +40,8 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy i
 
 class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that handles withdrawal requests independently."""
+
+    matching_round = None
 
     def __init__(self, **kwargs):
         """Initialize the withdrawal behaviour."""
@@ -214,6 +215,9 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
     def _convert_tokens_to_usdc(self) -> Generator:
         """Convert all tokens to USDC using LiFi route optimization (same as normal agent flow)."""
         self.context.logger.info("Converting tokens to USDC using LiFi route optimization")
+        
+        # Update status to show conversion in progress
+        yield from self._update_withdrawal_status("withdrawing", "Successfully converted funds to USDC. Transfering funds to user wallet...")
 
         # Get USDC address for the operating chain
         usdc_addresses = json.loads(self.params.usdc_addresses)
@@ -466,7 +470,7 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"Safe transaction hash: {safe_tx_hash}")
 
             # Create payload for transaction
-            payload_string = hash_payload_to_hex(
+            payload_string = self._hash_payload_to_hex(
                 safe_tx_hash=safe_tx_hash,
                 ether_value=ETHER_VALUE,
                 safe_tx_gas=SAFE_TX_GAS,
@@ -518,6 +522,24 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         signatures += packed_signature
 
         return signatures.hex()
+    
+    def _hash_payload_to_hex(
+    safe_tx_hash: str,
+    ether_value: int,
+    safe_tx_gas: int,
+    to_address: str,
+    data: bytes,
+    ) -> str:
+        """Hash the payload to hex format."""
+        import hashlib
+        
+        # Create payload string
+        payload = f"{safe_tx_hash}{ether_value}{safe_tx_gas}{to_address}{data.hex()}"
+        
+        # Hash the payload
+        payload_hash = hashlib.sha256(payload.encode()).hexdigest()
+        
+        return payload_hash
 
     def _execute_safe_transaction(
         self, to_address: str, data: bytes, chain: str
@@ -555,7 +577,7 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
                 data=data,
                 safe_tx_hash=safe_tx_hash,
             )
-            payload_string = hash_payload_to_hex(**tx_params)
+            payload_string = self._hash_payload_to_hex(**tx_params)
             
             # Send transaction
             tx_hash = yield from self.send_transaction(payload_string, chain)
@@ -717,6 +739,9 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
     def _transfer_to_target(self) -> Generator:
         """Transfer USDC to target address."""
         self.context.logger.info(f"Transferring USDC to {self.target_address}")
+        
+        # Update status to show transfer in progress
+        yield from self._update_withdrawal_status("withdrawing", "Successfully converted funds to USDC. Transfering funds to user wallet...")
 
         # Get USDC address for the operating chain
         usdc_addresses = json.loads(self.params.usdc_addresses)

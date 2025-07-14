@@ -37,7 +37,7 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.liquidity_trader_abci.rounds import (
-    Event as LiquidityTraderEvent,
+    LiquidityTraderAbciApp
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     SynchronizedData as BaseSynchronizedData,
@@ -77,7 +77,7 @@ class SynchronizedData(BaseSynchronizedData):
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
-    abci_app_cls = LiquidityTraderEvent
+    abci_app_cls = LiquidityTraderAbciApp
 
     def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
         """Initialize the state."""

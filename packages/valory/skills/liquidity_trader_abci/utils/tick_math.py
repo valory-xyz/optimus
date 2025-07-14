@@ -99,7 +99,6 @@ def get_amounts_for_liquidity(
     sqrtRatioX96: int, sqrtRatioAX96: int, sqrtRatioBX96: int, liquidity: int
 ) -> Tuple[int, int]:
     """Calculate token amounts from liquidity and price range boundaries for a position."""
-    breakpoint()
     if sqrtRatioAX96 > sqrtRatioBX96:
         sqrtRatioAX96, sqrtRatioBX96 = sqrtRatioBX96, sqrtRatioAX96
 

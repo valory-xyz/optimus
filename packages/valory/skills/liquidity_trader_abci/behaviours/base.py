@@ -258,6 +258,16 @@ COIN_ID_MAPPING = {
     },
 }
 
+# Reward tokens that should be excluded from investment consideration
+REWARD_TOKEN_ADDRESSES = {
+    "mode": {
+        "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
+    },
+    "optimism": {
+        "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
+    },
+}
+
 
 class LiquidityTraderBaseBehaviour(
     BalancerPoolBehaviour, UniswapPoolBehaviour, VelodromePoolBehaviour, ABC
@@ -300,6 +310,7 @@ class LiquidityTraderBaseBehaviour(
         # Read the assets and current pool
         self.read_current_positions()
         self.read_assets()
+        self.ensure_olas_in_assets()
         self.read_gas_costs()
         self.read_portfolio_data()
 
@@ -1548,3 +1559,36 @@ class GasCostTracker:
     def update_data(self, new_data: dict):
         """Update the internal data with new data."""
         self.data = new_data
+
+    def ensure_olas_in_assets(self) -> None:
+        """Ensure OLAS token is present in assets for all target investment chains."""
+        assets_updated = False
+
+        for chain in self.params.target_investment_chains:
+            # Get OLAS address for this chain
+            olas_address = OLAS_ADDRESSES.get(chain)
+            if not olas_address:
+                self.context.logger.warning(
+                    f"No OLAS address defined for chain {chain}"
+                )
+                continue
+
+            # Check if OLAS is already in assets for this chain
+            if olas_address not in self.assets[chain]:
+                self.assets[chain][olas_address] = "OLAS"
+                assets_updated = True
+                self.context.logger.info(
+                    f"Added OLAS token to assets for chain {chain}: {olas_address}"
+                )
+            else:
+                self.context.logger.info(
+                    f"OLAS token already present in assets for chain {chain}"
+                )
+
+        # Save assets if any updates were made
+        if assets_updated:
+            self.store_assets()
+            self.read_assets()
+            self.context.logger.info("Assets updated and stored with OLAS tokens")
+
+    

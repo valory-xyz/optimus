@@ -108,8 +108,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.store_assets()
 
             self.read_assets()
-
             chain = self.params.target_investment_chains[0]
+            yield from self.update_accumulated_rewards_for_chain(chain)
+
             safe_address = self.params.safe_contract_addresses.get(chain)
 
             # update locally stored eth balance in-case it's incorrect
@@ -1701,7 +1702,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
                     )
-
                 else:
                     # Handle ERC20 tokens
                     token_balance = yield from self.contract_interact(

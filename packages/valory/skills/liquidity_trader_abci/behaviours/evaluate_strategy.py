@@ -1602,21 +1602,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 balance = asset.get("balance", 0)
 
                 if chain and asset_address:
-                    # Filter out reward tokens from investment consideration
-                    reward_addresses = REWARD_TOKEN_ADDRESSES.get(chain, {})
-                    if to_checksum_address(asset_address) in reward_addresses.keys():
-                        self.context.logger.info(
-                            f"Filtering out reward token {asset_symbol} ({asset_address}) - not for investment"
-                        )
-                        continue
+                    investable_balance = yield from self._get_investable_balance(
+                        chain, asset_address, balance
+                    )
 
-                    if balance > 0:
+                    if investable_balance > 0:
                         token_balances.append(
                             {
                                 "chain": chain,
                                 "token": asset_address,
                                 "token_symbol": asset_symbol,
-                                "balance": balance,
+                                "balance": investable_balance,
                             }
                         )
 
@@ -1654,6 +1650,37 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             f"Tokens selected for bridging/swapping: {token_balances}"
         )
         return token_balances
+
+    def _get_investable_balance(
+        self, chain: str, token_address: str, total_balance: int
+    ) -> Generator[None, None, int]:
+        """Get the portion of token balance available for investment (total - reserved rewards)"""
+
+        # Check if this is a reward token
+        reward_addresses = REWARD_TOKEN_ADDRESSES.get(chain, {})
+        if to_checksum_address(token_address) not in reward_addresses.keys():
+            return total_balance
+
+        # Check if it's also whitelisted (like OLAS)
+        whitelisted_addresses = WHITELISTED_ASSETS.get(chain, {})
+        if to_checksum_address(token_address) not in whitelisted_addresses.keys():
+            self.context.logger.info(
+                f"Pure reward token {token_address} on {chain} - not for investment"
+            )
+            return 0  # Pure reward token, not for investment
+
+        # This is a whitelisted reward token - subtract accumulated rewards
+        accumulated_rewards = yield from self.get_accumulated_rewards_for_token(
+            chain, token_address
+        )
+        investable_balance = max(0, total_balance - accumulated_rewards)
+
+        self.context.logger.info(
+            f"Token {token_address} on {chain}: "
+            f"Total={total_balance}, Reserved={accumulated_rewards}, Investable={investable_balance}"
+        )
+
+        return investable_balance
 
     def _build_exit_pool_action(
         self, tokens: List[Dict[str, Any]], num_of_tokens_required: int

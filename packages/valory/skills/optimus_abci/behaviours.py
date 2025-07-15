@@ -43,6 +43,7 @@ from packages.valory.skills.termination_abci.behaviours import (
 from packages.valory.skills.transaction_settlement_abci.behaviours import (
     TransactionSettlementRoundBehaviour,
 )
+from packages.valory.skills.withdrawal_abci.behaviours import WithdrawalBehaviour
 
 
 class OptimusConsensusBehaviour(AbstractRoundBehaviour):
@@ -57,4 +58,4 @@ class OptimusConsensusBehaviour(AbstractRoundBehaviour):
         *TerminationAbciBehaviours.behaviours,
         *LiquidityTraderRoundBehaviour.behaviours,
     }
-    background_behaviours_cls = {BackgroundBehaviour}
+    background_behaviours_cls = {BackgroundBehaviour, WithdrawalBehaviour}

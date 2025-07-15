@@ -22,6 +22,7 @@
 import json
 import logging
 import math
+import os
 import types
 from abc import ABC
 from collections import defaultdict
@@ -312,7 +313,8 @@ class LiquidityTraderBaseBehaviour(
     @property
     def params(self) -> Params:
         """Return the params."""
-        return cast(Params, super().params)
+        params_obj = super().params
+        return cast(Params, params_obj)
 
     @property
     def shared_state(self) -> SharedState:

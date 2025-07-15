@@ -19,19 +19,28 @@
 
 """This module contains the withdrawal behaviour for the 'withdrawal_abci' skill."""
 
+import hashlib
 import json
 import time
+from pathlib import Path
 from typing import Dict, Generator, List, Optional, Any
 
 from eth_utils import to_bytes
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
+    GasCostTracker,
+    BalancerPoolBehaviour,
+    UniswapPoolBehaviour,
+    VelodromePoolBehaviour,
+    StakingState,
+    DexType,
+    ETHER_VALUE,
+    SAFE_TX_GAS,
+    ZERO_ADDRESS,
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
-from packages.valory.skills.liquidity_trader_abci.behaviours.base import DexType, ETHER_VALUE, SAFE_TX_GAS, ZERO_ADDRESS
-from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
-from packages.valory.contracts.gnosis_safe.contract import SafeOperation
+from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract, SafeOperation
 
 # Import decision making functions to reuse existing logic
 from packages.valory.skills.liquidity_trader_abci.behaviours.decision_making import DecisionMakingBehaviour
@@ -45,7 +54,29 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
 
     def __init__(self, **kwargs):
         """Initialize the withdrawal behaviour."""
-        super().__init__(**kwargs)
+        # Call the grandparent's __init__ (base AEA behaviour) instead of parent
+        super(LiquidityTraderBaseBehaviour, self).__init__(**kwargs)
+        
+        # Initialize attributes that the parent would normally set
+        self.assets: Dict[str, Any] = {}
+        self.current_positions: List[Dict[str, Any]] = []
+        self.portfolio_data: Dict[str, Any] = {}
+        self.whitelisted_assets: Dict[str, Any] = {}
+        self.funding_events: Dict[str, Any] = {}
+        self.pools: Dict[str, Any] = {}
+        self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
+        self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
+        self.pools[DexType.VELODROME.value] = VelodromePoolBehaviour
+        self.service_staking_state = StakingState.UNSTAKED
+        self._inflight_strategy_req: Optional[str] = None
+        self.initial_investment_values_per_pool = {}
+        
+        # Initialize gas cost tracker with default path (will be updated later if needed)
+        self.gas_cost_tracker = GasCostTracker(
+            file_path=Path("data") / "gas_costs.json"
+        )
+        
+        # Withdrawal-specific attributes
         self.withdrawal_id: Optional[str] = None
         self.target_address: Optional[str] = None
         self.operating_chain: Optional[str] = None
@@ -56,6 +87,54 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
     def setup(self) -> None:
         """Set up the behaviour."""
         self.context.logger.info("Withdrawal behaviour setup complete")
+
+    # Override file reading methods to avoid file operations during initialization
+    def read_current_positions(self) -> None:
+        """Override to avoid file operations during initialization."""
+        self.context.logger.info("Skipping file read for current_positions in withdrawal behaviour")
+        self.current_positions = []
+
+    def read_assets(self) -> None:
+        """Override to avoid file operations during initialization."""
+        self.context.logger.info("Skipping file read for assets in withdrawal behaviour")
+        self.assets = {}
+
+    def read_gas_costs(self) -> None:
+        """Override to avoid file operations during initialization."""
+        self.context.logger.info("Skipping file read for gas_costs in withdrawal behaviour")
+        # Initialize gas cost tracker with empty data
+        try:
+            # Try to use params if available
+            if hasattr(self, 'params') and hasattr(self.params, 'store_path') and hasattr(self.params, 'gas_cost_info_filename'):
+                self.gas_cost_tracker = GasCostTracker(
+                    file_path=Path(self.params.store_path) / self.params.gas_cost_info_filename
+                )
+            else:
+                # Fallback to default path
+                self.gas_cost_tracker = GasCostTracker(
+                    file_path=Path("data") / "gas_costs.json"
+                )
+        except Exception as e:
+            self.context.logger.warning(f"Could not initialize gas cost tracker: {e}")
+            # Final fallback
+            self.gas_cost_tracker = GasCostTracker(
+                file_path=Path("data") / "gas_costs.json"
+            )
+
+    def read_portfolio_data(self) -> None:
+        """Override to avoid file operations during initialization."""
+        self.context.logger.info("Skipping file read for portfolio_data in withdrawal behaviour")
+        self.portfolio_data = {}
+
+    def read_whitelisted_assets(self) -> None:
+        """Override to avoid file operations during initialization."""
+        self.context.logger.info("Skipping file read for whitelisted_assets in withdrawal behaviour")
+        self.whitelisted_assets = {}
+
+    def read_funding_events(self) -> None:
+        """Override to avoid file operations during initialization."""
+        self.context.logger.info("Skipping file read for funding_events in withdrawal behaviour")
+        self.funding_events = {}
 
     def act(self) -> Generator:
         """Execute the withdrawal behaviour."""
@@ -108,15 +187,24 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         """Prepare exit actions for all current positions."""
         self.context.logger.info("Preparing exit actions for current positions")
 
-        # Get current positions
-        current_positions = yield from self._read_kv(keys=("current_positions",))
-        if not current_positions:
-            self.context.logger.info("No current positions to exit")
-            return
-
-        positions = current_positions.get("current_positions", [])
-        if not positions:
-            self.context.logger.info("No current positions to exit")
+        # Read current positions from file (same as main skill)
+        try:
+            # Use the same file path construction as the base class
+            current_positions_filepath = Path(self.params.store_path) / self.params.pool_info_filename
+            
+            if not current_positions_filepath.exists():
+                self.context.logger.info("No current positions file found")
+                return
+            
+            with open(current_positions_filepath, 'r') as file:
+                positions = json.load(file)
+                
+            if not positions:
+                self.context.logger.info("No current positions to exit")
+                return
+                
+        except Exception as e:
+            self.context.logger.error(f"Error reading current positions from file: {e}")
             return
 
         # Prepare exit actions for each position
@@ -219,14 +307,12 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         # Update status to show conversion in progress
         yield from self._update_withdrawal_status("withdrawing", "Successfully converted funds to USDC. Transfering funds to user wallet...")
 
-        # Get USDC address for the operating chain
-        usdc_addresses = json.loads(self.params.usdc_addresses)
-        usdc_address = usdc_addresses.get(self.operating_chain)
+        # Get USDC address for the operating chain using base class method
+        usdc_address = self._get_usdc_address(self.operating_chain)
         if not usdc_address:
             self.context.logger.error(f"No USDC address configured for chain {self.operating_chain}")
             return
 
-        
         safe_address = self.params.safe_contract_addresses.get(self.operating_chain)
         initial_usdc_balance = yield from self._get_token_balance(self.operating_chain, safe_address, usdc_address)
         self.context.logger.info(f"Initial USDC balance: {initial_usdc_balance}")
@@ -239,8 +325,20 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
             return
 
         # Get current positions for balance calculation
-        current_positions = yield from self._read_kv(keys=("current_positions",))
-        positions = current_positions.get("current_positions", []) if current_positions else []
+        try:
+            # Use the same file path construction as the base class
+            current_positions_filepath = Path(self.params.store_path) / self.params.pool_info_filename
+            
+            if not current_positions_filepath.exists():
+                self.context.logger.info("No current positions file found for balance calculation")
+                positions = []
+            else:
+                with open(current_positions_filepath, 'r') as file:
+                    positions = json.load(file)
+                    
+        except Exception as e:
+            self.context.logger.error(f"Error reading current positions from file for balance calculation: {e}")
+            positions = []
 
         # Convert each token to USDC using LiFi route optimization
         successful_swaps = 0
@@ -276,7 +374,6 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
                 tx_hash = yield from self._execute_route_withdrawal(best_route, positions)
                 
                 if tx_hash:
-                    
                     yield from self.sleep(5.0)  # Wait for balance to reflect
                     new_usdc_balance = yield from self._get_token_balance(self.operating_chain, safe_address, usdc_address)
                     
@@ -360,8 +457,6 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error executing route: {e}")
             return None
-
-
 
     def _check_lifi_swap_status(self, tx_hash: str) -> Generator[None, None, Optional[str]]:
         """Check LiFi swap status (reusing logic from DecisionMakingBehaviour)."""
@@ -524,15 +619,14 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         return signatures.hex()
     
     def _hash_payload_to_hex(
-    safe_tx_hash: str,
-    ether_value: int,
-    safe_tx_gas: int,
-    to_address: str,
-    data: bytes,
+        self,
+        safe_tx_hash: str,
+        ether_value: int,
+        safe_tx_gas: int,
+        to_address: str,
+        data: bytes,
     ) -> str:
         """Hash the payload to hex format."""
-        import hashlib
-        
         # Create payload string
         payload = f"{safe_tx_hash}{ether_value}{safe_tx_gas}{to_address}{data.hex()}"
         
@@ -735,7 +829,6 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error checking transaction confirmation: {e}")
             return False
 
-
     def _transfer_to_target(self) -> Generator:
         """Transfer USDC to target address."""
         self.context.logger.info(f"Transferring USDC to {self.target_address}")
@@ -743,9 +836,8 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         # Update status to show transfer in progress
         yield from self._update_withdrawal_status("withdrawing", "Successfully converted funds to USDC. Transfering funds to user wallet...")
 
-        # Get USDC address for the operating chain
-        usdc_addresses = json.loads(self.params.usdc_addresses)
-        usdc_address = usdc_addresses.get(self.operating_chain)
+        # Get USDC address for the operating chain using base class method
+        usdc_address = self._get_usdc_address(self.operating_chain)
         if not usdc_address:
             self.context.logger.error(f"No USDC address configured for chain {self.operating_chain}")
             return
@@ -827,7 +919,6 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
                 "1": "https://etherscan.io/tx/",      # Ethereum Mainnet
                 "10": "https://optimistic.etherscan.io/tx/",  # Optimism
                 "34443": "https://explorer.mode.network/tx/",  # Mode Network
-
             }
             
             explorer_url = explorer_urls.get(chain_id)
@@ -840,8 +931,6 @@ class WithdrawalBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error generating transaction link: {e}")
             return f"https://etherscan.io/tx/{tx_hash}"  # Fallback
-
-
 
     def teardown(self) -> None:
         """Tear down the behaviour."""

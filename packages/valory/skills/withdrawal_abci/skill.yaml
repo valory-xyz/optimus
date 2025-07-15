@@ -6,12 +6,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 type: skill
 fingerprint:
-  __init__.py: bafybeig546nj42vvu3oehrq27ug655uxhmjlbylrigbryypvsuiijufaou
+  __init__.py: bafybeic22imui7t37ksafcfoh7mvl5tg3pcpwjujftvslcj2kgmvqplfky
   behaviours/__init__.py: bafybeieobxeiwpg42peg2vrzkao2tpkqxw4wtlua64aqom2ypclezeqx6q
-  behaviours/withdrawal_behaviour.py: bafybeih4coq5x4xgowt276jgfttogx5kznzcrrdz267bevbamo5ekcppfi
+  behaviours/withdrawal_behaviour.py: bafybeicko5cqh63aecussbnh556m2edpwz7tidtlkrgmtnlcmx674yfd6e
   handlers.py: bafybeihnunzvmbwkmujlnfwzon6n7mqy2t5pdcfhjqgylbfspnr4kmhv2i
-  models.py: bafybeib5d62x3gfxki3z5fw53lzx5aajue7j7ihqnydmd4fdvwhprk2ame
-  skill.py: bafybeihrc6oxdvwppewcn2xxggjdo2h4sm6vjahxcnu4t5siqcb5mvubxm
+  models.py: bafybeiefmhmabxtflqxsplzagvogibfyix56eg6zztsw77afskvtpzxmli
 fingerprint_ignore_patterns: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um
@@ -21,7 +20,8 @@ protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
 skills:
-- valory/liquidity_trader_abci:0.1.0:bafybeif2hfl5iftelltlr5nbqm5xm3ro5iz22ldlx5vfzq2s4xxettmna4
+- valory/liquidity_trader_abci:0.1.0:bafybeiavzj6i2tako5aodnssbtqq6dirturb4oksjj4bribtasfnyztrdu
+- valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
 connections: []
 behaviours:
   withdrawal_behaviour:
@@ -33,26 +33,149 @@ handlers:
     args: {}
 models:
   params:
-    class_name: WithdrawalParams
+    class_name: Params
     args:
-      usdc_addresses: ${str:{"optimism":"0x7F5c764cBc14f9669B88837ca1490cCa17c31607","mode":"0xd988097fb8612cc24eeC14542bC03424c656005f"}}
-      safe_contract_addresses: ${str:{"optimism":"${SAFE_ADDRESS_OPTIMISM}","mode":"${SAFE_ADDRESS_MODE}"}}
-      multisend_contract_addresses: ${str:{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa","mode":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}}
-      balancer_vault_contract_addresses: ${str:{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","mode":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}}
-      uniswap_position_manager_contract_addresses: ${str:{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}}
-      velodrome_non_fungible_position_manager_contract_addresses: ${str:{"optimism":"0x416b433906b1B72FA758e166e239c43d68dC6F29","base":"0x79e1bEf100000000000000000000000000000000","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}}
-      target_investment_chains: ${list:["mode", "optimism"]}
-      initial_assets: ${str:{"mode":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"},"optimism":{"0x0000000000000000000000000000000000000000":"ETH","0x7F5c764cBc14f9669B88837ca1490cCa17c31607":"USDC"}}}
-      slippage_for_swap: ${float:0.01}
-      lifi_api_url: ${str:https://li.quest/v1}
-      chain_to_chain_id_mapping: ${str:{"optimism":"10","mode":"34443","ethereum":"1","base":"8453"}}
-      tenderly_access_key: ${str:${TENDERLY_ACCESS_KEY}}
-      tenderly_account_slug: ${str:${TENDERLY_ACCOUNT_SLUG}}
-      tenderly_project_slug: ${str:${TENDERLY_PROJECT_SLUG}}
-      store_path: ${str:${STORE_PATH}}
-      portfolio_info_filename: ${str:portfolio.json}
+      safe_contract_addresses: '{"optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}'
+      multisend_contract_addresses: '{"ethereum":"0x998739BFdAAdde7C933B942a68053933098f9EDa","optimism":"0xbE5b0013D2712DC4faF07726041C27ecFdBC35AD","base":"0x998739BFdAAdde7C933B942a68053933098f9EDa","mode":"0x998739BFdAAdde7C933B942a68053933098f9EDa"}'
+      balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","mode":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
+      uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
+      velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0x416b433906b1B72FA758e166e239c43d68dC6F29","base":"0x79e1bEf100000000000000000000000000000000","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
+      target_investment_chains:
+      - mode
+      - optimism
+      initial_assets: '{"mode":{"0x0000000000000000000000000000000000000000":"ETH","0xd988097fb8612cc24eeC14542bC03424c656005f":"USDC"},"optimism":{"0x0000000000000000000000000000000000000000":"ETH","0x7F5c764cBc14f9669B88837ca1490cCa17c31607":"USDC"}}'
+      slippage_for_swap: 0.01
+      chain_to_chain_id_mapping: '{"optimism":10,"mode":34443,"ethereum":1,"base":8453}'
+      tenderly_access_key: access_key
+      tenderly_account_slug: account_slug
+      tenderly_project_slug: project_slug
+      store_path: data
+      portfolio_info_filename: portfolio.json
+      waiting_period_for_status_check: 30
+      assets_info_filename: assets.json
+      pool_info_filename: current_pool.json
+      gas_cost_info_filename: gas_costs.json
+      whitelisted_assets_filename: whitelisted_assets.json
+      funding_events_filename: funding_events.json
+      merkl_fetch_campaigns_args: '{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"true"}'
+      allowed_chains:
+      - optimism
+      - mode
+      gas_reserve: '{"optimism":1000000000000000000,"mode":1000000000000000000}'
+      apr_threshold: 5
+      round_threshold: 10
+      min_balance_multiplier: 2
+      lifi_advance_routes_url: https://li.quest/v1/quote
+      lifi_fetch_step_transaction_url: https://li.quest/v1/step
+      lifi_check_status_url: https://li.quest/v1/status
+      allowed_dexs:
+      - balancer
+      - uniswap_v3
+      - velodrome
+      chain_to_chain_key_mapping: '{"optimism":"optimism","mode":"mode"}'
+      max_num_of_retries: 3
+      reward_claiming_time_period: 3600
+      merkl_distributor_contract_addresses: '{"optimism":"0x0000000000000000000000000000000000000000","mode":"0x0000000000000000000000000000000000000000"}'
+      intermediate_tokens: '{"optimism":["0x7F5c764cBc14f9669B88837ca1490cCa17c31607"],"mode":["0xd988097fb8612cc24eeC14542bC03424c656005f"]}'
+      lifi_fetch_tools_url: https://li.quest/v1/tools
+      merkl_user_rewards_url: https://api.merkl.xyz/v3/userRewards
+      tenderly_bundle_simulation_url: https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle
+      staking_token_contract_address: '0x0000000000000000000000000000000000000000'
+      staking_activity_checker_contract_address: '0x0000000000000000000000000000000000000000'
+      staking_threshold_period: 5
+      min_investment_amount: 1
+      max_fee_percentage: 0.02
+      max_gas_percentage: 0.1
+      balancer_graphql_endpoints: '{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}'
+      staking_chain: optimism
+      file_hash_to_strategies: '{"bafybeifwt3r4uwjvgxmwjx7374wuk4sfn3gxyd7bh4hcazjjjro2swy4me":"max_apr_selection","bafybeicodnsjukmockuiunfyzg4zhgbihlfxakw3zibpeywqnlkgzjkfay":"balancer_pools_search","bafybeifdp5cwsgpgchd6ogiaa4o2crs3lkhybl2b7c5cbsct5j7qyeny7a":"uniswap_pools_search","bafybeih7zpjiq6gnddms6slr737shourl6makltwgzxsimjtjxs6d5wqse":"asset_lending","bafybeicivrn4y5qp6375zrxrtklxgwajevwsz5gfyjmldg5apolfmgf2zy":"velodrome_pools_search"}'
+      strategies_kwargs: '{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"velodrome_pools_search":{"graphql_endpoint":"https://gateway.thegraph.com/api/b8e4cf1b314c67d2a0109325046a7464/subgraphs/id/A4Y1A82YhSLTn998BVVELC8eWzhi992k4ZitByvssxqA"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}'
+      available_protocols:
+      - balancer
+      - uniswap_v3
+      - velodrome
+      selected_hyper_strategy: merkl_pools_search
+      dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","velodrome":"velodrome_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
+      default_acceptance_time: 300
+      max_pools: 10
+      profit_threshold: 5
+      loss_threshold: 10
+      pnl_check_interval: 3600
+      cleanup_freq: 100
+      genai_api_key: ''
+      velodrome_router_contract_addresses: '{"optimism":"0xa132DAB612dB5cB9fC9Ac426A0Cc215Ae3C8e429","mode":"0xa132DAB612dB5cB9fC9Ac426A0Cc215Ae3C8e429"}'
+      service_registry_contract_addresses: '{"optimism":"0x3d77596beb0f130a4415df3D2D8232B3d3D31e44","mode":"0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE"}'
+      genesis_config:
+        chain_id: chain-c4daS1
+        consensus_params:
+          block:
+            max_bytes: '22020096'
+            max_gas: '-1'
+            time_iota_ms: '1000'
+          evidence:
+            max_age_duration: '172800000000000'
+            max_age_num_blocks: '100000'
+            max_bytes: '1048576'
+          validator:
+            pub_key_types:
+            - ed25519
+          version: {}
+        genesis_time: '2022-05-20T16:00:21.735122717Z'
+        voting_power: '10'
+      cleanup_history_depth: 1
+      cleanup_history_depth_current: null
+      drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
+      setup:
+        all_participants:
+        - '0x0000000000000000000000000000000000000000'
+        consensus_threshold: null
+        safe_contract_address: '0x0000000000000000000000000000000000000000'
+      service_id: optimus
+      on_chain_service_id: null
+      tendermint_url: http://localhost:26657
+      max_healthcheck: 120
+      round_timeout_seconds: 30.0
+      sleep_time: 1
+      retry_timeout: 3
+      finalize_timeout: 60.0
+      history_check_timeout: 1205
+      ipfs_domain_name: null
+      ipfs_address: https://gateway.autonolas.tech/ipfs/
+      keeper_allowed_retries: 3
+      keeper_timeout: 30.0
+      max_attempts: 10
+      request_retry_delay: 1.0
+      request_timeout: 10.0
+      reset_pause_duration: 10
+      reset_tendermint_after: 2
+      retry_attempts: 400
+      share_tm_config_on_startup: false
+      tendermint_check_sleep_delay: 3
+      tendermint_com_url: http://localhost:8080
+      tendermint_max_retries: 5
+      tendermint_p2p_url: localhost:26656
+      use_termination: false
+      use_slashing: false
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
+      tx_timeout: 10.0
+      validate_timeout: 1205
+      service_registry_address: null
   state:
     class_name: WithdrawalSharedState
     args: {}
+dependencies:
+  web3:
+    version: <7,>=6.0.0
+  eth_abi:
+    version: ==4.0.0
+  requests:
+    version: <2.31.2,>=2.28.1
+  eth_utils: {}
+  pyyaml:
+    version: <=6.0.1,>=3.10
+  numpy:
+    version: ==2.2.5
 is_abstract: false
-dependencies: {}

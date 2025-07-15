@@ -9,7 +9,7 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeiguehsbdcqelysju3627o7lpujqeh45zktx5z44yxeh7qmbhanxui
   behaviours/apr_population.py: bafybeiczbvscmo4fyiulrozbng4xhwjged4sstyntgxvoi7rsulgkxa5r4
-  behaviours/base.py: bafybeigaqivumkw3rezfjujrek2igl32twmbrwgvedyzfq6tmizsac7nn4
+  behaviours/base.py: bafybeiayw2l5tvrrxsnjfawyfkjtqovzisza72rxypec2bxuhnuyfu6wk4
   behaviours/call_checkpoint.py: bafybeifthg4nwydhuzmc7qic6lvdjmwh5c3ef3l2arg3bpcqqoaqebkskq
   behaviours/check_staking_kpi_met.py: bafybeiebva2iej74465tfv7kc2wpku6p4rscifhj7x5y5hkh7dmmflhln4
   behaviours/decision_making.py: bafybeiclqu2uq57gyt5wun5nvqsoy7rhjibratghydnyvizbm2um6sqnou
@@ -23,7 +23,7 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeidj57an6yrefyhaojofnrqliqksvbodjcnpryuwnj73dxcmhmecfq
+  models.py: bafybeib3l7zautr4bz72hxtcweu7jrozjk6umm2kk3gyhcqne3pccwbkqy
   payloads.py: bafybeic7utivfkbnueahpoahb5g5gjlxuc26s2vouoozkuxwep3xqnekwq
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74

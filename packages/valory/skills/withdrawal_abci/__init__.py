@@ -19,6 +19,4 @@
 
 """This package contains the withdrawal skill for the 'optimus' agent."""
 
-from packages.valory.skills.withdrawal_abci.skill import WithdrawalSkill
-
-__all__ = ["WithdrawalSkill"] 
+__all__ = [] 

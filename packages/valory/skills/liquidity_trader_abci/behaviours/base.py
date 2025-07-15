@@ -110,6 +110,9 @@ RETRIES = 3  # Number of API call retries
 MIN_TIME_IN_POSITION = 604800 * 3  # 3 weeks
 PRICE_CACHE_KEY_PREFIX = "token_price_cache_"
 CACHE_TTL = 3600  # 1 hour in seconds
+REWARD_UPDATE_INTERVAL = 24 * 3600  # 24 hours
+REWARD_UPDATE_KEY_PREFIX = "last_reward_update_"
+LAST_EPOCH_KEY_PREFIX = "last_processed_epoch_"
 OLAS_ADDRESSES = {
     "mode": "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9",
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
@@ -258,6 +261,16 @@ COIN_ID_MAPPING = {
     },
 }
 
+# Reward tokens that should be excluded from investment consideration
+REWARD_TOKEN_ADDRESSES = {
+    "mode": {
+        "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
+    },
+    "optimism": {
+        "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
+    },
+}
+
 
 class LiquidityTraderBaseBehaviour(
     BalancerPoolBehaviour, UniswapPoolBehaviour, VelodromePoolBehaviour, ABC
@@ -300,6 +313,7 @@ class LiquidityTraderBaseBehaviour(
         # Read the assets and current pool
         self.read_current_positions()
         self.read_assets()
+        self.ensure_olas_in_assets()
         self.read_gas_costs()
         self.read_portfolio_data()
 
@@ -1485,6 +1499,212 @@ class LiquidityTraderBaseBehaviour(
         )
         yield from self._write_kv({ETH_REMAINING_KEY: str(amount)})
         return amount
+
+    def ensure_olas_in_assets(self) -> None:
+        """Ensure OLAS token is present in assets for all target investment chains."""
+        assets_updated = False
+
+        for chain in self.params.target_investment_chains:
+            # Get OLAS address for this chain
+            olas_address = OLAS_ADDRESSES.get(chain)
+            if not olas_address:
+                self.context.logger.warning(
+                    f"No OLAS address defined for chain {chain}"
+                )
+                continue
+
+            # Check if OLAS is already in assets for this chain
+            if olas_address not in self.assets[chain]:
+                self.assets[chain][olas_address] = "OLAS"
+                assets_updated = True
+                self.context.logger.info(
+                    f"Added OLAS token to assets for chain {chain}: {olas_address}"
+                )
+            else:
+                self.context.logger.info(
+                    f"OLAS token already present in assets for chain {chain}"
+                )
+
+        # Save assets if any updates were made
+        if assets_updated:
+            self.store_assets()
+            self.read_assets()
+            self.context.logger.info("Assets updated and stored with OLAS tokens")
+
+    def should_update_rewards_from_subgraph(
+        self, chain: str
+    ) -> Generator[None, None, bool]:
+        """Check if rewards should be updated from subgraph (24-hour interval)"""
+        update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
+        result = yield from self._read_kv((update_key,))
+
+        if not result or not result.get(update_key):
+            return True
+
+        last_update = int(result[update_key])
+        current_time = self._get_current_timestamp()
+
+        time_since_update = current_time - last_update
+        should_update = time_since_update >= REWARD_UPDATE_INTERVAL
+
+        self.context.logger.info(
+            f"Reward update check for {chain}: Last update {time_since_update/3600:.1f}h ago, "
+            f"Should update: {should_update}"
+        )
+
+        return should_update
+
+    def query_new_staking_rewards(
+        self, chain: str, last_processed_epoch: Optional[int] = None
+    ) -> Generator[None, None, Optional[List[Dict]]]:
+        """Query subgraph for new checkpoint rewards since last processed epoch"""
+        endpoint = self.params.staking_subgraph_endpoints.get(chain)
+        service_id = self.params.on_chain_service_id
+
+        where_clause = (
+            f"serviceIds_contains: [{service_id!r}]"  # Use serviceIds_contains
+        )
+        if last_processed_epoch is not None:
+            where_clause += f", epoch_gt: {last_processed_epoch!r}"
+
+        query = {
+            "query": f"""
+            {{
+            checkpoints(
+                orderBy: epoch
+                orderDirection: desc
+                where: {{
+                {where_clause}
+                }}
+            ) {{
+                id
+                epoch
+                rewards
+                serviceIds
+            }}
+            }}
+            """
+        }
+
+        self.context.logger.info(
+            f"Querying subgraph for {chain} since epoch {last_processed_epoch}"
+        )
+
+        response = yield from self.get_http_response(
+            method="POST",
+            url=endpoint,
+            content=json.dumps(query).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+        if response.status_code in HTTP_OK:
+            data = json.loads(response.body)
+            checkpoints = data.get("data", {}).get("checkpoints", [])
+            self.context.logger.info(
+                f"Retrieved {len(checkpoints)} checkpoints from subgraph"
+            )
+            return checkpoints
+
+        self.context.logger.error(
+            f"Failed to query subgraph: {response.status_code} - {response.body}"
+        )
+        return None
+
+    def update_accumulated_rewards_for_chain(
+        self, chain: str
+    ) -> Generator[None, None, None]:
+        """Update accumulated rewards for a chain using subgraph data"""
+        should_update_rewards = yield from self.should_update_rewards_from_subgraph(
+            chain
+        )
+        if not should_update_rewards:
+            return
+
+        service_id = self.params.on_chain_service_id
+        self.context.logger.info(f"Starting reward update for {chain}")
+
+        # Get last processed epoch
+        last_epoch_key = f"{LAST_EPOCH_KEY_PREFIX}{chain}"
+        result = yield from self._read_kv((last_epoch_key,))
+        last_processed_epoch = (
+            int(result.get(last_epoch_key))
+            if result and result.get(last_epoch_key) is not None
+            else None
+        )
+
+        # Query new checkpoints since last processed epoch
+        new_checkpoints = yield from self.query_new_staking_rewards(
+            chain, last_processed_epoch
+        )
+
+        if not new_checkpoints:
+            self.context.logger.info(f"No new checkpoints found for {chain}")
+            # Still mark as updated to avoid querying again for 24 hours
+            update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
+            yield from self._write_kv({update_key: str(self._get_current_timestamp())})
+            return
+
+        # Calculate new rewards from all new checkpoints
+        new_rewards = 0
+        for checkpoint in new_checkpoints:
+            service_ids = checkpoint.get("serviceIds", [])
+            rewards = checkpoint.get("rewards", [])
+
+            # Find the index of our service ID in the serviceIds array
+            try:
+                service_index = service_ids.index(str(service_id))
+                # Get the corresponding reward at the same index
+                if service_index < len(rewards):
+                    checkpoint_reward = int(rewards[service_index])
+                    new_rewards += checkpoint_reward
+                else:
+                    self.context.logger.warning(
+                        f"Service ID {service_id} found at index {service_index} but rewards array only has {len(rewards)} elements"
+                    )
+            except ValueError:
+                self.context.logger.warning(
+                    f"Service ID {service_id} not found in serviceIds array: {service_ids}"
+                )
+                continue
+
+        # Update stored accumulated rewards for OLAS token
+        olas_address = OLAS_ADDRESSES.get(chain)
+        # TO-DO: exclude any OLAS rewards withdrawn
+        if olas_address and new_rewards > 0:
+            rewards_key = f"accumulated_rewards_{chain}_{olas_address.lower()}"
+            result = yield from self._read_kv((rewards_key,))
+            if not result:
+                current_accumulated = 0
+            else:
+                rewards_value = result.get(rewards_key)
+                current_accumulated = (
+                    int(rewards_value) if rewards_value is not None else 0
+                )
+
+            total_accumulated = current_accumulated + new_rewards
+            yield from self._write_kv({rewards_key: str(total_accumulated)})
+
+            # Update last processed epoch (first element = latest epoch)
+            latest_epoch = new_checkpoints[0]["epoch"]
+            yield from self._write_kv({last_epoch_key: latest_epoch})
+
+            self.context.logger.info(
+                f"Updated rewards for {chain}: +{new_rewards} OLAS, "
+                f"Total accumulated: {total_accumulated} OLAS (Latest epoch: {latest_epoch})"
+            )
+
+        update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
+        yield from self._write_kv({update_key: str(int(self._get_current_timestamp()))})
+
+        self.context.logger.info(f"Completed reward update for {chain}")
+
+    def get_accumulated_rewards_for_token(
+        self, chain: str, token_address: str
+    ) -> Generator[None, None, int]:
+        """Get stored accumulated rewards for a token"""
+        rewards_key = f"accumulated_rewards_{chain}_{token_address.lower()}"
+        result = yield from self._read_kv((rewards_key,))
+        return int(result.get(rewards_key, 0)) if result else 0
 
 
 def execute_strategy(

@@ -224,7 +224,10 @@ class KvStoreHandler(AbstractResponseHandler):
             self.context.state.in_flight_req = False
             return
 
-        if kv_store_msg.performative == KvStoreMessage.Performative.SUCCESS:
+        if kv_store_msg.performative in [
+            KvStoreMessage.Performative.SUCCESS,
+            KvStoreMessage.Performative.READ_RESPONSE,
+        ]:
             nonce = kv_store_msg.dialogue_reference[0]
             callback, kwargs = self.context.state.req_to_callback.pop(nonce, (None, {}))
 
@@ -1146,25 +1149,9 @@ class HttpHandler(BaseHttpHandler):
             )
             self.context.logger.info(f"Reading from KV store... {kv_store_message}")
             kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
-            
-            # Store the callback to handle the response
-            nonce = kv_store_dialogue.dialogue_label.dialogue_reference[0]
-            self.context.state.req_to_callback[nonce] = (
-                self._handle_kv_read_response,
-                {},
+            self._send_message(
+                kv_store_message, kv_store_dialogue, self._handle_kv_read_response
             )
-            self.context.state.in_flight_req = True
-
-            # Send the message
-            self.context.outbox.put_message(message=kv_store_message)
-
-            # Wait for response (simple polling approach)
-            max_wait = 3  # Maximum wait time in seconds
-            wait_time = 0
-            while self.context.state.in_flight_req and wait_time < max_wait:
-                time.sleep(0.1)
-                wait_time += 0.1
-
             # Return cached data if available, otherwise empty dict
             return getattr(self.context.state, "last_kv_read_data", {})
 
@@ -1238,7 +1225,8 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Define the path to the portfolio data file (same as portfolio endpoint)
             portfolio_data_filepath: str = (
-                self.context.params.store_path / self.context.params.portfolio_info_filename
+                self.context.params.store_path
+                / self.context.params.portfolio_info_filename
             )
 
             # Read the portfolio data from the file (same as portfolio endpoint)
@@ -1283,26 +1271,28 @@ class HttpHandler(BaseHttpHandler):
                 response = {"error": "target_address is required", "status_code": 400}
                 self._send_ok_response(http_msg, http_dialogue, response)
                 return
-            
+
             # ✅ RESET: Clear any existing withdrawal status first
-            self._write_kv({
-                "withdrawal_status": "unknown",
-                "withdrawal_message": "",
-                "withdrawal_id": "",
-                "withdrawal_target_address": "",
-                "withdrawal_requested_at": "",
-                "withdrawal_completed_at": "",
-                "withdrawal_portfolio_value": "",
-                "withdrawal_chain": "",
-                "withdrawal_safe_address": "",
-                "withdrawal_tx_hashes": "",
-                "withdrawal_tx_link": "",
-                "withdrawal_request": ""
-            })
-            
+            self._write_kv(
+                {
+                    "withdrawal_status": "unknown",
+                    "withdrawal_message": "",
+                    "withdrawal_id": "",
+                    "withdrawal_target_address": "",
+                    "withdrawal_requested_at": "",
+                    "withdrawal_completed_at": "",
+                    "withdrawal_portfolio_value": "",
+                    "withdrawal_chain": "",
+                    "withdrawal_safe_address": "",
+                    "withdrawal_tx_hashes": "",
+                    "withdrawal_tx_link": "",
+                    "withdrawal_request": "",
+                }
+            )
+
             # Small delay to ensure KV store is updated
             time.sleep(0.1)
-            
+
             # Check for existing withdrawal using KV read
             existing_withdrawal = self._read_kv(keys=("withdrawal_status",))
             if existing_withdrawal and existing_withdrawal.get("withdrawal_status") in [
@@ -1315,13 +1305,15 @@ class HttpHandler(BaseHttpHandler):
                 }
                 self._send_ok_response(http_msg, http_dialogue, response)
                 return
-            
+
             import uuid
+
             withdrawal_id = str(uuid.uuid4())
-            
+
             # Define the path to the portfolio data file (same as portfolio endpoint)
             portfolio_data_filepath: str = (
-                self.context.params.store_path / self.context.params.portfolio_info_filename
+                self.context.params.store_path
+                / self.context.params.portfolio_info_filename
             )
 
             # Read the portfolio data from the file (same as portfolio endpoint)
@@ -1347,7 +1339,7 @@ class HttpHandler(BaseHttpHandler):
                 "safe_address": safe_address,
                 "requested_at": int(time.time()),
             }
-            
+
             # Use existing synchronous KV write function
             self._write_kv({"investing_paused": "true"})
             withdrawal_data = {
@@ -1377,11 +1369,13 @@ class HttpHandler(BaseHttpHandler):
         except Exception as e:
             self.context.logger.error(f"Error initiating withdrawal: {e}")
             # ✅ RESET: Clear withdrawal status on error
-            self._write_kv({
-                "investing_paused": "false", 
-                "withdrawal_status": "failed",
-                "withdrawal_message": f"Withdrawal failed: {str(e)}"
-            })
+            self._write_kv(
+                {
+                    "investing_paused": "false",
+                    "withdrawal_status": "failed",
+                    "withdrawal_message": f"Withdrawal failed: {str(e)}",
+                }
+            )
             response = {"error": str(e), "status_code": 500}
             self._send_ok_response(http_msg, http_dialogue, response)
 
@@ -1390,13 +1384,22 @@ class HttpHandler(BaseHttpHandler):
     ):
         try:
             # Get withdrawal data from KV store using read
-            withdrawal_data = self._read_kv(keys=(
-                "withdrawal_id", "withdrawal_status", "withdrawal_message", 
-                "withdrawal_target_address", "withdrawal_chain", "withdrawal_safe_address",
-                "withdrawal_tx_hashes", "withdrawal_requested_at", "withdrawal_completed_at",
-                "withdrawal_portfolio_value", "withdrawal_tx_link"
-            ))
-            
+            withdrawal_data = self._read_kv(
+                keys=(
+                    "withdrawal_id",
+                    "withdrawal_status",
+                    "withdrawal_message",
+                    "withdrawal_target_address",
+                    "withdrawal_chain",
+                    "withdrawal_safe_address",
+                    "withdrawal_tx_hashes",
+                    "withdrawal_requested_at",
+                    "withdrawal_completed_at",
+                    "withdrawal_portfolio_value",
+                    "withdrawal_tx_link",
+                )
+            )
+
             withdrawal_id = withdrawal_data.get("withdrawal_id", "")
             status = withdrawal_data.get("withdrawal_status", "unknown")
             message = withdrawal_data.get("withdrawal_message", "No withdrawal found")
@@ -1432,7 +1435,7 @@ class HttpHandler(BaseHttpHandler):
                 "target_address": target_address,
                 "chain": chain,
                 "safe_address": safe_address,
-                "status_code": 200
+                "status_code": 200,
             }
 
             # Add timestamps if available
@@ -1455,11 +1458,11 @@ class HttpHandler(BaseHttpHandler):
                     tx_hashes_list = json.loads(tx_hashes)
                     response_data["transaction_hashes"] = tx_hashes_list
                     response_data["transaction_count"] = len(tx_hashes_list)
-                    
+
                     # Add transaction link if available
                     if tx_link:
                         response_data["transaction_link"] = tx_link
-                        
+
                 except json.JSONDecodeError:
                     pass
 
@@ -1468,8 +1471,6 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error(f"Error getting withdrawal status: {e}")
             response = {"error": str(e), "status_code": 500}
             self._send_ok_response(http_msg, http_dialogue, response)
-
-
 
     def _send_message(
         self,

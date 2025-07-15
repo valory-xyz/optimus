@@ -36,9 +36,7 @@ from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
-from packages.valory.skills.liquidity_trader_abci.rounds import (
-    LiquidityTraderAbciApp
-)
+from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     SynchronizedData as BaseSynchronizedData,
 )

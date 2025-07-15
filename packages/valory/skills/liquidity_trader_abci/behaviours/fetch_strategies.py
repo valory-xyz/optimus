@@ -612,6 +612,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         initial_investment = (
             yield from self.calculate_initial_investment_value_from_funding_events()
         )
+
+        # If initial value calculations return None, use _load_chain_total_investment as fallback
+        if initial_investment is None:
+            chain = self.params.target_investment_chains[0]
+            total_investment = yield from self._load_chain_total_investment(chain)
+            self.context.logger.info(
+                f"Loaded {chain} investment from KV store: ${total_investment}"
+            )
+
+            if total_investment > 0:
+                initial_investment = total_investment
+                self.context.logger.info(
+                    f"Using total investment from KV store: ${initial_investment}"
+                )
+            else:
+                self.context.logger.warning(
+                    "No investment data found in KV store either"
+                )
         # Calculate total volume (total initial investment including closed positions)
         volume = yield from self._calculate_total_volume()
 

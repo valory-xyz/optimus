@@ -3875,7 +3875,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Fetch basic information when investing is paused."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # Fetch basic strategies without executing them
-            yield from self.fetch_strategies()
 
             payload = FetchStrategiesPayload(
                 sender=self.context.agent_address,

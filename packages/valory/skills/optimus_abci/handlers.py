@@ -512,11 +512,8 @@ class HttpHandler(BaseHttpHandler):
                 http_msg.body,
             )
         )
-        # If the handler is async, run it in the event loop
-        if asyncio.iscoroutinefunction(handler):
-            asyncio.create_task(handler(http_msg, http_dialogue, **kwargs))
-        else:
-            handler(http_msg, http_dialogue, **kwargs)
+        # All handlers are now synchronous
+        handler(http_msg, http_dialogue, **kwargs)
 
     def _handle_bad_request(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue, error_msg=None
@@ -1133,6 +1130,71 @@ class HttpHandler(BaseHttpHandler):
 
         self.context.state.request_queue.pop()
 
+    def _read_kv(self, keys: tuple) -> Dict[str, Any]:
+        """
+        Read data from the KV store.
+
+        :param keys: tuple of keys to read
+        :return: dictionary with key-value pairs
+        """
+        try:
+            kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
+            kv_store_message, srr_dialogue = kv_store_dialogues.create(
+                counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
+                performative=KvStoreMessage.Performative.READ_REQUEST,
+                keys=keys,
+            )
+            self.context.logger.info(f"Reading from KV store... {kv_store_message}")
+            kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
+            
+            # Store the callback to handle the response
+            nonce = kv_store_dialogue.dialogue_label.dialogue_reference[0]
+            self.context.state.req_to_callback[nonce] = (
+                self._handle_kv_read_response,
+                {},
+            )
+            self.context.state.in_flight_req = True
+
+            # Send the message
+            self.context.outbox.put_message(message=kv_store_message)
+
+            # Wait for response (simple polling approach)
+            max_wait = 3  # Maximum wait time in seconds
+            wait_time = 0
+            while self.context.state.in_flight_req and wait_time < max_wait:
+                time.sleep(0.1)
+                wait_time += 0.1
+
+            # Return cached data if available, otherwise empty dict
+            return getattr(self.context.state, "last_kv_read_data", {})
+
+        except Exception as e:
+            self.context.logger.error(f"Error reading from KV store: {e}")
+            return {}
+
+    def _handle_kv_read_response(
+        self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue
+    ) -> None:
+        """
+        Handle KV store read response messages.
+
+        :param kv_store_response_message: the KvStoreMessage response
+        :param dialogue: the KvStoreDialogue
+        """
+        success = (
+            kv_store_response_message.performative
+            == KvStoreMessage.Performative.READ_RESPONSE
+        )
+        if success:
+            self.context.logger.info("KV store read successful.")
+            # Store the read data for later use
+            if hasattr(kv_store_response_message, "data"):
+                self.context.state.last_kv_read_data = kv_store_response_message.data
+        else:
+            self.context.logger.info("KV store read failed.")
+            self.context.state.last_kv_read_data = {}
+        self.context.state.in_flight_req = False
+
     def _write_kv(self, data: Dict[str, str]) -> Generator[None, None, bool]:
         """
         Create or update data in the KV store.
@@ -1170,7 +1232,7 @@ class HttpHandler(BaseHttpHandler):
         else:
             self.context.logger.info("KV store update failed.")
 
-    async def _handle_get_withdrawal_amount(
+    def _handle_get_withdrawal_amount(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ):
         try:
@@ -1186,7 +1248,7 @@ class HttpHandler(BaseHttpHandler):
             except (FileNotFoundError, json.JSONDecodeError) as e:
                 self.context.logger.info(f"Error reading portfolio data: {str(e)}")
                 response = {"error": "Portfolio data not available", "status_code": 404}
-                await self._send_ok_response_async(http_msg, http_dialogue, response)
+                self._send_ok_response(http_msg, http_dialogue, response)
                 return
 
             # Extract withdrawal amount data
@@ -1204,13 +1266,13 @@ class HttpHandler(BaseHttpHandler):
                 "asset_breakdown": asset_breakdown,
                 "status_code": 200,
             }
-            await self._send_ok_response_async(http_msg, http_dialogue, response)
+            self._send_ok_response(http_msg, http_dialogue, response)
         except Exception as e:
             self.context.logger.error(f"Error getting withdrawal amount: {e}")
             response = {"error": str(e), "status_code": 500}
-            await self._send_ok_response_async(http_msg, http_dialogue, response)
+            self._send_ok_response(http_msg, http_dialogue, response)
 
-    async def _handle_post_withdrawal_initiate(
+    def _handle_post_withdrawal_initiate(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ):
         try:
@@ -1219,9 +1281,30 @@ class HttpHandler(BaseHttpHandler):
             target_address = request_data.get("target_address")
             if not target_address:
                 response = {"error": "target_address is required", "status_code": 400}
-                await self._send_ok_response_async(http_msg, http_dialogue, response)
+                self._send_ok_response(http_msg, http_dialogue, response)
                 return
-            existing_withdrawal = await self._read_kv_async(keys=("withdrawal_status",))
+            
+            # ✅ RESET: Clear any existing withdrawal status first
+            self._write_kv({
+                "withdrawal_status": "unknown",
+                "withdrawal_message": "",
+                "withdrawal_id": "",
+                "withdrawal_target_address": "",
+                "withdrawal_requested_at": "",
+                "withdrawal_completed_at": "",
+                "withdrawal_portfolio_value": "",
+                "withdrawal_chain": "",
+                "withdrawal_safe_address": "",
+                "withdrawal_tx_hashes": "",
+                "withdrawal_tx_link": "",
+                "withdrawal_request": ""
+            })
+            
+            # Small delay to ensure KV store is updated
+            time.sleep(0.1)
+            
+            # Check for existing withdrawal using KV read
+            existing_withdrawal = self._read_kv(keys=("withdrawal_status",))
             if existing_withdrawal and existing_withdrawal.get("withdrawal_status") in [
                 "pending",
                 "withdrawing",
@@ -1230,10 +1313,10 @@ class HttpHandler(BaseHttpHandler):
                     "error": "Withdrawal already in progress",
                     "status_code": 409,
                 }
-                await self._send_ok_response_async(http_msg, http_dialogue, response)
+                self._send_ok_response(http_msg, http_dialogue, response)
                 return
+            
             import uuid
-
             withdrawal_id = str(uuid.uuid4())
             
             # Define the path to the portfolio data file (same as portfolio endpoint)
@@ -1248,7 +1331,7 @@ class HttpHandler(BaseHttpHandler):
             except (FileNotFoundError, json.JSONDecodeError) as e:
                 self.context.logger.info(f"Error reading portfolio data: {str(e)}")
                 response = {"error": "Portfolio data not available", "status_code": 404}
-                await self._send_ok_response_async(http_msg, http_dialogue, response)
+                self._send_ok_response(http_msg, http_dialogue, response)
                 return
 
             total_value = portfolio_data.get("portfolio_value", 0)
@@ -1264,7 +1347,9 @@ class HttpHandler(BaseHttpHandler):
                 "safe_address": safe_address,
                 "requested_at": int(time.time()),
             }
-            await self._write_kv_async({"investing_paused": "true"})
+            
+            # Use existing synchronous KV write function
+            self._write_kv({"investing_paused": "true"})
             withdrawal_data = {
                 "withdrawal_request": json.dumps(withdrawal_request),
                 "withdrawal_status": "withdrawing",
@@ -1276,7 +1361,7 @@ class HttpHandler(BaseHttpHandler):
                 "withdrawal_chain": operating_chain,
                 "withdrawal_safe_address": safe_address,
             }
-            await self._write_kv_async(withdrawal_data)
+            self._write_kv(withdrawal_data)
             self.context.logger.info(
                 f"Withdrawal initiated and execution started: {withdrawal_id} -> {target_address}"
             )
@@ -1288,18 +1373,24 @@ class HttpHandler(BaseHttpHandler):
                 "total_value_usd": total_value,
                 "status_code": 200,
             }
-            await self._send_ok_response_async(http_msg, http_dialogue, response)
+            self._send_ok_response(http_msg, http_dialogue, response)
         except Exception as e:
             self.context.logger.error(f"Error initiating withdrawal: {e}")
+            # ✅ RESET: Clear withdrawal status on error
+            self._write_kv({
+                "investing_paused": "false", 
+                "withdrawal_status": "failed",
+                "withdrawal_message": f"Withdrawal failed: {str(e)}"
+            })
             response = {"error": str(e), "status_code": 500}
-            await self._send_ok_response_async(http_msg, http_dialogue, response)
+            self._send_ok_response(http_msg, http_dialogue, response)
 
-    async def _handle_get_withdrawal_status(
+    def _handle_get_withdrawal_status(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ):
         try:
-            # Get withdrawal data from KV store
-            withdrawal_data = await self._read_kv_async(keys=(
+            # Get withdrawal data from KV store using read
+            withdrawal_data = self._read_kv(keys=(
                 "withdrawal_id", "withdrawal_status", "withdrawal_message", 
                 "withdrawal_target_address", "withdrawal_chain", "withdrawal_safe_address",
                 "withdrawal_tx_hashes", "withdrawal_requested_at", "withdrawal_completed_at",
@@ -1333,7 +1424,7 @@ class HttpHandler(BaseHttpHandler):
             elif status == "completed":
                 message = "Withdrawal complete!"
             elif status == "failed":
-                message = "Withdrawal failed. Please contact support."
+                message = "Withdrawal failed due to error."
 
             response_data = {
                 "status": status,
@@ -1372,110 +1463,13 @@ class HttpHandler(BaseHttpHandler):
                 except json.JSONDecodeError:
                     pass
 
-            await self._send_ok_response_async(http_msg, http_dialogue, response_data)
+            self._send_ok_response(http_msg, http_dialogue, response_data)
         except Exception as e:
             self.context.logger.error(f"Error getting withdrawal status: {e}")
             response = {"error": str(e), "status_code": 500}
-            await self._send_ok_response_async(http_msg, http_dialogue, response)
+            self._send_ok_response(http_msg, http_dialogue, response)
 
-    async def _read_kv_async(self, keys: tuple) -> Dict[str, Any]:
-        """
-        Async KV store read operation using the existing dialogue pattern.
 
-        :param keys: tuple of keys to read
-        :return: dictionary with key-value pairs
-        """
-        try:
-            # Use the existing KV store dialogue pattern but make it async
-            kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
-            kv_store_message, srr_dialogue = kv_store_dialogues.create(
-                counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
-                performative=KvStoreMessage.Performative.READ_REQUEST,
-                keys=keys,
-            )
-            self.context.logger.info(f"Reading from KV store... {kv_store_message}")
-            kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
-
-            # Store the callback to handle the response
-            nonce = kv_store_dialogue.dialogue_label.dialogue_reference[0]
-            self.context.state.req_to_callback[nonce] = (
-                self._handle_kv_read_response_async,
-                {},
-            )
-            self.context.state.in_flight_req = True
-
-            # Send the message
-            self.context.outbox.put_message(message=kv_store_message)
-
-            await asyncio.sleep(1)
-
-            # Return cached data if available, otherwise empty dict
-            return getattr(self.context.state, "last_kv_read_data", {})
-
-        except Exception as e:
-            self.context.logger.error(f"Error reading from KV store: {e}")
-            return {}
-
-    async def _write_kv_async(self, data: Dict[str, str]) -> None:
-        """
-        Async KV store write operation using the existing dialogue pattern.
-
-        :param data: dictionary of data to write
-        """
-        try:
-            # Use the existing KV store dialogue pattern but make it async
-            kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
-            kv_store_message, srr_dialogue = kv_store_dialogues.create(
-                counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),
-                performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
-                data=data,
-            )
-            self.context.logger.info(f"Writing to KV store... {kv_store_message}")
-            kv_store_dialogue = cast(KvStoreDialogue, srr_dialogue)
-
-            # Store the callback to handle the response
-            nonce = kv_store_dialogue.dialogue_label.dialogue_reference[0]
-            self.context.state.req_to_callback[nonce] = (
-                self._handle_kv_store_response,
-                {},
-            )
-            self.context.state.in_flight_req = True
-
-            # Send the message
-            self.context.outbox.put_message(message=kv_store_message)
-
-            await asyncio.sleep(1)
-
-        except Exception as e:
-            self.context.logger.error(f"Error writing to KV store: {e}")
-
-    def _handle_kv_read_response_async(
-        self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue
-    ) -> None:
-        """
-        Handle KV store read response messages for async operations.
-
-        :param kv_store_response_message: the KvStoreMessage response
-        :param dialogue: the KvStoreDialogue
-        """
-        success = (
-            kv_store_response_message.performative
-            == KvStoreMessage.Performative.SUCCESS
-        )
-        if success:
-            self.context.logger.info("KV store read successful.")
-            # Store the read data for later use
-            if hasattr(kv_store_response_message, "data"):
-                self.context.state.last_kv_read_data = kv_store_response_message.data
-        else:
-            self.context.logger.info("KV store read failed.")
-            self.context.state.last_kv_read_data = {}
-
-    async def _send_ok_response_async(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, data: Dict[str, Any]
-    ):
-        # Implement async send response logic (can call the existing _send_ok_response for now)
-        self._send_ok_response(http_msg, http_dialogue, data)
 
     def _send_message(
         self,

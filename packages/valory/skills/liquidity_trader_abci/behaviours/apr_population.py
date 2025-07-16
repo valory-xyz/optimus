@@ -24,7 +24,7 @@ import json
 import os
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Generator, Optional, Type
+from typing import Any, Dict, Generator, Optional, Type, Tuple
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -35,10 +35,11 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     METRICS_TYPE,
     PositionStatus,
 )
+from packages.valory.skills.liquidity_trader_abci.payloads import APRPopulationPayload
 from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
-    APRPopulationPayload,
     APRPopulationRound,
 )
+from packages.valory.skills.liquidity_trader_abci.states.base import Event
 
 
 class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
@@ -49,8 +50,28 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     _final_value = None
 
     def async_act(self) -> Generator:
-        """Execute the APR population behavior."""
+        """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # Check if investing is paused due to withdrawal (read from KV store)
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info("Investing paused due to withdrawal request. Transitioning to withdrawal round.")
+                payload = APRPopulationPayload(
+                    sender=self.context.agent_address,
+                    content=json.dumps(
+                        {
+                            "event": Event.WITHDRAWAL_INITIATED.value,
+                            "updates": {},
+                        },
+                        sort_keys=True,
+                    ),
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
+            # Normal APR population logic
             sender = self.context.agent_address
             payload_context = "APR Population"
 
@@ -89,6 +110,8 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.wait_until_round_end()
 
             self.set_done()
+
+
 
     def _get_or_create_agent_type(
         self, eth_address: str
@@ -950,3 +973,12 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         last_name_prefix = self.generate_phonetic_name(address, 18, 2)
         last_name_number = int(address[-4:], 16) % 100
         return f"{first_name}-{last_name_prefix}{str(last_name_number).zfill(2)}"
+
+    def _read_investing_paused(self) -> Generator[None, None, bool]:
+        """Read investing_paused flag from KV store."""
+        try:
+            result = yield from self._read_kv(("investing_paused",))
+            return result.get("investing_paused", "false").lower() == "true"
+        except Exception as e:
+            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
+            return False

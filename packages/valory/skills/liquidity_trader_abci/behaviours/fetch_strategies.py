@@ -63,7 +63,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
 )
-from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
+from packages.valory.skills.liquidity_trader_abci.states.base import Event, StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesPayload,
     FetchStrategiesRound,
@@ -89,6 +89,29 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # Check if investing is paused due to withdrawal (read from KV store)
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info("Investing paused due to withdrawal request. Transitioning to withdrawal round.")
+                payload = FetchStrategiesPayload(
+                    sender=self.context.agent_address,
+                    content=json.dumps(
+                        {
+                            "event": Event.WITHDRAWAL_INITIATED.value,
+                            "updates": {},
+                        },
+                        sort_keys=True,
+                    ),
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
+            # Normal fetch strategies logic
+            sender = self.context.agent_address
+            (next_event, updates) = yield from self.get_next_event()
+
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
             self.context.logger.info(f"Agent hash: {agent_hash}")
@@ -3984,6 +4007,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "Failed to get service owner from service registry"
             )
             return None
+
+    def _read_investing_paused(self) -> Generator[None, None, bool]:
+        """Read investing_paused flag from KV store."""
+        try:
+            result = yield from self._read_kv(("investing_paused",))
+            return result.get("investing_paused", "false").lower() == "true"
+        except Exception as e:
+            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
+            return False
 
     def check_is_valid_safe_address(
         self, safe_address: str, operating_chain: str

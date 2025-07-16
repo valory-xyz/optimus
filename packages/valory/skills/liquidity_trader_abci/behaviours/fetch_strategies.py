@@ -281,7 +281,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Check if we need to recalculate the portfolio
             self.context.logger.info("Checking if portfolio recalculation is needed")
-            if self.should_recalculate_portfolio(self.portfolio_data):
+            should_recalculate = yield from self.should_recalculate_portfolio(
+                self.portfolio_data
+            )
+            if should_recalculate:
                 self.context.logger.info("Recalculating user share values")
                 yield from self.calculate_user_share_values()
                 # Store the updated portfolio data
@@ -455,8 +458,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("Failed to fetch historical ETH price")
             return None
 
-    def should_recalculate_portfolio(self, last_portfolio_data: Dict) -> bool:
+    def should_recalculate_portfolio(
+        self, last_portfolio_data: Dict
+    ) -> Generator[None, None, bool]:
         """Determine if the portfolio should be recalculated."""
+        chain = self.params.target_investment_chains[0]
+        initial_investment = yield from self._load_chain_total_investment(chain)
+        final_value = last_portfolio_data.get("portfolio_value", None)
+
+        if initial_investment is None or final_value is None:
+            return True
+
         last_round_id = self.context.state.round_sequence._abci_app._previous_rounds[
             -1
         ].round_id

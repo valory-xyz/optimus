@@ -2512,15 +2512,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Fetch token transfers
             self.context.logger.info("Fetching Mode token transfers...")
 
-            self._fetch_token_transfers_mode(
+            success = self._fetch_token_transfers_mode(
                 address, end_datetime, all_transfers_by_date, fetch_till_date
             )
+            if not success:
+                self.context.logger.info("No token transfers found for Mode")
+                all_transfers_by_date = self.funding_events["mode"]
 
             # Fetch ETH transfers
             self.context.logger.info("Fetching Mode ETH transfers...")
             self._fetch_eth_transfers_mode(
                 address, end_datetime, all_transfers_by_date, fetch_till_date
             )
+            if not success:
+                self.context.logger.info("No token transfers found for Mode")
+                all_transfers_by_date = self.funding_events["mode"]
 
             # Merge with existing data and save
             for date, transfers in all_transfers_by_date.items():
@@ -2784,7 +2790,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         target_date: str,
         all_transfers_by_date: dict,
         fetch_all_till_date: bool = False,
-    ) -> None:
+    ) -> bool:
         """
         Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date.
 
@@ -2823,7 +2829,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             if not response.status_code == 200:
                 self.context.logger.error("Failed to fetch Mode token transfers")
-                return None
+                return False
 
             response_data = response.json()
             transfers = response_data.get("items", [])
@@ -2904,6 +2910,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"Completed Mode token transfers {date_range}: {processed_count} found"
         )
+        return True
 
     def _fetch_eth_transfers_mode(
         self,
@@ -2911,7 +2918,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         target_date: str,
         all_transfers_by_date: dict,
         fetch_till_date: bool,
-    ) -> None:
+    ) -> bool:
         """Fetch ETH balance history from Mode blockchain explorer."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         endpoint = f"{base_url}/addresses/{address}/coin-balance-history"
@@ -2942,7 +2949,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             if not response.status_code == 200:
                 self.context.logger.error("Failed to fetch Mode coin balance history")
-                return
+                return False
 
             response_data = response.json()
             balance_history = response_data.get("items", [])
@@ -3024,6 +3031,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"Completed Mode coin balance history {date_range}: {processed_count} filtered transfers found"
         )
+        return True
 
     def _should_include_transfer_mode(
         self, from_address: dict, tx_data: dict = None, is_eth_transfer: bool = False

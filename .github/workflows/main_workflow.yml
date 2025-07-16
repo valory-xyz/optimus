@@ -145,7 +145,7 @@ jobs:
           echo "::set-output name=exit_code::$?"
       - name: Print detected leaks
         run: |
-          echo "Detected leaks:"
+          echo "leaks:"
           cat leak_report  
 
   test:

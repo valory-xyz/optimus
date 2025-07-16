@@ -20,6 +20,7 @@
 """This module contains the behaviour for executing trades for the 'liquidity_trader_abci' skill."""
 
 import json
+import time
 from decimal import Decimal
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type, cast
 
@@ -83,6 +84,31 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # Check if investing is paused due to withdrawal (read from KV store)
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                # Check if we have withdrawal actions to execute
+                withdrawal_actions = self.synchronized_data.withdrawal_actions
+                if withdrawal_actions:
+                    self.context.logger.info("Executing withdrawal actions...")
+                    # Continue with normal action execution for withdrawal actions
+                else:
+                    self.context.logger.info("Investing paused due to withdrawal request. Transitioning to withdrawal round.")
+                    payload = DecisionMakingPayload(
+                        sender=self.context.agent_address,
+                        content=json.dumps(
+                            {
+                                "event": Event.WITHDRAWAL_INITIATED.value,
+                                "updates": {},
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+                    yield from self.send_a2a_transaction(payload)
+                    yield from self.wait_until_round_end()
+                    self.set_done()
+                    return
+
             sender = self.context.agent_address
             (next_event, updates) = yield from self.get_next_event()
 
@@ -103,8 +129,25 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
+    def _read_investing_paused(self) -> Generator[None, None, bool]:
+        """Read investing_paused flag from KV store."""
+        try:
+            result = yield from self._read_kv(("investing_paused",))
+            return result.get("investing_paused", "false").lower() == "true"
+        except Exception as e:
+            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
+            return False
+
     def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""
+        # Check if we have withdrawal actions to execute
+        withdrawal_actions = self.synchronized_data.withdrawal_actions
+        if withdrawal_actions:
+            self.context.logger.info("Processing withdrawal actions...")
+            result = yield from self._process_withdrawal_actions(withdrawal_actions)
+            return result
+
+        # Normal action processing
         actions = self.synchronized_data.actions
         if not actions:
             self.context.logger.info("No actions to prepare")
@@ -121,6 +164,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         current_action_index = (
             0 if last_executed_action_index is None else last_executed_action_index + 1
         )
+
+        # Check if we're in the middle of executing actions and withdrawal was initiated
+        investing_paused = yield from self._read_investing_paused()
+        if investing_paused and last_executed_action_index is not None:
+            self.context.logger.info("Withdrawal initiated during action execution. Completing current actions...")
+            # Continue with existing actions to avoid stopping mid-execution
 
         if (
             self.synchronized_data.last_action == Action.EXECUTE_STEP.value
@@ -174,6 +223,406 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             positions, actions, current_action_index, last_round_id
         )
         return res
+
+    def _process_withdrawal_actions(self, withdrawal_actions: List[Dict[str, Any]]) -> Generator[None, None, Tuple[str, Dict]]:
+        """
+        Process withdrawal actions.
+        
+        :param withdrawal_actions: list of withdrawal actions
+        :return: tuple of (event, updates)
+        """
+        last_executed_withdrawal_action_index = self.synchronized_data.last_executed_action_index
+        current_action_index = (
+            0 if last_executed_withdrawal_action_index is None else last_executed_withdrawal_action_index + 1
+        )
+
+        if current_action_index >= len(withdrawal_actions):
+            self.context.logger.info("All withdrawal actions have been executed")
+            # Check if we need to progress to next step
+            next_step_result = yield from self._progress_withdrawal_step()
+            if next_step_result:
+                # More actions available in next step, transition to WithdrawFundsRound
+                self.context.logger.info("More withdrawal actions available. Transitioning to WithdrawFundsRound for new actions.")
+                return Event.WITHDRAWAL_INITIATED.value, {}
+            else:
+                # All steps completed, mark withdrawal as completed
+                self._update_withdrawal_completion()
+                return Event.DONE.value, {}
+
+        # Get the current withdrawal action
+        current_action = withdrawal_actions[current_action_index]
+        action_type = current_action.get("action_type")
+
+        self.context.logger.info(f"Processing withdrawal action {current_action_index + 1}/{len(withdrawal_actions)}: {action_type}")
+
+        if action_type == "EXIT_POOL":
+            result = yield from self._prepare_withdrawal_exit_pool_action(current_action, current_action_index)
+            if result[0] == Event.ERROR.value:
+                yield from self._update_withdrawal_status("FAILED", "Withdrawal failed due to error.")
+            return result
+        elif action_type == "SWAP":
+            result = yield from self._prepare_withdrawal_swap_action(current_action, current_action_index)
+            if result[0] == Event.ERROR.value:
+                yield from self._update_withdrawal_status("FAILED", "Withdrawal failed due to error.")
+            return result
+        elif action_type == "TRANSFER":
+            result = yield from self._prepare_withdrawal_transfer_action(current_action, current_action_index)
+            if result[0] == Event.ERROR.value:
+                yield from self._update_withdrawal_status("FAILED", "Withdrawal failed due to error.")
+            return result
+        else:
+            self.context.logger.error(f"Unknown withdrawal action type: {action_type}")
+            yield from self._update_withdrawal_status("FAILED", "Withdrawal failed due to error.")
+            return Event.ERROR.value, {}
+
+    def _progress_withdrawal_step(self) -> Generator[None, None, bool]:
+        """
+        Progress to next withdrawal step and check if more actions are available.
+        
+        :return: True if more actions are available, False if all steps completed
+        """
+        try:
+            # Read current withdrawal step from KV store
+            step_data = yield from self._read_kv(("withdrawal_current_step",))
+            current_step = step_data.get("withdrawal_current_step", "EXIT_POOLS")
+            
+            # Read withdrawal data to get target address and portfolio data
+            withdrawal_data = yield from self._read_kv(("withdrawal_target_address",))
+            target_address = withdrawal_data.get("withdrawal_target_address", "")
+            
+            if not target_address:
+                self.context.logger.error("No target address found for withdrawal step progression")
+                yield from self._update_withdrawal_status("FAILED", "Withdrawal failed due to error.")
+                return False
+            
+            # Get portfolio data
+            portfolio_data = yield from self._get_portfolio_data()
+            if not portfolio_data:
+                self.context.logger.error("No portfolio data available for withdrawal step progression")
+                yield from self._update_withdrawal_status("FAILED", "Withdrawal failed due to error.")
+                return False
+            
+            # Determine next step and check if actions are available
+            next_step = None
+            has_actions = False
+            
+            if current_step == "EXIT_POOLS":
+                # Check if there are pools to exit
+                exit_actions = yield from self._prepare_exit_pool_actions([])  # Empty positions since we already exited
+                if exit_actions:
+                    # Still have pools to exit
+                    has_actions = True
+                    next_step = "EXIT_POOLS"
+                else:
+                    # Move to swap step
+                    next_step = "SWAP_TO_USDC"
+                    swap_actions = yield from self._prepare_swap_to_usdc_actions(portfolio_data)
+                    if swap_actions:
+                        has_actions = True
+                    else:
+                        # Move to transfer step
+                        next_step = "TRANSFER_USDC"
+                        transfer_actions = yield from self._prepare_transfer_usdc_actions(target_address, portfolio_data)
+                        if transfer_actions:
+                            has_actions = True
+                        else:
+                            # No transfers needed, withdrawal complete
+                            return False
+                            
+            elif current_step == "SWAP_TO_USDC":
+                # Check if there are assets to swap
+                swap_actions = yield from self._prepare_swap_to_usdc_actions(portfolio_data)
+                if swap_actions:
+                    # Still have assets to swap
+                    has_actions = True
+                    next_step = "SWAP_TO_USDC"
+                else:
+                    # Move to transfer step
+                    next_step = "TRANSFER_USDC"
+                    transfer_actions = yield from self._prepare_transfer_usdc_actions(target_address, portfolio_data)
+                    if transfer_actions:
+                        has_actions = True
+                    else:
+                        # No transfers needed, withdrawal complete
+                        return False
+                        
+            elif current_step == "TRANSFER_USDC":
+                # Check if there is USDC to transfer
+                transfer_actions = yield from self._prepare_transfer_usdc_actions(target_address, portfolio_data)
+                if transfer_actions:
+                    # Still have USDC to transfer
+                    has_actions = True
+                    next_step = "TRANSFER_USDC"
+                else:
+                    # No transfers needed, withdrawal complete
+                    return False
+            
+            # Update step if we have new actions or need to progress
+            if has_actions and next_step:
+                # Update withdrawal step
+                yield from self._write_kv({"withdrawal_current_step": next_step})
+                
+                # Clear current withdrawal actions to force transition to WithdrawFundsRound
+                # This will trigger WithdrawFundsRound to create new actions for the next step
+                self.context.logger.info(f"Progressing to next withdrawal step: {next_step}. Triggering transition to WithdrawFundsRound.")
+                return True
+            else:
+                # No more actions, withdrawal complete
+                return False
+                
+        except Exception as e:
+            self.context.logger.error(f"Error progressing withdrawal step: {str(e)}")
+            yield from self._update_withdrawal_status("FAILED", "Withdrawal failed due to error.")
+            return False
+
+    def _prepare_exit_pool_actions(self, positions: List[Dict[str, Any]]) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Prepare exit pool actions for withdrawal step progression."""
+        actions = []
+        
+        for position in positions:
+            if position.get("status") == "OPEN":
+                # Create exit pool action
+                action = {
+                    "action_type": "EXIT_POOL",
+                    "chain": position.get("chain", self.context.params.target_investment_chains[0]),
+                    "pool_address": position.get("pool_address"),
+                    "dex_type": position.get("dex_type"),
+                    "token0": position.get("token0"),
+                    "token1": position.get("token1"),
+                    "token0_symbol": position.get("token0_symbol"),
+                    "token1_symbol": position.get("token1_symbol"),
+                    "pool_type": position.get("pool_type"),
+                    "description": f"Exit {position.get('token0_symbol')}/{position.get('token1_symbol')} pool for withdrawal"
+                }
+                
+                # Add position-specific data
+                if position.get("token_id"):
+                    action["token_id"] = position.get("token_id")
+                if position.get("liquidity"):
+                    action["liquidity"] = position.get("liquidity")
+                
+                actions.append(action)
+        
+        return actions
+
+    def _prepare_swap_to_usdc_actions(self, portfolio_data: Dict[str, Any]) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Prepare swap to USDC actions for withdrawal step progression."""
+        actions = []
+        portfolio_breakdown = portfolio_data.get("portfolio_breakdown", [])
+        
+        for asset in portfolio_breakdown:
+            asset_symbol = asset.get("asset", "")
+            balance = asset.get("balance", 0)
+            asset_address = asset.get("address", "")
+            
+            # Skip USDC and zero balances
+            if asset_symbol == "USDC" or balance <= 0:
+                continue
+            
+            # Create swap action to USDC
+            action = {
+                "action_type": "SWAP",
+                "chain": self.context.params.target_investment_chains[0],
+                "from_token": asset_address,
+                "from_token_symbol": asset_symbol,
+                "to_token": self._get_usdc_address(self.context.params.target_investment_chains[0]),
+                "to_token_symbol": "USDC",
+                "amount": balance,
+                "description": f"Swap {balance} {asset_symbol} to USDC for withdrawal"
+            }
+            
+            actions.append(action)
+        
+        return actions
+
+    def _prepare_transfer_usdc_actions(self, target_address: str, portfolio_data: Dict[str, Any]) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Prepare transfer USDC actions for withdrawal step progression."""
+        actions = []
+        portfolio_breakdown = portfolio_data.get("portfolio_breakdown", [])
+        
+        # Find USDC balance
+        usdc_balance = 0
+        usdc_address = ""
+        
+        for asset in portfolio_breakdown:
+            if asset.get("asset") == "USDC":
+                usdc_balance = asset.get("balance", 0)
+                usdc_address = asset.get("address", "")
+                break
+        
+        if usdc_balance > 0 and usdc_address:
+            # Create transfer action
+            action = {
+                "action_type": "TRANSFER",
+                "chain": self.context.params.target_investment_chains[0],
+                "from_address": self.context.params.safe_contract_addresses.get(
+                    self.context.params.target_investment_chains[0]
+                ),
+                "to_address": target_address,
+                "token_address": usdc_address,
+                "token_symbol": "USDC",
+                "amount": usdc_balance,
+                "description": f"Transfer {usdc_balance} USDC to {target_address}"
+            }
+            
+            actions.append(action)
+        
+        return actions
+
+    def _get_usdc_address(self, chain: str) -> str:
+        """Get USDC address for the given chain."""
+        usdc_addresses = {
+            "optimism": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+            "base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            "mode": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  # Using Base USDC for Mode
+            "ethereum": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        }
+        return usdc_addresses.get(chain, usdc_addresses["optimism"])
+
+    def _get_portfolio_data(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get current portfolio data."""
+        try:
+            portfolio_data_filepath = (
+                self.context.params.store_path / self.context.params.portfolio_info_filename
+            )
+            
+            with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
+                portfolio_data = json.load(file)
+            
+            return portfolio_data
+        except Exception as e:
+            self.context.logger.error(f"Error reading portfolio data: {str(e)}")
+            return None
+
+    def _prepare_withdrawal_exit_pool_action(self, action: Dict[str, Any], action_index: int) -> Generator[None, None, Tuple[str, Dict]]:
+        """Prepare withdrawal exit pool action."""
+        # Convert withdrawal action to standard exit pool action format
+        standard_action = {
+            "action_type": "EXIT_POOL",
+            "chain": action.get("chain"),
+            "pool_address": action.get("pool_address"),
+            "dex_type": action.get("dex_type"),
+            "token0": action.get("token0"),
+            "token1": action.get("token1"),
+            "token0_symbol": action.get("token0_symbol"),
+            "token1_symbol": action.get("token1_symbol"),
+            "pool_type": action.get("pool_type"),
+            "description": action.get("description")
+        }
+        
+        # Add position-specific data
+        if action.get("token_id"):
+            standard_action["token_id"] = action.get("token_id")
+        if action.get("liquidity"):
+            standard_action["liquidity"] = action.get("liquidity")
+
+        # Use existing exit pool logic
+        positions = self.synchronized_data.positions
+        res = yield from self._prepare_next_action(
+            positions, [standard_action], 0, "withdrawal"
+        )
+        
+        # Update the action index for withdrawal actions
+        updates = res[1] if len(res) > 1 else {}
+        updates["last_executed_action_index"] = action_index
+        
+        return res[0], updates
+
+    def _prepare_withdrawal_swap_action(self, action: Dict[str, Any], action_index: int) -> Generator[None, None, Tuple[str, Dict]]:
+        """Prepare withdrawal swap action."""
+        # Convert withdrawal action to standard swap action format
+        standard_action = {
+            "action_type": "SWAP",
+            "chain": action.get("chain"),
+            "from_token": action.get("from_token"),
+            "from_token_symbol": action.get("from_token_symbol"),
+            "to_token": action.get("to_token"),
+            "to_token_symbol": action.get("to_token_symbol"),
+            "amount": action.get("amount"),
+            "description": action.get("description")
+        }
+
+        # Use existing swap logic
+        positions = self.synchronized_data.positions
+        res = yield from self._prepare_next_action(
+            positions, [standard_action], 0, "withdrawal"
+        )
+        
+        # Update the action index for withdrawal actions
+        updates = res[1] if len(res) > 1 else {}
+        updates["last_executed_action_index"] = action_index
+        
+        return res[0], updates
+
+    def _prepare_withdrawal_transfer_action(self, action: Dict[str, Any], action_index: int) -> Generator[None, None, Tuple[str, Dict]]:
+        """Prepare withdrawal transfer action."""
+        # Convert withdrawal action to standard transfer action format
+        standard_action = {
+            "action_type": "TRANSFER",
+            "chain": action.get("chain"),
+            "from_address": action.get("from_address"),
+            "to_address": action.get("to_address"),
+            "token_address": action.get("token_address"),
+            "token_symbol": action.get("token_symbol"),
+            "amount": action.get("amount"),
+            "description": action.get("description")
+        }
+
+        # Use existing transfer logic
+        positions = self.synchronized_data.positions
+        res = yield from self._prepare_next_action(
+            positions, [standard_action], 0, "withdrawal"
+        )
+        
+        # Update the action index for withdrawal actions
+        updates = res[1] if len(res) > 1 else {}
+        updates["last_executed_action_index"] = action_index
+        
+        return res[0], updates
+
+    def _update_withdrawal_completion(self) -> None:
+        """Update withdrawal completion status."""
+        try:
+            # Update withdrawal status to completed and reset flags
+            update_data = {
+                "withdrawal_status": "COMPLETED",
+                "withdrawal_message": "Withdrawal complete!",
+                "withdrawal_completed_at": str(int(time.time())),
+                "investing_paused": "false"  # Reset the pause flag
+            }
+            
+            # Store transaction hashes if available
+            if hasattr(self.synchronized_data, 'final_tx_hash') and self.synchronized_data.final_tx_hash:
+                tx_hashes = [self.synchronized_data.final_tx_hash]
+                update_data["withdrawal_transaction_hashes"] = json.dumps(tx_hashes)
+            
+            # Use the existing _write_kv method to update KV store
+            self._write_kv(update_data)
+            self.context.logger.info("Withdrawal marked as completed and flags reset")
+        except Exception as e:
+            self.context.logger.error(f"Error updating withdrawal completion: {str(e)}")
+
+    def _update_withdrawal_status(self, status: str, message: str) -> Generator[None, None, None]:
+        """
+        Update withdrawal status in KV store.
+        
+        :param status: new status
+        :param message: status message
+        """
+        try:
+            update_data = {
+                "withdrawal_status": status,
+                "withdrawal_message": message
+            }
+            
+            if status == "COMPLETED":
+                import time
+                update_data["withdrawal_completed_at"] = str(int(time.time()))
+            
+            yield from self._write_kv(update_data)
+            self.context.logger.info(f"Withdrawal status updated to {status}: {message}")
+        except Exception as e:
+            self.context.logger.error(f"Error updating withdrawal status: {str(e)}")
 
     def _post_execute_step(
         self, actions, last_executed_action_index

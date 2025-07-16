@@ -82,6 +82,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Execute the behaviour's async action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # Check if investing is paused due to withdrawal (read from KV store)
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info("Investing paused due to withdrawal request. Transitioning to WithdrawFunds round.")
+                payload = EvaluateStrategyPayload(
+                    sender=self.context.agent_address,
+                    content=json.dumps(
+                        {
+                            "event": Event.WITHDRAWAL_INITIATED.value,
+                            "updates": {},
+                        },
+                        sort_keys=True,
+                    ),
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
             # Check minimum hold period
             # Check if no current positions and uninvested ETH, prepare swap to USDC
             actions = yield from self.check_and_prepare_non_whitelisted_swaps()
@@ -125,6 +144,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
+
+    def _read_investing_paused(self) -> Generator[None, None, bool]:
+        """Read investing_paused flag from KV store."""
+        try:
+            result = yield from self._read_kv(("investing_paused",))
+            return result.get("investing_paused", "false").lower() == "true"
+        except Exception as e:
+            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
+            return False
 
     def validate_and_prepare_velodrome_inputs(
         self, tick_bands, current_price, tick_spacing=1

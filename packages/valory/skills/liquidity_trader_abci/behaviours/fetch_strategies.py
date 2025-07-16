@@ -71,9 +71,6 @@ from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
     PostTxSettlementRound,
 )
-from packages.valory.skills.liquidity_trader_abci.utils import (
-    validate_and_fix_protocols,
-)
 from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_amounts_for_liquidity,
     get_sqrt_ratio_at_tick,
@@ -204,13 +201,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 for chain in self.params.target_investment_chains:
                     chain_strategies = self.params.available_strategies.get(chain, [])
                     serialized_protocols.extend(chain_strategies)
-
-            # Validate and fix protocols from KV store using shared utility
-            serialized_protocols = validate_and_fix_protocols(
-                serialized_protocols,
-                self.params.target_investment_chains,
-                self.params.available_strategies,
-            )
 
             # Update KV store if protocols were fixed
             if (
@@ -2525,7 +2515,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 address, end_datetime, all_transfers_by_date, fetch_till_date
             )
             if not success:
-                self.context.logger.info("No token transfers found for Mode")
+                self.context.logger.info("No ETH transfers found for Mode")
                 all_transfers_by_date = self.funding_events["mode"]
 
             # Merge with existing data and save
@@ -2553,7 +2543,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error fetching Mode transfers: {e}")
-            return {}
+            self.read_funding_events()
+            all_transfers_by_date = self.funding_events.get("mode", {})
+            return all_transfers_by_date
 
     def _fetch_all_transfers_until_date_optimism(
         self, address: str, end_date: str
@@ -2825,6 +2817,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 params=params,
                 headers={"Accept": "application/json"},
                 timeout=30,
+                verify=False,  # nosec B501
             )
 
             if not response.status_code == 200:
@@ -2945,6 +2938,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 params=params,
                 headers={"Accept": "application/json"},
                 timeout=30,
+                verify=False,  # nosec B501
             )
 
             if not response.status_code == 200:
@@ -3558,6 +3552,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     params=params,
                     headers={"Accept": "application/json"},
                     timeout=30,
+                    verify=False,  # nosec B501
                 )
 
                 if not response.status_code == 200:
@@ -3778,6 +3773,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 params=params,
                 headers={"Accept": "application/json"},
                 timeout=30,
+                verify=False,  # nosec B501
             )
 
             if response.status_code != 200:
@@ -3887,7 +3883,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Master safe address: {master_safe_address}"
                     )
-                    return master_safe_address
+                    is_valid_address = yield from self.check_is_valid_safe_address(
+                        master_safe_address, staking_chain
+                    )
+                    if is_valid_address:
+                        return master_safe_address
+                    else:
+                        return None
                 else:
                     self.context.logger.error(
                         "Failed to get service info from staking contract"
@@ -3917,9 +3919,38 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if service_owner_result:
             master_safe_address = service_owner_result
             self.context.logger.info(f"Master safe address: {master_safe_address}")
-            return master_safe_address
+            is_valid_address = yield from self.check_is_valid_safe_address(
+                master_safe_address, operating_chain
+            )
+            if is_valid_address:
+                return master_safe_address
+            else:
+                return None
         else:
             self.context.logger.error(
                 "Failed to get service owner from service registry"
             )
             return None
+
+    def check_is_valid_safe_address(
+        self, safe_address: str, operating_chain: str
+    ) -> Generator[None, None, bool]:
+        """Checks if an address is a GnosisSafe Contract"""
+        try:
+            res = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=safe_address,
+                contract_public_id=GnosisSafeContract.contract_id,
+                contract_callable="get_owners",
+                data_key="owners",
+                chain_id=operating_chain,
+            )
+
+            if res:
+                return True
+
+            return False
+
+        except Exception:
+            self.context.logger.info("Not a GnosisSafe")
+            return False

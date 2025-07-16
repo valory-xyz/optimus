@@ -41,12 +41,8 @@ def validate_and_fix_protocols(
                             if protocol not in default_protocols:
                                 default_protocols.append(protocol)
 
-        # If we have valid protocols, keep them and only add defaults for invalid ones
+        # If we have valid protocols, keep them - don't add defaults unless ALL are invalid
         if valid_protocols:
-            # Add any missing default protocols that aren't already in valid_protocols
-            for default_protocol in default_protocols:
-                if default_protocol not in valid_protocols:
-                    valid_protocols.append(default_protocol)
             return valid_protocols
         else:
             # Only if ALL protocols are invalid, use defaults

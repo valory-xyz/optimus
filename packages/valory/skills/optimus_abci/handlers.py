@@ -262,7 +262,7 @@ class HttpHandler(BaseHttpHandler):
         )
 
         # Route regexes
-        hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|0.0.0.0)(:\d+)?"
+        hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
         portfolio_url_regex = rf"{hostname_regex}\/portfolio"

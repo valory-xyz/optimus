@@ -49,6 +49,9 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.get_positions impor
 from packages.valory.skills.liquidity_trader_abci.behaviours.post_tx_settlement import (
     PostTxSettlementBehaviour,
 )
+from packages.valory.skills.liquidity_trader_abci.behaviours.withdraw_funds import (
+    WithdrawFundsBehaviour,
+)
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 
 
@@ -66,4 +69,5 @@ class LiquidityTraderRoundBehaviour(AbstractRoundBehaviour):
         DecisionMakingBehaviour,
         PostTxSettlementBehaviour,
         FetchStrategiesBehaviour,
+        WithdrawFundsBehaviour,
     ]

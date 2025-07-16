@@ -63,6 +63,9 @@ from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
 from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement import (
     PostTxSettlementRound,
 )
+from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
+    WithdrawFundsRound,
+)
 
 
 class LiquidityTraderAbciApp(AbciApp[Event]):
@@ -76,6 +79,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         GetPositionsRound,
         DecisionMakingRound,
         PostTxSettlementRound,
+        WithdrawFundsRound,
     }
     transition_function: AbciAppTransitionFunction = {
         APRPopulationRound: {
@@ -83,6 +87,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: APRPopulationRound,
             Event.ROUND_TIMEOUT: APRPopulationRound,
             Event.NONE: APRPopulationRound,
+            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         CallCheckpointRound: {
             Event.DONE: CheckStakingKPIMetRound,
@@ -93,6 +98,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ROUND_TIMEOUT: CallCheckpointRound,
             Event.NO_MAJORITY: CallCheckpointRound,
             Event.NONE: CallCheckpointRound,
+            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         CheckStakingKPIMetRound: {
             Event.DONE: GetPositionsRound,
@@ -103,12 +109,14 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.STAKING_KPI_NOT_MET: GetPositionsRound,
             Event.ERROR: GetPositionsRound,
             Event.NONE: CheckStakingKPIMetRound,
+            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         GetPositionsRound: {
             Event.DONE: APRPopulationRound,
             Event.NO_MAJORITY: GetPositionsRound,
             Event.ROUND_TIMEOUT: GetPositionsRound,
             Event.NONE: GetPositionsRound,
+            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         EvaluateStrategyRound: {
             Event.DONE: DecisionMakingRound,
@@ -116,6 +124,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ROUND_TIMEOUT: EvaluateStrategyRound,
             Event.WAIT: FinishedEvaluateStrategyRound,
             Event.NONE: EvaluateStrategyRound,
+            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         DecisionMakingRound: {
             Event.DONE: FinishedDecisionMakingRound,
@@ -125,17 +134,20 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.SETTLE: FinishedTxPreparationRound,
             Event.UPDATE: DecisionMakingRound,
             Event.NONE: DecisionMakingRound,
+            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         PostTxSettlementRound: {
             Event.ACTION_EXECUTED: DecisionMakingRound,
             Event.CHECKPOINT_TX_EXECUTED: CallCheckpointRound,
             Event.VANITY_TX_EXECUTED: CheckStakingKPIMetRound,
             Event.TRANSFER_COMPLETED: FetchStrategiesRound,
+            Event.WITHDRAWAL_COMPLETED: FetchStrategiesRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
             Event.UNRECOGNIZED: FailedMultiplexerRound,
             Event.DONE: PostTxSettlementRound,
             Event.NONE: PostTxSettlementRound,
             Event.NO_MAJORITY: PostTxSettlementRound,
+            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
         },
         FetchStrategiesRound: {
             Event.DONE: CallCheckpointRound,
@@ -144,6 +156,14 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.ROUND_TIMEOUT: FetchStrategiesRound,
             Event.SETTLE: FinishedTxPreparationRound,
             Event.NONE: FetchStrategiesRound,
+            Event.WITHDRAWAL_INITIATED: WithdrawFundsRound,
+        },
+        WithdrawFundsRound: {
+            Event.DONE: DecisionMakingRound,
+            Event.NO_MAJORITY: WithdrawFundsRound,
+            Event.ROUND_TIMEOUT: WithdrawFundsRound,
+            Event.NONE: WithdrawFundsRound,
+            Event.WITHDRAWAL_COMPLETED: FetchStrategiesRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},
@@ -179,6 +199,7 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
         GetPositionsRound: set(),
         DecisionMakingRound: set(),
         PostTxSettlementRound: set(),
+        WithdrawFundsRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedCallCheckpointRound: {get_name(SynchronizedData.most_voted_tx_hash)},

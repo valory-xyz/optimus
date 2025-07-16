@@ -694,6 +694,34 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             total_ratio = Decimal(0)
 
         # Update each entry with its ratio
+        # Filter out entries with negligible USD value (less than $0.01)
+        try:
+            filtered_breakdown = []
+            for entry in portfolio_breakdown:
+                try:
+                    # Handle potential missing or invalid value_usd
+                    value_usd = entry.get("value_usd")
+                    if value_usd is None:
+                        continue
+
+                    # Convert value_usd to Decimal safely
+                    value_usd_decimal = Decimal(str(value_usd))
+
+                    # Only keep entries >= 0.01
+                    if value_usd_decimal >= Decimal("0.01"):
+                        filtered_breakdown.append(entry)
+                except Exception as e:
+                    self.context.logger.warning(
+                        f"Error processing portfolio entry: {e}"
+                    )
+                    continue
+
+            portfolio_breakdown[:] = filtered_breakdown
+        except Exception as e:
+            self.context.logger.error(f"Error filtering portfolio breakdown: {e}")
+            # Keep original list in case of error
+            pass
+
         for entry in portfolio_breakdown:
             if total_value > 0 and total_ratio > 0:
                 entry["ratio"] = round(

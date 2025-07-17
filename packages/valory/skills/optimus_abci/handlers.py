@@ -262,7 +262,7 @@ class HttpHandler(BaseHttpHandler):
         )
 
         # Route regexes
-        hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|0.0.0.0)(:\d+)?"
+        hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
         portfolio_url_regex = rf"{hostname_regex}\/portfolio"
@@ -1027,18 +1027,18 @@ class HttpHandler(BaseHttpHandler):
 
         self.context.logger.info(f"composite_score: {composite_score}")
 
-        # Convert protocol names to strategies
-        selected_protocols = [
-            PROTOCOL_TO_STRATEGY.get(protocol, protocol)
-            for protocol in selected_protocol_names
-        ]
-
-        # Validate and fix protocols before storing using shared utility
-        selected_protocols = validate_and_fix_protocols(
-            selected_protocols,
+        # Validate and fix protocol names first (before converting to strategies)
+        validated_protocol_names = validate_and_fix_protocols(
+            selected_protocol_names,
             self.params.target_investment_chains,
             self.params.available_strategies,
         )
+
+        # Convert validated protocol names to strategies for storage
+        selected_protocols = [
+            PROTOCOL_TO_STRATEGY.get(protocol, protocol)
+            for protocol in validated_protocol_names
+        ]
 
         response_data = {
             "selected_protocols": selected_protocol_names,

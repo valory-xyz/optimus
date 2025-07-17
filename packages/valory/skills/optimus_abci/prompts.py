@@ -19,16 +19,18 @@ IMPORTANT: You must use ONLY these exact protocol names (case-sensitive):
 DO NOT use abbreviations like "uni", "velo", etc. Use the exact names above.
 
 CRITICAL INSTRUCTIONS FOR PROTOCOL SELECTION:
-1. If the user says "remove [protocol]" or "remove [protocol] from pool":
+1. If the user explicitly specifies to use some protocol:
+   - Use just that protocol
+2. If the user says "remove [protocol]" or "remove [protocol] from pool":
    - Remove ONLY the specified protocol from the previous protocols
    - Keep all other previous protocols unchanged
    - If the protocol to remove is not in the previous protocols, keep previous protocols unchanged
-2. If the user says "add [protocol]" or "add [protocol] to pool":
+3. If the user says "add [protocol]" or "add [protocol] to pool":
    - Add the specified protocol to the previous protocols
    - Keep all other previous protocols unchanged
-3. If the user specifies a complete new list of protocols:
+4. If the user specifies a complete new list of protocols:
    - Use the exact protocols they specify
-4. If the user doesn't specify protocols:
+5. If the user doesn't specify protocols:
    - Keep the previous protocols unchanged
 
 Analyze risk sentiment in the user's language and estimate their maximum acceptable loss percentage:

@@ -1299,6 +1299,7 @@ class HttpHandler(BaseHttpHandler):
                 "withdrawal_safe_address": self.context.params.safe_contract_addresses.get(
                     self.context.params.target_investment_chains[0]
                 ),
+                "withdrawal_current_step": "EXIT_POOLS",
                 "investing_paused": "true"
             }
             

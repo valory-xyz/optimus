@@ -19,7 +19,8 @@
 
 """This module contains the WithdrawFundsRound of LiquidityTraderAbciApp."""
 
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple, cast
+import json
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
@@ -42,22 +43,26 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
     none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
     collection_key = get_name(SynchronizedData.participant_to_withdraw_funds)
-    selection_key = (get_name(SynchronizedData.withdrawal_actions),)
+    selection_key = (get_name(SynchronizedData.actions),)  # Use standard actions field
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            # Get the withdrawal actions from the majority payload
-            majority_payload = self.majority_payload
-            withdrawal_actions = majority_payload.withdrawal_actions
+            # Parse the payload as JSON - it contains the withdrawal actions list directly
+            withdrawal_actions = json.loads(self.most_voted_payload)
+            synchronized_data = cast(SynchronizedData, self.synchronized_data)
             
-            # Create synchronized data with withdrawal actions
-            synced_data = SynchronizedData(self.synchronized_data.db)
-            synced_data.db.set("withdrawal_actions", withdrawal_actions)
+            # Store withdrawal actions in the standard actions field for normal flow processing
+            synchronized_data = synchronized_data.update(
+                synchronized_data_class=SynchronizedData,
+                actions=json.dumps(withdrawal_actions),  # Use standard actions field
+                last_action="WITHDRAWAL_INITIATED",
+                last_executed_action_index=None  # Reset action index for new actions
+            )
             
-            return synced_data, Event.DONE
+            return synchronized_data, Event.DONE
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
-            return synced_data, Event.NO_MAJORITY
-        return None 
+            return self.synchronized_data, Event.NO_MAJORITY
+        return None

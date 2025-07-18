@@ -62,6 +62,7 @@ class APRPopulationPayload(BaseTxPayload):
     """Represent a transaction payload for the APRPopulationPayload."""
 
     context: str
+    content: Optional[str] = None
 
 
 @dataclass(frozen=True)

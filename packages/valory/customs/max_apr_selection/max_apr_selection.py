@@ -178,6 +178,8 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         opportunity["composite_score"] = calculate_composite_score(
             opportunity, max_values
         )
+        # Calculate APR-weighted score for selection
+        opportunity["apr_weighted_score"] = opportunity["composite_score"] * opportunity.get("apr", 0)
 
     position_to_exit = {}
     optimal_opportunities = []
@@ -203,11 +205,12 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         ]
 
         if better_opportunities:
-            better_opportunities.sort(key=lambda x: x["composite_score"], reverse=True)
+            better_opportunities.sort(key=lambda x: x["apr_weighted_score"], reverse=True)
             optimal_opportunities = [better_opportunities[0]]
             optimal_opportunities[0]["relative_funds_percentage"] = 1.0
             logs.append(
-                f"Top opportunity found with composite score: {optimal_opportunities[0]['composite_score']}"
+                f"Top opportunity found with composite score: {optimal_opportunities[0]['composite_score']}, "
+                f"APR-weighted score: {optimal_opportunities[0]['apr_weighted_score']:.2f}"
             )
             # Add user-friendly reasoning with metric comparisons
             if position_to_exit:
@@ -259,7 +262,7 @@ def apply_risk_thresholds_and_select_optimal_strategy(
             }
     else:
         # For new entries without current positions
-        filtered_opportunities.sort(key=lambda x: x["composite_score"], reverse=True)
+        filtered_opportunities.sort(key=lambda x: x["apr_weighted_score"], reverse=True)
         top_composite_score = filtered_opportunities[0]["composite_score"]
 
         optimal_opportunities = [

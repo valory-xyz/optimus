@@ -86,20 +86,23 @@ def get_sqrt_ratio_at_tick(tick: int) -> int:
     if tick < 0:
         ratio = (2**256 - 1) // ratio
 
-    # Ensure the ratio is within valid bounds
-    if ratio < MIN_SQRT_RATIO:
+    # CRITICAL FIX: Convert from Q128.128 to Q64.96 with proper rounding
+    sqrt_price_x96 = (ratio >> 32) + (1 if ratio % (1 << 32) != 0 else 0)
+
+    # Ensure the result is within valid bounds
+    if sqrt_price_x96 < MIN_SQRT_RATIO:
         return MIN_SQRT_RATIO
-    if ratio > MAX_SQRT_RATIO:
+    if sqrt_price_x96 > MAX_SQRT_RATIO:
         return MAX_SQRT_RATIO
 
-    return ratio
+    return sqrt_price_x96
 
 
 def get_amounts_for_liquidity(
     sqrtRatioX96: int, sqrtRatioAX96: int, sqrtRatioBX96: int, liquidity: int
 ) -> Tuple[int, int]:
     """Calculate token amounts from liquidity and price range boundaries for a position."""
-    breakpoint()
+    # Ensure proper ordering: sqrtRatioAX96 should be the lower bound
     if sqrtRatioAX96 > sqrtRatioBX96:
         sqrtRatioAX96, sqrtRatioBX96 = sqrtRatioBX96, sqrtRatioAX96
 
@@ -122,16 +125,27 @@ def get_amounts_for_liquidity(
         # Current price is within the range
         amount1 = _get_amount1_for_liquidity(sqrtRatioAX96, sqrtRatioX96, liquidity)
 
-    return amount0, amount1
+    # Ensure non-negative results
+    return max(0, amount0), max(0, amount1)
 
 
 def _get_amount0_for_liquidity(
     sqrtRatioAX96: int, sqrtRatioBX96: int, liquidity: int
 ) -> int:
     """Calculate the amount of token0 for a position given liquidity and price range."""
-    # Multiply by 2^96 first to maintain precision
-    numerator = liquidity * (sqrtRatioBX96 - sqrtRatioAX96) * (2**96)
+    # Calculate the difference
+    sqrt_diff = sqrtRatioBX96 - sqrtRatioAX96
+
+    if sqrt_diff <= 0:
+        return 0
+
+    # Use the correct Uniswap V3 formula: amount0 = liquidity * (sqrtB - sqrtA) / (sqrtA * sqrtB / 2^96)
+    # Rearranged to: amount0 = (liquidity * (sqrtB - sqrtA) * 2^96) / (sqrtA * sqrtB)
+    numerator = liquidity * sqrt_diff * (2**96)
     denominator = sqrtRatioBX96 * sqrtRatioAX96
+
+    if denominator == 0:
+        return 0
 
     return numerator // denominator
 

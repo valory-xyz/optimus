@@ -353,6 +353,9 @@ class Params(BaseParams):
         self.service_registry_contract_addresses = json.loads(
             self._ensure("service_registry_contract_addresses", kwargs, str)
         )
+        self.staking_subgraph_endpoints = json.loads(
+            self._ensure("staking_subgraph_endpoints", kwargs, str)
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

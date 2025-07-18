@@ -194,9 +194,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.DONE.value, {}
 
         if decision == Decision.CONTINUE:
-            res = yield from self._update_assets_after_swap(
-                actions, last_executed_action_index
-            )
+            res = self._update_assets_after_swap(actions, last_executed_action_index)
             return res
 
     def _wait_for_swap_confirmation(self) -> Generator[None, None, Optional[Decision]]:
@@ -212,7 +210,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _update_assets_after_swap(
         self, actions, last_executed_action_index
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
 

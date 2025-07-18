@@ -249,7 +249,7 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def last_action(self) -> Optional[str]:
         """Get the last action."""
-        return cast(str, self.db.get("last_action"))
+        return cast(str, self.db.get("last_action", None))
 
     @property
     def participant_to_withdraw_funds(self) -> DeserializedCollection:

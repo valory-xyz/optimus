@@ -20,6 +20,7 @@
 """This module contains the EvaluateStrategyRound of LiquidityTraderAbciApp."""
 
 from typing import Optional, Tuple, cast
+import json
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
@@ -53,6 +54,16 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
             return None
 
         synced_data, event = cast(Tuple[SynchronizedData, Event], res)
+        
+        # Check if this is a withdrawal initiation event by examining the payload content
+        if synced_data.actions:
+            try:
+                actions_data = synced_data.actions
+                if isinstance(actions_data, dict) and actions_data.get("event") == Event.WITHDRAWAL_INITIATED.value:
+                    return synced_data, Event.WITHDRAWAL_INITIATED
+            except AttributeError:
+                pass
+        
         if event != Event.DONE:
             return res
 

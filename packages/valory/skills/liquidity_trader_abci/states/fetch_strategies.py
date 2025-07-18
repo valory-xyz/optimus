@@ -55,6 +55,10 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
             payload = json.loads(self.most_voted_payload)
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
+            # Check if this is a withdrawal initiation event
+            if payload.get("event") == Event.WITHDRAWAL_INITIATED.value:
+                return synchronized_data, Event.WITHDRAWAL_INITIATED
+
             # Check if this is an ETH transfer settlement event
             if payload.get("event") == Event.SETTLE.value:
                 updates = payload.get("updates", {})

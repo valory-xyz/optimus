@@ -52,26 +52,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            # Check if investing is paused due to withdrawal (read from KV store)
-            investing_paused = yield from self._read_investing_paused()
-            if investing_paused:
-                self.context.logger.info("Investing paused due to withdrawal request. Transitioning to withdrawal round.")
-                payload = APRPopulationPayload(
-                    sender=self.context.agent_address,
-                    content=json.dumps(
-                        {
-                            "event": Event.WITHDRAWAL_INITIATED.value,
-                            "updates": {},
-                        },
-                        sort_keys=True,
-                    ),
-                )
-                yield from self.send_a2a_transaction(payload)
-                yield from self.wait_until_round_end()
-                self.set_done()
-                return
-
-            # Normal APR population logic
             sender = self.context.agent_address
             payload_context = "APR Population"
 

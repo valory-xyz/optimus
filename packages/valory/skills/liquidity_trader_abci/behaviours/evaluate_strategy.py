@@ -66,6 +66,7 @@ from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
 )
+from packages.valory.skills.liquidity_trader_abci.states.base import Event
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
 )
@@ -89,7 +90,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info("Investing paused due to withdrawal request. Transitioning to WithdrawFunds round.")
                 payload = EvaluateStrategyPayload(
                     sender=self.context.agent_address,
-                    content=json.dumps(
+                    actions=json.dumps(
                         {
                             "event": Event.WITHDRAWAL_INITIATED.value,
                             "updates": {},

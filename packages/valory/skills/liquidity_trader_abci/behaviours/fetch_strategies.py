@@ -110,7 +110,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Normal fetch strategies logic
             sender = self.context.agent_address
-            (next_event, updates) = yield from self.get_next_event()
 
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"

@@ -1541,7 +1541,13 @@ class LiquidityTraderBaseBehaviour(
         if not result or not result.get(update_key):
             return True
 
-        last_update = int(result[update_key])
+        try:
+            last_update = int(float(result[update_key]))
+        except (ValueError, TypeError):
+            self.context.logger.error(
+                f"Invalid timestamp format in kv_store: {result[update_key]}"
+            )
+            return True  # Force update if timestamp is invalid
         current_time = self._get_current_timestamp()
 
         time_since_update = current_time - last_update

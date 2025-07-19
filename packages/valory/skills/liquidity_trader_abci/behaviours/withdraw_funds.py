@@ -21,6 +21,8 @@
 
 import json
 from typing import Any, Dict, Generator, List, Optional, Tuple
+import time
+
 
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
@@ -109,6 +111,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
             # Prepare withdrawal actions based on current state
             self.context.logger.info("Preparing withdrawal actions...")
+            yield from self._update_withdrawal_status("WITHDRAWING", "Withdrawal Initiated. Preparing your funds...")
             withdrawal_actions = yield from self._prepare_withdrawal_actions(
                 positions, target_address
             )
@@ -332,7 +335,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         if exit_actions:
             self.context.logger.info(f"Found {len(exit_actions)} open positions to exit")
             actions.extend(exit_actions)
-            yield from self._update_withdrawal_status("WITHDRAWING", "Funds prepared. Exiting pools...")
+            # yield from self._update_withdrawal_status("WITHDRAWING", "Funds prepared. Exiting pools...")
         else:
             self.context.logger.info("No open positions found")
         
@@ -342,7 +345,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         if swap_actions:
             self.context.logger.info(f"Found {len(swap_actions)} assets to swap to USDC")
             actions.extend(swap_actions)
-            yield from self._update_withdrawal_status("WITHDRAWING", "All active investment positions are closed. Converting assets...")
+            # yield from self._update_withdrawal_status("WITHDRAWING", "All active investment positions are closed. Converting assets...")
         else:
             self.context.logger.info("No assets to swap to USDC")
         
@@ -352,7 +355,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         if transfer_actions:
             self.context.logger.info(f"Found USDC to transfer")
             actions.extend(transfer_actions)
-            yield from self._update_withdrawal_status("WITHDRAWING", "Successfully converted assets to USDC. Transfering to user wallet...")
+            # yield from self._update_withdrawal_status("WITHDRAWING", "Successfully converted assets to USDC. Transfering to user wallet...")
         else:
             self.context.logger.info("No USDC to transfer - withdrawal complete")
             yield from self._update_withdrawal_status("COMPLETED", "Withdrawal complete!")
@@ -464,6 +467,10 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                     # Skip if it's already USDC
                     if token_symbol == "USDC":
                         self.context.logger.info("Skipping USDC - it's USDC")
+                        continue
+                    # Skip if it's OLAS
+                    if token_symbol == "OLAS":
+                        self.context.logger.info("Skipping OLAS - do not swap OLAS during withdrawal")
                         continue
                     
                     # Skip if balance is too small
@@ -596,8 +603,10 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             }
             
             if status == "COMPLETED":
-                import time
                 update_data["withdrawal_completed_at"] = str(int(time.time()))
+                update_data["investing_paused"] = "false"
+            if status == "FAILED":
+                update_data["investing_paused"] = "false"
             
             yield from self._write_kv(update_data)
             self.context.logger.info(f"Withdrawal status updated to {status}: {message}")
@@ -612,7 +621,6 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         try:
             reset_data = {
                 "investing_paused": "false"
-                # Note: We don't reset withdrawal_status to keep it as COMPLETED
             }
             yield from self._write_kv(reset_data)
             self.context.logger.info("Withdrawal flags reset successfully")

@@ -1339,19 +1339,22 @@ class HttpHandler(BaseHttpHandler):
             withdrawal_data = self._read_withdrawal_data()
             
             if not withdrawal_data or withdrawal_data.get("withdrawal_id") != withdrawal_id:
-                # Return UNKNOWN status when no withdrawal data found
-                response = {
-                    "status": "unknown",
-                    "message": "",
-                    "target_address": "",
-                    "chain": "",
-                    "safe_address": "",
-                    "requested_at": "",
-                    "estimated_value_usd": 0.0,
-                    "transaction_link": ""
-                }
-                self._send_ok_response(http_msg, http_dialogue, response)
-                return
+                time.sleep(1.5)
+                withdrawal_data = self._read_withdrawal_data()
+                if not withdrawal_data or withdrawal_data.get("withdrawal_id") != withdrawal_id:
+                    # Return UNKNOWN status when no withdrawal data found
+                    response = {
+                        "status": "unknown",
+                        "message": "",
+                        "target_address": "",
+                        "chain": "",
+                        "safe_address": "",
+                        "requested_at": "",
+                        "estimated_value_usd": 0.0,
+                        "transaction_link": ""
+                    }
+                    self._send_ok_response(http_msg, http_dialogue, response)
+                    return
             
             # Get transaction links based on chain
             transaction_links = []

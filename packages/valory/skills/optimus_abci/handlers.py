@@ -1218,7 +1218,6 @@ class HttpHandler(BaseHttpHandler):
         # Extract withdrawal amount data
         total_value = portfolio_data.get("portfolio_value", 0)
         operating_chain = self.context.params.target_investment_chains[0]
-        safe_address = self.context.params.safe_contract_addresses.get(operating_chain)
         asset_breakdown = portfolio_data.get("portfolio_breakdown", [])
 
         # Transform asset_breakdown to match the expected format
@@ -1236,7 +1235,6 @@ class HttpHandler(BaseHttpHandler):
             "amount": int(total_value * 10**6),  # Convert to USDC decimals (6)
             "total_value_usd": float(total_value),
             "chain": operating_chain,
-            "safe_address": safe_address,
             "asset_breakdown": formatted_breakdown,
             "status_code": 200,
         }
@@ -1317,7 +1315,6 @@ class HttpHandler(BaseHttpHandler):
             response = {
                 "id": withdrawal_id,
                 "status": "initiated",
-                "target_address": target_address,
                 "estimated_value_usd": float(total_value),
                 "chain": self.context.params.target_investment_chains[0],
             }
@@ -1359,9 +1356,7 @@ class HttpHandler(BaseHttpHandler):
                     response = {
                         "status": "unknown",
                         "message": "",
-                        "target_address": "",
                         "chain": "",
-                        "safe_address": "",
                         "requested_at": "",
                         "estimated_value_usd": 0.0,
                         "transaction_link": "",
@@ -1382,9 +1377,7 @@ class HttpHandler(BaseHttpHandler):
             response = {
                 "status": status.lower(),
                 "message": withdrawal_data.get("withdrawal_message", ""),
-                "target_address": withdrawal_data.get("withdrawal_target_address", ""),
                 "chain": withdrawal_data.get("withdrawal_chain", ""),
-                "safe_address": withdrawal_data.get("withdrawal_safe_address", ""),
                 "requested_at": withdrawal_data.get("withdrawal_requested_at", ""),
                 "estimated_value_usd": float(
                     withdrawal_data.get("withdrawal_estimated_value_usd", 0)

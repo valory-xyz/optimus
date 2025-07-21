@@ -78,6 +78,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     selected_opportunities = None
     position_to_exit = None
     trading_opportunities = []
+    positions_eligible_for_exit = []
 
     def async_act(self) -> Generator:
         """Execute the behaviour's async action."""
@@ -88,8 +89,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if actions:
                 yield from self.send_actions(actions)
 
-            should_hold = self.check_minimum_hold_period()
-            if should_hold:
+            self.positions_eligible_for_exit = (
+                self._apply_tip_filters_to_exit_decisions()
+            )
+            if not self.positions_eligible_for_exit:
                 yield from self.send_actions()
                 return
 
@@ -388,6 +391,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         )
                         continue
 
+                    # Extract percent_in_bounds from the first position (all positions have the same value)
+                    percent_in_bounds = (
+                        tick_bands[0].get("percent_in_bounds", 0.0)
+                        if tick_bands
+                        else 0.0
+                    )
+                    self.context.logger.info(f"percent_in_bounds : {percent_in_bounds}")
+
                     current_price = yield from pool._get_current_pool_price(
                         self, pool_address, chain
                     )
@@ -433,6 +444,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     # IMPORTANT: Add tick_spacing and tick_bands to the opportunity
                     opportunity["tick_spacing"] = tick_spacing
                     opportunity["tick_ranges"] = tick_bands
+                    # IMPORTANT: Store percent_in_bounds for TiP calculations
+                    opportunity["percent_in_bounds"] = percent_in_bounds
 
                     # Get available balances
                     token0 = opportunity["token0"]
@@ -544,43 +557,83 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info("Velodrome position analysis complete")
         return results
 
-    def check_minimum_hold_period(self) -> bool:
-        """Check if any position is still in minimum hold period."""
-        if not self.current_positions:
-            return False
-
-        open_position = next(
-            (
-                pos
-                for pos in self.current_positions
-                if pos.get("status") == PositionStatus.OPEN.value
-            ),
-            None,
-        )
-
-        if not open_position:
-            return False
-
-        timestamp = (
-            open_position.get("timestamp") or open_position.get("enter_timestamp") or 0
-        )
-        time_in_position = int(self._get_current_timestamp()) - timestamp
-
+    def _check_tip_exit_conditions(self, position: Dict) -> Tuple[bool, str]:
+        """Check if position can be exited based on TiP conditions"""
         try:
-            if time_in_position < MIN_TIME_IN_POSITION:
-                remaining_time = MIN_TIME_IN_POSITION - time_in_position
-                days, hours = divmod(remaining_time, 24 * 3600)
-                hours //= 3600
-                self.context.logger.info(
-                    f"Position {open_position.get('pool_address')} is still in minimum hold period. "
-                    f"Waiting for {days} days and {hours} hours before closing it."
-                )
-                return True
-        except Exception as e:
-            self.context.logger.error(f"Error checking minimum hold period: {str(e)}")
-            return False
+            entry_cost = position.get("entry_cost", 0)
 
-        return False
+            # Legacy positions (no entry_cost) use 3-week rule
+            if entry_cost == 0:
+                if not position.get("enter_timestamp"):
+                    return True, "No TiP data - legacy position"
+
+                days_elapsed = self._calculate_days_since_entry(
+                    position["enter_timestamp"]
+                )
+                if days_elapsed >= MIN_TIME_IN_POSITION:
+                    return True, f"Legacy position: {days_elapsed:.1f} >= 21 days"
+
+                remaining_days = MIN_TIME_IN_POSITION - days_elapsed
+                return (
+                    False,
+                    f"Legacy position must hold {remaining_days:.1f} more days",
+                )
+
+            # Check 1: Cost recovery through yield (exact threshold)
+            if position.get("cost_recovered", False):
+                return True, "Costs recovered through yield"
+
+            # Check 2: Minimum time requirement
+            if self._check_minimum_time_met(position):
+                days_elapsed = self._calculate_days_since_entry(
+                    position["enter_timestamp"]
+                )
+                min_hold_days = position.get("min_hold_days", 0)
+                return (
+                    True,
+                    f"Minimum time met: {days_elapsed:.1f} >= {min_hold_days:.1f} days",
+                )
+
+            # Calculate remaining time
+            days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
+            min_hold_days = position.get("min_hold_days", 0)
+            remaining_days = min_hold_days - days_elapsed
+
+            return False, f"Must hold {remaining_days:.1f} more days for cost recovery"
+
+        except Exception as e:
+            self.context.logger.error(f"Error checking TiP exit conditions: {e}")
+            return True, "Error in TiP check - allowing exit"
+
+    def _apply_tip_filters_to_exit_decisions(self) -> List[Dict]:
+        """Filter positions that can be exited based on TiP"""
+        try:
+            eligible_for_exit = []
+            blocked_by_tip = []
+
+            for position in self.current_positions:
+                if position.get("status") == PositionStatus.OPEN.value:
+                    can_exit, reason = self._check_tip_exit_conditions(position)
+
+                    if can_exit:
+                        eligible_for_exit.append(position)
+                    else:
+                        blocked_by_tip.append((position, reason))
+                        self.context.logger.info(f"TiP blocking exit: {reason}")
+
+            if blocked_by_tip and not eligible_for_exit:
+                self.context.logger.info("All positions blocked by TiP conditions")
+
+            return eligible_for_exit
+
+        except Exception as e:
+            self.context.logger.error(f"Error applying TiP filters: {e}")
+            # Return all open positions if TiP filtering fails
+            return [
+                p
+                for p in self.current_positions
+                if p.get("status") == PositionStatus.OPEN.value
+            ]
 
     def check_funds(self) -> bool:
         """Check if there are any funds available."""
@@ -776,7 +829,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "trading_opportunities": self.trading_opportunities,
             "current_positions": [
                 pos
-                for pos in self.current_positions
+                for pos in self.positions_eligible_for_exit
                 if pos.get("status") == PositionStatus.OPEN.value
             ],
             "max_pools": self.params.max_pools,
@@ -860,11 +913,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "current_positions": (
                         [
                             to_checksum_address(pos.get("pool_address"))
-                            for pos in self.current_positions
+                            for pos in self.positions_eligible_for_exit
                             if pos.get("status") == PositionStatus.OPEN.value
                             and pos.get("pool_address")
                         ]
-                        if self.current_positions
+                        if self.positions_eligible_for_exit
                         else []
                     ),
                     "coingecko_api_key": self.coingecko.api_key,
@@ -1055,7 +1108,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "apr_threshold": self.params.apr_threshold,
                 "protocols": self.params.available_protocols,
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                "current_positions": self.current_positions,
+                "current_positions": self.positions_eligible_for_exit,
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
             }
@@ -2102,6 +2155,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if opportunity.get("dex_type") == DexType.STURDY.value
                 else Action.ENTER_POOL.value
             ),
+            # Add TiP-required data for cost calculation
+            "opportunity_apr": opportunity.get("apr", 0),  # Percentage
+            "percent_in_bounds": opportunity.get(
+                "percent_in_bounds", 0.0
+            ),  # For CL pools
         }
         return action_details
 

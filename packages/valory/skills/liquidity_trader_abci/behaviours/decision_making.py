@@ -54,6 +54,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     LiquidityTraderBaseBehaviour,
     MAX_RETRIES_FOR_ROUTES,
     MAX_STEP_COST_RATIO,
+    MIN_TIME_IN_POSITION,
     PositionStatus,
     SAFE_TX_GAS,
     SLEEP_TIME,
@@ -194,6 +195,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return Event.DONE.value, {}
 
         if decision == Decision.CONTINUE:
+            # Add slippage costs after swap completion
+            yield from self._add_slippage_costs(self.synchronized_data.final_tx_hash)
             res = self._update_assets_after_swap(actions, last_executed_action_index)
             return res
 
@@ -409,6 +412,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
             self.current_positions.append(current_position)
 
+        # Add gas cost tracking for the enter pool transaction
+        yield from self._accumulate_transaction_costs(
+            self.synchronized_data.final_tx_hash, action.get("chain")
+        )
+
+        # Calculate and store TiP data after position amounts are determined
+        yield from self._calculate_and_store_tip_data(current_position, action)
+
         self.store_current_positions()
         self.context.logger.info(
             f"Enter pool was successful! Updated current positions for pool {current_position['pool_address']}"
@@ -427,6 +438,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["status"] = PositionStatus.CLOSED.value
                 position["exit_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["exit_timestamp"] = int(self._get_current_timestamp())
+
+                # Record TiP performance metrics
+                self._record_tip_performance(position)
 
                 # For Velodrome CL pools, log all the positions that were exited
                 if (
@@ -2830,3 +2844,301 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.error("Deposit event not found in transaction receipt")
         return None, None, None
+
+    def _accumulate_transaction_costs(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, None]:
+        """Add gas costs from this transaction to running total"""
+        try:
+            gas_cost_usd = yield from self._get_gas_cost_usd(tx_hash, chain)
+            self._current_entry_costs += gas_cost_usd
+
+            self.context.logger.info(
+                f"Added gas cost: ${gas_cost_usd:.2f}, running_total=${self._current_entry_costs:.2f}"
+            )
+        except Exception as e:
+            self.context.logger.error(f"Error accumulating transaction costs: {e}")
+            # Fallback to 3 weeks hardcoded TiP if cost tracking fails
+            self._current_entry_costs = 0.0
+            return
+
+    def _add_slippage_costs(self, tx_hash: str) -> Generator[None, None, None]:
+        """Add slippage costs after swap completion"""
+        try:
+            slippage_cost = yield from self._calculate_actual_slippage_cost(tx_hash)
+            self._current_entry_costs += slippage_cost
+
+            self.context.logger.info(
+                f"Added slippage cost: ${slippage_cost:.2f}, running_total=${self._current_entry_costs:.2f}"
+            )
+        except Exception as e:
+            self.context.logger.error(f"Error adding slippage costs: {e}")
+            self._current_entry_costs = 0.0
+            # Fallback to 3 weeks hardcoded TiP if cost tracking fails
+            return
+
+    def _get_gas_cost_usd(
+        self, tx_hash: str, chain: str
+    ) -> Generator[None, None, float]:
+        """Extract gas cost in USD from transaction receipt"""
+        try:
+            receipt = yield from self.get_transaction_receipt(
+                tx_digest=tx_hash, chain_id=chain
+            )
+
+            if receipt:
+                gas_used = receipt.get("gasUsed", 0)
+                gas_price = receipt.get("effectiveGasPrice", 0)
+
+                # Use existing _fetch_zero_address_price() for ETH price
+                eth_price_usd = yield from self._fetch_zero_address_price()
+                if not eth_price_usd:
+                    return 0.0
+
+                gas_cost_eth = (gas_used * gas_price) / 1e18
+                gas_cost_usd = gas_cost_eth * eth_price_usd
+
+                self.context.logger.info(
+                    f"Gas cost: {gas_used} gas @ {gas_price} wei = {gas_cost_eth:.6f} ETH "
+                    f"@ ${eth_price_usd:.2f} = ${gas_cost_usd:.2f}"
+                )
+
+                return gas_cost_usd
+
+            return 0.0
+        except Exception as e:
+            self.context.logger.error(f"Error calculating gas cost: {e}")
+            return 0.0
+
+    def _calculate_actual_slippage_cost(
+        self, tx_hash: str
+    ) -> Generator[None, None, float]:
+        """Calculate actual slippage cost after transaction execution"""
+        try:
+            url = f"{self.params.lifi_check_status_url}?txHash={tx_hash}"
+
+            response = yield from self.get_http_response(
+                method="GET",
+                url=url,
+                headers={"accept": "application/json"},
+            )
+
+            if response.status_code in HTTP_OK:
+                try:
+                    tx_status = json.loads(response.body)
+
+                    # Extract actual amounts from LiFi response
+                    sending = tx_status.get("sending", {})
+                    receiving = tx_status.get("receiving", {})
+
+                    sent_amount_usd = float(sending.get("amountUSD", 0))
+                    received_amount_usd = float(receiving.get("amountUSD", 0))
+
+                    # Calculate actual slippage
+                    if sent_amount_usd > received_amount_usd:
+                        slippage_cost = sent_amount_usd - received_amount_usd
+                        self.context.logger.info(
+                            f"Actual slippage: sent=${sent_amount_usd:.2f}, "
+                            f"received=${received_amount_usd:.2f}, slippage=${slippage_cost:.2f}"
+                        )
+                        return slippage_cost
+
+                except (ValueError, TypeError, KeyError) as e:
+                    self.context.logger.error(f"Error parsing LiFi response: {e}")
+                    raise Exception(f"Failed to parse LiFi response: {e}")
+
+            return 0.0
+        except Exception as e:
+            self.context.logger.error(f"Error calculating slippage cost: {e}")
+            raise Exception(f"Slippage calculation failed: {e}")
+
+    def _calculate_and_store_tip_data(
+        self, current_position: Dict, action: Dict
+    ) -> Generator[None, None, None]:
+        """Calculate TiP data using actual position amounts and accumulated costs"""
+        try:
+            # 1. Calculate principal from actual position amounts
+            amount0 = current_position.get("amount0", 0)
+            amount1 = current_position.get("amount1", 0)
+
+            principal_usd = yield from self._convert_amounts_to_usd(
+                amount0,
+                amount1,
+                action.get("token0"),
+                action.get("token1"),
+                action.get("chain"),
+            )
+
+            # 2. Apply 2x multiplier for round-trip costs
+            total_entry_cost = self._current_entry_costs * 2
+
+            # 3. Calculate minimum hold days using TiP formula with correct pool type logic
+            opportunity_apr = (
+                action.get("opportunity_apr", 0.0) / 100
+            )  # Convert % to decimal
+            percent_in_bounds = action.get("percent_in_bounds", 0.0)
+            is_cl_pool = action.get("is_cl_pool", False)
+
+            min_hold_days = self._calculate_min_hold_days(
+                opportunity_apr,
+                principal_usd,
+                total_entry_cost,
+                is_cl_pool,
+                percent_in_bounds,
+            )
+
+            # 4. Store TiP data in position
+            current_position.update(
+                {
+                    "entry_cost": total_entry_cost,
+                    "min_hold_days": min_hold_days,
+                    "principal_usd": principal_usd,
+                    "cost_recovered": False,
+                }
+            )
+
+            # 5. Reset cost accumulator
+            self._current_entry_costs = 0.0
+
+            self.context.logger.info(
+                f"TiP Data - Pool: {current_position.get('pool_address')}, "
+                f"Principal: ${principal_usd:.2f}, Entry Cost: ${total_entry_cost:.2f}, "
+                f"Min Hold: {min_hold_days:.1f} days"
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error calculating TiP data: {e}")
+            # Fallback to 3 weeks hardcoded TiP
+            current_position.update(
+                {
+                    "entry_cost": 0.0,
+                    "min_hold_days": MIN_TIME_IN_POSITION,  # 3 weeks fallback
+                    "principal_usd": 0.0,
+                    "cost_recovered": False,
+                }
+            )
+            self._current_entry_costs = 0.0
+
+    def _convert_amounts_to_usd(
+        self, amount0, amount1, token0_addr, token1_addr, chain
+    ) -> Generator[None, None, float]:
+        """Convert token amounts to USD using existing price patterns"""
+        try:
+            total_usd = 0.0
+
+            if amount0 and token0_addr:
+                # Get token0 decimals and price
+                token0_decimals = yield from self._get_token_decimals(
+                    chain, token0_addr
+                )
+                if token0_decimals:
+                    adjusted_amount0 = amount0 / (10**token0_decimals)
+                    if token0_addr == ZERO_ADDRESS:
+                        token0_price = yield from self._fetch_zero_address_price()
+                    else:
+                        token0_price = yield from self._fetch_token_price(
+                            token0_addr, chain
+                        )
+
+                    if token0_price:
+                        total_usd += adjusted_amount0 * token0_price
+
+            if amount1 and token1_addr:
+                # Get token1 decimals and price
+                token1_decimals = yield from self._get_token_decimals(
+                    chain, token1_addr
+                )
+                if token1_decimals:
+                    adjusted_amount1 = amount1 / (10**token1_decimals)
+                    if token1_addr == ZERO_ADDRESS:
+                        token1_price = yield from self._fetch_zero_address_price()
+                    else:
+                        token1_price = yield from self._fetch_token_price(
+                            token1_addr, chain
+                        )
+
+                    if token1_price:
+                        total_usd += adjusted_amount1 * token1_price
+
+            return total_usd
+
+        except Exception as e:
+            self.context.logger.error(f"Error converting amounts to USD: {e}")
+            return 0.0
+
+    def _calculate_min_hold_days(
+        self,
+        apr: float,
+        principal: float,
+        entry_cost: float,
+        is_cl_pool: bool,
+        percent_in_bounds: float = 1.0,
+    ) -> float:
+        """Calculate minimum days using TiP formula with correct APR logic"""
+        try:
+            if apr <= 0.0 or principal <= 0.0 or entry_cost <= 0.0:
+                return MIN_TIME_IN_POSITION  # Default 3 weeks for edge cases
+
+            # Apply percent_in_bounds ONLY for concentrated liquidity pools
+            if is_cl_pool:
+                effective_apr = apr * percent_in_bounds  # CL pools: adjust APR
+                pool_type_str = "Concentrated Liquidity"
+            else:
+                effective_apr = apr  # Non-CL pools: use base APR directly
+                pool_type_str = "Regular AMM"
+
+            # TiP formula: entry_cost / ((effective_apr/365) * principal)
+            min_days = entry_cost / ((effective_apr / 365) * principal)
+
+            result = max(1.0, min_days)  # At least 1 day
+
+            # Enhanced logging
+            self.context.logger.info(f"TiP Calculation ({pool_type_str}):")
+            self.context.logger.info(f"  Minimum hold days: {result:.1f}")
+
+            return result
+
+        except Exception as e:
+            self.context.logger.error(f"Error calculating min hold days: {e}")
+            return MIN_TIME_IN_POSITION  # Fallback to 3 weeks
+
+    def _record_tip_performance(self, exited_position: Dict) -> None:
+        """Record TiP performance metrics on position exit"""
+        try:
+            if not exited_position.get("enter_timestamp"):
+                return  # Legacy position
+
+            # Calculate actual hold time
+            enter_timestamp = exited_position["enter_timestamp"]
+            exit_timestamp = int(self._get_current_timestamp())
+            actual_hold_days = (exit_timestamp - enter_timestamp) / (24 * 3600)
+
+            # Get TiP data
+            entry_cost = exited_position.get("entry_cost", 0)
+            min_hold_days = exited_position.get("min_hold_days", 0)
+            principal = exited_position.get("principal_usd", 0)
+
+            # Mark as completed
+            exited_position.update(
+                {
+                    "cost_recovered": True,
+                    "actual_hold_days": actual_hold_days,
+                    "exit_timestamp": exit_timestamp,
+                    "status": PositionStatus.CLOSED.value,
+                }
+            )
+
+            # Log TiP performance
+            met_time_requirement = actual_hold_days >= min_hold_days
+            self.context.logger.info(
+                f"TiP Performance Summary:"
+                f"\n  Pool: {exited_position.get('pool_address')}"
+                f"\n  Principal: ${principal:.2f}"
+                f"\n  Entry Cost: ${entry_cost:.2f}"
+                f"\n  Required Hold: {min_hold_days:.1f} days"
+                f"\n  Actual Hold: {actual_hold_days:.1f} days"
+                f"\n  Met Time Requirement: {met_time_requirement}"
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error recording TiP performance: {e}")

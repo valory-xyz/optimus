@@ -24,7 +24,7 @@ import json
 import os
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Generator, Optional, Type, Tuple
+from typing import Any, Dict, Generator, Optional, Type
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -39,7 +39,6 @@ from packages.valory.skills.liquidity_trader_abci.payloads import APRPopulationP
 from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
     APRPopulationRound,
 )
-from packages.valory.skills.liquidity_trader_abci.states.base import Event
 
 
 class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
@@ -90,8 +89,6 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.wait_until_round_end()
 
             self.set_done()
-
-
 
     def _get_or_create_agent_type(
         self, eth_address: str

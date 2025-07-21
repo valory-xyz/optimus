@@ -19,8 +19,8 @@
 
 """This module contains the WithdrawFundsRound of LiquidityTraderAbciApp."""
 
-from typing import Dict, Optional, Set, Tuple, cast
 import json
+from typing import Optional, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     BaseSynchronizedData,
@@ -51,15 +51,15 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
             # Parse the payload as JSON - it contains the withdrawal actions list directly
             withdrawal_actions = json.loads(self.most_voted_payload)
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
-            
+
             # Store withdrawal actions in the standard actions field for normal flow processing
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 actions=json.dumps(withdrawal_actions),  # Use standard actions field
                 last_action="WITHDRAWAL_INITIATED",
-                last_executed_action_index=None  # Reset action index for new actions
+                last_executed_action_index=None,  # Reset action index for new actions
             )
-            
+
             return synchronized_data, Event.DONE
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants

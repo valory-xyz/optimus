@@ -23,4 +23,5 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.withdraw_funds impo
     WithdrawFundsBehaviour,
 )
 
+
 __all__ = ["WithdrawFundsBehaviour"]

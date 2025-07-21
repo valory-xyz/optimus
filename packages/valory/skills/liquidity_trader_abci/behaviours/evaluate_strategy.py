@@ -87,7 +87,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Check if investing is paused due to withdrawal (read from KV store)
             investing_paused = yield from self._read_investing_paused()
             if investing_paused:
-                self.context.logger.info("Investing paused due to withdrawal request. Transitioning to WithdrawFunds round.")
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."
+                )
                 payload = EvaluateStrategyPayload(
                     sender=self.context.agent_address,
                     actions=json.dumps(

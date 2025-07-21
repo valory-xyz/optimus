@@ -1394,8 +1394,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             f"Added new bridge route: {source_token.get('token_symbol')} -> {target_symbol}"
                         )
 
-                        # Add to the beginning of actions
-                        actions.insert(0, new_bridge_route)
+                        # Find the position to insert after exit pool action
+                        insert_position = 0
+                        for i, action in enumerate(actions):
+                            if action.get("action") == "ExitPool":
+                                insert_position = i + 1
+                        
+                        # Insert after the last exit pool action (or at the beginning if no exit pool actions)
+                        actions.insert(insert_position, new_bridge_route)
 
         self.context.logger.info(f"action at the end of velodrome: {actions}")
         return actions

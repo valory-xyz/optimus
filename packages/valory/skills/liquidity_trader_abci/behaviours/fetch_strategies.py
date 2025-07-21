@@ -92,7 +92,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Check if investing is paused due to withdrawal (read from KV store)
             investing_paused = yield from self._read_investing_paused()
             if investing_paused:
-                self.context.logger.info("Investing paused due to withdrawal request. Transitioning to withdrawal round.")
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to withdrawal round."
+                )
                 payload = FetchStrategiesPayload(
                     sender=self.context.agent_address,
                     content=json.dumps(

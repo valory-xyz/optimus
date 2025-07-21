@@ -23,4 +23,5 @@ from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
     WithdrawFundsRound,
 )
 
+
 __all__ = ["WithdrawFundsRound"]

@@ -28,7 +28,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, Generator, List, Optional, Tuple, Union, cast, Any
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -280,7 +280,9 @@ class HttpHandler(BaseHttpHandler):
         # Withdrawal endpoints
         withdrawal_amount_regex = rf"{hostname_regex}\/withdrawal\/amount"
         withdrawal_initiate_regex = rf"{hostname_regex}\/withdrawal\/initiate"
-        withdrawal_status_regex = rf"{hostname_regex}\/withdrawal\/status\/(?P<withdrawal_id>[a-zA-Z0-9\-]+)"
+        withdrawal_status_regex = (
+            rf"{hostname_regex}\/withdrawal\/status\/(?P<withdrawal_id>[a-zA-Z0-9\-]+)"
+        )
 
         # Define routes
         self.routes = {
@@ -1216,20 +1218,20 @@ class HttpHandler(BaseHttpHandler):
         # Extract withdrawal amount data
         total_value = portfolio_data.get("portfolio_value", 0)
         operating_chain = self.context.params.target_investment_chains[0]
-        safe_address = self.context.params.safe_contract_addresses.get(
-            operating_chain
-        )
+        safe_address = self.context.params.safe_contract_addresses.get(operating_chain)
         asset_breakdown = portfolio_data.get("portfolio_breakdown", [])
-        
+
         # Transform asset_breakdown to match the expected format
         formatted_breakdown = []
         for asset in asset_breakdown:
-            formatted_breakdown.append({
-                "token_symbol": asset.get("asset", "Unknown"),
-                "value": asset.get("balance", 0),
-                "value_usd": asset.get("value_usd", 0)
-            })
-        
+            formatted_breakdown.append(
+                {
+                    "token_symbol": asset.get("asset", "Unknown"),
+                    "value": asset.get("balance", 0),
+                    "value_usd": asset.get("value_usd", 0),
+                }
+            )
+
         response = {
             "amount": int(total_value * 10**6),  # Convert to USDC decimals (6)
             "total_value_usd": float(total_value),
@@ -1254,18 +1256,21 @@ class HttpHandler(BaseHttpHandler):
             # Parse incoming data
             data = json.loads(http_msg.body.decode("utf-8"))
             target_address = data.get("target_address", "")
-            
+
             # Validate target address
-            if not target_address or not self._is_valid_ethereum_address(target_address):
+            if not target_address or not self._is_valid_ethereum_address(
+                target_address
+            ):
                 error_response = {"error": "Invalid target address format"}
                 self._send_ok_response(http_msg, http_dialogue, error_response)
                 return
 
             # Check if there are funds available
             portfolio_data_filepath: str = (
-                self.context.params.store_path / self.context.params.portfolio_info_filename
+                self.context.params.store_path
+                / self.context.params.portfolio_info_filename
             )
-            
+
             try:
                 with open(portfolio_data_filepath, "r", encoding="utf-8") as file:
                     portfolio_data = json.load(file)
@@ -1283,10 +1288,10 @@ class HttpHandler(BaseHttpHandler):
 
             # Generate withdrawal ID
             withdrawal_id = str(uuid.uuid4())
-            
+
             # Get current timestamp
             current_timestamp = int(time.time())
-            
+
             # Prepare withdrawal data with correct initial status and message
             withdrawal_data = {
                 "withdrawal_id": withdrawal_id,
@@ -1300,27 +1305,29 @@ class HttpHandler(BaseHttpHandler):
                     self.context.params.target_investment_chains[0]
                 ),
                 "withdrawal_current_step": "EXIT_POOLS",
-                "investing_paused": "true"
+                "investing_paused": "true",
             }
-            
+
             # Store withdrawal data in KV store
             threading.Thread(
                 target=self._write_withdrawal_data, args=(withdrawal_data,)
             ).start()
-            
+
             # Prepare response
             response = {
                 "id": withdrawal_id,
                 "status": "initiated",
                 "target_address": target_address,
                 "estimated_value_usd": float(total_value),
-                "chain": self.context.params.target_investment_chains[0]
+                "chain": self.context.params.target_investment_chains[0],
             }
-            
+
             self._send_ok_response(http_msg, http_dialogue, response)
-            
+
         except (json.JSONDecodeError, ValueError) as e:
-            self.context.logger.info(f"Error processing withdrawal initiation: {str(e)}")
+            self.context.logger.info(
+                f"Error processing withdrawal initiation: {str(e)}"
+            )
             error_response = {"error": "Invalid request format"}
             self._send_ok_response(http_msg, http_dialogue, error_response)
 
@@ -1337,11 +1344,17 @@ class HttpHandler(BaseHttpHandler):
         try:
             # Read withdrawal data from KV store
             withdrawal_data = self._read_withdrawal_data()
-            
-            if not withdrawal_data or withdrawal_data.get("withdrawal_id") != withdrawal_id:
-                time.sleep(1.5)
+
+            if (
+                not withdrawal_data
+                or withdrawal_data.get("withdrawal_id") != withdrawal_id
+            ):
+                time.sleep(5)
                 withdrawal_data = self._read_withdrawal_data()
-                if not withdrawal_data or withdrawal_data.get("withdrawal_id") != withdrawal_id:
+                if (
+                    not withdrawal_data
+                    or withdrawal_data.get("withdrawal_id") != withdrawal_id
+                ):
                     # Return UNKNOWN status when no withdrawal data found
                     response = {
                         "status": "unknown",
@@ -1351,11 +1364,11 @@ class HttpHandler(BaseHttpHandler):
                         "safe_address": "",
                         "requested_at": "",
                         "estimated_value_usd": 0.0,
-                        "transaction_link": ""
+                        "transaction_link": "",
                     }
                     self._send_ok_response(http_msg, http_dialogue, response)
                     return
-            
+
             # Get transaction links based on chain
             transaction_links = []
             if withdrawal_data.get("withdrawal_transaction_hashes"):
@@ -1363,7 +1376,7 @@ class HttpHandler(BaseHttpHandler):
                 chain = withdrawal_data.get("withdrawal_chain", "optimism")
                 for tx_hash in tx_hashes:
                     transaction_links.append(self._get_transaction_link(chain, tx_hash))
-            
+
             # Prepare response based on status
             status = withdrawal_data.get("withdrawal_status", "UNKNOWN")
             response = {
@@ -1373,18 +1386,24 @@ class HttpHandler(BaseHttpHandler):
                 "chain": withdrawal_data.get("withdrawal_chain", ""),
                 "safe_address": withdrawal_data.get("withdrawal_safe_address", ""),
                 "requested_at": withdrawal_data.get("withdrawal_requested_at", ""),
-                "estimated_value_usd": float(withdrawal_data.get("withdrawal_estimated_value_usd", 0)),
-                "transaction_link": transaction_links[0] if transaction_links else ""
+                "estimated_value_usd": float(
+                    withdrawal_data.get("withdrawal_estimated_value_usd", 0)
+                ),
+                "transaction_link": transaction_links[0] if transaction_links else "",
             }
-            
+
             # Add status-specific fields
             if status == "COMPLETED":
-                response["completed_at"] = withdrawal_data.get("withdrawal_completed_at", "")
-                response["transaction_hashes"] = json.loads(withdrawal_data.get("withdrawal_transaction_hashes", "[]"))
+                response["completed_at"] = withdrawal_data.get(
+                    "withdrawal_completed_at", ""
+                )
+                response["transaction_hashes"] = json.loads(
+                    withdrawal_data.get("withdrawal_transaction_hashes", "[]")
+                )
                 response["transaction_count"] = len(response["transaction_hashes"])
-            
+
             self._send_ok_response(http_msg, http_dialogue, response)
-            
+
         except Exception as e:
             self.context.logger.error(f"Error getting withdrawal status: {str(e)}")
             error_response = {"error": "Failed to retrieve withdrawal status"}
@@ -1393,19 +1412,20 @@ class HttpHandler(BaseHttpHandler):
     def _is_valid_ethereum_address(self, address: str) -> bool:
         """
         Validate if the given string is a valid Ethereum address.
-        
+
         :param address: the address to validate
         :return: True if valid, False otherwise
         """
         import re
+
         # Check if it matches Ethereum address pattern
-        pattern = re.compile(r'^0x[a-fA-F0-9]{40}$')
+        pattern = re.compile(r"^0x[a-fA-F0-9]{40}$")
         return bool(pattern.match(address))
 
     def _write_withdrawal_data(self, data: Dict[str, str]) -> None:
         """
         Write withdrawal data to KV store.
-        
+
         :param data: the withdrawal data to store
         """
         try:
@@ -1418,16 +1438,25 @@ class HttpHandler(BaseHttpHandler):
     def _read_withdrawal_data(self) -> Optional[Dict[str, str]]:
         """
         Read withdrawal data from KV store.
-        
+
         :return: withdrawal data or None if not found
         """
         try:
             # Read all withdrawal-related keys from KV store
-            keys = ("withdrawal_id", "withdrawal_status", "withdrawal_target_address", 
-                   "withdrawal_message", "withdrawal_requested_at", "withdrawal_completed_at",
-                   "withdrawal_estimated_value_usd", "withdrawal_chain", "withdrawal_safe_address",
-                   "withdrawal_transaction_hashes", "withdrawal_current_step")
-            
+            keys = (
+                "withdrawal_id",
+                "withdrawal_status",
+                "withdrawal_target_address",
+                "withdrawal_message",
+                "withdrawal_requested_at",
+                "withdrawal_completed_at",
+                "withdrawal_estimated_value_usd",
+                "withdrawal_chain",
+                "withdrawal_safe_address",
+                "withdrawal_transaction_hashes",
+                "withdrawal_current_step",
+            )
+
             result = self._read_kv(keys)
             return result if result else None
         except Exception as e:
@@ -1437,7 +1466,7 @@ class HttpHandler(BaseHttpHandler):
     def _get_transaction_link(self, chain: str, tx_hash: str) -> str:
         """
         Get transaction explorer link based on chain.
-        
+
         :param chain: the blockchain chain
         :param tx_hash: the transaction hash
         :return: the transaction explorer link
@@ -1446,13 +1475,14 @@ class HttpHandler(BaseHttpHandler):
             "optimism": f"https://optimistic.etherscan.io/tx/{tx_hash}",
             "base": f"https://basescan.org/tx/{tx_hash}",
             "mode": f"https://explorer-mode-mainnet-0.t.conduit.xyz/tx/{tx_hash}",
-            "ethereum": f"https://etherscan.io/tx/{tx_hash}"
+            "ethereum": f"https://etherscan.io/tx/{tx_hash}",
         }
         return chain_explorers.get(chain, f"https://etherscan.io/tx/{tx_hash}")
 
     def _read_kv(self, keys: tuple) -> Dict[str, Any]:
         """
         Read data from the KV store.
+
         :param keys: tuple of keys to read
         :return: dictionary with key-value pairs
         """
@@ -1478,11 +1508,7 @@ class HttpHandler(BaseHttpHandler):
     def _handle_kv_read_response(
         self, kv_store_response_message: KvStoreMessage, dialogue: Dialogue
     ) -> None:
-        """
-        Handle KV store read response messages.
-        :param kv_store_response_message: the KvStoreMessage response
-        :param dialogue: the KvStoreDialogue
-        """
+        """Handle KV store read response messages."""
         success = (
             kv_store_response_message.performative
             == KvStoreMessage.Performative.READ_RESPONSE

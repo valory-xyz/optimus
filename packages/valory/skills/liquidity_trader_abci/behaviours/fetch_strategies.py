@@ -2427,51 +2427,46 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _calculate_chain_investment_value(
         self, all_transfers: Dict, chain: str, safe_address: str
     ) -> Generator[None, None, float]:
-        """Calculate investment value for a specific chain and update stored total."""
         new_investment = 0.0
         total_reversion = 0.0
 
-        # Track ETH transfers and reversions first
         reversion_info = yield from self._track_eth_transfers_and_reversions(
             safe_address, chain
         )
         reversion_amount = reversion_info.get("reversion_amount", 0)
+        reversion_dates = reversion_info.get("reversion_dates", [])
+        reversion_amounts = reversion_info.get("reversion_amounts", [])
         historical_reversion_value = reversion_info.get(
             "historical_reversion_value", 0.0
         )
-        reversion_date = reversion_info.get("reversion_date")
 
         if historical_reversion_value > 0:
             total_reversion += historical_reversion_value
             self.context.logger.info(
-                f"{chain.upper()} REVERSION: {historical_reversion_value} ETH (from {reversion_date})"
+                f"{chain.upper()} REVERSION: {historical_reversion_value} ETH (from {reversion_dates})"
             )
 
-        if reversion_amount > 0:
-            date_str = (
-                reversion_date
-                if reversion_date
-                else datetime.now().strftime("%d-%m-%Y")
-            )
-            eth_price = yield from self._fetch_historical_eth_price(date_str)
-            if eth_price:
-                reversion_value = reversion_amount * eth_price
-                total_reversion += reversion_value
-                self.context.logger.info(
-                    f"{chain.upper()} REVERSION: {reversion_amount} ETH @ ${eth_price} = ${reversion_value} (from {reversion_date})"
-                )
+        # For each reversion, subtract its value at the correct date
+        if reversion_amount > 0 and reversion_dates:
+            # Use reversion_amounts for correct pairing
+            for amount, date_str in zip(reversion_amounts, reversion_dates):
+                eth_price = yield from self._fetch_historical_eth_price(date_str)
+                if eth_price:
+                    reversion_value = amount * eth_price
+                    total_reversion += reversion_value
+                    self.context.logger.info(
+                        f"{chain.upper()} REVERSION: {amount} ETH @ ${eth_price} = ${reversion_value} (from {date_str})"
+                    )
 
         for date, transfers in all_transfers.items():
             for transfer in transfers:
                 try:
-                    # Get token price for the transfer date
                     token_symbol = transfer.get("symbol", "Unknown")
                     amount = transfer.get("delta", transfer.get("amount", 0))
 
                     if amount <= 0:
                         continue
 
-                    # Get historical price for the transfer date
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
 
                     if token_symbol == "ETH":  # nosec B105
@@ -2498,7 +2493,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     continue
 
-        # Update total investment for this chain
         updated_total = new_investment - total_reversion
         yield from self._save_chain_total_investment(chain, updated_total)
 
@@ -2507,6 +2501,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         return updated_total
+
+    def _calculate_total_reversion_value(
+        self, eth_transfers: List[Dict], reversion_transfers: List[Dict]
+    ) -> Generator[None, None, float]:
+        """Calculate the total reversion value from the reversion transfers."""
+        reversion_value = 0.0
+        for transfer in reversion_transfers:
+            amount = transfer.get("amount", 0)
+            # Parse the timestamp to date string
+            try:
+                timestamp = transfer.get("timestamp", "")
+                if timestamp.endswith("Z"):
+                    tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    date_str = tx_datetime.strftime("%d-%m-%Y")
+                else:
+                    date_str = datetime.fromtimestamp(int(timestamp)).strftime("%d-%m-%Y")
+            except Exception:
+                date_str = transfer.get("timestamp", "")
+            eth_price = yield from self._fetch_historical_eth_price(date_str)
+            if eth_price:
+                reversion_value += amount * eth_price
+        return reversion_value
 
     def _fetch_all_transfers_until_date_mode(
         self, address: str, end_date: str, fetch_till_date: bool
@@ -3410,20 +3426,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             self.context.logger.info(f"Master safe address: {master_safe_address}")
 
-            # Track ETH transfers
-            eth_transfers = []
-            initial_funding = None
-            reversion_transfers = []
-            historical_reversion_value = 0.0
-            reversion_date = None
-
-            # Sort transfers by timestamp
+            # Sort incoming and outgoing transfers by timestamp
             sorted_incoming_transfers = []
             for _, transfers in all_incoming_transfers.items():
                 for transfer in transfers:
                     if isinstance(transfer, dict) and "timestamp" in transfer:
                         sorted_incoming_transfers.append(transfer)
-
             sorted_incoming_transfers.sort(key=lambda x: x["timestamp"])
 
             sorted_outgoing_transfers = []
@@ -3431,10 +3439,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 for transfer in transfers:
                     if isinstance(transfer, dict) and "timestamp" in transfer:
                         sorted_outgoing_transfers.append(transfer)
-
             sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
 
-            # Process transfers
+            # Identify initial funding (first incoming ETH transfer)
+            initial_funding = None
+            eth_transfers = []
             for transfer in sorted_incoming_transfers:
                 # Check if it's an ETH transfer
                 if transfer.get("symbol") == "ETH":
@@ -3445,72 +3454,74 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             "from_address": transfer.get("from_address"),
                             "timestamp": transfer.get("timestamp"),
                         }
-                        eth_transfers.append(transfer)
                     # If it's from the same address as initial funding
                     elif (
                         transfer.get("from_address", "").lower() == master_safe_address
                     ):
                         eth_transfers.append(transfer)
 
+            # Map outgoing (reversion) transfers by amount, date, and timestamp for quick lookup
+            reverted = set()
+            reversion_transfers = []
             for transfer in sorted_outgoing_transfers:
                 if transfer.get("symbol") == "ETH":
                     if (
                         transfer.get("to_address", "").lower() == master_safe_address
-                        and transfer.get("from_address", "").lower()
-                        == safe_address.lower()
+                        and transfer.get("from_address", "").lower() == safe_address.lower()
                     ):
+                        try:
+                            timestamp = transfer.get("timestamp", "")
+                            if timestamp.endswith("Z"):
+                                tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                                date_str = tx_datetime.strftime("%d-%m-%Y")
+                            else:
+                                date_str = datetime.fromtimestamp(int(timestamp)).strftime("%d-%m-%Y")
+                        except Exception:
+                            date_str = transfer.get("timestamp", "")
+                        tx_hash = transfer.get("tx_hash") or transfer.get("transaction_hash")
+                        if tx_hash:
+                            reverted.add(tx_hash)
+                        else:
+                            reverted.add((float(transfer.get("amount", 0)), date_str, timestamp))
                         reversion_transfers.append(transfer)
 
-            # Get current ETH balance
+            # For each post-initial-funding ETH transfer, check if it needs to be reverted
+            reversion_candidates = []
+            for transfer in eth_transfers:
+                amount = float(transfer.get("amount", 0))
+                try:
+                    timestamp = transfer.get("timestamp", "")
+                    if timestamp.endswith("Z"):
+                        tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                        date_str = tx_datetime.strftime("%d-%m-%Y")
+                    else:
+                        date_str = datetime.fromtimestamp(int(timestamp)).strftime("%d-%m-%Y")
+                except Exception:
+                    date_str = transfer.get("timestamp", "")
+                tx_hash = transfer.get("tx_hash") or transfer.get("transaction_hash")
+                if tx_hash:
+                    if tx_hash not in reverted:
+                        reversion_candidates.append({"amount": amount, "date": date_str, "timestamp": timestamp})
+                else:
+                    if (amount, date_str, timestamp) not in reverted:
+                        reversion_candidates.append({"amount": amount, "date": date_str, "timestamp": timestamp})
+
+            # Process newest to oldest
+            reversion_candidates = list(reversed(reversion_candidates))
+
+            # Only revert as much as is available in the safe, in order of newest to oldest
             chain = self.params.target_investment_chains[0]
             account = self.params.safe_contract_addresses.get(chain)
             current_eth_balance = yield from self._get_native_balance(chain, account)
 
-            # Determine if reversion is needed
-            reversion_amount = 0
-
-            if initial_funding and len(eth_transfers) > 1:
-                # If there are additional transfers after initial funding
-                if len(reversion_transfers) == 0:
-                    # No reversion has happened yet, revert the last transfer amount
-                    last_transfer = eth_transfers[-1]
-                    reversion_amount = float(last_transfer.get("amount", 0))
-
-                    # Get the date of the last transfer that needs reversion
-                    try:
-                        # Handle ISO format timestamp
-                        timestamp = last_transfer.get("timestamp", "")
-                        if timestamp.endswith("Z"):
-                            # Convert ISO format to datetime
-                            tx_datetime = datetime.fromisoformat(
-                                timestamp.replace("Z", "+00:00")
-                            )
-                            reversion_date = tx_datetime.strftime("%d-%m-%Y")
-                        else:
-                            # Try parsing as Unix timestamp
-                            reversion_date = datetime.fromtimestamp(
-                                int(timestamp)
-                            ).strftime("%d-%m-%Y")
-                    except (ValueError, TypeError) as e:
-                        self.context.logger.warning(f"Error parsing timestamp: {e}")
-                        # Use current date as fallback
-                        reversion_date = current_date
-
-                    if current_eth_balance < reversion_amount:
-                        reversion_amount = current_eth_balance
-                        self.context.logger.info(
-                            f"Current ETH balance is {current_eth_balance} which is less than the reversion amount {reversion_amount} indicating that some ETH has already been used"
-                        )
-
-                    self.context.logger.info(
-                        f"Found additional ETH transfer of {reversion_amount} that needs reversion from date: {reversion_date}"
-                    )
+            total_to_revert = 0
+            reversion_plan = []
+            for candidate in reversion_candidates:
+                if current_eth_balance - total_to_revert >= candidate["amount"]:
+                    reversion_plan.append(candidate)
+                    total_to_revert += candidate["amount"]
                 else:
-                    # Reversion has already happened, set amount to 0
-                    reversion_amount = 0
-                    self.context.logger.info(
-                        "Additional ETH transfer has already been reverted"
-                    )
+                    break
 
             if len(reversion_transfers) > 0:
                 historical_reversion_value = (
@@ -3519,59 +3530,35 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                 )
 
-            return {
-                "reversion_amount": reversion_amount,
-                "master_safe_address": master_safe_address,
-                "historical_reversion_value": historical_reversion_value,
-                "reversion_date": reversion_date,
-            }
+            if reversion_plan:
+                total_reversion_amount = sum(c["amount"] for c in reversion_plan)
+                reversion_dates = [c["date"] for c in reversion_plan]
+                reversion_amounts = [c["amount"] for c in reversion_plan]
+                return {
+                    "reversion_amount": total_reversion_amount,
+                    "reversion_dates": reversion_dates,
+                    "reversion_amounts": reversion_amounts,
+                    "master_safe_address": master_safe_address,
+                    "historical_reversion_value": historical_reversion_value,
+                }
+            else:
+                return {
+                    "reversion_amount": 0,
+                    "reversion_dates": [],
+                    "reversion_amounts": [],
+                    "master_safe_address": master_safe_address,
+                    "historical_reversion_value": historical_reversion_value,
+                }
 
         except Exception as e:
             self.context.logger.error(f"Error tracking ETH transfers: {str(e)}")
             return {
                 "reversion_amount": 0,
-                "master_safe_address": None,
+                "reversion_dates": [],
+                "reversion_amounts": [],
+                "master_safe_address": master_safe_address,
                 "historical_reversion_value": 0.0,
-                "reversion_date": None,
             }
-
-    def _calculate_total_reversion_value(
-        self, eth_transfers: List[Dict], reversion_transfers: List[Dict]
-    ) -> Generator[None, None, float]:
-        """Calculate the total reversion value from the reversion transfers."""
-        reversion_amount = 0.0
-        reversion_date = None
-        reversion_value = 0.0
-        last_transfer = eth_transfers[-1]
-        current_date = datetime.now().strftime("%d-%m-%Y")
-
-        try:
-            # Handle ISO format timestamp
-            timestamp = last_transfer.get("timestamp", "")
-            if timestamp.endswith("Z"):
-                # Convert ISO format to datetime
-                tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                reversion_date = tx_datetime.strftime("%d-%m-%Y")
-            else:
-                # Try parsing as Unix timestamp
-                reversion_date = datetime.fromtimestamp(int(timestamp)).strftime(
-                    "%d-%m-%Y"
-                )
-        except (ValueError, TypeError) as e:
-            self.context.logger.warning(f"Error parsing timestamp: {e}")
-            # Use current date as fallback
-            reversion_date = current_date
-
-        for index, transfer in enumerate(reversion_transfers):
-            if index == 0:
-                eth_price = yield from self._fetch_historical_eth_price(reversion_date)
-            else:
-                eth_price = yield from self._fetch_historical_eth_price(current_date)
-            if eth_price:
-                reversion_amount = transfer.get("amount", 0)
-                reversion_value += reversion_amount * eth_price
-
-        return reversion_value
 
     def _fetch_outgoing_transfers_until_date_mode(
         self,

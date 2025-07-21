@@ -597,6 +597,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error(f"Error processing position: {str(e)}")
                 continue
 
+        self.store_current_positions()
         # Calculate safe balances value
         total_safe_value_usd = yield from self._calculate_safe_balances_value(
             portfolio_breakdown
@@ -1160,7 +1161,59 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     }
                 )
 
+        # Update position with current value and TiP yield calculation
+        yield from self._update_position_with_current_value(position, user_share, chain)
+
         return user_share
+
+    def _update_position_with_current_value(
+        self, position: Dict, current_value_usd: Decimal, chain: str
+    ) -> Generator[None, None, None]:
+        """Update position with current value and yield estimate for TiP cost recovery"""
+        try:
+            # Store current value in position
+            position["current_value_usd"] = float(current_value_usd)
+            position["last_updated"] = int(self._get_current_timestamp())
+
+            # Simple yield estimate if we have TiP data
+            principal_usd = position.get("principal_usd", 0)
+            entry_cost = position.get("entry_cost", 0)
+
+            if principal_usd > 0 and entry_cost > 0:
+                # Simple yield = current_value - principal
+                estimated_yield = float(current_value_usd) - principal_usd
+
+                # Check if yield covers entry cost (exact threshold)
+                if estimated_yield >= entry_cost:
+                    position["cost_recovered"] = True
+                    self.context.logger.info(
+                        f"Position {position.get('pool_address')} has recovered costs: "
+                        f"yield=${estimated_yield:.2f} >= entry_cost=${entry_cost:.2f}"
+                    )
+                else:
+                    # Log progress toward cost recovery
+                    recovery_percentage = (
+                        (estimated_yield / entry_cost) * 100 if entry_cost > 0 else 0
+                    )
+                    remaining_yield_needed = entry_cost - estimated_yield
+                    self.context.logger.info(
+                        f"Position {position.get('pool_address')} cost recovery progress: "
+                        f"{recovery_percentage:.1f}% (${estimated_yield:.2f}/${entry_cost:.2f}), "
+                        f"need ${remaining_yield_needed:.2f} more"
+                    )
+            elif entry_cost == 0:
+                # Legacy position without TiP data - mark as recovered
+                position["cost_recovered"] = True
+                self.context.logger.info(
+                    f"Legacy position {position.get('pool_address')} marked as cost recovered"
+                )
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error updating position with current value: {e}"
+            )
+            # Fallback to 3 weeks hardcoded TiP if yield calculation fails
+            position["cost_recovered"] = False
 
     def get_user_share_value_velodrome(
         self, user_address: str, pool_address: str, token_id: int, chain: str, position

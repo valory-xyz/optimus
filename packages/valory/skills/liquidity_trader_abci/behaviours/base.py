@@ -98,7 +98,7 @@ ERC20_DECIMALS = 18
 AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus"}
 METRICS_NAME = "APR"
 METRICS_TYPE = "json"
-PORTFOLIO_UPDATE_INTERVAL = 3600 * 2  # 2hr
+PORTFOLIO_UPDATE_INTERVAL = 3600 * 1  # 2hr
 APR_UPDATE_INTERVAL = 3600 * 24  # 24hr
 METRICS_UPDATE_INTERVAL = 21600  # 6hr
 # Initial available amount for ETH (0.005 ETH)
@@ -107,7 +107,7 @@ ETH_INITIAL_AMOUNT = int(0.005 * 10**18)
 ETH_REMAINING_KEY = "eth_remaining_amount"
 SLEEP_TIME = 10  # Configurable sleep time
 RETRIES = 3  # Number of API call retries
-MIN_TIME_IN_POSITION = 604800 * 3  # 3 weeks
+MIN_TIME_IN_POSITION = 21.0  # 3 weeks
 PRICE_CACHE_KEY_PREFIX = "token_price_cache_"
 CACHE_TTL = 3600  # 1 hour in seconds
 REWARD_UPDATE_INTERVAL = 24 * 3600  # 24 hours
@@ -309,6 +309,7 @@ class LiquidityTraderBaseBehaviour(
             file_path=self.params.store_path / self.params.gas_cost_info_filename
         )
         self.initial_investment_values_per_pool = {}
+        self._current_entry_costs = 0.0
 
         # Read the assets and current pool
         self.read_current_positions()
@@ -604,6 +605,20 @@ class LiquidityTraderBaseBehaviour(
                             )
                 if "status" not in position:
                     position["status"] = PositionStatus.OPEN.value
+
+                # Add TiP fields for backward compatibility
+                if "entry_cost" not in position:
+                    position["entry_cost"] = 0.0  # Total USD cost (gas + slippage)
+                if "min_hold_days" not in position:
+                    # Legacy positions get 21 days (3 weeks) hardcoded if they have enter_timestamp
+                    position["min_hold_days"] = (
+                        MIN_TIME_IN_POSITION if position.get("enter_timestamp") else 0.0
+                    )
+                if "cost_recovered" not in position:
+                    position["cost_recovered"] = False
+                if "principal_usd" not in position:
+                    position["principal_usd"] = 0.0
+
                 adjusted_positions.append(position)
 
             self.current_positions = adjusted_positions
@@ -1711,6 +1726,19 @@ class LiquidityTraderBaseBehaviour(
         rewards_key = f"accumulated_rewards_{chain}_{token_address.lower()}"
         result = yield from self._read_kv((rewards_key,))
         return int(result.get(rewards_key, 0)) if result else 0
+
+    def _calculate_days_since_entry(self, enter_timestamp: int) -> float:
+        """Calculate days elapsed since position entry."""
+        current_time = int(self._get_current_timestamp())
+        return (current_time - enter_timestamp) / (24 * 3600)
+
+    def _check_minimum_time_met(self, position: Dict) -> bool:
+        """Check if minimum time requirement is met for a position."""
+        if not position.get("enter_timestamp") or position.get("min_hold_days", 0) == 0:
+            return True  # No time requirements
+
+        days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
+        return days_elapsed >= position["min_hold_days"]
 
 
 def execute_strategy(

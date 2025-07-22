@@ -153,11 +153,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             self.set_done()
 
     def _read_withdrawal_data(self) -> Generator[None, None, Optional[Dict[str, str]]]:
-        """
-        Read withdrawal data from KV store.
-
-        :return: withdrawal data or None if not found
-        """
+        """Read withdrawal data from KV store."""
         try:
             self.context.logger.info(
                 "Attempting to read withdrawal data from KV store..."
@@ -191,11 +187,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
     def _get_portfolio_data(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """
-        Get current portfolio data by fetching fresh data from blockchain.
-
-        :return: portfolio data or None if not found
-        """
+        """Get current portfolio data by fetching fresh data from blockchain."""
         # Update portfolio data with fresh blockchain data instead of reading from static file
         self.context.logger.info("Fetching fresh portfolio data from blockchain...")
         yield from self.update_portfolio_after_action()
@@ -213,12 +205,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
     def _validate_and_update_position_statuses(
         self, positions: List[Dict[str, Any]]
     ) -> Generator[None, None, List[Dict[str, Any]]]:
-        """
-        Validate position statuses against on-chain state and update local data.
-
-        :param positions: current positions
-        :return: updated positions with correct statuses
-        """
+        """Validate position statuses against on-chain state and update local data."""
         updated_positions = []
 
         for position in positions:
@@ -277,16 +264,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         dex_type: str,
         position: Dict[str, Any] = None,
     ) -> Generator[None, None, int]:
-        """
-        Get the pool balance for the safe address based on pool type.
-
-        :param pool_address: pool address
-        :param safe_address: safe address
-        :param chain: blockchain chain
-        :param dex_type: type of DEX (balancer, velodrome, uniswap_v3, sturdy)
-        :param position: position data for NFT-based pools
-        :return: balance amount
-        """
+        """Get the pool balance for the safe address based on pool type."""
         try:
             # Route to appropriate handler based on DEX type
             if dex_type == "balancer":
@@ -848,12 +826,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
     def _update_withdrawal_status(
         self, status: str, message: str
     ) -> Generator[None, None, None]:
-        """
-        Update withdrawal status in KV store.
-
-        :param status: new status
-        :param message: status message
-        """
+        """Update withdrawal status in KV store."""
         try:
             update_data = {"withdrawal_status": status, "withdrawal_message": message}
 
@@ -871,11 +844,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error updating withdrawal status: {str(e)}")
 
     def _reset_withdrawal_flags(self) -> Generator[None, None, None]:
-        """
-        Reset withdrawal flags when withdrawal is completed.
-
-        Keep the status as COMPLETED for historical record.
-        """
+        """Reset withdrawal flags when withdrawal is completed"""
         try:
             reset_data = {"investing_paused": "false"}
             yield from self._write_kv(reset_data)

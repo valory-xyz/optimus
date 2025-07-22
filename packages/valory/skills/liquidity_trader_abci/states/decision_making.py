@@ -45,6 +45,7 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
     error_event = Event.ERROR
     none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
+    withdrawal_initiated: Event = Event.WITHDRAWAL_INITIATED
     collection_key = get_name(SynchronizedData.participant_to_decision_making)
     selection_key = (get_name(SynchronizedData.chain_id),)
 

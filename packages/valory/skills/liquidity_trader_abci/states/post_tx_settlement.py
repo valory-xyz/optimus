@@ -58,6 +58,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
+    withdrawal_initiated: Event = Event.WITHDRAWAL_INITIATED
     collection_key = get_name(SynchronizedData.participant_to_post_tx_settlement)
     selection_key = (get_name(SynchronizedData.chain_id),)
 

@@ -42,6 +42,7 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
+    withdrawal_completed_event = Event.WITHDRAWAL_COMPLETED
     collection_key = get_name(SynchronizedData.participant_to_withdraw_funds)
     selection_key = (get_name(SynchronizedData.actions),)  # Use standard actions field
 

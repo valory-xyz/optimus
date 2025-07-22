@@ -539,6 +539,21 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             "Getting fresh positions data for action preparation..."
         )
 
+        # Get fresh positions data for action preparation
+        self.context.logger.info(
+            "Getting fresh positions data for action preparation..."
+        )
+        fresh_positions = yield from self.get_positions()
+        if fresh_positions:
+            self.context.logger.info(
+                f"Successfully got fresh positions. Found {len(fresh_positions)} position groups."
+            )
+        else:
+            self.context.logger.warning(
+                "Failed to get fresh positions, using validated positions."
+            )
+            fresh_positions = positions
+
         # Step 1: Check for open positions and create exit actions
         self.context.logger.info("=== STEP 1: CHECKING FOR OPEN POSITIONS ===")
         exit_actions = self._prepare_exit_pool_actions(positions)
@@ -553,7 +568,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Step 2: Create swap actions for all non-USDC assets
         self.context.logger.info("=== STEP 2: PREPARING SWAP ACTIONS ===")
-        swap_actions = self._prepare_swap_to_usdc_actions_standard(positions)
+        swap_actions = self._prepare_swap_to_usdc_actions_standard(fresh_positions)
         if swap_actions:
             self.context.logger.info(
                 f"Found {len(swap_actions)} assets to swap to USDC"
@@ -566,7 +581,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         # Step 3: Create transfer action for USDC
         self.context.logger.info("=== STEP 3: PREPARING TRANSFER ACTION ===")
         transfer_actions = self._prepare_transfer_usdc_actions_standard(
-            target_address, positions
+            target_address, fresh_positions
         )
         if transfer_actions:
             self.context.logger.info("Found USDC to transfer")

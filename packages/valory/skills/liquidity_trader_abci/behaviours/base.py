@@ -2431,12 +2431,12 @@ class LiquidityTraderBaseBehaviour(
                 return None
 
             # Skip if it's already USDC
-            if from_token_symbol == "USDC":
+            if from_token_symbol == "USDC": # nosec B105
                 self.context.logger.info("Skipping USDC - it's already USDC")
                 return None
 
             # Skip if it's OLAS
-            if from_token_symbol == "OLAS":
+            if from_token_symbol == "OLAS": # nosec B105
                 self.context.logger.info(
                     "Skipping OLAS - do not swap OLAS during withdrawal"
                 )

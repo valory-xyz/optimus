@@ -60,6 +60,10 @@ class CallCheckpointRound(CollectSameUntilThresholdRound):
 
         synced_data, event = cast(Tuple[SynchronizedData, Event], res)
 
+        # Check if this is a withdrawal initiation event
+        if event == Event.WITHDRAWAL_INITIATED:
+            return synced_data, Event.WITHDRAWAL_INITIATED
+
         if event != Event.DONE:
             return res
 

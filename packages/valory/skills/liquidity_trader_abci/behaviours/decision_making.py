@@ -20,6 +20,7 @@
 """This module contains the behaviour for executing trades for the 'liquidity_trader_abci' skill."""
 
 import json
+import time
 from decimal import Decimal
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type, cast
 
@@ -84,6 +85,30 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # Check if investing is paused due to withdrawal (read from KV store)
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                # Check the withdrawal status from KV store
+                withdrawal_status = yield from self._read_withdrawal_status()
+                if withdrawal_status == "INITIATED":
+                    self.context.logger.info(
+                        "Investing paused due to withdrawal request. Transitioning to withdrawal round."
+                    )
+                    payload = DecisionMakingPayload(
+                        sender=self.context.agent_address,
+                        content=json.dumps(
+                            {
+                                "event": Event.WITHDRAWAL_INITIATED.value,
+                                "updates": {},
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+                    yield from self.send_a2a_transaction(payload)
+                    yield from self.wait_until_round_end()
+                    self.set_done()
+                    return
+
             sender = self.context.agent_address
             (next_event, updates) = yield from self.get_next_event()
 
@@ -104,8 +129,27 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.set_done()
 
+    def _read_investing_paused(self) -> Generator[None, None, bool]:
+        """Read investing_paused flag from KV store."""
+        try:
+            result = yield from self._read_kv(("investing_paused",))
+            return result.get("investing_paused", "false").lower() == "true"
+        except Exception as e:
+            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
+            return False
+
+    def _read_withdrawal_status(self) -> Generator[None, None, str]:
+        """Read withdrawal_status from KV store."""
+        try:
+            result = yield from self._read_kv(("withdrawal_status",))
+            return result.get("withdrawal_status", "unknown")
+        except Exception as e:
+            self.context.logger.error(f"Error reading withdrawal_status: {str(e)}")
+            return "unknown"
+
     def get_next_event(self) -> Generator[None, None, Tuple[str, Dict]]:
         """Get next event"""
+        # Normal action processing
         actions = self.synchronized_data.actions
         if not actions:
             self.context.logger.info("No actions to prepare")
@@ -123,8 +167,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             0 if last_executed_action_index is None else last_executed_action_index + 1
         )
 
+        # Add safety check for last_action field
+        try:
+            last_action = self.synchronized_data.last_action
+        except ValueError:
+            last_action = None
+            self.context.logger.warning("last_action field not set in get_next_event")
+
         if (
-            self.synchronized_data.last_action == Action.EXECUTE_STEP.value
+            last_action == Action.EXECUTE_STEP.value
             and last_round_id != DecisionMakingRound.auto_round_id()
         ):
             res = yield from self._post_execute_step(
@@ -148,33 +199,103 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     actions, last_executed_action_index
                 )
             if (
-                self.synchronized_data.last_action == Action.CLAIM_REWARDS.value
-                and last_round_id != DecisionMakingRound.auto_round_id()
+                self.synchronized_data.last_action == Action.BRIDGE_SWAP.value
+                or self.synchronized_data.last_action
+                == Action.BRIDGE_SWAP_EXECUTED.value
             ):
-                return self._post_execute_claim_rewards(
+                yield from self._post_execute_transfer(
                     actions, last_executed_action_index
                 )
+            if self.synchronized_data.last_action == Action.WITHDRAW.value:
+                yield from self._post_execute_withdraw(
+                    actions, last_executed_action_index
+                )
+            if self.synchronized_data.last_action == Action.CLAIM_REWARDS.value:
+                res = yield from self._post_execute_claim_rewards(
+                    actions, last_executed_action_index
+                )
+                return res
 
-        if (
-            last_executed_action_index is not None
-            and self.synchronized_data.last_action
-            in [
-                Action.ROUTES_FETCHED.value,
-                Action.STEP_EXECUTED.value,
-                Action.SWITCH_ROUTE.value,
-            ]
-        ):
-            res = yield from self._process_route_execution(positions)
-            return res
-
-        if current_action_index >= len(self.synchronized_data.actions):
+        if current_action_index >= len(actions):
             self.context.logger.info("All actions have been executed")
             return Event.DONE.value, {}
+
+        # Check if we need to execute routes that were previously fetched
+        if last_action and last_action in [
+            Action.ROUTES_FETCHED.value,
+            Action.STEP_EXECUTED.value,
+            Action.SWITCH_ROUTE.value,
+        ]:
+            self.context.logger.info("Executing routes...")
+            res = yield from self._process_route_execution(positions)
+            return res
 
         res = yield from self._prepare_next_action(
             positions, actions, current_action_index, last_round_id
         )
         return res
+
+    def _get_portfolio_data(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get current portfolio data from the base behaviour's property."""
+        if not self.portfolio_data:
+            self.context.logger.error("Portfolio data is empty in base behaviour.")
+            return None
+        self.context.logger.info(
+            f"Using base behaviour's portfolio data with keys: {list(self.portfolio_data.keys())}"
+        )
+        return self.portfolio_data
+
+    def _update_withdrawal_completion(self) -> Generator[None, None, None]:
+        """Update withdrawal completion status and refresh portfolio data."""
+        try:
+            # Update withdrawal status to completed and reset flags
+            update_data = {
+                "withdrawal_status": "COMPLETED",
+                "withdrawal_message": "Withdrawal complete!",
+                "withdrawal_completed_at": str(int(time.time())),
+                "investing_paused": "false",  # Reset the pause flag
+            }
+
+            # Store transaction hashes if available
+            if (
+                hasattr(self.synchronized_data, "final_tx_hash")
+                and self.synchronized_data.final_tx_hash
+            ):
+                tx_hashes = [self.synchronized_data.final_tx_hash]
+                update_data["withdrawal_transaction_hashes"] = json.dumps(tx_hashes)
+
+            # Use the existing _write_kv method to update KV store
+            yield from self._write_kv(update_data)
+            self.context.logger.info("Withdrawal marked as completed and flags reset")
+
+            # Update portfolio data file after withdrawal completion
+            self.context.logger.info(
+                "Updating portfolio data file after withdrawal completion..."
+            )
+            # Note: This will be called asynchronously, so we don't yield from it
+            # The portfolio update will happen in the next round
+            self.context.logger.info("Portfolio data will be updated in the next round")
+        except Exception as e:
+            self.context.logger.error(f"Error updating withdrawal completion: {str(e)}")
+
+    def _update_withdrawal_status(
+        self, status: str, message: str
+    ) -> Generator[None, None, None]:
+        """Update withdrawal status in KV store."""
+        try:
+            update_data = {"withdrawal_status": status, "withdrawal_message": message}
+
+            if status == "COMPLETED":
+                import time
+
+                update_data["withdrawal_completed_at"] = str(int(time.time()))
+
+            yield from self._write_kv(update_data)
+            self.context.logger.info(
+                f"Withdrawal status updated to {status}: {message}"
+            )
+        except Exception as e:
+            self.context.logger.error(f"Error updating withdrawal status: {str(e)}")
 
     def _post_execute_step(
         self, actions, last_executed_action_index
@@ -228,6 +349,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             action.get("to_token"),
             action.get("to_token_symbol"),
         )
+
+        # Update portfolio data to reflect new USDC balance after swap
+        self.context.logger.info("Updating portfolio data after swap...")
+        yield from self.update_portfolio_after_action()
+        self.context.logger.info("Portfolio data updated after swap.")
+
+        # Check if this was a withdrawal swap and log accordingly
+        if action.get("description", "").startswith("Withdrawal"):
+            self.context.logger.info("Withdrawal swap completed successfully.")
 
         fee_details = {
             "remaining_fee_allowance": action.get("remaining_fee_allowance"),
@@ -460,8 +590,35 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
         self.context.logger.info("Exit was successful! Updated positions.")
+
         # When we exit the pool, it may take time to reflect the balance of our assets in the safe
         yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
+
+        # Refresh portfolio data to reflect the new balances after exiting the pool
+        self.context.logger.info("Refreshing portfolio data after pool exit...")
+        yield from self.update_portfolio_after_action()
+        self.context.logger.info("Portfolio data refreshed after pool exit.")
+
+        # Check if this was a withdrawal exit and log accordingly
+        if action.get("description", "").startswith("Withdrawal"):
+            self.context.logger.info("Withdrawal pool exit completed successfully.")
+
+    def _post_execute_transfer(self, actions, last_executed_action_index):
+        """Handle USDC transfer completion."""
+        # Update portfolio data to reflect final USDC balance after transfer
+        self.context.logger.info("Updating portfolio data after USDC transfer...")
+        yield from self.update_portfolio_after_action()
+        self.context.logger.info("Portfolio data updated after USDC transfer.")
+
+    def _post_execute_withdraw(self, actions, last_executed_action_index):
+        """Handle withdrawal transfer completion."""
+        investing_paused = yield from self._read_investing_paused()
+        withdrawal_status = yield from self._read_withdrawal_status()
+        if investing_paused and withdrawal_status == "WITHDRAWING":
+            self.context.logger.info(
+                "Withdrawal transfer completed. Marking withdrawal as complete."
+            )
+            yield from self._update_withdrawal_completion()
 
     def _post_execute_claim_rewards(
         self, actions, last_executed_action_index
@@ -646,6 +803,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         next_action_details = actions[current_action_index]
         action_name = next_action_details.get("action")
 
+        # Check if investing is paused due to withdrawal (read from KV store)
+        investing_paused = yield from self._read_investing_paused()
+        withdrawal_status = yield from self._read_withdrawal_status()
+
         if not action_name:
             self.context.logger.error(f"Invalid action: {next_action_details}")
             return Event.DONE.value, {}
@@ -662,11 +823,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 next_action_details
             )
             last_action = Action.EXIT_POOL.value
+            if investing_paused and withdrawal_status == "WITHDRAWING":
+                yield from self._update_withdrawal_status(
+                    "WITHDRAWING", "Funds prepared. Exiting pools..."
+                )
 
         elif next_action == Action.FIND_BRIDGE_ROUTE:
             routes = yield from self.fetch_routes(positions, next_action_details)
             if not routes:
                 self.context.logger.error("Error fetching routes")
+                # Withdrawal failure handling
+                investing_paused = yield from self._read_investing_paused()
+                withdrawal_status = yield from self._read_withdrawal_status()
+                if investing_paused and withdrawal_status == "WITHDRAWING":
+                    yield from self._update_withdrawal_status(
+                        "FAILED", "Withdrawal failed during route fetching."
+                    )
+                    yield from self._reset_withdrawal_flags()
                 return Event.DONE.value, {}
 
             if self.synchronized_data.max_allowed_steps_in_a_route:
@@ -680,6 +853,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.error(
                         f"Needed routes with equal to or less than {self.synchronized_data.max_allowed_steps_in_a_route} steps, none found!"
                     )
+                    # Withdrawal failure handling
+                    investing_paused = yield from self._read_investing_paused()
+                    withdrawal_status = yield from self._read_withdrawal_status()
+                    if investing_paused and withdrawal_status == "WITHDRAWING":
+                        yield from self._update_withdrawal_status(
+                            "FAILED", "Withdrawal failed during route fetching."
+                        )
+                        yield from self._reset_withdrawal_flags()
                     return Event.DONE.value, {}
 
             serialized_routes = json.dumps(routes)
@@ -696,6 +877,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             chain_id = next_action_details.get("from_chain")
             safe_address = next_action_details.get("safe_address")
             last_action = Action.EXECUTE_STEP.value
+            if investing_paused and withdrawal_status == "WITHDRAWING":
+                yield from self._update_withdrawal_status(
+                    "WITHDRAWING",
+                    "All active investment positions are closed. Converting assets...",
+                )
 
         elif next_action == Action.CLAIM_REWARDS:
             tx_hash, chain_id, safe_address = yield from self.get_claim_rewards_tx_hash(
@@ -710,9 +896,27 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             last_action = Action.DEPOSIT.value
 
         elif next_action == Action.WITHDRAW:
-            tx_hash, chain_id, safe_address = yield from self.get_withdraw_tx_hash(
-                next_action_details
-            )
+            if investing_paused and withdrawal_status == "WITHDRAWING":
+                yield from self._update_withdrawal_status(
+                    "WITHDRAWING",
+                    "Successfully converted assets to USDC. Transferring to user wallet...",
+                )
+            # Check if this is a token transfer or vault withdrawal
+            if (
+                "token_address" in next_action_details
+                and "to_address" in next_action_details
+            ):
+                # This is a token transfer
+                (
+                    tx_hash,
+                    chain_id,
+                    safe_address,
+                ) = yield from self.get_token_transfer_tx_hash(next_action_details)
+            else:
+                # This is a vault withdrawal
+                tx_hash, chain_id, safe_address = yield from self.get_withdraw_tx_hash(
+                    next_action_details
+                )
             last_action = Action.WITHDRAW.value
 
         else:
@@ -1652,6 +1856,92 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return payload_string, chain, safe_address
 
+    def get_token_transfer_tx_hash(
+        self, action
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Get token transfer tx hash"""
+        chain = action.get("chain")
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        to_address = action.get("to_address")
+        token_address = action.get("token_address")
+        funds_percentage = action.get("funds_percentage", 1.0)
+
+        if not to_address or not token_address:
+            self.context.logger.error(f"Missing information in action: {action}")
+            return None, None, None
+
+        # Get the token balance from the safe
+        token_balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=token_address,
+            contract_public_id="valory/erc20:0.1.0",
+            contract_callable="check_balance",
+            data_key="token",
+            account=safe_address,
+            chain_id=chain,
+        )
+
+        if token_balance is None:
+            self.context.logger.error("Error fetching token balance")
+            return None, None, None
+
+        # Calculate the amount to transfer based on funds percentage
+        amount = int(token_balance * funds_percentage)
+
+        if amount <= 0:
+            self.context.logger.error(f"No balance to transfer: {token_balance}")
+            return None, None, None
+
+        # Prepare the transfer transaction
+        tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=token_address,
+            contract_public_id="valory/erc20:0.1.0",
+            contract_callable="build_transfer_tx",
+            data_key="data",
+            to_address=to_address,
+            amount=amount,
+            chain_id=chain,
+        )
+
+        if not tx_hash:
+            self.context.logger.error("Error preparing transfer transaction")
+            return None, None, None
+
+        # Create Safe transaction
+        safe_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=safe_address,
+            contract_public_id=GnosisSafeContract.contract_id,
+            contract_callable="get_raw_safe_transaction_hash",
+            data_key="tx_hash",
+            to_address=token_address,
+            value=ETHER_VALUE,
+            data=tx_hash,
+            operation=SafeOperation.CALL.value,
+            safe_tx_gas=SAFE_TX_GAS,
+            chain_id=chain,
+        )
+
+        if not safe_tx_hash:
+            return None, None, None
+
+        safe_tx_hash = safe_tx_hash[2:]
+        self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
+
+        payload_string = hash_payload_to_hex(
+            safe_tx_hash=safe_tx_hash,
+            ether_value=ETHER_VALUE,
+            safe_tx_gas=SAFE_TX_GAS,
+            operation=SafeOperation.CALL.value,
+            to_address=token_address,
+            data=tx_hash,
+        )
+
+        self.context.logger.info(f"Tx hash payload string is {payload_string}")
+
+        return payload_string, chain, safe_address
+
     def prepare_bridge_swap_action(
         self,
         positions: List[Dict[str, Any]],
@@ -2036,6 +2326,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 return amount
 
+        slippage = self.params.slippage_for_swap
+        investing_paused = yield from self._read_investing_paused()
+        if investing_paused:
+            slippage = 0.15  # 15% slippage for withdrawal actions
+
         from_chain = action.get("from_chain")
         to_chain = action.get("to_chain")
         from_chain_id = self.params.chain_to_chain_id_mapping.get(from_chain)
@@ -2045,7 +2340,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         from_token_symbol = action.get("from_token_symbol")
         to_token_symbol = action.get("to_token_symbol")
         allow_switch_chain = True
-        slippage = self.params.slippage_for_swap
+        slippage = slippage
         from_address = self.params.safe_contract_addresses.get(from_chain)
         to_address = self.params.safe_contract_addresses.get(to_chain)
 
@@ -2060,11 +2355,20 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         available_amount = self._get_balance(from_chain, from_token_address, positions)
+        self.context.logger.info(f"Balance from positions: {available_amount}")
+
+        if available_amount is None:
+            self.context.logger.error(
+                f"Could not determine available amount for {from_token_symbol} on chain {from_chain}"
+            )
+            return None
 
         # Calculate the amount to swap based on the available amount and funds percentage
         amount = min(
             available_amount, int(available_amount * action.get("funds_percentage", 1))
         )
+
+        self.context.logger.info(f"Calculated amount: {amount}")
 
         action["amount"] = amount
 

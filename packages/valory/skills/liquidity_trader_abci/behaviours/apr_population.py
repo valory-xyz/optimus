@@ -35,8 +35,8 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     METRICS_TYPE,
     PositionStatus,
 )
+from packages.valory.skills.liquidity_trader_abci.payloads import APRPopulationPayload
 from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
-    APRPopulationPayload,
     APRPopulationRound,
 )
 
@@ -49,7 +49,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
     _final_value = None
 
     def async_act(self) -> Generator:
-        """Execute the APR population behavior."""
+        """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             sender = self.context.agent_address
             payload_context = "APR Population"
@@ -950,3 +950,12 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         last_name_prefix = self.generate_phonetic_name(address, 18, 2)
         last_name_number = int(address[-4:], 16) % 100
         return f"{first_name}-{last_name_prefix}{str(last_name_number).zfill(2)}"
+
+    def _read_investing_paused(self) -> Generator[None, None, bool]:
+        """Read investing_paused flag from KV store."""
+        try:
+            result = yield from self._read_kv(("investing_paused",))
+            return result.get("investing_paused", "false").lower() == "true"
+        except Exception as e:
+            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
+            return False

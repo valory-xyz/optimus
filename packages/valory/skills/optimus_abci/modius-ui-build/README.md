@@ -1,7 +1,7 @@
 # BabyDegen UI
 
 React application for BabyDegen UI.
-Served by the Modius and Optimus agent, designed to be consumed by the agent and available in [Pearl]
+Served by the Modius and Optimus agent, designed to be consumed by the agent and available in [Pearl](https://github.com/valory-xyz/olas-operate-app).
 
 ## 🚀 Development
 

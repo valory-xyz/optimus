@@ -39,26 +39,28 @@ class StakingState(Enum):
 
 
 class Event(Enum):
-    """LiquidityTraderAbciApp Events"""
+    """Event enumeration for the LiquidityTraderAbciApp."""
 
-    ACTION_EXECUTED = "execute_next_action"
-    CHECKPOINT_TX_EXECUTED = "checkpoint_tx_executed"
     DONE = "done"
-    ERROR = "error"
-    NEXT_CHECKPOINT_NOT_REACHED_YET = "next_checkpoint_not_reached_yet"
+    ROUND_TIMEOUT = "round_timeout"
     NO_MAJORITY = "no_majority"
     NONE = "none"
-    ROUND_TIMEOUT = "round_timeout"
-    SERVICE_EVICTED = "service_evicted"
-    SERVICE_NOT_STAKED = "service_not_staked"
-    SETTLE = "settle"
-    TRANSFER_COMPLETED = "transfer_completed"
-    UNRECOGNIZED = "unrecognized"
-    UPDATE = "update"
-    VANITY_TX_EXECUTED = "vanity_tx_executed"
     WAIT = "wait"
+    SETTLE = "settle"
+    UPDATE = "update"
+    ERROR = "error"
+    ACTION_EXECUTED = "action_executed"
+    CHECKPOINT_TX_EXECUTED = "checkpoint_tx_executed"
+    VANITY_TX_EXECUTED = "vanity_tx_executed"
+    TRANSFER_COMPLETED = "transfer_completed"
+    WITHDRAWAL_COMPLETED = "withdrawal_completed"
+    WITHDRAWAL_INITIATED = "withdrawal_initiated"
+    UNRECOGNIZED = "unrecognized"
+    NEXT_CHECKPOINT_NOT_REACHED_YET = "next_checkpoint_not_reached_yet"
+    SERVICE_NOT_STAKED = "service_not_staked"
+    SERVICE_EVICTED = "service_evicted"
+    STAKING_KPI_MET = "staking_kpi_met"
     STAKING_KPI_NOT_MET = "staking_kpi_not_met"
-    STAKING_KPI_MET = "staking_kpi_met"  # nosec
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -248,3 +250,22 @@ class SynchronizedData(BaseSynchronizedData):
     def last_action(self) -> Optional[str]:
         """Get the last action."""
         return cast(str, self.db.get("last_action", None))
+
+    @property
+    def participant_to_withdraw_funds(self) -> DeserializedCollection:
+        """Get the participants to the WithdrawFunds round."""
+        return self._get_deserialized("participant_to_withdraw_funds")
+
+    @property
+    def withdrawal_actions(self) -> Optional[List[Dict[str, Any]]]:
+        """Get the withdrawal actions."""
+        serialized = self.db.get("withdrawal_actions", "[]")
+        if serialized is None:
+            serialized = "[]"
+        withdrawal_actions = json.loads(serialized)
+        return withdrawal_actions
+
+    @property
+    def investing_paused(self) -> bool:
+        """Get whether investing is paused due to withdrawal."""
+        return cast(bool, self.db.get("investing_paused", False))

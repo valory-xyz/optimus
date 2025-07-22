@@ -1399,7 +1399,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         for i, action in enumerate(actions):
                             if action.get("action") == "ExitPool":
                                 insert_position = i + 1
-                        
+
                         # Insert after the last exit pool action (or at the beginning if no exit pool actions)
                         actions.insert(insert_position, new_bridge_route)
 

@@ -281,12 +281,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def _update_withdrawal_status(
         self, status: str, message: str
     ) -> Generator[None, None, None]:
-        """
-        Update withdrawal status in KV store.
-
-        :param status: new status
-        :param message: status message
-        """
+        """Update withdrawal status in KV store."""
         try:
             update_data = {"withdrawal_status": status, "withdrawal_message": message}
 

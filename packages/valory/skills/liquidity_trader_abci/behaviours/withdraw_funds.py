@@ -245,7 +245,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
                 # Get on-chain balance using pool-specific method
                 balance = yield from self._get_pool_balance(
-                    pool_address, safe_address, chain, dex_type
+                    pool_address, safe_address, chain, dex_type, position
                 )
 
                 if balance == 0:
@@ -270,7 +270,12 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         return updated_positions
 
     def _get_pool_balance(
-        self, pool_address: str, safe_address: str, chain: str, dex_type: str
+        self,
+        pool_address: str,
+        safe_address: str,
+        chain: str,
+        dex_type: str,
+        position: Dict[str, Any] = None,
     ) -> Generator[None, None, int]:
         """
         Get the pool balance for the safe address based on pool type.
@@ -279,57 +284,27 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         :param safe_address: safe address
         :param chain: blockchain chain
         :param dex_type: type of DEX (balancer, velodrome, uniswap_v3, sturdy)
+        :param position: position data for NFT-based pools
         :return: balance amount
         """
         try:
+            # Route to appropriate handler based on DEX type
             if dex_type == "balancer":
-                # Balancer pools use WeightedPoolContract
-                balance_response = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_STATE,
-                    contract_address=pool_address,
-                    contract_public_id="valory/balancer_weighted_pool:0.1.0",
-                    contract_callable="get_balance",
-                    data_key="balance",
-                    account=safe_address,
-                    chain_id=chain,
+                balance_response = yield from self._get_balancer_pool_balance(
+                    pool_address, safe_address, chain
                 )
-
             elif dex_type == "velodrome":
-                # Velodrome pools use VelodromePoolContract
-                balance_response = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_STATE,
-                    contract_address=pool_address,
-                    contract_public_id="valory/velodrome_pool:0.1.0",
-                    contract_callable="get_balance",
-                    data_key="balance",
-                    account=safe_address,
-                    chain_id=chain,
+                balance_response = yield from self._get_velodrome_pool_balance(
+                    pool_address, safe_address, chain, position
                 )
-
             elif dex_type == "uniswap_v3":
-                # Uniswap V3 uses ERC20 balanceOf for LP tokens
-                balance_response = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_STATE,
-                    contract_address=pool_address,
-                    contract_public_id="valory/erc20:0.1.0",
-                    contract_callable="check_balance",
-                    data_key="token",
-                    account=safe_address,
-                    chain_id=chain,
+                balance_response = yield from self._get_uniswap_v3_pool_balance(
+                    pool_address, safe_address, chain, position
                 )
-
             elif dex_type == "sturdy":
-                # Sturdy uses YearnV3VaultContract
-                balance_response = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_STATE,
-                    contract_address=pool_address,
-                    contract_public_id="valory/sturdy_yearn_v3_vault:0.1.0",
-                    contract_callable="balance_of",
-                    data_key="amount",
-                    owner=safe_address,
-                    chain_id=chain,
+                balance_response = yield from self._get_sturdy_pool_balance(
+                    pool_address, safe_address, chain
                 )
-
             else:
                 self.context.logger.error(f"Unsupported DEX type: {dex_type}")
                 return 0
@@ -344,6 +319,229 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error getting pool balance for {pool_address} ({dex_type}): {str(e)}"
             )
             return 0
+
+    def _get_balancer_pool_balance(
+        self, pool_address: str, safe_address: str, chain: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get balance for Balancer pools using WeightedPoolContract."""
+        balance_response = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=pool_address,
+            contract_public_id="valory/balancer_weighted_pool:0.1.0",
+            contract_callable="get_balance",
+            data_key="balance",
+            account=safe_address,
+            chain_id=chain,
+        )
+        return balance_response
+
+    def _get_velodrome_pool_balance(
+        self,
+        pool_address: str,
+        safe_address: str,
+        chain: str,
+        position: Dict[str, Any] = None,
+    ) -> Generator[None, None, Optional[int]]:
+        """Get balance for Velodrome pools (both regular and CL pools)."""
+        is_cl_pool = position.get("is_cl_pool", False) if position else False
+
+        if is_cl_pool:
+            balance_response = yield from self._get_velodrome_cl_pool_balance(
+                pool_address, safe_address, chain, position
+            )
+            return balance_response
+        else:
+            balance_response = yield from self._get_velodrome_regular_pool_balance(
+                pool_address, safe_address, chain
+            )
+            return balance_response
+
+    def _get_velodrome_regular_pool_balance(
+        self, pool_address: str, safe_address: str, chain: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get balance for regular Velodrome pools using VelodromePoolContract."""
+        balance_response = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=pool_address,
+            contract_public_id="valory/velodrome_pool:0.1.0",
+            contract_callable="get_balance",
+            data_key="balance",
+            account=safe_address,
+            chain_id=chain,
+        )
+        return balance_response
+
+    def _get_velodrome_cl_pool_balance(
+        self,
+        pool_address: str,
+        safe_address: str,
+        chain: str,
+        position: Dict[str, Any] = None,
+    ) -> Generator[None, None, Optional[int]]:
+        """Get balance for Velodrome CL pools using NonFungiblePositionManager."""
+        position_manager_address = (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain
+            )
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No Velodrome position manager address found for chain {chain}"
+            )
+            return 0
+
+        positions = position.get("positions", []) if position else []
+        if not positions:
+            # If we don't have specific positions, check if the safe owns any positions
+            balance_response = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_STATE,
+                contract_address=position_manager_address,
+                contract_public_id="valory/velodrome_non_fungible_position_manager:0.1.0",
+                contract_callable="balanceOf",
+                data_key="balance",
+                owner=safe_address,
+                chain_id=chain,
+            )
+            return balance_response
+        else:
+            # Check each position to see if any still have liquidity
+            total_liquidity = yield from self._check_velodrome_cl_positions_liquidity(
+                position_manager_address, safe_address, chain, positions
+            )
+            return total_liquidity
+
+    def _check_velodrome_cl_positions_liquidity(
+        self,
+        position_manager_address: str,
+        safe_address: str,
+        chain: str,
+        positions: List[Dict[str, Any]],
+    ) -> Generator[None, None, int]:
+        """Check liquidity for multiple Velodrome CL positions."""
+        total_liquidity = 0
+
+        for pos in positions:
+            token_id = pos.get("token_id")
+            if not token_id:
+                continue
+
+            # Check if the safe is still the owner of this specific position
+            owner_response = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_STATE,
+                contract_address=position_manager_address,
+                contract_public_id="valory/velodrome_non_fungible_position_manager:0.1.0",
+                contract_callable="ownerOf",
+                data_key="owner",
+                token_id=token_id,
+                chain_id=chain,
+            )
+
+            if owner_response and owner_response.lower() == safe_address.lower():
+                # Safe still owns the position, now check if it has liquidity
+                position_data = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_STATE,
+                    contract_address=position_manager_address,
+                    contract_public_id="valory/velodrome_non_fungible_position_manager:0.1.0",
+                    contract_callable="get_position",
+                    data_key="data",
+                    token_id=token_id,
+                    chain_id=chain,
+                )
+
+                if position_data and position_data.get("liquidity", 0) > 0:
+                    total_liquidity += 1
+
+        return total_liquidity
+
+    def _get_uniswap_v3_pool_balance(
+        self,
+        pool_address: str,
+        safe_address: str,
+        chain: str,
+        position: Dict[str, Any] = None,
+    ) -> Generator[None, None, Optional[int]]:
+        """Get balance for Uniswap V3 pools using NonFungiblePositionManager."""
+        position_manager_address = (
+            self.params.uniswap_position_manager_contract_addresses.get(chain)
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return 0
+
+        token_id = position.get("token_id") if position else None
+        if not token_id:
+            # If we don't have a specific token_id, check if the safe owns any positions
+            balance_response = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_STATE,
+                contract_address=position_manager_address,
+                contract_public_id="valory/uniswap_v3_non_fungible_position_manager:0.1.0",
+                contract_callable="balanceOf",
+                data_key="balance",
+                owner=safe_address,
+                chain_id=chain,
+            )
+            return balance_response
+        else:
+            # Check if the safe is still the owner of this specific position
+            liquidity_check = yield from self._check_uniswap_v3_position_liquidity(
+                position_manager_address, safe_address, chain, token_id
+            )
+            return liquidity_check
+
+    def _check_uniswap_v3_position_liquidity(
+        self,
+        position_manager_address: str,
+        safe_address: str,
+        chain: str,
+        token_id: int,
+    ) -> Generator[None, None, int]:
+        """Check liquidity for a specific Uniswap V3 position."""
+        # Check if the safe is still the owner of this specific position
+        owner_response = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=position_manager_address,
+            contract_public_id="valory/uniswap_v3_non_fungible_position_manager:0.1.0",
+            contract_callable="ownerOf",
+            data_key="owner",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if owner_response and owner_response.lower() == safe_address.lower():
+            # Safe still owns the position, now check if it has liquidity
+            position_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_STATE,
+                contract_address=position_manager_address,
+                contract_public_id="valory/uniswap_v3_non_fungible_position_manager:0.1.0",
+                contract_callable="get_position",
+                data_key="data",
+                token_id=token_id,
+                chain_id=chain,
+            )
+
+            if position_data and position_data.get("liquidity", 0) > 0:
+                return 1  # Position exists and has liquidity
+            else:
+                return 0  # Position exists but has no liquidity
+        else:
+            return 0  # Safe no longer owns the position
+
+    def _get_sturdy_pool_balance(
+        self, pool_address: str, safe_address: str, chain: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get balance for Sturdy pools using YearnV3VaultContract."""
+        balance_response = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=pool_address,
+            contract_public_id="valory/sturdy_yearn_v3_vault:0.1.0",
+            contract_callable="balance_of",
+            data_key="amount",
+            owner=safe_address,
+            chain_id=chain,
+        )
+        return balance_response
 
     def _prepare_withdrawal_actions(
         self, positions: List[Dict[str, Any]], target_address: str
@@ -378,7 +576,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Step 1: Check for open positions and create exit actions
         self.context.logger.info("=== STEP 1: CHECKING FOR OPEN POSITIONS ===")
-        exit_actions = self._prepare_exit_pool_actions_standard(validated_positions)
+        exit_actions = self._prepare_exit_pool_actions(validated_positions)
         if exit_actions:
             self.context.logger.info(
                 f"Found {len(exit_actions)} open positions to exit"
@@ -432,7 +630,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         return actions
 
-    def _prepare_exit_pool_actions_standard(
+    def _prepare_exit_pool_actions(
         self, positions: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
@@ -459,50 +657,35 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
             if status == "OPEN" or status == "open":
                 self.context.logger.info(f"Creating exit action for position {i+1}")
-                # Create exit pool action in standard format
-                action = {
-                    "action": Action.EXIT_POOL.value,  # Standard action key
-                    "chain": position.get(
-                        "chain", self.context.params.target_investment_chains[0]
-                    ),
-                    "pool_address": position.get("pool_address"),
-                    "dex_type": position.get("dex_type"),
-                    "token0": position.get("token0"),
-                    "token1": position.get("token1"),
-                    "token0_symbol": position.get("token0_symbol"),
-                    "token1_symbol": position.get("token1_symbol"),
-                    "pool_type": position.get("pool_type"),
-                    "description": f"Exit {position.get('token0_symbol')}/{position.get('token1_symbol')} pool for withdrawal",
-                    "assets": [
+
+                # Use base class method to build exit action
+                action = self._build_exit_pool_action_base(position)
+                if action:
+                    # Add description for withdrawal context
+                    action[
+                        "description"
+                    ] = f"Exit {position.get('token0_symbol')}/{position.get('token1_symbol')} pool for withdrawal"
+
+                    # Add required assets field
+                    action["assets"] = [
                         position.get("token0"),
                         position.get("token1"),
-                    ],  # Required assets field
-                }
+                    ]
 
-                # Add position-specific data
-                if position.get("token_id"):
-                    action["token_id"] = position.get("token_id")
-                if position.get("liquidity"):
-                    action["liquidity"] = position.get("liquidity")
+                    # Add missing fields that are required for proper transaction preparation
+                    if position.get("pool_fee") is not None:
+                        action["pool_fee"] = position.get("pool_fee")
+                    if position.get("tick_spacing") is not None:
+                        action["tick_spacing"] = position.get("tick_spacing")
+                    if position.get("tick_ranges") is not None:
+                        action["tick_ranges"] = position.get("tick_ranges")
 
-                # Add missing fields that are required for proper transaction preparation
-                if position.get("pool_fee") is not None:
-                    action["pool_fee"] = position.get("pool_fee")
-                if position.get("tick_spacing") is not None:
-                    action["tick_spacing"] = position.get("tick_spacing")
-                if position.get("tick_ranges") is not None:
-                    action["tick_ranges"] = position.get("tick_ranges")
-                if position.get("token_ids") is not None:
-                    action["token_ids"] = position.get("token_ids")
-                if position.get("liquidities") is not None:
-                    action["liquidities"] = position.get("liquidities")
-                if position.get("is_stable") is not None:
-                    action["is_stable"] = position.get("is_stable")
-                if position.get("is_cl_pool") is not None:
-                    action["is_cl_pool"] = position.get("is_cl_pool")
-
-                self.context.logger.info(f"Created exit action: {action}")
-                actions.append(action)
+                    self.context.logger.info(f"Created exit action: {action}")
+                    actions.append(action)
+                else:
+                    self.context.logger.error(
+                        f"Failed to create exit action for position {i+1}"
+                    )
             else:
                 self.context.logger.info(
                     f"Skipping position {i+1} with status: {status}"
@@ -564,22 +747,22 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                         f"Creating swap action for {token_symbol} with balance {balance}"
                     )
 
-                    # Create swap action using funds_percentage like normal flow
-                    swap_action = {
-                        "action": Action.FIND_BRIDGE_ROUTE.value,  # Standard action key
-                        "chain": chain,
-                        "from_chain": chain,  # Required by fetch_routes
-                        "to_chain": chain,  # Required by fetch_routes
-                        "from_token": token_address,
-                        "from_token_symbol": token_symbol,
-                        "to_token": self._get_usdc_address(chain),
-                        "to_token_symbol": "USDC",
-                        "funds_percentage": 1.0,  # Use 100% of available balance
-                        "description": f"Swap {token_symbol} to USDC for withdrawal",
-                    }
+                    # Use base class method to build swap action
+                    swap_action = self._build_swap_to_usdc_action(
+                        chain=chain,
+                        from_token_address=token_address,
+                        from_token_symbol=token_symbol,
+                        funds_percentage=1.0,  # Use 100% of available balance
+                        description=f"Swap {token_symbol} to USDC for withdrawal",
+                    )
 
-                    self.context.logger.info(f"Created swap action: {swap_action}")
-                    actions.append(swap_action)
+                    if swap_action:
+                        self.context.logger.info(f"Created swap action: {swap_action}")
+                        actions.append(swap_action)
+                    else:
+                        self.context.logger.error(
+                            f"Failed to create swap action for {token_symbol}"
+                        )
 
         self.context.logger.info("=== SWAP DEBUGGING COMPLETE ===")
         self.context.logger.info(f"Total swap actions created: {len(actions)}")
@@ -661,21 +844,6 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Returning actions list: {actions}")
 
         return actions
-
-    def _get_usdc_address(self, chain: str) -> str:
-        """
-        Get USDC address for the given chain.
-
-        :param chain: blockchain chain
-        :return: USDC contract address
-        """
-        usdc_addresses = {
-            "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",  # Native USDC, not bridged USDC.e
-            "base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-            "mode": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  # Using Base USDC for Mode
-            "ethereum": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        }
-        return usdc_addresses.get(chain, usdc_addresses["optimism"])
 
     def _update_withdrawal_status(
         self, status: str, message: str

@@ -1223,7 +1223,7 @@ class HttpHandler(BaseHttpHandler):
         filtered_breakdown = []
         for asset in asset_breakdown:
             asset_symbol = asset.get("asset", "")
-            if asset_symbol == "OLAS": # nosec B105
+            if asset_symbol == "OLAS":  # nosec B105
                 continue  # Skip OLAS
             filtered_breakdown.append(asset)
 

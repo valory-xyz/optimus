@@ -2426,19 +2426,34 @@ class LiquidityTraderBaseBehaviour(
         """
         try:
             usdc_address = self._get_usdc_address(chain)
-            olas_address = self._get_olas_address(chain) if hasattr(self, '_get_olas_address') else None
+            olas_address = (
+                self._get_olas_address(chain)
+                if hasattr(self, "_get_olas_address")
+                else None
+            )
             if not usdc_address:
                 self.context.logger.error(f"Could not get USDC address for {chain}")
                 return None
 
             # Skip if it's already USDC (by address)
-            if from_token_address and from_token_address.lower() == usdc_address.lower():
-                self.context.logger.info("Skipping USDC - it's already USDC (by address)")
+            if (
+                from_token_address
+                and from_token_address.lower() == usdc_address.lower()
+            ):
+                self.context.logger.info(
+                    "Skipping USDC - it's already USDC (by address)"
+                )
                 return None
 
             # Skip if it's OLAS (by address)
-            if olas_address and from_token_address and from_token_address.lower() == olas_address.lower():
-                self.context.logger.info("Skipping OLAS - do not swap OLAS during withdrawal (by address)")
+            if (
+                olas_address
+                and from_token_address
+                and from_token_address.lower() == olas_address.lower()
+            ):
+                self.context.logger.info(
+                    "Skipping OLAS - do not swap OLAS during withdrawal (by address)"
+                )
                 return None
 
             swap_action = {
@@ -2497,13 +2512,10 @@ class LiquidityTraderBaseBehaviour(
             return None
 
     def _get_olas_address(self, chain: str) -> Optional[str]:
-        """
-        Get the OLAS token address for the given chain.
-        Update the mapping below with the correct OLAS addresses for each supported chain.
-        """
+        """Get the OLAS token address for the given chain."""
         olas_addresses = {
-            "optimism": "0xfc2e6e6bcbd49ccf3a5f029c79984372dcbfe527",  
-            "mode": "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9",      
+            "optimism": "0xfc2e6e6bcbd49ccf3a5f029c79984372dcbfe527",
+            "mode": "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9",
         }
         return olas_addresses.get(chain)
 

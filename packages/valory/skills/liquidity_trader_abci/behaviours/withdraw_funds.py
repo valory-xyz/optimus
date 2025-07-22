@@ -692,12 +692,28 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Skip if it's already USDC or OLAS by address
                     usdc_address = self._get_usdc_address(chain)
-                    olas_address = self._get_olas_address(chain) if hasattr(self, '_get_olas_address') else None
-                    if token_address and usdc_address and token_address.lower() == usdc_address.lower():
-                        self.context.logger.info("Skipping USDC - it's USDC (by address)")
+                    olas_address = (
+                        self._get_olas_address(chain)
+                        if hasattr(self, "_get_olas_address")
+                        else None
+                    )
+                    if (
+                        token_address
+                        and usdc_address
+                        and token_address.lower() == usdc_address.lower()
+                    ):
+                        self.context.logger.info(
+                            "Skipping USDC - it's USDC (by address)"
+                        )
                         continue
-                    if token_address and olas_address and token_address.lower() == olas_address.lower():
-                        self.context.logger.info("Skipping OLAS - do not swap OLAS during withdrawal (by address)")
+                    if (
+                        token_address
+                        and olas_address
+                        and token_address.lower() == olas_address.lower()
+                    ):
+                        self.context.logger.info(
+                            "Skipping OLAS - do not swap OLAS during withdrawal (by address)"
+                        )
                         continue
 
                     # Skip if balance is too small
@@ -751,7 +767,9 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Find USDC balance from positions data
         usdc_balance = 0
-        usdc_address = self._get_usdc_address(self.context.params.target_investment_chains[0])
+        usdc_address = self._get_usdc_address(
+            self.context.params.target_investment_chains[0]
+        )
 
         for position in positions:
             self.context.logger.info(f"--- Checking position: {position} ---")
@@ -764,7 +782,12 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(f"--- Checking asset: {asset} ---")
 
                 token_address = asset.get("address", "")
-                if token_address and usdc_address and token_address.lower() == usdc_address.lower() and "balance" in asset:
+                if (
+                    token_address
+                    and usdc_address
+                    and token_address.lower() == usdc_address.lower()
+                    and "balance" in asset
+                ):
                     usdc_balance = asset.get("balance", 0)
                     self.context.logger.info(
                         f"Found USDC: balance={usdc_balance}, address={usdc_address}"

@@ -1216,13 +1216,23 @@ class HttpHandler(BaseHttpHandler):
             return
 
         # Extract withdrawal amount data
-        total_value = portfolio_data.get("portfolio_value", 0)
         operating_chain = self.context.params.target_investment_chains[0]
         asset_breakdown = portfolio_data.get("portfolio_breakdown", [])
 
+        # Filter out OLAS from asset breakdown
+        filtered_breakdown = []
+        for asset in asset_breakdown:
+            asset_symbol = asset.get("asset", "")
+            if asset_symbol == "OLAS": # nosec B105
+                continue  # Skip OLAS
+            filtered_breakdown.append(asset)
+
+        # Calculate total value excluding OLAS
+        total_value = sum(asset.get("value_usd", 0) for asset in filtered_breakdown)
+
         # Transform asset_breakdown to match the expected format
         formatted_breakdown = []
-        for asset in asset_breakdown:
+        for asset in filtered_breakdown:
             formatted_breakdown.append(
                 {
                     "token_symbol": asset.get("asset", "Unknown"),

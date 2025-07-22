@@ -533,28 +533,15 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             "Validating position statuses against on-chain state..."
         )
-        validated_positions = yield from self._validate_and_update_position_statuses(
-            positions
-        )
 
         # Get fresh positions data for action preparation
         self.context.logger.info(
             "Getting fresh positions data for action preparation..."
         )
-        fresh_positions = yield from self.get_positions()
-        if fresh_positions:
-            self.context.logger.info(
-                f"Successfully got fresh positions. Found {len(fresh_positions)} position groups."
-            )
-        else:
-            self.context.logger.warning(
-                "Failed to get fresh positions, using validated positions."
-            )
-            fresh_positions = validated_positions
 
         # Step 1: Check for open positions and create exit actions
         self.context.logger.info("=== STEP 1: CHECKING FOR OPEN POSITIONS ===")
-        exit_actions = self._prepare_exit_pool_actions(validated_positions)
+        exit_actions = self._prepare_exit_pool_actions(positions)
         if exit_actions:
             self.context.logger.info(
                 f"Found {len(exit_actions)} open positions to exit"
@@ -566,7 +553,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Step 2: Create swap actions for all non-USDC assets
         self.context.logger.info("=== STEP 2: PREPARING SWAP ACTIONS ===")
-        swap_actions = self._prepare_swap_to_usdc_actions_standard(fresh_positions)
+        swap_actions = self._prepare_swap_to_usdc_actions_standard(positions)
         if swap_actions:
             self.context.logger.info(
                 f"Found {len(swap_actions)} assets to swap to USDC"
@@ -579,7 +566,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         # Step 3: Create transfer action for USDC
         self.context.logger.info("=== STEP 3: PREPARING TRANSFER ACTION ===")
         transfer_actions = self._prepare_transfer_usdc_actions_standard(
-            target_address, fresh_positions
+            target_address, positions
         )
         if transfer_actions:
             self.context.logger.info("Found USDC to transfer")
@@ -703,15 +690,14 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                         f"Token: {token_symbol}, Address: {token_address}, Balance: {balance}"
                     )
 
-                    # Skip if it's already USDC
-                    if token_symbol == "USDC":  # nosec B105
-                        self.context.logger.info("Skipping USDC - it's USDC")
+                    # Skip if it's already USDC or OLAS by address
+                    usdc_address = self._get_usdc_address(chain)
+                    olas_address = self._get_olas_address(chain) if hasattr(self, '_get_olas_address') else None
+                    if token_address and usdc_address and token_address.lower() == usdc_address.lower():
+                        self.context.logger.info("Skipping USDC - it's USDC (by address)")
                         continue
-                    # Skip if it's OLAS
-                    if token_symbol == "OLAS":  # nosec B105
-                        self.context.logger.info(
-                            "Skipping OLAS - do not swap OLAS during withdrawal"
-                        )
+                    if token_address and olas_address and token_address.lower() == olas_address.lower():
+                        self.context.logger.info("Skipping OLAS - do not swap OLAS during withdrawal (by address)")
                         continue
 
                     # Skip if balance is too small
@@ -765,7 +751,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Find USDC balance from positions data
         usdc_balance = 0
-        usdc_address = ""
+        usdc_address = self._get_usdc_address(self.context.params.target_investment_chains[0])
 
         for position in positions:
             self.context.logger.info(f"--- Checking position: {position} ---")
@@ -777,10 +763,8 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             for asset in assets:
                 self.context.logger.info(f"--- Checking asset: {asset} ---")
 
-                token_symbol = asset.get("asset_symbol", "")
-
-                if token_symbol == "USDC" and "balance" in asset:  # nosec B105
-                    usdc_address = asset.get("address", "")
+                token_address = asset.get("address", "")
+                if token_address and usdc_address and token_address.lower() == usdc_address.lower() and "balance" in asset:
                     usdc_balance = asset.get("balance", 0)
                     self.context.logger.info(
                         f"Found USDC: balance={usdc_balance}, address={usdc_address}"

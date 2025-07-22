@@ -453,41 +453,6 @@ class LiquidityTraderBaseBehaviour(
 
         return asset_balances_dict
 
-    def _get_native_balance(
-        self, chain: str, account: str
-    ) -> Generator[None, None, Optional[int]]:
-        """Get native balance"""
-        ledger_api_response = yield from self.get_ledger_api_response(
-            performative=LedgerApiMessage.Performative.GET_STATE,
-            ledger_callable="get_balance",
-            block_identifier="latest",
-            account=account,
-            chain_id=chain,
-        )
-
-        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
-            self.context.logger.error(
-                f"Could not calculate the balance of the safe: {ledger_api_response}"
-            )
-            return None
-
-        return int(ledger_api_response.state.body["get_balance_result"])
-
-    def _get_token_balance(
-        self, chain: str, account: str, asset_address: str
-    ) -> Generator[None, None, Optional[int]]:
-        """Get token balance"""
-        balance = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=asset_address,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="check_balance",
-            data_key="token",
-            account=account,
-            chain_id=chain,
-        )
-        return balance
-
     def _get_balance(
         self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
     ) -> Optional[int]:
@@ -727,165 +692,37 @@ class LiquidityTraderBaseBehaviour(
             positions = yield from self.get_positions()
 
             # Calculate value_in_pools from current positions
-            value_in_pools = 0.0
-            for position in positions:
-                if position.get("status") == PositionStatus.OPEN.value:
-                    position_value = position.get("value_usd", 0)
-                    if isinstance(position_value, str):
-                        position_value = (
-                            float(position_value) if position_value else 0.0
-                        )
-                    value_in_pools += position_value
+            value_in_pools = yield from self._calculate_pools_value(positions)
 
-            # Get current balances from blockchain (FRESH DATA)
-            chain = self.context.params.target_investment_chains[0]
-            if chain == "optimism":
-                balances = yield from self._get_optimism_balances_from_safe_api()
-            elif chain == "mode":
-                balances = yield from self._get_mode_balances_from_explorer_api()
-            else:
-                self.context.logger.error(f"Unsupported chain: {chain}")
-                return
+            # Fetch fresh balances from blockchain APIs
+            balances = yield from self._fetch_fresh_balances()
 
-            # Create a mapping of token addresses to their current balances and USD values
-            balance_map = {}
-            total_safe_value = 0
-
-            for balance in balances:
-                # Handle different balance formats
-                if "tokenAddress" in balance:
-                    # Format from SafeApi (has balanceUsd)
-                    token_address = balance.get("tokenAddress")
-                    balance_amount = balance.get("balance", "0")
-                    balance_usd = float(balance.get("balanceUsd", 0))
-                    token_symbol = balance.get("tokenSymbol", "")
-                else:
-                    # Format from _get_optimism_balances_from_safe_api (no balanceUsd)
-                    token_address = balance.get("address")
-                    balance_amount = balance.get("balance", 0)
-                    token_symbol = balance.get("asset_symbol", "")
-
-                    # Calculate USD value for this token
-                    if token_address and balance_amount > 0:
-                        if token_address.lower() == ZERO_ADDRESS.lower():
-                            # ETH
-                            token_price = yield from self._fetch_zero_address_price()
-                        else:
-                            # ERC20 token
-                            token_price = yield from self._fetch_token_price(
-                                token_address, chain
-                            )
-
-                        if token_price:
-                            # Convert balance to human-readable format
-                            token_decimals = yield from self._get_token_decimals(
-                                chain, token_address
-                            )
-                            if token_decimals is not None:
-                                adjusted_balance = float(balance_amount) / (
-                                    10**token_decimals
-                                )
-                                balance_usd = adjusted_balance * token_price
-                            else:
-                                balance_usd = 0.0
-                        else:
-                            balance_usd = 0.0
-                    else:
-                        balance_usd = 0.0
-
-                if token_address:
-                    balance_map[token_address.lower()] = {
-                        "balance": balance_amount,
-                        "balance_usd": balance_usd,
-                        "symbol": token_symbol,
-                    }
-                    total_safe_value += balance_usd
-
-            # Get existing portfolio breakdown to preserve structure
-            portfolio_breakdown = self.portfolio_data.get("portfolio_breakdown", [])
-            existing_assets = {
-                asset.get("address", "").lower(): asset for asset in portfolio_breakdown
-            }
-
-            # Update existing assets and add new ones
-            updated_breakdown = []
-            total_portfolio_value = 0
-
-            # Process existing assets
-            for asset in portfolio_breakdown:
-                asset_address = asset.get("address", "").lower()
-                asset_symbol = asset.get("asset", "")
-
-                # Get fresh balance data for this asset
-                if asset_address in balance_map:
-                    fresh_data = balance_map[asset_address]
-                    updated_asset = {
-                        "asset": asset_symbol,
-                        "address": asset.get(
-                            "address"
-                        ),  # Preserve original address format
-                        "balance": float(fresh_data["balance"]),
-                        "price": asset.get("price", 0),  # Preserve existing price
-                        "value_usd": fresh_data["balance_usd"],
-                        "ratio": 0,  # Will be calculated below
-                    }
-                    total_portfolio_value += fresh_data["balance_usd"]
-                else:
-                    # Asset not found in current balances, set balance to 0
-                    updated_asset = {
-                        "asset": asset_symbol,
-                        "address": asset.get("address"),
-                        "balance": 0.0,
-                        "price": asset.get("price", 0),
-                        "value_usd": 0.0,
-                        "ratio": 0.0,
-                    }
-
-                updated_breakdown.append(updated_asset)
-
-            # Add new assets that weren't in the original portfolio
-            for token_address, balance_data in balance_map.items():
-                if token_address not in existing_assets:
-                    # This is a new asset (e.g., from a swap)
-                    new_asset = {
-                        "asset": balance_data["symbol"],
-                        "address": token_address,  # Use the address from balance_map
-                        "balance": float(balance_data["balance"]),
-                        "price": 0,  # Will need to be fetched if needed
-                        "value_usd": balance_data["balance_usd"],
-                        "ratio": 0,  # Will be calculated below
-                    }
-                    updated_breakdown.append(new_asset)
-                    total_portfolio_value += balance_data["balance_usd"]
-                    self.context.logger.info(
-                        f"Added new asset to portfolio: {balance_data['symbol']} (${balance_data['balance_usd']:.2f})"
-                    )
-
-            # Calculate ratios
-            if total_portfolio_value > 0:
-                for asset in updated_breakdown:
-                    asset["ratio"] = (asset["value_usd"] / total_portfolio_value) * 100
-
-            # Update portfolio data while preserving all existing fields
-            self.portfolio_data.update(
-                {
-                    "portfolio_value": float(
-                        total_portfolio_value + value_in_pools
-                    ),  # Total = safe + pools
-                    "value_in_safe": float(total_safe_value),
-                    "value_in_pools": float(
-                        value_in_pools
-                    ),  # Calculated dynamically from positions
-                    "portfolio_breakdown": updated_breakdown,
-                    "last_updated": int(self._get_current_timestamp()),
-                }
+            # Calculate USD values for all tokens
+            balance_map, total_safe_value = yield from self._calculate_token_usd_values(
+                balances
             )
 
-            # Preserve all other existing fields (initial_investment, volume, roi, agent_hash, allocations, address)
-            # These fields remain unchanged
+            # Update portfolio breakdown with fresh data
+            (
+                updated_breakdown,
+                total_portfolio_value,
+            ) = yield from self._update_portfolio_breakdown(balance_map)
 
-            # Store updated portfolio data
-            self.store_portfolio_data()
+            # Calculate asset ratios
+            yield from self._calculate_portfolio_ratios(
+                updated_breakdown, total_portfolio_value
+            )
+
+            # Update main portfolio data
+            yield from self._update_portfolio_data(
+                updated_breakdown,
+                total_portfolio_value,
+                total_safe_value,
+                value_in_pools,
+            )
+
+            # Synchronize position data with portfolio data for consistency
+            yield from self._sync_positions_with_portfolio(balance_map)
 
             self.context.logger.info(
                 f"Portfolio data updated with fresh blockchain data. Total value: ${total_portfolio_value + value_in_pools:.2f} (Safe: ${total_safe_value:.2f}, Pools: ${value_in_pools:.2f})"
@@ -893,9 +730,269 @@ class LiquidityTraderBaseBehaviour(
 
         except Exception as e:
             self.context.logger.error(f"Error updating portfolio data: {e}")
-    
+
+    def _calculate_pools_value(
+        self, positions: List[Dict[str, Any]]
+    ) -> Generator[None, None, float]:
+        """Calculate total value in pools from current positions."""
+        value_in_pools = 0.0
+        for position in positions:
+            if position.get("status") == PositionStatus.OPEN.value:
+                position_value = position.get("value_usd", 0)
+                if isinstance(position_value, str):
+                    position_value = float(position_value) if position_value else 0.0
+                value_in_pools += position_value
+        return value_in_pools
+
+    def _fetch_fresh_balances(self) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Fetch fresh balances from blockchain APIs."""
+        chain = self.context.params.target_investment_chains[0]
+        if chain == "optimism":
+            balances = yield from self._get_optimism_balances_from_safe_api()
+        elif chain == "mode":
+            balances = yield from self._get_mode_balances_from_explorer_api()
+        else:
+            self.context.logger.error(f"Unsupported chain: {chain}")
+            return []
+        return balances
+
+    def _calculate_token_usd_values(
+        self, balances: List[Dict[str, Any]]
+    ) -> Generator[None, None, Tuple[Dict[str, Dict[str, Any]], float]]:
+        """Calculate USD values for all tokens in balances."""
+        balance_map = {}
+        total_safe_value = 0
+        chain = self.context.params.target_investment_chains[0]
+
+        for balance in balances:
+            # Handle different balance formats
+            if "tokenAddress" in balance:
+                # Format from SafeApi (has balanceUsd)
+                token_address = balance.get("tokenAddress")
+                balance_amount = balance.get("balance", "0")
+                balance_usd = float(balance.get("balanceUsd", 0))
+                token_symbol = balance.get("tokenSymbol", "")
+            else:
+                # Format from _get_optimism_balances_from_safe_api (no balanceUsd)
+                token_address = balance.get("address")
+                balance_amount = balance.get("balance", 0)
+                token_symbol = balance.get("asset_symbol", "")
+
+                # Calculate USD value for this token
+                balance_usd = yield from self._calculate_single_token_usd_value(
+                    token_address, balance_amount, chain
+                )
+
+            if token_address:
+                balance_map[token_address.lower()] = {
+                    "balance": balance_amount,
+                    "balance_usd": balance_usd,
+                    "symbol": token_symbol,
+                }
+                total_safe_value += balance_usd
+
+        return balance_map, total_safe_value
+
+    def _calculate_single_token_usd_value(
+        self, token_address: str, balance_amount: Any, chain: str
+    ) -> Generator[None, None, float]:
+        """Calculate USD value for a single token."""
+        if not token_address or balance_amount <= 0:
+            return 0.0
+
+        try:
+            if token_address.lower() == ZERO_ADDRESS.lower():
+                # ETH
+                token_price = yield from self._fetch_zero_address_price()
+            else:
+                # ERC20 token
+                token_price = yield from self._fetch_token_price(token_address, chain)
+
+            if token_price:
+                # Convert balance to human-readable format
+                token_decimals = yield from self._get_token_decimals(
+                    chain, token_address
+                )
+                if token_decimals is not None:
+                    adjusted_balance = float(balance_amount) / (10**token_decimals)
+                    return adjusted_balance * token_price
+                else:
+                    return 0.0
+            else:
+                return 0.0
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating USD value for {token_address}: {e}"
+            )
+            return 0.0
+
+    def _update_portfolio_breakdown(
+        self, balance_map: Dict[str, Dict[str, Any]]
+    ) -> Generator[None, None, Tuple[List[Dict[str, Any]], float]]:
+        """Update portfolio breakdown with fresh balance data."""
+        # Get existing portfolio breakdown to preserve structure
+        portfolio_breakdown = self.portfolio_data.get("portfolio_breakdown", [])
+        existing_assets = {
+            asset.get("address", "").lower(): asset for asset in portfolio_breakdown
+        }
+
+        # Update existing assets and add new ones
+        updated_breakdown = []
+        total_portfolio_value = 0
+
+        # Process existing assets
+        for asset in portfolio_breakdown:
+            asset_address = asset.get("address", "").lower()
+            asset_symbol = asset.get("asset", "")
+
+            # Get fresh balance data for this asset
+            if asset_address in balance_map:
+                fresh_data = balance_map[asset_address]
+                updated_asset = {
+                    "asset": asset_symbol,
+                    "address": asset.get("address"),  # Preserve original address format
+                    "balance": float(fresh_data["balance"]),
+                    "price": asset.get("price", 0),  # Preserve existing price
+                    "value_usd": fresh_data["balance_usd"],
+                    "ratio": 0,  # Will be calculated below
+                }
+                total_portfolio_value += fresh_data["balance_usd"]
+            else:
+                # Asset not found in current balances, set balance to 0
+                updated_asset = {
+                    "asset": asset_symbol,
+                    "address": asset.get("address"),
+                    "balance": 0.0,
+                    "price": asset.get("price", 0),
+                    "value_usd": 0.0,
+                    "ratio": 0.0,
+                }
+
+            updated_breakdown.append(updated_asset)
+
+        # Add new assets that weren't in the original portfolio
+        for token_address, balance_data in balance_map.items():
+            if token_address not in existing_assets:
+                # This is a new asset (e.g., from a swap)
+                new_asset = {
+                    "asset": balance_data["symbol"],
+                    "address": token_address,  # Use the address from balance_map
+                    "balance": float(balance_data["balance"]),
+                    "price": 0,  # Will need to be fetched if needed
+                    "value_usd": balance_data["balance_usd"],
+                    "ratio": 0,  # Will be calculated below
+                }
+                updated_breakdown.append(new_asset)
+                total_portfolio_value += balance_data["balance_usd"]
+                self.context.logger.info(
+                    f"Added new asset to portfolio: {balance_data['symbol']} (${balance_data['balance_usd']:.2f})"
+                )
+
+        return updated_breakdown, total_portfolio_value
+
+    def _calculate_portfolio_ratios(
+        self, updated_breakdown: List[Dict[str, Any]], total_portfolio_value: float
+    ) -> Generator[None, None, None]:
+        """Calculate ratios for all assets in portfolio breakdown."""
+        if total_portfolio_value > 0:
+            for asset in updated_breakdown:
+                asset["ratio"] = (asset["value_usd"] / total_portfolio_value) * 100
+
+    def _update_portfolio_data(
+        self,
+        updated_breakdown: List[Dict[str, Any]],
+        total_portfolio_value: float,
+        total_safe_value: float,
+        value_in_pools: float,
+    ) -> Generator[None, None, None]:
+        """Update main portfolio data with calculated values."""
+        # Update portfolio data while preserving all existing fields
+        self.portfolio_data.update(
+            {
+                "portfolio_value": float(
+                    total_portfolio_value + value_in_pools
+                ),  # Total = safe + pools
+                "value_in_safe": float(total_safe_value),
+                "value_in_pools": float(
+                    value_in_pools
+                ),  # Calculated dynamically from positions
+                "portfolio_breakdown": updated_breakdown,
+                "last_updated": int(self._get_current_timestamp()),
+            }
+        )
+
+        # Preserve all other existing fields (initial_investment, volume, roi, agent_hash, allocations, address)
+        # These fields remain unchanged
+
+        # Store updated portfolio data
+        self.store_portfolio_data()
+
+    def _sync_positions_with_portfolio(
+        self, balance_map: Dict[str, Dict[str, Any]]
+    ) -> Generator[None, None, None]:
+        """Synchronize position data with portfolio data for consistency."""
+        try:
+            # Get current positions from synchronized data
+            current_positions = self.synchronized_data.positions
+
+            if not current_positions:
+                self.context.logger.info("No positions to synchronize")
+                return
+
+            # Update asset balances in positions to match portfolio data
+            updated_positions = []
+            for position in current_positions:
+                updated_assets = []
+                for asset in position.get("assets", []):
+                    asset_address = asset.get("address", "").lower()
+
+                    # Update balance from fresh portfolio data
+                    if asset_address in balance_map:
+                        fresh_data = balance_map[asset_address]
+                        updated_asset = {
+                            **asset,  # Preserve all existing fields
+                            "balance": fresh_data[
+                                "balance"
+                            ],  # Update with fresh balance
+                        }
+                        self.context.logger.debug(
+                            f"Updated position asset {asset.get('asset_symbol')} balance: {asset.get('balance')} -> {fresh_data['balance']}"
+                        )
+                    else:
+                        # Asset not found in fresh data, set balance to 0
+                        updated_asset = {
+                            **asset,  # Preserve all existing fields
+                            "balance": 0,  # Set to 0 if not found
+                        }
+                        self.context.logger.debug(
+                            f"Asset {asset.get('asset_symbol')} not found in fresh data, setting balance to 0"
+                        )
+
+                    updated_assets.append(updated_asset)
+
+                # Update position with new assets
+                updated_position = {
+                    **position,  # Preserve all existing fields
+                    "assets": updated_assets,
+                }
+                updated_positions.append(updated_position)
+
+            # Update current positions in base behaviour
+            self.current_positions = updated_positions
+            self.store_current_positions()
+
+            self.context.logger.info(
+                f"Synchronized {len(updated_positions)} positions with fresh portfolio data"
+            )
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error synchronizing positions with portfolio: {e}"
+            )
+            # Don't fail the entire portfolio update if position sync fails
+
     def _get_optimism_balances_from_safe_api(
-    self,
+        self,
     ) -> Generator[None, None, List[Dict[str, Any]]]:
         """Get Optimism balances using SafeApi with pagination"""
         safe_address = self.params.safe_contract_addresses.get("optimism")
@@ -2242,6 +2339,163 @@ class LiquidityTraderBaseBehaviour(
 
         days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
         return days_elapsed >= position["min_hold_days"]
+
+    def _build_exit_pool_action_base(
+        self, position: Dict[str, Any], tokens: List[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build action for exiting a pool position.
+
+        :param position: position data containing pool information
+        :param tokens: optional list of tokens for the exit action
+        :return: exit pool action dictionary
+        """
+        if not position:
+            self.context.logger.error("No position provided for exit action")
+            return None
+
+        dex_type = position.get("dex_type")
+        chain = position.get("chain")
+        pool_address = position.get("pool_address")
+        pool_type = position.get("pool_type")
+        is_stable = position.get("is_stable")
+        is_cl_pool = position.get("is_cl_pool")
+
+        # Determine action type based on DEX
+        action_type = (
+            Action.WITHDRAW.value
+            if dex_type == DexType.STURDY.value
+            else Action.EXIT_POOL.value
+        )
+
+        # Build base action
+        exit_pool_action = {
+            "action": action_type,
+            "dex_type": dex_type,
+            "chain": chain,
+            "pool_address": pool_address,
+            "pool_type": pool_type,
+            "is_stable": is_stable,
+            "is_cl_pool": is_cl_pool,
+        }
+
+        # Add assets if provided
+        if tokens:
+            exit_pool_action["assets"] = [token.get("token") for token in tokens]
+
+        # Handle Velodrome CL pools with multiple positions
+        if (
+            dex_type == DexType.VELODROME.value
+            and is_cl_pool
+            and "positions" in position
+        ):
+            # Extract token IDs from all positions
+            token_ids = [pos["token_id"] for pos in position.get("positions", [])]
+            liquidities = [pos["liquidity"] for pos in position.get("positions", [])]
+            if token_ids and liquidities:
+                self.context.logger.info(
+                    f"Exiting Velodrome CL pool with {len(token_ids)} positions. "
+                    f"Token IDs: {token_ids}"
+                )
+                exit_pool_action["token_ids"] = token_ids
+                exit_pool_action["liquidities"] = liquidities
+        # For single position case (backward compatibility)
+        elif "token_id" in position:
+            exit_pool_action["token_id"] = position.get("token_id")
+            exit_pool_action["liquidity"] = position.get("liquidity")
+
+        return exit_pool_action
+
+    def _build_swap_to_usdc_action(
+        self,
+        chain: str,
+        from_token_address: str,
+        from_token_symbol: str,
+        funds_percentage: float = 1.0,
+        description: str = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build action for swapping a token to USDC.
+
+        :param chain: blockchain chain
+        :param from_token_address: source token address
+        :param from_token_symbol: source token symbol
+        :param funds_percentage: percentage of funds to use (default: 1.0 = 100%)
+        :param description: optional description for the action
+        :return: swap action dictionary
+        """
+        try:
+            usdc_address = self._get_usdc_address(chain)
+            if not usdc_address:
+                self.context.logger.error(f"Could not get USDC address for {chain}")
+                return None
+
+            # Skip if it's already USDC
+            if from_token_symbol == "USDC":
+                self.context.logger.info("Skipping USDC - it's already USDC")
+                return None
+
+            # Skip if it's OLAS
+            if from_token_symbol == "OLAS":
+                self.context.logger.info(
+                    "Skipping OLAS - do not swap OLAS during withdrawal"
+                )
+                return None
+
+            swap_action = {
+                "action": Action.FIND_BRIDGE_ROUTE.value,
+                "chain": chain,
+                "from_chain": chain,
+                "to_chain": chain,
+                "from_token": from_token_address,
+                "from_token_symbol": from_token_symbol,
+                "to_token": usdc_address,
+                "to_token_symbol": "USDC",
+                "funds_percentage": funds_percentage,
+            }
+
+            if description:
+                swap_action["description"] = description
+
+            self.context.logger.info(f"Created swap action: {swap_action}")
+            return swap_action
+
+        except Exception as e:
+            self.context.logger.error(f"Error building swap to USDC action: {str(e)}")
+            return None
+
+    def _get_usdc_address(self, chain: str) -> Optional[str]:
+        """
+        Get USDC token address for the specified chain.
+
+        :param chain: blockchain chain
+        :return: USDC contract address
+        """
+        try:
+            # Common USDC addresses for different chains
+            usdc_addresses = {
+                "mode": "0xd988097fb8612cc24eeC14542bC03424c656005f",
+                "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+            }
+
+            usdc_address = usdc_addresses.get(chain.lower())
+            if usdc_address:
+                usdc_address = to_checksum_address(usdc_address)
+                self.context.logger.info(
+                    f"Found USDC address for {chain}: {usdc_address}"
+                )
+                return usdc_address
+            else:
+                self.context.logger.warning(
+                    f"No USDC address configured for chain: {chain}"
+                )
+                return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error getting USDC address for {chain}: {str(e)}"
+            )
+            return None
 
 
 def execute_strategy(

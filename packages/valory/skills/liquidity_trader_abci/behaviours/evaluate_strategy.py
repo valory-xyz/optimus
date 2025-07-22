@@ -757,23 +757,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     self.context.logger.info("Preparing swap action to USDC.")
 
-                    actions.append(
-                        {
-                            "action": Action.FIND_BRIDGE_ROUTE.value,
-                            "from_chain": chain,
-                            "to_chain": chain,  # Same chain swap
-                            "from_token": asset_address,
-                            "from_token_symbol": asset_symbol,
-                            "to_token": usdc_address,
-                            "to_token_symbol": "USDC",
-                            "funds_percentage": 1.0,  # Use all available balance
-                        }
+                    # Use base class method to build swap action
+                    swap_action = self._build_swap_to_usdc_action(
+                        chain=chain,
+                        from_token_address=asset_address,
+                        from_token_symbol=asset_symbol,
+                        funds_percentage=1.0,  # Use all available balance
+                        description=f"Swap non-whitelisted {asset_symbol} to USDC",
                     )
 
-                    self.context.logger.info(
-                        f"Prepared {asset_symbol} to USDC swap on {chain}: "
-                        f"{asset_symbol} -> USDC"
-                    )
+                    if swap_action:
+                        actions.append(swap_action)
+                        self.context.logger.info(
+                            f"Prepared {asset_symbol} to USDC swap on {chain}: "
+                            f"{asset_symbol} -> USDC"
+                        )
+                    else:
+                        self.context.logger.error(
+                            f"Failed to create swap action for {asset_symbol}"
+                        )
 
             return actions
 
@@ -782,34 +784,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error in check_and_prepare_non_whitelisted_swaps: {str(e)}"
             )
             return []
-
-    def _get_usdc_address(self, chain: str) -> Optional[str]:
-        """Get USDC token address for the specified chain."""
-        try:
-            # Common USDC addresses for different chains
-            usdc_addresses = {
-                "mode": "0xd988097fb8612cc24eeC14542bC03424c656005f",
-                "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-            }
-
-            usdc_address = usdc_addresses.get(chain.lower())
-            if usdc_address:
-                usdc_address = to_checksum_address(usdc_address)
-                self.context.logger.info(
-                    f"Found USDC address for {chain}: {usdc_address}"
-                )
-                return usdc_address
-            else:
-                self.context.logger.warning(
-                    f"No USDC address configured for chain: {chain}"
-                )
-                return None
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error getting USDC address for {chain}: {str(e)}"
-            )
-            return None
 
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""
@@ -1786,46 +1760,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        exit_pool_action = {
-            "action": (
-                Action.WITHDRAW.value
-                if self.position_to_exit.get("dex_type") == DexType.STURDY.value
-                else Action.EXIT_POOL.value
-            ),
-            "dex_type": self.position_to_exit.get("dex_type"),
-            "chain": self.position_to_exit.get("chain"),
-            "assets": [token.get("token") for token in tokens],
-            "pool_address": self.position_to_exit.get("pool_address"),
-            "pool_type": self.position_to_exit.get("pool_type"),
-            "is_stable": self.position_to_exit.get("is_stable"),
-            "is_cl_pool": self.position_to_exit.get("is_cl_pool"),
-        }
-
-        # Handle Velodrome CL pools with multiple positions
-        if (
-            self.position_to_exit.get("dex_type") == DexType.VELODROME.value
-            and self.position_to_exit.get("is_cl_pool")
-            and "positions" in self.position_to_exit
-        ):
-            # Extract token IDs from all positions
-            token_ids = [
-                pos["token_id"] for pos in self.position_to_exit.get("positions", [])
-            ]
-            liquidities = [
-                pos["liquidity"] for pos in self.position_to_exit.get("positions", [])
-            ]
-            if token_ids and liquidities:
-                self.context.logger.info(
-                    f"Exiting Velodrome CL pool with {len(token_ids)} positions. "
-                    f"Token IDs: {token_ids}"
-                )
-                exit_pool_action["token_ids"] = token_ids
-                exit_pool_action["liquidities"] = liquidities
-        # For single position case (backward compatibility)
-        elif "token_id" in self.position_to_exit:
-            exit_pool_action["token_id"] = self.position_to_exit.get("token_id")
-            exit_pool_action["liquidity"] = self.position_to_exit.get("liquidity")
-
+        # Use base class method to build exit action
+        exit_pool_action = self._build_exit_pool_action_base(
+            self.position_to_exit, tokens
+        )
         return exit_pool_action
 
     def _get_required_tokens(

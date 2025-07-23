@@ -89,7 +89,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-
             # Normal fetch strategies logic
             sender = self.context.agent_address
 
@@ -1166,13 +1165,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
         # Update position with current value and TiP yield calculation
-        yield from self._update_position_with_current_value(position, user_share, chain)
+        self._update_position_with_current_value(position, user_share, chain)
 
         return user_share
 
     def _update_position_with_current_value(
         self, position: Dict, current_value_usd: Decimal, chain: str
-    ) -> Generator[None, None, None]:
+    ) -> None:
         """Update position with current value and yield estimate for TiP cost recovery"""
         try:
             # Store current value in position
@@ -1207,7 +1206,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
             elif entry_cost == 0:
                 # Legacy position without TiP data - mark as recovered
-                position["cost_recovered"] = True
+                position["cost_recovered"] = False
                 self.context.logger.info(
                     f"Legacy position {position.get('pool_address')} marked as cost recovered"
                 )

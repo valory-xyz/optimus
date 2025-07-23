@@ -111,12 +111,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if actions:
                 yield from self.send_actions(actions)
 
-            self.positions_eligible_for_exit = (
-                self._apply_tip_filters_to_exit_decisions()
-            )
-            if not self.positions_eligible_for_exit:
+            (
+                should_proceed,
+                positions_eligible_for_exit,
+            ) = self._apply_tip_filters_to_exit_decisions()
+            if not should_proceed:
                 yield from self.send_actions()
                 return
+
+            if positions_eligible_for_exit:
+                self.positions_eligible_for_exit = positions_eligible_for_exit
 
             # Check for funds
             are_funds_available = self.check_funds()
@@ -636,11 +640,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error checking TiP exit conditions: {e}")
             return True, "Error in TiP check - allowing exit"
 
-    def _apply_tip_filters_to_exit_decisions(self) -> List[Dict]:
+    def _apply_tip_filters_to_exit_decisions(self) -> Tuple[bool, List[Dict]]:
         """Filter positions that can be exited based on TiP"""
         try:
             eligible_for_exit = []
             blocked_by_tip = []
+
+            if not self.current_positions:
+                self.context.logger.info("No current positions to check for TiP.")
+                return True, []
 
             for position in self.current_positions:
                 if position.get("status") == PositionStatus.OPEN.value:
@@ -655,12 +663,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if blocked_by_tip and not eligible_for_exit:
                 self.context.logger.info("All positions blocked by TiP conditions")
 
-            return eligible_for_exit
+            # Return True if there are eligible positions or all positions are closed
+            should_proceed = bool(eligible_for_exit) or not any(
+                p.get("status") == PositionStatus.OPEN.value
+                for p in self.current_positions
+            )
+
+            return should_proceed, eligible_for_exit
 
         except Exception as e:
             self.context.logger.error(f"Error applying TiP filters: {e}")
             # Return all open positions if TiP filtering fails
-            return [
+            return False, [
                 p
                 for p in self.current_positions
                 if p.get("status") == PositionStatus.OPEN.value

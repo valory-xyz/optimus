@@ -63,7 +63,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     WHITELISTED_ASSETS,
     ZERO_ADDRESS,
 )
-from packages.valory.skills.liquidity_trader_abci.states.base import Event, StakingState
+from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesPayload,
     FetchStrategiesRound,
@@ -89,26 +89,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def async_act(self) -> Generator:
         """Async act"""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            # Check if investing is paused due to withdrawal (read from KV store)
-            investing_paused = yield from self._read_investing_paused()
-            if investing_paused:
-                self.context.logger.info(
-                    "Investing paused due to withdrawal request. Transitioning to withdrawal round."
-                )
-                payload = FetchStrategiesPayload(
-                    sender=self.context.agent_address,
-                    content=json.dumps(
-                        {
-                            "event": Event.WITHDRAWAL_INITIATED.value,
-                            "updates": {},
-                        },
-                        sort_keys=True,
-                    ),
-                )
-                yield from self.send_a2a_transaction(payload)
-                yield from self.wait_until_round_end()
-                self.set_done()
-                return
 
             # Normal fetch strategies logic
             sender = self.context.agent_address

@@ -318,7 +318,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if decision == Decision.CONTINUE:
             # Add slippage costs after swap completion
             yield from self._add_slippage_costs(self.synchronized_data.final_tx_hash)
-            res = self._update_assets_after_swap(actions, last_executed_action_index)
+            res = yield from self._update_assets_after_swap(
+                actions, last_executed_action_index
+            )
             return res
 
     def _wait_for_swap_confirmation(self) -> Generator[None, None, Optional[Decision]]:
@@ -334,7 +336,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _update_assets_after_swap(
         self, actions, last_executed_action_index
-    ) -> Tuple[Optional[str], Optional[Dict]]:
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
 
@@ -3446,3 +3448,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error recording TiP performance: {e}")
+
+    def _reset_withdrawal_flags(self) -> Generator[None, None, None]:
+        """Reset withdrawal flags when withdrawal is completed"""
+        try:
+            reset_data = {"investing_paused": "false"}
+            yield from self._write_kv(reset_data)
+            self.context.logger.info("Withdrawal flags reset successfully")
+        except Exception as e:
+            self.context.logger.error(f"Error resetting withdrawal flags: {str(e)}")

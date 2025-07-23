@@ -34,6 +34,9 @@ from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
 )
 
 
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
+
 class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that handles withdrawal operations."""
 
@@ -64,6 +67,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             # Get current positions and portfolio data
             self.context.logger.info("Getting current positions...")
             positions = self.current_positions
+            portfolio_data = self.portfolio_data
             self.context.logger.info(f"Found {len(positions)} positions")
 
             # Log position details for debugging
@@ -117,7 +121,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 "WITHDRAWING", "Withdrawal Initiated. Preparing your funds..."
             )
             withdrawal_actions = yield from self._prepare_withdrawal_actions(
-                positions, target_address
+                positions, target_address, portfolio_data
             )
             self.context.logger.info(
                 f"Prepared {len(withdrawal_actions)} withdrawal actions"
@@ -522,7 +526,10 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         return balance_response
 
     def _prepare_withdrawal_actions(
-        self, positions: List[Dict[str, Any]], target_address: str
+        self,
+        positions: List[Dict[str, Any]],
+        target_address: str,
+        portfolio_data: Dict[str, Any],
     ) -> Generator[None, None, List[Dict[str, Any]]]:
         """Prepare all withdrawal actions in order: exit pools -> swap to USDC -> transfer USDC."""
         actions = []
@@ -543,16 +550,6 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             "Getting fresh positions data for action preparation..."
         )
-        fresh_positions = yield from self.get_positions()
-        if fresh_positions:
-            self.context.logger.info(
-                f"Successfully got fresh positions. Found {len(fresh_positions)} position groups."
-            )
-        else:
-            self.context.logger.warning(
-                "Failed to get fresh positions, using validated positions."
-            )
-            fresh_positions = positions
 
         # Step 1: Check for open positions and create exit actions
         self.context.logger.info("=== STEP 1: CHECKING FOR OPEN POSITIONS ===")
@@ -568,7 +565,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Step 2: Create swap actions for all non-USDC assets
         self.context.logger.info("=== STEP 2: PREPARING SWAP ACTIONS ===")
-        swap_actions = self._prepare_swap_to_usdc_actions_standard(fresh_positions)
+        swap_actions = self._prepare_swap_to_usdc_actions_standard(portfolio_data)
         if swap_actions:
             self.context.logger.info(
                 f"Found {len(swap_actions)} assets to swap to USDC"
@@ -580,9 +577,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Step 3: Create transfer action for USDC
         self.context.logger.info("=== STEP 3: PREPARING TRANSFER ACTION ===")
-        transfer_actions = self._prepare_transfer_usdc_actions_standard(
-            target_address, fresh_positions
-        )
+        transfer_actions = self._prepare_transfer_usdc_actions_standard(target_address)
         if transfer_actions:
             self.context.logger.info("Found USDC to transfer")
             actions.extend(transfer_actions)
@@ -675,7 +670,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         return actions
 
     def _prepare_swap_to_usdc_actions_standard(
-        self, positions: List[Dict[str, Any]]
+        self, portfolio_data: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Prepare swap actions to convert all assets to USDC using positions data."""
         self.context.logger.info("=== SWAP DEBUGGING ===")
@@ -683,81 +678,71 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
 
         # Get the configured chain
         chain = self.context.params.target_investment_chains[0]
+        portfolio_breakdown = portfolio_data.get("portfolio_breakdown", [])
 
         # Process positions data to find assets with balances
-        for position in positions:
-            self.context.logger.info(f"--- Processing position: {position} ---")
+        for asset in portfolio_breakdown:
+            token_symbol = asset.get("asset")
+            self.context.logger.info(f"--- Processing asset: {token_symbol} ---")
 
-            # Check if position has assets array
-            assets = position.get("assets", [])
-            self.context.logger.info(f"Found {len(assets)} assets in position")
+            token_address = asset.get("address")
+            value_usd = asset.get("value_usd", 0)
 
-            for asset in assets:
-                self.context.logger.info(f"--- Processing asset: {asset} ---")
+            self.context.logger.info(
+                f"Token: {token_symbol}, Address: {token_address}, Value: {value_usd}"
+            )
 
-                # Check if asset has balance data
-                if "balance" in asset and asset.get("balance", 0) > 0:
-                    token_address = asset.get("address")
-                    token_symbol = asset.get("asset_symbol", "")
-                    balance = asset.get("balance", 0)
+            # Skip if it's already USDC or OLAS by address
+            usdc_address = self._get_usdc_address(chain)
+            olas_address = (
+                self._get_olas_address(chain)
+                if hasattr(self, "_get_olas_address")
+                else None
+            )
+            if (
+                token_address
+                and usdc_address
+                and token_address.lower() == usdc_address.lower()
+            ):
+                self.context.logger.info("Skipping USDC - it's USDC (by address)")
+                continue
+            if (
+                token_address
+                and olas_address
+                and token_address.lower() == olas_address.lower()
+            ):
+                self.context.logger.info(
+                    "Skipping OLAS - do not swap OLAS during withdrawal (by address)"
+                )
+                continue
 
-                    self.context.logger.info(
-                        f"Token: {token_symbol}, Address: {token_address}, Balance: {balance}"
-                    )
+            # Skip if balance is too small
+            if value_usd <= 1:  # nosec B105
+                self.context.logger.info(
+                    f"Skipping {token_symbol} - balance too small: {value_usd}"
+                )
+                continue
 
-                    # Skip if it's already USDC or OLAS by address
-                    usdc_address = self._get_usdc_address(chain)
-                    olas_address = (
-                        self._get_olas_address(chain)
-                        if hasattr(self, "_get_olas_address")
-                        else None
-                    )
-                    if (
-                        token_address
-                        and usdc_address
-                        and token_address.lower() == usdc_address.lower()
-                    ):
-                        self.context.logger.info(
-                            "Skipping USDC - it's USDC (by address)"
-                        )
-                        continue
-                    if (
-                        token_address
-                        and olas_address
-                        and token_address.lower() == olas_address.lower()
-                    ):
-                        self.context.logger.info(
-                            "Skipping OLAS - do not swap OLAS during withdrawal (by address)"
-                        )
-                        continue
+            self.context.logger.info(
+                f"Creating swap action for {token_symbol} with balance {value_usd}"
+            )
 
-                    # Skip if balance is too small
-                    if balance <= 1000000000000000000:  # Minimum threshold = 1 USDC
-                        self.context.logger.info(
-                            f"Skipping {token_symbol} - balance too small: {balance}"
-                        )
-                        continue
+            # Use base class method to build swap action
+            swap_action = self._build_swap_to_usdc_action(
+                chain=chain,
+                from_token_address=token_address,
+                from_token_symbol=token_symbol,
+                funds_percentage=1.0,  # Use 100% of available balance
+                description=f"Swap {asset} to USDC for withdrawal",
+            )
 
-                    self.context.logger.info(
-                        f"Creating swap action for {token_symbol} with balance {balance}"
-                    )
-
-                    # Use base class method to build swap action
-                    swap_action = self._build_swap_to_usdc_action(
-                        chain=chain,
-                        from_token_address=token_address,
-                        from_token_symbol=token_symbol,
-                        funds_percentage=1.0,  # Use 100% of available balance
-                        description=f"Swap {token_symbol} to USDC for withdrawal",
-                    )
-
-                    if swap_action:
-                        self.context.logger.info(f"Created swap action: {swap_action}")
-                        actions.append(swap_action)
-                    else:
-                        self.context.logger.error(
-                            f"Failed to create swap action for {token_symbol}"
-                        )
+            if swap_action:
+                self.context.logger.info(f"Created swap action: {swap_action}")
+                actions.append(swap_action)
+            else:
+                self.context.logger.error(
+                    f"Failed to create swap action for {token_symbol}"
+                )
 
         self.context.logger.info("=== SWAP DEBUGGING COMPLETE ===")
         self.context.logger.info(f"Total swap actions created: {len(actions)}")
@@ -766,7 +751,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         return actions
 
     def _prepare_transfer_usdc_actions_standard(
-        self, target_address: str, positions: List[Dict[str, Any]]
+        self, target_address: str
     ) -> List[Dict[str, Any]]:
         """
         Prepare actions to transfer all USDC to user wallet using positions data.
@@ -781,62 +766,30 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Target address: {target_address}")
 
         # Find USDC balance from positions data
-        usdc_balance = 0
         usdc_address = self._get_usdc_address(
             self.context.params.target_investment_chains[0]
         )
-
-        for position in positions:
-            self.context.logger.info(f"--- Checking position: {position} ---")
-
-            # Check if position has assets array
-            assets = position.get("assets", [])
-            self.context.logger.info(f"Found {len(assets)} assets in position")
-
-            for asset in assets:
-                self.context.logger.info(f"--- Checking asset: {asset} ---")
-
-                token_address = asset.get("address", "")
-                if (
-                    token_address
-                    and usdc_address
-                    and token_address.lower() == usdc_address.lower()
-                    and "balance" in asset
-                ):
-                    usdc_balance = asset.get("balance", 0)
-                    self.context.logger.info(
-                        f"Found USDC: balance={usdc_balance}, address={usdc_address}"
-                    )
-                    break
-                else:
-                    self.context.logger.info("Not USDC or no balance, continuing...")
-
-        self.context.logger.info(
-            f"Final USDC balance: {usdc_balance}, address: {usdc_address}"
-        )
-        self.context.logger.info(f"USDC balance > 0: {usdc_balance > 0}")
         self.context.logger.info(f"USDC address exists: {bool(usdc_address)}")
 
-        if usdc_address:
-            self.context.logger.info("Creating transfer action for USDC...")
+        self.context.logger.info("Creating transfer action for USDC...")
 
-            # Create transfer action using dynamic amount calculation
-            action = {
-                "action": Action.WITHDRAW.value,  # Standard action key
-                "chain": self.context.params.target_investment_chains[0],
-                "from_address": self.context.params.safe_contract_addresses.get(
-                    self.context.params.target_investment_chains[0]
-                ),
-                "to_address": target_address,
-                "token_address": usdc_address,
-                "token_symbol": "USDC",
-                "funds_percentage": 1.0,  # Use 100% of available USDC balance
-                "description": f"Transfer USDC to {target_address}",
-            }
+        # Create transfer action using dynamic amount calculation
+        action = {
+            "action": Action.WITHDRAW.value,  # Standard action key
+            "chain": self.context.params.target_investment_chains[0],
+            "from_address": self.context.params.safe_contract_addresses.get(
+                self.context.params.target_investment_chains[0]
+            ),
+            "to_address": target_address,
+            "token_address": usdc_address,
+            "token_symbol": "USDC",
+            "funds_percentage": 1.0,  # Use 100% of available USDC balance
+            "description": f"Transfer USDC to {target_address}",
+        }
 
-            self.context.logger.info(f"Created transfer action: {action}")
-            actions.append(action)
-            self.context.logger.info(f"Actions list after append: {actions}")
+        self.context.logger.info(f"Created transfer action: {action}")
+        actions.append(action)
+        self.context.logger.info(f"Actions list after append: {actions}")
 
         self.context.logger.info("=== TRANSFER DEBUGGING COMPLETE ===")
         self.context.logger.info(f"Total transfer actions created: {len(actions)}")

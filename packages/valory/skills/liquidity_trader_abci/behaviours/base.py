@@ -444,6 +444,7 @@ class LiquidityTraderBaseBehaviour(
                         ),
                         "address": to_checksum_address(asset_address),
                         "balance": balance,
+                        "decimal": decimal,
                     }
                 )
 

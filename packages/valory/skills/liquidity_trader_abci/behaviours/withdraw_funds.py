@@ -753,13 +753,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
     def _prepare_transfer_usdc_actions_standard(
         self, target_address: str
     ) -> List[Dict[str, Any]]:
-        """
-        Prepare actions to transfer all USDC to user wallet using positions data.
-
-        :param target_address: user's target address
-        :param positions: positions data for balance checking
-        :return: list of transfer actions
-        """
+        """Prepare actions to transfer all USDC to user wallet using positions data."""
         actions = []
 
         self.context.logger.info("=== TRANSFER DEBUGGING ===")

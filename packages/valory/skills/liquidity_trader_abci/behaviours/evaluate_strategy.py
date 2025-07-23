@@ -640,7 +640,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error checking TiP exit conditions: {e}")
             return True, "Error in TiP check - allowing exit"
 
-    def _apply_tip_filters_to_exit_decisions(self) -> Tuple[bool, List[Dict]]:
+    def _apply_tip_filters_to_exit_decisions(self) -> Tuple[bool, Optional[List[Dict]]]:
         """Filter positions that can be exited based on TiP"""
         try:
             eligible_for_exit = []
@@ -674,7 +674,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error applying TiP filters: {e}")
             # Return all open positions if TiP filtering fails
-            return False, [
+            return True, [
                 p
                 for p in self.current_positions
                 if p.get("status") == PositionStatus.OPEN.value

@@ -2,12 +2,22 @@ name: velodrome_sugar
 author: valory
 version: 0.1.0
 type: contract
-description: Velodrome Sugar contract for accurate tick math calculations
+description: A wrapper for Velodrome's Sugar calls.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  contract.py: bafybeihxojh3cftudzrcjcf3gg23slipaqyeobyletfbs7tt3q26scb7y
+  __init__.py: bafybeihqaq6tfjfm5ooeo2lxcxwctx7blqt6ccu2y7srhcoys4snlqoj6m
+  build/contract_interface.json: bafybeiejabouynogilagtlora6rxoqwdji4sp246rcjhuzky2ekmejz5sq
+  contract.py: bafybeidy6ln5khef2ia45ghbg3jaubv2gxmwjtdz2kqd2uq6qil42perly
 fingerprint_ignore_patterns: []
+contracts: []
 class_name: VelodromeSugarContract
-contract_interface_paths: {}
-dependencies: {}
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.65.0
+  web3:
+    version: <7,>=6.0.0
+  eth_abi:
+    version: ==4.0.0

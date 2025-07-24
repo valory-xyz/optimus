@@ -49,6 +49,7 @@ from packages.valory.contracts.staking_activity_checker.contract import (
     StakingActivityCheckerContract,
 )
 from packages.valory.contracts.staking_token.contract import StakingTokenContract
+from packages.valory.contracts.velodrome_sugar.contract import VelodromeSugarContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
@@ -1711,6 +1712,92 @@ class LiquidityTraderBaseBehaviour(
         rewards_key = f"accumulated_rewards_{chain}_{token_address.lower()}"
         result = yield from self._read_kv((rewards_key,))
         return int(result.get(rewards_key, 0)) if result else 0
+
+    def get_velodrome_position_principal(
+        self,
+        chain: str,
+        position_manager_address: str,
+        token_id: int,
+        sqrt_price_x96: int
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """Get Velodrome position principal using Sugar contract."""
+        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        if not sugar_address:
+            self.context.logger.error(f"No Velodrome Sugar contract address for chain {chain}")
+            return 0, 0
+        
+        # Use Velodrome's official principal function for maximum accuracy
+        amounts = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=sugar_address,
+            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_callable="principal",
+            data_key="amounts",
+            position_manager=position_manager_address,
+            token_id=token_id,
+            sqrt_price_x96=sqrt_price_x96,
+            chain_id=chain,
+        )
+        
+        if amounts:
+            return amounts[0], amounts[1]
+        return 0, 0
+
+    def get_velodrome_amounts_for_liquidity(
+        self, 
+        chain: str,
+        sqrt_price_x96: int, 
+        sqrt_ratio_a_x96: int, 
+        sqrt_ratio_b_x96: int, 
+        liquidity: int
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """Get amounts for liquidity using Velodrome Sugar contract."""
+        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        if not sugar_address:
+            self.context.logger.error(f"No Velodrome Sugar contract address for chain {chain}")
+            return 0, 0
+        
+        # Use Velodrome's official getAmountsForLiquidity function
+        amounts = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=sugar_address,
+            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_callable="get_amounts_for_liquidity",
+            data_key="amounts",
+            sqrt_price_x96=sqrt_price_x96,
+            sqrt_ratio_a_x96=sqrt_ratio_a_x96,
+            sqrt_ratio_b_x96=sqrt_ratio_b_x96,
+            liquidity=liquidity,
+            chain_id=chain,
+        )
+        
+        if amounts:
+            return amounts[0], amounts[1]
+        return 0, 0
+
+    def get_velodrome_sqrt_ratio_at_tick(
+        self, 
+        chain: str,
+        tick: int
+    ) -> Generator[None, None, int]:
+        """Get sqrt ratio at tick using Velodrome Sugar contract."""
+        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        if not sugar_address:
+            self.context.logger.error(f"No Velodrome Sugar contract address for chain {chain}")
+            return 0
+        
+        # Use Velodrome's official getSqrtRatioAtTick function
+        sqrt_ratio = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=sugar_address,
+            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_callable="get_sqrt_ratio_at_tick",
+            data_key="sqrt_ratio",
+            tick=tick,
+            chain_id=chain,
+        )
+        
+        return sqrt_ratio if sqrt_ratio else 0
 
 
 def execute_strategy(

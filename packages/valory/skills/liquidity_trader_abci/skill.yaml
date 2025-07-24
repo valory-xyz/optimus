@@ -274,6 +274,7 @@ models:
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
+      velodrome_sugar_contract_addresses: '{"mode":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202","optimism":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202"}'
     class_name: Params
   coingecko:
     args:

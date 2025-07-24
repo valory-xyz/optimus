@@ -19,6 +19,7 @@
         "contract/valory/staking_token/0.1.0": "bafybeiclu2xkt6yzgm2d336wcjid7zrgdnvjnxinksxxw5yvfwvwiqd6ii",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeibh6fasgz3a6tgr7j4svsbrgzxryhkh6gsf7vf4kpvirs77djxzti",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeiflwdffp2zkebx74eeivfz2g7x5w3icwsoflwddt46zzfiuovwuq4",
+        "contract/valory/velodrome_sugar/0.1.0": "bafybeihxojh3cftudzrcjcf3gg23slipaqyeobyletfbs7tt3q26scb7y",
         "connection/valory/mirror_db/0.1.0": "bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeihjxojh3cftudzrcjcf3gg23slipaqyeobyletfbs7tt3q26scb7y",
         "skill/valory/optimus_abci/0.1.0": "bafybeidqpb5exlis6wvpwpqp6xw6iy7nyf4pucs6ws2k7jngkb5pn7mb74",

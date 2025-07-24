@@ -10,14 +10,14 @@ fingerprint:
   behaviours.py: bafybeiawcqmu5kn6kmbndvivfyyaokva4v44oygwpdgl3hhtbr4slzgll4
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
   dialogues.py: bafybeifojr2urrwkm6rpm3wbytvcy54ks7x7qashwphyrlkrnaem6jaswy
-  fsm_specification.yaml: bafybeidp6i43hfayjxrmvcu4d77vjwprhzbqrlt4bhu3vx7kesz6yjhlqy
-  handlers.py: bafybeibxeu64al3z647pwg6uxc4n2uu3dg5vafkuldoxnhvszaejet5qdi
+  fsm_specification.yaml: bafybeigs27k3cmcgnu4w5j72vgp2uqbmt3c4zgsw55epm577bkm3yosulu
+  handlers.py: bafybeifada5b6j35o2voimmrktou2i46ny4mz6jmcnak66qtzq6sbhl4r4
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
-  modius-ui-build/README.md: bafybeidjtw3mmefyflnxwqjg2l2cvj2t4bfpqjepa3tktgdyz325usswxm
+  modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agent-agentsfun-logo-Cl82UKSm.png: bafybeia3nla5pruiurpwvzex6bbsgset4k2foerma2iwy5zxmtjidur454
-  modius-ui-build/assets/index-DWinKtug.js: bafybeig77un65t6nmfkhcxbukcdd7mjh4kmscpqhzf2cyb6q75524dmw6u
+  modius-ui-build/assets/index-DCZuJwWO.js: bafybeigtorzgbsl3ukbzji2whlcti5y3fsisvatsbznzb4kxkisocrmv2m
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  modius-ui-build/index.html: bafybeiggx3w3agdovjomm4t5z5b6mkzotdlbwze7c76at7t7r3kjkwb5eq
+  modius-ui-build/index.html: bafybeiapep3fe4nwokamjkdxwxe7awpqrgbd4ysyjlcyjbkhream6megd4
   modius-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/networks/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -54,11 +54,11 @@ fingerprint:
   modius-ui-build/logos/tokens/usdt0.png: bafybeig4muixers6emdrg645t46ggkcgwdrdrghwcsnoizpla56d2aj6gq
   modius-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  optimus-ui-build/README.md: bafybeidjtw3mmefyflnxwqjg2l2cvj2t4bfpqjepa3tktgdyz325usswxm
+  optimus-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   optimus-ui-build/assets/agent-agentsfun-logo-Cl82UKSm.png: bafybeia3nla5pruiurpwvzex6bbsgset4k2foerma2iwy5zxmtjidur454
-  optimus-ui-build/assets/index-B9o54laa.js: bafybeihml6wq7cxxcr65fsejwd7n6uxwofahuikomh4tt3o6omt36deypi
+  optimus-ui-build/assets/index-Dj4RmbI6.js: bafybeiehvafez6sdoucdp4xskg2sdocwnnrpcftl6uqu6gzwbvqs3qnmpy
   optimus-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  optimus-ui-build/index.html: bafybeig2h6zd7erxhco6456r65nqsvzeb2ocvjcyi2mg5mc6qlsbbtps7u
+  optimus-ui-build/index.html: bafybeic42dnsq3x3k5xefk2szlcheuncwxr2tkw6r63aghlolu4hk25yl4
   optimus-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   optimus-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   optimus-ui-build/logos/networks/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -111,7 +111,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
-- valory/liquidity_trader_abci:0.1.0:bafybeihjxojh3cftudzrcjcf3gg23slipaqyeobyletfbs7tt3q26scb7y
+- valory/liquidity_trader_abci:0.1.0:bafybeie32qrsojtsvpirzyl4segusygmbpguwishrx3fvqoeq5isgo3dvi
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 behaviours:
   main:

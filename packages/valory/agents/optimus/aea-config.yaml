@@ -24,12 +24,12 @@ contracts:
 - valory/service_registry:0.1.0:bafybeidiyohupppaunqtwhxzt3kbp4k4hcryp4xgda36t3sy43brxs3vci
 - valory/balancer_weighted_pool:0.1.0:bafybeiewnxxzzpso2iuqw6sw5rlxj6p3e4cr2czwnmfm3m2pcuihuit7nu
 - valory/balancer_vault:0.1.0:bafybeigb3dd34py2jhixmuhy7o52ex572y4d7yhrauywzn4kwzlipscxai
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeif5v7ainmqjoqmbux6m7ssrfziaaebaqtxt64qinsujsujihxuie4
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeift466wsnbo2qpgax7moarlfftquzis6r4lynfl7bdcieuwldot7m
 - valory/uniswap_v3_pool:0.1.0:bafybeigipe5aznisrlbbxmbeoyan5ayughp7z57cjxwbx5qigsjgrzqav4
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeiflwdffp2zkebx74eeivfz2g7x5w3icwsoflwddt46zzfiuovwuq4
 - valory/velodrome_router:0.1.0:bafybeieueyt3csn2sxujq3vkmeauxjbdbdyfgz2mpubmq7xc73thspno74
 - valory/velodrome_cl_pool:0.1.0:bafybeiaqs2hbjgckwmys6gqwct2izqf575jbr7xkkkq4hzplmv2qgxe5vm
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeiao53anrfz4aijfg6oobfkr564d5hsclklxfcxatk4tkv4cqqzi44
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeic6xt4hwj5brx4wtxpefptajorqh3z5dqlaaa43pldby3zwidrqzm
 - valory/velodrome_pool:0.1.0:bafybeihe4772icn47dk2ddfgfkcbd5z66ihhrulgydl6gmc6ffdjrcrakm
 protocols:
 - open_aea/signing:1.0.0:bafybeig2d36zxy65vd7fwhs7scotuktydcarm74aprmrb5nioiymr3yixm
@@ -45,8 +45,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
-- valory/liquidity_trader_abci:0.1.0:bafybeihjxojh3cftudzrcjcf3gg23slipaqyeobyletfbs7tt3q26scb7y
-- valory/optimus_abci:0.1.0:bafybeidqpb5exlis6wvpwpqp6xw6iy7nyf4pucs6ws2k7jngkb5pn7mb74
+- valory/liquidity_trader_abci:0.1.0:bafybeie32qrsojtsvpirzyl4segusygmbpguwishrx3fvqoeq5isgo3dvi
+- valory/optimus_abci:0.1.0:bafybeih35wybarya2cni6uflav4iqcn2js7cgkvrz6sjcfx6ykr4f3acxq
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi

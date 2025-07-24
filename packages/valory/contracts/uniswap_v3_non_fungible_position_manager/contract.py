@@ -139,6 +139,31 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         token1 = contract_instance.functions.token1().call()
         return dict(tokens=[token0, token1])
     
+    @classmethod
+    def balanceOf(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        owner: str,
+    ) -> JSONLike:
+        """Get the number of NFT positions owned by an address"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        balance = contract_instance.functions.balanceOf(owner).call()
+        return dict(balance=balance)
+    
+    @classmethod
+    def ownerOf(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Get the owner of a specific NFT position"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        owner = contract_instance.functions.ownerOf(token_id).call()
+        return dict(owner=owner)
+    
+    @classmethod
     def get_position(
         cls,
         ledger_api: EthereumApi,

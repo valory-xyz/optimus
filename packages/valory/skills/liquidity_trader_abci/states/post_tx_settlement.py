@@ -45,6 +45,9 @@ from packages.valory.skills.liquidity_trader_abci.states.decision_making import 
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesRound,
 )
+from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
+    WithdrawFundsRound,
+)
 
 
 class PostTxSettlementRound(CollectSameUntilThresholdRound):
@@ -55,6 +58,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
+    withdrawal_initiated: Event = Event.WITHDRAWAL_INITIATED
     collection_key = get_name(SynchronizedData.participant_to_post_tx_settlement)
     selection_key = (get_name(SynchronizedData.chain_id),)
 
@@ -66,6 +70,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
                 CheckStakingKPIMetRound.auto_round_id(): Event.VANITY_TX_EXECUTED,
                 DecisionMakingRound.auto_round_id(): Event.ACTION_EXECUTED,
                 FetchStrategiesRound.auto_round_id(): Event.TRANSFER_COMPLETED,
+                WithdrawFundsRound.auto_round_id(): Event.WITHDRAWAL_COMPLETED,
             }
 
             synced_data = SynchronizedData(self.synchronized_data.db)

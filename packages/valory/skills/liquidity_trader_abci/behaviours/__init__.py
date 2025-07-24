@@ -18,3 +18,10 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the implementation of the behaviours of 'liquidity_trader_abci' skill."""
+
+from packages.valory.skills.liquidity_trader_abci.behaviours.withdraw_funds import (
+    WithdrawFundsBehaviour,
+)
+
+
+__all__ = ["WithdrawFundsBehaviour"]

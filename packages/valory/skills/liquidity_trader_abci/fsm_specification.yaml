@@ -17,6 +17,8 @@ alphabet_in:
 - UPDATE
 - VANITY_TX_EXECUTED
 - WAIT
+- WITHDRAWAL_COMPLETED
+- WITHDRAWAL_INITIATED
 default_start_state: FetchStrategiesRound
 final_states:
 - FailedMultiplexerRound
@@ -33,6 +35,7 @@ start_states:
 - FetchStrategiesRound
 - GetPositionsRound
 - PostTxSettlementRound
+- WithdrawFundsRound
 states:
 - APRPopulationRound
 - CallCheckpointRound
@@ -48,11 +51,13 @@ states:
 - FinishedTxPreparationRound
 - GetPositionsRound
 - PostTxSettlementRound
+- WithdrawFundsRound
 transition_func:
     (APRPopulationRound, DONE): EvaluateStrategyRound
     (APRPopulationRound, NONE): APRPopulationRound
     (APRPopulationRound, NO_MAJORITY): APRPopulationRound
     (APRPopulationRound, ROUND_TIMEOUT): APRPopulationRound
+    (APRPopulationRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
     (CallCheckpointRound, NONE): CallCheckpointRound
@@ -61,6 +66,7 @@ transition_func:
     (CallCheckpointRound, SERVICE_EVICTED): GetPositionsRound
     (CallCheckpointRound, SERVICE_NOT_STAKED): GetPositionsRound
     (CallCheckpointRound, SETTLE): FinishedCallCheckpointRound
+    (CallCheckpointRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CheckStakingKPIMetRound, DONE): GetPositionsRound
     (CheckStakingKPIMetRound, ERROR): GetPositionsRound
     (CheckStakingKPIMetRound, NONE): CheckStakingKPIMetRound
@@ -69,6 +75,7 @@ transition_func:
     (CheckStakingKPIMetRound, SETTLE): FinishedCheckStakingKPIMetRound
     (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
     (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
+    (CheckStakingKPIMetRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (DecisionMakingRound, DONE): FinishedDecisionMakingRound
     (DecisionMakingRound, ERROR): FinishedDecisionMakingRound
     (DecisionMakingRound, NONE): DecisionMakingRound
@@ -76,21 +83,25 @@ transition_func:
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
     (DecisionMakingRound, SETTLE): FinishedTxPreparationRound
     (DecisionMakingRound, UPDATE): DecisionMakingRound
+    (DecisionMakingRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
     (EvaluateStrategyRound, NONE): EvaluateStrategyRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
     (EvaluateStrategyRound, WAIT): FinishedEvaluateStrategyRound
+    (EvaluateStrategyRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (FetchStrategiesRound, DONE): CallCheckpointRound
     (FetchStrategiesRound, NONE): FetchStrategiesRound
     (FetchStrategiesRound, NO_MAJORITY): FetchStrategiesRound
     (FetchStrategiesRound, ROUND_TIMEOUT): FetchStrategiesRound
     (FetchStrategiesRound, SETTLE): FinishedTxPreparationRound
     (FetchStrategiesRound, WAIT): FetchStrategiesRound
+    (FetchStrategiesRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (GetPositionsRound, DONE): APRPopulationRound
     (GetPositionsRound, NONE): GetPositionsRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
+    (GetPositionsRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
     (PostTxSettlementRound, DONE): PostTxSettlementRound
@@ -100,3 +111,10 @@ transition_func:
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): FailedMultiplexerRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
+    (PostTxSettlementRound, WITHDRAWAL_COMPLETED): FetchStrategiesRound
+    (PostTxSettlementRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
+    (WithdrawFundsRound, DONE): DecisionMakingRound
+    (WithdrawFundsRound, NONE): WithdrawFundsRound
+    (WithdrawFundsRound, NO_MAJORITY): WithdrawFundsRound
+    (WithdrawFundsRound, ROUND_TIMEOUT): WithdrawFundsRound
+    (WithdrawFundsRound, WITHDRAWAL_COMPLETED): FetchStrategiesRound

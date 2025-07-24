@@ -1081,6 +1081,14 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"{band_multipliers[1]:.4f}, {band_multipliers[2]:.4f}"
             )
 
+            # Extract percent_in_bounds from the optimization result
+            percent_in_bounds = result.get("percent_in_bounds", 1.0)
+            self.context.logger.info(f"Percent in bounds: {percent_in_bounds:.2f}%")
+
+            # Add percent_in_bounds to each position
+            for position in positions:
+                position["percent_in_bounds"] = percent_in_bounds
+
             return positions
 
         except Exception as e:

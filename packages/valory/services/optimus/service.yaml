@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidnftcehibhmjjs577ymtd7jaluxxvr4nijaiujwxa5a65l4nk44q
+agent: valory/optimus:0.1.0:bafybeih4j7xdt75ecvzqsdy7xr2v3wkyfnr6l2f7fv2qhv3dvm42qewpjm
 number_of_agents: 1
 deployment:
   agent:
@@ -176,6 +176,8 @@ type: connection
 config:
   host: ${HTTP_SERVER_HOST:str:0.0.0.0}
   port: ${HTTP_SERVER_PORT:int:8716}
+  ssl_cert: ${SSL_CERT_PATH:str:}
+  ssl_key: ${SSL_KEY_PATH:str:}
 ---
 public_id: dvilela/kv_store:0.1.0
 type: connection

@@ -1,0 +1,13 @@
+name: velodrome_sugar
+author: valory
+version: 0.1.0
+type: contract
+description: Velodrome Sugar contract for accurate tick math calculations
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  contract.py: bafybeihxojh3cftudzrcjcf3gg23slipaqyeobyletfbs7tt3q26scb7y
+fingerprint_ignore_patterns: []
+class_name: VelodromeSugarContract
+contract_interface_paths: {}
+dependencies: {}

@@ -1439,22 +1439,34 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Use DEX-specific calculation methods
         if dex_type == DexType.VELODROME.value and token_id:
             # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
-            position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(chain)
+            position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain
+            )
             if position_manager_address:
-                self.context.logger.info("Using Velodrome Sugar contract for position calculation")
+                self.context.logger.info(
+                    "Using Velodrome Sugar contract for position calculation"
+                )
                 amount0, amount1 = yield from self.get_velodrome_position_principal(
                     chain, position_manager_address, token_id, sqrt_price_x96
                 )
             else:
-                self.context.logger.warning("No Velodrome position manager found, falling back to Sugar getAmountsForLiquidity")
-                sqrt_a = yield from self.get_velodrome_sqrt_ratio_at_tick(chain, tick_lower)
-                sqrt_b = yield from self.get_velodrome_sqrt_ratio_at_tick(chain, tick_upper)
+                self.context.logger.warning(
+                    "No Velodrome position manager found, falling back to Sugar getAmountsForLiquidity"
+                )
+                sqrt_a = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                    chain, tick_lower
+                )
+                sqrt_b = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                    chain, tick_upper
+                )
                 amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
                     chain, sqrt_price_x96, sqrt_a, sqrt_b, liquidity
                 )
         else:
             # For Uniswap and others: Use existing tick math implementation
-            self.context.logger.info("Using custom tick math for non-Velodrome position")
+            self.context.logger.info(
+                "Using custom tick math for non-Velodrome position"
+            )
             sqrtA = get_sqrt_ratio_at_tick(tick_lower)
             sqrtB = get_sqrt_ratio_at_tick(tick_upper)
             amount0, amount1 = get_amounts_for_liquidity(

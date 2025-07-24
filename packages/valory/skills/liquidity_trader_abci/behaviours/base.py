@@ -2334,14 +2334,16 @@ class LiquidityTraderBaseBehaviour(
         chain: str,
         position_manager_address: str,
         token_id: int,
-        sqrt_price_x96: int
+        sqrt_price_x96: int,
     ) -> Generator[None, None, Tuple[int, int]]:
         """Get Velodrome position principal using Sugar contract."""
         sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
         if not sugar_address:
-            self.context.logger.error(f"No Velodrome Sugar contract address for chain {chain}")
+            self.context.logger.error(
+                f"No Velodrome Sugar contract address for chain {chain}"
+            )
             return 0, 0
-        
+
         # Use Velodrome's official principal function for maximum accuracy
         amounts = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -2354,25 +2356,27 @@ class LiquidityTraderBaseBehaviour(
             sqrt_price_x96=sqrt_price_x96,
             chain_id=chain,
         )
-        
+
         if amounts:
             return amounts[0], amounts[1]
         return 0, 0
 
     def get_velodrome_amounts_for_liquidity(
-        self, 
+        self,
         chain: str,
-        sqrt_price_x96: int, 
-        sqrt_ratio_a_x96: int, 
-        sqrt_ratio_b_x96: int, 
-        liquidity: int
+        sqrt_price_x96: int,
+        sqrt_ratio_a_x96: int,
+        sqrt_ratio_b_x96: int,
+        liquidity: int,
     ) -> Generator[None, None, Tuple[int, int]]:
         """Get amounts for liquidity using Velodrome Sugar contract."""
         sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
         if not sugar_address:
-            self.context.logger.error(f"No Velodrome Sugar contract address for chain {chain}")
+            self.context.logger.error(
+                f"No Velodrome Sugar contract address for chain {chain}"
+            )
             return 0, 0
-        
+
         # Use Velodrome's official getAmountsForLiquidity function
         amounts = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -2386,22 +2390,22 @@ class LiquidityTraderBaseBehaviour(
             liquidity=liquidity,
             chain_id=chain,
         )
-        
+
         if amounts:
             return amounts[0], amounts[1]
         return 0, 0
 
     def get_velodrome_sqrt_ratio_at_tick(
-        self, 
-        chain: str,
-        tick: int
+        self, chain: str, tick: int
     ) -> Generator[None, None, int]:
         """Get sqrt ratio at tick using Velodrome Sugar contract."""
         sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
         if not sugar_address:
-            self.context.logger.error(f"No Velodrome Sugar contract address for chain {chain}")
+            self.context.logger.error(
+                f"No Velodrome Sugar contract address for chain {chain}"
+            )
             return 0
-        
+
         # Use Velodrome's official getSqrtRatioAtTick function
         sqrt_ratio = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -2412,7 +2416,7 @@ class LiquidityTraderBaseBehaviour(
             tick=tick,
             chain_id=chain,
         )
-        
+
         return sqrt_ratio if sqrt_ratio else 0
 
 

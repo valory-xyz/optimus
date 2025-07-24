@@ -38,6 +38,7 @@ class APRPopulationRound(CollectSameUntilThresholdRound):
     done_event = Event.DONE
     no_majority_event = Event.NO_MAJORITY
     none_event: Event = Event.NONE
+    withdrawal_initiated: Event = Event.WITHDRAWAL_INITIATED
     collection_key = get_name(SynchronizedData.participant_to_context_round)
     selection_key = get_name(SynchronizedData.context)
 

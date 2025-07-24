@@ -66,6 +66,7 @@ from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
 )
+from packages.valory.skills.liquidity_trader_abci.states.base import Event
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
 )
@@ -78,20 +79,48 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     selected_opportunities = None
     position_to_exit = None
     trading_opportunities = []
+    positions_eligible_for_exit = []
 
     def async_act(self) -> Generator:
         """Execute the behaviour's async action."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # Check if investing is paused due to withdrawal (read from KV store)
+            investing_paused = yield from self._read_investing_paused()
+            if investing_paused:
+                self.context.logger.info(
+                    "Investing paused due to withdrawal request. Transitioning to WithdrawFunds round."
+                )
+                payload = EvaluateStrategyPayload(
+                    sender=self.context.agent_address,
+                    actions=json.dumps(
+                        {
+                            "event": Event.WITHDRAWAL_INITIATED.value,
+                            "updates": {},
+                        },
+                        sort_keys=True,
+                    ),
+                )
+                yield from self.send_a2a_transaction(payload)
+                yield from self.wait_until_round_end()
+                self.set_done()
+                return
+
             # Check minimum hold period
             # Check if no current positions and uninvested ETH, prepare swap to USDC
             actions = yield from self.check_and_prepare_non_whitelisted_swaps()
             if actions:
                 yield from self.send_actions(actions)
 
-            should_hold = self.check_minimum_hold_period()
-            if should_hold:
+            (
+                should_proceed,
+                positions_eligible_for_exit,
+            ) = self._apply_tip_filters_to_exit_decisions()
+            if not should_proceed:
                 yield from self.send_actions()
                 return
+
+            if positions_eligible_for_exit:
+                self.positions_eligible_for_exit = positions_eligible_for_exit
 
             # Check for funds
             are_funds_available = self.check_funds()
@@ -125,6 +154,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self.wait_until_round_end()
 
         self.set_done()
+
+    def _read_investing_paused(self) -> Generator[None, None, bool]:
+        """Read investing_paused flag from KV store."""
+        try:
+            result = yield from self._read_kv(("investing_paused",))
+            return result.get("investing_paused", "false").lower() == "true"
+        except Exception as e:
+            self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
+            return False
 
     def validate_and_prepare_velodrome_inputs(
         self, tick_bands, current_price, tick_spacing=1
@@ -388,6 +426,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         )
                         continue
 
+                    # Extract percent_in_bounds from the first position (all positions have the same value)
+                    percent_in_bounds = (
+                        tick_bands[0].get("percent_in_bounds", 0.0)
+                        if tick_bands
+                        else 0.0
+                    )
+                    self.context.logger.info(f"percent_in_bounds : {percent_in_bounds}")
+
                     current_price = yield from pool._get_current_pool_price(
                         self, pool_address, chain
                     )
@@ -433,6 +479,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     # IMPORTANT: Add tick_spacing and tick_bands to the opportunity
                     opportunity["tick_spacing"] = tick_spacing
                     opportunity["tick_ranges"] = tick_bands
+                    # IMPORTANT: Store percent_in_bounds for TiP calculations
+                    opportunity["percent_in_bounds"] = percent_in_bounds
 
                     # Get available balances
                     token0 = opportunity["token0"]
@@ -544,43 +592,93 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info("Velodrome position analysis complete")
         return results
 
-    def check_minimum_hold_period(self) -> bool:
-        """Check if any position is still in minimum hold period."""
-        if not self.current_positions:
-            return False
-
-        open_position = next(
-            (
-                pos
-                for pos in self.current_positions
-                if pos.get("status") == PositionStatus.OPEN.value
-            ),
-            None,
-        )
-
-        if not open_position:
-            return False
-
-        timestamp = (
-            open_position.get("timestamp") or open_position.get("enter_timestamp") or 0
-        )
-        time_in_position = int(self._get_current_timestamp()) - timestamp
-
+    def _check_tip_exit_conditions(self, position: Dict) -> Tuple[bool, str]:
+        """Check if position can be exited based on TiP conditions"""
         try:
-            if time_in_position < MIN_TIME_IN_POSITION:
-                remaining_time = MIN_TIME_IN_POSITION - time_in_position
-                days, hours = divmod(remaining_time, 24 * 3600)
-                hours //= 3600
-                self.context.logger.info(
-                    f"Position {open_position.get('pool_address')} is still in minimum hold period. "
-                    f"Waiting for {days} days and {hours} hours before closing it."
-                )
-                return True
-        except Exception as e:
-            self.context.logger.error(f"Error checking minimum hold period: {str(e)}")
-            return False
+            entry_cost = position.get("entry_cost", 0)
 
-        return False
+            # Legacy positions (no entry_cost) use 3-week rule
+            if entry_cost == 0:
+                if not position.get("enter_timestamp"):
+                    return True, "No TiP data - legacy position"
+
+                days_elapsed = self._calculate_days_since_entry(
+                    position["enter_timestamp"]
+                )
+                if days_elapsed >= MIN_TIME_IN_POSITION:
+                    return True, f"Legacy position: {days_elapsed:.1f} >= 21 days"
+
+                remaining_days = MIN_TIME_IN_POSITION - days_elapsed
+                return (
+                    False,
+                    f"Legacy position must hold {remaining_days:.1f} more days",
+                )
+
+            # Check 1: Cost recovery through yield (exact threshold)
+            if position.get("cost_recovered", False):
+                return True, "Costs recovered through yield"
+
+            # Check 2: Minimum time requirement
+            if self._check_minimum_time_met(position):
+                days_elapsed = self._calculate_days_since_entry(
+                    position["enter_timestamp"]
+                )
+                min_hold_days = position.get("min_hold_days", 0)
+                return (
+                    True,
+                    f"Minimum time met: {days_elapsed:.1f} >= {min_hold_days:.1f} days",
+                )
+
+            # Calculate remaining time
+            days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
+            min_hold_days = position.get("min_hold_days", 0)
+            remaining_days = min_hold_days - days_elapsed
+
+            return False, f"Must hold {remaining_days:.1f} more days for cost recovery"
+
+        except Exception as e:
+            self.context.logger.error(f"Error checking TiP exit conditions: {e}")
+            return True, "Error in TiP check - allowing exit"
+
+    def _apply_tip_filters_to_exit_decisions(self) -> Tuple[bool, Optional[List[Dict]]]:
+        """Filter positions that can be exited based on TiP"""
+        try:
+            eligible_for_exit = []
+            blocked_by_tip = []
+
+            if not self.current_positions:
+                self.context.logger.info("No current positions to check for TiP.")
+                return True, []
+
+            for position in self.current_positions:
+                if position.get("status") == PositionStatus.OPEN.value:
+                    can_exit, reason = self._check_tip_exit_conditions(position)
+
+                    if can_exit:
+                        eligible_for_exit.append(position)
+                    else:
+                        blocked_by_tip.append((position, reason))
+                        self.context.logger.info(f"TiP blocking exit: {reason}")
+
+            if blocked_by_tip and not eligible_for_exit:
+                self.context.logger.info("All positions blocked by TiP conditions")
+
+            # Return True if there are eligible positions or all positions are closed
+            should_proceed = bool(eligible_for_exit) or not any(
+                p.get("status") == PositionStatus.OPEN.value
+                for p in self.current_positions
+            )
+
+            return should_proceed, eligible_for_exit
+
+        except Exception as e:
+            self.context.logger.error(f"Error applying TiP filters: {e}")
+            # Return all open positions if TiP filtering fails
+            return True, [
+                p
+                for p in self.current_positions
+                if p.get("status") == PositionStatus.OPEN.value
+            ]
 
     def check_funds(self) -> bool:
         """Check if there are any funds available."""
@@ -673,23 +771,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     self.context.logger.info("Preparing swap action to USDC.")
 
-                    actions.append(
-                        {
-                            "action": Action.FIND_BRIDGE_ROUTE.value,
-                            "from_chain": chain,
-                            "to_chain": chain,  # Same chain swap
-                            "from_token": asset_address,
-                            "from_token_symbol": asset_symbol,
-                            "to_token": usdc_address,
-                            "to_token_symbol": "USDC",
-                            "funds_percentage": 1.0,  # Use all available balance
-                        }
+                    # Use base class method to build swap action
+                    swap_action = self._build_swap_to_usdc_action(
+                        chain=chain,
+                        from_token_address=asset_address,
+                        from_token_symbol=asset_symbol,
+                        funds_percentage=1.0,  # Use all available balance
+                        description=f"Swap non-whitelisted {asset_symbol} to USDC",
                     )
 
-                    self.context.logger.info(
-                        f"Prepared {asset_symbol} to USDC swap on {chain}: "
-                        f"{asset_symbol} -> USDC"
-                    )
+                    if swap_action:
+                        actions.append(swap_action)
+                        self.context.logger.info(
+                            f"Prepared {asset_symbol} to USDC swap on {chain}: "
+                            f"{asset_symbol} -> USDC"
+                        )
+                    else:
+                        self.context.logger.error(
+                            f"Failed to create swap action for {asset_symbol}"
+                        )
 
             return actions
 
@@ -698,34 +798,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error in check_and_prepare_non_whitelisted_swaps: {str(e)}"
             )
             return []
-
-    def _get_usdc_address(self, chain: str) -> Optional[str]:
-        """Get USDC token address for the specified chain."""
-        try:
-            # Common USDC addresses for different chains
-            usdc_addresses = {
-                "mode": "0xd988097fb8612cc24eeC14542bC03424c656005f",
-                "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-            }
-
-            usdc_address = usdc_addresses.get(chain.lower())
-            if usdc_address:
-                usdc_address = to_checksum_address(usdc_address)
-                self.context.logger.info(
-                    f"Found USDC address for {chain}: {usdc_address}"
-                )
-                return usdc_address
-            else:
-                self.context.logger.warning(
-                    f"No USDC address configured for chain: {chain}"
-                )
-                return None
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error getting USDC address for {chain}: {str(e)}"
-            )
-            return None
 
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""
@@ -776,7 +848,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "trading_opportunities": self.trading_opportunities,
             "current_positions": [
                 pos
-                for pos in self.current_positions
+                for pos in self.positions_eligible_for_exit
                 if pos.get("status") == PositionStatus.OPEN.value
             ],
             "max_pools": self.params.max_pools,
@@ -860,11 +932,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "current_positions": (
                         [
                             to_checksum_address(pos.get("pool_address"))
-                            for pos in self.current_positions
+                            for pos in self.positions_eligible_for_exit
                             if pos.get("status") == PositionStatus.OPEN.value
                             and pos.get("pool_address")
                         ]
-                        if self.current_positions
+                        if self.positions_eligible_for_exit
                         else []
                     ),
                     "coingecko_api_key": self.coingecko.api_key,
@@ -1055,7 +1127,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "apr_threshold": self.params.apr_threshold,
                 "protocols": self.params.available_protocols,
                 "chain_to_chain_id_mapping": self.params.chain_to_chain_id_mapping,
-                "current_positions": self.current_positions,
+                "current_positions": self.positions_eligible_for_exit,
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
             }
@@ -1341,8 +1413,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             f"Added new bridge route: {source_token.get('token_symbol')} -> {target_symbol}"
                         )
 
-                        # Add to the beginning of actions
-                        actions.insert(0, new_bridge_route)
+                        # Find the position to insert after exit pool action
+                        insert_position = 0
+                        for i, action in enumerate(actions):
+                            if action.get("action") == "ExitPool":
+                                insert_position = i + 1
+
+                        # Insert after the last exit pool action (or at the beginning if no exit pool actions)
+                        actions.insert(insert_position, new_bridge_route)
 
         self.context.logger.info(f"action at the end of velodrome: {actions}")
         return actions
@@ -1696,46 +1774,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-        exit_pool_action = {
-            "action": (
-                Action.WITHDRAW.value
-                if self.position_to_exit.get("dex_type") == DexType.STURDY.value
-                else Action.EXIT_POOL.value
-            ),
-            "dex_type": self.position_to_exit.get("dex_type"),
-            "chain": self.position_to_exit.get("chain"),
-            "assets": [token.get("token") for token in tokens],
-            "pool_address": self.position_to_exit.get("pool_address"),
-            "pool_type": self.position_to_exit.get("pool_type"),
-            "is_stable": self.position_to_exit.get("is_stable"),
-            "is_cl_pool": self.position_to_exit.get("is_cl_pool"),
-        }
-
-        # Handle Velodrome CL pools with multiple positions
-        if (
-            self.position_to_exit.get("dex_type") == DexType.VELODROME.value
-            and self.position_to_exit.get("is_cl_pool")
-            and "positions" in self.position_to_exit
-        ):
-            # Extract token IDs from all positions
-            token_ids = [
-                pos["token_id"] for pos in self.position_to_exit.get("positions", [])
-            ]
-            liquidities = [
-                pos["liquidity"] for pos in self.position_to_exit.get("positions", [])
-            ]
-            if token_ids and liquidities:
-                self.context.logger.info(
-                    f"Exiting Velodrome CL pool with {len(token_ids)} positions. "
-                    f"Token IDs: {token_ids}"
-                )
-                exit_pool_action["token_ids"] = token_ids
-                exit_pool_action["liquidities"] = liquidities
-        # For single position case (backward compatibility)
-        elif "token_id" in self.position_to_exit:
-            exit_pool_action["token_id"] = self.position_to_exit.get("token_id")
-            exit_pool_action["liquidity"] = self.position_to_exit.get("liquidity")
-
+        # Use base class method to build exit action
+        exit_pool_action = self._build_exit_pool_action_base(
+            self.position_to_exit, tokens
+        )
         return exit_pool_action
 
     def _get_required_tokens(
@@ -2102,6 +2144,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 if opportunity.get("dex_type") == DexType.STURDY.value
                 else Action.ENTER_POOL.value
             ),
+            # Add TiP-required data for cost calculation
+            "opportunity_apr": opportunity.get("apr", 0),  # Percentage
+            "percent_in_bounds": opportunity.get(
+                "percent_in_bounds", 0.0
+            ),  # For CL pools
         }
         return action_details
 

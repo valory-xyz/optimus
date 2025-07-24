@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the DecisionMakingRound of LiquidityTraderAbciApp."""
+"""This module contains the WithdrawFundsRound of LiquidityTraderAbciApp."""
 
 import json
 from typing import Optional, Tuple, cast
@@ -27,58 +27,41 @@ from packages.valory.skills.abstract_round_abci.base import (
     CollectSameUntilThresholdRound,
     get_name,
 )
-from packages.valory.skills.liquidity_trader_abci.payloads import DecisionMakingPayload
+from packages.valory.skills.liquidity_trader_abci.payloads import WithdrawFundsPayload
 from packages.valory.skills.liquidity_trader_abci.states.base import (
     Event,
     SynchronizedData,
 )
 
 
-class DecisionMakingRound(CollectSameUntilThresholdRound):
-    """DecisionMakingRound"""
+class WithdrawFundsRound(CollectSameUntilThresholdRound):
+    """A round that handles withdrawal operations."""
 
-    payload_class = DecisionMakingPayload
+    payload_class = WithdrawFundsPayload
     synchronized_data_class = SynchronizedData
     done_event = Event.DONE
-    settle_event = Event.SETTLE
-    update_event = Event.UPDATE
-    error_event = Event.ERROR
     none_event: Event = Event.NONE
     no_majority_event = Event.NO_MAJORITY
-    withdrawal_initiated: Event = Event.WITHDRAWAL_INITIATED
-    collection_key = get_name(SynchronizedData.participant_to_decision_making)
-    selection_key = (get_name(SynchronizedData.chain_id),)
+    withdrawal_completed_event = Event.WITHDRAWAL_COMPLETED
+    collection_key = get_name(SynchronizedData.participant_to_withdraw_funds)
+    selection_key = (get_name(SynchronizedData.actions),)  # Use standard actions field
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            # We reference all the events here to prevent the check-abciapp-specs tool from complaining
-            payload = json.loads(self.most_voted_payload)
-            event = Event(payload["event"])
+            # Parse the payload as JSON - it contains the withdrawal actions list directly
+            withdrawal_actions = json.loads(self.most_voted_payload)
             synchronized_data = cast(SynchronizedData, self.synchronized_data)
 
-            # Ensure positions is always serialized
-            positions = payload.get("updates", {}).get("positions", None)
-            if positions and not isinstance(positions, str):
-                payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
-
-            new_action = payload.get("updates", {}).get("new_action", {})
-            updated_actions = self.synchronized_data.actions
-            if new_action:
-                if self.synchronized_data.last_executed_action_index is None:
-                    index = 0
-                else:
-                    index = self.synchronized_data.last_executed_action_index + 1
-                updated_actions.insert(index, new_action)
-
-            serialized_actions = json.dumps(updated_actions)
+            # Store withdrawal actions in the standard actions field for normal flow processing
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
-                **payload.get("updates", {}),
-                actions=serialized_actions
+                actions=json.dumps(withdrawal_actions),  # Use standard actions field
+                last_action="WITHDRAWAL_INITIATED",
+                last_executed_action_index=None,  # Reset action index for new actions
             )
-            return synchronized_data, event
 
+            return synchronized_data, Event.DONE
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):

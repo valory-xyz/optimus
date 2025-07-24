@@ -155,4 +155,9 @@ ROUNDS_INFO = {
         "description": "Checks that the transaction was succesful",
         "transitions": {},
     },
+    "WithdrawFundsRound": {
+        "name": "Withdrawing funds",
+        "description": "Withdraws funds from the agent",
+        "transitions": {},
+    },
 }

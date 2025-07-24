@@ -29,6 +29,8 @@ alphabet_in:
 - VALIDATE_TIMEOUT
 - VANITY_TX_EXECUTED
 - WAIT
+- WITHDRAWAL_COMPLETED
+- WITHDRAWAL_INITIATED
 default_start_state: RegistrationStartupRound
 final_states: []
 label: OptimusAbciApp
@@ -58,11 +60,13 @@ states:
 - SelectKeeperTransactionSubmissionBRound
 - SynchronizeLateMessagesRound
 - ValidateTransactionRound
+- WithdrawFundsRound
 transition_func:
     (APRPopulationRound, DONE): EvaluateStrategyRound
     (APRPopulationRound, NONE): APRPopulationRound
     (APRPopulationRound, NO_MAJORITY): APRPopulationRound
     (APRPopulationRound, ROUND_TIMEOUT): APRPopulationRound
+    (APRPopulationRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CallCheckpointRound, DONE): CheckStakingKPIMetRound
     (CallCheckpointRound, NEXT_CHECKPOINT_NOT_REACHED_YET): CheckStakingKPIMetRound
     (CallCheckpointRound, NONE): CallCheckpointRound
@@ -71,6 +75,7 @@ transition_func:
     (CallCheckpointRound, SERVICE_EVICTED): GetPositionsRound
     (CallCheckpointRound, SERVICE_NOT_STAKED): GetPositionsRound
     (CallCheckpointRound, SETTLE): RandomnessTransactionSubmissionRound
+    (CallCheckpointRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CheckLateTxHashesRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckLateTxHashesRound, CHECK_TIMEOUT): CheckLateTxHashesRound
     (CheckLateTxHashesRound, DONE): PostTxSettlementRound
@@ -85,6 +90,7 @@ transition_func:
     (CheckStakingKPIMetRound, SETTLE): RandomnessTransactionSubmissionRound
     (CheckStakingKPIMetRound, STAKING_KPI_MET): GetPositionsRound
     (CheckStakingKPIMetRound, STAKING_KPI_NOT_MET): GetPositionsRound
+    (CheckStakingKPIMetRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (CheckTransactionHistoryRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckTransactionHistoryRound, CHECK_TIMEOUT): CheckTransactionHistoryRound
     (CheckTransactionHistoryRound, DONE): PostTxSettlementRound
@@ -101,17 +107,20 @@ transition_func:
     (DecisionMakingRound, ROUND_TIMEOUT): DecisionMakingRound
     (DecisionMakingRound, SETTLE): RandomnessTransactionSubmissionRound
     (DecisionMakingRound, UPDATE): DecisionMakingRound
+    (DecisionMakingRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (EvaluateStrategyRound, DONE): DecisionMakingRound
     (EvaluateStrategyRound, NONE): EvaluateStrategyRound
     (EvaluateStrategyRound, NO_MAJORITY): EvaluateStrategyRound
     (EvaluateStrategyRound, ROUND_TIMEOUT): EvaluateStrategyRound
     (EvaluateStrategyRound, WAIT): ResetAndPauseRound
+    (EvaluateStrategyRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (FetchStrategiesRound, DONE): CallCheckpointRound
     (FetchStrategiesRound, NONE): FetchStrategiesRound
     (FetchStrategiesRound, NO_MAJORITY): FetchStrategiesRound
     (FetchStrategiesRound, ROUND_TIMEOUT): FetchStrategiesRound
     (FetchStrategiesRound, SETTLE): RandomnessTransactionSubmissionRound
     (FetchStrategiesRound, WAIT): FetchStrategiesRound
+    (FetchStrategiesRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (FinalizationRound, CHECK_HISTORY): CheckTransactionHistoryRound
     (FinalizationRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (FinalizationRound, DONE): ValidateTransactionRound
@@ -122,6 +131,7 @@ transition_func:
     (GetPositionsRound, NONE): GetPositionsRound
     (GetPositionsRound, NO_MAJORITY): GetPositionsRound
     (GetPositionsRound, ROUND_TIMEOUT): GetPositionsRound
+    (GetPositionsRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (PostTxSettlementRound, ACTION_EXECUTED): DecisionMakingRound
     (PostTxSettlementRound, CHECKPOINT_TX_EXECUTED): CallCheckpointRound
     (PostTxSettlementRound, DONE): PostTxSettlementRound
@@ -131,6 +141,8 @@ transition_func:
     (PostTxSettlementRound, TRANSFER_COMPLETED): FetchStrategiesRound
     (PostTxSettlementRound, UNRECOGNIZED): ResetAndPauseRound
     (PostTxSettlementRound, VANITY_TX_EXECUTED): CheckStakingKPIMetRound
+    (PostTxSettlementRound, WITHDRAWAL_COMPLETED): FetchStrategiesRound
+    (PostTxSettlementRound, WITHDRAWAL_INITIATED): WithdrawFundsRound
     (RandomnessTransactionSubmissionRound, DONE): SelectKeeperTransactionSubmissionARound
     (RandomnessTransactionSubmissionRound, NONE): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, NO_MAJORITY): RandomnessTransactionSubmissionRound
@@ -167,3 +179,8 @@ transition_func:
     (ValidateTransactionRound, NONE): SelectKeeperTransactionSubmissionBRound
     (ValidateTransactionRound, NO_MAJORITY): ValidateTransactionRound
     (ValidateTransactionRound, VALIDATE_TIMEOUT): CheckTransactionHistoryRound
+    (WithdrawFundsRound, DONE): DecisionMakingRound
+    (WithdrawFundsRound, NONE): WithdrawFundsRound
+    (WithdrawFundsRound, NO_MAJORITY): WithdrawFundsRound
+    (WithdrawFundsRound, ROUND_TIMEOUT): WithdrawFundsRound
+    (WithdrawFundsRound, WITHDRAWAL_COMPLETED): FetchStrategiesRound

@@ -3451,14 +3451,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         eth_transfers.append(transfer)
                     # If it's from the same address as initial funding
                     elif (
-                        transfer.get("from_address", "").lower() == master_safe_address
+                        transfer.get("from_address", "").lower() == master_safe_address.lower()
                     ):
                         eth_transfers.append(transfer)
 
             for transfer in sorted_outgoing_transfers:
                 if transfer.get("symbol") == "ETH":
                     if (
-                        transfer.get("to_address", "").lower() == master_safe_address
+                        transfer.get("to_address", "").lower() == master_safe_address.lower()
                         and transfer.get("from_address", "").lower()
                         == safe_address.lower()
                     ):

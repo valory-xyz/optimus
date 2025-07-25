@@ -3162,16 +3162,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             pool_address = position.get("pool_address")
             gas_cost_usd = yield from self._get_gas_cost_usd(tx_hash, chain)
 
-            # Create position ID for cost tracking
-            position_id = f"{chain}_{pool_address}"
-
             # Update entry costs in KV store
             updated_costs = yield from self._update_entry_costs(
-                chain, position_id, gas_cost_usd
+                chain, pool_address, gas_cost_usd
             )
 
             self.context.logger.info(
-                f"Added gas cost: ${gas_cost_usd:.2f}, total_costs=${updated_costs:.2f} for position {position_id}"
+                f"Added gas cost: ${gas_cost_usd:.6f}, total_costs=${updated_costs:.6f} for position {pool_address}"
             )
 
         except Exception as e:
@@ -3184,42 +3181,31 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             slippage_cost = yield from self._calculate_actual_slippage_cost(tx_hash)
 
             # Get the current action being executed to determine position ID
-            actions = self.synchronized_data.actions
-            last_executed_action_index = (
-                self.synchronized_data.last_executed_action_index
-            )
+            enter_pool_actions = [
+                action for action in self.synchronized_data.actions 
+                if action.get("action") == "EnterPool"
+            ]
 
-            if actions and last_executed_action_index is not None:
-                # For swap actions, we need to look at the next action (enter pool) to get position info
-                next_action_index = last_executed_action_index + 1
-                if next_action_index < len(actions):
-                    next_action = actions[next_action_index]
-                    pool_address = next_action.get("pool_address")
-                    chain = next_action.get("chain")
+            if enter_pool_actions:
+                pool_address = enter_pool_actions[0].get("pool_address")
+                chain = enter_pool_actions[0].get("chain")
 
-                    if pool_address and chain:
-                        # Create position ID for cost tracking
-                        position_id = f"{chain}_{pool_address}"
+                if pool_address and chain:
+                    # Update entry costs in KV store
+                    updated_costs = yield from self._update_entry_costs(
+                        chain, pool_address, slippage_cost
+                    )
 
-                        # Update entry costs in KV store
-                        updated_costs = yield from self._update_entry_costs(
-                            chain, position_id, slippage_cost
-                        )
-
-                        self.context.logger.info(
-                            f"Added slippage cost: ${slippage_cost:.2f}, total_costs=${updated_costs:.2f} for position {position_id}"
-                        )
-                    else:
-                        self.context.logger.warning(
-                            "No pool_address or chain found in next action for slippage cost tracking"
-                        )
+                    self.context.logger.info(
+                        f"Added slippage cost: ${slippage_cost:.6f}, total_costs=${updated_costs:.6f} for position {pool_address}"
+                    )
                 else:
                     self.context.logger.warning(
-                        "No next action found for slippage cost tracking"
+                        "No pool_address or chain found in next action for slippage cost tracking"
                     )
             else:
                 self.context.logger.warning(
-                    "No current action found for slippage cost tracking"
+                    "No next action found for slippage cost tracking"
                 )
 
         except Exception as e:
@@ -3295,8 +3281,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     if sent_amount_usd > received_amount_usd:
                         slippage_cost = sent_amount_usd - received_amount_usd
                         self.context.logger.info(
-                            f"Actual slippage: sent=${sent_amount_usd:.2f}, "
-                            f"received=${received_amount_usd:.2f}, slippage=${slippage_cost:.2f}"
+                            f"Actual slippage: sent=${sent_amount_usd:.6f}, "
+                            f"received=${received_amount_usd:.6f}, slippage=${slippage_cost:.6f}"
                         )
                         return slippage_cost
 
@@ -3332,17 +3318,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             enter_timestamp = current_position.get("enter_timestamp")
 
             if chain and pool_address and enter_timestamp:
-                position_id = f"{chain}_{pool_address}"
                 accumulated_costs = yield from self._get_updated_entry_costs(
-                    chain, position_id, enter_timestamp
+                    chain, pool_address, enter_timestamp
                 )
 
                 # Apply 2x multiplier for round-trip costs
                 total_entry_cost = accumulated_costs * 2
 
                 self.context.logger.info(
-                    f"Retrieved accumulated costs: ${accumulated_costs:.2f}, "
-                    f"total with 2x multiplier: ${total_entry_cost:.2f}"
+                    f"Retrieved accumulated costs: ${accumulated_costs:.6f}, "
+                    f"total with 2x multiplier: ${total_entry_cost:.6f}"
                 )
             else:
                 self.context.logger.warning(
@@ -3377,7 +3362,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             self.context.logger.info(
                 f"TiP Data - Pool: {current_position.get('pool_address')}, "
-                f"Principal: ${principal_usd:.2f}, Entry Cost: ${total_entry_cost:.2f}, "
+                f"Principal: ${principal_usd:.6f}, Entry Cost: ${total_entry_cost:.6f}, "
                 f"Min Hold: {min_hold_days:.1f} days"
             )
 
@@ -3507,8 +3492,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(
                 f"TiP Performance Summary:"
                 f"\n  Pool: {exited_position.get('pool_address')}"
-                f"\n  Principal: ${principal:.2f}"
-                f"\n  Entry Cost: ${entry_cost:.2f}"
+                f"\n  Principal: ${principal:.6f}"
+                f"\n  Entry Cost: ${entry_cost:.26f}"
                 f"\n  Required Hold: {min_hold_days:.1f} days"
                 f"\n  Actual Hold: {actual_hold_days:.1f} days"
                 f"\n  Met Time Requirement: {met_time_requirement}"

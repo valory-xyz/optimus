@@ -2261,14 +2261,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             pool_address = enter_pool_action.get("pool_address")
 
             if chain and pool_address:
-                # Create position ID for cost tracking
-                position_id = f"{chain}_{pool_address}"
-
                 # Initialize entry costs in KV store
-                yield from self._initialize_position_entry_costs(chain, position_id)
+                yield from self._initialize_position_entry_costs(chain, pool_address)
 
                 self.context.logger.info(
-                    f"Initialized entry costs for new position: {position_id}"
+                    f"Initialized entry costs for new position: {pool_address}"
                 )
             else:
                 self.context.logger.warning(

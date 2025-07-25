@@ -9,12 +9,12 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeih7hfdbsmpowvg5httqq444gamejxmkbkdwwjs2qjilkfws66376a
   behaviours/apr_population.py: bafybeiaeb4fnszqcxudedsmz2yvawkn55zp6ffalwl6rbd5hw3cty33oiu
-  behaviours/base.py: bafybeiebgmxs6wwxiq7gkbtabvzpfellkx5a6mxeecopaaarn6m5alcyqe
+  behaviours/base.py: bafybeibbb36cwfzk3jwjkiuwz35me73lko3z6khuo4e7fkk4wxjrfp72zq
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeieul2w57khx53bokxkq562tnh4v7coo7cb5b5cij7r7khuvx2dwmq
-  behaviours/evaluate_strategy.py: bafybeiafnuq53m2qaltevicnph5z5irkikqj5czr2yvp3iqzusiarkfvnu
-  behaviours/fetch_strategies.py: bafybeiayoh2qmsewqompt4rbwrqizhokkqnnroduaztll7nmuo2cm22ra4
+  behaviours/decision_making.py: bafybeiejdlnbyqk5hszguunbbvnblgrhseg4qjvyadaospiyggf4khzwoq
+  behaviours/evaluate_strategy.py: bafybeibzdxpn3apkxo3zvghagf4ipild4kdxofm2te3rczjeuohpljhi4e
+  behaviours/fetch_strategies.py: bafybeiaweupenax7nscddh3mrsrkirhzw3hh37gkg7cgzppubcvxf54zju
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -277,7 +277,7 @@ models:
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
-      velodrome_sugar_contract_addresses: '{"mode":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202","optimism":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202"}'
+      velodrome_sugar_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0x15810F291d547d340b1Ac78f75Dc0cdC7406A0c3"}'
     class_name: Params
   coingecko:
     args:

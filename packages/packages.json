@@ -21,10 +21,10 @@
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeiflwdffp2zkebx74eeivfz2g7x5w3icwsoflwddt46zzfiuovwuq4",
         "contract/valory/velodrome_sugar/0.1.0": "bafybeia5myvyiinqejchomfntcs775ipjf5bylfo2kkedims33uc775eei",
         "connection/valory/mirror_db/0.1.0": "bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeicau7o67vx6fdlwddrwrock3grfokkx4pjp5xgodzuf6qygmt5naa",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiblbnwafhuoqdrkqlawsr2t4snhyua6r6ktu5pzrjcw64yfwlqupy",
-        "agent/valory/optimus/0.1.0": "bafybeicyvjpvtzcekfsot7j37tifmlkp3b55za4qvtw4boht3ytzis5tyq",
-        "service/valory/optimus/0.1.0": "bafybeidhujevaj25v5x7wms7vzhtdp647ymlclqdvpzxzoqmblqmbg6mpe"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeibi3he34o6ebygisma54rw24ksizejoxbdkqh5awoj4imrhz5s6eu",
+        "skill/valory/optimus_abci/0.1.0": "bafybeigf7cbroghcqrserausf4qq4lyz4vnerl7fzpncv3ikaygtlwynnu",
+        "agent/valory/optimus/0.1.0": "bafybeih6otu3yv2blu7ybetuaqymh4talpjxiutu75zx6rtoh4qug3by24",
+        "service/valory/optimus/0.1.0": "bafybeihejriwks6dqnoinah7blthzdt5sxhxjq5ivbabbl5dkxjsuguzmm"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -51,7 +51,7 @@
         "connection/dvilela/kv_store/0.1.0": "bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu",
         "skill/valory/abstract_abci/0.1.0": "bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i",
         "skill/valory/reset_pause_abci/0.1.0": "bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du",
-        "skill/valory/registration_abci/0.1.0": "bafybeibmljr626hq4fs4goa7qgpapy6n622y7y45vgs7wzjkrj7lj5ra44",
+        "skill/valory/registration_abci/0.1.0": "bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm",
         "skill/valory/abstract_round_abci/0.1.0": "bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu",
         "skill/valory/termination_abci/0.1.0": "bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi",
         "skill/valory/transaction_settlement_abci/0.1.0": "bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve"

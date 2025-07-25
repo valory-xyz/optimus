@@ -3182,7 +3182,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             # Get the current action being executed to determine position ID
             enter_pool_actions = [
-                action for action in self.synchronized_data.actions 
+                action
+                for action in self.synchronized_data.actions
                 if action.get("action") == "EnterPool"
             ]
 

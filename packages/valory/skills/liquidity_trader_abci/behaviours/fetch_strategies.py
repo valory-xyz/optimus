@@ -1270,28 +1270,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token1_address: str,
         position_manager_address: str,
         contract_id: Any,
+        dex_type: str,
         get_position_callable: str = "get_position",
         position_data_key: str = "data",
         slot0_contract_id: Any = None,
     ) -> Generator[None, None, Dict[str, Decimal]]:
-        """Calculate concentrated liquidity position value.
-
-        Calculate the value of a concentrated liquidity position by fetching
-        position details and computing token amounts.
-
-        :param pool_address: Address of the pool contract.
-        :param chain: Chain identifier.
-        :param position: Position data dictionary.
-        :param token0_address: Address of token0.
-        :param token1_address: Address of token1.
-        :param position_manager_address: Address of position manager contract.
-        :param contract_id: Contract identifier.
-        :param get_position_callable: Name of the position getter function.
-        :param position_data_key: Key for position data in response.
-        :param slot0_contract_id: Optional contract ID for slot0 calls.
-        :yield: Steps in the contract interaction process.
-        :return: Dictionary mapping token addresses to their quantities.
-        """
+        """Calculate concentrated liquidity position value."""
         # Early validation of required parameters
         if not all(
             [
@@ -1371,7 +1355,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate amounts for this position
             amount0, amount1 = self._calculate_position_amounts(
-                position_details, current_tick, sqrt_price_x96, pos
+                position_details, current_tick, sqrt_price_x96, pos, dex_type, chain
             )
 
             total_token0_qty += Decimal(amount0)
@@ -1402,17 +1386,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         current_tick: int,
         sqrt_price_x96: int,
         position: Dict[str, Any],
+        dex_type: str,
+        chain: str,
     ) -> Generator[None, None, Optional[Tuple[int, int]]]:
-        """Calculate token amounts with DEX-specific logic.
-
-        Uses Velodrome Sugar contract for Velodrome positions and custom tick math for others.
-
-        :param position_details: Position details from the contract.
-        :param current_tick: Current tick from the pool.
-        :param sqrt_price_x96: Current sqrt price from the pool.
-        :param position: Position data from our system.
-        :return: Tuple of (amount0, amount1) representing token amounts.
-        """
+        """Calculate token amounts with DEX-specific logic."""
         # Extract position details
         tick_lower_val = position_details.get("tickLower")
         tick_upper_val = position_details.get("tickUpper")
@@ -1428,8 +1405,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         tokens_owed0 = int(position_details.get("tokensOwed0", 0))
         tokens_owed1 = int(position_details.get("tokensOwed1", 0))
         token_id = position.get("token_id")
-        chain = position.get("chain")
-        dex_type = position.get("dex_type")
 
         # Log position details
         self.context.logger.info(
@@ -1523,6 +1498,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 token1_address=token1_address,
                 position_manager_address=position_manager_address,
                 contract_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                dex_type=DexType.VELODROME.value,
                 get_position_callable="get_position",
                 position_data_key="data",
                 slot0_contract_id=VelodromeCLPoolContract.contract_id,
@@ -1637,6 +1613,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 token1_address=token1_address,
                 position_manager_address=position_manager_address,
                 contract_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+                dex_type=DexType.UNISWAP_V3.value,
                 get_position_callable="get_position",
                 position_data_key="data",
                 slot0_contract_id=UniswapV3PoolContract.contract_id,

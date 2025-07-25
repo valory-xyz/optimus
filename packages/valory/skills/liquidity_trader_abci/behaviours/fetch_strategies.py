@@ -1402,11 +1402,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         current_tick: int,
         sqrt_price_x96: int,
         position: Dict[str, Any],
-    ) -> Optional[Tuple[int, int]]:
-        """Calculate token amounts for a position based on whether it's in range or not.
+    ) -> Generator[None, None, Optional[Tuple[int, int]]]:
+        """Calculate token amounts with DEX-specific logic.
 
-        Determines the token amounts for a liquidity position by checking if the
-        current tick is within the position's range and calculating accordingly.
+        Uses Velodrome Sugar contract for Velodrome positions and custom tick math for others.
 
         :param position_details: Position details from the contract.
         :param current_tick: Current tick from the pool.
@@ -1428,22 +1427,52 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         liquidity = int(liquidity_val)
         tokens_owed0 = int(position_details.get("tokensOwed0", 0))
         tokens_owed1 = int(position_details.get("tokensOwed1", 0))
+        token_id = position.get("token_id")
+        chain = position.get("chain")
+        dex_type = position.get("dex_type")
 
         # Log position details
         self.context.logger.info(
-            f"For position, liquidity range is [{tick_lower}, {tick_upper}] "
+            f"For {dex_type} position, liquidity range is [{tick_lower}, {tick_upper}] "
             f"and current tick is {current_tick}"
         )
 
-        # Always use get_amounts_for_liquidity for accurate calculation
-        # This handles both in-range and out-of-range positions correctly
-        sqrtA = get_sqrt_ratio_at_tick(tick_lower)
-        sqrtB = get_sqrt_ratio_at_tick(tick_upper)
-
-        # Calculate amounts using get_amounts_for_liquidity (same approach as Velodrome fix)
-        amount0, amount1 = get_amounts_for_liquidity(
-            sqrt_price_x96, sqrtA, sqrtB, liquidity
-        )
+        # Use DEX-specific calculation methods
+        if dex_type == DexType.VELODROME.value and token_id:
+            # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
+            position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain
+            )
+            if position_manager_address:
+                self.context.logger.info(
+                    "Using Velodrome Sugar contract for position calculation"
+                )
+                amount0, amount1 = yield from self.get_velodrome_position_principal(
+                    chain, position_manager_address, token_id, sqrt_price_x96
+                )
+            else:
+                self.context.logger.warning(
+                    "No Velodrome position manager found, falling back to Sugar getAmountsForLiquidity"
+                )
+                sqrt_a = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                    chain, tick_lower
+                )
+                sqrt_b = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                    chain, tick_upper
+                )
+                amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
+                    chain, sqrt_price_x96, sqrt_a, sqrt_b, liquidity
+                )
+        else:
+            # For Uniswap and others: Use existing tick math implementation
+            self.context.logger.info(
+                "Using custom tick math for non-Velodrome position"
+            )
+            sqrtA = get_sqrt_ratio_at_tick(tick_lower)
+            sqrtB = get_sqrt_ratio_at_tick(tick_upper)
+            amount0, amount1 = get_amounts_for_liquidity(
+                sqrt_price_x96, sqrtA, sqrtB, liquidity
+            )
 
         # Add uncollected fees
         amount0 += tokens_owed0

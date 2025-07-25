@@ -546,8 +546,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # Add gas cost tracking for the enter pool transaction
         yield from self._accumulate_transaction_costs(
-            self.synchronized_data.final_tx_hash, action.get("chain")
+            self.synchronized_data.final_tx_hash, current_position
         )
+
+        yield from self._rename_entry_costs_key(current_position)
 
         # Calculate and store TiP data after position amounts are determined
         yield from self._calculate_and_store_tip_data(current_position, action)
@@ -3152,35 +3154,76 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         return None, None, None
 
     def _accumulate_transaction_costs(
-        self, tx_hash: str, chain: str
+        self, tx_hash: str, position: Optional[Dict]
     ) -> Generator[None, None, None]:
-        """Add gas costs from this transaction to running total"""
+        """Add gas costs from this transaction to running total using KV store"""
         try:
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
             gas_cost_usd = yield from self._get_gas_cost_usd(tx_hash, chain)
-            self._current_entry_costs += gas_cost_usd
+
+            # Create position ID for cost tracking
+            position_id = f"{chain}_{pool_address}"
+
+            # Update entry costs in KV store
+            updated_costs = yield from self._update_entry_costs(
+                chain, position_id, gas_cost_usd
+            )
 
             self.context.logger.info(
-                f"Added gas cost: ${gas_cost_usd:.2f}, running_total=${self._current_entry_costs:.2f}"
+                f"Added gas cost: ${gas_cost_usd:.2f}, total_costs=${updated_costs:.2f} for position {position_id}"
             )
+
         except Exception as e:
             self.context.logger.error(f"Error accumulating transaction costs: {e}")
-            # Fallback to 3 weeks hardcoded TiP if cost tracking fails
-            self._current_entry_costs = 0.0
             return
 
     def _add_slippage_costs(self, tx_hash: str) -> Generator[None, None, None]:
-        """Add slippage costs after swap completion"""
+        """Add slippage costs after swap completion using KV store"""
         try:
             slippage_cost = yield from self._calculate_actual_slippage_cost(tx_hash)
-            self._current_entry_costs += slippage_cost
 
-            self.context.logger.info(
-                f"Added slippage cost: ${slippage_cost:.2f}, running_total=${self._current_entry_costs:.2f}"
+            # Get the current action being executed to determine position ID
+            actions = self.synchronized_data.actions
+            last_executed_action_index = (
+                self.synchronized_data.last_executed_action_index
             )
+
+            if actions and last_executed_action_index is not None:
+                # For swap actions, we need to look at the next action (enter pool) to get position info
+                next_action_index = last_executed_action_index + 1
+                if next_action_index < len(actions):
+                    next_action = actions[next_action_index]
+                    pool_address = next_action.get("pool_address")
+                    chain = next_action.get("chain")
+
+                    if pool_address and chain:
+                        # Create position ID for cost tracking
+                        position_id = f"{chain}_{pool_address}"
+
+                        # Update entry costs in KV store
+                        updated_costs = yield from self._update_entry_costs(
+                            chain, position_id, slippage_cost
+                        )
+
+                        self.context.logger.info(
+                            f"Added slippage cost: ${slippage_cost:.2f}, total_costs=${updated_costs:.2f} for position {position_id}"
+                        )
+                    else:
+                        self.context.logger.warning(
+                            "No pool_address or chain found in next action for slippage cost tracking"
+                        )
+                else:
+                    self.context.logger.warning(
+                        "No next action found for slippage cost tracking"
+                    )
+            else:
+                self.context.logger.warning(
+                    "No current action found for slippage cost tracking"
+                )
+
         except Exception as e:
             self.context.logger.error(f"Error adding slippage costs: {e}")
-            self._current_entry_costs = 0.0
-            # Fallback to 3 weeks hardcoded TiP if cost tracking fails
             return
 
     def _get_gas_cost_usd(
@@ -3201,15 +3244,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 if not eth_price_usd:
                     return 0.0
 
-                gas_cost_eth = (gas_used * gas_price) / 1e18
-                gas_cost_usd = gas_cost_eth * eth_price_usd
+                # L2 cost calculation
+                l2_cost = (gas_used * gas_price) / 1e18
+
+                # L1 cost calculation
+                l1_fee = (
+                    int(receipt.get("l1Fee", "0x0"), 16) / 1e18
+                )  # Convert hex to decimal
+
+                # Total cost should be
+                total_cost_eth = l2_cost + l1_fee
+                total_cost_usd = total_cost_eth * eth_price_usd
 
                 self.context.logger.info(
-                    f"Gas cost: {gas_used} gas @ {gas_price} wei = {gas_cost_eth:.6f} ETH "
-                    f"@ ${eth_price_usd:.2f} = ${gas_cost_usd:.2f}"
+                    f"Total cost: {total_cost_eth}, Total cost usd: {total_cost_usd} for transaction {tx_hash}"
                 )
 
-                return gas_cost_usd
+                return total_cost_usd
 
             return 0.0
         except Exception as e:
@@ -3261,7 +3312,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     def _calculate_and_store_tip_data(
         self, current_position: Dict, action: Dict
     ) -> Generator[None, None, None]:
-        """Calculate TiP data using actual position amounts and accumulated costs"""
+        """Calculate TiP data using actual position amounts and accumulated costs from KV store"""
         try:
             # 1. Calculate principal from actual position amounts
             amount0 = current_position.get("amount0", 0)
@@ -3275,8 +3326,29 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 action.get("chain"),
             )
 
-            # 2. Apply 2x multiplier for round-trip costs
-            total_entry_cost = self._current_entry_costs * 2
+            # 2. Get accumulated costs from KV store
+            chain = action.get("chain")
+            pool_address = action.get("pool_address")
+            enter_timestamp = current_position.get("enter_timestamp")
+
+            if chain and pool_address and enter_timestamp:
+                position_id = f"{chain}_{pool_address}"
+                accumulated_costs = yield from self._get_updated_entry_costs(
+                    chain, position_id, enter_timestamp
+                )
+
+                # Apply 2x multiplier for round-trip costs
+                total_entry_cost = accumulated_costs * 2
+
+                self.context.logger.info(
+                    f"Retrieved accumulated costs: ${accumulated_costs:.2f}, "
+                    f"total with 2x multiplier: ${total_entry_cost:.2f}"
+                )
+            else:
+                self.context.logger.warning(
+                    "Missing position data for cost retrieval, using fallback"
+                )
+                total_entry_cost = 0.0
 
             # 3. Calculate minimum hold days using TiP formula with correct pool type logic
             opportunity_apr = (
@@ -3303,9 +3375,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 }
             )
 
-            # 5. Reset cost accumulator
-            self._current_entry_costs = 0.0
-
             self.context.logger.info(
                 f"TiP Data - Pool: {current_position.get('pool_address')}, "
                 f"Principal: ${principal_usd:.2f}, Entry Cost: ${total_entry_cost:.2f}, "
@@ -3323,7 +3392,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     "cost_recovered": False,
                 }
             )
-            self._current_entry_costs = 0.0
 
     def _convert_amounts_to_usd(
         self, amount0, amount1, token0_addr, token1_addr, chain
@@ -3457,3 +3525,144 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Withdrawal flags reset successfully")
         except Exception as e:
             self.context.logger.error(f"Error resetting withdrawal flags: {str(e)}")
+
+    # Entry costs tracking methods using KV store
+    def _get_entry_costs_key(self, chain: str, position_id: str) -> str:
+        """Generate unique key for entry costs storage"""
+        return f"entry_costs_{chain}_{position_id}"
+
+    def _get_updated_entry_costs_key(
+        self, chain: str, position_id: str, entry_timestamp: str
+    ) -> str:
+        """Generate unique key for entry costs storage"""
+        return f"entry_costs_{chain}_{position_id}_{entry_timestamp}"
+
+    def _store_entry_costs(
+        self, chain: str, position_id: str, costs: float
+    ) -> Generator[None, None, None]:
+        """Store entry costs in KV store with unique key"""
+        try:
+            key = self._get_entry_costs_key(chain, position_id)
+
+            # Get existing entry costs dictionary
+            entry_costs_dict = yield from self._get_all_entry_costs()
+
+            # Update the dictionary
+            entry_costs_dict[key] = costs
+
+            # Store back to KV store
+            yield from self._write_kv(
+                {"entry_costs_dict": json.dumps(entry_costs_dict)}
+            )
+
+            self.context.logger.info(f"Stored entry costs: {key} = ${costs:.6f}")
+        except Exception as e:
+            self.context.logger.error(f"Error storing entry costs: {e}")
+
+    def _get_entry_costs(
+        self, chain: str, position_id: str
+    ) -> Generator[None, None, float]:
+        """Retrieve entry costs from KV store"""
+        try:
+            key = self._get_entry_costs_key(chain, position_id)
+            entry_costs_dict = yield from self._get_all_entry_costs()
+
+            costs = entry_costs_dict.get(key, 0.0)
+            self.context.logger.debug(f"Retrieved entry costs: {key} = ${costs:.6f}")
+            return costs
+        except Exception as e:
+            self.context.logger.error(f"Error retrieving entry costs: {e}")
+            return 0.0
+
+    def _get_updated_entry_costs(
+        self, chain: str, position_id: str, entry_timestamp: str
+    ) -> Generator[None, None, float]:
+        """Retrieve entry costs from KV store"""
+        try:
+            key = self._get_updated_entry_costs_key(chain, position_id, entry_timestamp)
+            entry_costs_dict = yield from self._get_all_entry_costs()
+
+            costs = entry_costs_dict.get(key, 0.0)
+            self.context.logger.debug(f"Retrieved entry costs: {key} = ${costs:.6f}")
+            return costs
+        except Exception as e:
+            self.context.logger.error(f"Error retrieving entry costs: {e}")
+            return 0.0
+
+    def _update_entry_costs(
+        self, chain: str, position_id: str, additional_cost: float
+    ) -> Generator[None, None, float]:
+        """Update entry costs by adding additional cost"""
+        try:
+            current_costs = yield from self._get_entry_costs(chain, position_id)
+            new_costs = current_costs + additional_cost
+
+            yield from self._store_entry_costs(chain, position_id, new_costs)
+
+            self.context.logger.info(
+                f"Updated entry costs: ${current_costs:.6f} + ${additional_cost:.6f} = ${new_costs:.6f}"
+            )
+            return new_costs
+        except Exception as e:
+            self.context.logger.error(f"Error updating entry costs: {e}")
+            return 0.0
+
+    def _get_all_entry_costs(self) -> Generator[None, None, Dict[str, float]]:
+        """Get all entry costs from KV store"""
+        try:
+            result = yield from self._read_kv(("entry_costs_dict",))
+            if result and result.get("entry_costs_dict"):
+                entry_costs_dict = json.loads(result["entry_costs_dict"])
+                # Convert string values back to float
+                return {k: float(v) for k, v in entry_costs_dict.items()}
+            return {}
+        except Exception as e:
+            self.context.logger.error(f"Error getting all entry costs: {e}")
+            return {}
+
+    def _rename_entry_costs_key(
+        self, current_position: Optional[dict]
+    ) -> Generator[None, None, None]:
+        """Rename an entry costs key in the KV store"""
+        try:
+            chain = current_position.get("chain")
+            pool_address = current_position.get("pool_address")
+            entry_timestamp = current_position.get("enter_timestamp")
+            old_key = self._get_entry_costs_key(chain, pool_address)
+            new_key = self._get_updated_entry_costs_key(
+                chain, pool_address, entry_timestamp
+            )
+
+            # Get all entry costs from KV store
+            entry_costs_dict = yield from self._get_all_entry_costs()
+
+            # Check if old key exists
+            if old_key not in entry_costs_dict:
+                self.context.logger.warning(
+                    f"Old key {old_key} not found in entry costs"
+                )
+
+            # Check if new key already exists (avoid overwriting)
+            if new_key in entry_costs_dict:
+                self.context.logger.warning(
+                    f"New key {new_key} already exists in entry costs"
+                )
+
+            # Get the value from old key
+            cost_value = entry_costs_dict[old_key]
+
+            # Add value to new key and remove old key
+            entry_costs_dict[new_key] = cost_value
+            del entry_costs_dict[old_key]
+
+            # Store updated dictionary back to KV store
+            yield from self._write_kv(
+                {"entry_costs_dict": json.dumps(entry_costs_dict)}
+            )
+
+            self.context.logger.info(
+                f"Successfully renamed entry costs key: {old_key} -> {new_key} (value: ${cost_value:.6f})"
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error renaming entry costs key: {e}")

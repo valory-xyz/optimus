@@ -1354,7 +1354,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             # Calculate amounts for this position
-            amount0, amount1 = self._calculate_position_amounts(
+            amount0, amount1 = yield from self._calculate_position_amounts(
                 position_details, current_tick, sqrt_price_x96, pos, dex_type, chain
             )
 

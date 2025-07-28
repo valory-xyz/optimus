@@ -2078,40 +2078,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Marked {dex_type} position as closed due to zero liquidity: {position}"
                     )
 
-        # Second pass: Mark CLOSED positions as OPEN if liquidity > 0
-        for position in self.current_positions:
-            if position.get("status") != PositionStatus.CLOSED.value:
-                continue
-
-            dex_type = position.get("dex_type")
-
-            if dex_type == DexType.VELODROME.value and position.get("is_cl_pool"):
-                # For Velodrome CL pools, check if any sub-position has liquidity > 0
-                any_position_has_liquidity = False
-                for pos in position.get("positions", []):
-                    current_liquidity = pos.get("current_liquidity", 0)
-                    lp_token_balance = pos.get("lp_token_balance", 0)
-
-                    if current_liquidity > 0 or lp_token_balance > 0:
-                        any_position_has_liquidity = True
-                        break
-
-                if any_position_has_liquidity:
-                    position["status"] = PositionStatus.OPEN.value
-                    self.context.logger.info(
-                        f"Reopened Velodrome CL position due to liquidity detected in sub-positions: {position}"
-                    )
-            else:
-                # For all other position types
-                current_liquidity = position.get("current_liquidity", 0)
-                lp_token_balance = position.get("lp_token_balance", 0)
-
-                if current_liquidity > 0 or lp_token_balance > 0:
-                    position["status"] = PositionStatus.OPEN.value
-                    self.context.logger.info(
-                        f"Reopened {dex_type} position due to detected liquidity (current_liquidity: {current_liquidity}, lp_token_balance: {lp_token_balance}): {position}"
-                    )
-
         # Store the updated positions
         self.store_current_positions()
 

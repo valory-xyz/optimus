@@ -2138,7 +2138,6 @@ class LiquidityTraderBaseBehaviour(
                     f"Initialized assets dictionary for chain {chain}"
                 )
 
-
             # Check if OLAS is already in assets for this chain
             if olas_address not in self.assets[chain]:
                 self.assets[chain][olas_address] = "OLAS"

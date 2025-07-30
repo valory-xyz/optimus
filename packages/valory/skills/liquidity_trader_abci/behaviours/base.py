@@ -2132,10 +2132,12 @@ class LiquidityTraderBaseBehaviour(
 
             # Ensure the chain exists in self.assets before accessing it
             if chain not in self.assets:
-                self.assets[chain] = {}
+                # Initialize with initial assets for this chain if available
+                initial_assets_for_chain = self.params.initial_assets.get(chain, {})
+                self.assets[chain] = initial_assets_for_chain.copy()
                 assets_updated = True
                 self.context.logger.info(
-                    f"Initialized assets dictionary for chain {chain}"
+                    f"Initialized assets dictionary for chain {chain} with initial assets: {initial_assets_for_chain}"
                 )
 
             # Check if OLAS is already in assets for this chain

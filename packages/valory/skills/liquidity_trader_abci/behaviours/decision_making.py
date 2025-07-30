@@ -3463,7 +3463,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # TiP formula: entry_cost / ((effective_apr/365) * principal)
             min_days = entry_cost / ((effective_apr / 365) * principal)
 
-            result = max(1.0, min_days)  # At least 1 day
+            result = max(14.0, min_days)  # At least 14 days
 
             # Enhanced logging
             self.context.logger.info(f"TiP Calculation ({pool_type_str}):")

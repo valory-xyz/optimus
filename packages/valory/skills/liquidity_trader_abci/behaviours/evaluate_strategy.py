@@ -638,10 +638,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Minimum time met: {days_elapsed:.1f} >= {min_hold_days:.1f} days",
                 )
 
-            # Check 2: Cost recovery through yield (exact threshold)
-            if position.get("cost_recovered", False):
-                return True, "Costs recovered through yield"
-
             # Calculate remaining time
             days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
             min_hold_days = position.get("min_hold_days", 0)

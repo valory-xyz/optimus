@@ -263,7 +263,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         deadline = int(last_update_time) + (20 * 60)
 
         # Call addLiquidity on the router contract
-        tx_hash = yield from self.contract_interact(
+        add_liquidity_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=router_address,
             contract_public_id=VelodromeRouterContract.contract_id,
@@ -281,7 +281,95 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
 
-        return tx_hash, router_address
+        if not add_liquidity_tx_hash:
+            self.context.logger.error("Failed to create add_liquidity transaction")
+            return None, None
+
+        # Create multisend array for batching liquidity provision + staking
+        multi_send_txs = []
+
+        # Add the liquidity provision transaction
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": router_address,
+                "value": 0,
+                "data": add_liquidity_tx_hash,
+            }
+        )
+
+        # Try to add staking transaction (partial success approach)
+        try:
+            # Calculate expected LP amount for staking
+            expected_lp_amount = yield from self._calculate_expected_lp_amount(
+                pool_address=pool_address,
+                amount0=adjusted_amounts[0],
+                amount1=adjusted_amounts[1],
+                chain=chain,
+            )
+
+            if expected_lp_amount:
+                # Create pool data for staking
+                pool_data_for_staking = {
+                    "pool_address": pool_address,
+                    "is_cl_pool": False,
+                }
+
+                # Create staking transaction
+                stake_tx_hash = yield from self.stake_position_universal(
+                    pool_data=pool_data_for_staking,
+                    stake_param=expected_lp_amount,
+                    chain=chain,
+                )
+
+                if stake_tx_hash:
+                    # Get gauge address for the transaction
+                    gauge_address = yield from self._get_gauge_address_from_pool(
+                        pool_address, chain, False
+                    )
+                    
+                    if gauge_address:
+                        multi_send_txs.append(
+                            {
+                                "operation": MultiSendOperation.CALL,
+                                "to": gauge_address,
+                                "value": 0,
+                                "data": stake_tx_hash,
+                            }
+                        )
+                        self.context.logger.info("Added staking transaction to multisend")
+                    else:
+                        self.context.logger.warning("Could not get gauge address, skipping staking")
+                else:
+                    self.context.logger.warning("Failed to create staking transaction, proceeding with liquidity provision only")
+            else:
+                self.context.logger.warning("Could not calculate expected LP amount, skipping staking")
+
+        except Exception as e:
+            self.context.logger.warning(f"Error adding staking to flow: {str(e)}, proceeding with liquidity provision only")
+
+        # Prepare multisend transaction
+        multisend_address = self.params.multisend_contract_addresses.get(chain, "")
+        if not multisend_address:
+            self.context.logger.error(f"Could not find multisend address for chain {chain}")
+            return None, None
+
+        multisend_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
+            chain_id=chain,
+        )
+
+        if not multisend_tx_hash:
+            self.context.logger.error("Failed to create multisend transaction")
+            return None, None
+
+        self.context.logger.info(f"V2 pool multisend_tx_hash = {multisend_tx_hash}")
+        return bytes.fromhex(multisend_tx_hash[2:]), multisend_address
 
     def _exit_stable_volatile_pool(
         self,
@@ -2475,3 +2563,57 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             
             xvelo_addresses = self.params.xvelo_token_contract_addresses
             return xvelo_addresses.get(chain)
+
+    def _calculate_expected_lp_amount(
+        self,
+        pool_address: str,
+        amount0: int,
+        amount1: int,
+        chain: str,
+    ) -> Generator[None, None, Optional[int]]:
+        """Calculate expected LP tokens from liquidity provision for V2 pools"""
+        try:
+            # Get pool reserves and total supply
+            reserves_data = yield from self._get_pool_reserves(pool_address, chain)
+            if not reserves_data:
+                self.context.logger.error(f"Could not get reserves for pool {pool_address}")
+                return None
+
+            reserve0, reserve1 = reserves_data
+
+            # Get total supply of LP tokens
+            total_supply = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=VelodromePoolContract.contract_id,
+                contract_callable="get_total_supply",
+                data_key="data",
+                chain_id=chain,
+            )
+
+            if not total_supply:
+                self.context.logger.error(f"Could not get total supply for pool {pool_address}")
+                return None
+
+            # Calculate LP amount using the minimum ratio to avoid over-estimation
+            # LP_amount = min(amount0 * total_supply / reserve0, amount1 * total_supply / reserve1)
+            if reserve0 > 0 and reserve1 > 0:
+                lp_from_token0 = (amount0 * total_supply) // reserve0
+                lp_from_token1 = (amount1 * total_supply) // reserve1
+                expected_lp_amount = min(lp_from_token0, lp_from_token1)
+                
+                self.context.logger.info(
+                    f"Expected LP calculation: amount0={amount0}, amount1={amount1}, "
+                    f"reserve0={reserve0}, reserve1={reserve1}, total_supply={total_supply}, "
+                    f"lp_from_token0={lp_from_token0}, lp_from_token1={lp_from_token1}, "
+                    f"expected_lp_amount={expected_lp_amount}"
+                )
+                
+                return expected_lp_amount
+            else:
+                self.context.logger.error("Pool reserves contain zero values")
+                return None
+
+        except Exception as e:
+            self.context.logger.error(f"Error calculating expected LP amount: {str(e)}")
+            return None

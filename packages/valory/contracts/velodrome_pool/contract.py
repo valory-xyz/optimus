@@ -81,3 +81,14 @@ class VelodromePoolContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         gauge_address = contract_instance.functions.gauge().call()
         return dict(data=gauge_address)
+
+    @classmethod
+    def get_total_supply(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the total supply of LP tokens."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        total_supply = contract_instance.functions.totalSupply().call()
+        return dict(data=total_supply)

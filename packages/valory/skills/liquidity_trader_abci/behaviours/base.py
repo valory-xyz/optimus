@@ -73,6 +73,8 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
     StakingState,
     SynchronizedData,
 )
+from packages.valory.contracts.velodrome_sugar.contract import VelodromeSugarContract
+
 
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"

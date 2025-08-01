@@ -1119,50 +1119,126 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         portfolio_breakdown: List,
     ) -> Generator[Decimal, None, None]:
         """Calculate total value of a position and update portfolio breakdown."""
-        user_share = Decimal(0)
+        # Handle new Velodrome return format with rewards
+        if isinstance(user_balances, dict) and "base_position" in user_balances:
+            # New format with VELO rewards
+            base_balances = user_balances["base_position"]
+            rewards_value_usd = user_balances.get("rewards_value_usd", Decimal(0))
+            total_value_usd = user_balances.get("total_value_usd", Decimal(0))
+            
+            # If total_value_usd is provided, use it directly
+            if total_value_usd > 0:
+                user_share = total_value_usd
+            else:
+                # Calculate base position value and add rewards
+                user_share = Decimal(0)
+                for token_address, token_symbol in token_info.items():
+                    asset_balance = base_balances.get(token_address)
+                    if asset_balance is None:
+                        continue
 
-        for token_address, token_symbol in token_info.items():
-            asset_balance = user_balances.get(token_address)
-            if asset_balance is None:
-                self.context.logger.error(f"Could not find balance for {token_symbol}")
-                continue
+                    asset_price = yield from self._fetch_token_price(token_address, chain)
+                    if asset_price is None:
+                        continue
 
-            asset_price = yield from self._fetch_token_price(token_address, chain)
-            if asset_price is None:
-                self.context.logger.error(f"Could not fetch price for {token_symbol}")
-                continue
+                    asset_price = Decimal(str(asset_price))
+                    asset_value_usd = asset_balance * asset_price
+                    user_share += asset_value_usd
 
-            asset_price = Decimal(str(asset_price))
-            asset_value_usd = asset_balance * asset_price
-            user_share += asset_value_usd
+                user_share += rewards_value_usd
 
-            # Update portfolio breakdown
-            existing_asset = next(
-                (
-                    entry
-                    for entry in portfolio_breakdown
-                    if entry["address"] == token_address
-                ),
-                None,
+            # Update portfolio breakdown with base position tokens
+            for token_address, token_symbol in token_info.items():
+                asset_balance = base_balances.get(token_address)
+                if asset_balance is None:
+                    continue
+
+                asset_price = yield from self._fetch_token_price(token_address, chain)
+                if asset_price is None:
+                    continue
+
+                asset_price = Decimal(str(asset_price))
+                asset_value_usd = asset_balance * asset_price
+
+                # Update portfolio breakdown
+                existing_asset = next(
+                    (
+                        entry
+                        for entry in portfolio_breakdown
+                        if entry["address"] == token_address
+                    ),
+                    None,
+                )
+
+                if existing_asset:
+                    existing_asset.update(
+                        {
+                            "balance": float(asset_balance),
+                            "value_usd": float(asset_value_usd),
+                        }
+                    )
+                else:
+                    portfolio_breakdown.append(
+                        {
+                            "asset": token_symbol,
+                            "address": token_address,
+                            "balance": float(asset_balance),
+                            "price": float(asset_price),
+                            "value_usd": float(asset_value_usd),
+                        }
+                    )
+
+            self.context.logger.info(
+                f"Velodrome position value breakdown: Base=${user_share - rewards_value_usd}, "
+                f"Rewards=${rewards_value_usd}, Total=${user_share}"
             )
 
-            if existing_asset:
-                existing_asset.update(
-                    {
-                        "balance": float(asset_balance),
-                        "value_usd": float(asset_value_usd),
-                    }
+        else:
+            # Legacy format - existing logic for other DEXes
+            user_share = Decimal(0)
+
+            for token_address, token_symbol in token_info.items():
+                asset_balance = user_balances.get(token_address)
+                if asset_balance is None:
+                    self.context.logger.error(f"Could not find balance for {token_symbol}")
+                    continue
+
+                asset_price = yield from self._fetch_token_price(token_address, chain)
+                if asset_price is None:
+                    self.context.logger.error(f"Could not fetch price for {token_symbol}")
+                    continue
+
+                asset_price = Decimal(str(asset_price))
+                asset_value_usd = asset_balance * asset_price
+                user_share += asset_value_usd
+
+                # Update portfolio breakdown
+                existing_asset = next(
+                    (
+                        entry
+                        for entry in portfolio_breakdown
+                        if entry["address"] == token_address
+                    ),
+                    None,
                 )
-            else:
-                portfolio_breakdown.append(
-                    {
-                        "asset": token_symbol,
-                        "address": token_address,
-                        "balance": float(asset_balance),
-                        "price": float(asset_price),
-                        "value_usd": float(asset_value_usd),
-                    }
-                )
+
+                if existing_asset:
+                    existing_asset.update(
+                        {
+                            "balance": float(asset_balance),
+                            "value_usd": float(asset_value_usd),
+                        }
+                    )
+                else:
+                    portfolio_breakdown.append(
+                        {
+                            "asset": token_symbol,
+                            "address": token_address,
+                            "balance": float(asset_balance),
+                            "price": float(asset_price),
+                            "value_usd": float(asset_value_usd),
+                        }
+                    )
 
         # Update position with current value and TiP yield calculation
         self._update_position_with_current_value(position, user_share, chain)
@@ -1482,22 +1558,58 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"No position manager address found for chain {chain}"
             )
-            return {}
+            return {
+                "base_position": {},
+                "rewards_value_usd": Decimal("0"),
+                "rewards_amount_velo": Decimal("0"),
+                "total_value_usd": Decimal("0")
+            }
 
-        return (
-            yield from self._calculate_cl_position_value(
-                pool_address=pool_address,
-                chain=chain,
-                position=position,
-                token0_address=token0_address,
-                token1_address=token1_address,
-                position_manager_address=position_manager_address,
-                contract_id=VelodromeNonFungiblePositionManagerContract.contract_id,
-                get_position_callable="get_position",
-                position_data_key="data",
-                slot0_contract_id=VelodromeCLPoolContract.contract_id,
-            )
+        # Calculate base position value (existing logic)
+        base_position = yield from self._calculate_cl_position_value(
+            pool_address=pool_address,
+            chain=chain,
+            position=position,
+            token0_address=token0_address,
+            token1_address=token1_address,
+            position_manager_address=position_manager_address,
+            contract_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+            get_position_callable="get_position",
+            position_data_key="data",
+            slot0_contract_id=VelodromeCLPoolContract.contract_id,
         )
+
+        if not base_position:
+            base_position = {}
+
+        # Calculate VELO rewards value
+        rewards_value_usd, rewards_amount_velo = yield from self._calculate_velo_rewards_value(
+            position, chain
+        )
+
+        # Calculate total USD value of base position
+        base_value_usd = Decimal("0")
+        for token_address, balance in base_position.items():
+            try:
+                token_price = yield from self._fetch_token_price(token_address, chain)
+                if token_price:
+                    base_value_usd += balance * Decimal(str(token_price))
+            except Exception as e:
+                self.context.logger.warning(f"Error calculating base value for {token_address}: {str(e)}")
+
+        total_value_usd = base_value_usd + rewards_value_usd
+
+        self.context.logger.info(
+            f"Velodrome CL position value breakdown: "
+            f"Base=${base_value_usd}, Rewards=${rewards_value_usd}, Total=${total_value_usd}"
+        )
+
+        return {
+            "base_position": base_position,
+            "rewards_value_usd": rewards_value_usd,
+            "rewards_amount_velo": rewards_amount_velo,
+            "total_value_usd": total_value_usd
+        }
 
     def _get_user_share_value_velodrome_non_cl(
         self,
@@ -1522,7 +1634,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Failed to get user balance for pool: {pool_address}"
             )
-            return {}
+            return {
+                "base_position": {},
+                "rewards_value_usd": Decimal("0"),
+                "rewards_amount_velo": Decimal("0"),
+                "total_value_usd": Decimal("0")
+            }
 
         total_supply = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1536,7 +1653,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Failed to get total supply for pool: {pool_address}"
             )
-            return {}
+            return {
+                "base_position": {},
+                "rewards_value_usd": Decimal("0"),
+                "rewards_amount_velo": Decimal("0"),
+                "total_value_usd": Decimal("0")
+            }
 
         reserves = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1550,7 +1672,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Failed to get reserves for pool: {pool_address}"
             )
-            return {}
+            return {
+                "base_position": {},
+                "rewards_value_usd": Decimal("0"),
+                "rewards_amount_velo": Decimal("0"),
+                "total_value_usd": Decimal("0")
+            }
 
         getcontext().prec = 50
         user_share = Decimal(str(user_balance)) / Decimal(str(total_supply))
@@ -1558,22 +1685,54 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             chain, token0_address, token1_address
         )
         if token0_decimals is None or token1_decimals is None:
-            return {}
+            return {
+                "base_position": {},
+                "rewards_value_usd": Decimal("0"),
+                "rewards_amount_velo": Decimal("0"),
+                "total_value_usd": Decimal("0")
+            }
 
         token0_balance = self._adjust_for_decimals(reserves[0], token0_decimals)
         token1_balance = self._adjust_for_decimals(reserves[1], token1_decimals)
         user_token0_balance = user_share * token0_balance
         user_token1_balance = user_share * token1_balance
 
-        self.context.logger.info(
-            f"Velodrome Non-CL Pool Balances - "
-            f"User share: {user_share}, "
-            f"Token0: {user_token0_balance} {position.get('token0_symbol')}, "
-            f"Token1: {user_token1_balance} {position.get('token1_symbol')}"
-        )
-        return {
+        # Create base position
+        base_position = {
             token0_address: user_token0_balance,
             token1_address: user_token1_balance,
+        }
+
+        # Calculate VELO rewards value
+        rewards_value_usd, rewards_amount_velo = yield from self._calculate_velo_rewards_value(
+            position, chain
+        )
+
+        # Calculate total USD value of base position
+        base_value_usd = Decimal("0")
+        for token_address, balance in base_position.items():
+            try:
+                token_price = yield from self._fetch_token_price(token_address, chain)
+                if token_price:
+                    base_value_usd += balance * Decimal(str(token_price))
+            except Exception as e:
+                self.context.logger.warning(f"Error calculating base value for {token_address}: {str(e)}")
+
+        total_value_usd = base_value_usd + rewards_value_usd
+
+        self.context.logger.info(
+            f"Velodrome V2 Pool Balances - "
+            f"User share: {user_share}, "
+            f"Token0: {user_token0_balance} {position.get('token0_symbol')}, "
+            f"Token1: {user_token1_balance} {position.get('token1_symbol')}, "
+            f"Base=${base_value_usd}, Rewards=${rewards_value_usd}, Total=${total_value_usd}"
+        )
+
+        return {
+            "base_position": base_position,
+            "rewards_value_usd": rewards_value_usd,
+            "rewards_amount_velo": rewards_amount_velo,
+            "total_value_usd": total_value_usd
         }
 
     def get_user_share_value_uniswap(
@@ -4019,3 +4178,95 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception:
             self.context.logger.info("Not a GnosisSafe")
             return False
+
+    def _calculate_velo_rewards_value(
+        self,
+        position_data: Dict,
+        chain: str,
+    ) -> Generator[None, None, Tuple[Decimal, Decimal]]:
+        """Calculate USD value of accumulated VELO rewards
+        
+        Returns:
+            Tuple[Decimal, Decimal]: (rewards_value_usd, rewards_amount_velo)
+        """
+        try:
+            # Extract emissions_earned from LP Sugar position data
+            emissions_earned_wei = position_data.get("emissions_earned", 0)
+            
+            if not emissions_earned_wei or emissions_earned_wei == 0:
+                self.context.logger.info("No VELO rewards found in position data")
+                return Decimal("0"), Decimal("0")
+            
+            # Convert from wei to VELO tokens (divide by 10^18)
+            velo_amount = Decimal(str(emissions_earned_wei)) / Decimal("1000000000000000000")
+            
+            if velo_amount <= 0:
+                return Decimal("0"), Decimal("0")
+            
+            self.context.logger.info(f"Found VELO rewards: {velo_amount} tokens from {emissions_earned_wei} wei")
+            
+            # Get VELO token price based on chain
+            velo_price = yield from self._get_velo_token_price(chain)
+            if not velo_price or velo_price <= 0:
+                self.context.logger.warning(f"Could not get VELO token price for chain {chain}")
+                return Decimal("0"), velo_amount
+            
+            # Calculate USD value
+            rewards_value_usd = velo_amount * Decimal(str(velo_price))
+            
+            self.context.logger.info(
+                f"VELO rewards calculation: {velo_amount} VELO @ ${velo_price} = ${rewards_value_usd}"
+            )
+            
+            return rewards_value_usd, velo_amount
+            
+        except Exception as e:
+            self.context.logger.error(f"Error calculating VELO rewards value: {str(e)}")
+            return Decimal("0"), Decimal("0")
+
+    def _get_velo_token_price(self, chain: str) -> Generator[None, None, Optional[float]]:
+        """Get VELO or XVELO token price based on chain"""
+        try:
+            if chain.lower() == "optimism":
+                # Fetch VELO price for Optimism
+                velo_address = self.params.velo_token_contract_addresses.get(chain)
+                if not velo_address:
+                    self.context.logger.error(f"No VELO token address found for chain {chain}")
+                    return None
+                
+                price = yield from self._fetch_token_price(velo_address, chain)
+                self.context.logger.info(f"VELO price on {chain}: ${price}")
+                return price
+                
+            elif chain.lower() == "mode":
+                # Fetch XVELO price for Mode
+                xvelo_address = self.params.xvelo_token_contract_addresses.get(chain)
+                if not xvelo_address:
+                    self.context.logger.error(f"No XVELO token address found for chain {chain}")
+                    return None
+                
+                price = yield from self._fetch_token_price(xvelo_address, chain)
+                self.context.logger.info(f"XVELO price on {chain}: ${price}")
+                return price
+                
+            else:
+                # For other chains, try VELO first, then XVELO
+                velo_address = self.params.velo_token_contract_addresses.get(chain)
+                if velo_address:
+                    price = yield from self._fetch_token_price(velo_address, chain)
+                    if price:
+                        self.context.logger.info(f"VELO price on {chain}: ${price}")
+                        return price
+                
+                xvelo_address = self.params.xvelo_token_contract_addresses.get(chain)
+                if xvelo_address:
+                    price = yield from self._fetch_token_price(xvelo_address, chain)
+                    self.context.logger.info(f"XVELO price on {chain}: ${price}")
+                    return price
+                
+                self.context.logger.error(f"No VELO/XVELO token address found for chain {chain}")
+                return None
+                
+        except Exception as e:
+            self.context.logger.error(f"Error getting VELO token price: {str(e)}")
+            return None

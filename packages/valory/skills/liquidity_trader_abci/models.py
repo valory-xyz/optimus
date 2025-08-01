@@ -350,6 +350,21 @@ class Params(BaseParams):
                 str,
             )
         )
+        self.velo_token_contract_addresses = json.loads(
+            self._ensure("velo_token_contract_addresses", kwargs, str)
+        )
+        self.xvelo_token_contract_addresses = json.loads(
+            self._ensure("xvelo_token_contract_addresses", kwargs, str)
+        )
+        self.voter_contract_addresses = json.loads(
+            self._ensure("voter_contract_addresses", kwargs, str)
+        )
+        self.gauge_factory_v1_contract_addresses = json.loads(
+            self._ensure("gauge_factory_v1_contract_addresses", kwargs, str)
+        )
+        self.gauge_factory_v2_contract_addresses = json.loads(
+            self._ensure("gauge_factory_v2_contract_addresses", kwargs, str)
+        )
         self.service_registry_contract_addresses = json.loads(
             self._ensure("service_registry_contract_addresses", kwargs, str)
         )

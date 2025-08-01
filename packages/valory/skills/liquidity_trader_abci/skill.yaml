@@ -274,6 +274,11 @@ models:
       genai_api_key: null
       velodrome_router_contract_addresses: '{"optimism":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","mode":"0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45"}'
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
+      velo_token_contract_addresses: '{"optimism":"0x3c8B650257cFb5f272f799F5e2b4e65093a11a05"}'
+      xvelo_token_contract_addresses: '{"mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81"}'
+      voter_contract_addresses: '{"optimism":"0x09236cfF45047DBee6B921e00704bed6D6B8Cf7e"}'
+      gauge_factory_v1_contract_addresses: '{"optimism":"0xC5be2c918EB04B091962fDF095A217A55CFA42C5"}'
+      gauge_factory_v2_contract_addresses: '{"optimism":"0x8391fE399640E7228A059f8Fa104b8a7B4835071"}'
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
     class_name: Params

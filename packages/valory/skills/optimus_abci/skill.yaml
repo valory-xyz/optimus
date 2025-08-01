@@ -227,6 +227,11 @@ models:
       multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
       velodrome_router_contract_addresses: '{"optimism":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","mode":"0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45"}'
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0x416b433906b1B72FA758e166e239c43d68dC6F29","base":"0x79e1bEf100000000000000000000000000000000","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
+      velo_token_contract_addresses: '{"optimism":"0x3c8B650257cFb5f272f799F5e2b4e65093a11a05"}'
+      xvelo_token_contract_addresses: '{"mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81"}'
+      voter_contract_addresses: '{"optimism":"0x09236cfF45047DBee6B921e00704bed6D6B8Cf7e"}'
+      gauge_factory_v1_contract_addresses: '{"optimism":"0xC5be2c918EB04B091962fDF095A217A55CFA42C5"}'
+      gauge_factory_v2_contract_addresses: '{"optimism":"0x8391fE399640E7228A059f8Fa104b8a7B4835071"}'
       tx_timeout: 10.0
       allowed_dexs:
       - balancerPool

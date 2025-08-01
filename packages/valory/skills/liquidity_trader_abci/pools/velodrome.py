@@ -417,10 +417,72 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         ).round_sequence.last_round_transition_timestamp.timestamp()
         deadline = int(last_update_time) + (20 * 60)
 
-        # Use multisend to batch approve and remove liquidity transactions
+        # Use multisend to batch unstaking, claiming, and liquidity removal
         multi_send_txs = []
 
-        # First, approve the liquidity tokens to the router
+        # Step 1: Check staking status and unstake if needed
+        try:
+            staked_amount = yield from self._get_staked_amount_v2(pool_address, chain)
+            if staked_amount and staked_amount > 0:
+                self.context.logger.info(f"Found staked amount: {staked_amount}, unstaking...")
+                
+                # Create unstaking transaction
+                unstake_tx_hash = yield from self.unstake_position_universal(
+                    pool_data={"pool_address": pool_address, "is_cl_pool": False},
+                    unstake_param=staked_amount,
+                    chain=chain,
+                )
+
+                if unstake_tx_hash:
+                    gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, False)
+                    if gauge_address:
+                        multi_send_txs.append(
+                            {
+                                "operation": MultiSendOperation.CALL,
+                                "to": gauge_address,
+                                "value": 0,
+                                "data": unstake_tx_hash,
+                            }
+                        )
+                        self.context.logger.info("Added unstaking transaction to multisend")
+                    else:
+                        self.context.logger.warning("Could not get gauge address for unstaking")
+                else:
+                    self.context.logger.warning("Failed to create unstaking transaction")
+            else:
+                self.context.logger.info("No staked amount found, skipping unstaking")
+
+        except Exception as e:
+            self.context.logger.warning(f"Error checking/handling staking: {str(e)}, proceeding with exit")
+
+        # Step 2: Batch claim rewards from gauge
+        try:
+            gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, False)
+            if gauge_address:
+                claim_tx_hash = yield from self.claim_rewards_batch([gauge_address], chain)
+                if claim_tx_hash:
+                    voter_address = self.params.voter_contract_addresses.get(chain)
+                    if voter_address:
+                        multi_send_txs.append(
+                            {
+                                "operation": MultiSendOperation.CALL,
+                                "to": voter_address,
+                                "value": 0,
+                                "data": claim_tx_hash,
+                            }
+                        )
+                        self.context.logger.info("Added reward claiming transaction to multisend")
+                    else:
+                        self.context.logger.warning("Could not get voter address for claiming")
+                else:
+                    self.context.logger.warning("Failed to create reward claiming transaction")
+            else:
+                self.context.logger.warning("Could not get gauge address for reward claiming")
+
+        except Exception as e:
+            self.context.logger.warning(f"Error claiming rewards: {str(e)}, proceeding with exit")
+
+        # Step 3: Approve the liquidity tokens to the router
         approve_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=pool_address,
@@ -445,7 +507,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             }
         )
 
-        # Then, call removeLiquidity on the router contract
+        # Step 4: Call removeLiquidity on the router contract
         remove_liquidity_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=router_address,
@@ -497,7 +559,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         if not multisend_tx_hash:
             return None, None, None
 
-        self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
+        self.context.logger.info(f"V2 pool exit multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
     def _enter_cl_pool(
@@ -740,6 +802,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
         multi_send_txs = []
+        gauge_addresses = []
 
         # TO-DO: Calculate min amounts accounting for slippage
         amount0_min = 0
@@ -754,7 +817,83 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # Use a high max value similar to Uniswap's approach for collecting tokens
         amount_max = Web3.to_wei(2**100 - 1, "wei")
 
-        # Process each position
+        # Step 1: Process each position for unstaking and collect gauge addresses
+        for index, position_token_id in enumerate(token_ids):
+            try:
+                # Get pool address from token ID
+                pool_address = yield from self._get_pool_address_from_token_id(position_token_id, chain)
+                if not pool_address:
+                    self.context.logger.warning(f"Could not get pool address for token ID {position_token_id}")
+                    continue
+
+                # Check if position is staked and unstake if needed
+                is_staked = yield from self._is_cl_position_staked(position_token_id, pool_address, chain)
+                if is_staked:
+                    self.context.logger.info(f"Token ID {position_token_id} is staked, unstaking...")
+                    
+                    # Create unstaking transaction
+                    unstake_tx_hash = yield from self.unstake_position_universal(
+                        pool_data={"pool_address": pool_address, "is_cl_pool": True},
+                        unstake_param=position_token_id,
+                        chain=chain,
+                    )
+
+                    if unstake_tx_hash:
+                        gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, True)
+                        if gauge_address:
+                            multi_send_txs.append(
+                                {
+                                    "operation": MultiSendOperation.CALL,
+                                    "to": gauge_address,
+                                    "value": 0,
+                                    "data": unstake_tx_hash,
+                                }
+                            )
+                            # Collect gauge address for batch claiming (avoid duplicates)
+                            if gauge_address not in gauge_addresses:
+                                gauge_addresses.append(gauge_address)
+                            self.context.logger.info(f"Added unstaking transaction for token ID {position_token_id}")
+                        else:
+                            self.context.logger.warning(f"Could not get gauge address for token ID {position_token_id}")
+                    else:
+                        self.context.logger.warning(f"Failed to create unstaking transaction for token ID {position_token_id}")
+                else:
+                    self.context.logger.info(f"Token ID {position_token_id} is not staked, skipping unstaking")
+                    
+                    # Still collect gauge address for potential reward claiming
+                    gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, True)
+                    if gauge_address and gauge_address not in gauge_addresses:
+                        gauge_addresses.append(gauge_address)
+
+            except Exception as e:
+                self.context.logger.warning(f"Error processing token ID {position_token_id}: {str(e)}")
+                continue
+
+        # Step 2: Batch claim rewards from all gauges
+        if gauge_addresses:
+            try:
+                self.context.logger.info(f"Batch claiming rewards from {len(gauge_addresses)} gauges")
+                claim_tx_hash = yield from self.claim_rewards_batch(gauge_addresses, chain)
+                if claim_tx_hash:
+                    voter_address = self.params.voter_contract_addresses.get(chain)
+                    if voter_address:
+                        multi_send_txs.append(
+                            {
+                                "operation": MultiSendOperation.CALL,
+                                "to": voter_address,
+                                "value": 0,
+                                "data": claim_tx_hash,
+                            }
+                        )
+                        self.context.logger.info("Added batch reward claiming transaction to multisend")
+                    else:
+                        self.context.logger.warning("Could not get voter address for claiming")
+                else:
+                    self.context.logger.warning("Failed to create batch reward claiming transaction")
+            except Exception as e:
+                self.context.logger.warning(f"Error claiming rewards: {str(e)}, proceeding with exit")
+
+        # Step 3: Process each position for liquidity removal (existing logic)
         for index, position_token_id in enumerate(token_ids):
             # Get liquidity for this position from the corresponding index
             position_liquidity = liquidities[index]
@@ -835,7 +974,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         if not multisend_tx_hash:
             return None
 
-        self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
+        self.context.logger.info(f"CL pool exit multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
     def get_liquidity_for_token_velodrome(
@@ -2617,3 +2756,125 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         except Exception as e:
             self.context.logger.error(f"Error calculating expected LP amount: {str(e)}")
             return None
+
+    def _get_staked_amount_v2(
+        self,
+        pool_address: str,
+        chain: str,
+    ) -> Generator[None, None, Optional[int]]:
+        """Get the amount of LP tokens staked in gauge for V2 pools"""
+        try:
+            # Get gauge address from pool
+            gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, False)
+            if not gauge_address:
+                self.context.logger.info(f"No gauge found for pool {pool_address}")
+                return 0
+
+            # Get safe address
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address found for chain {chain}")
+                return 0
+
+            # Check staked balance in gauge
+            staked_balance = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeGaugeV2Contract.contract_id,
+                contract_callable="get_balance",
+                data_key="data",
+                account=safe_address,
+                chain_id=chain,
+            )
+
+            if staked_balance is None:
+                self.context.logger.info(f"No staked balance found in gauge {gauge_address}")
+                return 0
+
+            self.context.logger.info(f"Found staked balance: {staked_balance} in gauge {gauge_address}")
+            return staked_balance
+
+        except Exception as e:
+            self.context.logger.warning(f"Error getting staked amount: {str(e)}")
+            return 0
+
+    def _get_pool_address_from_token_id(
+        self,
+        token_id: int,
+        chain: str,
+    ) -> Generator[None, None, Optional[str]]:
+        """Get pool address from CL position token ID"""
+        try:
+            position_manager_address = (
+                self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                    chain, ""
+                )
+            )
+            if not position_manager_address:
+                self.context.logger.error(f"No position manager address found for chain {chain}")
+                return None
+
+            # Get position data from position manager
+            position_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                contract_callable="get_position",
+                data_key="data",
+                token_id=token_id,
+                chain_id=chain,
+            )
+
+            if not position_data:
+                self.context.logger.error(f"Could not get position data for token ID {token_id}")
+                return None
+
+            # Extract pool address from position data (typically at index 0)
+            pool_address = position_data[0] if len(position_data) > 0 else None
+            
+            if pool_address:
+                self.context.logger.info(f"Found pool address {pool_address} for token ID {token_id}")
+            else:
+                self.context.logger.error(f"No pool address found in position data for token ID {token_id}")
+            
+            return pool_address
+
+        except Exception as e:
+            self.context.logger.error(f"Error getting pool address from token ID {token_id}: {str(e)}")
+            return None
+
+    def _is_cl_position_staked(
+        self,
+        token_id: int,
+        pool_address: str,
+        chain: str,
+    ) -> Generator[None, None, bool]:
+        """Check if a CL position (NFT) is currently staked in gauge"""
+        try:
+            # Get gauge address from pool
+            gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, True)
+            if not gauge_address:
+                self.context.logger.info(f"No gauge found for CL pool {pool_address}")
+                return False
+
+            # Check if token is deposited in gauge
+            # For CL gauges, we check if the gauge owns the NFT
+            owner = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeCLGaugeV2Contract.contract_id,
+                contract_callable="check_deposit",
+                data_key="data",
+                token_id=token_id,
+                chain_id=chain,
+            )
+
+            # If the gauge returns a valid response, the token is staked
+            is_staked = owner is not None and owner != ZERO_ADDRESS
+            
+            self.context.logger.info(f"Token ID {token_id} staking status: {is_staked}")
+            return is_staked
+
+        except Exception as e:
+            self.context.logger.warning(f"Error checking CL position staking status: {str(e)}")
+            return False

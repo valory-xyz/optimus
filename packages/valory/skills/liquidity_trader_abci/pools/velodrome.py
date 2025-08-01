@@ -42,6 +42,8 @@ from packages.valory.contracts.velodrome_non_fungible_position_manager.contract 
 )
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
 from packages.valory.contracts.velodrome_router.contract import VelodromeRouterContract
+from packages.valory.contracts.velodrome_gauge_v2.contract import VelodromeGaugeV2Contract
+from packages.valory.contracts.velodrome_cl_gauge_v2.contract import VelodromeCLGaugeV2Contract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
@@ -2192,3 +2194,165 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Error calculating stable pool amounts: {str(e)}"
             )
             return max_amounts_in
+
+    def stake_position_universal(
+        self,
+        pool_data: Dict,
+        stake_param: int,  # Either token_id (CL) or lp_amount (V2)
+        chain: str,
+    ) -> Generator[None, None, Optional[str]]:
+        """
+        Universal staking function for both pool types
+        
+        For CL pools: calls gauge.deposit(tokenId)
+        For V2 pools: calls gauge.deposit(amount, recipient)
+        """
+        # Get pool information to determine type and gauge address
+        pool_address = pool_data.get("pool_address")
+        is_cl_pool = pool_data.get("is_cl_pool", False)
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        
+        if not pool_address or not safe_address:
+            self.context.logger.error(
+                f"Missing required parameters: pool_address={pool_address}, safe_address={safe_address}"
+            )
+            return None
+
+        # Get gauge address from pool contract
+        gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, is_cl_pool)
+        if not gauge_address:
+            self.context.logger.error(f"Could not get gauge address for pool {pool_address}")
+            return None
+
+        # Determine contract ID based on pool type
+        contract_id = self._determine_gauge_contract_id(is_cl_pool)
+        
+        # Create staking transaction based on pool type
+        if is_cl_pool:
+            # For CL pools: call gauge.deposit(tokenId)
+            stake_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=contract_id,
+                contract_callable="deposit",
+                data_key="data",
+                token_id=stake_param,
+                chain_id=chain,
+            )
+        else:
+            # For V2 pools: call gauge.deposit(amount, recipient)
+            stake_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=contract_id,
+                contract_callable="deposit",
+                data_key="data",
+                amount=stake_param,
+                recipient=safe_address,
+                chain_id=chain,
+            )
+
+        if not stake_tx_hash:
+            self.context.logger.error(f"Failed to create staking transaction for {'CL' if is_cl_pool else 'V2'} pool")
+            return None
+
+        self.context.logger.info(f"Created staking transaction: {stake_tx_hash}")
+        return stake_tx_hash
+
+    def _get_gauge_address_from_pool(
+        self, pool_address: str, chain: str, is_cl_pool: bool
+    ) -> Generator[None, None, Optional[str]]:
+        """Get gauge address from pool contract."""
+        try:
+            # Use appropriate contract based on pool type
+            contract_id = VelodromeCLPoolContract.contract_id if is_cl_pool else VelodromePoolContract.contract_id
+            
+            gauge_address = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=contract_id,
+                contract_callable="gauge",
+                data_key="data",
+                chain_id=chain,
+            )
+
+            if not gauge_address:
+                self.context.logger.error(f"No gauge found for pool {pool_address}")
+                return None
+
+            self.context.logger.info(f"Found gauge address {gauge_address} for pool {pool_address}")
+            return gauge_address
+
+        except Exception as e:
+            self.context.logger.error(f"Error getting gauge address: {str(e)}")
+            return None
+
+    def _determine_gauge_contract_id(self, is_cl_pool: bool):
+        """Determine appropriate gauge contract ID based on pool type."""
+        if is_cl_pool:
+            return VelodromeCLGaugeV2Contract.contract_id
+        else:
+            return VelodromeGaugeV2Contract.contract_id
+
+    def unstake_position_universal(
+        self,
+        pool_data: Dict,
+        unstake_param: int,  # Either token_id (CL) or lp_amount (V2)
+        chain: str,
+    ) -> Generator[None, None, Optional[str]]:
+        """
+        Universal unstaking function for both pool types
+        
+        For CL pools: calls gauge.withdraw(tokenId)
+        For V2 pools: calls gauge.withdraw(amount)
+        """
+        # Get pool information to determine type and gauge address
+        pool_address = pool_data.get("pool_address")
+        is_cl_pool = pool_data.get("is_cl_pool", False)
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        
+        if not pool_address or not safe_address:
+            self.context.logger.error(
+                f"Missing required parameters: pool_address={pool_address}, safe_address={safe_address}"
+            )
+            return None
+
+        # Get gauge address from pool contract
+        gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, is_cl_pool)
+        if not gauge_address:
+            self.context.logger.error(f"Could not get gauge address for pool {pool_address}")
+            return None
+
+        # Determine contract ID based on pool type
+        contract_id = self._determine_gauge_contract_id(is_cl_pool)
+        
+        # Create unstaking transaction based on pool type
+        if is_cl_pool:
+            # For CL pools: call gauge.withdraw(tokenId)
+            unstake_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=contract_id,
+                contract_callable="withdraw",
+                data_key="data",
+                token_id=unstake_param,
+                chain_id=chain,
+            )
+        else:
+            # For V2 pools: call gauge.withdraw(amount)
+            unstake_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=contract_id,
+                contract_callable="withdraw",
+                data_key="data",
+                amount=unstake_param,
+                chain_id=chain,
+            )
+
+        if not unstake_tx_hash:
+            self.context.logger.error(f"Failed to create unstaking transaction for {'CL' if is_cl_pool else 'V2'} pool")
+            return None
+
+        self.context.logger.info(f"Created unstaking transaction: {unstake_tx_hash}")
+        return unstake_tx_hash

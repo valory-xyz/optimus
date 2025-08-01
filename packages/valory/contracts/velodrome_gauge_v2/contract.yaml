@@ -1,0 +1,12 @@
+name: velodrome_gauge_v2
+author: valory
+version: 0.1.0
+type: contract
+description: Velodrome Gauge V2 contract for traditional LP token staking
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi
+  contract.py: bafybeie2atixvtcwkw7f5xf4ht6cxzromw5enq7z6l2p5lxnfqr7qzbaei
+fingerprint_ignore_patterns: []
+dependencies: {}

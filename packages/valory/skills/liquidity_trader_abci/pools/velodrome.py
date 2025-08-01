@@ -44,6 +44,7 @@ from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContr
 from packages.valory.contracts.velodrome_router.contract import VelodromeRouterContract
 from packages.valory.contracts.velodrome_gauge_v2.contract import VelodromeGaugeV2Contract
 from packages.valory.contracts.velodrome_cl_gauge_v2.contract import VelodromeCLGaugeV2Contract
+from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
@@ -2356,3 +2357,121 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         self.context.logger.info(f"Created unstaking transaction: {unstake_tx_hash}")
         return unstake_tx_hash
+
+    def claim_rewards_individual(
+        self,
+        pool_data: Dict,
+        chain: str,
+    ) -> Generator[None, None, Optional[str]]:
+        """Claim rewards from individual gauge - both CL and V2 use same interface"""
+        # Get pool information to determine type and gauge address
+        pool_address = pool_data.get("pool_address")
+        is_cl_pool = pool_data.get("is_cl_pool", False)
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        
+        if not pool_address or not safe_address:
+            self.context.logger.error(
+                f"Missing required parameters: pool_address={pool_address}, safe_address={safe_address}"
+            )
+            return None
+
+        # Get gauge address from pool contract
+        gauge_address = yield from self._get_gauge_address_from_pool(pool_address, chain, is_cl_pool)
+        if not gauge_address:
+            self.context.logger.error(f"Could not get gauge address for pool {pool_address}")
+            return None
+
+        # Get appropriate reward token address based on chain
+        reward_token_address = self._get_reward_token_address(chain)
+        if not reward_token_address:
+            self.context.logger.error(f"Could not get reward token address for chain {chain}")
+            return None
+
+        # Determine contract ID based on pool type
+        contract_id = self._determine_gauge_contract_id(is_cl_pool)
+        
+        # Create reward claiming transaction
+        # Both CL and V2 gauges use the same getReward interface
+        claim_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=contract_id,
+            contract_callable="get_reward",
+            data_key="data",
+            account=safe_address,
+            token=reward_token_address,
+            chain_id=chain,
+        )
+
+        if not claim_tx_hash:
+            self.context.logger.error(f"Failed to create reward claiming transaction for {'CL' if is_cl_pool else 'V2'} pool")
+            return None
+
+        self.context.logger.info(f"Created individual reward claiming transaction: {claim_tx_hash}")
+        return claim_tx_hash
+
+    def claim_rewards_batch(
+        self,
+        gauge_addresses: List[str],
+        chain: str,
+    ) -> Generator[None, None, Optional[str]]:
+        """Batch claim from multiple gauges via Voter contract (more gas efficient)"""
+        if not gauge_addresses:
+            self.context.logger.error("No gauge addresses provided for batch claiming")
+            return None
+
+        # Get voter contract address for the chain
+        voter_address = self.params.voter_contract_addresses.get(chain)
+        if not voter_address:
+            self.context.logger.error(f"No voter contract address found for chain {chain}")
+            return None
+
+        # Get appropriate reward token address based on chain
+        reward_token_address = self._get_reward_token_address(chain)
+        if not reward_token_address:
+            self.context.logger.error(f"Could not get reward token address for chain {chain}")
+            return None
+
+        # Build tokens array: [[VELO_TOKEN], [VELO_TOKEN], ...] for each gauge
+        tokens_array = [[reward_token_address] for _ in gauge_addresses]
+
+        # Create batch reward claiming transaction
+        batch_claim_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=voter_address,
+            contract_public_id=VelodromeVoterContract.contract_id,
+            contract_callable="claim_rewards",
+            data_key="data",
+            gauges=gauge_addresses,
+            tokens=tokens_array,
+            chain_id=chain,
+        )
+
+        if not batch_claim_tx_hash:
+            self.context.logger.error("Failed to create batch reward claiming transaction")
+            return None
+
+        self.context.logger.info(f"Created batch reward claiming transaction for {len(gauge_addresses)} gauges: {batch_claim_tx_hash}")
+        return batch_claim_tx_hash
+
+    def _get_reward_token_address(self, chain: str) -> Optional[str]:
+        """Get the appropriate reward token address based on chain (VELO for Optimism, XVELO for Mode)"""
+        # For Optimism: use VELO token
+        if chain.lower() == "optimism":
+            velo_addresses = self.params.velo_token_contract_addresses
+            return velo_addresses.get(chain)
+        
+        # For Mode: use XVELO token
+        elif chain.lower() == "mode":
+            xvelo_addresses = self.params.xvelo_token_contract_addresses
+            return xvelo_addresses.get(chain)
+        
+        # For other chains, try VELO first, then XVELO
+        else:
+            velo_addresses = self.params.velo_token_contract_addresses
+            velo_address = velo_addresses.get(chain)
+            if velo_address:
+                return velo_address
+            
+            xvelo_addresses = self.params.xvelo_token_contract_addresses
+            return xvelo_addresses.get(chain)

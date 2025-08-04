@@ -159,7 +159,20 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Read investing_paused flag from KV store."""
         try:
             result = yield from self._read_kv(("investing_paused",))
-            return result.get("investing_paused", "false").lower() == "true"
+            if result is None:
+                self.context.logger.warning(
+                    "No response from KV store for investing_paused flag"
+                )
+                return False
+
+            investing_paused_value = result.get("investing_paused")
+            if investing_paused_value is None:
+                self.context.logger.warning(
+                    "investing_paused value is None in KV store"
+                )
+                return False
+
+            return investing_paused_value.lower() == "true"
         except Exception as e:
             self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
             return False
@@ -614,11 +627,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Legacy position must hold {remaining_days:.1f} more days",
                 )
 
-            # Check 1: Cost recovery through yield (exact threshold)
-            if position.get("cost_recovered", False):
-                return True, "Costs recovered through yield"
-
-            # Check 2: Minimum time requirement
+            # Check 1: Minimum time requirement
             if self._check_minimum_time_met(position):
                 days_elapsed = self._calculate_days_since_entry(
                     position["enter_timestamp"]
@@ -695,13 +704,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def update_position_metrics(self) -> None:
         """Update metrics for all open positions."""
-        if not self.current_positions:
+        if not self.positions_eligible_for_exit:
             return
 
         current_timestamp = self._get_current_timestamp()
         open_positions = [
             pos
-            for pos in self.current_positions
+            for pos in self.positions_eligible_for_exit
             if pos.get("status") == PositionStatus.OPEN.value
         ]
 
@@ -1565,6 +1574,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if not enter_pool_action:
                 self.context.logger.error("Error building enter pool action")
                 return None
+
+            # Initialize entry costs for new position when actions are formed
+            yield from self._initialize_entry_costs_for_new_position(enter_pool_action)
+
             actions.append(enter_pool_action)
 
         # Check for Velodrome positions with 100% allocation to one token
@@ -2247,3 +2260,40 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             current_timestamp
             >= last_claimed_timestamp + self.params.reward_claiming_time_period
         )
+
+    def _initialize_entry_costs_for_new_position(
+        self, enter_pool_action: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Initialize entry costs for a new position when actions are formed in EvaluateStrategy"""
+        try:
+            chain = enter_pool_action.get("chain")
+            pool_address = enter_pool_action.get("pool_address")
+
+            if chain and pool_address:
+                # Initialize entry costs in KV store
+                yield from self._initialize_position_entry_costs(chain, pool_address)
+
+                self.context.logger.info(
+                    f"Initialized entry costs for new position: {pool_address}"
+                )
+            else:
+                self.context.logger.warning(
+                    "Missing chain or pool_address for entry cost initialization"
+                )
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error initializing entry costs for new position: {e}"
+            )
+
+    def _initialize_position_entry_costs(
+        self, chain: str, position_id: str
+    ) -> Generator[None, None, None]:
+        """Initialize entry costs for a new position"""
+        try:
+            yield from self._store_entry_costs(chain, position_id, 0.0)
+            self.context.logger.info(
+                f"Initialized entry costs for position: {chain}_{position_id}"
+            )
+        except Exception as e:
+            self.context.logger.error(f"Error initializing position entry costs: {e}")

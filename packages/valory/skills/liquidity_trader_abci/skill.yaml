@@ -8,23 +8,23 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeih7hfdbsmpowvg5httqq444gamejxmkbkdwwjs2qjilkfws66376a
-  behaviours/apr_population.py: bafybeiaeb4fnszqcxudedsmz2yvawkn55zp6ffalwl6rbd5hw3cty33oiu
-  behaviours/base.py: bafybeiaz3nkmlb7o4zchgufkuakzjffyqxdkzcxvq5ttsuwm2uqcotd4ya
+  behaviours/apr_population.py: bafybeif55alo4imflrjzhrl76oqhrhlzoto6gz3e7gq2k5hvcfahcwjtka
+  behaviours/base.py: bafybeih7atlx5u6w24vztztlsrqhcrydh5l3nc4pouigjwb6jk2msx2nbe
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeidnn47p3vz5hcon3kj7hvi6yfzld4gk5f2renaeeuwgro56iom3z4
-  behaviours/evaluate_strategy.py: bafybeidmvbwqjya44q4mqmhqzjbbacwlfejsgm7ptano5i67ia2vbq2qru
-  behaviours/fetch_strategies.py: bafybeiesa63sys7hf4lur2s4v6c7ihnq5ob6vjdqg3nnvubjuc2r47q7cq
+  behaviours/decision_making.py: bafybeicnzb4ryyphlrdmc3tc2lyxncmreiwauntssioltdwfvjt6rp4iba
+  behaviours/evaluate_strategy.py: bafybeigplm5imr6uazpfw6xeolfrrenkybluhj77xvmekrroyysm3zz7ky
+  behaviours/fetch_strategies.py: bafybeihyslvsougpe3c6eapscciqo3ibwsif4jqyts6fiwnzb7qyufeqc4
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
-  behaviours/withdraw_funds.py: bafybeifnsjfsvavh3ohc4tvh3oilmiwvhx6mn223gdssvjmnymmr5jtw4u
+  behaviours/withdraw_funds.py: bafybeigucdm7ch5aqxfi7djeh46d37jc4lajleqbmer3uh7bfhz4lkuut4
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeib5tu3pmpl5tjf44q4ixjhuzhawujhlw5o226mo66srdy2qsbnqx4
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeidt7m2fkdatrhzuuenxuh4fvjqa4moedwgcuawo4jqxulbtfmjlva
+  models.py: bafybeihbnuqap24kyxre5ksyaq6nuq6amjkxqf3foumsoi4ye4b7gkrdj4
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
@@ -75,6 +75,7 @@ contracts:
 - valory/velodrome_non_fungible_position_manager:0.1.0:bafybeic6xt4hwj5brx4wtxpefptajorqh3z5dqlaaa43pldby3zwidrqzm
 - valory/velodrome_pool:0.1.0:bafybeihe4772icn47dk2ddfgfkcbd5z66ihhrulgydl6gmc6ffdjrcrakm
 - valory/service_registry:0.1.0:bafybeidiyohupppaunqtwhxzt3kbp4k4hcryp4xgda36t3sy43brxs3vci
+- valory/velodrome_sugar:0.1.0:bafybeia5myvyiinqejchomfntcs775ipjf5bylfo2kkedims33uc775eei
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
@@ -276,6 +277,7 @@ models:
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
+      velodrome_sugar_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0x15810F291d547d340b1Ac78f75Dc0cdC7406A0c3"}'
     class_name: Params
   coingecko:
     args:

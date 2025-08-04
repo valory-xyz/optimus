@@ -108,6 +108,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.store_assets()
 
             self.read_assets()
+
+            # Update the amounts of all open positions
+            if self.synchronized_data.period_count == 0:
+                self.context.logger.info("Updating position amounts for period 0")
+                yield from self.update_position_amounts()
+                self.context.logger.info(
+                    "Checking and updating zero liquidity positions"
+                )
+                self.check_and_update_zero_liquidity_positions()
+
+            self.context.logger.info(f"Current Positions: {self.current_positions}")
+
             chain = self.params.target_investment_chains[0]
             yield from self.update_accumulated_rewards_for_chain(chain)
 
@@ -260,17 +272,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Store current timestamp as last updated
                 self.context.logger.info("Updating last whitelist update timestamp")
                 yield from self._write_kv({"last_whitelisted_updated": current_time})
-
-            # Update the amounts of all open positions
-            if self.synchronized_data.period_count == 0:
-                self.context.logger.info("Updating position amounts for period 0")
-                yield from self.update_position_amounts()
-                self.context.logger.info(
-                    "Checking and updating zero liquidity positions"
-                )
-                self.check_and_update_zero_liquidity_positions()
-
-            self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             # Check if we need to recalculate the portfolio
             self.context.logger.info("Checking if portfolio recalculation is needed")
@@ -1269,28 +1270,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token1_address: str,
         position_manager_address: str,
         contract_id: Any,
+        dex_type: str,
         get_position_callable: str = "get_position",
         position_data_key: str = "data",
         slot0_contract_id: Any = None,
     ) -> Generator[None, None, Dict[str, Decimal]]:
-        """Calculate concentrated liquidity position value.
-
-        Calculate the value of a concentrated liquidity position by fetching
-        position details and computing token amounts.
-
-        :param pool_address: Address of the pool contract.
-        :param chain: Chain identifier.
-        :param position: Position data dictionary.
-        :param token0_address: Address of token0.
-        :param token1_address: Address of token1.
-        :param position_manager_address: Address of position manager contract.
-        :param contract_id: Contract identifier.
-        :param get_position_callable: Name of the position getter function.
-        :param position_data_key: Key for position data in response.
-        :param slot0_contract_id: Optional contract ID for slot0 calls.
-        :yield: Steps in the contract interaction process.
-        :return: Dictionary mapping token addresses to their quantities.
-        """
+        """Calculate concentrated liquidity position value."""
         # Early validation of required parameters
         if not all(
             [
@@ -1369,8 +1354,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             # Calculate amounts for this position
-            amount0, amount1 = self._calculate_position_amounts(
-                position_details, current_tick, sqrt_price_x96, pos
+            amount0, amount1 = yield from self._calculate_position_amounts(
+                position_details, current_tick, sqrt_price_x96, pos, dex_type, chain
             )
 
             total_token0_qty += Decimal(amount0)
@@ -1401,18 +1386,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         current_tick: int,
         sqrt_price_x96: int,
         position: Dict[str, Any],
-    ) -> Optional[Tuple[int, int]]:
-        """Calculate token amounts for a position based on whether it's in range or not.
-
-        Determines the token amounts for a liquidity position by checking if the
-        current tick is within the position's range and calculating accordingly.
-
-        :param position_details: Position details from the contract.
-        :param current_tick: Current tick from the pool.
-        :param sqrt_price_x96: Current sqrt price from the pool.
-        :param position: Position data from our system.
-        :return: Tuple of (amount0, amount1) representing token amounts.
-        """
+        dex_type: str,
+        chain: str,
+    ) -> Generator[None, None, Optional[Tuple[int, int]]]:
+        """Calculate token amounts with DEX-specific logic."""
         # Extract position details
         tick_lower_val = position_details.get("tickLower")
         tick_upper_val = position_details.get("tickUpper")
@@ -1427,22 +1404,50 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         liquidity = int(liquidity_val)
         tokens_owed0 = int(position_details.get("tokensOwed0", 0))
         tokens_owed1 = int(position_details.get("tokensOwed1", 0))
+        token_id = position.get("token_id")
 
         # Log position details
         self.context.logger.info(
-            f"For position, liquidity range is [{tick_lower}, {tick_upper}] "
+            f"For {dex_type} position, liquidity range is [{tick_lower}, {tick_upper}] "
             f"and current tick is {current_tick}"
         )
 
-        # Always use get_amounts_for_liquidity for accurate calculation
-        # This handles both in-range and out-of-range positions correctly
-        sqrtA = get_sqrt_ratio_at_tick(tick_lower)
-        sqrtB = get_sqrt_ratio_at_tick(tick_upper)
-
-        # Calculate amounts using get_amounts_for_liquidity (same approach as Velodrome fix)
-        amount0, amount1 = get_amounts_for_liquidity(
-            sqrt_price_x96, sqrtA, sqrtB, liquidity
-        )
+        # Use DEX-specific calculation methods
+        if dex_type == DexType.VELODROME.value and token_id:
+            # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
+            position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain
+            )
+            if position_manager_address:
+                self.context.logger.info(
+                    "Using Velodrome Sugar contract for position calculation"
+                )
+                amount0, amount1 = yield from self.get_velodrome_position_principal(
+                    chain, position_manager_address, token_id, sqrt_price_x96
+                )
+            else:
+                self.context.logger.warning(
+                    "No Velodrome position manager found, falling back to Sugar getAmountsForLiquidity"
+                )
+                sqrt_a = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                    chain, tick_lower
+                )
+                sqrt_b = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                    chain, tick_upper
+                )
+                amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
+                    chain, sqrt_price_x96, sqrt_a, sqrt_b, liquidity
+                )
+        else:
+            # For Uniswap and others: Use existing tick math implementation
+            self.context.logger.info(
+                "Using custom tick math for non-Velodrome position"
+            )
+            sqrtA = get_sqrt_ratio_at_tick(tick_lower)
+            sqrtB = get_sqrt_ratio_at_tick(tick_upper)
+            amount0, amount1 = get_amounts_for_liquidity(
+                sqrt_price_x96, sqrtA, sqrtB, liquidity
+            )
 
         # Add uncollected fees
         amount0 += tokens_owed0
@@ -1493,6 +1498,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 token1_address=token1_address,
                 position_manager_address=position_manager_address,
                 contract_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                dex_type=DexType.VELODROME.value,
                 get_position_callable="get_position",
                 position_data_key="data",
                 slot0_contract_id=VelodromeCLPoolContract.contract_id,
@@ -1607,6 +1613,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 token1_address=token1_address,
                 position_manager_address=position_manager_address,
                 contract_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+                dex_type=DexType.UNISWAP_V3.value,
                 get_position_callable="get_position",
                 position_data_key="data",
                 slot0_contract_id=UniswapV3PoolContract.contract_id,
@@ -2033,10 +2040,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         return pool_name
 
     def check_and_update_zero_liquidity_positions(self) -> None:
-        """Check for positions with zero liquidity and mark them as closed."""
+        """Check for positions with zero liquidity and mark them as closed, and reopen closed positions that now have liquidity."""
         if not self.current_positions:
             return
 
+        # First pass: Mark OPEN positions as CLOSED if liquidity = 0
         for position in self.current_positions:
             if position.get("status") != PositionStatus.OPEN.value:
                 continue
@@ -3451,14 +3459,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         eth_transfers.append(transfer)
                     # If it's from the same address as initial funding
                     elif (
-                        transfer.get("from_address", "").lower() == master_safe_address.lower()
+                        transfer.get("from_address", "").lower()
+                        == master_safe_address.lower()
                     ):
                         eth_transfers.append(transfer)
 
             for transfer in sorted_outgoing_transfers:
                 if transfer.get("symbol") == "ETH":
                     if (
-                        transfer.get("to_address", "").lower() == master_safe_address.lower()
+                        transfer.get("to_address", "").lower()
+                        == master_safe_address.lower()
                         and transfer.get("from_address", "").lower()
                         == safe_address.lower()
                     ):
@@ -3992,7 +4002,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Read investing_paused flag from KV store."""
         try:
             result = yield from self._read_kv(("investing_paused",))
-            return result.get("investing_paused", "false").lower() == "true"
+            if result is None:
+                self.context.logger.warning(
+                    "No response from KV store for investing_paused flag"
+                )
+                return False
+
+            investing_paused_value = result.get("investing_paused")
+            if investing_paused_value is None:
+                self.context.logger.warning(
+                    "investing_paused value is None in KV store"
+                )
+                return False
+
+            return investing_paused_value.lower() == "true"
         except Exception as e:
             self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
             return False

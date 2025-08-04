@@ -1,0 +1,21 @@
+name: velodrome_voter
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the Velodrome Voter interface.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeida5z2rs3bfsa4el27clwhno4nc2mgrobfhj6o423rv7baazrdsfm
+  build/contract_interface.json: bafybeibkrk7byo7o73rf3gcjqfqhdzpjifr7inl4pnk45wn3ntivxdaxnq
+  contract.py: bafybeidlbwhhgvo2py2ulhidlrkhgqzlm47znc3y2leykkiqguxuuz2sba
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: VelodromeVoterContract
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.65.0
+  web3:
+    version: <7,>=6.0.0

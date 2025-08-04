@@ -36,12 +36,17 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
+from packages.valory.contracts.velodrome_cl_gauge.contract import (
+    VelodromeCLGaugeContract,
+)
 from packages.valory.contracts.velodrome_cl_pool.contract import VelodromeCLPoolContract
+from packages.valory.contracts.velodrome_gauge.contract import VelodromeGaugeContract
 from packages.valory.contracts.velodrome_non_fungible_position_manager.contract import (
     VelodromeNonFungiblePositionManagerContract,
 )
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
 from packages.valory.contracts.velodrome_router.contract import VelodromeRouterContract
+from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
@@ -2192,3 +2197,836 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Error calculating stable pool amounts: {str(e)}"
             )
             return max_amounts_in
+
+    # ==================== STAKING FUNCTIONALITY ====================
+
+    def get_gauge_address(
+        self, lp_token: str, **kwargs: Any
+    ) -> Generator[None, None, Optional[str]]:
+        """Query voter contract for gauge address."""
+        chain = kwargs.get("chain")
+        if not chain:
+            self.context.logger.error(
+                "Chain parameter is required for get_gauge_address"
+            )
+            return None
+
+        self.context.logger.info(
+            f"Getting gauge address for LP token: {lp_token} on chain: {chain}"
+        )
+
+        # Get voter contract address
+        voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
+        if not voter_address:
+            self.context.logger.error(
+                f"No voter contract address found for chain {chain}"
+            )
+            return None
+
+        # Query the voter contract for the gauge address
+        gauge_address = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=voter_address,
+            contract_public_id=VelodromeVoterContract.contract_id,
+            contract_callable="gauges",
+            data_key="gauge",
+            pool_address=lp_token,
+            chain_id=chain,
+        )
+
+        if not gauge_address or gauge_address == ZERO_ADDRESS:
+            self.context.logger.warning(f"No gauge found for LP token {lp_token}")
+            return None
+
+        self.context.logger.info(
+            f"Found gauge address: {gauge_address} for LP token: {lp_token}"
+        )
+        return gauge_address
+
+    def stake_lp_tokens(
+        self, lp_token: str, amount: int, **kwargs: Any
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Stake LP tokens in gauge."""
+        chain = kwargs.get("chain")
+        safe_address = kwargs.get("safe_address")
+
+        if not all([chain, safe_address]):
+            self.context.logger.error(
+                "Chain and safe_address parameters are required for stake_lp_tokens"
+            )
+            return {"error": "Missing required parameters: chain, safe_address"}
+
+        self.context.logger.info(
+            f"Staking {amount} LP tokens ({lp_token}) on chain: {chain}"
+        )
+
+        if amount <= 0:
+            error_msg = "Amount must be greater than 0"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Get gauge address for this LP token
+        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        if not gauge_address:
+            error_msg = f"No gauge found for LP token {lp_token}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Validate that the gauge is active
+        voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
+        if voter_address:
+            validation_result = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=voter_address,
+                contract_public_id=VelodromeVoterContract.contract_id,
+                contract_callable="validate_gauge_address",
+                data_key="is_valid",
+                gauge_address=gauge_address,
+                chain_id=chain,
+            )
+
+            if not validation_result or not validation_result.get("is_valid", False):
+                error_msg = f"Gauge {gauge_address} is not valid or not active"
+                self.context.logger.error(error_msg)
+                return {"error": error_msg}
+
+        # Create multisend transaction for approve + stake
+        multi_send_txs = []
+
+        # First, approve LP tokens to gauge
+        approve_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=lp_token,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="build_approval_tx",
+            data_key="tx_hash",
+            spender=gauge_address,
+            amount=amount,
+            chain_id=chain,
+        )
+
+        if not approve_tx_hash:
+            error_msg = "Failed to create approval transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": lp_token,
+                "value": 0,
+                "data": approve_tx_hash,
+            }
+        )
+
+        # Then, stake LP tokens in gauge
+        stake_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeGaugeContract.contract_id,
+            contract_callable="deposit",
+            data_key="tx_hash",
+            amount=amount,
+            chain_id=chain,
+        )
+
+        if not stake_tx_hash:
+            error_msg = "Failed to create stake transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": gauge_address,
+                "value": 0,
+                "data": stake_tx_hash,
+            }
+        )
+
+        # Prepare multisend transaction
+        multisend_address = self.params.multisend_contract_addresses.get(chain, "")
+        if not multisend_address:
+            error_msg = f"Could not find multisend address for chain {chain}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        multisend_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
+            chain_id=chain,
+        )
+
+        if not multisend_tx_hash:
+            error_msg = "Failed to create multisend transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        self.context.logger.info(
+            f"Successfully created stake transaction for {amount} LP tokens"
+        )
+        return {
+            "tx_hash": bytes.fromhex(multisend_tx_hash[2:]),
+            "contract_address": multisend_address,
+            "gauge_address": gauge_address,
+            "amount": amount,
+            "success": True,
+            "is_multisend": True,
+        }
+
+    def unstake_lp_tokens(
+        self, lp_token: str, amount: int, **kwargs: Any
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Withdraw LP tokens from gauge."""
+        chain = kwargs.get("chain")
+        safe_address = kwargs.get("safe_address")
+
+        if not all([chain, safe_address]):
+            self.context.logger.error(
+                "Chain and safe_address parameters are required for unstake_lp_tokens"
+            )
+            return {"error": "Missing required parameters: chain, safe_address"}
+
+        self.context.logger.info(
+            f"Unstaking {amount} LP tokens ({lp_token}) on chain: {chain}"
+        )
+
+        if amount <= 0:
+            error_msg = "Amount must be greater than 0"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Get gauge address for this LP token
+        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        if not gauge_address:
+            error_msg = f"No gauge found for LP token {lp_token}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Check staked balance
+        staked_balance = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeGaugeContract.contract_id,
+            contract_callable="balance_of",
+            data_key="balance",
+            account=safe_address,
+            chain_id=chain,
+        )
+
+        if not staked_balance or staked_balance < amount:
+            error_msg = f"Insufficient staked balance. Requested: {amount}, Available: {staked_balance or 0}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Create withdraw transaction
+        withdraw_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeGaugeContract.contract_id,
+            contract_callable="withdraw",
+            data_key="tx_hash",
+            amount=amount,
+            chain_id=chain,
+        )
+
+        if not withdraw_tx_hash:
+            error_msg = "Failed to create withdraw transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        self.context.logger.info(
+            f"Successfully created unstake transaction for {amount} LP tokens"
+        )
+        return {
+            "tx_hash": withdraw_tx_hash,
+            "contract_address": gauge_address,
+            "amount": amount,
+            "success": True,
+            "is_multisend": False,
+        }
+
+    def claim_rewards(
+        self, lp_token: str, **kwargs: Any
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Claim VELO emissions from gauge."""
+        chain = kwargs.get("chain")
+        safe_address = kwargs.get("safe_address")
+
+        if not all([chain, safe_address]):
+            self.context.logger.error(
+                "Chain and safe_address parameters are required for claim_rewards"
+            )
+            return {"error": "Missing required parameters: chain, safe_address"}
+
+        self.context.logger.info(
+            f"Claiming rewards for LP token: {lp_token} on chain: {chain}"
+        )
+
+        # Get gauge address for this LP token
+        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        if not gauge_address:
+            error_msg = f"No gauge found for LP token {lp_token}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Check pending rewards before claiming
+        pending_rewards = yield from self.get_pending_rewards(
+            lp_token, safe_address, chain=chain
+        )
+        if pending_rewards == 0:
+            self.context.logger.info("No pending rewards to claim")
+            return {
+                "message": "No pending rewards to claim",
+                "pending_rewards": 0,
+                "success": True,
+            }
+
+        # Create claim rewards transaction
+        claim_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeGaugeContract.contract_id,
+            contract_callable="get_reward",
+            data_key="tx_hash",
+            account=safe_address,
+            chain_id=chain,
+        )
+
+        if not claim_tx_hash:
+            error_msg = "Failed to create claim rewards transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        self.context.logger.info(
+            f"Successfully created claim rewards transaction. Pending rewards: {pending_rewards}"
+        )
+        return {
+            "tx_hash": claim_tx_hash,
+            "contract_address": gauge_address,
+            "pending_rewards": pending_rewards,
+            "success": True,
+            "is_multisend": False,
+        }
+
+    def get_pending_rewards(
+        self, lp_token: str, user_address: str, **kwargs: Any
+    ) -> Generator[None, None, int]:
+        """Check earned rewards without claiming."""
+        chain = kwargs.get("chain")
+        if not chain:
+            self.context.logger.error(
+                "Chain parameter is required for get_pending_rewards"
+            )
+            return 0
+
+        self.context.logger.info(
+            f"Getting pending rewards for LP token: {lp_token}, user: {user_address} on chain: {chain}"
+        )
+
+        # Get gauge address for this LP token
+        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        if not gauge_address:
+            self.context.logger.warning(f"No gauge found for LP token {lp_token}")
+            return 0
+
+        # Get earned rewards
+        earned_result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeGaugeContract.contract_id,
+            contract_callable="earned",
+            data_key="earned",
+            account=user_address,
+            chain_id=chain,
+        )
+
+        if not earned_result:
+            self.context.logger.warning(
+                f"Could not get earned rewards for user {user_address}"
+            )
+            return 0
+
+        earned_amount = earned_result if isinstance(earned_result, int) else 0
+        self.context.logger.info(f"Pending rewards for {user_address}: {earned_amount}")
+        return earned_amount
+
+    def get_staked_balance(
+        self, lp_token: str, user_address: str, **kwargs: Any
+    ) -> Generator[None, None, int]:
+        """Get the staked balance of LP tokens in gauge."""
+        chain = kwargs.get("chain")
+        if not chain:
+            self.context.logger.error(
+                "Chain parameter is required for get_staked_balance"
+            )
+            return 0
+
+        self.context.logger.info(
+            f"Getting staked balance for LP token: {lp_token}, user: {user_address} on chain: {chain}"
+        )
+
+        # Get gauge address for this LP token
+        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        if not gauge_address:
+            self.context.logger.warning(f"No gauge found for LP token {lp_token}")
+            return 0
+
+        # Get staked balance
+        balance_result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeGaugeContract.contract_id,
+            contract_callable="balance_of",
+            data_key="balance",
+            account=user_address,
+            chain_id=chain,
+        )
+
+        if not balance_result:
+            self.context.logger.warning(
+                f"Could not get staked balance for user {user_address}"
+            )
+            return 0
+
+        staked_amount = balance_result if isinstance(balance_result, int) else 0
+        self.context.logger.info(f"Staked balance for {user_address}: {staked_amount}")
+        return staked_amount
+
+    def get_gauge_total_supply(
+        self, lp_token: str, **kwargs: Any
+    ) -> Generator[None, None, int]:
+        """Get the total supply of staked tokens in gauge."""
+        chain = kwargs.get("chain")
+        if not chain:
+            self.context.logger.error(
+                "Chain parameter is required for get_gauge_total_supply"
+            )
+            return 0
+
+        self.context.logger.info(
+            f"Getting total supply for gauge of LP token: {lp_token} on chain: {chain}"
+        )
+
+        # Get gauge address for this LP token
+        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        if not gauge_address:
+            self.context.logger.warning(f"No gauge found for LP token {lp_token}")
+            return 0
+
+        # Get total supply
+        total_supply_result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeGaugeContract.contract_id,
+            contract_callable="total_supply",
+            data_key="total_supply",
+            chain_id=chain,
+        )
+
+        if not total_supply_result:
+            self.context.logger.warning(
+                f"Could not get total supply for gauge {gauge_address}"
+            )
+            return 0
+
+        total_supply = (
+            total_supply_result if isinstance(total_supply_result, int) else 0
+        )
+        self.context.logger.info(
+            f"Total supply for gauge {gauge_address}: {total_supply}"
+        )
+        return total_supply
+
+    # ==================== CL STAKING FUNCTIONALITY ====================
+
+    def stake_cl_lp_tokens(
+        self, lp_token: str, amount: int, recipient: str, **kwargs: Any
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Stake LP tokens in CL gauge with recipient."""
+        chain = kwargs.get("chain")
+        safe_address = kwargs.get("safe_address")
+
+        if not all([chain, safe_address]):
+            self.context.logger.error(
+                "Chain and safe_address parameters are required for stake_cl_lp_tokens"
+            )
+            return {"error": "Missing required parameters: chain, safe_address"}
+
+        self.context.logger.info(
+            f"Staking {amount} CL LP tokens ({lp_token}) for recipient: {recipient} on chain: {chain}"
+        )
+
+        if amount <= 0:
+            error_msg = "Amount must be greater than 0"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Get gauge address for this LP token
+        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
+        if not gauge_address:
+            error_msg = f"No gauge found for LP token {lp_token}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Validate recipient address
+        try:
+            checksumed_recipient = self.context.ledger_api.api.to_checksum_address(
+                recipient
+            )
+        except Exception as e:
+            error_msg = f"Invalid recipient address: {e}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Create multisend transaction for approve + stake
+        multi_send_txs = []
+
+        # First, approve LP tokens to CL gauge
+        approve_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=lp_token,
+            contract_public_id=ERC20.contract_id,
+            contract_callable="build_approval_tx",
+            data_key="tx_hash",
+            spender=gauge_address,
+            amount=amount,
+            chain_id=chain,
+        )
+
+        if not approve_tx_hash:
+            error_msg = "Failed to create approval transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": lp_token,
+                "value": 0,
+                "data": approve_tx_hash,
+            }
+        )
+
+        # Then, stake LP tokens in CL gauge with recipient
+        stake_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="deposit",
+            data_key="tx_hash",
+            amount=amount,
+            recipient=checksumed_recipient,
+            chain_id=chain,
+        )
+
+        if not stake_tx_hash:
+            error_msg = "Failed to create CL stake transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": gauge_address,
+                "value": 0,
+                "data": stake_tx_hash,
+            }
+        )
+
+        # Prepare multisend transaction
+        multisend_address = self.params.multisend_contract_addresses.get(chain, "")
+        if not multisend_address:
+            error_msg = f"Could not find multisend address for chain {chain}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        multisend_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
+            chain_id=chain,
+        )
+
+        if not multisend_tx_hash:
+            error_msg = "Failed to create multisend transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        self.context.logger.info(
+            f"Successfully created CL stake transaction for {amount} LP tokens"
+        )
+        return {
+            "tx_hash": bytes.fromhex(multisend_tx_hash[2:]),
+            "contract_address": multisend_address,
+            "gauge_address": gauge_address,
+            "amount": amount,
+            "recipient": checksumed_recipient,
+            "success": True,
+            "is_multisend": True,
+        }
+
+    def unstake_cl_lp_tokens(
+        self, token_id: int, **kwargs: Any
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Withdraw LP tokens from CL gauge using token ID."""
+        chain = kwargs.get("chain")
+        safe_address = kwargs.get("safe_address")
+        gauge_address = kwargs.get("gauge_address")
+
+        if not all([chain, safe_address]):
+            self.context.logger.error(
+                "Chain and safe_address parameters are required for unstake_cl_lp_tokens"
+            )
+            return {"error": "Missing required parameters: chain, safe_address"}
+
+        if not gauge_address:
+            self.context.logger.error(
+                "gauge_address parameter is required for unstake_cl_lp_tokens"
+            )
+            return {"error": "Missing required parameter: gauge_address"}
+
+        self.context.logger.info(
+            f"Unstaking CL LP tokens with token ID: {token_id} on chain: {chain}"
+        )
+
+        if token_id < 0:
+            error_msg = "Token ID must be non-negative"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Create withdraw transaction using token ID
+        withdraw_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="withdraw",
+            data_key="tx_hash",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if not withdraw_tx_hash:
+            error_msg = "Failed to create CL withdraw transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # For CL withdrawals, we might need multisend if approval is required
+        # For now, return single transaction
+        self.context.logger.info(
+            f"Successfully created CL unstake transaction for token ID: {token_id}"
+        )
+        return {
+            "tx_hash": withdraw_tx_hash,
+            "contract_address": gauge_address,
+            "token_id": token_id,
+            "success": True,
+            "is_multisend": False,
+        }
+
+    def claim_cl_rewards(
+        self, account: str, **kwargs: Any
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Claim VELO emissions from CL gauge."""
+        chain = kwargs.get("chain")
+        gauge_address = kwargs.get("gauge_address")
+
+        if not all([chain, gauge_address]):
+            self.context.logger.error(
+                "Chain and gauge_address parameters are required for claim_cl_rewards"
+            )
+            return {"error": "Missing required parameters: chain, gauge_address"}
+
+        self.context.logger.info(
+            f"Claiming CL rewards for account: {account} on chain: {chain}"
+        )
+
+        # Validate account address
+        try:
+            checksumed_account = self.context.ledger_api.api.to_checksum_address(
+                account
+            )
+        except Exception as e:
+            error_msg = f"Invalid account address: {e}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        # Check pending rewards before claiming
+        pending_rewards = yield from self.get_cl_pending_rewards(
+            account, gauge_address=gauge_address, chain=chain
+        )
+        if pending_rewards == 0:
+            self.context.logger.info("No pending CL rewards to claim")
+            return {
+                "message": "No pending CL rewards to claim",
+                "pending_rewards": 0,
+                "success": True,
+            }
+
+        # Create claim rewards transaction
+        claim_tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="get_reward",
+            data_key="tx_hash",
+            account=checksumed_account,
+            chain_id=chain,
+        )
+
+        if not claim_tx_hash:
+            error_msg = "Failed to create CL claim rewards transaction"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        self.context.logger.info(
+            f"Successfully created CL claim rewards transaction. Pending rewards: {pending_rewards}"
+        )
+        return {
+            "tx_hash": claim_tx_hash,
+            "contract_address": gauge_address,
+            "pending_rewards": pending_rewards,
+            "account": checksumed_account,
+            "success": True,
+            "is_multisend": False,
+        }
+
+    def get_cl_pending_rewards(
+        self, account: str, **kwargs: Any
+    ) -> Generator[None, None, int]:
+        """Check earned rewards from CL gauge without claiming."""
+        chain = kwargs.get("chain")
+        gauge_address = kwargs.get("gauge_address")
+
+        if not all([chain, gauge_address]):
+            self.context.logger.error(
+                "Chain and gauge_address parameters are required for get_cl_pending_rewards"
+            )
+            return 0
+
+        self.context.logger.info(
+            f"Getting CL pending rewards for account: {account} on chain: {chain}"
+        )
+
+        # Validate account address
+        try:
+            checksumed_account = self.context.ledger_api.api.to_checksum_address(
+                account
+            )
+        except Exception as e:
+            self.context.logger.error(f"Invalid account address: {e}")
+            return 0
+
+        # Get earned rewards from CL gauge
+        earned_result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="earned",
+            data_key="earned",
+            account=checksumed_account,
+            chain_id=chain,
+        )
+
+        if not earned_result:
+            self.context.logger.warning(
+                f"Could not get CL earned rewards for user {account}"
+            )
+            return 0
+
+        earned_amount = earned_result if isinstance(earned_result, int) else 0
+        self.context.logger.info(f"CL pending rewards for {account}: {earned_amount}")
+        return earned_amount
+
+    def get_cl_staked_balance(
+        self, account: str, **kwargs: Any
+    ) -> Generator[None, None, int]:
+        """Get the staked balance in CL gauge."""
+        chain = kwargs.get("chain")
+        gauge_address = kwargs.get("gauge_address")
+
+        if not all([chain, gauge_address]):
+            self.context.logger.error(
+                "Chain and gauge_address parameters are required for get_cl_staked_balance"
+            )
+            return 0
+
+        self.context.logger.info(
+            f"Getting CL staked balance for account: {account} on chain: {chain}"
+        )
+
+        # Validate account address
+        try:
+            checksumed_account = self.context.ledger_api.api.to_checksum_address(
+                account
+            )
+        except Exception as e:
+            self.context.logger.error(f"Invalid account address: {e}")
+            return 0
+
+        # Get staked balance from CL gauge
+        balance_result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="balance_of",
+            data_key="balance",
+            account=checksumed_account,
+            chain_id=chain,
+        )
+
+        if not balance_result:
+            self.context.logger.warning(
+                f"Could not get CL staked balance for user {account}"
+            )
+            return 0
+
+        staked_amount = balance_result if isinstance(balance_result, int) else 0
+        self.context.logger.info(f"CL staked balance for {account}: {staked_amount}")
+        return staked_amount
+
+    def get_cl_gauge_total_supply(self, **kwargs: Any) -> Generator[None, None, int]:
+        """Get the total supply of staked tokens in CL gauge."""
+        chain = kwargs.get("chain")
+        gauge_address = kwargs.get("gauge_address")
+
+        if not all([chain, gauge_address]):
+            self.context.logger.error(
+                "Chain and gauge_address parameters are required for get_cl_gauge_total_supply"
+            )
+            return 0
+
+        self.context.logger.info(
+            f"Getting CL total supply for gauge: {gauge_address} on chain: {chain}"
+        )
+
+        # Get total supply from CL gauge
+        total_supply_result = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=gauge_address,
+            contract_public_id=VelodromeCLGaugeContract.contract_id,
+            contract_callable="total_supply",
+            data_key="total_supply",
+            chain_id=chain,
+        )
+
+        if not total_supply_result:
+            self.context.logger.warning(
+                f"Could not get CL total supply for gauge {gauge_address}"
+            )
+            return 0
+
+        total_supply = (
+            total_supply_result if isinstance(total_supply_result, int) else 0
+        )
+        self.context.logger.info(
+            f"CL total supply for gauge {gauge_address}: {total_supply}"
+        )
+        return total_supply

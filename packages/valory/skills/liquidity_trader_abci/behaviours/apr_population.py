@@ -955,7 +955,20 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         """Read investing_paused flag from KV store."""
         try:
             result = yield from self._read_kv(("investing_paused",))
-            return result.get("investing_paused", "false").lower() == "true"
+            if result is None:
+                self.context.logger.warning(
+                    "No response from KV store for investing_paused flag"
+                )
+                return False
+
+            investing_paused_value = result.get("investing_paused")
+            if investing_paused_value is None:
+                self.context.logger.warning(
+                    "investing_paused value is None in KV store"
+                )
+                return False
+
+            return investing_paused_value.lower() == "true"
         except Exception as e:
             self.context.logger.error(f"Error reading investing_paused flag: {str(e)}")
             return False

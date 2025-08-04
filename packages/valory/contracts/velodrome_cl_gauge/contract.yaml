@@ -1,0 +1,21 @@
+name: velodrome_cl_gauge
+author: valory
+version: 0.1.0
+type: contract
+description: The contract package for the Velodrome Gauge interface.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiecpcrowgly4p3d4ddg2nvmsgx4kds734harcmrf7d53vduu5x3my
+  build/contract_interface.json: bafybeidmvdd6usoevhkz6dvj3vjj5nll76tkufyll3aojtjswpckpmkxwa
+  contract.py: bafybeifwn5cag54yxozbobi5tmds7hz6nqjy2zbzuo3xfltxqlk5kr7ycy
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: VelodromeCLGaugeContract
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.65.0
+  web3:
+    version: <7,>=6.0.0

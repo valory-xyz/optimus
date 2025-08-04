@@ -1,0 +1,186 @@
+{
+    "contractName": "VelodromeRewardsSugar",
+    "abi": [
+      {
+        "inputs": [
+          {
+            "name": "_limit",
+            "type": "uint256"
+          },
+          {
+            "name": "_offset",
+            "type": "uint256"
+          },
+          {
+            "name": "_account",
+            "type": "address"
+          }
+        ],
+        "name": "positions",
+        "outputs": [
+          {
+            "components": [
+              {
+                "name": "id",
+                "type": "uint256"
+              },
+              {
+                "name": "lp",
+                "type": "address"
+              },
+              {
+                "name": "liquidity",
+                "type": "uint256"
+              },
+              {
+                "name": "staked",
+                "type": "uint256"
+              },
+              {
+                "name": "amount0",
+                "type": "uint256"
+              },
+              {
+                "name": "amount1",
+                "type": "uint256"
+              },
+              {
+                "name": "staked0",
+                "type": "uint256"
+              },
+              {
+                "name": "staked1",
+                "type": "uint256"
+              },
+              {
+                "name": "unstaked_earned0",
+                "type": "uint256"
+              },
+              {
+                "name": "unstaked_earned1",
+                "type": "uint256"
+              },
+              {
+                "name": "emissions_earned",
+                "type": "uint256"
+              },
+              {
+                "name": "tick_lower",
+                "type": "int24"
+              },
+              {
+                "name": "tick_upper",
+                "type": "int24"
+              },
+              {
+                "name": "sqrt_ratio_lower",
+                "type": "uint160"
+              },
+              {
+                "name": "sqrt_ratio_upper",
+                "type": "uint160"
+              },
+              {
+                "name": "alm",
+                "type": "address"
+              }
+            ],
+            "name": "",
+            "type": "tuple[]"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "name": "_limit",
+            "type": "uint256"
+          },
+          {
+            "name": "_offset",
+            "type": "uint256"
+          },
+          {
+            "name": "_account",
+            "type": "address"
+          }
+        ],
+        "name": "rewards",
+        "outputs": [
+          {
+            "components": [
+              {
+                "name": "venft_id",
+                "type": "uint256"
+              },
+              {
+                "name": "lp",
+                "type": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256"
+              },
+              {
+                "name": "token",
+                "type": "address"
+              },
+              {
+                "name": "fee",
+                "type": "address"
+              },
+              {
+                "name": "bribe",
+                "type": "address"
+              },
+              {
+                "name": "earned",
+                "type": "uint256"
+              }
+            ],
+            "name": "",
+            "type": "tuple[]"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "name": "_account",
+            "type": "address"
+          },
+          {
+            "name": "_tokens",
+            "type": "address[]"
+          }
+        ],
+        "name": "earned",
+        "outputs": [
+          {
+            "components": [
+              {
+                "name": "token",
+                "type": "address"
+              },
+              {
+                "name": "earned",
+                "type": "uint256"
+              }
+            ],
+            "name": "",
+            "type": "tuple[]"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    "bytecode": "",
+    "deployedBytecode": "",
+    "linkReferences": {},
+    "deployedLinkReferences": {}
+}

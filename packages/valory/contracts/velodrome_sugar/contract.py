@@ -76,3 +76,44 @@ class VelodromeSugarContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.getSqrtRatioAtTick(tick).call()
         return {"sqrt_ratio": result}
+
+    @classmethod
+    def positions(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        limit: int,
+        offset: int,
+        account: str,
+    ) -> JSONLike:
+        """Get user positions and rewards data using Velodrome Sugar contract."""
+        checksumed_account = ledger_api.api.to_checksum_address(account)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.positions(
+            limit, offset, checksumed_account
+        ).call()
+        
+        # Convert the result to a more readable format
+        positions = []
+        for position in result:
+            position_data = {
+                "id": position[0],
+                "lp": position[1],
+                "liquidity": position[2],
+                "staked": position[3],
+                "amount0": position[4],
+                "amount1": position[5],
+                "staked0": position[6],
+                "staked1": position[7],
+                "unstaked_earned0": position[8],
+                "unstaked_earned1": position[9],
+                "emissions_earned": position[10],
+                "tick_lower": position[11],
+                "tick_upper": position[12],
+                "sqrt_ratio_lower": position[13],
+                "sqrt_ratio_upper": position[14],
+                "alm": position[15],
+            }
+            positions.append(position_data)
+        
+        return {"positions": positions}

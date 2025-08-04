@@ -129,75 +129,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             eth_balance = yield from self._get_native_balance(chain, safe_address)
             self.context.logger.info(f"Current ETH balance: {eth_balance}")
 
-            res = yield from self._track_eth_transfers_and_reversions(
-                safe_address, chain
-            )
-
-            to_address = res.get("master_safe_address")
-            eth_amount = int(res.get("reversion_amount", 0) * 10**18)
-
-            if eth_amount > 0:
-                if not to_address:
-                    self.context.logger.error(
-                        f"No master safe address found for chain {chain}"
-                    )
-                    # Continue with normal flow
-                else:
-                    self.context.logger.info(
-                        f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}"
-                    )
-
-                    # Create ETH transfer transaction
-                    safe_tx_hash = yield from self.contract_interact(
-                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                        contract_address=safe_address,
-                        contract_public_id=GnosisSafeContract.contract_id,
-                        contract_callable="get_raw_safe_transaction_hash",
-                        data_key="tx_hash",
-                        to_address=to_address,
-                        value=eth_amount,
-                        data=b"",
-                        operation=SafeOperation.CALL.value,
-                        safe_tx_gas=SAFE_TX_GAS,
-                        chain_id=chain,
-                    )
-
-                    if safe_tx_hash:
-                        safe_tx_hash = safe_tx_hash[2:]
-                        payload_string = hash_payload_to_hex(
-                            safe_tx_hash=safe_tx_hash,
-                            ether_value=eth_amount,
-                            safe_tx_gas=SAFE_TX_GAS,
-                            operation=SafeOperation.CALL.value,
-                            to_address=to_address,
-                            data=b"",
-                        )
-
-                        # Create settlement payload
-                        payload = FetchStrategiesPayload(
-                            sender=sender,
-                            content=json.dumps(
-                                {
-                                    "event": "settle",
-                                    "updates": {
-                                        "tx_submitter": FetchStrategiesRound.auto_round_id(),
-                                        "most_voted_tx_hash": payload_string,
-                                        "chain_id": chain,
-                                        "safe_contract_address": safe_address,
-                                    },
-                                },
-                                sort_keys=True,
-                            ),
-                        )
-
-                        with self.context.benchmark_tool.measure(
-                            self.behaviour_id
-                        ).consensus():
-                            yield from self.send_a2a_transaction(payload)
-                            yield from self.wait_until_round_end()
-
-                        self.set_done()
-                        return
+            if self.synchronized_data.period_count == 0:
+                yield from self._check_and_create_eth_revert_transactions(
+                    chain, safe_address, sender
+                )
 
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")
@@ -387,6 +322,83 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             "Completed price-based filtering of whitelisted assets"
         )
+
+    def _check_and_create_eth_revert_transactions(
+        self, chain, safe_address, sender
+    ) -> Generator[None, None, None]:
+        """Check if there are any ETH revert transactions and create them if there are."""
+
+        if not safe_address:
+            self.context.logger.error(f"No safe address found for chain {chain}")
+            return
+
+        res = yield from self._track_eth_transfers_and_reversions(safe_address, chain)
+
+        to_address = res.get("master_safe_address")
+        eth_amount = int(res.get("reversion_amount", 0) * 10**18)
+
+        if eth_amount > 0:
+            if not to_address:
+                self.context.logger.error(
+                    f"No master safe address found for chain {chain}"
+                )
+                # Continue with normal flow
+            else:
+                self.context.logger.info(
+                    f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}"
+                )
+
+                # Create ETH transfer transaction
+                safe_tx_hash = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=safe_address,
+                    contract_public_id=GnosisSafeContract.contract_id,
+                    contract_callable="get_raw_safe_transaction_hash",
+                    data_key="tx_hash",
+                    to_address=to_address,
+                    value=eth_amount,
+                    data=b"",
+                    operation=SafeOperation.CALL.value,
+                    safe_tx_gas=SAFE_TX_GAS,
+                    chain_id=chain,
+                )
+
+                if safe_tx_hash:
+                    safe_tx_hash = safe_tx_hash[2:]
+                    payload_string = hash_payload_to_hex(
+                        safe_tx_hash=safe_tx_hash,
+                        ether_value=eth_amount,
+                        safe_tx_gas=SAFE_TX_GAS,
+                        operation=SafeOperation.CALL.value,
+                        to_address=to_address,
+                        data=b"",
+                    )
+
+                    # Create settlement payload
+                    payload = FetchStrategiesPayload(
+                        sender=sender,
+                        content=json.dumps(
+                            {
+                                "event": "settle",
+                                "updates": {
+                                    "tx_submitter": FetchStrategiesRound.auto_round_id(),
+                                    "most_voted_tx_hash": payload_string,
+                                    "chain_id": chain,
+                                    "safe_contract_address": safe_address,
+                                },
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+
+                    with self.context.benchmark_tool.measure(
+                        self.behaviour_id
+                    ).consensus():
+                        yield from self.send_a2a_transaction(payload)
+                        yield from self.wait_until_round_end()
+
+                    self.set_done()
+                    return
 
     def _get_historical_price_for_date(
         self, token_address: str, token_symbol: str, date_str: str, chain: str

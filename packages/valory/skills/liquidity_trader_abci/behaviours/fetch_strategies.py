@@ -102,9 +102,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
             sender = self.context.agent_address
-
+            chain = self.params.target_investment_chains[0]
+            self.read_assets()
             if not self.assets:
-                self.assets = self.params.initial_assets
+                initial_assets_for_chain = self.params.initial_assets.get(chain, {})
+                self.assets[chain] = initial_assets_for_chain.copy()
                 self.store_assets()
 
             self.read_assets()
@@ -120,7 +122,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
-            chain = self.params.target_investment_chains[0]
             yield from self.update_accumulated_rewards_for_chain(chain)
 
             safe_address = self.params.safe_contract_addresses.get(chain)
@@ -274,16 +275,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._write_kv({"last_whitelisted_updated": current_time})
 
             # Check if we need to recalculate the portfolio
-            self.context.logger.info("Checking if portfolio recalculation is needed")
-            should_recalculate = yield from self.should_recalculate_portfolio(
-                self.portfolio_data
-            )
-            if should_recalculate:
-                self.context.logger.info("Recalculating user share values")
-                yield from self.calculate_user_share_values()
-                # Store the updated portfolio data
-                self.context.logger.info("Storing updated portfolio data")
-                self.store_portfolio_data()
+            self.context.logger.info("Recalculating user share values")
+            yield from self.calculate_user_share_values()
+            # Store the updated portfolio data
+            self.context.logger.info("Storing updated portfolio data")
+            self.store_portfolio_data()
 
             payload = FetchStrategiesPayload(
                 sender=sender,
@@ -1103,11 +1099,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         user_balances = yield from self.get_user_share_value_velodrome(
             user_address, pool_address, token_id, chain, position
         )
+
+        # Add VELO rewards to user balances if position is staked
+        if position.get("staked", False):
+            velo_rewards = yield from self._get_velodrome_pending_rewards(
+                position, chain, user_address
+            )
+            if velo_rewards > 0:
+                # Get VELO token address for the chain
+                velo_token_address = self._get_velo_token_address(chain)
+                if velo_token_address:
+                    user_balances[velo_token_address] = velo_rewards
+                    self.context.logger.info(
+                        f"Added VELO rewards to position: {velo_rewards}"
+                    )
+
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
         token_info = {
             position.get("token0"): position.get("token0_symbol"),
             position.get("token1"): position.get("token1_symbol"),
         }
+
+        # Add VELO to token_info if rewards exist
+        velo_token_address = self._get_velo_token_address(chain)
+        if velo_token_address and velo_token_address in user_balances:
+            token_info[velo_token_address] = "VELO"
 
         return user_balances, details, token_info
 
@@ -4042,3 +4058,65 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception:
             self.context.logger.info("Not a GnosisSafe")
             return False
+
+    def _get_velodrome_pending_rewards(
+        self, position: Dict, chain: str, user_address: str
+    ) -> Generator[None, None, Decimal]:
+        """Get pending VELO rewards for a staked Velodrome position."""
+        try:
+            pool_address = position.get("pool_address")
+            is_cl_pool = position.get("is_cl_pool", False)
+
+            if not pool_address:
+                self.context.logger.warning(
+                    "No pool address found for Velodrome position"
+                )
+                return Decimal(0)
+
+            # Get the Velodrome pool behaviour to access reward methods
+            pool = self.pools.get("velodrome")
+            if not pool:
+                self.context.logger.warning("Velodrome pool behaviour not found")
+                return Decimal(0)
+
+            # Get pending rewards based on pool type
+            if is_cl_pool:
+                # For CL pools, we need the gauge address
+                gauge_address = yield from pool.get_gauge_address(
+                    pool_address, chain=chain
+                )
+                if not gauge_address:
+                    self.context.logger.warning(
+                        f"No gauge found for CL pool {pool_address}"
+                    )
+                    return Decimal(0)
+
+                pending_rewards = yield from pool.get_cl_pending_rewards(
+                    account=user_address, gauge_address=gauge_address, chain=chain
+                )
+            else:
+                # For regular pools
+                pending_rewards = yield from pool.get_pending_rewards(
+                    lp_token=pool_address, user_address=user_address, chain=chain
+                )
+
+            if pending_rewards and pending_rewards > 0:
+                # Convert from wei to VELO (18 decimals)
+                velo_rewards = Decimal(pending_rewards) / Decimal(10**18)
+                self.context.logger.info(
+                    f"Found VELO rewards: {velo_rewards} for position {pool_address}"
+                )
+                return velo_rewards
+
+            return Decimal(0)
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error getting Velodrome pending rewards: {str(e)}"
+            )
+            return Decimal(0)
+
+    def _get_velo_token_address(self, chain: str) -> Optional[str]:
+        """Get the VELO token address for the specified chain from params."""
+        velo_addresses = self.params.velo_token_contract_addresses
+        return velo_addresses.get(chain)

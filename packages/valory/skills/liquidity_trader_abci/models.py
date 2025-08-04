@@ -359,6 +359,15 @@ class Params(BaseParams):
         self.velodrome_sugar_contract_addresses = json.loads(
             self._ensure("velodrome_sugar_contract_addresses", kwargs, str)
         )
+        self.velodrome_voter_contract_addresses = json.loads(
+            self._ensure("velodrome_voter_contract_addresses", kwargs, str)
+        )
+        self.velodrome_rewards_sugar_contract_addresses = json.loads(
+            self._ensure("velodrome_rewards_sugar_contract_addresses", kwargs, str)
+        )
+        self.velo_token_contract_addresses = json.loads(
+            self._ensure("velo_token_contract_addresses", kwargs, str)
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

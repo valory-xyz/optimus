@@ -111,7 +111,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
-- valory/liquidity_trader_abci:0.1.0:bafybeiapwaskzzddlticrfp66ygpmp3vpkezrdo3vbq6eks6bdweajivpm
+- valory/liquidity_trader_abci:0.1.0:bafybeigfcta7zzi7xjpgihnlwhdeynhbtdu7ae2ztiy2pai5xfhzz5vhxm
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 behaviours:
   main:
@@ -300,6 +300,9 @@ models:
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
       velodrome_sugar_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0x15810F291d547d340b1Ac78f75Dc0cdC7406A0c3"}'
+      velodrome_voter_contract_addresses: '{"optimism":"0x0d9814bc039e3c9DeE53566317Fd0924ED260347","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"}'
+      velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8"}'
+      velo_token_contract_addresses: '{"optimism":"0x9560e827af36c94d2ac33a39bce1fe78631088db","mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81"}'
     class_name: Params
   coingecko:
     args:

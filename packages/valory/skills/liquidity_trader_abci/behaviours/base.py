@@ -145,6 +145,9 @@ class Action(Enum):
     SWITCH_ROUTE = "switch_route"
     WITHDRAW = "withdraw"
     DEPOSIT = "deposit"
+    STAKE_LP_TOKENS = "StakeLpTokens"
+    UNSTAKE_LP_TOKENS = "UnstakeLpTokens"
+    CLAIM_STAKING_REWARDS = "ClaimStakingRewards"
 
 
 class SwapStatus(Enum):
@@ -259,6 +262,7 @@ COIN_ID_MAPPING = {
         "ousdt": "openusdt",
         "usdglo": "glo-dollar",
         "iusdc": "ironclad-usd",
+        "velo": "velodrome-finance",
     },
 }
 
@@ -266,9 +270,11 @@ COIN_ID_MAPPING = {
 REWARD_TOKEN_ADDRESSES = {
     "mode": {
         "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
+        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "VELO",  # VELO on Mode
     },
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
+        "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "XVELO",  # VELO on Optimism
     },
 }
 
@@ -2140,17 +2146,20 @@ class LiquidityTraderBaseBehaviour(
                     f"Initialized assets dictionary for chain {chain} with initial assets: {initial_assets_for_chain}"
                 )
 
-            # Check if OLAS is already in assets for this chain
-            if olas_address not in self.assets[chain]:
-                self.assets[chain][olas_address] = "OLAS"
-                assets_updated = True
-                self.context.logger.info(
-                    f"Added OLAS token to assets for chain {chain}: {olas_address}"
-                )
-            else:
-                self.context.logger.info(
-                    f"OLAS token already present in assets for chain {chain}"
-                )
+            try:
+                # Check if OLAS is already in assets for this chain
+                if olas_address not in self.assets[chain]:
+                    self.assets[chain][olas_address] = "OLAS"
+                    assets_updated = True
+                    self.context.logger.info(
+                        f"Added OLAS token to assets for chain {chain}: {olas_address}"
+                    )
+                else:
+                    self.context.logger.info(
+                        f"OLAS token already present in assets for chain {chain}"
+                    )
+            except Exception as e:
+                self.context.logger.warning(f"Error updating olas address {e}")
 
         # Save assets if any updates were made
         if assets_updated:

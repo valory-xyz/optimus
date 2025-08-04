@@ -1551,7 +1551,30 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return actions
         tokens.extend(available_tokens)
 
+        # ==================== POSITION EXIT WITH STAKING ====================
         if self.position_to_exit:
+            # Step 1: Claim staking rewards before exit (if position has staking)
+            if self._has_staking_metadata(self.position_to_exit):
+                claim_rewards_action = self._build_claim_staking_rewards_action(
+                    self.position_to_exit
+                )
+                if claim_rewards_action:
+                    actions.append(claim_rewards_action)
+                    self.context.logger.info(
+                        "Added claim staking rewards action before exit"
+                    )
+
+                # Step 2: Unstake LP tokens before exit
+                unstake_action = self._build_unstake_lp_tokens_action(
+                    self.position_to_exit
+                )
+                if unstake_action:
+                    actions.append(unstake_action)
+                    self.context.logger.info(
+                        "Added unstake LP tokens action before exit"
+                    )
+
+            # Step 3: Exit the pool
             dex_type = self.position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
             exit_pool_action = self._build_exit_pool_action(
@@ -1561,6 +1584,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error("Error building exit pool action")
                 return None
             actions.append(exit_pool_action)
+
+        # ==================== POSITION ENTRY WITH STAKING ====================
         # Build actions based on selected opportunities
         for opportunity in self.selected_opportunities:
             bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
@@ -1579,6 +1604,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             yield from self._initialize_entry_costs_for_new_position(enter_pool_action)
 
             actions.append(enter_pool_action)
+
+            # Add staking action after entering pool (if applicable)
+            if self._should_add_staking_actions(opportunity):
+                stake_action = self._build_stake_lp_tokens_action(opportunity)
+                if stake_action:
+                    actions.append(stake_action)
+                    self.context.logger.info(
+                        "Added stake LP tokens action after pool entry"
+                    )
 
         # Check for Velodrome positions with 100% allocation to one token
         if (
@@ -2297,3 +2331,268 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
         except Exception as e:
             self.context.logger.error(f"Error initializing position entry costs: {e}")
+
+    # ==================== STAKING HELPER METHODS ====================
+
+    def _build_stake_lp_tokens_action(
+        self, opportunity: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Build action for staking LP tokens after liquidity provision."""
+        try:
+            chain = opportunity.get("chain")
+            pool_address = opportunity.get("pool_address")
+            dex_type = opportunity.get("dex_type")
+            is_cl_pool = opportunity.get("is_cl_pool", False)
+
+            # Only create staking actions for Velodrome pools
+            if dex_type != "velodrome":
+                self.context.logger.info(
+                    f"Skipping staking for non-Velodrome pool: {dex_type}"
+                )
+                return None
+
+            if not all([chain, pool_address]):
+                self.context.logger.error(
+                    "Missing required parameters for staking action"
+                )
+                return None
+
+            # Determine staking action type based on pool type
+            if is_cl_pool:
+                # For CL pools, we need recipient and token_id information
+                safe_address = self.params.safe_contract_addresses.get(chain)
+                if not safe_address:
+                    self.context.logger.error(
+                        f"No safe address found for chain {chain}"
+                    )
+                    return None
+
+                stake_action = {
+                    "action": Action.STAKE_LP_TOKENS.value,
+                    "dex_type": dex_type,
+                    "chain": chain,
+                    "pool_address": pool_address,
+                    "is_cl_pool": True,
+                    "recipient": safe_address,
+                    "description": f"Stake CL LP tokens for {pool_address}",
+                }
+            else:
+                # For regular pools
+                stake_action = {
+                    "action": Action.STAKE_LP_TOKENS.value,
+                    "dex_type": dex_type,
+                    "chain": chain,
+                    "pool_address": pool_address,
+                    "is_cl_pool": False,
+                    "description": f"Stake LP tokens for {pool_address}",
+                }
+
+            self.context.logger.info(f"Created stake LP tokens action: {stake_action}")
+            return stake_action
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error building stake LP tokens action: {str(e)}"
+            )
+            return None
+
+    def _build_claim_staking_rewards_action(
+        self, position: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Build action for claiming staking rewards before position exit."""
+        try:
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
+            dex_type = position.get("dex_type")
+            is_cl_pool = position.get("is_cl_pool", False)
+            gauge_address = position.get("gauge_address")
+
+            # Only create claim actions for Velodrome pools with staking metadata
+            if dex_type != "velodrome":
+                self.context.logger.info(
+                    f"Skipping reward claim for non-Velodrome pool: {dex_type}"
+                )
+                return None
+
+            if not all([chain, pool_address]):
+                self.context.logger.error(
+                    "Missing required parameters for claim rewards action"
+                )
+                return None
+
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address found for chain {chain}")
+                return None
+
+            claim_action = {
+                "action": Action.CLAIM_STAKING_REWARDS.value,
+                "dex_type": dex_type,
+                "chain": chain,
+                "pool_address": pool_address,
+                "is_cl_pool": is_cl_pool,
+                "account": safe_address,
+                "description": f"Claim staking rewards for {pool_address}",
+            }
+
+            # Add gauge address if available
+            if gauge_address:
+                claim_action["gauge_address"] = gauge_address
+
+            self.context.logger.info(
+                f"Created claim staking rewards action: {claim_action}"
+            )
+            return claim_action
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error building claim staking rewards action: {str(e)}"
+            )
+            return None
+
+    def _build_unstake_lp_tokens_action(
+        self, position: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Build action for unstaking LP tokens before position exit."""
+        try:
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
+            dex_type = position.get("dex_type")
+            is_cl_pool = position.get("is_cl_pool", False)
+            gauge_address = position.get("gauge_address")
+
+            # Only create unstaking actions for Velodrome pools
+            if dex_type != "velodrome":
+                self.context.logger.info(
+                    f"Skipping unstaking for non-Velodrome pool: {dex_type}"
+                )
+                return None
+
+            if not all([chain, pool_address]):
+                self.context.logger.error(
+                    "Missing required parameters for unstake action"
+                )
+                return None
+
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address found for chain {chain}")
+                return None
+
+            if is_cl_pool:
+                # For CL pools, we need token_id information
+                token_ids = position.get("token_ids", [])
+                if not token_ids:
+                    # Try to get from single position format
+                    token_id = position.get("token_id")
+                    if token_id is not None:
+                        token_ids = [token_id]
+
+                if not token_ids:
+                    self.context.logger.error(
+                        "No token IDs found for CL pool unstaking"
+                    )
+                    return None
+
+                unstake_action = {
+                    "action": Action.UNSTAKE_LP_TOKENS.value,
+                    "dex_type": dex_type,
+                    "chain": chain,
+                    "pool_address": pool_address,
+                    "is_cl_pool": True,
+                    "token_ids": token_ids,
+                    "description": f"Unstake CL LP tokens for {pool_address}",
+                }
+            else:
+                # For regular pools, we need the staked amount
+                unstake_action = {
+                    "action": Action.UNSTAKE_LP_TOKENS.value,
+                    "dex_type": dex_type,
+                    "chain": chain,
+                    "pool_address": pool_address,
+                    "is_cl_pool": False,
+                    "description": f"Unstake LP tokens for {pool_address}",
+                }
+
+            # Add gauge address if available
+            if gauge_address:
+                unstake_action["gauge_address"] = gauge_address
+
+            self.context.logger.info(
+                f"Created unstake LP tokens action: {unstake_action}"
+            )
+            return unstake_action
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error building unstake LP tokens action: {str(e)}"
+            )
+            return None
+
+    def _get_gauge_address_for_position(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, Optional[str]]:
+        """Get gauge address for a position using voter contract."""
+        try:
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
+
+            if not all([chain, pool_address]):
+                self.context.logger.error(
+                    "Missing chain or pool_address for gauge lookup"
+                )
+                return None
+
+            # Get voter contract address
+            voter_address = self.params.velodrome_voter_contract_addresses.get(
+                chain, ""
+            )
+            if not voter_address:
+                self.context.logger.error(
+                    f"No voter contract address found for chain {chain}"
+                )
+                return None
+
+            # Use the Velodrome pool behaviour to get gauge address
+            pool_behaviour = self.pools.get("velodrome")
+            if not pool_behaviour:
+                self.context.logger.error("Velodrome pool behaviour not found")
+                return None
+
+            # Get gauge address using the pool behaviour method
+            gauge_address = yield from pool_behaviour.get_gauge_address(
+                self, lp_token=pool_address, chain=chain
+            )
+
+            if gauge_address:
+                self.context.logger.info(
+                    f"Found gauge address {gauge_address} for pool {pool_address}"
+                )
+                return gauge_address
+            else:
+                self.context.logger.warning(f"No gauge found for pool {pool_address}")
+                return None
+
+        except Exception as e:
+            self.context.logger.error(f"Error getting gauge address: {str(e)}")
+            return None
+
+    def _has_staking_metadata(self, position: Dict[str, Any]) -> bool:
+        """Check if position has staking metadata."""
+        return bool(
+            position.get("gauge_address") or position.get("staked_amount", 0) > 0
+        )
+
+    def _should_add_staking_actions(self, opportunity: Dict[str, Any]) -> bool:
+        """Determine if staking actions should be added for this opportunity."""
+        dex_type = opportunity.get("dex_type")
+
+        # Only add staking for Velodrome pools
+        if dex_type != "velodrome":
+            return False
+
+        # Check if chain has voter contract configured
+        chain = opportunity.get("chain")
+        voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
+
+        return bool(voter_address)

@@ -1,0 +1,23 @@
+name: velodrome_slipstream_helper
+author: valory
+version: 0.1.0
+type: contract
+description: A wrapper for Velodrome's Slipstream Helper calls.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeifok6lmgiqjb4d2s3tmxtk46pjvpc3xfwu3bylzr3xtzrhguqnhdq
+  build/contract_interface.json: bafybeiejabouynogilagtlora6rxoqwdji4sp246rcjhuzky2ekmejz5sq
+  contract.py: bafybeid4k26xwy4fs34btrlxmvd4jopg6eef2yotg3ijjqw2drb7z2att4
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: VelodromeSlipstreamHelperContract
+contract_interface_paths:
+  ethereum: build/contract_interface.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.65.0
+  web3:
+    version: <7,>=6.0.0
+  eth_abi:
+    version: ==4.0.0

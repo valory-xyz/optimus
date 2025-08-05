@@ -1821,10 +1821,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 continue
 
             self.context.logger.info(f"Calculating safe balances for chain {chain}")
+            balances = []
 
             # Get current balances dynamically instead of using static assets
             if chain == Chain.OPTIMISM.value:
                 balances = yield from self._get_optimism_balances_from_safe_api()
+
+            if chain == Chain.MODE.value:
+                balances = yield from self._get_mode_balances_from_explorer_api()
 
             if not balances:
                 self.context.logger.warning(f"No balances found for chain {chain}")

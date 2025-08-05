@@ -2709,9 +2709,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     # ==================== CL STAKING FUNCTIONALITY ====================
 
     def stake_cl_lp_tokens(
-        self, lp_token: str, amount: int, recipient: str, **kwargs: Any
+        self, token_ids: List[int], gauge_address: str, **kwargs: Any
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Stake LP tokens in CL gauge with recipient."""
+        """Stake specific CL NFT positions in their gauge."""
         chain = kwargs.get("chain")
         safe_address = kwargs.get("safe_address")
 
@@ -2721,86 +2721,125 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return {"error": "Missing required parameters: chain, safe_address"}
 
+        if not token_ids:
+            self.context.logger.error("No token IDs provided for staking")
+            return {"error": "No token IDs provided for staking"}
+
         self.context.logger.info(
-            f"Staking {amount} CL LP tokens ({lp_token}) for recipient: {recipient} on chain: {chain}"
+            f"Staking CL NFT positions {token_ids} in gauge {gauge_address} on chain: {chain}"
         )
 
-        if amount <= 0:
-            error_msg = "Amount must be greater than 0"
-            self.context.logger.error(error_msg)
-            return {"error": error_msg}
-
-        # Get gauge address for this LP token
-        gauge_address = yield from self.get_gauge_address(lp_token, chain=chain)
-        if not gauge_address:
-            error_msg = f"No gauge found for LP token {lp_token}"
-            self.context.logger.error(error_msg)
-            return {"error": error_msg}
-
-        # Validate recipient address
-        try:
-            checksumed_recipient = self.context.ledger_api.api.to_checksum_address(
-                recipient
+        # Get position manager address
+        position_manager_address = (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain, ""
             )
-        except Exception as e:
-            error_msg = f"Invalid recipient address: {e}"
-            self.context.logger.error(error_msg)
-            return {"error": error_msg}
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No position manager address found for chain {chain}"
+            )
+            return {"error": f"No position manager address found for chain {chain}"}
 
-        # Create multisend transaction for approve + stake
+        # Check if we need to approve the gauge for all NFTs
+        is_approved = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+            contract_callable="is_approved_for_all",
+            data_key="result",
+            owner=safe_address,
+            operator=gauge_address,
+            chain_id=chain,
+        )
+
         multi_send_txs = []
 
-        # First, approve LP tokens to CL gauge
-        approve_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=lp_token,
-            contract_public_id=ERC20.contract_id,
-            contract_callable="build_approval_tx",
-            data_key="tx_hash",
-            spender=gauge_address,
-            amount=amount,
-            chain_id=chain,
-        )
+        # Add approval transaction if needed
+        if not is_approved or not is_approved.get("is_approved", False):
+            self.context.logger.info(
+                f"Setting approval for all NFTs to gauge {gauge_address}"
+            )
+            approve_all_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                contract_callable="set_approval_for_all",
+                data_key="tx_hash",
+                operator=gauge_address,
+                approved=True,
+                chain_id=chain,
+            )
 
-        if not approve_tx_hash:
-            error_msg = "Failed to create approval transaction"
+            if not approve_all_tx_hash:
+                error_msg = "Failed to create setApprovalForAll transaction"
+                self.context.logger.error(error_msg)
+                return {"error": error_msg}
+
+            multi_send_txs.append(
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": position_manager_address,
+                    "value": 0,
+                    "data": approve_all_tx_hash,
+                }
+            )
+
+        # Stake each NFT position
+        staked_positions = []
+        for token_id in token_ids:
+            # Get position liquidity to use as amount
+            position_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                contract_callable="get_position",
+                data_key="data",
+                token_id=token_id,
+                chain_id=chain,
+            )
+
+            if not position_data or not position_data.get("liquidity"):
+                self.context.logger.warning(
+                    f"No liquidity found for token ID {token_id}, skipping"
+                )
+                continue
+
+            liquidity = position_data["liquidity"]
+
+            # Create stake transaction for this NFT
+            stake_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeCLGaugeContract.contract_id,
+                contract_callable="deposit",
+                data_key="tx_hash",
+                amount=liquidity,
+                recipient=safe_address,
+                chain_id=chain,
+            )
+
+            if not stake_tx_hash:
+                self.context.logger.warning(
+                    f"Failed to create stake transaction for token ID {token_id}"
+                )
+                continue
+
+            multi_send_txs.append(
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": gauge_address,
+                    "value": 0,
+                    "data": stake_tx_hash,
+                }
+            )
+
+            staked_positions.append({"token_id": token_id, "liquidity": liquidity})
+
+        if not multi_send_txs:
+            error_msg = "No valid stake transactions created"
             self.context.logger.error(error_msg)
             return {"error": error_msg}
-
-        multi_send_txs.append(
-            {
-                "operation": MultiSendOperation.CALL,
-                "to": lp_token,
-                "value": 0,
-                "data": approve_tx_hash,
-            }
-        )
-
-        # Then, stake LP tokens in CL gauge with recipient
-        stake_tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=gauge_address,
-            contract_public_id=VelodromeCLGaugeContract.contract_id,
-            contract_callable="deposit",
-            data_key="tx_hash",
-            amount=amount,
-            recipient=checksumed_recipient,
-            chain_id=chain,
-        )
-
-        if not stake_tx_hash:
-            error_msg = "Failed to create CL stake transaction"
-            self.context.logger.error(error_msg)
-            return {"error": error_msg}
-
-        multi_send_txs.append(
-            {
-                "operation": MultiSendOperation.CALL,
-                "to": gauge_address,
-                "value": 0,
-                "data": stake_tx_hash,
-            }
-        )
 
         # Prepare multisend transaction
         multisend_address = self.params.multisend_contract_addresses.get(chain, "")
@@ -2825,25 +2864,23 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return {"error": error_msg}
 
         self.context.logger.info(
-            f"Successfully created CL stake transaction for {amount} LP tokens"
+            f"Successfully created CL stake transaction for {len(staked_positions)} positions"
         )
         return {
             "tx_hash": bytes.fromhex(multisend_tx_hash[2:]),
             "contract_address": multisend_address,
             "gauge_address": gauge_address,
-            "amount": amount,
-            "recipient": checksumed_recipient,
+            "staked_positions": staked_positions,
             "success": True,
             "is_multisend": True,
         }
 
     def unstake_cl_lp_tokens(
-        self, token_id: int, **kwargs: Any
+        self, token_ids: List[int], gauge_address: str, **kwargs: Any
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Withdraw LP tokens from CL gauge using token ID."""
+        """Withdraw specific CL NFT positions from their gauge."""
         chain = kwargs.get("chain")
         safe_address = kwargs.get("safe_address")
-        gauge_address = kwargs.get("gauge_address")
 
         if not all([chain, safe_address]):
             self.context.logger.error(
@@ -2851,71 +2888,107 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return {"error": "Missing required parameters: chain, safe_address"}
 
-        if not gauge_address:
-            self.context.logger.error(
-                "gauge_address parameter is required for unstake_cl_lp_tokens"
-            )
-            return {"error": "Missing required parameter: gauge_address"}
+        if not token_ids:
+            self.context.logger.error("No token IDs provided for unstaking")
+            return {"error": "No token IDs provided for unstaking"}
 
         self.context.logger.info(
-            f"Unstaking CL LP tokens with token ID: {token_id} on chain: {chain}"
+            f"Unstaking CL NFT positions {token_ids} from gauge {gauge_address} on chain: {chain}"
         )
 
-        if token_id < 0:
-            error_msg = "Token ID must be non-negative"
+        multi_send_txs = []
+        unstaked_positions = []
+
+        # Unstake each NFT position
+        for token_id in token_ids:
+            # Create withdraw transaction using token ID
+            withdraw_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeCLGaugeContract.contract_id,
+                contract_callable="withdraw",
+                data_key="tx_hash",
+                token_id=token_id,
+                chain_id=chain,
+            )
+
+            if not withdraw_tx_hash:
+                self.context.logger.warning(
+                    f"Failed to create withdraw transaction for token ID {token_id}"
+                )
+                continue
+
+            multi_send_txs.append(
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": gauge_address,
+                    "value": 0,
+                    "data": withdraw_tx_hash,
+                }
+            )
+
+            unstaked_positions.append({"token_id": token_id})
+
+        if not multi_send_txs:
+            error_msg = "No valid unstake transactions created"
             self.context.logger.error(error_msg)
             return {"error": error_msg}
 
-        # Create withdraw transaction using token ID
-        withdraw_tx_hash = yield from self.contract_interact(
+        # Prepare multisend transaction
+        multisend_address = self.params.multisend_contract_addresses.get(chain, "")
+        if not multisend_address:
+            error_msg = f"Could not find multisend address for chain {chain}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=gauge_address,
-            contract_public_id=VelodromeCLGaugeContract.contract_id,
-            contract_callable="withdraw",
-            data_key="tx_hash",
-            token_id=token_id,
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
             chain_id=chain,
         )
 
-        if not withdraw_tx_hash:
-            error_msg = "Failed to create CL withdraw transaction"
+        if not multisend_tx_hash:
+            error_msg = "Failed to create multisend transaction"
             self.context.logger.error(error_msg)
             return {"error": error_msg}
 
-        # For CL withdrawals, we might need multisend if approval is required
-        # For now, return single transaction
         self.context.logger.info(
-            f"Successfully created CL unstake transaction for token ID: {token_id}"
+            f"Successfully created CL unstake transaction for {len(unstaked_positions)} positions"
         )
         return {
-            "tx_hash": withdraw_tx_hash,
-            "contract_address": gauge_address,
-            "token_id": token_id,
+            "tx_hash": bytes.fromhex(multisend_tx_hash[2:]),
+            "contract_address": multisend_address,
+            "gauge_address": gauge_address,
+            "unstaked_positions": unstaked_positions,
             "success": True,
-            "is_multisend": False,
+            "is_multisend": True,
         }
 
     def claim_cl_rewards(
-        self, account: str, **kwargs: Any
+        self, gauge_address: str, **kwargs: Any
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Claim VELO emissions from CL gauge."""
         chain = kwargs.get("chain")
-        gauge_address = kwargs.get("gauge_address")
+        safe_address = kwargs.get("safe_address")
 
-        if not all([chain, gauge_address]):
+        if not all([chain, safe_address]):
             self.context.logger.error(
-                "Chain and gauge_address parameters are required for claim_cl_rewards"
+                "Chain and safe_address parameters are required for claim_cl_rewards"
             )
-            return {"error": "Missing required parameters: chain, gauge_address"}
+            return {"error": "Missing required parameters: chain, safe_address"}
 
         self.context.logger.info(
-            f"Claiming CL rewards for account: {account} on chain: {chain}"
+            f"Claiming CL rewards from gauge: {gauge_address} on chain: {chain}"
         )
 
         # Validate account address
         try:
             checksumed_account = self.context.ledger_api.api.to_checksum_address(
-                account
+                safe_address
             )
         except Exception as e:
             error_msg = f"Invalid account address: {e}"
@@ -2924,7 +2997,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
         # Check pending rewards before claiming
         pending_rewards = yield from self.get_cl_pending_rewards(
-            account, gauge_address=gauge_address, chain=chain
+            safe_address, gauge_address=gauge_address, chain=chain
         )
         if pending_rewards == 0:
             self.context.logger.info("No pending CL rewards to claim")

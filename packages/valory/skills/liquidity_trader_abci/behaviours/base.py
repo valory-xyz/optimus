@@ -50,7 +50,9 @@ from packages.valory.contracts.staking_activity_checker.contract import (
     StakingActivityCheckerContract,
 )
 from packages.valory.contracts.staking_token.contract import StakingTokenContract
-from packages.valory.contracts.velodrome_sugar.contract import VelodromeSugarContract
+from packages.valory.contracts.velodrome_slipstream_helper.contract import (
+    VelodromeSlipstreamHelperContract,
+)
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
@@ -259,7 +261,7 @@ COIN_ID_MAPPING = {
         "wrseth": "wrapped-rseth",
         "wmlt": "bmx-wrapped-mode-liquidity-token",
         "bmx": "bmx",
-        "xvelo": None,
+        "xvelo": "velodrome-finance",  # xVELO can be bridged back 1:1 for native VELO on OP
         "iusdc": "ironclad-usd",
     },
     "optimism": {
@@ -2267,6 +2269,41 @@ class LiquidityTraderBaseBehaviour(
         days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
         return days_elapsed >= position["min_hold_days"]
 
+    def _store_entry_costs(
+        self, chain: str, position_id: str, costs: float
+    ) -> Generator[None, None, None]:
+        """Store entry costs in KV store with unique key"""
+        try:
+            key = self._get_entry_costs_key(chain, position_id)
+
+            # Get existing entry costs dictionary
+            entry_costs_dict = yield from self._get_all_entry_costs()
+
+            # Update the dictionary
+            entry_costs_dict[key] = costs
+
+            # Store back to KV store
+            yield from self._write_kv(
+                {"entry_costs_dict": json.dumps(entry_costs_dict)}
+            )
+
+            self.context.logger.info(f"Stored entry costs: {key} = ${costs:.6f}")
+        except Exception as e:
+            self.context.logger.error(f"Error storing entry costs: {e}")
+
+    def _get_all_entry_costs(self) -> Generator[None, None, Dict[str, float]]:
+        """Get all entry costs from KV store"""
+        try:
+            result = yield from self._read_kv(("entry_costs_dict",))
+            if result and result.get("entry_costs_dict"):
+                entry_costs_dict = json.loads(result["entry_costs_dict"])
+                # Convert string values back to float
+                return {k: float(v) for k, v in entry_costs_dict.items()}
+            return {}
+        except Exception as e:
+            self.context.logger.error(f"Error getting all entry costs: {e}")
+            return {}
+
     def _build_exit_pool_action_base(
         self, position: Dict[str, Any], tokens: List[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
@@ -2454,7 +2491,9 @@ class LiquidityTraderBaseBehaviour(
         sqrt_price_x96: int,
     ) -> Generator[None, None, Tuple[int, int]]:
         """Get Velodrome position principal using Sugar contract."""
-        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        sugar_address = self.params.velodrome_slipstream_helper_contract_addresses.get(
+            chain
+        )
         if not sugar_address:
             self.context.logger.error(
                 f"No Velodrome Sugar contract address for chain {chain}"
@@ -2465,7 +2504,7 @@ class LiquidityTraderBaseBehaviour(
         amounts = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=sugar_address,
-            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
             contract_callable="principal",
             data_key="amounts",
             position_manager=position_manager_address,
@@ -2487,7 +2526,9 @@ class LiquidityTraderBaseBehaviour(
         liquidity: int,
     ) -> Generator[None, None, Tuple[int, int]]:
         """Get amounts for liquidity using Velodrome Sugar contract."""
-        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        sugar_address = self.params.velodrome_slipstream_helper_contract_addresses.get(
+            chain
+        )
         if not sugar_address:
             self.context.logger.error(
                 f"No Velodrome Sugar contract address for chain {chain}"
@@ -2498,7 +2539,7 @@ class LiquidityTraderBaseBehaviour(
         amounts = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=sugar_address,
-            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
             contract_callable="get_amounts_for_liquidity",
             data_key="amounts",
             sqrt_price_x96=sqrt_price_x96,
@@ -2516,7 +2557,9 @@ class LiquidityTraderBaseBehaviour(
         self, chain: str, tick: int
     ) -> Generator[None, None, int]:
         """Get sqrt ratio at tick using Velodrome Sugar contract."""
-        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        sugar_address = self.params.velodrome_slipstream_helper_contract_addresses.get(
+            chain
+        )
         if not sugar_address:
             self.context.logger.error(
                 f"No Velodrome Sugar contract address for chain {chain}"
@@ -2527,7 +2570,7 @@ class LiquidityTraderBaseBehaviour(
         sqrt_ratio = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=sugar_address,
-            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
             contract_callable="get_sqrt_ratio_at_tick",
             data_key="sqrt_ratio",
             tick=tick,

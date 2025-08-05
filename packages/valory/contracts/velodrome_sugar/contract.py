@@ -32,50 +32,6 @@ class VelodromeSugarContract(Contract):
 
     contract_id = PublicId.from_str("valory/velodrome_sugar:0.1.0")
 
-    @classmethod
-    def principal(
-        cls,
-        ledger_api: LedgerApi,
-        contract_address: str,
-        position_manager: str,
-        token_id: int,
-        sqrt_price_x96: int,
-    ) -> JSONLike:
-        """Get position principal using Velodrome Sugar contract."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        result = contract_instance.functions.principal(
-            position_manager, token_id, sqrt_price_x96
-        ).call()
-        return {"amounts": result}
-
-    @classmethod
-    def get_amounts_for_liquidity(
-        cls,
-        ledger_api: LedgerApi,
-        contract_address: str,
-        sqrt_price_x96: int,
-        sqrt_ratio_a_x96: int,
-        sqrt_ratio_b_x96: int,
-        liquidity: int,
-    ) -> JSONLike:
-        """Get amounts for liquidity using Velodrome Sugar contract."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        result = contract_instance.functions.getAmountsForLiquidity(
-            sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
-        ).call()
-        return {"amounts": result}
-
-    @classmethod
-    def get_sqrt_ratio_at_tick(
-        cls,
-        ledger_api: LedgerApi,
-        contract_address: str,
-        tick: int,
-    ) -> JSONLike:
-        """Get sqrt ratio at tick using Velodrome Sugar contract."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        result = contract_instance.functions.getSqrtRatioAtTick(tick).call()
-        return {"sqrt_ratio": result}
 
     @classmethod
     def positions(

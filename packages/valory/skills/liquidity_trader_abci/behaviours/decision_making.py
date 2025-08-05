@@ -3529,28 +3529,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Generate unique key for entry costs storage"""
         return f"entry_costs_{chain}_{position_id}_{entry_timestamp}"
 
-    def _store_entry_costs(
-        self, chain: str, position_id: str, costs: float
-    ) -> Generator[None, None, None]:
-        """Store entry costs in KV store with unique key"""
-        try:
-            key = self._get_entry_costs_key(chain, position_id)
-
-            # Get existing entry costs dictionary
-            entry_costs_dict = yield from self._get_all_entry_costs()
-
-            # Update the dictionary
-            entry_costs_dict[key] = costs
-
-            # Store back to KV store
-            yield from self._write_kv(
-                {"entry_costs_dict": json.dumps(entry_costs_dict)}
-            )
-
-            self.context.logger.info(f"Stored entry costs: {key} = ${costs:.6f}")
-        except Exception as e:
-            self.context.logger.error(f"Error storing entry costs: {e}")
-
     def _get_entry_costs(
         self, chain: str, position_id: str
     ) -> Generator[None, None, float]:
@@ -3598,19 +3576,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error updating entry costs: {e}")
             return 0.0
-
-    def _get_all_entry_costs(self) -> Generator[None, None, Dict[str, float]]:
-        """Get all entry costs from KV store"""
-        try:
-            result = yield from self._read_kv(("entry_costs_dict",))
-            if result and result.get("entry_costs_dict"):
-                entry_costs_dict = json.loads(result["entry_costs_dict"])
-                # Convert string values back to float
-                return {k: float(v) for k, v in entry_costs_dict.items()}
-            return {}
-        except Exception as e:
-            self.context.logger.error(f"Error getting all entry costs: {e}")
-            return {}
 
     def _rename_entry_costs_key(
         self, current_position: Optional[dict]
@@ -3689,30 +3654,64 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if not pool:
                 self.context.logger.error("Velodrome pool behaviour not found")
                 return None, None, None
-
-            # Get LP token balance to stake
-            lp_balance = yield from self._get_token_balance(
-                chain, safe_address, pool_address
-            )
-            if not lp_balance or lp_balance <= 0:
-                self.context.logger.error(
-                    f"No LP tokens to stake for pool {pool_address}"
-                )
-                return None, None, None
-
             # Call the appropriate staking method based on pool type
             if is_cl_pool:
-                # For CL pools, we need recipient and the amount
-                recipient = action.get("recipient", safe_address)
+                # For CL pools, get token IDs and gauge address from action or find matching position
+                token_ids = action.get("token_ids")
+                gauge_address = action.get("gauge_address")
+
+                # If not provided in action, find from current positions
+                if not token_ids or not gauge_address:
+                    matching_position = None
+                    for position in self.current_positions:
+                        if (
+                            position.get("pool_address") == pool_address
+                            and position.get("chain") == chain
+                            and position.get("status") == PositionStatus.OPEN.value
+                        ):
+                            matching_position = position
+                            break
+
+                    if not matching_position:
+                        self.context.logger.error(
+                            f"No matching position found for pool {pool_address}"
+                        )
+                        return None, None, None
+
+                    # Extract token IDs from position data
+                    if not token_ids:
+                        positions_data = matching_position.get("positions", [])
+                        token_ids = [pos["token_id"] for pos in positions_data]
+
+                    # Get gauge address if not provided
+                    if not gauge_address:
+                        gauge_address = yield from pool.get_gauge_address(
+                            pool_address, chain=chain
+                        )
+
+                if not token_ids or not gauge_address:
+                    self.context.logger.error(
+                        f"Missing token_ids ({token_ids}) or gauge_address ({gauge_address}) for CL pool staking"
+                    )
+                    return None, None, None
+
                 result = yield from pool.stake_cl_lp_tokens(
-                    lp_token=pool_address,
-                    amount=lp_balance,
-                    recipient=recipient,
+                    token_ids=token_ids,
+                    gauge_address=gauge_address,
                     chain=chain,
                     safe_address=safe_address,
                 )
             else:
-                # For regular pools
+                # For regular pools, get LP token balance to stake
+                lp_balance = yield from self._get_token_balance(
+                    chain, safe_address, pool_address
+                )
+                if not lp_balance or lp_balance <= 0:
+                    self.context.logger.error(
+                        f"No LP tokens to stake for pool {pool_address}"
+                    )
+                    return None, None, None
+
                 result = yield from pool.stake_lp_tokens(
                     lp_token=pool_address,
                     amount=lp_balance,
@@ -3817,22 +3816,52 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.error("Velodrome pool behaviour not found")
                 return None, None, None
 
-            # Get staked balance to unstake
+            # Call the appropriate unstaking method based on pool type
             if is_cl_pool:
-                # For CL pools, we need token_ids from action
-                token_ids = action.get("token_ids", [])
-                if not token_ids:
+                # For CL pools, get token IDs and gauge address from action or find matching position
+                token_ids = action.get("token_ids")
+                gauge_address = action.get("gauge_address")
+
+                # If not provided in action, find from current positions
+                if not token_ids or not gauge_address:
+                    matching_position = None
+                    for position in self.current_positions:
+                        if (
+                            position.get("pool_address") == pool_address
+                            and position.get("chain") == chain
+                            and position.get("status") == PositionStatus.OPEN.value
+                        ):
+                            matching_position = position
+                            break
+
+                    if not matching_position:
+                        self.context.logger.error(
+                            f"No matching position found for pool {pool_address}"
+                        )
+                        return None, None, None
+
+                    # Extract token IDs from position data
+                    if not token_ids:
+                        positions_data = matching_position.get("positions", [])
+                        token_ids = [pos["token_id"] for pos in positions_data]
+
+                    # Get gauge address if not provided
+                    if not gauge_address:
+                        gauge_address = yield from pool.get_gauge_address(
+                            pool_address, chain=chain
+                        )
+
+                if not token_ids or not gauge_address:
                     self.context.logger.error(
-                        "No token IDs provided for CL pool unstaking"
+                        f"Missing token_ids ({token_ids}) or gauge_address ({gauge_address}) for CL pool unstaking"
                     )
                     return None, None, None
 
-                # Use the first token_id for unstaking
                 result = yield from pool.unstake_cl_lp_tokens(
-                    token_id=token_ids[0],
+                    token_ids=token_ids,
+                    gauge_address=gauge_address,
                     chain=chain,
                     safe_address=safe_address,
-                    gauge_address=action.get("gauge_address"),
                 )
             else:
                 # For regular pools, get staked balance
@@ -3954,16 +3983,40 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             # Call the appropriate reward claiming method based on pool type
             if is_cl_pool:
-                # For CL pools, we need gauge_address
+                # For CL pools, get gauge address from action or find matching position
                 gauge_address = action.get("gauge_address")
+
+                # If not provided in action, find from current positions or get from pool
+                if not gauge_address:
+                    matching_position = None
+                    for position in self.current_positions:
+                        if (
+                            position.get("pool_address") == pool_address
+                            and position.get("chain") == chain
+                            and position.get("status") == PositionStatus.OPEN.value
+                        ):
+                            matching_position = position
+                            break
+
+                    if not matching_position:
+                        self.context.logger.error(
+                            f"No matching position found for pool {pool_address}"
+                        )
+                        return None, None, None
+
+                    # Get gauge address from pool
+                    gauge_address = yield from pool.get_gauge_address(
+                        pool_address, chain=chain
+                    )
+
                 if not gauge_address:
                     self.context.logger.error(
-                        "No gauge address provided for CL pool reward claiming"
+                        f"No gauge address found for CL pool {pool_address}"
                     )
                     return None, None, None
 
                 result = yield from pool.claim_cl_rewards(
-                    account=safe_address, gauge_address=gauge_address, chain=chain
+                    gauge_address=gauge_address, chain=chain, safe_address=safe_address
                 )
             else:
                 # For regular pools

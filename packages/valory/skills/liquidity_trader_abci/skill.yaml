@@ -9,12 +9,12 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeih7hfdbsmpowvg5httqq444gamejxmkbkdwwjs2qjilkfws66376a
   behaviours/apr_population.py: bafybeif55alo4imflrjzhrl76oqhrhlzoto6gz3e7gq2k5hvcfahcwjtka
-  behaviours/base.py: bafybeidbkybxokcnbozsfecxs7sxh7uvan3xe3qij345z3bowwtr457k2q
+  behaviours/base.py: bafybeifhekr5fm325ouohn2du65cmbpd445hrguc3takcenmbifsaflruy
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeie53dijuxkoncve6yxebvmmsz42fx7om2koumqzom5rtlg7sdeuci
-  behaviours/evaluate_strategy.py: bafybeih5y7z7p6722s2akg6gwvv5m4lpqpek3dc63u6nevjfcxnsd642by
-  behaviours/fetch_strategies.py: bafybeia73iljpj44fxfitvtceyhzmr5yqawb2jkmekp7bls7fnv4wquofa
+  behaviours/decision_making.py: bafybeieq5d3juqn77yc4m4oz7qkuulxpw3vo4tn7si7y7sbbaz22j5zslq
+  behaviours/evaluate_strategy.py: bafybeihw2mrjdasrxwklxhev4gcls3crm26iapb2ytvl2nnxlz4jdj2qpi
+  behaviours/fetch_strategies.py: bafybeigpjbuascuarlam5eaulaepoyffiwpsfrb2dbsw62pi3dk6pfxo7u
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -24,13 +24,13 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeiaa4dpad67n2ettm6jjbsq2p3dzqlndyf57k6bnzpabgqu46fpgeu
+  models.py: bafybeibq5dyiinyitxg5kqeifzkk2nn2iqqwnjzdwo2pyq7hgrwuk34ppa
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
-  pools/balancer.py: bafybeib6ftotspu2ojuk5hy6gclq36b2fnftsyi5fxocuyqayjxsgjlueu
-  pools/uniswap.py: bafybeigmqptgmjaxscszohfusgxsexqyx4awuyw7p4g5l7k2qpeyq7vdcu
-  pools/velodrome.py: bafybeicboaiir4qgapghfpticqiafzkyrfd7ibivaehzvmszc25bqs744m
+  pools/balancer.py: bafybeifn7thpqbcjtvp4tdzrizqtd5hisguzeoevtyurgjbkcujdy3ldv4
+  pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
+  pools/velodrome.py: bafybeig3xjf4jvuff2hqgmufe3diuiwdtmxzqcgyxp7xkjcgpyocksylpu
   rounds.py: bafybeihsstee7burcnrc75bjisbswxrc5h6lvi3e2l6ciiiy4nqepw2zfy
   rounds_info.py: bafybeihtj6mf74ccw6k2vokv7vkf4nwbp7j7cfm7j6cvuqop7gomavxucu
   states/__init__.py: bafybeigzgpxgx6g4ioalm7fdalcckk5lmw6z4k4sb5d4a4cdespv2umogi
@@ -53,7 +53,7 @@ fingerprint:
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
   utils/__init__.py: bafybeiefmxsdj4kz6b34hdzdc7yxu5hhvqh6pn2koszgr2lt7mhmqdzy6i
   utils/protocol_validation.py: bafybeihkot6dfgdunk5pjeysn72nvpbpgjdqt5fp6o7qvxqo4meoxo5to4
-  utils/tick_math.py: bafybeia4vjsyydjlzojqzrowprxgvdacdwxkk2lkpauun573caumazkuu4
+  utils/tick_math.py: bafybeidgd4dxshehz4by7jlvcrjfidqdrpcksn4knzd6oaolwkoc2fxc4y
 fingerprint_ignore_patterns: []
 connections:
 - valory/mirror_db:0.1.0:bafybeicphs7dg7yhpb4x5qixawua76ipj5xoaixjeqankren254wbqiyja
@@ -63,7 +63,7 @@ contracts:
 - valory/balancer_weighted_pool:0.1.0:bafybeiewnxxzzpso2iuqw6sw5rlxj6p3e4cr2czwnmfm3m2pcuihuit7nu
 - valory/balancer_vault:0.1.0:bafybeigb3dd34py2jhixmuhy7o52ex572y4d7yhrauywzn4kwzlipscxai
 - valory/balancer_queries:0.1.0:bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu
-- valory/erc20:0.1.0:bafybeiczphtgmlot3tbsqwfstagnuffw6rlzlxpodnvafodwq573q555ye
+- valory/erc20:0.1.0:bafybeigg5xv3bbvv6zfdjykncirh2wi7t7xpf4b4rebao77r2wwjg7uhjy
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeift466wsnbo2qpgax7moarlfftquzis6r4lynfl7bdcieuwldot7m
 - valory/uniswap_v3_pool:0.1.0:bafybeigipe5aznisrlbbxmbeoyan5ayughp7z57cjxwbx5qigsjgrzqav4

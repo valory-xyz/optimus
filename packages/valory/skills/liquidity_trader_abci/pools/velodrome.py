@@ -3094,6 +3094,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"CL total supply for gauge {gauge_address}: {total_supply}"
         )
         return total_supply
+
     def _calculate_slippage_protection_for_velodrome_mint(
         self,
         pool_address: str,

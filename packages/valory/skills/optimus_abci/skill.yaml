@@ -303,6 +303,12 @@ models:
       velodrome_voter_contract_addresses: '{"optimism":"0x0d9814bc039e3c9DeE53566317Fd0924ED260347","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"}'
       velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8"}'
       velo_token_contract_addresses: '{"optimism":"0x9560e827af36c94d2ac33a39bce1fe78631088db","mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81"}'
+      slippage_tolerance: 0.005
+      balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5"}'
+      safe_api_base_url: https://safe-transaction-optimism.safe.global/api/v2/safes
+      safe_api_timeout: 30
+      mode_explorer_api_base_url: https://explorer-mode-mainnet-0.t.conduit.xyz
+      mode_api_timeout: 30
     class_name: Params
   coingecko:
     args:

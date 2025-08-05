@@ -1716,7 +1716,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _get_available_tokens(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
-        """Get tokens with the highest balances."""
+        """Get tokens with the highest balances, filtering out reward tokens."""
         token_balances = []
 
         for position in self.synchronized_data.positions:
@@ -1727,6 +1727,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 balance = asset.get("balance", 0)
 
                 if chain and asset_address:
+                    # Filter out reward tokens from investment consideration
+                    reward_addresses = REWARD_TOKEN_ADDRESSES.get(chain, {})
+                    if asset_address.lower() in [
+                        addr.lower() for addr in reward_addresses.keys()
+                    ]:
+                        self.context.logger.info(
+                            f"Filtering out reward token {asset_symbol} ({asset_address}) - not for investment"
+                        )
+                        continue
+
                     investable_balance = yield from self._get_investable_balance(
                         chain, asset_address, balance
                     )

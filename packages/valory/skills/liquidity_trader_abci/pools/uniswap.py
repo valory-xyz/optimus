@@ -36,6 +36,11 @@ from packages.valory.contracts.uniswap_v3_pool.contract import UniswapV3PoolCont
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
+from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
+    get_amounts_for_liquidity,
+    get_liquidity_for_amounts,
+    get_sqrt_ratio_at_tick,
+)
 
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -119,9 +124,16 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         if not tick_lower or not tick_upper:
             return None, None
 
-        # TO-DO: add slippage protection
-        amount0_min = 0
-        amount1_min = 0
+        # Calculate slippage protection using TickMath utilities
+        (
+            amount0_min,
+            amount1_min,
+        ) = yield from self._calculate_slippage_protection_for_mint(
+            pool_address, tick_lower, tick_upper, max_amounts_in, chain
+        )
+
+        if amount0_min is None or amount1_min is None:
+            return None, None
 
         # deadline is set to be 20 minutes from current time
         last_update_time = cast(
@@ -158,6 +170,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         safe_address = kwargs.get("safe_address")
         chain = kwargs.get("chain")
         liquidity = kwargs.get("liquidity")
+        pool_address = kwargs.get("pool_address")
 
         if not all([token_id, safe_address, chain]):
             self.context.logger.error(
@@ -176,16 +189,22 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
 
         multi_send_txs = []
 
-        # decrease liquidity
-        # TO-DO: Calculate min amounts accouting for slippage
-        amount0_min = 0
-        amount1_min = 0
-
         # fetch liquidity from contract
         if not liquidity:
             liquidity = yield from self.get_liquidity_for_token(token_id, chain)
             if not liquidity:
                 return None, None, None
+
+        # Calculate slippage protection for decrease liquidity
+        (
+            amount0_min,
+            amount1_min,
+        ) = yield from self._calculate_slippage_protection_for_decrease(
+            token_id, liquidity, chain, pool_address
+        )
+
+        if amount0_min is None or amount1_min is None:
+            return None, None, None
 
         # deadline is set to be 20 minutes from current time
         last_update_time = cast(
@@ -469,3 +488,152 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             f"TICK LOWER: {adjusted_tick_lower} TICK UPPER: {adjusted_tick_upper}"
         )
         return adjusted_tick_lower, adjusted_tick_upper
+
+    def _calculate_slippage_protection_for_mint(
+        self,
+        pool_address: str,
+        tick_lower: int,
+        tick_upper: int,
+        max_amounts_in: list,
+        chain: str,
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """Calculate slippage protection for mint operations using TickMath utilities."""
+        try:
+            slot0_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=UniswapV3PoolContract.contract_id,
+                contract_callable="slot0",
+                data_key="slot0",
+                chain_id=chain,
+            )
+
+            if not slot0_data or "sqrt_price_x96" not in slot0_data:
+                self.context.logger.error(
+                    f"Failed to get slot0 data for pool {pool_address}"
+                )
+                return None, None
+
+            sqrt_price_x96 = slot0_data["sqrt_price_x96"]
+
+            # Compute tick-bound √prices
+            sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
+            sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
+
+            # Use get_liquidity_for_amounts to calculate liquidity directly from desired amounts
+            amount0_desired = max_amounts_in[0]
+            amount1_desired = max_amounts_in[1]
+
+            estimated_liquidity = get_liquidity_for_amounts(
+                sqrt_price_x96,
+                sqrt_ratio_a_x96,
+                sqrt_ratio_b_x96,
+                amount0_desired,
+                amount1_desired,
+            )
+
+            # Calculate expected amounts from the calculated liquidity
+            expected_amount0, expected_amount1 = get_amounts_for_liquidity(
+                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, estimated_liquidity
+            )
+
+            # Apply slippage tolerance
+            slippage_tolerance = self.params.slippage_tolerance
+            amount0_min = int(expected_amount0 * (1 - slippage_tolerance))
+            amount1_min = int(expected_amount1 * (1 - slippage_tolerance))
+
+            # Ensure minimum amounts never exceed maximum amounts
+            amount0_min = min(amount0_min, max_amounts_in[0])
+            amount1_min = min(amount1_min, max_amounts_in[1])
+
+            self.context.logger.info(
+                f"Uniswap slippage protection - Desired: {amount0_desired}/{amount1_desired}, "
+                f"Expected: {expected_amount0}/{expected_amount1}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}, "
+                f"Max amounts: {max_amounts_in[0]}/{max_amounts_in[1]}"
+            )
+
+            return amount0_min, amount1_min
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating slippage protection when minting: {str(e)}"
+            )
+            return None, None
+
+    def _calculate_slippage_protection_for_decrease(
+        self, token_id: int, liquidity: int, chain: str, pool_address: str
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """Calculate slippage protection for decrease liquidity operations using TickMath utilities."""
+        try:
+            position_manager_address = (
+                self.params.uniswap_position_manager_contract_addresses.get(chain, "")
+            )
+            if not position_manager_address:
+                self.context.logger.error(
+                    f"No position_manager contract address found for chain {chain}"
+                )
+                return 0, 0
+
+            position = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=UniswapV3NonfungiblePositionManagerContract.contract_id,
+                contract_callable="get_position",
+                data_key="data",
+                token_id=token_id,
+                chain_id=chain,
+            )
+
+            if not position:
+                self.context.logger.error(
+                    f"Failed to get position data for token {token_id}"
+                )
+                return 0, 0
+
+            tick_lower = position.get("tickLower")
+            tick_upper = position.get("tickUpper")
+
+            slot0_data = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=UniswapV3PoolContract.contract_id,
+                contract_callable="slot0",
+                data_key="slot0",
+                chain_id=chain,
+            )
+
+            if not slot0_data or "sqrt_price_x96" not in slot0_data:
+                self.context.logger.error(
+                    f"Failed to get slot0 data for pool {pool_address}"
+                )
+                return 0, 0
+
+            sqrt_price_x96 = slot0_data["sqrt_price_x96"]
+
+            # Compute tick-bound √prices
+            sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
+            sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
+
+            # Calculate expected amounts for the liquidity being removed
+            expected_amount0, expected_amount1 = get_amounts_for_liquidity(
+                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
+            )
+
+            # Apply slippage tolerance
+            slippage_tolerance = self.params.slippage_tolerance
+            amount0_min = int(expected_amount0 * (1 - slippage_tolerance))
+            amount1_min = int(expected_amount1 * (1 - slippage_tolerance))
+
+            self.context.logger.info(
+                f"Uniswap slippage protection when decreasing liquidity - Expected: {expected_amount0}/{expected_amount1}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}"
+            )
+
+            return amount0_min, amount1_min
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating slippage protection when decreasing liquidity: {str(e)}"
+            )
+            return None, None

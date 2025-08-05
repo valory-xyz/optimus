@@ -50,6 +50,11 @@ from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterCon
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
+from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
+    get_amounts_for_liquidity,
+    get_liquidity_for_amounts,
+    get_sqrt_ratio_at_tick,
+)
 
 
 # Constants for price history functions
@@ -183,6 +188,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     safe_address=safe_address,
                     token_ids=token_ids,
                     liquidities=liquidities,
+                    pool_address=pool_address,
                 )
             )
         else:
@@ -253,10 +259,28 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         else:
             adjusted_amounts = max_amounts_in
 
-        # Set minimum amounts (with slippage protection)
-        # TO-DO: Implement proper slippage protection
-        amount_a_min = 0
-        amount_b_min = 0
+        # Query expected amounts and apply slippage protection
+        expected_amounts = yield from self._query_add_liquidity_velodrome(
+            router_address, assets[0], assets[1], is_stable, adjusted_amounts, chain
+        )
+
+        if expected_amounts:
+            slippage_tolerance = self.params.slippage_tolerance
+            amount_a_min = int(expected_amounts["amount_a"] * (1 - slippage_tolerance))
+            amount_b_min = int(expected_amounts["amount_b"] * (1 - slippage_tolerance))
+
+            amount_a_min = min(amount_a_min, adjusted_amounts[0])
+            amount_b_min = min(amount_b_min, adjusted_amounts[1])
+            self.context.logger.info(
+                f"Velodrome stable/volatile pool slippage protection - "
+                f"Expected: {expected_amounts['amount_a']}/{expected_amounts['amount_b']}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount_a_min}/{amount_b_min}"
+            )
+        else:
+            self.context.logger.warning(
+                "Unable to quote add liquidity amounts, using zero minimums"
+            )
+            return None, None
 
         # Set deadline (20 minutes from now)
         last_update_time = cast(
@@ -320,10 +344,25 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None, None
 
-        # Set minimum amounts (with slippage protection)
-        # TO-DO: Implement proper slippage protection
-        amount_a_min = 0
-        amount_b_min = 0
+        # Query expected amounts and apply slippage protection
+        expected_amounts = yield from self._query_remove_liquidity_velodrome(
+            router_address, assets[0], assets[1], is_stable, liquidity, chain
+        )
+
+        if expected_amounts:
+            slippage_tolerance = self.params.slippage_tolerance
+            amount_a_min = int(expected_amounts["amount_a"] * (1 - slippage_tolerance))
+            amount_b_min = int(expected_amounts["amount_b"] * (1 - slippage_tolerance))
+            self.context.logger.info(
+                f"Velodrome stable/volatile pool exit slippage protection - "
+                f"Expected: {expected_amounts['amount_a']}/{expected_amounts['amount_b']}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount_a_min}/{amount_b_min}"
+            )
+        else:
+            self.context.logger.warning(
+                "Unable to quote remove liquidity amounts, using zero minimums"
+            )
+            return None, None
 
         # Set deadline (20 minutes from now)
         last_update_time = cast(
@@ -483,10 +522,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             sqrt_price_x96 = 0  # Default value
 
-        # TO-DO: add slippage protection
-        amount0_min = 0
-        amount1_min = 0
-
         # deadline is set to be 20 minutes from current time
         last_update_time = cast(
             SharedState, self.context.state
@@ -562,6 +597,24 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Position allocation: {position.get('allocation', 0):.1%}, "
                 f"Amounts: {amount0_desired}/{amount1_desired}"
             )
+
+            # Calculate slippage protection for this specific position
+            (
+                amount0_min,
+                amount1_min,
+            ) = yield from self._calculate_slippage_protection_for_velodrome_mint(
+                pool_address,
+                position["tick_lower"],
+                position["tick_upper"],
+                [amount0_desired, amount1_desired],
+                chain,
+            )
+
+            if amount0_min is None or amount1_min is None:
+                self.context.logger.error(
+                    f"Failed to calculate slippage protection for position {position}"
+                )
+                return None, None
 
             # Call mint on the CLPoolManager contract
             mint_tx_hash = yield from self.contract_interact(
@@ -640,6 +693,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         safe_address: str,
         token_ids: List[int],
         liquidities: List[int],
+        pool_address: str,
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Exit positions from a Velodrome concentrated liquidity pool."""
         position_manager_address = (
@@ -654,10 +708,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
         multi_send_txs = []
-
-        # TO-DO: Calculate min amounts accounting for slippage
-        amount0_min = 0
-        amount1_min = 0
 
         # deadline is set to be 20 minutes from current time
         last_update_time = cast(
@@ -681,6 +731,20 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                         f"Could not get liquidity for token ID {position_token_id}, skipping"
                     )
                     continue
+
+            # Calculate slippage protection for this specific position
+            (
+                amount0_min,
+                amount1_min,
+            ) = yield from self._calculate_slippage_protection_for_velodrome_decrease(
+                position_token_id, position_liquidity, chain, pool_address
+            )
+
+            if amount0_min is None or amount1_min is None:
+                self.context.logger.error(
+                    f"Failed to calculate slippage protection for position {position_token_id}"
+                )
+                return None, None
 
             # Decrease liquidity for this position
             decrease_liquidity_tx_hash = yield from self.decrease_liquidity_velodrome(
@@ -3030,3 +3094,243 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"CL total supply for gauge {gauge_address}: {total_supply}"
         )
         return total_supply
+    def _calculate_slippage_protection_for_velodrome_mint(
+        self,
+        pool_address: str,
+        tick_lower: int,
+        tick_upper: int,
+        max_amounts_in: list,
+        chain: str,
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """Calculate slippage protection for Velodrome mint operations using TickMath utilities."""
+        try:
+            sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
+            if sqrt_price_x96 is None:
+                self.context.logger.error(
+                    f"Failed to get sqrt_price_x96 for pool {pool_address}"
+                )
+                return None, None
+
+            # Compute tick-bound √prices
+            sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
+            sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
+
+            # Use get_liquidity_for_amounts to calculate liquidity directly from desired amounts
+            amount0_desired = max_amounts_in[0]
+            amount1_desired = max_amounts_in[1]
+
+            estimated_liquidity = get_liquidity_for_amounts(
+                sqrt_price_x96,
+                sqrt_ratio_a_x96,
+                sqrt_ratio_b_x96,
+                amount0_desired,
+                amount1_desired,
+            )
+
+            # Calculate expected amounts from the calculated liquidity
+            expected_amount0, expected_amount1 = get_amounts_for_liquidity(
+                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, estimated_liquidity
+            )
+
+            # Apply slippage tolerance
+            slippage_tolerance = self.params.slippage_tolerance
+            amount0_min = int(expected_amount0 * (1 - slippage_tolerance))
+            amount1_min = int(expected_amount1 * (1 - slippage_tolerance))
+
+            # Ensure minimum amounts never exceed maximum amounts
+            amount0_min = min(amount0_min, max_amounts_in[0])
+            amount1_min = min(amount1_min, max_amounts_in[1])
+
+            self.context.logger.info(
+                f"Velodrome slippage protection - Desired: {amount0_desired}/{amount1_desired}, "
+                f"Expected: {expected_amount0}/{expected_amount1}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}, "
+                f"Max amounts: {max_amounts_in[0]}/{max_amounts_in[1]}"
+            )
+
+            return amount0_min, amount1_min
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating Velodrome slippage protection when minting: {str(e)}"
+            )
+            return None, None
+
+    def _query_add_liquidity_velodrome(
+        self,
+        router_address: str,
+        token_a: str,
+        token_b: str,
+        is_stable: bool,
+        amounts: List[int],
+        chain: str,
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Query expected amounts for Velodrome addLiquidity operation."""
+        try:
+            factory = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=VelodromeRouterContract.contract_id,
+                contract_callable="factory",
+                data_key="factory",
+                chain_id=chain,
+            )
+
+            if not factory:
+                self.context.logger.info(
+                    f"No factory address found for router {router_address}"
+                )
+                return None, None, None
+
+            result = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=VelodromeRouterContract.contract_id,
+                contract_callable="quote_add_liquidity",
+                data_key="result",
+                token_a=token_a,
+                token_b=token_b,
+                stable=is_stable,
+                factory=factory,
+                amount_a_desired=amounts[0],
+                amount_b_desired=amounts[1],
+                chain_id=chain,
+            )
+
+            if result:
+                return {
+                    "amount_a": result["amount_a"],
+                    "amount_b": result["amount_b"],
+                    "liquidity": result["liquidity"],
+                }
+            else:
+                self.context.logger.warning("No result from quoteAddLiquidity")
+                return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error querying Velodrome add liquidity: {str(e)}"
+            )
+            return None
+
+    def _query_remove_liquidity_velodrome(
+        self,
+        router_address: str,
+        token_a: str,
+        token_b: str,
+        is_stable: bool,
+        liquidity: int,
+        chain: str,
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Query expected amounts for Velodrome addLiquidity operation."""
+        try:
+            factory = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=VelodromeRouterContract.contract_id,
+                contract_callable="factory",
+                data_key="factory",
+                chain_id=chain,
+            )
+
+            if not factory:
+                self.context.logger.info(
+                    f"No factory address found for router {router_address}"
+                )
+                return None, None, None
+
+            result = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=router_address,
+                contract_public_id=VelodromeRouterContract.contract_id,
+                contract_callable="quote_remove_liquidity",
+                data_key="result",
+                token_a=token_a,
+                token_b=token_b,
+                stable=is_stable,
+                factory=factory,
+                liquidity=liquidity,
+                chain_id=chain,
+            )
+
+            if result:
+                return {
+                    "amount_a": result["amount_a"],
+                    "amount_b": result["amount_b"],
+                }
+            else:
+                self.context.logger.warning("No result from quoteAddLiquidity")
+                return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error querying Velodrome add liquidity: {str(e)}"
+            )
+            return None
+
+    def _calculate_slippage_protection_for_velodrome_decrease(
+        self, token_id: int, liquidity: int, chain: str, pool_address: str
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """Calculate slippage protection for Velodrome decrease liquidity operations using TickMath utilities."""
+        try:
+            position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain, ""
+            )
+            if not position_manager_address:
+                self.context.logger.error(
+                    f"No position_manager contract address found for chain {chain}"
+                )
+                return 0, 0
+
+            position = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=position_manager_address,
+                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+                contract_callable="get_position",
+                data_key="data",
+                token_id=token_id,
+                chain_id=chain,
+            )
+
+            if not position or len(position) < 8:
+                self.context.logger.error(
+                    f"Failed to get position data for token {token_id}"
+                )
+                return 0, 0
+
+            tick_lower = position.get("tickLower")
+            tick_upper = position.get("tickUpper")
+
+            sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
+            if sqrt_price_x96 is None:
+                self.context.logger.error(
+                    f"Failed to get sqrt_price_x96 for pool {pool_address}"
+                )
+                return 0, 0
+
+            # Compute tick-bound √prices
+            sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
+            sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
+
+            # Calculate expected amounts for the liquidity being removed
+            expected_amount0, expected_amount1 = get_amounts_for_liquidity(
+                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
+            )
+
+            # Apply slippage tolerance
+            slippage_tolerance = self.params.slippage_tolerance
+            amount0_min = int(expected_amount0 * (1 - slippage_tolerance))
+            amount1_min = int(expected_amount1 * (1 - slippage_tolerance))
+
+            self.context.logger.info(
+                f"Velodrome slippage protection when decreasing liquidity - Expected: {expected_amount0}/{expected_amount1}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}"
+            )
+
+            return amount0_min, amount1_min
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating Velodrome slippage protection when decreasing liquidity: {str(e)}"
+            )
+            return None, None

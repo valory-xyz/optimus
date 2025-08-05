@@ -33,6 +33,8 @@ from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
+from packages.valory.skills.liquidity_trader_abci.behaviours.base import OLAS_ADDRESSES
+
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -1768,6 +1770,45 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return {asset_address: user_asset_balance}
 
+    def _add_to_portfolio_breakdown(
+        self,
+        portfolio_breakdown: List[Dict],
+        token_address: str,
+        token_symbol: str,
+        adjusted_balance: Decimal,
+        token_price: Decimal,
+        token_value_usd: Decimal,
+    ) -> None:
+        """Helper method to add or update portfolio breakdown entries."""
+        existing_asset = next(
+            (
+                entry
+                for entry in portfolio_breakdown
+                if entry["address"].lower() == token_address.lower()
+            ),
+            None,
+        )
+
+        if existing_asset:
+            # Update existing entry by adding balance
+            existing_asset["balance"] = float(
+                Decimal(str(existing_asset["balance"])) + adjusted_balance
+            )
+            existing_asset["value_usd"] = float(
+                Decimal(str(existing_asset["value_usd"])) + token_value_usd
+            )
+        else:
+            # Add new entry
+            portfolio_breakdown.append(
+                {
+                    "asset": token_symbol,
+                    "address": token_address,
+                    "balance": float(adjusted_balance),
+                    "price": float(token_price),
+                    "value_usd": float(token_value_usd),
+                }
+            )
+
     def _calculate_safe_balances_value(
         self, portfolio_breakdown: List[Dict]
     ) -> Generator[Decimal, None, None]:
@@ -1785,8 +1826,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Get current balances dynamically instead of using static assets
             if chain == Chain.OPTIMISM.value:
                 balances = yield from self._get_optimism_balances_from_safe_api()
-            else:
-                balances = yield from self._get_contract_based_balances(chain)
 
             if not balances:
                 self.context.logger.warning(f"No balances found for chain {chain}")
@@ -1802,6 +1841,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if token_balance == 0:
+                    continue
+
+                # Skip OLAS tokens - we'll handle them separately using accumulated rewards
+                olas_address = OLAS_ADDRESSES.get(chain)
+                if olas_address and token_address.lower() == olas_address.lower():
+                    self.context.logger.info(
+                        f"Skipping OLAS token from balances - will use accumulated rewards instead"
+                    )
                     continue
 
                 # Get token decimals and adjust balance
@@ -1844,35 +1891,46 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
                 )
 
-                # Add to portfolio breakdown if not already present
-                existing_asset = next(
-                    (
-                        entry
-                        for entry in portfolio_breakdown
-                        if entry["address"] == token_address
-                    ),
-                    None,
+                # Add to portfolio breakdown using helper method
+                self._add_to_portfolio_breakdown(
+                    portfolio_breakdown,
+                    token_address,
+                    token_symbol,
+                    adjusted_balance,
+                    token_price,
+                    token_value_usd,
                 )
 
-                if existing_asset:
-                    # Update existing entry by adding safe balance
-                    existing_asset["balance"] = float(
-                        Decimal(str(existing_asset["balance"])) + adjusted_balance
+        # After processing all balances, add OLAS rewards separately
+        olas_address = OLAS_ADDRESSES.get(chain)
+        if olas_address:
+            accumulated_olas_rewards = yield from self.get_accumulated_rewards_for_token(chain, olas_address)
+            if accumulated_olas_rewards > 0:
+                # Convert from wei to OLAS (18 decimals)
+                olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(10**18)
+                
+                # Get OLAS price
+                olas_price = yield from self._fetch_token_price(olas_address, chain)
+                if olas_price is not None:
+                    olas_price = Decimal(str(olas_price))
+                    olas_value_usd = olas_balance * olas_price
+                    total_safe_value += olas_value_usd
+
+                    self.context.logger.info(
+                        f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"
                     )
-                    existing_asset["value_usd"] = float(
-                        Decimal(str(existing_asset["value_usd"])) + token_value_usd
+
+                    # Add OLAS rewards to portfolio breakdown using helper method
+                    self._add_to_portfolio_breakdown(
+                        portfolio_breakdown,
+                        olas_address,
+                        "OLAS",
+                        olas_balance,
+                        olas_price,
+                        olas_value_usd,
                     )
                 else:
-                    # Add new entry for safe balance
-                    portfolio_breakdown.append(
-                        {
-                            "asset": token_symbol,
-                            "address": token_address,
-                            "balance": float(adjusted_balance),
-                            "price": float(token_price),
-                            "value_usd": float(token_value_usd),
-                        }
-                    )
+                    self.context.logger.warning("Could not fetch price for OLAS rewards")
 
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value

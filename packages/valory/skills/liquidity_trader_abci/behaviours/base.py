@@ -2239,7 +2239,20 @@ class LiquidityTraderBaseBehaviour(
         """Get stored accumulated rewards for a token"""
         rewards_key = f"accumulated_rewards_{chain}_{token_address.lower()}"
         result = yield from self._read_kv((rewards_key,))
-        return int(result.get(rewards_key, 0)) if result else 0
+        if not result:
+            return 0
+
+        rewards_value = result.get(rewards_key)
+        if rewards_value is None:
+            return 0
+
+        try:
+            return int(rewards_value)
+        except (ValueError, TypeError):
+            self.context.logger.warning(
+                f"Invalid rewards value for {rewards_key}: {rewards_value}, returning 0"
+            )
+            return 0
 
     def _calculate_days_since_entry(self, enter_timestamp: int) -> float:
         """Calculate days elapsed since position entry."""

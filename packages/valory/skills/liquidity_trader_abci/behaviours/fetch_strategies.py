@@ -1900,42 +1900,45 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     token_value_usd,
                 )
 
-        # After processing all balances, add OLAS rewards separately
-        olas_address = OLAS_ADDRESSES.get(chain)
-        if olas_address:
-            accumulated_olas_rewards = (
-                yield from self.get_accumulated_rewards_for_token(chain, olas_address)
-            )
-            if accumulated_olas_rewards > 0:
-                # Convert from wei to OLAS (18 decimals)
-                olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(
-                    10**18
+            yield from self.update_accumulated_rewards_for_chain(chain)
+            # After processing all balances, add OLAS rewards separately
+            olas_address = OLAS_ADDRESSES.get(chain)
+            if olas_address:
+                accumulated_olas_rewards = (
+                    yield from self.get_accumulated_rewards_for_token(
+                        chain, olas_address
+                    )
                 )
-
-                # Get OLAS price
-                olas_price = yield from self._fetch_token_price(olas_address, chain)
-                if olas_price is not None:
-                    olas_price = Decimal(str(olas_price))
-                    olas_value_usd = olas_balance * olas_price
-                    total_safe_value += olas_value_usd
-
-                    self.context.logger.info(
-                        f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"
+                if accumulated_olas_rewards > 0:
+                    # Convert from wei to OLAS (18 decimals)
+                    olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(
+                        10**18
                     )
 
-                    # Add OLAS rewards to portfolio breakdown using helper method
-                    self._add_to_portfolio_breakdown(
-                        portfolio_breakdown,
-                        olas_address,
-                        "OLAS",
-                        olas_balance,
-                        olas_price,
-                        olas_value_usd,
-                    )
-                else:
-                    self.context.logger.warning(
-                        "Could not fetch price for OLAS rewards"
-                    )
+                    # Get OLAS price
+                    olas_price = yield from self._fetch_token_price(olas_address, chain)
+                    if olas_price is not None:
+                        olas_price = Decimal(str(olas_price))
+                        olas_value_usd = olas_balance * olas_price
+                        total_safe_value += olas_value_usd
+
+                        self.context.logger.info(
+                            f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"
+                        )
+
+                        # Add OLAS rewards to portfolio breakdown using helper method
+                        self._add_to_portfolio_breakdown(
+                            portfolio_breakdown,
+                            olas_address,
+                            "OLAS",
+                            olas_balance,
+                            olas_price,
+                            olas_value_usd,
+                        )
+                    else:
+                        self.context.logger.warning(
+                            "Could not fetch price for OLAS rewards"
+                        )
 
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value

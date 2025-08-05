@@ -33,8 +33,6 @@ from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
 )
-from packages.valory.skills.liquidity_trader_abci.behaviours.base import OLAS_ADDRESSES
-
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -59,6 +57,7 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
+    OLAS_ADDRESSES,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
     SAFE_TX_GAS,
@@ -1847,7 +1846,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 olas_address = OLAS_ADDRESSES.get(chain)
                 if olas_address and token_address.lower() == olas_address.lower():
                     self.context.logger.info(
-                        f"Skipping OLAS token from balances - will use accumulated rewards instead"
+                        "Skipping OLAS token from balances - will use accumulated rewards instead"
                     )
                     continue
 
@@ -1904,11 +1903,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # After processing all balances, add OLAS rewards separately
         olas_address = OLAS_ADDRESSES.get(chain)
         if olas_address:
-            accumulated_olas_rewards = yield from self.get_accumulated_rewards_for_token(chain, olas_address)
+            accumulated_olas_rewards = (
+                yield from self.get_accumulated_rewards_for_token(chain, olas_address)
+            )
             if accumulated_olas_rewards > 0:
                 # Convert from wei to OLAS (18 decimals)
-                olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(10**18)
-                
+                olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(
+                    10**18
+                )
+
                 # Get OLAS price
                 olas_price = yield from self._fetch_token_price(olas_address, chain)
                 if olas_price is not None:
@@ -1930,7 +1933,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         olas_value_usd,
                     )
                 else:
-                    self.context.logger.warning("Could not fetch price for OLAS rewards")
+                    self.context.logger.warning(
+                        "Could not fetch price for OLAS rewards"
+                    )
 
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value

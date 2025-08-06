@@ -1,6 +1,6 @@
 {
     "contractName": "",
-    "abi": [
+    "abi": 
         [
             {
                 "anonymous": false,
@@ -662,7 +662,7 @@
                 "type": "function"
             }
         ]
-    ],
+    ,
     "bytecode": "",
     "deployedBytecode": "",
     "linkReferences": {},

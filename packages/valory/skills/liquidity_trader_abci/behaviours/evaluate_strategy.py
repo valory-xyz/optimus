@@ -1555,15 +1555,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if self.position_to_exit:
             # Step 1: Claim staking rewards before exit (if position has staking)
             if self._has_staking_metadata(self.position_to_exit):
-                claim_rewards_action = self._build_claim_staking_rewards_action(
-                    self.position_to_exit
-                )
-                if claim_rewards_action:
-                    actions.append(claim_rewards_action)
-                    self.context.logger.info(
-                        "Added claim staking rewards action before exit"
-                    )
-
                 # Step 2: Unstake LP tokens before exit
                 unstake_action = self._build_unstake_lp_tokens_action(
                     self.position_to_exit
@@ -2491,7 +2482,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             if is_cl_pool:
                 # For CL pools, we need token_id information
-                token_ids = position.get("token_ids", [])
+                positions_data = position.get("positions", [])
+                token_ids = [pos["token_id"] for pos in positions_data]
                 if not token_ids:
                     # Try to get from single position format
                     token_id = position.get("token_id")
@@ -2590,7 +2582,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _has_staking_metadata(self, position: Dict[str, Any]) -> bool:
         """Check if position has staking metadata."""
         return bool(
-            position.get("gauge_address") or position.get("staked_amount", 0) > 0
+            position.get("gauge_address")
+            or position.get("staked")
+            or position.get("staked_amount", 0) > 0
         )
 
     def _should_add_staking_actions(self, opportunity: Dict[str, Any]) -> bool:

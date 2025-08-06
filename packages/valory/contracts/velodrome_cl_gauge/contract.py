@@ -57,24 +57,14 @@ class VelodromeCLGaugeContract(Contract):
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
-        amount: int,
-        recipient: str,
+        token_id: int,
     ) -> JSONLike:
         """Prepare encoded tx for depositing tokens to CL gauge with recipient."""
-        _logger.debug(f"Preparing CL deposit transaction for amount: {amount}, recipient: {recipient}")
-        
-        if amount <= 0:
-            error_msg = "Amount must be greater than 0"
-            _logger.error(error_msg)
-            return dict(error=error_msg)
-        
-        checksumed_recipient = ledger_api.api.to_checksum_address(recipient)
-        
         return cls._encode_call(
             ledger_api,
             contract_address,
             "deposit",
-            (amount, checksumed_recipient),
+            (token_id,),
         )
 
     @classmethod
@@ -85,12 +75,6 @@ class VelodromeCLGaugeContract(Contract):
         token_id: int,
     ) -> JSONLike:
         """Prepare encoded tx for withdrawing tokens from CL gauge using token ID."""
-        _logger.debug(f"Preparing CL withdraw transaction for token ID: {token_id}")
-        
-        if token_id < 0:
-            error_msg = "Token ID must be non-negative"
-            _logger.error(error_msg)
-            return dict(error=error_msg)
         
         return cls._encode_call(
             ledger_api,
@@ -119,19 +103,35 @@ class VelodromeCLGaugeContract(Contract):
         )
 
     @classmethod
+    def get_reward_for_token_id(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Prepare encoded tx for claiming rewards for specific token ID from CL gauge."""
+                
+        return cls._encode_call(
+            ledger_api,
+            contract_address,
+            "getReward",
+            (token_id,),
+        )
+
+    @classmethod
     def earned(
         cls,
         ledger_api: EthereumApi,
         contract_address: str,
         account: str,
+        token_id: int,
     ) -> JSONLike:
         """Get the amount of rewards earned by an account in CL gauge."""
         _logger.debug(f"Getting CL earned rewards for account: {account}")
         
         checksumed_account = ledger_api.api.to_checksum_address(account)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        earned_amount = contract_instance.functions.earned(checksumed_account).call()
-        _logger.debug(f"CL earned amount for {account}: {earned_amount}")
+        earned_amount = contract_instance.functions.earned(checksumed_account, token_id).call()
         return dict(earned=earned_amount)
 
     @classmethod

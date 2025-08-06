@@ -12,9 +12,9 @@ fingerprint:
   behaviours/base.py: bafybeidtmid5y6w7kv5kmqf2hbpmlqf37yi6yz7i6okiryzpflmt5qq6am
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeidxfqplei3e6qdxhfzd3cwsba5iljnvsx4vstrsv2n4b76xsqtnte
-  behaviours/evaluate_strategy.py: bafybeihw2mrjdasrxwklxhev4gcls3crm26iapb2ytvl2nnxlz4jdj2qpi
-  behaviours/fetch_strategies.py: bafybeifljfnom5m7ngii5ludnzerivlfx54kewf4h4xpnipcdn6vcbgbbu
+  behaviours/decision_making.py: bafybeidr2qa6dchzdha644l64pmq4qvautz7fytqkqqozyrmzwmjnb7lty
+  behaviours/evaluate_strategy.py: bafybeibsvephevn2nb25qkwaxofqoyxgke7vsopurvviutxm7n6b43fgsa
+  behaviours/fetch_strategies.py: bafybeichfbp5hctrnunte764426abify4dov346ejhqcca3afcqp4ozwbi
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -30,7 +30,7 @@ fingerprint:
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeifn7thpqbcjtvp4tdzrizqtd5hisguzeoevtyurgjbkcujdy3ldv4
   pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
-  pools/velodrome.py: bafybeibpacl2hiki4eqztz6kbxdp43l5vw6t7vcox65zqbhrjbxqkhrvpe
+  pools/velodrome.py: bafybeialy3mrrdpcgretp2pzvdvueofeho4bcvco4gte3uvzreqot5j7bi
   rounds.py: bafybeihsstee7burcnrc75bjisbswxrc5h6lvi3e2l6ciiiy4nqepw2zfy
   rounds_info.py: bafybeihtj6mf74ccw6k2vokv7vkf4nwbp7j7cfm7j6cvuqop7gomavxucu
   states/__init__.py: bafybeigzgpxgx6g4ioalm7fdalcckk5lmw6z4k4sb5d4a4cdespv2umogi
@@ -76,10 +76,9 @@ contracts:
 - valory/velodrome_non_fungible_position_manager:0.1.0:bafybeib6etbmecnjelpfrv443stpzihnvogneu6xldy3cct5j737wjn6cq
 - valory/velodrome_pool:0.1.0:bafybeihe4772icn47dk2ddfgfkcbd5z66ihhrulgydl6gmc6ffdjrcrakm
 - valory/service_registry:0.1.0:bafybeidiyohupppaunqtwhxzt3kbp4k4hcryp4xgda36t3sy43brxs3vci
-- valory/velodrome_sugar:0.1.0:bafybeib3cacodyksxlf2sacgvemwdknfwz2hjijpjrvwl4jkcbf3tkuvxa
-- valory/velodrome_gauge:0.1.0:bafybeicsskf2mzjmue6brhdqzs64lkm26fe2jamvl533gpaikeyvocqvcm
-- valory/velodrome_voter:0.1.0:bafybeiht5ciywxnsrgqrovgdrwruyxf3vmye27cjagsfzs63buzapsh4ea
-- valory/velodrome_cl_gauge:0.1.0:bafybeidrkr4znxm2yld4kjxxkf43b3u7acmu7fg4nk3smwsafss2d55xay
+- valory/velodrome_gauge:0.1.0:bafybeicbrtp2burhnthqmeme2nihfg6jrhx622edt4bxhtgoxqamjcicdu
+- valory/velodrome_voter:0.1.0:bafybeid2nvctd25mcthgokt7m47f35pofff7gov3qai5aj4jdeo2uojhr4
+- valory/velodrome_cl_gauge:0.1.0:bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm
 - valory/velodrome_slipstream_helper:0.1.0:bafybeidkkemyjdafqloq7yhgk56226u2f2re4uxetpmae2jjyz4iknrmya
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
@@ -289,7 +288,7 @@ models:
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
       velodrome_slipstream_helper_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202"}'
-      velodrome_voter_contract_addresses: '{"optimism":"0x0d9814bc039e3c9DeE53566317Fd0924ED260347","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"}'
+      velodrome_voter_contract_addresses: '{"optimism":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"}'
       velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8",}'
       velo_token_contract_addresses: '{"optimism":"0x9560e827af36c94d2ac33a39bce1fe78631088db","mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81"}'
     class_name: Params

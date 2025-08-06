@@ -2265,7 +2265,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     # ==================== STAKING FUNCTIONALITY ====================
 
     def get_gauge_address(
-        self, lp_token: str, **kwargs: Any
+        self, pool_address: str, **kwargs: Any
     ) -> Generator[None, None, Optional[str]]:
         """Query voter contract for gauge address."""
         chain = kwargs.get("chain")
@@ -2276,7 +2276,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
         self.context.logger.info(
-            f"Getting gauge address for LP token: {lp_token} on chain: {chain}"
+            f"Getting gauge address for LP token: {pool_address} on chain: {chain}"
         )
 
         # Get voter contract address
@@ -2294,16 +2294,16 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             contract_public_id=VelodromeVoterContract.contract_id,
             contract_callable="gauges",
             data_key="gauge",
-            pool_address=lp_token,
+            pool_address=pool_address,
             chain_id=chain,
         )
 
         if not gauge_address or gauge_address == ZERO_ADDRESS:
-            self.context.logger.warning(f"No gauge found for LP token {lp_token}")
+            self.context.logger.warning(f"No gauge found for pool {pool_address}")
             return None
 
         self.context.logger.info(
-            f"Found gauge address: {gauge_address} for LP token: {lp_token}"
+            f"Found gauge address: {gauge_address} for pool: {pool_address}"
         )
         return gauge_address
 
@@ -2336,24 +2336,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(error_msg)
             return {"error": error_msg}
 
-        # Validate that the gauge is active
-        voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
-        if voter_address:
-            validation_result = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=voter_address,
-                contract_public_id=VelodromeVoterContract.contract_id,
-                contract_callable="validate_gauge_address",
-                data_key="is_valid",
-                gauge_address=gauge_address,
-                chain_id=chain,
-            )
-
-            if not validation_result or not validation_result.get("is_valid", False):
-                error_msg = f"Gauge {gauge_address} is not valid or not active"
-                self.context.logger.error(error_msg)
-                return {"error": error_msg}
-
         # Create multisend transaction for approve + stake
         multi_send_txs = []
 
@@ -2363,7 +2345,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             contract_address=lp_token,
             contract_public_id=ERC20.contract_id,
             contract_callable="build_approval_tx",
-            data_key="tx_hash",
+            data_key="data",
             spender=gauge_address,
             amount=amount,
             chain_id=chain,
@@ -2507,7 +2489,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"Successfully created unstake transaction for {amount} LP tokens"
         )
         return {
-            "tx_hash": withdraw_tx_hash,
+            "tx_hash": bytes.fromhex(withdraw_tx_hash[2:]),
             "contract_address": gauge_address,
             "amount": amount,
             "success": True,
@@ -2609,7 +2591,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             chain_id=chain,
         )
 
-        if not earned_result:
+        if earned_result is None:
             self.context.logger.warning(
                 f"Could not get earned rewards for user {user_address}"
             )
@@ -2747,7 +2729,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             contract_address=position_manager_address,
             contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
             contract_callable="is_approved_for_all",
-            data_key="result",
+            data_key="is_approved",
             owner=safe_address,
             operator=gauge_address,
             chain_id=chain,
@@ -2788,25 +2770,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         # Stake each NFT position
         staked_positions = []
         for token_id in token_ids:
-            # Get position liquidity to use as amount
-            position_data = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=position_manager_address,
-                contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
-                contract_callable="get_position",
-                data_key="data",
-                token_id=token_id,
-                chain_id=chain,
-            )
-
-            if not position_data or not position_data.get("liquidity"):
-                self.context.logger.warning(
-                    f"No liquidity found for token ID {token_id}, skipping"
-                )
-                continue
-
-            liquidity = position_data["liquidity"]
-
             # Create stake transaction for this NFT
             stake_tx_hash = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -2814,8 +2777,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 contract_public_id=VelodromeCLGaugeContract.contract_id,
                 contract_callable="deposit",
                 data_key="tx_hash",
-                amount=liquidity,
-                recipient=safe_address,
+                token_id=token_id,
                 chain_id=chain,
             )
 
@@ -2834,7 +2796,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
-            staked_positions.append({"token_id": token_id, "liquidity": liquidity})
+            staked_positions.append({"token_id": token_id})
 
         if not multi_send_txs:
             error_msg = "No valid stake transactions created"
@@ -2969,9 +2931,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         }
 
     def claim_cl_rewards(
-        self, gauge_address: str, **kwargs: Any
+        self, gauge_address: str, token_ids: List[int], **kwargs: Any
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Claim VELO emissions from CL gauge."""
+        """Claim VELO emissions from CL gauge for specific token IDs."""
         chain = kwargs.get("chain")
         safe_address = kwargs.get("safe_address")
 
@@ -2981,58 +2943,118 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return {"error": "Missing required parameters: chain, safe_address"}
 
+        if not token_ids:
+            self.context.logger.error("No token IDs provided for CL reward claiming")
+            return {"error": "No token IDs provided for CL reward claiming"}
+
         self.context.logger.info(
-            f"Claiming CL rewards from gauge: {gauge_address} on chain: {chain}"
+            f"Claiming CL rewards from gauge: {gauge_address} for token IDs: {token_ids} on chain: {chain}"
         )
 
-        # Validate account address
-        try:
-            checksumed_account = self.context.ledger_api.api.to_checksum_address(
-                safe_address
+        multi_send_txs = []
+        tokens_with_rewards = []
+
+        # Check pending rewards for each token ID and create claim transactions
+        for token_id in token_ids:
+            # Check pending rewards for this token ID
+            earned_result = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=gauge_address,
+                contract_public_id=VelodromeCLGaugeContract.contract_id,
+                contract_callable="earned",
+                data_key="earned",
+                account=safe_address,
+                token_id=token_id,
+                chain_id=chain,
             )
-        except Exception as e:
-            error_msg = f"Invalid account address: {e}"
-            self.context.logger.error(error_msg)
-            return {"error": error_msg}
 
-        # Check pending rewards before claiming
-        pending_rewards = yield from self.get_cl_pending_rewards(
-            safe_address, gauge_address=gauge_address, chain=chain
-        )
-        if pending_rewards == 0:
-            self.context.logger.info("No pending CL rewards to claim")
+            if earned_result is None:
+                self.context.logger.warning(
+                    f"Could not get earned rewards for token ID {token_id}"
+                )
+                continue
+
+            earned_amount = earned_result if isinstance(earned_result, int) else 0
+
+            if earned_amount > 0:
+                self.context.logger.info(
+                    f"Token ID {token_id} has pending rewards: {earned_amount}"
+                )
+
+                # Create claim rewards transaction for this token ID
+                claim_tx_hash = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=gauge_address,
+                    contract_public_id=VelodromeCLGaugeContract.contract_id,
+                    contract_callable="get_reward_for_token_id",
+                    data_key="tx_hash",
+                    token_id=token_id,
+                    chain_id=chain,
+                )
+
+                if not claim_tx_hash:
+                    self.context.logger.warning(
+                        f"Failed to create claim transaction for token ID {token_id}"
+                    )
+                    continue
+
+                multi_send_txs.append(
+                    {
+                        "operation": MultiSendOperation.CALL,
+                        "to": gauge_address,
+                        "value": 0,
+                        "data": claim_tx_hash,
+                    }
+                )
+
+                tokens_with_rewards.append(
+                    {"token_id": token_id, "earned": earned_amount}
+                )
+            else:
+                self.context.logger.info(
+                    f"Token ID {token_id} has no pending rewards, skipping"
+                )
+
+        if not multi_send_txs:
+            self.context.logger.info("No tokens with pending rewards found")
             return {
-                "message": "No pending CL rewards to claim",
-                "pending_rewards": 0,
+                "message": "No tokens with pending rewards found",
+                "tokens_checked": token_ids,
                 "success": True,
             }
 
-        # Create claim rewards transaction
-        claim_tx_hash = yield from self.contract_interact(
+        # Prepare multisend transaction
+        multisend_address = self.params.multisend_contract_addresses.get(chain, "")
+        if not multisend_address:
+            error_msg = f"Could not find multisend address for chain {chain}"
+            self.context.logger.error(error_msg)
+            return {"error": error_msg}
+
+        multisend_tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=gauge_address,
-            contract_public_id=VelodromeCLGaugeContract.contract_id,
-            contract_callable="get_reward",
-            data_key="tx_hash",
-            account=checksumed_account,
+            contract_address=multisend_address,
+            contract_public_id=MultiSendContract.contract_id,
+            contract_callable="get_tx_data",
+            data_key="data",
+            multi_send_txs=multi_send_txs,
             chain_id=chain,
         )
 
-        if not claim_tx_hash:
-            error_msg = "Failed to create CL claim rewards transaction"
+        if not multisend_tx_hash:
+            error_msg = "Failed to create multisend transaction"
             self.context.logger.error(error_msg)
             return {"error": error_msg}
 
         self.context.logger.info(
-            f"Successfully created CL claim rewards transaction. Pending rewards: {pending_rewards}"
+            f"Successfully created CL claim rewards transaction for {len(tokens_with_rewards)} tokens"
         )
         return {
-            "tx_hash": claim_tx_hash,
-            "contract_address": gauge_address,
-            "pending_rewards": pending_rewards,
-            "account": checksumed_account,
+            "tx_hash": bytes.fromhex(multisend_tx_hash[2:]),
+            "contract_address": multisend_address,
+            "gauge_address": gauge_address,
+            "tokens_with_rewards": tokens_with_rewards,
             "success": True,
-            "is_multisend": False,
+            "is_multisend": True,
         }
 
     def get_cl_pending_rewards(
@@ -3041,8 +3063,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         """Check earned rewards from CL gauge without claiming."""
         chain = kwargs.get("chain")
         gauge_address = kwargs.get("gauge_address")
+        token_id = kwargs.get("token_id")
 
-        if not all([chain, gauge_address]):
+        if not all([chain, gauge_address, token_id]):
             self.context.logger.error(
                 "Chain and gauge_address parameters are required for get_cl_pending_rewards"
             )
@@ -3052,15 +3075,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"Getting CL pending rewards for account: {account} on chain: {chain}"
         )
 
-        # Validate account address
-        try:
-            checksumed_account = self.context.ledger_api.api.to_checksum_address(
-                account
-            )
-        except Exception as e:
-            self.context.logger.error(f"Invalid account address: {e}")
-            return 0
-
         # Get earned rewards from CL gauge
         earned_result = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -3068,11 +3082,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             contract_public_id=VelodromeCLGaugeContract.contract_id,
             contract_callable="earned",
             data_key="earned",
-            account=checksumed_account,
+            account=account,
+            token_id=token_id,
             chain_id=chain,
         )
 
-        if not earned_result:
+        if earned_result is None:
             self.context.logger.warning(
                 f"Could not get CL earned rewards for user {account}"
             )
@@ -3099,15 +3114,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             f"Getting CL staked balance for account: {account} on chain: {chain}"
         )
 
-        # Validate account address
-        try:
-            checksumed_account = self.context.ledger_api.api.to_checksum_address(
-                account
-            )
-        except Exception as e:
-            self.context.logger.error(f"Invalid account address: {e}")
-            return 0
-
         # Get staked balance from CL gauge
         balance_result = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -3115,7 +3121,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             contract_public_id=VelodromeCLGaugeContract.contract_id,
             contract_callable="balance_of",
             data_key="balance",
-            account=checksumed_account,
+            account=account,
             chain_id=chain,
         )
 

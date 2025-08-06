@@ -229,15 +229,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return res
             if self.synchronized_data.last_action == Action.STAKE_LP_TOKENS.value:
-                yield from self._post_execute_stake_lp_tokens(
-                    actions, last_executed_action_index
-                )
+                self._post_execute_stake_lp_tokens(actions, last_executed_action_index)
             if self.synchronized_data.last_action == Action.UNSTAKE_LP_TOKENS.value:
-                yield from self._post_execute_unstake_lp_tokens(
+                self._post_execute_unstake_lp_tokens(
                     actions, last_executed_action_index
                 )
             if self.synchronized_data.last_action == Action.CLAIM_STAKING_REWARDS.value:
-                yield from self._post_execute_claim_staking_rewards(
+                self._post_execute_claim_staking_rewards(
                     actions, last_executed_action_index
                 )
 
@@ -3663,7 +3661,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 # If not provided in action, find from current positions
                 if not token_ids or not gauge_address:
                     matching_position = None
-                    for position in self.current_positions:
+                    for position in reversed(self.current_positions):
                         if (
                             position.get("pool_address") == pool_address
                             and position.get("chain") == chain
@@ -3686,7 +3684,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # Get gauge address if not provided
                     if not gauge_address:
                         gauge_address = yield from pool.get_gauge_address(
-                            pool_address, chain=chain
+                            self, pool_address, chain=chain
                         )
 
                 if not token_ids or not gauge_address:
@@ -3696,6 +3694,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     return None, None, None
 
                 result = yield from pool.stake_cl_lp_tokens(
+                    self,
                     token_ids=token_ids,
                     gauge_address=gauge_address,
                     chain=chain,
@@ -3713,6 +3712,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     return None, None, None
 
                 result = yield from pool.stake_lp_tokens(
+                    self,
                     lp_token=pool_address,
                     amount=lp_balance,
                     chain=chain,
@@ -3825,7 +3825,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 # If not provided in action, find from current positions
                 if not token_ids or not gauge_address:
                     matching_position = None
-                    for position in self.current_positions:
+                    for position in reversed(self.current_positions):
                         if (
                             position.get("pool_address") == pool_address
                             and position.get("chain") == chain
@@ -3848,7 +3848,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # Get gauge address if not provided
                     if not gauge_address:
                         gauge_address = yield from pool.get_gauge_address(
-                            pool_address, chain=chain
+                            self, pool_address, chain=chain
                         )
 
                 if not token_ids or not gauge_address:
@@ -3858,6 +3858,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     return None, None, None
 
                 result = yield from pool.unstake_cl_lp_tokens(
+                    self,
                     token_ids=token_ids,
                     gauge_address=gauge_address,
                     chain=chain,
@@ -3866,7 +3867,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 # For regular pools, get staked balance
                 staked_balance = yield from pool.get_staked_balance(
-                    lp_token=pool_address, user_address=safe_address, chain=chain
+                    self, lp_token=pool_address, user_address=safe_address, chain=chain
                 )
 
                 if not staked_balance or staked_balance <= 0:
@@ -3876,6 +3877,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     return None, None, None
 
                 result = yield from pool.unstake_lp_tokens(
+                    self,
                     lp_token=pool_address,
                     amount=staked_balance,
                     chain=chain,
@@ -3983,13 +3985,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             # Call the appropriate reward claiming method based on pool type
             if is_cl_pool:
-                # For CL pools, get gauge address from action or find matching position
+                # For CL pools, get token IDs and gauge address from action or find matching position
+                token_ids = action.get("token_ids")
                 gauge_address = action.get("gauge_address")
 
-                # If not provided in action, find from current positions or get from pool
-                if not gauge_address:
+                # If not provided in action, find from current positions
+                if not token_ids or not gauge_address:
                     matching_position = None
-                    for position in self.current_positions:
+                    for position in reversed(self.current_positions):
                         if (
                             position.get("pool_address") == pool_address
                             and position.get("chain") == chain
@@ -4004,24 +4007,38 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                         )
                         return None, None, None
 
-                    # Get gauge address from pool
-                    gauge_address = yield from pool.get_gauge_address(
-                        pool_address, chain=chain
-                    )
+                    # Extract token IDs from position data if not provided
+                    if not token_ids:
+                        positions_data = matching_position.get("positions", [])
+                        token_ids = [pos["token_id"] for pos in positions_data]
 
-                if not gauge_address:
+                    # Get gauge address from pool if not provided
+                    if not gauge_address:
+                        gauge_address = yield from pool.get_gauge_address(
+                            self, pool_address, chain=chain
+                        )
+
+                if not token_ids or not gauge_address:
                     self.context.logger.error(
-                        f"No gauge address found for CL pool {pool_address}"
+                        f"Missing token_ids ({token_ids}) or gauge_address ({gauge_address}) for CL pool reward claiming"
                     )
                     return None, None, None
 
+                self.context.logger.info(
+                    f"Claiming CL rewards for token IDs: {token_ids} from gauge: {gauge_address}"
+                )
+
                 result = yield from pool.claim_cl_rewards(
-                    gauge_address=gauge_address, chain=chain, safe_address=safe_address
+                    self,
+                    gauge_address=gauge_address,
+                    token_ids=token_ids,
+                    chain=chain,
+                    safe_address=safe_address,
                 )
             else:
                 # For regular pools
                 result = yield from pool.claim_rewards(
-                    lp_token=pool_address, chain=chain, safe_address=safe_address
+                    self, lp_token=pool_address, chain=chain, safe_address=safe_address
                 )
 
             if not result or result.get("error"):

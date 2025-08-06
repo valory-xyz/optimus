@@ -1,6 +1,6 @@
 {
     "contractName": "",
-    "abi": [
+    "abi": 
         [
             {
                 "inputs": [
@@ -1355,7 +1355,7 @@
                 "type": "function"
             }
         ]
-    ],
+    ,
     "bytecode": "",
     "deployedBytecode": "",
     "linkReferences": {},

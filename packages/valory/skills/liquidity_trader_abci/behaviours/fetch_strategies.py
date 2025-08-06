@@ -1103,7 +1103,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Get VELO token address for the chain
                 velo_token_address = self._get_velo_token_address(chain)
                 if velo_token_address:
-                    user_balances[velo_token_address] = velo_rewards
+                    user_balances[velo_token_address] = velo_rewards // 10**18
                     self.context.logger.info(
                         f"Added VELO rewards to position: {velo_rewards}"
                     )
@@ -4122,21 +4122,30 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if is_cl_pool:
                 # For CL pools, we need the gauge address
                 gauge_address = yield from pool.get_gauge_address(
-                    pool_address, chain=chain
+                    self, pool_address, chain=chain
                 )
                 if not gauge_address:
                     self.context.logger.warning(
                         f"No gauge found for CL pool {pool_address}"
                     )
                     return Decimal(0)
-
-                pending_rewards = yield from pool.get_cl_pending_rewards(
-                    account=user_address, gauge_address=gauge_address, chain=chain
-                )
+                positions_data = position.get("positions", [])
+                token_ids = [pos["token_id"] for pos in positions_data]
+                pending_rewards = 0
+                for token_id in token_ids:
+                    rewards = yield from pool.get_cl_pending_rewards(
+                        self,
+                        account=user_address,
+                        gauge_address=gauge_address,
+                        chain=chain,
+                        token_id=token_id,
+                    )
+                    if rewards:
+                        pending_rewards += rewards
             else:
                 # For regular pools
                 pending_rewards = yield from pool.get_pending_rewards(
-                    lp_token=pool_address, user_address=user_address, chain=chain
+                    self, lp_token=pool_address, user_address=user_address, chain=chain
                 )
 
             if pending_rewards and pending_rewards > 0:

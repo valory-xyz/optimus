@@ -1,6 +1,6 @@
 {
   "contractName": "",
-  "abi": [
+  "abi": 
     [
       {
         "stateMutability": "nonpayable",
@@ -753,7 +753,7 @@
         ]
       }
     ]
-  ],
+  ,
   "bytecode": "",
   "deployedBytecode": "",
   "linkReferences": {},

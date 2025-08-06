@@ -1930,15 +1930,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"
                         )
 
-                        # Add OLAS rewards to portfolio breakdown using helper method
-                        self._add_to_portfolio_breakdown(
-                            portfolio_breakdown,
-                            olas_address,
-                            "OLAS",
-                            olas_balance,
-                            olas_price,
-                            olas_value_usd,
-                        )
                     else:
                         self.context.logger.warning(
                             "Could not fetch price for OLAS rewards"

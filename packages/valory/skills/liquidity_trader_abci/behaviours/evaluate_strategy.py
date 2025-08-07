@@ -1225,7 +1225,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _merge_duplicate_bridge_swap_actions(
         self, actions: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Identify and merge duplicate bridge swap actions"""
+        """Identify and merge duplicate bridge swap actions, and remove redundant same-chain same-token actions"""
         try:
             if not actions:
                 return actions
@@ -1236,6 +1236,55 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 for i, action in enumerate(actions)
                 if action.get("action") == Action.FIND_BRIDGE_ROUTE.value
             ]
+
+            if len(bridge_swap_actions) == 0:
+                return actions  # No bridge actions to process
+
+            # First, filter out redundant same-chain same-token actions
+            indices_to_remove_redundant = []
+            for idx, action in bridge_swap_actions:
+                try:
+                    from_chain = action.get("from_chain", "")
+                    to_chain = action.get("to_chain", "")
+                    from_token = action.get("from_token", "")
+                    to_token = action.get("to_token", "")
+
+                    # Check if this is a redundant action (same chain and same token)
+                    if (
+                        from_chain == to_chain
+                        and from_token.lower() == to_token.lower()
+                        and from_chain
+                        and to_chain
+                        and from_token
+                        and to_token
+                    ):
+                        indices_to_remove_redundant.append(idx)
+
+                        self.context.logger.info(
+                            f"Removing redundant bridge swap action: "
+                            f"{action.get('from_token_symbol', 'unknown')} on {from_chain} "
+                            f"to {action.get('to_token_symbol', 'unknown')} on {to_chain} "
+                            f"(same chain and same token address)"
+                        )
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error checking for redundant bridge swap action: {e}. Action: {action}"
+                    )
+
+            # Remove redundant actions first
+            if indices_to_remove_redundant:
+                actions = [
+                    action
+                    for i, action in enumerate(actions)
+                    if i not in indices_to_remove_redundant
+                ]
+
+                # Update bridge_swap_actions list after removing redundant actions
+                bridge_swap_actions = [
+                    (i, action)
+                    for i, action in enumerate(actions)
+                    if action.get("action") == Action.FIND_BRIDGE_ROUTE.value
+                ]
 
             if len(bridge_swap_actions) <= 1:
                 return actions  # No duplicates possible with 0 or 1 bridge actions

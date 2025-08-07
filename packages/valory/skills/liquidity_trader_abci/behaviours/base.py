@@ -481,6 +481,9 @@ class LiquidityTraderBaseBehaviour(
             else:
                 # ERC-20 token
                 if token_info:
+                    if token_address == "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84":
+                        continue
+
                     balances.append(
                         {
                             "asset_symbol": token_info.get("symbol", "UNKNOWN"),
@@ -505,7 +508,7 @@ class LiquidityTraderBaseBehaviour(
 
         while True:
             url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
-            params = f"?trusted=true&exclude_spam=true&limit={limit}&offset={offset}"
+            params = f"?exclude_spam=true&limit={limit}&offset={offset}"
             endpoint = url + params
 
             self.context.logger.info(

@@ -9,11 +9,11 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeih7hfdbsmpowvg5httqq444gamejxmkbkdwwjs2qjilkfws66376a
   behaviours/apr_population.py: bafybeif55alo4imflrjzhrl76oqhrhlzoto6gz3e7gq2k5hvcfahcwjtka
-  behaviours/base.py: bafybeidtmid5y6w7kv5kmqf2hbpmlqf37yi6yz7i6okiryzpflmt5qq6am
+  behaviours/base.py: bafybeic5yts2eckvx3a2bhcceszqgejrrewyqyl7phtyek5xprtzx7fhla
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeidr2qa6dchzdha644l64pmq4qvautz7fytqkqqozyrmzwmjnb7lty
-  behaviours/evaluate_strategy.py: bafybeibsvephevn2nb25qkwaxofqoyxgke7vsopurvviutxm7n6b43fgsa
+  behaviours/evaluate_strategy.py: bafybeih4elro6ainkirqw6zieecfn4epqzt4et6ea425zqbm45utnk5afu
   behaviours/fetch_strategies.py: bafybeidtmblmslxuo72qfhcvpcis26rsbwcz4d5qwjdudd4stmmivfyc4a
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
@@ -228,7 +228,7 @@ models:
       slippage_for_swap: 0.08
       slippage_tolerance: 0.005
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","mode":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
-      balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5"}'
+      balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0x36caC20dd805d128c1a6Dd16eeA845C574b5A17C"}'
       uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'
       chain_to_chain_key_mapping: '{"optimism":"opt","base":"bas","mode":"mod"}'
       waiting_period_for_status_check: 5

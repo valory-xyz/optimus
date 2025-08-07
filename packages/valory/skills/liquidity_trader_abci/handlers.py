@@ -25,6 +25,7 @@ from aea.configurations.data_types import PublicId
 
 from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ipfs import IpfsMessage
+from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.handlers import (
     ABCIRoundHandler as BaseABCIRoundHandler,
 )
@@ -53,6 +54,33 @@ SigningHandler = BaseSigningHandler
 LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
+
+
+class SrrHandler(AbstractResponseHandler):
+    """A class for handling SRR messages."""
+
+    SUPPORTED_PROTOCOL: Optional[PublicId] = SrrMessage.protocol_id
+    allowed_response_performatives = frozenset(
+        {
+            SrrMessage.Performative.REQUEST,
+            SrrMessage.Performative.RESPONSE,
+        }
+    )
+
+    @property
+    def shared_state(self) -> SharedState:
+        """Get the shared state."""
+        return cast(SharedState, self.context.state)
+
+    def handle(self, message: SrrMessage) -> None:
+        """
+        Implement the reaction to an SRR message.
+
+        :param message: the message
+        :return: None
+        """
+        self.context.logger.debug(f"Received SRR message: {message}")
+        super().handle(message)
 
 
 class IpfsHandler(AbstractResponseHandler):

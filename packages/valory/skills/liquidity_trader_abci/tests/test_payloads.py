@@ -30,6 +30,7 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
     GetPositionsPayload,
     PostTxSettlementPayload,
+    WithdrawFundsPayload,
 )
 
 
@@ -79,6 +80,12 @@ from packages.valory.skills.liquidity_trader_abci.payloads import (
             PostTxSettlementPayload,
             {
                 "content": "content",
+            },
+        ),
+        (
+            WithdrawFundsPayload,
+            {
+                "withdrawal_actions": '[]',
             },
         ),
     ],

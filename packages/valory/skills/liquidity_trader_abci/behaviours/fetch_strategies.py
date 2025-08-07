@@ -957,6 +957,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Always show all portfolio breakdown entries to display complete portfolio
             for entry in portfolio_breakdown:
                 try:
+                    chain = self.params.target_investment_chains[0]
+                    if (
+                        entry.get("address").lower()
+                        == OLAS_ADDRESSES.get(chain).lower()
+                    ):
+                        continue
+
                     filtered_portfolio_breakdown.append(
                         {
                             "asset": entry["asset"],
@@ -1924,7 +1931,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if olas_price is not None:
                         olas_price = Decimal(str(olas_price))
                         olas_value_usd = olas_balance * olas_price
-                        total_safe_value += olas_value_usd
 
                         self.context.logger.info(
                             f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"

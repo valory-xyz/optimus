@@ -481,7 +481,9 @@ class LiquidityTraderBaseBehaviour(
             else:
                 # ERC-20 token
                 if token_info:
-                    if token_address == "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84":
+                    if (
+                        token_address == "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84"
+                    ):  # nosec B105
                         continue
 
                     balances.append(

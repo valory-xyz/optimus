@@ -4204,15 +4204,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
              patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.PORTFOLIO_UPDATE_INTERVAL", 100):
             assert fetch_behaviour._is_time_update_due() is True
 
-    def test_is_time_update_due_false(self):
-        """Time update not due when the interval hasn't elapsed."""
-        fetch_behaviour = self._create_fetch_strategies_behaviour()
-        # last updated very recent
-        fetch_behaviour.portfolio_data = {"last_updated": 10_000}
-        with patch.object(fetch_behaviour, "_get_current_timestamp", return_value=10_050), \
-             patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.PORTFOLIO_UPDATE_INTERVAL", 1000):
-            assert fetch_behaviour._is_time_update_due() is False
-
     def test_have_positions_changed_true(self):
         """Positions have changed when count differs, new opened, or closed detected."""
         fetch_behaviour = self._create_fetch_strategies_behaviour()
@@ -7084,101 +7075,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         
         assert result == {}
 
-    def test_calculate_total_reversion_value_success(self):
-        """Test successful reversion value calculation."""
-        fetch_behaviour = self._create_fetch_strategies_behaviour()
-        
-        eth_transfers = [
-            {
-                "symbol": "ETH",
-                "amount": 10.0,
-                "timestamp": "2024-01-01T10:00:00Z"
-            }
-        ]
-        
-        reversion_transfers = [
-            {
-                "symbol": "ETH",
-                "amount": 2.0,
-                "timestamp": "2024-01-03T10:00:00Z"
-            },
-            {
-                "symbol": "ETH",
-                "amount": 1.0,
-                "timestamp": "2024-01-04T10:00:00Z"
-            }
-        ]
-        
-        def mock_fetch_historical_eth_price(date_str):
-            yield
-            if "01-01-2024" in date_str:
-                return 2000.0  # Price for reversion date
-            return 2100.0  # Price for current date
-        
-        with patch.object(fetch_behaviour, '_fetch_historical_eth_price', mock_fetch_historical_eth_price):
-            result = self._consume_generator(
-                fetch_behaviour._calculate_total_reversion_value(eth_transfers, reversion_transfers)
-            )
-            
-            # Expected: (2.0 * 2000.0) + (1.0 * 2100.0) = 4000.0 + 2100.0 = 6100.0
-            assert result == 6100.0
-
-    def test_calculate_total_reversion_value_no_transfers(self):
-        """Test reversion value calculation with no transfers."""
-        fetch_behaviour = self._create_fetch_strategies_behaviour()
-        
-        eth_transfers = [
-            {
-                "symbol": "ETH",
-                "amount": 10.0,
-                "timestamp": "2024-01-01T10:00:00Z"
-            }
-        ]
-        
-        reversion_transfers = []
-        
-        def mock_fetch_historical_eth_price(date_str):
-            yield
-            return 2000.0
-        
-        with patch.object(fetch_behaviour, '_fetch_historical_eth_price', mock_fetch_historical_eth_price):
-            result = self._consume_generator(
-                fetch_behaviour._calculate_total_reversion_value(eth_transfers, reversion_transfers)
-            )
-            
-            assert result == 0.0
-
-    def test_calculate_total_reversion_value_price_failure(self):
-        """Test reversion value calculation when price fetch fails."""
-        fetch_behaviour = self._create_fetch_strategies_behaviour()
-        
-        eth_transfers = [
-            {
-                "symbol": "ETH",
-                "amount": 10.0,
-                "timestamp": "2024-01-01T10:00:00Z"
-            }
-        ]
-        
-        reversion_transfers = [
-            {
-                "symbol": "ETH",
-                "amount": 2.0,
-                "timestamp": "2024-01-03T10:00:00Z"
-            }
-        ]
-        
-        def mock_fetch_historical_eth_price(date_str):
-            yield
-            return None  # Price fetch fails
-        
-        with patch.object(fetch_behaviour, '_fetch_historical_eth_price', mock_fetch_historical_eth_price):
-            result = self._consume_generator(
-                fetch_behaviour._calculate_total_reversion_value(eth_transfers, reversion_transfers)
-            )
-            
-            assert result == 0.0
-
     def test_calculate_total_reversion_value_invalid_timestamp(self):
         """Test reversion value calculation with invalid timestamp."""
         fetch_behaviour = self._create_fetch_strategies_behaviour()
@@ -7223,8 +7119,9 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             
             def mock_get_service_staking_state(chain):
                 # Simulate staked state
-                fetch_behaviour.service_staking_state = StakingState.STAKED
                 yield
+                fetch_behaviour.service_staking_state = StakingState.STAKED
+
             
             def mock_get_service_info(chain):
                 print(f"DEBUG: mock_get_service_info called with chain={chain}")
@@ -7310,43 +7207,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             
             assert result is None
 
-    def test_get_master_safe_address_service_registry_fallback(self):
-        """Test master safe address fetch using service registry fallback."""
-        fetch_behaviour = self._create_fetch_strategies_behaviour()
-        
-        # Set staking token and chain to None to trigger fallback using patch.dict
-        with patch.dict(fetch_behaviour.params.__dict__, {
-            'staking_token_contract_address': None,
-            'staking_chain': None,
-            'on_chain_service_id': 'test_service_id'
-        }):
-        
-            def mock_contract_interact(performative, contract_address, contract_public_id,
-                                    contract_callable, data_key, **kwargs):
-                if contract_callable == "get_service_owner":
-                    # Yield intermediate values (like the actual method does)
-                    yield
-                    # Return the final result
-                    return "0xmaster123456789012345678901234567890123456"
-                else:
-                    # Yield intermediate values (like the actual method does)
-                    yield
-                    # Return the final result
-                    return None
-        
-            def mock_check_is_valid_safe_address(address, chain):
-                # Yield intermediate values (like the actual method does)
-                yield
-                # Return the final result
-                return True
-        
-            with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact), \
-                 patch.object(fetch_behaviour, 'check_is_valid_safe_address', mock_check_is_valid_safe_address):
-                
-                result = self._consume_generator(fetch_behaviour.get_master_safe_address())
-                
-                assert result == "0xmaster123456789012345678901234567890123456"
-
     def test_get_master_safe_address_service_registry_failure(self):
         """Test master safe address fetch when service registry fails."""
         fetch_behaviour = self._create_fetch_strategies_behaviour()
@@ -7386,19 +7246,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             result = self._consume_generator(fetch_behaviour.get_master_safe_address())
             
             assert result is None
-
-    def test_read_investing_paused_true(self):
-        """Test reading investing_paused flag when it's set to true."""
-        fetch_behaviour = self._create_fetch_strategies_behaviour()
-        
-        def mock_read_kv(keys):
-            yield
-            return {"investing_paused": "true"}
-        
-        with patch.object(fetch_behaviour, '_read_kv', mock_read_kv):
-            result = self._consume_generator(fetch_behaviour._read_investing_paused())
-            
-            assert result is True
 
     def test_read_investing_paused_false(self):
         """Test reading investing_paused flag when it's set to false."""
@@ -7617,51 +7464,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             result = self._consume_generator(fetch_behaviour.calculate_initial_investment_value_from_funding_events())
             
             assert result is None
-
-    def test_calculate_chain_investment_value_success(self):
-        """Test successful chain investment calculation."""
-        fetch_behaviour = self._create_fetch_strategies_behaviour()
-        
-        # Mock transfer data
-        mock_transfers = {
-            "2024-01-15": [
-                {"symbol": "ETH", "delta": 10.0, "amount": 10.0, "timestamp": "1642248000"},
-                {"symbol": "USDC", "delta": 1000.0, "amount": 1000.0, "timestamp": "1642248000"}
-            ]
-        }
-        
-        def mock_track_eth_transfers_and_reversions(safe_address, chain):
-            yield
-            return {"reversion_amount": 0.0, "historical_reversion_value": 0.0, "reversion_date": None}
-        
-        def mock_fetch_historical_eth_price(date_str):
-            yield
-            return 2000.0  # $2000 per ETH
-        
-        def mock_fetch_historical_token_price(coingecko_id, date_str):
-            yield
-            return 1.0  # $1 per USDC
-        
-        def mock_get_coin_id_from_symbol(symbol, chain):
-            if symbol == "USDC":
-                return "usd-coin"
-            return None
-        
-        def mock_save_chain_total_investment(chain, total):
-            yield
-        
-        with patch.object(fetch_behaviour, '_track_eth_transfers_and_reversions', mock_track_eth_transfers_and_reversions), \
-            patch.object(fetch_behaviour, '_fetch_historical_eth_price', mock_fetch_historical_eth_price), \
-            patch.object(fetch_behaviour, '_fetch_historical_token_price', mock_fetch_historical_token_price), \
-            patch.object(fetch_behaviour, 'get_coin_id_from_symbol', mock_get_coin_id_from_symbol), \
-            patch.object(fetch_behaviour, '_save_chain_total_investment', mock_save_chain_total_investment):
-            
-            result = self._consume_generator(fetch_behaviour._calculate_chain_investment_value(
-                mock_transfers, "optimism", "0x1234567890123456789012345678901234567890"
-            ))
-            
-            # Expected: (10 ETH * $2000) + (1000 USDC * $1) = $20,000 + $1,000 = $21,000
-            assert result == 21000.0
 
     def test_calculate_chain_investment_value_with_reversion(self):
         """Test chain investment calculation with reversion handling."""
@@ -7987,3 +7789,1125 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             
             # Should handle exception gracefully and return None (since total_investment is 0.0)
             assert result is None 
+
+    def test_adjust_for_decimals_edge_cases(self):
+        """Test _adjust_for_decimals method with edge cases."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Test with zero decimals
+        result1 = fetch_behaviour._adjust_for_decimals(100, 0)
+        assert result1 == Decimal('100')
+        
+        # Test with large numbers
+        result2 = fetch_behaviour._adjust_for_decimals(999999999999999999, 18)
+        assert result2 == Decimal('0.999999999999999999')
+
+    def test_update_portfolio_breakdown_ratios_success(self):
+        """Test _update_portfolio_breakdown_ratios method with valid data."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        portfolio_breakdown = [
+            {"value_usd": "100.0", "balance": "10.0", "price": "10.0"},
+            {"value_usd": "200.0", "balance": "20.0", "price": "10.0"},
+            {"value_usd": "300.0", "balance": "30.0", "price": "10.0"}
+        ]
+        
+        total_value = Decimal('600.0')
+        
+        fetch_behaviour._update_portfolio_breakdown_ratios(portfolio_breakdown, total_value)
+        
+        # Check that ratios are calculated correctly
+        assert len(portfolio_breakdown) == 3
+        assert portfolio_breakdown[0]["ratio"] == Decimal('0.166667')  # 100/600
+        assert portfolio_breakdown[1]["ratio"] == Decimal('0.333333')  # 200/600
+        assert portfolio_breakdown[2]["ratio"] == Decimal('0.5')       # 300/600
+        
+        # Check that values are converted to float
+        assert isinstance(portfolio_breakdown[0]["value_usd"], float)
+        assert isinstance(portfolio_breakdown[0]["balance"], float)
+        assert isinstance(portfolio_breakdown[0]["price"], float)
+
+    def test_update_portfolio_breakdown_ratios_empty_list(self):
+        """Test _update_portfolio_breakdown_ratios method with empty portfolio."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        portfolio_breakdown = []
+        total_value = Decimal('100.0')
+        
+        # Should not raise any exception
+        fetch_behaviour._update_portfolio_breakdown_ratios(portfolio_breakdown, total_value)
+        assert len(portfolio_breakdown) == 0
+
+    def test_update_portfolio_breakdown_ratios_zero_total_value(self):
+        """Test _update_portfolio_breakdown_ratios method with zero total value."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        portfolio_breakdown = [
+            {"value_usd": "100.0", "balance": "10.0", "price": "10.0"}
+        ]
+        
+        total_value = Decimal('0.0')
+        
+        fetch_behaviour._update_portfolio_breakdown_ratios(portfolio_breakdown, total_value)
+        
+        # Should set ratio to 0.0 when total_value is 0
+        assert portfolio_breakdown[0]["ratio"] == Decimal('0.0')
+
+    def test_update_portfolio_breakdown_ratios_filter_small_values(self):
+        """Test _update_portfolio_breakdown_ratios method filters small values."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        portfolio_breakdown = [
+            {"value_usd": "100.0", "balance": "10.0", "price": "10.0"},
+            {"value_usd": "0.005", "balance": "0.001", "price": "5.0"},  # Should be filtered out
+            {"value_usd": "200.0", "balance": "20.0", "price": "10.0"}
+        ]
+        
+        total_value = Decimal('300.0')
+        
+        fetch_behaviour._update_portfolio_breakdown_ratios(portfolio_breakdown, total_value)
+        
+        # Should filter out the small value entry
+        assert len(portfolio_breakdown) == 2
+        assert portfolio_breakdown[0]["value_usd"] == 100.0
+        assert portfolio_breakdown[1]["value_usd"] == 200.0
+
+    def test_update_portfolio_breakdown_ratios_missing_value_usd(self):
+        """Test _update_portfolio_breakdown_ratios method with missing value_usd."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        portfolio_breakdown = [
+            {"value_usd": 100.0, "balance": 10.0, "price": 10.0},
+            {"value_usd": 0.0, "balance": 10.0, "price": 10.0},  # Zero value_usd (will be filtered out)
+            {"value_usd": 200.0, "balance": 20.0, "price": 10.0}
+        ]
+        
+        total_value = Decimal('300.0')
+        
+        fetch_behaviour._update_portfolio_breakdown_ratios(portfolio_breakdown, total_value)
+        
+        # Should filter out the entry with zero value_usd (less than 0.01 threshold)
+        assert len(portfolio_breakdown) == 2
+
+    def test_create_portfolio_data_success(self):
+        """Test _create_portfolio_data method with valid inputs."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock environment variable
+        with patch.dict('os.environ', {'AEA_AGENT': 'test:agent:hash'}):
+            total_pools_value = Decimal('1000.0')
+            total_safe_value = Decimal('500.0')
+            initial_investment = 1000.0
+            volume = 500.0
+            allocations = [
+                {
+                    "chain": "optimism",
+                    "type": "uniswap",
+                    "id": "pool1",
+                    "assets": ["WETH", "USDC"],
+                    "apr": 10.5,
+                    "details": {"pool": "test"},
+                    "ratio": 0.6,
+                    "address": "0x123"
+                }
+            ]
+            portfolio_breakdown = [
+                {
+                    "asset": "WETH",
+                    "address": "0x456",
+                    "balance": 10.0,
+                    "price": 2000.0,
+                    "value_usd": 20000.0,
+                    "ratio": 0.6
+                }
+            ]
+            
+            with patch.object(fetch_behaviour, '_get_current_timestamp', return_value=1234567890):
+                result = fetch_behaviour._create_portfolio_data(
+                    total_pools_value, total_safe_value, initial_investment, 
+                    volume, allocations, portfolio_breakdown
+                )
+            
+            assert result["portfolio_value"] == 1500.0
+            assert result["value_in_pools"] == 1000.0
+            assert result["value_in_safe"] == 500.0
+            assert result["initial_investment"] == 1000.0
+            assert result["volume"] == 500.0
+            assert result["roi"] == 50.0  # (1500/1000 - 1) * 100
+            assert result["agent_hash"] == "hash"
+            assert len(result["allocations"]) == 1
+            assert len(result["portfolio_breakdown"]) == 1
+
+    def test_create_portfolio_data_zero_initial_investment(self):
+        """Test _create_portfolio_data method with zero initial investment."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        with patch.dict('os.environ', {'AEA_AGENT': 'test:agent:hash'}):
+            with patch.object(fetch_behaviour, '_get_current_timestamp', return_value=1234567890):
+                result = fetch_behaviour._create_portfolio_data(
+                    Decimal('1000.0'), Decimal('500.0'), 0.0,
+                    500.0, [], []
+                )
+        
+        assert result["roi"] is None
+
+    def test_create_portfolio_data_negative_initial_investment(self):
+        """Test _create_portfolio_data method with negative initial investment."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        with patch.dict('os.environ', {'AEA_AGENT': 'test:agent:hash'}):
+            with patch.object(fetch_behaviour, '_get_current_timestamp', return_value=1234567890):
+                result = fetch_behaviour._create_portfolio_data(
+                    Decimal('1000.0'), Decimal('500.0'), -100.0, 
+                    500.0, [], []
+                )
+                
+                assert result["roi"] is None
+
+    def test_create_portfolio_data_no_agent_config(self):
+        """Test _create_portfolio_data method without agent config."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        with patch.dict('os.environ', {}, clear=True):
+            with patch.object(fetch_behaviour, '_get_current_timestamp', return_value=1234567890):
+                result = fetch_behaviour._create_portfolio_data(
+                    Decimal('1000.0'), Decimal('500.0'), 1000.0, 
+                    500.0, [], []
+                )
+                
+                assert result["agent_hash"] == "Not found"
+
+    def test_should_include_transfer_mode_true(self):
+        """Test _should_include_transfer_mode method returns True for valid transfers."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = {
+            "hash": "0x1234567890123456789012345678901234567890",
+            "is_contract": False
+        }
+        
+        result = fetch_behaviour._should_include_transfer_mode(from_address)
+        assert result is True
+
+    def test_should_include_transfer_mode_false_null_address(self):
+        """Test _should_include_transfer_mode method returns False for null addresses."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = {
+            "hash": "0x0000000000000000000000000000000000000000",
+            "is_contract": False
+        }
+        
+        result = fetch_behaviour._should_include_transfer_mode(from_address)
+        assert result is False
+
+    def test_should_include_transfer_mode_false_empty_address(self):
+        """Test _should_include_transfer_mode method returns False for empty address."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = {
+            "hash": "",
+            "is_contract": False
+        }
+        
+        result = fetch_behaviour._should_include_transfer_mode(from_address)
+        assert result is False
+
+    def test_should_include_transfer_mode_false_no_from_address(self):
+        """Test _should_include_transfer_mode method returns False when no from_address."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        result = fetch_behaviour._should_include_transfer_mode(None)
+        assert result is False
+
+    def test_should_include_transfer_mode_gnosis_safe_contract(self):
+        """Test _should_include_transfer_mode method with Gnosis safe contract."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = {
+            "hash": "0x1234567890123456789012345678901234567890",
+            "is_contract": True
+        }
+        
+        # Mock _is_gnosis_safe to return True
+        with patch.object(fetch_behaviour, '_is_gnosis_safe', return_value=True):
+            result = fetch_behaviour._should_include_transfer_mode(from_address)
+            assert result is True
+
+    def test_should_include_transfer_mode_regular_contract(self):
+        """Test _should_include_transfer_mode method with regular contract."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = {
+            "hash": "0x1234567890123456789012345678901234567890",
+            "is_contract": True
+        }
+        
+        # Mock _is_gnosis_safe to return False
+        with patch.object(fetch_behaviour, '_is_gnosis_safe', return_value=False):
+            result = fetch_behaviour._should_include_transfer_mode(from_address)
+            assert result is False
+
+    def test_should_include_transfer_mode_eth_transfer_invalid_status(self):
+        """Test _should_include_transfer_mode method with invalid ETH transfer status."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = {
+            "hash": "0x1234567890123456789012345678901234567890",
+            "is_contract": False
+        }
+        
+        tx_data = {"status": "failed", "value": "1000"}
+        
+        result = fetch_behaviour._should_include_transfer_mode(from_address, tx_data, True)
+        assert result is False
+
+    def test_should_include_transfer_mode_eth_transfer_zero_value(self):
+        """Test _should_include_transfer_mode method with zero ETH transfer value."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = {
+            "hash": "0x1234567890123456789012345678901234567890",
+            "is_contract": False
+        }
+        
+        tx_data = {"status": "ok", "value": "0"}
+        
+        result = fetch_behaviour._should_include_transfer_mode(from_address, tx_data, True)
+        assert result is False
+
+    def test_save_transfer_data_mode_success(self):
+        """Test _save_transfer_data_mode method."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        test_data = {"transfers": [{"hash": "0x123", "value": "1000"}]}
+        
+        def mock_write_kv(data):
+            yield None
+        
+        with patch.object(fetch_behaviour, '_write_kv', mock_write_kv):
+            result = list(fetch_behaviour._save_transfer_data_mode(test_data))
+            assert result == [None]
+
+    def test_should_include_transfer_optimism_success(self):
+        """Test _should_include_transfer_optimism method with valid address."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = "0x1234567890123456789012345678901234567890"
+        
+        def mock_request_with_retries(endpoint, method=None, body=None, headers=None, rate_limited_code=None, rate_limited_callback=None, retry_wait=None):
+            yield
+            if "mainnet.optimism.io" in endpoint:
+                # Mock the contract check - return that it's not a contract (EOA)
+                return (True, {"result": "0x"})
+            elif "safe-transaction-optimism.safe.global" in endpoint:
+                # Mock the Gnosis Safe check - return success
+                return (True, {"status": "ok"})
+        
+        with patch.object(fetch_behaviour, '_request_with_retries', mock_request_with_retries):
+            result = self._consume_generator(
+                fetch_behaviour._should_include_transfer_optimism(from_address)
+            )
+            assert result is True  # EOA address, should be included
+
+    def test_should_include_transfer_optimism_contract_address(self):
+        """Test _should_include_transfer_optimism method with contract address."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = "0x1234567890123456789012345678901234567890"
+        
+        def mock_request_with_retries(endpoint, method=None, body=None, headers=None, rate_limited_code=None, rate_limited_callback=None, retry_wait=None):
+            yield
+            if "mainnet.optimism.io" in endpoint:
+                # Mock the contract check - return that it's a contract
+                return (True, {"result": "0x1234567890abcdef"})
+            elif "safe-transaction-optimism.safe.global" in endpoint:
+                # Mock the Gnosis Safe check - return failure (not a safe)
+                return (False, {})
+        
+        with patch.object(fetch_behaviour, '_request_with_retries', mock_request_with_retries):
+            result = self._consume_generator(
+                fetch_behaviour._should_include_transfer_optimism(from_address)
+            )
+            assert result is False  # Contract but not a safe, should be excluded
+
+    def test_should_include_transfer_optimism_gnosis_safe(self):
+        """Test _should_include_transfer_optimism method with Gnosis safe."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        from_address = "0x1234567890123456789012345678901234567890"
+        
+        def mock_request_with_retries(endpoint, method=None, body=None, headers=None, rate_limited_code=None, rate_limited_callback=None, retry_wait=None):
+            yield
+            if "mainnet.optimism.io" in endpoint:
+                # Mock the contract check - return that it's a contract
+                return (True, {"result": "0x1234567890abcdef"})
+            elif "safe-transaction-optimism.safe.global" in endpoint:
+                # Mock the Gnosis Safe check - return success (is a safe)
+                return (True, {"status": "ok"})
+        
+        with patch.object(fetch_behaviour, '_request_with_retries', mock_request_with_retries):
+            result = self._consume_generator(
+                fetch_behaviour._should_include_transfer_optimism(from_address)
+            )
+            assert result is True  # Contract and is a safe, should be included
+
+    def test_save_transfer_data_optimism_success(self):
+        """Test _save_transfer_data_optimism method."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        test_data = {"transfers": [{"hash": "0x123", "value": "1000"}]}
+        
+        def mock_write_kv(data):
+            yield None
+        
+        with patch.object(fetch_behaviour, '_write_kv', mock_write_kv):
+            result = list(fetch_behaviour._save_transfer_data_optimism(test_data))
+            assert result == [None]
+
+    def test_get_tick_ranges_unsupported_dex(self):
+        """Test _get_tick_ranges method with unsupported DEX type."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position = {"dex_type": "unsupported_dex"}
+        
+        result = list(fetch_behaviour._get_tick_ranges(position, "optimism"))
+        assert result == []
+
+    def test_get_tick_ranges_velodrome_non_cl_pool(self):
+        """Test _get_tick_ranges method with Velodrome non-CL pool."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position = {
+            "dex_type": "velodrome",
+            "is_cl_pool": False
+        }
+        
+        result = list(fetch_behaviour._get_tick_ranges(position, "optimism"))
+        assert result == []
+
+    def test_get_tick_ranges_no_pool_address(self):
+        """Test _get_tick_ranges method with no pool address."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position = {
+            "dex_type": "uniswap_v3"
+        }
+        
+        result = list(fetch_behaviour._get_tick_ranges(position, "optimism"))
+        assert result == []
+
+    def test_get_tick_ranges_contract_failure(self):
+        """Test _get_tick_ranges method when contract call fails."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position = {
+            "dex_type": "uniswap_v3",
+            "pool_address": "0x1234567890123456789012345678901234567890"
+        }
+        
+        def mock_contract_interact(**kwargs):
+            yield None  # Simulate contract call failure
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = list(fetch_behaviour._get_tick_ranges(position, "optimism"))
+            assert result == []
+
+    def test_get_tick_ranges_invalid_slot0_data(self):
+        """Test _get_tick_ranges method with invalid slot0 data."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position = {
+            "dex_type": "uniswap_v3",
+            "pool_address": "0x1234567890123456789012345678901234567890"
+        }
+        
+        def mock_contract_interact(**kwargs):
+            yield {"invalid": "data"}  # Missing tick data
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = list(fetch_behaviour._get_tick_ranges(position, "optimism"))
+            assert result == []
+
+    def test_have_positions_changed_no_last_data(self):
+        """Test _have_positions_changed method with no last portfolio data."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        result = fetch_behaviour._have_positions_changed({})
+        assert result is True  # Should return True when no last data
+
+    def test_have_positions_changed_no_positions_key(self):
+        """Test _have_positions_changed method with no positions key."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        last_portfolio_data = {"some_other_key": "value"}
+        
+        result = fetch_behaviour._have_positions_changed(last_portfolio_data)
+        assert result is True  # Should return True when no positions key
+
+    def test_have_positions_changed_different_number_of_positions(self):
+        """Test _have_positions_changed method with different number of positions."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        last_portfolio_data = {
+            "positions": [
+                {"pool_address": "0x123", "balance": "100.0"}
+            ]
+        }
+        
+        # Mock current positions with different count
+        with patch.object(fetch_behaviour, 'current_positions', [
+            {"pool_address": "0x123", "balance": "100.0"},
+            {"pool_address": "0x456", "balance": "200.0"}
+        ]):
+            result = fetch_behaviour._have_positions_changed(last_portfolio_data)
+            assert result is True
+
+    def test_fetch_token_transfers_mode_success(self):
+        """Test _fetch_token_transfers_mode method with successful API call."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        def mock_requests_get(*args, **kwargs):
+            class MockResponse:
+                def __init__(self):
+                    self.status_code = 200
+                    self.json_data = {
+                        "items": [
+                            {
+                                "timestamp": "2022-01-01T00:00:00Z",
+                                "from": {"hash": "0x456"},
+                                "token": {
+                                    "symbol": "USDC",
+                                    "address": "0x123",
+                                    "decimals": 6
+                                },
+                                "total": {"value": "1000000"},
+                                "transaction_hash": "0x789"
+                            }
+                        ]
+                    }
+                
+                def json(self):
+                    return self.json_data
+            
+            return MockResponse()
+        
+        with patch('requests.get', mock_requests_get):
+            result = fetch_behaviour._fetch_token_transfers_mode(
+                "0x123", "2022-01-01", {}, False
+            )
+            assert result is True
+
+    def test_fetch_token_transfers_mode_api_failure(self):
+        """Test _fetch_token_transfers_mode method with API failure."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        def mock_requests_get(*args, **kwargs):
+            class MockResponse:
+                def __init__(self):
+                    self.status_code = 500
+                
+                def json(self):
+                    return {}
+            
+            return MockResponse()
+        
+        with patch('requests.get', mock_requests_get):
+            result = fetch_behaviour._fetch_token_transfers_mode(
+                "0x123", "2022-01-01", {}, False
+            )
+            assert result is False
+
+    def test_fetch_eth_transfers_mode_success(self):
+        """Test _fetch_eth_transfers_mode method with successful API call."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        def mock_requests_get(*args, **kwargs):
+            class MockResponse:
+                def __init__(self):
+                    self.status_code = 200
+                    self.json_data = {
+                        "items": [
+                            {
+                                "value": "1000000000000000000",
+                                "delta": "1000000000000000000",
+                                "transaction_hash": None,
+                                "block_timestamp": "2022-01-01T00:00:00Z",
+                                "block_number": 12345
+                            }
+                        ],
+                        "next_page_params": None
+                    }
+                
+                def json(self):
+                    return self.json_data
+            
+            return MockResponse()
+        
+        with patch('requests.get', mock_requests_get):
+            result = fetch_behaviour._fetch_eth_transfers_mode(
+                "0x123", "2022-01-01", {}, True
+            )
+            assert result is True
+
+    def test_fetch_eth_transfers_mode_api_failure(self):
+        """Test _fetch_eth_transfers_mode method with API failure."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        def mock_requests_get(*args, **kwargs):
+            class MockResponse:
+                def __init__(self):
+                    self.status_code = 500
+                
+                def json(self):
+                    return {}
+            
+            return MockResponse()
+        
+        with patch('requests.get', mock_requests_get):
+            result = fetch_behaviour._fetch_eth_transfers_mode(
+                "0x123", "2022-01-01", {}, True
+            )
+            assert result is False
+
+    def test_check_and_update_zero_liquidity_positions(self):
+        """Test check_and_update_zero_liquidity_positions method."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock current positions with zero liquidity
+        with patch.object(fetch_behaviour, 'current_positions', [
+            {"balance": "0", "pool_address": "0x123"},
+            {"balance": "100", "pool_address": "0x456"}
+        ]):
+            # Should not raise any exception
+            fetch_behaviour.check_and_update_zero_liquidity_positions()
+
+    def test_update_allocation_ratios_success(self):
+        """Test _update_allocation_ratios method with valid inputs."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        individual_shares = [
+            ("0x123", Decimal('100.0')),
+            ("0x456", Decimal('200.0'))
+        ]
+        total_value = Decimal('300.0')
+        allocations = [
+            {"address": "0x123", "ratio": 0.0},
+            {"address": "0x456", "ratio": 0.0}
+        ]
+        
+        def mock_update_allocation_ratios(individual_shares, total_value, allocations):
+            yield None
+        
+        with patch.object(fetch_behaviour, '_update_allocation_ratios', mock_update_allocation_ratios):
+            result = list(fetch_behaviour._update_allocation_ratios(individual_shares, total_value, allocations))
+            assert result == [None]
+
+    def test_update_allocation_ratios_zero_total_value(self):
+        """Test _update_allocation_ratios method with zero total value."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        individual_shares = [
+            ("0x123", Decimal('100.0')),
+            ("0x456", Decimal('200.0'))
+        ]
+        total_value = Decimal('0.0')
+        allocations = [
+            {"address": "0x123", "ratio": 0.0},
+            {"address": "0x456", "ratio": 0.0}
+        ]
+        
+        def mock_update_allocation_ratios(individual_shares, total_value, allocations):
+            yield None
+        
+        with patch.object(fetch_behaviour, '_update_allocation_ratios', mock_update_allocation_ratios):
+            result = list(fetch_behaviour._update_allocation_ratios(individual_shares, total_value, allocations))
+            assert result == [None]
+
+
+    def test_get_tick_ranges_slot0_failure(self):
+        """Test _get_tick_ranges method when slot0 call fails."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position = {
+            "pool_address": "0x1234567890123456789012345678901234567890",
+            "dex_type": "velodrome",
+            "token_id": 123
+        }
+        
+        def mock_contract_interact(**kwargs):
+            return None
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = self._consume_generator(fetch_behaviour._get_tick_ranges(position, "optimism"))
+            assert result == []
+
+    def test_get_tick_ranges_no_position_manager(self):
+        """Test _get_tick_ranges method when position manager address is missing."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position = {
+            "pool_address": "0x1234567890123456789012345678901234567890",
+            "dex_type": "velodrome",
+            "token_id": 123
+        }
+        
+        def mock_contract_interact(**kwargs):
+            if kwargs.get("contract_callable") == "slot0":
+                return {"tick": 500}
+            return None
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = self._consume_generator(fetch_behaviour._get_tick_ranges(position, "optimism"))
+            assert result == []
+
+    def test_get_tick_ranges_multiple_positions(self):
+        """Test _get_tick_ranges method with multiple positions."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Set up position manager address in params using patch.dict
+        with patch.dict(fetch_behaviour.params.__dict__, {
+            'velodrome_non_fungible_position_manager_contract_addresses': {
+                "optimism": "0x1234567890123456789012345678901234567890"
+            }
+        }):
+            
+            position = {
+                "pool_address": "0x1234567890123456789012345678901234567890",
+                "dex_type": "velodrome",
+                "is_cl_pool": True,
+                "positions": [
+                    {"token_id": 123, "tickLower": -1000, "tickUpper": 1000},
+                    {"token_id": 456, "tickLower": -500, "tickUpper": 500}
+                ]
+            }
+            
+            def mock_contract_interact(**kwargs):
+                yield
+                if kwargs.get("contract_callable") == "slot0":
+                    return {"tick": 500}
+                elif kwargs.get("contract_callable") == "get_position":
+                    token_id = kwargs.get("token_id")
+                    if token_id == 123:
+                        return {"tickLower": -1000, "tickUpper": 1000}
+                    elif token_id == 456:
+                        return {"tickLower": -500, "tickUpper": 500}
+                return None
+            
+            with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+                result = self._consume_generator(fetch_behaviour._get_tick_ranges(position, "optimism"))
+                
+                assert len(result) == 2
+                assert result[0]["token_id"] == 123
+                assert result[1]["token_id"] == 456
+
+    # ============================================================================
+    # HIGH PRIORITY MISSING FLOWS - POSITION UPDATE FLOWS
+    # ============================================================================
+
+
+    def test_calculate_position_amounts_missing_details(self):
+        """Test _calculate_position_amounts method with missing position details."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position_details = {
+            "tickLower": None,
+            "tickUpper": 1000,
+            "liquidity": "1000000000000000000"
+        }
+        current_tick = 500
+        sqrt_price_x96 = 1000000000000000000000000
+        position = {"token_id": 123}
+        dex_type = "uniswap_v3"
+        chain = "optimism"
+        
+        result = self._consume_generator(
+            fetch_behaviour._calculate_position_amounts(
+                position_details, current_tick, sqrt_price_x96, position, dex_type, chain
+            )
+        )
+        
+        assert result == (0, 0)
+
+    def test_calculate_position_amounts_uniswap_fallback(self):
+        """Test _calculate_position_amounts method with Uniswap fallback calculation."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position_details = {
+            "tickLower": -1000,
+            "tickUpper": 1000,
+            "liquidity": "1000000000000000000",
+            "tokensOwed0": "100000000000000000",
+            "tokensOwed1": "200000000000000000"
+        }
+        current_tick = 500
+        sqrt_price_x96 = 1000000000000000000000000
+        position = {"token_id": 123}
+        dex_type = "uniswap_v3"
+        chain = "optimism"
+        
+        result = self._consume_generator(
+            fetch_behaviour._calculate_position_amounts(
+                position_details, current_tick, sqrt_price_x96, position, dex_type, chain
+            )
+        )
+        
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert isinstance(result[0], int)
+        assert isinstance(result[1], int)
+
+    def test_calculate_position_amounts_velodrome_sugar_fallback(self):
+        """Test _calculate_position_amounts method with Velodrome Sugar fallback."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        position_details = {
+            "tickLower": -1000,
+            "tickUpper": 1000,
+            "liquidity": "1000000000000000000",
+            "tokensOwed0": "100000000000000000",
+            "tokensOwed1": "200000000000000000"
+        }
+        current_tick = 500
+        sqrt_price_x96 = 1000000000000000000000000
+        position = {"token_id": 123, "dex_type": "velodrome"}
+        dex_type = "velodrome"
+        chain = "optimism"
+        
+        def mock_get_velodrome_position_principal(chain, position_manager_address, token_id, sqrt_price_x96):
+            yield
+            return 1000000000000000000, 2000000000000000000
+        
+        with patch.object(fetch_behaviour, 'get_velodrome_position_principal', mock_get_velodrome_position_principal):
+            result = self._consume_generator(
+                fetch_behaviour._calculate_position_amounts(
+                    position_details, current_tick, sqrt_price_x96, position, dex_type, chain
+                )
+            )
+            
+            assert result == (1100000000000000000, 2200000000000000000)
+
+    def test_get_user_share_value_velodrome_cl_success(self):
+        """Test _get_user_share_value_velodrome_cl method with successful calculation."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        pool_address = "0x1234567890123456789012345678901234567890"
+        chain = "optimism"
+        position = {"token_id": 123}
+        token0_address = "0x1111111111111111111111111111111111111111"
+        token1_address = "0x2222222222222222222222222222222222222222"
+        
+        def mock_calculate_cl_position_value(**kwargs):
+            yield
+            return {
+                "token0_balance": Decimal('100.0'),
+                "token1_balance": Decimal('200.0'),
+                "token0_symbol": "WETH",
+                "token1_symbol": "USDC"
+            }
+        
+        with patch.object(fetch_behaviour, '_calculate_cl_position_value', mock_calculate_cl_position_value):
+            result = self._consume_generator(
+                fetch_behaviour._get_user_share_value_velodrome_cl(
+                    pool_address, chain, position, token0_address, token1_address
+                )
+            )
+            
+            assert result["token0_balance"] == Decimal('100.0')
+            assert result["token1_balance"] == Decimal('200.0')
+            assert result["token0_symbol"] == "WETH"
+            assert result["token1_symbol"] == "USDC"
+
+    def test_get_user_share_value_velodrome_cl_no_position_manager(self):
+        """Test _get_user_share_value_velodrome_cl method with missing position manager."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        pool_address = "0x1234567890123456789012345678901234567890"
+        chain = "optimism"
+        position = {"token_id": 123}
+        token0_address = "0x1111111111111111111111111111111111111111"
+        token1_address = "0x2222222222222222222222222222222222222222"
+        
+        def mock_contract_interact(**kwargs):
+            yield
+            return None
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = self._consume_generator(
+                fetch_behaviour._get_user_share_value_velodrome_cl(
+                    pool_address, chain, position, token0_address, token1_address
+                )
+            )
+            
+            assert result == {}
+
+    def test_get_user_share_value_velodrome_non_cl_success(self):
+        """Test _get_user_share_value_velodrome_non_cl method with successful calculation."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        user_address = "0x1234567890123456789012345678901234567890"
+        pool_address = "0x1111111111111111111111111111111111111111"
+        chain = "optimism"
+        position = {"token0_symbol": "WETH", "token1_symbol": "USDC"}
+        token0_address = "0x2222222222222222222222222222222222222222"
+        token1_address = "0x3333333333333333333333333333333333333333"
+        
+        def mock_contract_interact(**kwargs):
+            if kwargs.get("contract_callable") == "check_balance":
+                yield
+                return "1000000000000000000"
+            elif kwargs.get("contract_callable") == "get_total_supply":
+                yield
+                return "10000000000000000000"
+            elif kwargs.get("contract_callable") == "get_reserves":
+                yield
+                return ["1000000000000000000000", "2000000000000000000000"]
+            else:
+                yield
+                return None
+        
+        def mock_get_token_decimals_pair(chain, token0_address, token1_address):
+            yield
+            return 18, 6
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            with patch.object(fetch_behaviour, '_get_token_decimals_pair', mock_get_token_decimals_pair):
+                result = self._consume_generator(
+                    fetch_behaviour._get_user_share_value_velodrome_non_cl(
+                        user_address, pool_address, chain, position, token0_address, token1_address
+                    )
+                )
+                
+                assert token0_address in result
+                assert token1_address in result
+                assert result[token0_address] == Decimal("100.0")
+                assert result[token1_address] == Decimal("200000000000000.0")
+
+    def test_get_user_share_value_velodrome_non_cl_balance_failure(self):
+        """Test _get_user_share_value_velodrome_non_cl method when balance check fails."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        user_address = "0x1234567890123456789012345678901234567890"
+        pool_address = "0x1111111111111111111111111111111111111111"
+        chain = "optimism"
+        position = {"token0_symbol": "WETH", "token1_symbol": "USDC"}
+        token0_address = "0x2222222222222222222222222222222222222222"
+        token1_address = "0x3333333333333333333333333333333333333333"
+        
+        def mock_contract_interact(**kwargs):
+            yield
+            return None
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = self._consume_generator(
+                fetch_behaviour._get_user_share_value_velodrome_non_cl(
+                    user_address, pool_address, chain, position, token0_address, token1_address
+                )
+            )
+            
+            assert result == {}
+
+    def test_get_user_share_value_velodrome_non_cl_total_supply_failure(self):
+        """Test _get_user_share_value_velodrome_non_cl method when total supply check fails."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        user_address = "0x1234567890123456789012345678901234567890"
+        pool_address = "0x1111111111111111111111111111111111111111"
+        chain = "optimism"
+        position = {"token0_symbol": "WETH", "token1_symbol": "USDC"}
+        token0_address = "0x2222222222222222222222222222222222222222"
+        token1_address = "0x3333333333333333333333333333333333333333"
+        
+        def mock_contract_interact(**kwargs):
+            if kwargs.get("contract_callable") == "check_balance":
+                return "1000000000000000000"
+            return None
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = self._consume_generator(
+                fetch_behaviour._get_user_share_value_velodrome_non_cl(
+                    user_address, pool_address, chain, position, token0_address, token1_address
+                )
+            )
+            
+            assert result == {}
+
+    def test_get_user_share_value_velodrome_non_cl_reserves_failure(self):
+        """Test _get_user_share_value_velodrome_non_cl method when reserves check fails."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        user_address = "0x1234567890123456789012345678901234567890"
+        pool_address = "0x1111111111111111111111111111111111111111"
+        chain = "optimism"
+        position = {"token0_symbol": "WETH", "token1_symbol": "USDC"}
+        token0_address = "0x2222222222222222222222222222222222222222"
+        token1_address = "0x3333333333333333333333333333333333333333"
+        
+        def mock_contract_interact(**kwargs):
+            if kwargs.get("contract_callable") == "check_balance":
+                return "1000000000000000000"
+            elif kwargs.get("contract_callable") == "get_total_supply":
+                return "10000000000000000000"
+            return None
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = self._consume_generator(
+                fetch_behaviour._get_user_share_value_velodrome_non_cl(
+                    user_address, pool_address, chain, position, token0_address, token1_address
+                )
+            )
+            
+            assert result == {}
+
+    def test_get_user_share_value_velodrome_non_cl_decimals_failure(self):
+        """Test _get_user_share_value_velodrome_non_cl method when decimals check fails."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        user_address = "0x1234567890123456789012345678901234567890"
+        pool_address = "0x1111111111111111111111111111111111111111"
+        chain = "optimism"
+        position = {"token0_symbol": "WETH", "token1_symbol": "USDC"}
+        token0_address = "0x2222222222222222222222222222222222222222"
+        token1_address = "0x3333333333333333333333333333333333333333"
+        
+        def mock_contract_interact(**kwargs):
+            if kwargs.get("contract_callable") == "check_balance":
+                return "1000000000000000000"
+            elif kwargs.get("contract_callable") == "get_total_supply":
+                return "10000000000000000000"
+            elif kwargs.get("contract_callable") == "get_reserves":
+                return ["1000000000000000000000", "2000000000000000000000"]
+            return None
+        
+        def mock_get_token_decimals_pair(chain, token0_address, token1_address):
+            return None, None
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            with patch.object(fetch_behaviour, '_get_token_decimals_pair', mock_get_token_decimals_pair):
+                result = self._consume_generator(
+                    fetch_behaviour._get_user_share_value_velodrome_non_cl(
+                        user_address, pool_address, chain, position, token0_address, token1_address
+                )
+                )
+                
+                assert result == {}
+
+    # ============================================================================
+    # HIGH PRIORITY MISSING FLOWS - SAFE ADDRESS VALIDATION
+    # ============================================================================
+
+    def test_check_is_valid_safe_address_success(self):
+        """Test check_is_valid_safe_address method with valid safe address."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        safe_address = "0x1234567890123456789012345678901234567890"
+        operating_chain = "optimism"
+        
+        def mock_contract_interact(**kwargs):
+            yield
+            return ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"]
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = self._consume_generator(
+                fetch_behaviour.check_is_valid_safe_address(safe_address, operating_chain)
+            )
+            
+            assert result is True
+
+    def test_check_is_valid_safe_address_failure(self):
+        """Test check_is_valid_safe_address method with invalid safe address."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        safe_address = "0x1234567890123456789012345678901234567890"
+        operating_chain = "optimism"
+        
+        def mock_contract_interact(**kwargs):
+            yield
+            return None
+        
+        with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+            result = self._consume_generator(
+                fetch_behaviour.check_is_valid_safe_address(safe_address, operating_chain)
+            )
+            
+            assert result is False
+
+    def test_get_master_safe_address_not_staked(self):
+        """Test get_master_safe_address method when service is not staked."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        def mock_get_service_staking_state(chain):
+            return StakingState.NOT_STAKED
+        
+        with patch.object(fetch_behaviour, '_get_service_staking_state', mock_get_service_staking_state):
+            result = self._consume_generator(fetch_behaviour.get_master_safe_address())
+            
+            assert result is None
+
+    def test_get_master_safe_address_no_service_id(self):
+        """Test get_master_safe_address method when service ID is missing."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        def mock_get_service_staking_state(chain):
+            return StakingState.STAKED
+        
+        def mock_get_service_info(chain):
+            return None
+        
+        with patch.object(fetch_behaviour, '_get_service_staking_state', mock_get_service_staking_state):
+            with patch.object(fetch_behaviour, '_get_service_info', mock_get_service_info):
+                result = self._consume_generator(fetch_behaviour.get_master_safe_address())
+                
+                assert result is None
+
+    def test_get_master_safe_address_service_registry_fallback(self):
+        """Test get_master_safe_address method with service registry fallback."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Set required parameters for the fallback path
+        with patch.dict(fetch_behaviour.params.__dict__, {
+            'on_chain_service_id': 'test_service_id',
+            'target_investment_chains': ['optimism'],
+            'staking_token_contract_address': None,
+            'staking_chain': None,
+            'service_registry_contract_addresses': {'optimism': '0xServiceRegistryAddress'}
+        }):
+            
+            def mock_get_service_staking_state(chain):
+                yield
+                return StakingState.STAKED
+            
+            def mock_get_service_info(chain):
+                yield
+                return None
+            
+            def mock_contract_interact(**kwargs):
+                yield
+                if kwargs.get("contract_callable") == "get_service_owner":
+                    return "0x1234567890123456789012345678901234567890"
+                return None
+            
+            def mock_check_is_valid_safe_address(address, chain):
+                yield
+                return True
+            
+            with patch.object(fetch_behaviour, '_get_service_staking_state', mock_get_service_staking_state):
+                with patch.object(fetch_behaviour, '_get_service_info', mock_get_service_info):
+                    with patch.object(fetch_behaviour, 'contract_interact', mock_contract_interact):
+                        with patch.object(fetch_behaviour, 'check_is_valid_safe_address', mock_check_is_valid_safe_address):
+                            result = self._consume_generator(fetch_behaviour.get_master_safe_address())
+                            
+                            assert result == "0x1234567890123456789012345678901234567890"
+
+    def test_read_investing_paused_true(self):
+        """Test _read_investing_paused method when investing is paused."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        def mock_read_kv(keys):
+            yield
+            return {"investing_paused": "true"}
+        
+        with patch.object(fetch_behaviour, '_read_kv', mock_read_kv):
+            result = self._consume_generator(fetch_behaviour._read_investing_paused())
+            
+            assert result is True

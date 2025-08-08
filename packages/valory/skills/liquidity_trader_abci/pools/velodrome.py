@@ -598,17 +598,19 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Amounts: {amount0_desired}/{amount1_desired}"
             )
 
-            # Calculate slippage protection for this specific position
-            (
-                amount0_min,
-                amount1_min,
-            ) = yield from self._calculate_slippage_protection_for_velodrome_mint(
-                pool_address,
-                position["tick_lower"],
-                position["tick_upper"],
-                [amount0_desired, amount1_desired],
-                chain,
-            )
+            # Calculate slippage protection for this specific position # noqa: E800
+            # (# noqa: E800
+            #     amount0_min, # noqa: E800
+            #     amount1_min, # noqa: E800
+            # ) = yield from self._calculate_slippage_protection_for_velodrome_mint( # noqa: E800
+            #     pool_address, # noqa: E800
+            #     position["tick_lower"],# noqa: E800
+            #     position["tick_upper"], # noqa: E800
+            #     [amount0_desired, amount1_desired], # noqa: E800
+            #     chain,# noqa: E800
+            # )# noqa: E800
+            amount0_min = 0
+            amount1_min = 1
 
             if amount0_min is None or amount1_min is None:
                 self.context.logger.error(
@@ -732,13 +734,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     )
                     continue
 
-            # Calculate slippage protection for this specific position
-            (
-                amount0_min,
-                amount1_min,
-            ) = yield from self._calculate_slippage_protection_for_velodrome_decrease(
-                position_token_id, position_liquidity, chain, pool_address
-            )
+            # Calculate slippage protection for this specific position #noqa: E800
+            # ( #noqa: E800
+            #     amount0_min, #noqa: E800
+            #     amount1_min, #noqa: E800
+            # ) = yield from self._calculate_slippage_protection_for_velodrome_decrease( #noqa: E800
+            #     position_token_id, position_liquidity, chain, pool_address #noqa: E800
+            # ) #noqa: E800
+            amount0_min = 0
+            amount1_min = 1
 
             if amount0_min is None or amount1_min is None:
                 self.context.logger.error(

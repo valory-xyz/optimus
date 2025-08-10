@@ -6893,3 +6893,378 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             
             # Verify the result is empty dict
             assert result == {}
+
+    def test_track_whitelisted_assets_success_with_price_drops(self):
+        """Test successful tracking of whitelisted assets with price drops that trigger removal."""
+        self.setup_default_test_data()
+        
+        # Create the correct behaviour instance
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock the WHITELISTED_ASSETS to only include tokens we want to test
+        test_whitelisted_assets = {
+            "mode": {
+                "0x4200000000000000000000000000000000000006": "WETH",
+                "0xdfc7c877a950e49d2610114102175a06c2e3167a": "MODE",
+            },
+            "optimism": {
+                "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
+            }
+        }
+        
+        # Mock the datetime to have consistent test dates
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.datetime') as mock_datetime, \
+             patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS', test_whitelisted_assets):
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            
+            # Setup whitelisted assets in memory
+            fetch_behaviour.whitelisted_assets = test_whitelisted_assets.copy()
+            
+            def mock_get_historical_price_for_date(token_address, token_symbol, date_str, chain):
+                # This is a generator that yields None and returns the price
+                yield
+                # Simulate price drops for some tokens
+                if token_symbol == "MODE":
+                    if "14-01-2024" in date_str:  # yesterday
+                        return 1.0
+                    else:  # today
+                        return 0.9  # 10% drop
+                elif token_symbol == "USDT0":
+                    if "14-01-2024" in date_str:  # yesterday
+                        return 1.0
+                    else:  # today
+                        return 0.94  # 6% drop
+                else:
+                    # Other tokens maintain or increase price
+                    return 1.0
+            
+            def mock_store_whitelisted_assets():
+                # Mock storing assets
+                pass
+            
+            # Apply mocks
+            with patch.object(fetch_behaviour, '_get_historical_price_for_date', side_effect=mock_get_historical_price_for_date), \
+                 patch.object(fetch_behaviour, 'store_whitelisted_assets', side_effect=mock_store_whitelisted_assets), \
+                 patch.object(fetch_behaviour, 'sleep', return_value=None):
+                
+                # Execute the method
+                generator = fetch_behaviour._track_whitelisted_assets()
+                self._consume_generator(generator)
+                
+                # Verify that tokens with >5% price drop were removed
+                assert "0xdfc7c877a950e49d2610114102175a06c2e3167a" not in fetch_behaviour.whitelisted_assets["mode"]
+                
+                # Verify that other tokens remain
+                assert "0x4200000000000000000000000000000000000006" in fetch_behaviour.whitelisted_assets["mode"]
+                
+                # Verify that optimism chain tokens were not processed (since optimism is not in target_investment_chains)
+                assert "0x01bff41798a0bcf287b996046ca68b395dbc1071" in fetch_behaviour.whitelisted_assets["optimism"]
+
+    def test_track_whitelisted_assets_no_price_drops(self):
+        """Test tracking of whitelisted assets when no tokens have significant price drops."""
+        self.setup_default_test_data()
+        
+        # Create the correct behaviour instance
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock the WHITELISTED_ASSETS to only include tokens we want to test
+        test_whitelisted_assets = {
+            "mode": {
+                "0x4200000000000000000000000000000000000006": "WETH",
+                "0xdfc7c877a950e49d2610114102175a06c2e3167a": "MODE"
+            }
+        }
+        
+        # Mock the datetime
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.datetime') as mock_datetime, \
+             patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS', test_whitelisted_assets), \
+             patch.object(fetch_behaviour, 'sleep', return_value=None):
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            
+            # Setup whitelisted assets
+            fetch_behaviour.whitelisted_assets = test_whitelisted_assets.copy()
+            
+            def mock_get_historical_price_for_date(token_address, token_symbol, date_str, chain):
+                # This is a generator that yields None and returns the price
+                yield
+                # All tokens maintain or increase price
+                if "14-01-2024" in date_str:  # yesterday
+                    return 1.0
+                else:  # today
+                    return 1.05  # 5% increase
+            
+            def mock_store_whitelisted_assets():
+                pass
+            
+            # Apply mocks
+            with patch.object(fetch_behaviour, '_get_historical_price_for_date', side_effect=mock_get_historical_price_for_date), \
+                 patch.object(fetch_behaviour, 'store_whitelisted_assets', side_effect=mock_store_whitelisted_assets), \
+                 patch.object(fetch_behaviour, 'sleep', return_value=None):
+                
+                # Execute the method
+                generator = fetch_behaviour._track_whitelisted_assets()
+                self._consume_generator(generator)
+                
+                # Verify that no tokens were removed
+                assert fetch_behaviour.whitelisted_assets == test_whitelisted_assets
+
+    def test_track_whitelisted_assets_price_fetch_failure(self):
+        """Test tracking of whitelisted assets when price fetching fails for some tokens."""
+        self.setup_default_test_data()
+        
+        # Create the correct behaviour instance
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock the WHITELISTED_ASSETS to only include tokens we want to test
+        test_whitelisted_assets = {
+            "mode": {
+                "0x4200000000000000000000000000000000000006": "WETH",
+                "0xdfc7c877a950e49d2610114102175a06c2e3167a": "MODE"
+            }
+        }
+        
+        # Mock the datetime
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.datetime') as mock_datetime, \
+             patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS', test_whitelisted_assets), \
+             patch.object(fetch_behaviour, 'sleep', return_value=None):
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            
+            # Setup whitelisted assets
+            fetch_behaviour.whitelisted_assets = test_whitelisted_assets.copy()
+            
+            def mock_get_historical_price_for_date(token_address, token_symbol, date_str, chain):
+                # This is a generator that yields None and returns the price
+                yield
+                # Simulate price fetch failure for MODE token
+                if token_symbol == "MODE":
+                    return None
+                else:
+                    # WETH price fetch succeeds
+                    if "14-01-2024" in date_str:  # yesterday
+                        return 1.0
+                    else:  # today
+                        return 1.05
+            
+            def mock_store_whitelisted_assets():
+                pass
+            
+            # Apply mocks
+            with patch.object(fetch_behaviour, '_get_historical_price_for_date', side_effect=mock_get_historical_price_for_date), \
+                 patch.object(fetch_behaviour, 'store_whitelisted_assets', side_effect=mock_store_whitelisted_assets), \
+                 patch.object(fetch_behaviour, 'sleep', return_value=None):
+                
+                # Execute the method
+                generator = fetch_behaviour._track_whitelisted_assets()
+                self._consume_generator(generator)
+                
+                # Verify that tokens with failed price fetches are not removed
+                assert fetch_behaviour.whitelisted_assets == test_whitelisted_assets
+
+    def test_track_whitelisted_assets_unsupported_chain(self):
+        """Test tracking of whitelisted assets when chain is not in target investment chains."""
+        self.setup_default_test_data()
+        
+        # Create the correct behaviour instance
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock the WHITELISTED_ASSETS to only include tokens we want to test
+        test_whitelisted_assets = {
+            "unsupported_chain": {
+                "0x1234567890123456789012345678901234567890": "TEST"
+            },
+            "mode": {
+                "0x4200000000000000000000000000000000000006": "WETH"
+            }
+        }
+        
+        # Mock the datetime
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.datetime') as mock_datetime, \
+             patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS', test_whitelisted_assets), \
+             patch.object(fetch_behaviour, 'sleep', return_value=None):
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            
+            # Setup whitelisted assets
+            fetch_behaviour.whitelisted_assets = test_whitelisted_assets.copy()
+            
+            # Mock target investment chains to exclude unsupported_chain
+            fetch_behaviour.params.target_investment_chains = ["mode"]
+            
+            def mock_get_historical_price_for_date(token_address, token_symbol, date_str, chain):
+                # This is a generator that yields None and returns the price
+                yield
+                # This should not be called for unsupported chain
+                if chain == "unsupported_chain":
+                    raise Exception("Should not be called for unsupported chain")
+                return 1.0
+            
+            def mock_store_whitelisted_assets():
+                pass
+            
+            # Apply mocks
+            with patch.object(fetch_behaviour, '_get_historical_price_for_date', side_effect=mock_get_historical_price_for_date), \
+                 patch.object(fetch_behaviour, 'store_whitelisted_assets', side_effect=mock_store_whitelisted_assets), \
+                 patch.object(fetch_behaviour, 'sleep', return_value=None):
+                
+                # Execute the method
+                generator = fetch_behaviour._track_whitelisted_assets()
+                self._consume_generator(generator)
+                
+                # Verify that unsupported chain assets are not processed
+                assert "unsupported_chain" in fetch_behaviour.whitelisted_assets
+                assert "0x1234567890123456789012345678901234567890" in fetch_behaviour.whitelisted_assets["unsupported_chain"]
+
+    def test_track_whitelisted_assets_exception_handling(self):
+        """Test tracking of whitelisted assets when exceptions occur during price checking."""
+        self.setup_default_test_data()
+        
+        # Create the correct behaviour instance
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock the WHITELISTED_ASSETS to only include tokens we want to test
+        test_whitelisted_assets = {
+            "mode": {
+                "0x4200000000000000000000000000000000000006": "WETH",
+                "0xdfc7c877a950e49d2610114102175a06c2e3167a": "MODE"
+            }
+        }
+        
+        # Mock the datetime
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.datetime') as mock_datetime, \
+             patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS', test_whitelisted_assets), \
+             patch.object(fetch_behaviour, 'sleep', return_value=None):
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            
+            # Setup whitelisted assets
+            fetch_behaviour.whitelisted_assets = test_whitelisted_assets.copy()
+            
+            def mock_get_historical_price_for_date(token_address, token_symbol, date_str, chain):
+                # This is a generator that yields None and returns the price
+                yield
+                # Simulate exception for MODE token
+                if token_symbol == "MODE":
+                    raise Exception("API error")
+                else:
+                    # WETH price fetch succeeds
+                    return 1.0
+            
+            def mock_store_whitelisted_assets():
+                pass
+            
+            # Apply mocks
+            with patch.object(fetch_behaviour, '_get_historical_price_for_date', side_effect=mock_get_historical_price_for_date), \
+                 patch.object(fetch_behaviour, 'store_whitelisted_assets', side_effect=mock_store_whitelisted_assets), \
+                 patch.object(fetch_behaviour, 'sleep', return_value=None):
+                
+                # Execute the method
+                generator = fetch_behaviour._track_whitelisted_assets()
+                self._consume_generator(generator)
+                
+                # Verify that tokens with exceptions are not removed
+                assert fetch_behaviour.whitelisted_assets == test_whitelisted_assets
+
+    def test_track_whitelisted_assets_borderline_price_drop(self):
+        """Test tracking of whitelisted assets with exactly 5% price drop (should not be removed)."""
+        self.setup_default_test_data()
+        
+        # Create the correct behaviour instance
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock the WHITELISTED_ASSETS to only include tokens we want to test
+        test_whitelisted_assets = {
+            "mode": {
+                "0x4200000000000000000000000000000000000006": "WETH",
+                "0xdfc7c877a950e49d2610114102175a06c2e3167a": "MODE"
+            }
+        }
+        
+        # Mock the datetime
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.datetime') as mock_datetime, \
+             patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS', test_whitelisted_assets), \
+             patch.object(fetch_behaviour, 'sleep', return_value=None):
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            
+            # Setup whitelisted assets
+            fetch_behaviour.whitelisted_assets = test_whitelisted_assets.copy()
+            
+            def mock_get_historical_price_for_date(token_address, token_symbol, date_str, chain):
+                # This is a generator that yields None and returns the price
+                yield
+                # MODE has exactly 5% drop (borderline case)
+                if token_symbol == "MODE":
+                    if "14-01-2024" in date_str:  # yesterday
+                        return 1.0
+                    else:  # today
+                        return 0.95  # exactly 5% drop
+                else:
+                    # WETH maintains price
+                    return 1.0
+            
+            def mock_store_whitelisted_assets():
+                pass
+            
+            # Apply mocks
+            with patch.object(fetch_behaviour, '_get_historical_price_for_date', side_effect=mock_get_historical_price_for_date), \
+                 patch.object(fetch_behaviour, 'store_whitelisted_assets', side_effect=mock_store_whitelisted_assets), \
+                 patch.object(fetch_behaviour, 'sleep', return_value=None):
+                
+                # Execute the method
+                generator = fetch_behaviour._track_whitelisted_assets()
+                self._consume_generator(generator)
+                
+                # Verify that tokens with exactly 5% drop are not removed (threshold is < -5.0)
+                assert fetch_behaviour.whitelisted_assets == test_whitelisted_assets
+
+    def test_track_whitelisted_assets_price_increase(self):
+        """Test tracking of whitelisted assets with price increases (should not be removed)."""
+        self.setup_default_test_data()
+        
+        # Create the correct behaviour instance
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock the WHITELISTED_ASSETS to only include tokens we want to test
+        test_whitelisted_assets = {
+            "mode": {
+                "0x4200000000000000000000000000000000000006": "WETH",
+                "0xdfc7c877a950e49d2610114102175a06c2e3167a": "MODE"
+            }
+        }
+        
+        # Mock the datetime
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.datetime') as mock_datetime, \
+             patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.WHITELISTED_ASSETS', test_whitelisted_assets), \
+             patch.object(fetch_behaviour, 'sleep', return_value=None):
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            
+            # Setup whitelisted assets
+            fetch_behaviour.whitelisted_assets = test_whitelisted_assets.copy()
+            
+            def mock_get_historical_price_for_date(token_address, token_symbol, date_str, chain):
+                # This is a generator that yields None and returns the price
+                yield
+                # Both tokens have price increases
+                if "14-01-2024" in date_str:  # yesterday
+                    return 1.0
+                else:  # today
+                    return 1.1  # 10% increase
+            
+            def mock_store_whitelisted_assets():
+                pass
+            
+            # Apply mocks
+            with patch.object(fetch_behaviour, '_get_historical_price_for_date', side_effect=mock_get_historical_price_for_date), \
+                 patch.object(fetch_behaviour, 'store_whitelisted_assets', side_effect=mock_store_whitelisted_assets), \
+                 patch.object(fetch_behaviour, 'sleep', return_value=None):
+                
+                # Execute the method
+                generator = fetch_behaviour._track_whitelisted_assets()
+                self._consume_generator(generator)
+                
+                # Verify that tokens with price increases are not removed
+                assert fetch_behaviour.whitelisted_assets == test_whitelisted_assets

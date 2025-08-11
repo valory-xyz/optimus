@@ -23,6 +23,9 @@ from abc import ABC
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
+from eth_utils import to_checksum_address
+
+from packages.valory.contracts.balancer_queries.contract import BalancerQueriesContract
 from packages.valory.contracts.balancer_vault.contract import VaultContract
 from packages.valory.contracts.balancer_weighted_pool.contract import (
     WeightedPoolContract,
@@ -223,9 +226,6 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         if not pool_id:
             return None, None
 
-        # TO-DO: calculate minimum_bpt
-        minimum_bpt = 0
-
         self.context.logger.info(f"assets, max_amounts_in:{assets, max_amounts_in}")
 
         new_assets, new_max_amounts_in = yield from self.update_value(
@@ -240,6 +240,29 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(
             f"new_assets, new_max_amounts_in:{new_assets, new_max_amounts_in}"
         )
+
+        # Query expected BPT output and apply slippage protection
+        expected_bpt = yield from self._query_join_bpt(
+            pool_id,
+            safe_address,
+            new_assets,
+            new_max_amounts_in,
+            join_kind,
+            from_internal_balance,
+            chain,
+        )
+        if expected_bpt:
+            slippage_tolerance = self.params.slippage_tolerance
+            minimum_bpt = int(expected_bpt * (1 - slippage_tolerance))
+            self.context.logger.info(
+                f"Expected BPT: {expected_bpt}, Minimum BPT with slippage: {minimum_bpt}"
+            )
+        else:
+            self.context.logger.warning(
+                "Unable to estimate minimum BPT, discarding transaction"
+            )
+            return None, None
+
         self.context.logger.info("Preparing transaction for pool join.")
 
         tx_hash = yield from self.contract_interact(
@@ -294,9 +317,6 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         if not pool_id:
             return None, None, None
 
-        # TO-DO: queryExit in BalancerQueries to find the current amounts of tokens we would get for our BPT, and then account for some possible slippage.
-        min_amounts_out = [0, 0]
-
         # fetch the amount of LP tokens
         bpt_amount_in = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -315,6 +335,30 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
 
         # toInternalBalance - True if receiving internal token balances. False if receiving ERC20.
         to_internal_balance = ZERO_ADDRESS in assets
+
+        # Query expected amounts out and apply slippage protection
+        expected_amounts = yield from self._query_exit_amounts(
+            pool_id,
+            safe_address,
+            assets,
+            bpt_amount_in,
+            exit_kind,
+            to_internal_balance,
+            chain,
+        )
+        if expected_amounts:
+            slippage_tolerance = self.params.slippage_tolerance
+            min_amounts_out = [
+                int(amt * (1 - slippage_tolerance)) for amt in expected_amounts
+            ]
+            self.context.logger.info(
+                f"Expected amounts: {expected_amounts}, Min amounts with slippage: {min_amounts_out}"
+            )
+        else:
+            self.context.logger.warning(
+                "Unable to estimate minimum amounts out, discarding transaction"
+            )
+            return None, None, None
 
         tx_hash = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -411,6 +455,100 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             return JoinKind.ComposableStablePool.EXACT_TOKENS_IN_FOR_BPT_OUT.value
         else:
             self.context.logger.error(f"Unknown pool type: {pool_type}")
+            return None
+
+    def _query_join_bpt(
+        self,
+        pool_id: str,
+        sender: str,
+        assets: List[str],
+        max_amounts_in: List[int],
+        join_kind: int,
+        from_internal_balance: bool,
+        chain: str,
+    ) -> Generator[None, None, Optional[int]]:
+        """Query expected BPT output for join operation."""
+        queries_address = self.params.balancer_queries_contract_addresses.get(chain)
+        if not queries_address:
+            self.context.logger.warning(
+                f"No BalancerQueries address found for chain {chain}"
+            )
+            return None
+
+        try:
+            # Ensure all asset addresses are checksummed
+            checksummed_assets = [to_checksum_address(asset) for asset in assets]
+
+            result = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=queries_address,
+                contract_public_id=BalancerQueriesContract.contract_id,
+                contract_callable="query_join",
+                data_key="result",
+                pool_id=pool_id,
+                sender=sender,
+                recipient=sender,
+                assets=checksummed_assets,
+                max_amounts_in=max_amounts_in,
+                join_kind=join_kind,
+                minimum_bpt=0,
+                from_internal_balance=from_internal_balance,
+                chain_id=chain,
+            )
+            self.context.logger.info(f"Result from query_join: {result}")
+            return result.get("bpt_out")
+
+        except Exception as e:
+            self.context.logger.error(f"Error querying join BPT: {str(e)}")
+            return None
+
+    def _query_exit_amounts(
+        self,
+        pool_id: str,
+        sender: str,
+        assets: List[str],
+        bpt_amount_in: int,
+        exit_kind: int,
+        to_internal_balance: bool,
+        chain: str,
+    ) -> Generator[None, None, Optional[List[int]]]:
+        """Query expected token amounts for exit operation."""
+        queries_address = self.params.balancer_queries_contract_addresses.get(chain)
+        if not queries_address:
+            self.context.logger.warning(
+                f"No BalancerQueries address found for chain {chain}"
+            )
+            return None
+
+        try:
+            # Ensure all asset addresses are checksummed
+            checksummed_assets = [to_checksum_address(asset) for asset in assets]
+
+            result = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=queries_address,
+                contract_public_id=BalancerQueriesContract.contract_id,
+                contract_callable="query_exit",
+                data_key="result",
+                pool_id=pool_id,
+                sender=sender,
+                recipient=sender,
+                assets=checksummed_assets,
+                min_amounts_out=[0] * len(checksummed_assets),
+                exit_kind=exit_kind,
+                bpt_amount_in=bpt_amount_in,
+                to_internal_balance=to_internal_balance,
+                chain_id=chain,
+            )
+
+            if result and "amounts_out" in result:
+                return result["amounts_out"]
+            else:
+                self.context.logger.warning("Invalid result from queryExit")
+                return None
+
+        except Exception as e:
+            self.context.logger.error(f"Error querying exit amounts: {str(e)}")
             return None
 
     def _determine_exit_kind(self, pool_type: PoolType) -> Optional[int]:

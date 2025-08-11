@@ -155,3 +155,50 @@ def _get_amount1_for_liquidity(
 ) -> int:
     """Calculate the amount of token1 for a position given liquidity and price range."""
     return liquidity * (sqrtRatioBX96 - sqrtRatioAX96) // (2**96)
+
+
+def get_liquidity_for_amount0(
+    sqrtRatioAX96: int, sqrtRatioBX96: int, amount0: int
+) -> int:
+    """Calculate liquidity from amount0 and price range."""
+    if sqrtRatioAX96 > sqrtRatioBX96:
+        sqrtRatioAX96, sqrtRatioBX96 = sqrtRatioBX96, sqrtRatioAX96
+
+    intermediate = (sqrtRatioAX96 * sqrtRatioBX96) // (2**96)
+    return (amount0 * intermediate) // (sqrtRatioBX96 - sqrtRatioAX96)
+
+
+def get_liquidity_for_amount1(
+    sqrtRatioAX96: int, sqrtRatioBX96: int, amount1: int
+) -> int:
+    """Calculate liquidity from amount1 and price range."""
+    if sqrtRatioAX96 > sqrtRatioBX96:
+        sqrtRatioAX96, sqrtRatioBX96 = sqrtRatioBX96, sqrtRatioAX96
+
+    return (amount1 * (2**96)) // (sqrtRatioBX96 - sqrtRatioAX96)
+
+
+def get_liquidity_for_amounts(
+    sqrtRatioX96: int,
+    sqrtRatioAX96: int,
+    sqrtRatioBX96: int,
+    amount0: int,
+    amount1: int,
+) -> int:
+    """Calculate liquidity from desired amounts using Uniswap's approach."""
+    if sqrtRatioAX96 > sqrtRatioBX96:
+        sqrtRatioAX96, sqrtRatioBX96 = sqrtRatioBX96, sqrtRatioAX96
+
+    if sqrtRatioX96 <= sqrtRatioAX96:
+        # Price below range - only token0 needed
+        liquidity = get_liquidity_for_amount0(sqrtRatioAX96, sqrtRatioBX96, amount0)
+    elif sqrtRatioX96 < sqrtRatioBX96:
+        # Price in range - both tokens needed, use the limiting one
+        liquidity0 = get_liquidity_for_amount0(sqrtRatioX96, sqrtRatioBX96, amount0)
+        liquidity1 = get_liquidity_for_amount1(sqrtRatioAX96, sqrtRatioX96, amount1)
+        liquidity = min(liquidity0, liquidity1)
+    else:
+        # Price above range - only token1 needed
+        liquidity = get_liquidity_for_amount1(sqrtRatioAX96, sqrtRatioBX96, amount1)
+
+    return liquidity

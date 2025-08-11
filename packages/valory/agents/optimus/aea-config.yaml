@@ -27,11 +27,15 @@ contracts:
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeift466wsnbo2qpgax7moarlfftquzis6r4lynfl7bdcieuwldot7m
 - valory/uniswap_v3_pool:0.1.0:bafybeigipe5aznisrlbbxmbeoyan5ayughp7z57cjxwbx5qigsjgrzqav4
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeiflwdffp2zkebx74eeivfz2g7x5w3icwsoflwddt46zzfiuovwuq4
-- valory/velodrome_router:0.1.0:bafybeieueyt3csn2sxujq3vkmeauxjbdbdyfgz2mpubmq7xc73thspno74
+- valory/velodrome_router:0.1.0:bafybeicbxymgxzskstpx3r5eoazoyfuzpbk5oqzphyscskj3x7brieipqi
 - valory/velodrome_cl_pool:0.1.0:bafybeiaqs2hbjgckwmys6gqwct2izqf575jbr7xkkkq4hzplmv2qgxe5vm
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeic6xt4hwj5brx4wtxpefptajorqh3z5dqlaaa43pldby3zwidrqzm
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeib6etbmecnjelpfrv443stpzihnvogneu6xldy3cct5j737wjn6cq
 - valory/velodrome_pool:0.1.0:bafybeihe4772icn47dk2ddfgfkcbd5z66ihhrulgydl6gmc6ffdjrcrakm
-- valory/velodrome_sugar:0.1.0:bafybeia5myvyiinqejchomfntcs775ipjf5bylfo2kkedims33uc775eei
+- valory/velodrome_sugar:0.1.0:bafybeia633snwf6rxtywukkbvxnallv25fnxrwtykydzuivs4ecmrhvnkq
+- valory/velodrome_gauge:0.1.0:bafybeicbrtp2burhnthqmeme2nihfg6jrhx622edt4bxhtgoxqamjcicdu
+- valory/velodrome_voter:0.1.0:bafybeid2nvctd25mcthgokt7m47f35pofff7gov3qai5aj4jdeo2uojhr4
+- valory/velodrome_cl_gauge:0.1.0:bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm
+- valory/balancer_queries:0.1.0:bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu
 protocols:
 - open_aea/signing:1.0.0:bafybeig2d36zxy65vd7fwhs7scotuktydcarm74aprmrb5nioiymr3yixm
 - valory/abci:0.1.0:bafybeiatodhboj6a3p35x4f4b342lzk6ckxpud23awnqbxwjeon3k5y36u
@@ -46,8 +50,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
-- valory/liquidity_trader_abci:0.1.0:bafybeigopckpknru3fp3xjkaeubqqojis6bnr5d4jmcuugq7mwr5b3vldi
-- valory/optimus_abci:0.1.0:bafybeigdht2limtuslzqhjkdannb2eiharjfe2kr5dcyv4qclaeikpap24
+- valory/liquidity_trader_abci:0.1.0:bafybeif4qewxzyebohpquygh2dgy4tpohg5vefxzffkrgjlfy47sbij374
+- valory/optimus_abci:0.1.0:bafybeighmk2vt64ebnc3jit7jjxscwb4r6scla2l7i6imw7d7jd34vimbq
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
@@ -304,3 +308,4 @@ models:
       available_strategies: ${str:{"mode":["balancer_pools_search","asset_lending","velodrome_pools_search"],"optimism":["balancer_pools_search","uniswap_pools_search","velodrome_pools_search"]}}
       default_acceptance_time: ${int:5}
       genai_api_key: ${str:""}
+      slippage_tolerance: ${float:0.005}

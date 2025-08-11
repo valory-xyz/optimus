@@ -7,8 +7,8 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihqaq6tfjfm5ooeo2lxcxwctx7blqt6ccu2y7srhcoys4snlqoj6m
-  build/contract_interface.json: bafybeiejabouynogilagtlora6rxoqwdji4sp246rcjhuzky2ekmejz5sq
-  contract.py: bafybeidy6ln5khef2ia45ghbg3jaubv2gxmwjtdz2kqd2uq6qil42perly
+  build/contract_interface.json: bafybeialdjftyvkh3zxroxoevuuumjbmqhkzwea57pk2fmqf7qra7gieku
+  contract.py: bafybeiaunb443dwgfvcpwre5pmj44ho4wus5oitf37vvvczsvsfunwbwgq
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeSugarContract

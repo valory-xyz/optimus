@@ -82,6 +82,10 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
 )
 
 
+# Add these constants to the class or base file
+CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
+
+
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""
 
@@ -3343,6 +3347,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         ]:
             return False
 
+        # Check cache first
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{from_address.lower()}"
+        cached_result = yield from self._read_kv((cache_key,))
+
+        if cached_result and cached_result.get(cache_key):
+            try:
+                cached_data = json.loads(cached_result[cache_key])
+                return cached_data.get("is_eoa", False)
+            except (json.JSONDecodeError, KeyError):
+                pass
+
         try:
             # Use Optimism RPC to check if address is a contract
             payload = {
@@ -3369,25 +3384,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # If code is '0x', it's an EOA
             if code == "0x":
-                return True
+                is_eoa = True
+            else:
+                # If it has code, check if it's a GnosisSafe
+                safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{from_address}/"
+                success, _ = yield from self._request_with_retries(
+                    endpoint=safe_check_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
+                is_eoa = success
 
-            # If it has code, check if it's a GnosisSafe
-            safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{from_address}/"
-            success, _ = yield from self._request_with_retries(
-                endpoint=safe_check_url,
-                headers={"Accept": "application/json"},
-                rate_limited_code=429,
-                rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                retry_wait=self.params.sleep_time,
-            )
+            # Cache the result permanently (no TTL)
+            cache_data = {"is_eoa": is_eoa}
+            yield from self._write_kv({cache_key: json.dumps(cache_data)})
 
-            if success:
-                return True
-
-            self.context.logger.info(
-                f"Excluding transfer from contract: {from_address}"
-            )
-            return False
+            if not is_eoa:
+                self.context.logger.info(
+                    f"Excluding transfer from contract: {from_address}"
+                )
+            return is_eoa
 
         except Exception as e:
             self.context.logger.error(f"Error checking address {from_address}: {e}")

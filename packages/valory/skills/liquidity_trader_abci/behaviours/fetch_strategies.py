@@ -81,8 +81,10 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
 
+
 # Add these constants to the class or base file
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
+
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""
@@ -3348,7 +3350,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Check cache first
         cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{from_address.lower()}"
         cached_result = yield from self._read_kv((cache_key,))
-        
+
         if cached_result and cached_result.get(cache_key):
             try:
                 cached_data = json.loads(cached_result[cache_key])

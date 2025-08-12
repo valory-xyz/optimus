@@ -1009,6 +1009,10 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                     if pool['type'] not in [0, -1] and pool['tick'] != 0:
                         chain_name = CHAIN_NAMES.get(chain_id, "unknown").capitalize()
                         logger.info(f"{chain_name} pool #{len(formatted_pools) + 1}: {pool['id']} type: {pool['type']} tick: {pool['tick']}")
+                    if pool['tick'] == 0 and pool['type'] in [0,-1]:
+                        pool['is_stable'] = True if pool['type'] == 0 else False
+                    else:
+                        pool['is_stable'] = None
                     formatted_pools.append(pool)
                 
                 # Add the formatted pools to our collection
@@ -1318,7 +1322,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "chain": chain_name,
             "apr": apr,  # Add APR to the formatted pool data
             "is_cl_pool": is_cl_pool,  # Add flag for concentrated liquidity pool
-            "is_stable": True,  # Always set to True as requested
+            "is_stable": pool["is_stable"]
         }
         
         # Add tokens (should be at least 2 tokens)

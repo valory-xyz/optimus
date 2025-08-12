@@ -12,7 +12,7 @@ fingerprint:
   behaviours/base.py: bafybeihegays6jj6nclneorw5sk4e7oralk3dsxsq6xfm2ekjfnlmh5bk4
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeidr2qa6dchzdha644l64pmq4qvautz7fytqkqqozyrmzwmjnb7lty
+  behaviours/decision_making.py: bafybeibbe7wbwqkvgtcgkwbazqylm6oyfg56nbivqx6wenmaol37wx2hla
   behaviours/evaluate_strategy.py: bafybeih4n3nxsclhdaduysbf5qlcexfdsosbrcjlbmbe2kuiptzsxy6e7u
   behaviours/fetch_strategies.py: bafybeicbxgcjrtrmz4rdjenkqmfw4poki5arqupijmzz5a7puznad5nmym
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
@@ -28,9 +28,9 @@ fingerprint:
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
-  pools/balancer.py: bafybeifn7thpqbcjtvp4tdzrizqtd5hisguzeoevtyurgjbkcujdy3ldv4
-  pools/uniswap.py: bafybeihxk4niliniuapnoc24w7b42m6utot6rm5ifld6lycfqp4bdshfcu
-  pools/velodrome.py: bafybeibtbnc5r6ffdshm5qhm7izjnbh7odpkfop72brkqut5bidiu3u2qi
+  pools/balancer.py: bafybeiafwkg3dwban2hlyaistf2litbx32mhbbdnrsuoultc26uii42oma
+  pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
+  pools/velodrome.py: bafybeialy3mrrdpcgretp2pzvdvueofeho4bcvco4gte3uvzreqot5j7bi
   rounds.py: bafybeihsstee7burcnrc75bjisbswxrc5h6lvi3e2l6ciiiy4nqepw2zfy
   rounds_info.py: bafybeihtj6mf74ccw6k2vokv7vkf4nwbp7j7cfm7j6cvuqop7gomavxucu
   states/__init__.py: bafybeigzgpxgx6g4ioalm7fdalcckk5lmw6z4k4sb5d4a4cdespv2umogi
@@ -52,6 +52,7 @@ fingerprint:
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
   utils/__init__.py: bafybeiefmxsdj4kz6b34hdzdc7yxu5hhvqh6pn2koszgr2lt7mhmqdzy6i
+  utils/balancer_math.py: bafybeielos57pjvke5ks3e6jhy3aiwsvjxrzek7rilystys73mzxbulld4
   utils/protocol_validation.py: bafybeihkot6dfgdunk5pjeysn72nvpbpgjdqt5fp6o7qvxqo4meoxo5to4
   utils/tick_math.py: bafybeidgd4dxshehz4by7jlvcrjfidqdrpcksn4knzd6oaolwkoc2fxc4y
 fingerprint_ignore_patterns: []

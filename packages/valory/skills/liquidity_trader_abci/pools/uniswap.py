@@ -124,15 +124,13 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         if not tick_lower or not tick_upper:
             return None, None
 
-        # Calculate slippage protection using TickMath utilities # noqa: E800
-        # ( # noqa: E800
-        #     amount0_min, # noqa: E800
-        #     amount1_min, # noqa: E800
-        # ) = yield from self._calculate_slippage_protection_for_mint( # noqa: E800
-        #     pool_address, tick_lower, tick_upper, max_amounts_in, chain # noqa: E800
-        # ) # noqa: E800
-        amount0_min = 0
-        amount1_min = 1
+        # Calculate slippage protection using TickMath utilities
+        (
+            amount0_min,
+            amount1_min,
+        ) = yield from self._calculate_slippage_protection_for_mint(
+            pool_address, tick_lower, tick_upper, max_amounts_in, chain
+        )
 
         if amount0_min is None or amount1_min is None:
             return None, None
@@ -172,6 +170,7 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
         safe_address = kwargs.get("safe_address")
         chain = kwargs.get("chain")
         liquidity = kwargs.get("liquidity")
+        pool_address = kwargs.get("pool_address")
 
         if not all([token_id, safe_address, chain]):
             self.context.logger.error(
@@ -196,15 +195,13 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             if not liquidity:
                 return None, None, None
 
-        # Calculate slippage protection for decrease liquidity # noqa: E800
-        # ( # noqa: E800
-        #     amount0_min, # noqa: E800
-        #     amount1_min, # noqa: E800
-        # ) = yield from self._calculate_slippage_protection_for_decrease( # noqa: E800
-        #     token_id, liquidity, chain, pool_address # noqa: E800
-        # ) # noqa: E800
-        amount0_min = 1
-        amount1_min = 1
+        # Calculate slippage protection for decrease liquidity
+        (
+            amount0_min,
+            amount1_min,
+        ) = yield from self._calculate_slippage_protection_for_decrease(
+            token_id, liquidity, chain, pool_address
+        )
 
         if amount0_min is None or amount1_min is None:
             return None, None, None

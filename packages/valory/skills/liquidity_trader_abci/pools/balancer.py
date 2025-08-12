@@ -32,6 +32,9 @@ from packages.valory.contracts.balancer_weighted_pool.contract import (
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
+from packages.valory.skills.liquidity_trader_abci.utils.balancer_math import (
+    BalancerProportionalMath,
+)
 
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -242,20 +245,18 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         )
 
         # Query expected BPT output and apply slippage protection
-        expected_bpt = yield from self._query_join_bpt(
-            pool_id,
-            safe_address,
-            new_assets,
-            new_max_amounts_in,
-            join_kind,
-            from_internal_balance,
-            chain,
+        expected_bpt_out = yield from self.query_proportional_join(
+            pool_id=pool_id,
+            pool_address=pool_address,
+            vault_address=vault_address,
+            chain=chain,
+            amounts_in=max_amounts_in,
         )
-        if expected_bpt:
+        if expected_bpt_out:
             slippage_tolerance = self.params.slippage_tolerance
-            minimum_bpt = int(expected_bpt * (1 - slippage_tolerance))
+            minimum_bpt = int(expected_bpt_out * (1 - slippage_tolerance))
             self.context.logger.info(
-                f"Expected BPT: {expected_bpt}, Minimum BPT with slippage: {minimum_bpt}"
+                f"Expected BPT: {expected_bpt_out}, Minimum BPT with slippage: {minimum_bpt}"
             )
         else:
             self.context.logger.warning(
@@ -337,15 +338,14 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
         to_internal_balance = ZERO_ADDRESS in assets
 
         # Query expected amounts out and apply slippage protection
-        expected_amounts = yield from self._query_exit_amounts(
-            pool_id,
-            safe_address,
-            assets,
-            bpt_amount_in,
-            exit_kind,
-            to_internal_balance,
-            chain,
+        expected_amounts = yield from self.query_proportional_exit(
+            pool_id=pool_id,
+            pool_address=pool_address,
+            vault_address=vault_address,
+            chain=chain,
+            bpt_amount_in=bpt_amount_in,
         )
+
         if expected_amounts:
             slippage_tolerance = self.params.slippage_tolerance
             min_amounts_out = [
@@ -565,4 +565,126 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
             return ExitKind.ComposableStablePool.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT.value
         else:
             self.context.logger.error(f"Unknown pool type: {pool_type}")
+            return None
+
+    def query_proportional_exit(
+        self,
+        pool_id: str,
+        pool_address: str,
+        vault_address: str,
+        chain: str,
+        bpt_amount_in: int,
+    ) -> Generator[None, None, Optional[List[int]]]:
+        """Simulate proportional exit for any pool type"""
+        try:
+            # Fetch pool token information
+            pool_tokens_info = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=vault_address,
+                contract_public_id=VaultContract.contract_id,
+                contract_callable="get_pool_tokens",
+                pool_id=pool_id,
+                data_key="tokens",
+                chain_id=chain,
+            )
+
+            if not pool_tokens_info or len(pool_tokens_info) < 2:
+                self.context.logger.error("Failed to fetch pool token information")
+                return None
+
+            token_balances = pool_tokens_info[1]  # Token balances in the pool
+
+            # Fetch total BPT supply
+            total_bpt_supply = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=WeightedPoolContract.contract_id,
+                contract_callable="total_supply",
+                data_key="total_supply",
+                chain_id=chain,
+            )
+
+            if not total_bpt_supply:
+                self.context.logger.error("Failed to fetch total BPT supply")
+                return None
+
+            # Simulate proportional exit
+            amounts_out = BalancerProportionalMath.query_proportional_exit(
+                token_balances=token_balances,
+                total_bpt_supply=total_bpt_supply,
+                bpt_amount_in=bpt_amount_in,
+            )
+
+            self.context.logger.info(
+                f"Proportional exit simulation - BPT in: {bpt_amount_in}, "
+                f"Amounts out: {amounts_out}"
+            )
+
+            return amounts_out
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in proportional exit simulation: {str(e)}"
+            )
+            return None
+
+    def query_proportional_join(
+        self,
+        pool_id: str,
+        pool_address: str,
+        vault_address: str,
+        chain: str,
+        amounts_in: List[int],
+    ) -> Generator[None, None, Optional[int]]:
+        """Simulate proportional join for any pool type"""
+        try:
+            # Fetch pool token information
+            pool_tokens_info = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=vault_address,
+                contract_public_id=VaultContract.contract_id,
+                contract_callable="get_pool_tokens",
+                pool_id=pool_id,
+                data_key="tokens",
+                chain_id=chain,
+            )
+
+            if not pool_tokens_info or len(pool_tokens_info) < 2:
+                self.context.logger.error("Failed to fetch pool token information")
+                return None
+
+            token_balances = pool_tokens_info[1]  # Token balances in the pool
+
+            # Fetch total BPT supply
+            total_bpt_supply = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=pool_address,
+                contract_public_id=WeightedPoolContract.contract_id,
+                contract_callable="total_supply",
+                data_key="total_supply",
+                chain_id=chain,
+            )
+
+            if not total_bpt_supply:
+                self.context.logger.error("Failed to fetch total BPT supply")
+                return None
+
+            # Simulate proportional join
+            bpt_out = BalancerProportionalMath.query_proportional_join(
+                token_balances=token_balances,
+                total_bpt_supply=total_bpt_supply,
+                amounts_in=amounts_in,
+            )
+
+            self.context.logger.info(
+                f"Proportional join simulation - BPT out: {bpt_out}, "
+                f"Input amounts: {amounts_in}"
+            )
+
+            return bpt_out
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in proportional join simulation: {str(e)}"
+            )
             return None

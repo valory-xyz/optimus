@@ -107,6 +107,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Current Positions - {self.current_positions}"
                 )
 
+            # Update the amounts of all open positions
+            if self.synchronized_data.period_count == 0:
+                self.context.logger.info("Updating position amounts for period 0")
+                yield from self.update_position_amounts()
+                self.context.logger.info(
+                    "Checking and updating zero liquidity positions"
+                )
+                self.check_and_update_zero_liquidity_positions()
+
+            self.context.logger.info(f"Current Positions: {self.current_positions}")
+
             sender = self.context.agent_address
 
             chain = self.params.target_investment_chains[0]

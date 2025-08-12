@@ -1166,6 +1166,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[Decimal, None, None]:
         """Calculate total value of a position and update portfolio breakdown."""
         user_share = Decimal(0)
+        token_prices = {}
 
         for token_address, token_symbol in token_info.items():
             asset_balance = user_balances.get(token_address)
@@ -1181,6 +1182,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             asset_price = Decimal(str(asset_price))
             asset_value_usd = asset_balance * asset_price
             user_share += asset_value_usd
+
+            # Store price for yield calculation
+            token_prices[token_address] = asset_price
 
             # Update portfolio breakdown
             existing_asset = next(
@@ -1210,59 +1214,250 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     }
                 )
 
-        # Update position with current value and TiP yield calculation
-        self._update_position_with_current_value(position, user_share, chain)
+        # Update position with current value and corrected yield calculation
+        self._update_position_with_current_value(
+            position, user_share, chain, user_balances, token_info, token_prices
+        )
 
         return user_share
 
     def _update_position_with_current_value(
-        self, position: Dict, current_value_usd: Decimal, chain: str
-    ) -> None:
-        """Update position with current value and yield estimate for TiP cost recovery"""
+        self,
+        position: Dict,
+        current_value_usd: Decimal,
+        chain: str,
+        user_balances: Dict = None,
+        token_info: Dict = None,
+        token_prices: Dict = None,
+    ) -> Generator[None, None, None]:
+        """Update position with current value and corrected yield calculation"""
         try:
             # Store current value in position
             position["current_value_usd"] = float(current_value_usd)
             position["last_updated"] = int(self._get_current_timestamp())
 
-            # Simple yield estimate if we have TiP data
-            principal_usd = position.get("principal_usd", 0)
-            entry_cost = position.get("entry_cost", 0)
+            # Get initial token amounts from position data
+            initial_amount0 = position.get("amount0", 0)  # Raw amount (with decimals)
+            initial_amount1 = position.get("amount1", 0)  # Raw amount (with decimals)
 
-            if principal_usd > 0 and entry_cost > 0:
-                # Simple yield = current_value - principal
-                estimated_yield = float(current_value_usd) - principal_usd
+            # Use provided user_balances if available, otherwise get them
+            if user_balances is None:
+                user_balances = yield from self._get_current_token_balances(
+                    position, chain
+                )
 
-                # Check if yield covers entry cost (exact threshold)
-                if estimated_yield >= entry_cost:
+            if (
+                user_balances
+                and initial_amount0 is not None
+                and initial_amount1 is not None
+            ):
+                # Calculate yield as token quantity increases priced at current prices
+                yield_usd = yield from self._calculate_corrected_yield(
+                    position,
+                    initial_amount0,
+                    initial_amount1,
+                    user_balances,
+                    chain,
+                    token_prices,
+                )
+
+                # Check cost recovery using actual yield
+                entry_cost = position.get("entry_cost", 0)
+                if yield_usd >= entry_cost:
                     position["cost_recovered"] = True
+                    position["yield_usd"] = float(yield_usd)
                     self.context.logger.info(
                         f"Position {position.get('pool_address')} has recovered costs: "
-                        f"yield=${estimated_yield:.2f} >= entry_cost=${entry_cost:.2f}"
+                        f"yield=${yield_usd:.2f} >= entry_cost=${entry_cost:.2f}"
                     )
                 else:
-                    # Log progress toward cost recovery
+                    position["cost_recovered"] = False
+                    position["yield_usd"] = float(yield_usd)
                     recovery_percentage = (
-                        (estimated_yield / entry_cost) * 100 if entry_cost > 0 else 0
+                        (yield_usd / entry_cost) * 100 if entry_cost > 0 else 0
                     )
-                    remaining_yield_needed = entry_cost - estimated_yield
+                    remaining_yield_needed = entry_cost - yield_usd
                     self.context.logger.info(
                         f"Position {position.get('pool_address')} cost recovery progress: "
-                        f"{recovery_percentage:.1f}% (${estimated_yield:.2f}/${entry_cost:.2f}), "
+                        f"{recovery_percentage:.1f}% (${yield_usd:.2f}/${entry_cost:.2f}), "
                         f"need ${remaining_yield_needed:.2f} more"
                     )
-            elif entry_cost == 0:
-                # Legacy position without TiP data - mark as recovered
+            else:
+                # Fallback for positions without complete initial data
                 position["cost_recovered"] = False
-                self.context.logger.info(
-                    f"Legacy position {position.get('pool_address')} marked as cost recovered"
-                )
+                position["yield_usd"] = 0.0
 
         except Exception as e:
             self.context.logger.error(
                 f"Error updating position with current value: {e}"
             )
-            # Fallback to 3 weeks hardcoded TiP if yield calculation fails
             position["cost_recovered"] = False
+            position["yield_usd"] = 0.0
+
+    def _calculate_corrected_yield(
+        self,
+        position: Dict,
+        initial_amount0: int,
+        initial_amount1: int,
+        current_balances: Dict,
+        chain: str,
+        token_prices: Dict = None,
+    ) -> Generator[Decimal, None, None]:
+        """Calculate yield as token quantity increases priced at current prices"""
+
+        token0_address = position.get("token0")
+        token1_address = position.get("token1")
+
+        # Get token decimals
+        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error(
+                "Could not get token decimals for yield calculation"
+            )
+            return Decimal(0)
+
+        # Convert initial amounts to decimal-adjusted values
+        initial_token0_decimal = Decimal(initial_amount0) / Decimal(
+            10**token0_decimals
+        )
+        initial_token1_decimal = Decimal(initial_amount1) / Decimal(
+            10**token1_decimals
+        )
+
+        # Get current balances (already decimal-adjusted)
+        current_token0_balance = current_balances.get(token0_address, Decimal(0))
+        current_token1_balance = current_balances.get(token1_address, Decimal(0))
+
+        # Calculate token quantity increases (the actual yield from fees)
+        token0_increase = max(
+            Decimal(0), current_token0_balance - initial_token0_decimal
+        )
+        token1_increase = max(
+            Decimal(0), current_token1_balance - initial_token1_decimal
+        )
+
+        # Use provided token prices if available, otherwise fetch them
+        if (
+            token_prices
+            and token0_address in token_prices
+            and token1_address in token_prices
+        ):
+            token0_price = token_prices[token0_address]
+            token1_price = token_prices[token1_address]
+        else:
+            # Price the increases at current prices
+            token0_price = yield from self._fetch_token_price(token0_address, chain)
+            token1_price = yield from self._fetch_token_price(token1_address, chain)
+
+            if token0_price is None or token1_price is None:
+                self.context.logger.error(
+                    "Could not fetch current token prices for yield calculation"
+                )
+                return Decimal(0)
+
+            token0_price = Decimal(str(token0_price))
+            token1_price = Decimal(str(token1_price))
+
+        # Calculate base yield from token increases (fees)
+        base_yield_usd = (token0_increase * token0_price) + (
+            token1_increase * token1_price
+        )
+
+        # Add VELO rewards if position is staked
+        velo_rewards_usd = Decimal(0)
+        if position.get("staked", False) and position.get("dex_type") == "velodrome":
+            # Get VELO token address and check if it's in current_balances
+            velo_token_address = self._get_velo_token_address(chain)
+            if velo_token_address and velo_token_address in current_balances:
+                velo_balance = current_balances[velo_token_address]
+                if velo_balance > 0:
+                    # Get VELO price
+                    if token_prices and velo_token_address in token_prices:
+                        velo_price = token_prices[velo_token_address]
+                    else:
+                        velo_price = yield from self._fetch_token_price(
+                            velo_token_address, chain
+                        )
+                        if velo_price is None:
+                            self.context.logger.warning(
+                                "Could not fetch VELO price for yield calculation"
+                            )
+                            velo_price = Decimal(0)
+                        else:
+                            velo_price = Decimal(str(velo_price))
+
+                    velo_rewards_usd = velo_balance * velo_price
+
+        # Total yield = base yield + VELO rewards
+        total_yield_usd = base_yield_usd + velo_rewards_usd
+
+        # Enhanced logging
+        log_message = (
+            f"Corrected yield calculation for {position.get('pool_address', 'unknown')}: "
+            f"Initial amounts: {initial_token0_decimal:.6f} {position.get('token0_symbol', 'TOKEN0')}, "
+            f"{initial_token1_decimal:.6f} {position.get('token1_symbol', 'TOKEN1')} | "
+            f"Current amounts: {current_token0_balance:.6f} {position.get('token0_symbol', 'TOKEN0')}, "
+            f"{current_token1_balance:.6f} {position.get('token1_symbol', 'TOKEN1')} | "
+            f"Token increases: {token0_increase:.6f} @ ${token0_price:.2f} = ${token0_increase * token0_price:.2f}, "
+            f"{token1_increase:.6f} @ ${token1_price:.2f} = ${token1_increase * token1_price:.2f} | "
+            f"Base yield: ${base_yield_usd:.2f}"
+        )
+
+        if velo_rewards_usd > 0:
+            velo_balance = current_balances.get(
+                self._get_velo_token_address(chain), Decimal(0)
+            )
+            velo_price = (
+                velo_rewards_usd / velo_balance if velo_balance > 0 else Decimal(0)
+            )
+            log_message += f" | VELO rewards: {velo_balance:.6f} @ ${velo_price:.2f} = ${velo_rewards_usd:.2f}"
+
+        log_message += f" | Total yield: ${total_yield_usd:.2f}"
+
+        self.context.logger.info(log_message)
+
+        return total_yield_usd
+
+    def _get_current_token_balances(
+        self, position: Dict, chain: str
+    ) -> Generator[Any, Any, Dict[str, Decimal]]:
+        """Get current token balances for a position (reuse existing calculation logic)"""
+        dex_type = position.get("dex_type")
+        current_user_shares = {}
+        if dex_type == DexType.BALANCER.value:
+            user_address = self.params.safe_contract_addresses.get(chain)
+            pool_id = position.get("pool_id")
+            pool_address = position.get("pool_address")
+            current_user_shares = yield from self.get_user_share_value_balancer(
+                user_address, pool_id, pool_address, chain
+            )
+
+        elif dex_type == DexType.UNISWAP_V3.value:
+            pool_address = position.get("pool_address")
+            token_id = position.get("token_id")
+            current_user_shares = yield from self.get_user_share_value_uniswap(
+                pool_address, token_id, chain, position
+            )
+
+        elif dex_type == DexType.VELODROME.value:
+            user_address = self.params.safe_contract_addresses.get(chain)
+            pool_address = position.get("pool_address")
+            token_id = position.get("token_id")
+            current_user_shares = yield from self.get_user_share_value_velodrome(
+                user_address, pool_address, token_id, chain, position
+            )
+
+        elif dex_type == DexType.STURDY.value:
+            user_address = self.params.safe_contract_addresses.get(chain)
+            aggregator_address = position.get("pool_address")
+            asset_address = position.get("token0")
+            current_user_shares = yield from self.get_user_share_value_sturdy(
+                user_address, aggregator_address, asset_address, chain
+            )
+
+        return current_user_shares
 
     def get_user_share_value_velodrome(
         self, user_address: str, pool_address: str, token_id: int, chain: str, position

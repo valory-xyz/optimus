@@ -627,23 +627,38 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Legacy position must hold {remaining_days:.1f} more days",
                 )
 
-            # Check 1: Minimum time requirement
-            if self._check_minimum_time_met(position):
-                days_elapsed = self._calculate_days_since_entry(
-                    position["enter_timestamp"]
-                )
-                min_hold_days = position.get("min_hold_days", 0)
-                return (
-                    True,
-                    f"Minimum time met: {days_elapsed:.1f} >= {min_hold_days:.1f} days",
-                )
+            # For new positions, BOTH conditions must be met:
+            # 1. Minimum time requirement
+            # 2. Cost recovery through yield
 
-            # Calculate remaining time
+            cost_recovered = position.get("cost_recovered", False)
+            minimum_time_met = self._check_minimum_time_met(position)
+
             days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
             min_hold_days = position.get("min_hold_days", 0)
-            remaining_days = min_hold_days - days_elapsed
 
-            return False, f"Must hold {remaining_days:.1f} more days for cost recovery"
+            # Check if both conditions are satisfied
+            if cost_recovered and minimum_time_met:
+                return (
+                    True,
+                    f"Both conditions met: costs recovered AND minimum time ({days_elapsed:.1f} >= {min_hold_days:.1f} days)",
+                )
+
+            # Determine what's still needed
+            missing_conditions = []
+            if not cost_recovered:
+                yield_usd = position.get("yield_usd", 0)
+                missing_conditions.append(
+                    f"costs not recovered (${yield_usd:.2f}/${entry_cost:.2f})"
+                )
+
+            if not minimum_time_met:
+                remaining_days = min_hold_days - days_elapsed
+                missing_conditions.append(
+                    f"minimum time not met ({remaining_days:.1f} more days needed)"
+                )
+
+            return False, f"Cannot exit: {' AND '.join(missing_conditions)}"
 
         except Exception as e:
             self.context.logger.error(f"Error checking TiP exit conditions: {e}")

@@ -600,6 +600,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         total_safe_value_usd = yield from self._calculate_safe_balances_value(
             portfolio_breakdown
         )
+        staking_rewards_value = yield from self.calculate_stakig_rewards_value()
 
         # Calculate final portfolio metrics
         yield from self._update_portfolio_metrics(
@@ -637,6 +638,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         portfolio_data = self._create_portfolio_data(
             total_user_share_value_usd,
             total_safe_value_usd,
+            staking_rewards_value,
             initial_investment,
             volume,
             allocations,
@@ -908,6 +910,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self,
         total_pools_value: Decimal,
         total_safe_value: Decimal,
+        staking_rewards_value: Decimal,
         initial_investment: float,
         volume: float,
         allocations: List[Dict],
@@ -926,19 +929,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
             # Convert to percentage by multiplying by 100
-            roi = None
+            total_roi = None
+            partial_roi = None
             if initial_investment is not None and initial_investment > 0:
                 try:
-                    roi_decimal = (
+                    total_roi_decimal = (
+                        float(total_portfolio_value + staking_rewards_value)
+                        / float(initial_investment)
+                    ) - 1
+                    total_roi = round(total_roi_decimal * 100, 2)
+
+                    partial_roi_decimal = (
                         float(total_portfolio_value) / float(initial_investment)
                     ) - 1
-                    roi = round(roi_decimal * 100, 2)
+                    partial_roi = round(partial_roi_decimal * 100, 2)
+
                     self.context.logger.info(
-                        f"ROI calculated: {roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
+                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
                     )
                 except (ValueError, ZeroDivisionError, TypeError) as e:
                     self.context.logger.error(f"Error calculating ROI: {str(e)}")
-                    roi = None
+                    total_roi = None
+                    partial_roi = None
             else:
                 self.context.logger.info(
                     f"ROI not calculated - initial_investment: {initial_investment}"
@@ -1017,7 +1029,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if initial_investment is not None
                 else None,
                 "volume": float(volume) if volume is not None else None,
-                "roi": roi,
+                "total_roi": total_roi,
+                "partial_roi": partial_roi,
                 "agent_hash": agent_hash,
                 "allocations": processed_allocations,
                 "portfolio_breakdown": filtered_portfolio_breakdown,
@@ -1915,38 +1928,43 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     token_value_usd,
                 )
 
-            yield from self.update_accumulated_rewards_for_chain(chain)
-            # After processing all balances, add OLAS rewards separately
-            olas_address = OLAS_ADDRESSES.get(chain)
-            if olas_address:
-                accumulated_olas_rewards = (
-                    yield from self.get_accumulated_rewards_for_token(
-                        chain, olas_address
-                    )
-                )
-                if accumulated_olas_rewards > 0:
-                    # Convert from wei to OLAS (18 decimals)
-                    olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(
-                        10**18
-                    )
-
-                    # Get OLAS price
-                    olas_price = yield from self._fetch_token_price(olas_address, chain)
-                    if olas_price is not None:
-                        olas_price = Decimal(str(olas_price))
-                        olas_value_usd = olas_balance * olas_price
-
-                        self.context.logger.info(
-                            f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"
-                        )
-
-                    else:
-                        self.context.logger.warning(
-                            "Could not fetch price for OLAS rewards"
-                        )
-
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value
+
+    def calculate_stakig_rewards_value(self) -> Generator[None, None, Decimal]:
+        """Calculates staking rewards equivalent in USD"""
+        chain = self.params.target_investment_chains[0]
+        yield from self.update_accumulated_rewards_for_chain(chain)
+        # After processing all balances, add OLAS rewards separately
+        olas_address = OLAS_ADDRESSES.get(chain)
+        if olas_address:
+            accumulated_olas_rewards = (
+                yield from self.get_accumulated_rewards_for_token(chain, olas_address)
+            )
+            if accumulated_olas_rewards > 0:
+                # Convert from wei to OLAS (18 decimals)
+                olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(
+                    10**18
+                )
+
+                # Get OLAS price
+                olas_price = yield from self._fetch_token_price(olas_address, chain)
+                if olas_price is not None:
+                    olas_price = Decimal(str(olas_price))
+                    olas_value_usd = olas_balance * olas_price
+
+                    self.context.logger.info(
+                        f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"
+                    )
+                    return olas_value_usd
+
+                else:
+                    self.context.logger.warning(
+                        "Could not fetch price for OLAS rewards"
+                    )
+                    return Decimal(0)
+
+        return Decimal(0)
 
     def _get_aggregator_name(
         self, aggregator_address: str, chain: str

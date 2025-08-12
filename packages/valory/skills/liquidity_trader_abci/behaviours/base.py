@@ -521,7 +521,12 @@ class LiquidityTraderBaseBehaviour(
             success, response_data = yield from self._request_with_retries(
                 endpoint=endpoint,
                 method="GET",
-                headers={"Accept": "application/json"},
+                headers={
+                    "Accept": "application/json",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
                 rate_limited_callback=lambda: None,  # No specific rate limit callback for SafeApi
                 max_retries=MAX_RETRIES_FOR_API_CALL,
                 retry_wait=2,
@@ -695,7 +700,12 @@ class LiquidityTraderBaseBehaviour(
             success, response_data = yield from self._request_with_retries(
                 endpoint=endpoint,
                 method="GET",
-                headers={"Accept": "application/json"},
+                headers={
+                    "Accept": "application/json",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
                 rate_limited_callback=lambda: None,
                 max_retries=MAX_RETRIES_FOR_API_CALL,
                 retry_wait=2,

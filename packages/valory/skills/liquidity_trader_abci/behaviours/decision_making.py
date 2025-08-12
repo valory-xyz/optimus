@@ -2555,9 +2555,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code not in HTTP_OK:
             # Handle 404 errors (project not found) by continuing execution
-            if response.status_code == 404:
+            if response.status_code in [403,404]:
                 self.context.logger.warning(
-                    f"Tenderly simulation failed with 404 (project not found) from url {api_url}. "
+                    f"Tenderly simulation failed with url {api_url}. "
                     f"Error Message: {response.body}. Continuing execution without simulation."
                 )
                 return True

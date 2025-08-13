@@ -46,6 +46,9 @@ from packages.valory.contracts.velodrome_non_fungible_position_manager.contract 
 )
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
 from packages.valory.contracts.velodrome_router.contract import VelodromeRouterContract
+from packages.valory.contracts.velodrome_slipstream_helper.contract import (
+    VelodromeSlipstreamHelperContract,
+)
 from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
@@ -3393,8 +3396,11 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
 
             # Calculate expected amounts for the liquidity being removed
-            expected_amount0, expected_amount1 = get_amounts_for_liquidity(
-                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
+            (
+                expected_amount0,
+                expected_amount1,
+            ) = yield from self.get_velodrome_amounts_for_liquidity(
+                chain, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
             )
 
             # Apply slippage tolerance
@@ -3414,3 +3420,39 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Error calculating Velodrome slippage protection when decreasing liquidity: {str(e)}"
             )
             return None, None
+
+    def get_velodrome_amounts_for_liquidity(
+        self,
+        chain: str,
+        sqrt_price_x96: int,
+        sqrt_ratio_a_x96: int,
+        sqrt_ratio_b_x96: int,
+        liquidity: int,
+    ) -> Generator[None, None, Tuple[int, int]]:
+        """Get amounts for liquidity using Velodrome Sugar contract."""
+        sugar_address = self.params.velodrome_slipstream_helper_contract_addresses.get(
+            chain
+        )
+        if not sugar_address:
+            self.context.logger.error(
+                f"No Velodrome Sugar contract address for chain {chain}"
+            )
+            return 0, 0
+
+        # Use Velodrome's official getAmountsForLiquidity function
+        amounts = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=sugar_address,
+            contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
+            contract_callable="get_amounts_for_liquidity",
+            data_key="amounts",
+            sqrt_price_x96=sqrt_price_x96,
+            sqrt_ratio_a_x96=sqrt_ratio_a_x96,
+            sqrt_ratio_b_x96=sqrt_ratio_b_x96,
+            liquidity=liquidity,
+            chain_id=chain,
+        )
+
+        if amounts:
+            return amounts[0], amounts[1]
+        return 0, 0

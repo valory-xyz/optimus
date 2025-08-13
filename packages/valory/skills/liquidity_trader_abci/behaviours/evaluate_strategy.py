@@ -1459,6 +1459,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             action["to_token"] = target_token
                             action["to_token_symbol"] = target_symbol
 
+                        # Use the full relative slice for one-sided allocation
+                        try:
+                            full_slice = float(
+                                enter_pool_action.get("relative_funds_percentage", 1.0)
+                                or 1.0
+                            )
+                        except (ValueError, TypeError):
+                            full_slice = 1.0
+                        action["funds_percentage"] = full_slice
+
                 # If no FindBridgeRoute actions were found, add one
                 if not bridge_routes_found and available_tokens:
                     self.context.logger.info("No bridge routes found, adding a new one")
@@ -1479,7 +1489,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             "from_token_symbol": source_token.get("token_symbol"),
                             "to_token": target_token,
                             "to_token_symbol": target_symbol,
-                            "funds_percentage": 1.0,  # Use 100% allocation
+                            "funds_percentage": full_slice,  # Use full allocation
                         }
 
                         self.context.logger.info(
@@ -2073,15 +2083,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Handle single source token case
         if len(tokens) == 1:
             token = tokens[0]
+            # Sequential split: 1/N of initial on the first step,
+            # then 1/(N-1) of the remainder, ..., consuming the full slice.
+            remaining_splits = len(required_tokens)
             for dest_token_address, dest_token_symbol in required_tokens:
                 # Skip if same token on same chain
                 if (
                     token.get("chain") == dest_chain
                     and token.get("token") == dest_token_address
                 ):
+                    remaining_splits = max(1, remaining_splits - 1)
                     continue
 
-                token_percentage = relative_funds_percentage / len(required_tokens)
+                step_percentage = relative_funds_percentage / max(1, remaining_splits)
 
                 self._add_bridge_swap_action(
                     bridge_swap_actions,
@@ -2089,10 +2103,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     dest_chain,
                     dest_token_address,
                     dest_token_symbol,
-                    token_percentage,
+                    step_percentage,
                 )
+                remaining_splits = max(1, remaining_splits - 1)
         else:
-            # Multiple source tokens case
+            # Multiple source tokens case (unchanged)
             tokens.sort(key=lambda x: x["token"])
             dest_tokens = sorted(required_tokens, key=lambda x: x[0])
 

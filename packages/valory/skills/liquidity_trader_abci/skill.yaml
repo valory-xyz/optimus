@@ -30,7 +30,7 @@ fingerprint:
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeiafwkg3dwban2hlyaistf2litbx32mhbbdnrsuoultc26uii42oma
   pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
-  pools/velodrome.py: bafybeiau6nltqu4isbdz5t6ou35szxybzrrkwilqxf75xrtxfkkj626h34
+  pools/velodrome.py: bafybeidegkxxydyvd7ppncs2whkby6qxxyflkplh5rev3l657gxxhkv62y
   rounds.py: bafybeihsstee7burcnrc75bjisbswxrc5h6lvi3e2l6ciiiy4nqepw2zfy
   rounds_info.py: bafybeihtj6mf74ccw6k2vokv7vkf4nwbp7j7cfm7j6cvuqop7gomavxucu
   states/__init__.py: bafybeigzgpxgx6g4ioalm7fdalcckk5lmw6z4k4sb5d4a4cdespv2umogi
@@ -80,7 +80,7 @@ contracts:
 - valory/velodrome_gauge:0.1.0:bafybeicbrtp2burhnthqmeme2nihfg6jrhx622edt4bxhtgoxqamjcicdu
 - valory/velodrome_voter:0.1.0:bafybeid2nvctd25mcthgokt7m47f35pofff7gov3qai5aj4jdeo2uojhr4
 - valory/velodrome_cl_gauge:0.1.0:bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm
-- valory/velodrome_slipstream_helper:0.1.0:bafybeidkkemyjdafqloq7yhgk56226u2f2re4uxetpmae2jjyz4iknrmya
+- valory/velodrome_slipstream_helper:0.1.0:bafybeiapaeltu46cu6f3byxqzkz47fyibcijxc7245mnemi6efhwujfn6e
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4

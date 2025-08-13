@@ -2555,9 +2555,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code not in HTTP_OK:
             # Handle 404 errors (project not found) by continuing execution
-            if response.status_code == 404:
+            if response.status_code in [403, 404]:
                 self.context.logger.warning(
-                    f"Tenderly simulation failed with 404 (project not found) from url {api_url}. "
+                    f"Tenderly simulation failed with url {api_url}. "
                     f"Error Message: {response.body}. Continuing execution without simulation."
                 )
                 return True
@@ -3454,11 +3454,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # TiP formula: entry_cost / ((effective_apr/365) * principal)
             min_days = entry_cost / ((effective_apr / 365) * principal)
 
-            result = max(14.0, min_days)  # At least 14 days
+            result = max(1.0, min_days)  # At least 2 days
 
             # Enhanced logging
             self.context.logger.info(f"TiP Calculation ({pool_type_str}):")
-            self.context.logger.info(f"  Minimum hold days: {result:.1f}")
+            self.context.logger.info(f"Minimum hold days: {result:.1f}")
 
             return result
 

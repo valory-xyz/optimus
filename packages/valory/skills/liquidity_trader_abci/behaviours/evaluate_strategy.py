@@ -2191,7 +2191,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         except Exception:
             overall_token1_ratio = opportunity.get("token1_percentage", 0) / 100.0
 
-        target_ratios_by_token: Dict[str, float] = {
+        # Default to 50/50 if not a CL pool or token requirements are missing
+        is_cl_pool = bool(opportunity.get("is_cl_pool", False))
+        if (not is_cl_pool) or (not token_requirements):
+            overall_token0_ratio = 0.5
+            overall_token1_ratio = 0.5
+
+        # Fallback to 50/50 if both ratios end up as zero
+        if overall_token0_ratio == 0 and overall_token1_ratio == 0:
+            overall_token0_ratio = 0.5
+            overall_token1_ratio = 0.5
+
+        target_ratios_by_token = {
             opportunity.get("token0"): overall_token0_ratio,
             opportunity.get("token1"): overall_token1_ratio,
         }
@@ -2277,6 +2288,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "to_token": dest_token_address,
                     "to_token_symbol": dest_token_symbol,
                     "funds_percentage": relative_funds_percentage,
+                    "source_initial_balance": token.get("balance", 0),
                 }
             )
         elif source_token_address != dest_token_address:
@@ -2295,6 +2307,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "to_token": dest_token_address,
                     "to_token_symbol": dest_token_symbol,
                     "funds_percentage": relative_funds_percentage,
+                    "source_initial_balance": token.get("balance", 0),
                 }
             )
         else:

@@ -1150,8 +1150,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Compute available USD per side and total
-        usd0 = (token0_balance / (10 ** token0_decimals)) * float(price0)
-        usd1 = (token1_balance / (10 ** token1_decimals)) * float(price1)
+        usd0 = (token0_balance / (10**token0_decimals)) * float(price0)
+        usd1 = (token1_balance / (10**token1_decimals)) * float(price1)
         total_usd_available = usd0 + usd1
 
         if total_usd_available <= 0:
@@ -1187,8 +1187,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         target_usd1 = total_usd_available * w1
 
         # Convert target USD to token units and cap by balances and max_amounts
-        desired0 = int(min((target_usd0 / float(price0)) * (10 ** token0_decimals), token0_balance))
-        desired1 = int(min((target_usd1 / float(price1)) * (10 ** token1_decimals), token1_balance))
+        desired0 = int(
+            min((target_usd0 / float(price0)) * (10**token0_decimals), token0_balance)
+        )
+        desired1 = int(
+            min((target_usd1 / float(price1)) * (10**token1_decimals), token1_balance)
+        )
 
         # Apply additional caps if provided
         if len(max_amounts) >= 2:

@@ -1060,8 +1060,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             tick_current = int(np.log(current_price) / np.log(1.0001))
 
             # Define a converter that maps a human price to a tick relative to tick_current
-            # delta = ln(price / current_ema) / ln(1.0001)
-            # tick = tick_current + round(delta)
             def price_to_tick(price: float) -> int:
                 ratio = price / current_ema if current_ema > 0 else 1.0
                 delta = np.log(ratio) / np.log(1.0001)

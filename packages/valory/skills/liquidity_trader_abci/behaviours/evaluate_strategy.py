@@ -1963,8 +1963,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     ]
 
                     # Calculate percentage based on target ratios for each required token
-                    token_percentage = relative_funds_percentage * target_ratios_by_token.get(
-                        dest_token_address, 1.0 / max(1, len(required_tokens))
+                    token_percentage = (
+                        relative_funds_percentage
+                        * target_ratios_by_token.get(
+                            dest_token_address, 1.0 / max(1, len(required_tokens))
+                        )
                     )
 
                     # Add bridge action
@@ -2026,7 +2029,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                 fraction,
                             )
             except Exception as e:
-                self.context.logger.error(f"Error during on-chain rebalance planning: {e}")
+                self.context.logger.error(
+                    f"Error during on-chain rebalance planning: {e}"
+                )
 
         return bridge_swap_actions
 
@@ -2103,8 +2108,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Calculate percentage based on target ratios
-                    token_percentage = relative_funds_percentage * target_ratios_by_token.get(
-                        dest_token_address, 1.0 / max(1, len(required_tokens))
+                    token_percentage = (
+                        relative_funds_percentage
+                        * target_ratios_by_token.get(
+                            dest_token_address, 1.0 / max(1, len(required_tokens))
+                        )
                     )
 
                     self._add_bridge_swap_action(
@@ -2141,8 +2149,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 # Allocate according to target ratios for each destination token
-                step_percentage = relative_funds_percentage * target_ratios_by_token.get(
-                    dest_token_address, 1.0 / max(1, len(required_tokens))
+                step_percentage = (
+                    relative_funds_percentage
+                    * target_ratios_by_token.get(
+                        dest_token_address, 1.0 / max(1, len(required_tokens))
+                    )
                 )
 
                 self._add_bridge_swap_action(
@@ -2170,8 +2181,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 ):
                     continue
 
-                token_percentage = relative_funds_percentage * target_ratios_by_token.get(
-                    dest_token_address, 1.0 / max(1, len(dest_tokens))
+                token_percentage = (
+                    relative_funds_percentage
+                    * target_ratios_by_token.get(
+                        dest_token_address, 1.0 / max(1, len(dest_tokens))
+                    )
                 )
 
                 self._add_bridge_swap_action(

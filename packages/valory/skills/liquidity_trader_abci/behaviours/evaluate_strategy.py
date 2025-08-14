@@ -1992,6 +1992,57 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         token_percentage,
                     )
 
+            # If both required tokens are already on the destination chain, rebalance if off target
+            try:
+                if len(required_tokens) >= 2:
+                    # Map of destination chain tokens by address
+                    dest_tokens_map = {
+                        t.get("token"): t
+                        for t in tokens
+                        if t.get("chain") == dest_chain and t.get("token")
+                    }
+                    token0_addr, token0_sym = required_tokens[0]
+                    token1_addr, token1_sym = required_tokens[1]
+                    tok0 = dest_tokens_map.get(token0_addr)
+                    tok1 = dest_tokens_map.get(token1_addr)
+                    val0 = float(tok0.get("value", 0)) if tok0 else 0.0
+                    val1 = float(tok1.get("value", 0)) if tok1 else 0.0
+                    total_val = val0 + val1
+                    if tok0 and tok1 and total_val > 0:
+                        target0 = float(target_ratios_by_token.get(token0_addr, 0.5))
+                        desired0 = total_val * target0
+                        desired1 = total_val - desired0
+                        surplus0 = max(0.0, val0 - desired0)
+                        surplus1 = max(0.0, val1 - desired1)
+                        deficit0 = max(0.0, desired0 - val0)
+                        deficit1 = max(0.0, desired1 - val1)
+
+                        # Swap from surplus token to the one with deficit, using value-based fraction
+                        if surplus0 > 0 and deficit1 > 0 and val0 > 0:
+                            swap_val = min(surplus0, deficit1)
+                            fraction = min(1.0, swap_val / max(1e-12, val0))
+                            self._add_bridge_swap_action(
+                                bridge_swap_actions,
+                                tok0,
+                                dest_chain,
+                                token1_addr,
+                                token1_sym,
+                                fraction,
+                            )
+                        elif surplus1 > 0 and deficit0 > 0 and val1 > 0:
+                            swap_val = min(surplus1, deficit0)
+                            fraction = min(1.0, swap_val / max(1e-12, val1))
+                            self._add_bridge_swap_action(
+                                bridge_swap_actions,
+                                tok1,
+                                dest_chain,
+                                token0_addr,
+                                token0_sym,
+                                fraction,
+                            )
+            except Exception as e:
+                self.context.logger.error(f"Error during on-chain rebalance planning: {e}")
+
         return bridge_swap_actions
 
     def _handle_some_tokens_available(

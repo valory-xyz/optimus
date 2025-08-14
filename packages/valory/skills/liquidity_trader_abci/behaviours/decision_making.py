@@ -2414,8 +2414,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Calculate the amount to swap based on the available amount and funds percentage
+        snapshot_balance = action.get("source_initial_balance")
+        if isinstance(snapshot_balance, int) and snapshot_balance > 0:
+            base_amount = snapshot_balance
+        else:
+            base_amount = available_amount if available_amount is not None else 0
+
         amount = min(
-            available_amount, int(available_amount * action.get("funds_percentage", 1))
+            available_amount,
+            int(base_amount * action.get("funds_percentage", 1)),
         )
 
         self.context.logger.info(f"Calculated amount: {amount}")

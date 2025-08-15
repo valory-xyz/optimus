@@ -25,7 +25,7 @@ from decimal import Decimal
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type, cast
 
 from eth_abi import decode
-from eth_utils import keccak, to_bytes, to_checksum_address, to_hex
+from eth_utils import keccak, to_bytes, to_hex
 
 from packages.valory.contracts.erc20.contract import ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
@@ -228,6 +228,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     actions, last_executed_action_index
                 )
                 return res
+            if self.synchronized_data.last_action == Action.STAKE_LP_TOKENS.value:
+                self._post_execute_stake_lp_tokens(actions, last_executed_action_index)
+            if self.synchronized_data.last_action == Action.UNSTAKE_LP_TOKENS.value:
+                self._post_execute_unstake_lp_tokens(
+                    actions, last_executed_action_index
+                )
+            if self.synchronized_data.last_action == Action.CLAIM_STAKING_REWARDS.value:
+                self._post_execute_claim_staking_rewards(
+                    actions, last_executed_action_index
+                )
 
         if current_action_index >= len(actions):
             self.context.logger.info("All actions have been executed")
@@ -352,18 +362,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
-
-        # Add tokens to assets
-        self._add_token_to_assets(
-            action.get("from_chain"),
-            action.get("from_token"),
-            action.get("from_token_symbol"),
-        )
-        self._add_token_to_assets(
-            action.get("to_chain"),
-            action.get("to_token"),
-            action.get("to_token_symbol"),
-        )
 
         # Update portfolio data to reflect new USDC balance after swap
         self.context.logger.info("Updating portfolio data after swap...")
@@ -641,13 +639,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, actions, last_executed_action_index
     ) -> Tuple[Optional[str], Optional[Dict]]:
         """Handle claiming rewards."""
-        action = actions[last_executed_action_index]
-        chain = action.get("chain")
-        for token, token_symbol in zip(
-            action.get("tokens"), action.get("token_symbols")
-        ):
-            self._add_token_to_assets(chain, token, token_symbol)
-
         current_timestamp = cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
@@ -935,6 +926,30 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     next_action_details
                 )
             last_action = Action.WITHDRAW.value
+
+        elif next_action == Action.STAKE_LP_TOKENS:
+            (
+                tx_hash,
+                chain_id,
+                safe_address,
+            ) = yield from self.get_stake_lp_tokens_tx_hash(next_action_details)
+            last_action = Action.STAKE_LP_TOKENS.value
+
+        elif next_action == Action.UNSTAKE_LP_TOKENS:
+            (
+                tx_hash,
+                chain_id,
+                safe_address,
+            ) = yield from self.get_unstake_lp_tokens_tx_hash(next_action_details)
+            last_action = Action.UNSTAKE_LP_TOKENS.value
+
+        elif next_action == Action.CLAIM_STAKING_REWARDS:
+            (
+                tx_hash,
+                chain_id,
+                safe_address,
+            ) = yield from self.get_claim_staking_rewards_tx_hash(next_action_details)
+            last_action = Action.CLAIM_STAKING_REWARDS.value
 
         else:
             tx_hash = None
@@ -2540,9 +2555,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         if response.status_code not in HTTP_OK:
             # Handle 404 errors (project not found) by continuing execution
-            if response.status_code == 404:
+            if response.status_code in [403, 404]:
                 self.context.logger.warning(
-                    f"Tenderly simulation failed with 404 (project not found) from url {api_url}. "
+                    f"Tenderly simulation failed with url {api_url}. "
                     f"Error Message: {response.body}. Continuing execution without simulation."
                 )
                 return True
@@ -2956,30 +2971,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None, None, None
 
         return amount0, amount1, timestamp
-
-    def _add_token_to_assets(self, chain, token, symbol):
-        # Read current assets
-        token = to_checksum_address(token)
-        self.read_assets()
-        current_assets = self.assets
-
-        # Initialize assets if empty
-        if not current_assets:
-            current_assets = self.params.initial_assets
-
-        # Ensure the chain key exists in assets
-        if chain not in current_assets:
-            current_assets[chain] = {}
-
-        # Add token to the specified chain if it doesn't exist
-        if token not in current_assets[chain]:
-            current_assets[chain][token] = symbol
-
-        # Store updated assets
-        self.assets = current_assets
-        self.store_assets()
-
-        self.context.logger.info(f"Updated assets: {self.assets}")
 
     def _get_signature(self, owner: str) -> str:
         signatures = b""
@@ -3463,11 +3454,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             # TiP formula: entry_cost / ((effective_apr/365) * principal)
             min_days = entry_cost / ((effective_apr / 365) * principal)
 
-            result = max(14.0, min_days)  # At least 14 days
+            result = max(1.0, min_days)  # At least 2 days
 
             # Enhanced logging
             self.context.logger.info(f"TiP Calculation ({pool_type_str}):")
-            self.context.logger.info(f"  Minimum hold days: {result:.1f}")
+            self.context.logger.info(f"Minimum hold days: {result:.1f}")
 
             return result
 
@@ -3536,28 +3527,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         """Generate unique key for entry costs storage"""
         return f"entry_costs_{chain}_{position_id}_{entry_timestamp}"
 
-    def _store_entry_costs(
-        self, chain: str, position_id: str, costs: float
-    ) -> Generator[None, None, None]:
-        """Store entry costs in KV store with unique key"""
-        try:
-            key = self._get_entry_costs_key(chain, position_id)
-
-            # Get existing entry costs dictionary
-            entry_costs_dict = yield from self._get_all_entry_costs()
-
-            # Update the dictionary
-            entry_costs_dict[key] = costs
-
-            # Store back to KV store
-            yield from self._write_kv(
-                {"entry_costs_dict": json.dumps(entry_costs_dict)}
-            )
-
-            self.context.logger.info(f"Stored entry costs: {key} = ${costs:.6f}")
-        except Exception as e:
-            self.context.logger.error(f"Error storing entry costs: {e}")
-
     def _get_entry_costs(
         self, chain: str, position_id: str
     ) -> Generator[None, None, float]:
@@ -3606,19 +3575,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error updating entry costs: {e}")
             return 0.0
 
-    def _get_all_entry_costs(self) -> Generator[None, None, Dict[str, float]]:
-        """Get all entry costs from KV store"""
-        try:
-            result = yield from self._read_kv(("entry_costs_dict",))
-            if result and result.get("entry_costs_dict"):
-                entry_costs_dict = json.loads(result["entry_costs_dict"])
-                # Convert string values back to float
-                return {k: float(v) for k, v in entry_costs_dict.items()}
-            return {}
-        except Exception as e:
-            self.context.logger.error(f"Error getting all entry costs: {e}")
-            return {}
-
     def _rename_entry_costs_key(
         self, current_position: Optional[dict]
     ) -> Generator[None, None, None]:
@@ -3665,3 +3621,593 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error renaming entry costs key: {e}")
+
+    # ==================== STAKING EXECUTION METHODS ====================
+
+    def get_stake_lp_tokens_tx_hash(
+        self, action
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Get stake LP tokens tx hash"""
+        try:
+            dex_type = action.get("dex_type")
+            chain = action.get("chain")
+            pool_address = action.get("pool_address")
+            is_cl_pool = action.get("is_cl_pool", False)
+            safe_address = self.params.safe_contract_addresses.get(chain)
+
+            if dex_type != "velodrome":
+                self.context.logger.error(
+                    f"Staking only supported for Velodrome, got: {dex_type}"
+                )
+                return None, None, None
+
+            if not all([chain, pool_address, safe_address]):
+                self.context.logger.error(
+                    f"Missing required parameters for staking: {action}"
+                )
+                return None, None, None
+
+            # Get the Velodrome pool behaviour
+            pool = self.pools.get("velodrome")
+            if not pool:
+                self.context.logger.error("Velodrome pool behaviour not found")
+                return None, None, None
+            # Call the appropriate staking method based on pool type
+            if is_cl_pool:
+                # For CL pools, get token IDs and gauge address from action or find matching position
+                token_ids = action.get("token_ids")
+                gauge_address = action.get("gauge_address")
+
+                # If not provided in action, find from current positions
+                if not token_ids or not gauge_address:
+                    matching_position = None
+                    for position in reversed(self.current_positions):
+                        if (
+                            position.get("pool_address") == pool_address
+                            and position.get("chain") == chain
+                            and position.get("status") == PositionStatus.OPEN.value
+                        ):
+                            matching_position = position
+                            break
+
+                    if not matching_position:
+                        self.context.logger.error(
+                            f"No matching position found for pool {pool_address}"
+                        )
+                        return None, None, None
+
+                    # Extract token IDs from position data
+                    if not token_ids:
+                        positions_data = matching_position.get("positions", [])
+                        token_ids = [pos["token_id"] for pos in positions_data]
+
+                    # Get gauge address if not provided
+                    if not gauge_address:
+                        gauge_address = yield from pool.get_gauge_address(
+                            self, pool_address, chain=chain
+                        )
+
+                if not token_ids or not gauge_address:
+                    self.context.logger.error(
+                        f"Missing token_ids ({token_ids}) or gauge_address ({gauge_address}) for CL pool staking"
+                    )
+                    return None, None, None
+
+                result = yield from pool.stake_cl_lp_tokens(
+                    self,
+                    token_ids=token_ids,
+                    gauge_address=gauge_address,
+                    chain=chain,
+                    safe_address=safe_address,
+                )
+            else:
+                # For regular pools, get LP token balance to stake
+                lp_balance = yield from self._get_token_balance(
+                    chain, safe_address, pool_address
+                )
+                if not lp_balance or lp_balance <= 0:
+                    self.context.logger.error(
+                        f"No LP tokens to stake for pool {pool_address}"
+                    )
+                    return None, None, None
+
+                result = yield from pool.stake_lp_tokens(
+                    self,
+                    lp_token=pool_address,
+                    amount=lp_balance,
+                    chain=chain,
+                    safe_address=safe_address,
+                )
+
+            if not result or result.get("error"):
+                error_msg = (
+                    result.get("error", "Unknown error")
+                    if result
+                    else "No result returned"
+                )
+                self.context.logger.error(
+                    f"Failed to get staking transaction: {error_msg}"
+                )
+                return None, None, None
+
+            tx_hash = result.get("tx_hash")
+            contract_address = result.get("contract_address")
+            is_multisend = result.get("is_multisend", False)
+
+            if not tx_hash or not contract_address:
+                self.context.logger.error(
+                    "Missing tx_hash or contract_address in staking result"
+                )
+                return None, None, None
+
+            # Create Safe transaction
+            operation = (
+                SafeOperation.DELEGATE_CALL.value
+                if is_multisend
+                else SafeOperation.CALL.value
+            )
+
+            safe_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=safe_address,
+                contract_public_id=GnosisSafeContract.contract_id,
+                contract_callable="get_raw_safe_transaction_hash",
+                data_key="tx_hash",
+                to_address=contract_address,
+                value=ETHER_VALUE,
+                data=tx_hash,
+                operation=operation,
+                safe_tx_gas=SAFE_TX_GAS,
+                chain_id=chain,
+            )
+
+            if not safe_tx_hash:
+                return None, None, None
+
+            safe_tx_hash = safe_tx_hash[2:]
+            self.context.logger.info(
+                f"Hash of the Safe staking transaction: {safe_tx_hash}"
+            )
+
+            payload_string = hash_payload_to_hex(
+                safe_tx_hash=safe_tx_hash,
+                ether_value=ETHER_VALUE,
+                safe_tx_gas=SAFE_TX_GAS,
+                operation=operation,
+                to_address=contract_address,
+                data=tx_hash,
+            )
+
+            self.context.logger.info(
+                f"Staking tx hash payload string is {payload_string}"
+            )
+            return payload_string, chain, safe_address
+
+        except Exception as e:
+            self.context.logger.error(f"Error in get_stake_lp_tokens_tx_hash: {str(e)}")
+            return None, None, None
+
+    def get_unstake_lp_tokens_tx_hash(
+        self, action
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Get unstake LP tokens tx hash"""
+        try:
+            dex_type = action.get("dex_type")
+            chain = action.get("chain")
+            pool_address = action.get("pool_address")
+            is_cl_pool = action.get("is_cl_pool", False)
+            safe_address = self.params.safe_contract_addresses.get(chain)
+
+            if dex_type != "velodrome":
+                self.context.logger.error(
+                    f"Unstaking only supported for Velodrome, got: {dex_type}"
+                )
+                return None, None, None
+
+            if not all([chain, pool_address, safe_address]):
+                self.context.logger.error(
+                    f"Missing required parameters for unstaking: {action}"
+                )
+                return None, None, None
+
+            # Get the Velodrome pool behaviour
+            pool = self.pools.get("velodrome")
+            if not pool:
+                self.context.logger.error("Velodrome pool behaviour not found")
+                return None, None, None
+
+            # Call the appropriate unstaking method based on pool type
+            if is_cl_pool:
+                # For CL pools, get token IDs and gauge address from action or find matching position
+                token_ids = action.get("token_ids")
+                gauge_address = action.get("gauge_address")
+
+                # If not provided in action, find from current positions
+                if not token_ids or not gauge_address:
+                    matching_position = None
+                    for position in reversed(self.current_positions):
+                        if (
+                            position.get("pool_address") == pool_address
+                            and position.get("chain") == chain
+                            and position.get("status") == PositionStatus.OPEN.value
+                        ):
+                            matching_position = position
+                            break
+
+                    if not matching_position:
+                        self.context.logger.error(
+                            f"No matching position found for pool {pool_address}"
+                        )
+                        return None, None, None
+
+                    # Extract token IDs from position data
+                    if not token_ids:
+                        positions_data = matching_position.get("positions", [])
+                        token_ids = [pos["token_id"] for pos in positions_data]
+
+                    # Get gauge address if not provided
+                    if not gauge_address:
+                        gauge_address = yield from pool.get_gauge_address(
+                            self, pool_address, chain=chain
+                        )
+
+                if not token_ids or not gauge_address:
+                    self.context.logger.error(
+                        f"Missing token_ids ({token_ids}) or gauge_address ({gauge_address}) for CL pool unstaking"
+                    )
+                    return None, None, None
+
+                result = yield from pool.unstake_cl_lp_tokens(
+                    self,
+                    token_ids=token_ids,
+                    gauge_address=gauge_address,
+                    chain=chain,
+                    safe_address=safe_address,
+                )
+            else:
+                # For regular pools, get staked balance
+                staked_balance = yield from pool.get_staked_balance(
+                    self, lp_token=pool_address, user_address=safe_address, chain=chain
+                )
+
+                if not staked_balance or staked_balance <= 0:
+                    self.context.logger.error(
+                        f"No staked LP tokens to unstake for pool {pool_address}"
+                    )
+                    return None, None, None
+
+                result = yield from pool.unstake_lp_tokens(
+                    self,
+                    lp_token=pool_address,
+                    amount=staked_balance,
+                    chain=chain,
+                    safe_address=safe_address,
+                )
+
+            if not result or result.get("error"):
+                error_msg = (
+                    result.get("error", "Unknown error")
+                    if result
+                    else "No result returned"
+                )
+                self.context.logger.error(
+                    f"Failed to get unstaking transaction: {error_msg}"
+                )
+                return None, None, None
+
+            tx_hash = result.get("tx_hash")
+            contract_address = result.get("contract_address")
+            is_multisend = result.get("is_multisend", False)
+
+            if not tx_hash or not contract_address:
+                self.context.logger.error(
+                    "Missing tx_hash or contract_address in unstaking result"
+                )
+                return None, None, None
+
+            # Create Safe transaction
+            operation = (
+                SafeOperation.DELEGATE_CALL.value
+                if is_multisend
+                else SafeOperation.CALL.value
+            )
+
+            safe_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=safe_address,
+                contract_public_id=GnosisSafeContract.contract_id,
+                contract_callable="get_raw_safe_transaction_hash",
+                data_key="tx_hash",
+                to_address=contract_address,
+                value=ETHER_VALUE,
+                data=tx_hash,
+                operation=operation,
+                safe_tx_gas=SAFE_TX_GAS,
+                chain_id=chain,
+            )
+
+            if not safe_tx_hash:
+                return None, None, None
+
+            safe_tx_hash = safe_tx_hash[2:]
+            self.context.logger.info(
+                f"Hash of the Safe unstaking transaction: {safe_tx_hash}"
+            )
+
+            payload_string = hash_payload_to_hex(
+                safe_tx_hash=safe_tx_hash,
+                ether_value=ETHER_VALUE,
+                safe_tx_gas=SAFE_TX_GAS,
+                operation=operation,
+                to_address=contract_address,
+                data=tx_hash,
+            )
+
+            self.context.logger.info(
+                f"Unstaking tx hash payload string is {payload_string}"
+            )
+            return payload_string, chain, safe_address
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in get_unstake_lp_tokens_tx_hash: {str(e)}"
+            )
+            return None, None, None
+
+    def get_claim_staking_rewards_tx_hash(
+        self, action
+    ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Get claim staking rewards tx hash"""
+        try:
+            dex_type = action.get("dex_type")
+            chain = action.get("chain")
+            pool_address = action.get("pool_address")
+            is_cl_pool = action.get("is_cl_pool", False)
+            safe_address = self.params.safe_contract_addresses.get(chain)
+
+            if dex_type != "velodrome":
+                self.context.logger.error(
+                    f"Reward claiming only supported for Velodrome, got: {dex_type}"
+                )
+                return None, None, None
+
+            if not all([chain, pool_address, safe_address]):
+                self.context.logger.error(
+                    f"Missing required parameters for reward claiming: {action}"
+                )
+                return None, None, None
+
+            # Get the Velodrome pool behaviour
+            pool = self.pools.get("velodrome")
+            if not pool:
+                self.context.logger.error("Velodrome pool behaviour not found")
+                return None, None, None
+
+            # Call the appropriate reward claiming method based on pool type
+            if is_cl_pool:
+                # For CL pools, get token IDs and gauge address from action or find matching position
+                token_ids = action.get("token_ids")
+                gauge_address = action.get("gauge_address")
+
+                # If not provided in action, find from current positions
+                if not token_ids or not gauge_address:
+                    matching_position = None
+                    for position in reversed(self.current_positions):
+                        if (
+                            position.get("pool_address") == pool_address
+                            and position.get("chain") == chain
+                            and position.get("status") == PositionStatus.OPEN.value
+                        ):
+                            matching_position = position
+                            break
+
+                    if not matching_position:
+                        self.context.logger.error(
+                            f"No matching position found for pool {pool_address}"
+                        )
+                        return None, None, None
+
+                    # Extract token IDs from position data if not provided
+                    if not token_ids:
+                        positions_data = matching_position.get("positions", [])
+                        token_ids = [pos["token_id"] for pos in positions_data]
+
+                    # Get gauge address from pool if not provided
+                    if not gauge_address:
+                        gauge_address = yield from pool.get_gauge_address(
+                            self, pool_address, chain=chain
+                        )
+
+                if not token_ids or not gauge_address:
+                    self.context.logger.error(
+                        f"Missing token_ids ({token_ids}) or gauge_address ({gauge_address}) for CL pool reward claiming"
+                    )
+                    return None, None, None
+
+                self.context.logger.info(
+                    f"Claiming CL rewards for token IDs: {token_ids} from gauge: {gauge_address}"
+                )
+
+                result = yield from pool.claim_cl_rewards(
+                    self,
+                    gauge_address=gauge_address,
+                    token_ids=token_ids,
+                    chain=chain,
+                    safe_address=safe_address,
+                )
+            else:
+                # For regular pools
+                result = yield from pool.claim_rewards(
+                    self, lp_token=pool_address, chain=chain, safe_address=safe_address
+                )
+
+            if not result or result.get("error"):
+                error_msg = (
+                    result.get("error", "Unknown error")
+                    if result
+                    else "No result returned"
+                )
+                self.context.logger.error(
+                    f"Failed to get reward claiming transaction: {error_msg}"
+                )
+                return None, None, None
+
+            tx_hash = result.get("tx_hash")
+            contract_address = result.get("contract_address")
+            is_multisend = result.get("is_multisend", False)
+
+            if not tx_hash or not contract_address:
+                self.context.logger.error(
+                    "Missing tx_hash or contract_address in reward claiming result"
+                )
+                return None, None, None
+
+            # Create Safe transaction
+            operation = (
+                SafeOperation.DELEGATE_CALL.value
+                if is_multisend
+                else SafeOperation.CALL.value
+            )
+
+            safe_tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=safe_address,
+                contract_public_id=GnosisSafeContract.contract_id,
+                contract_callable="get_raw_safe_transaction_hash",
+                data_key="tx_hash",
+                to_address=contract_address,
+                value=ETHER_VALUE,
+                data=tx_hash,
+                operation=operation,
+                safe_tx_gas=SAFE_TX_GAS,
+                chain_id=chain,
+            )
+
+            if not safe_tx_hash:
+                return None, None, None
+
+            safe_tx_hash = safe_tx_hash[2:]
+            self.context.logger.info(
+                f"Hash of the Safe reward claiming transaction: {safe_tx_hash}"
+            )
+
+            payload_string = hash_payload_to_hex(
+                safe_tx_hash=safe_tx_hash,
+                ether_value=ETHER_VALUE,
+                safe_tx_gas=SAFE_TX_GAS,
+                operation=operation,
+                to_address=contract_address,
+                data=tx_hash,
+            )
+
+            self.context.logger.info(
+                f"Reward claiming tx hash payload string is {payload_string}"
+            )
+            return payload_string, chain, safe_address
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in get_claim_staking_rewards_tx_hash: {str(e)}"
+            )
+            return None, None, None
+
+    # ==================== STAKING POST-EXECUTION HANDLERS ====================
+
+    def _post_execute_stake_lp_tokens(self, actions, last_executed_action_index):
+        """Handle staking LP tokens completion."""
+        action = actions[last_executed_action_index]
+        pool_address = action.get("pool_address")
+        chain = action.get("chain")
+        is_cl_pool = action.get("is_cl_pool", False)
+
+        self.context.logger.info(
+            f"LP token staking completed for pool {pool_address} on {chain}"
+        )
+
+        # Update position metadata to include staking information
+        for position in self.current_positions:
+            if (
+                position.get("pool_address") == pool_address
+                and position.get("chain") == chain
+                and position.get("status") == PositionStatus.OPEN.value
+            ):
+                # Add staking metadata to position
+                position["staked"] = True
+                position["staking_tx_hash"] = self.synchronized_data.final_tx_hash
+                position["staking_timestamp"] = int(self._get_current_timestamp())
+
+                # For CL pools, we might want to store additional metadata
+                if is_cl_pool:
+                    position["staked_cl_pool"] = True
+
+                self.context.logger.info(
+                    f"Updated position {pool_address} with staking metadata"
+                )
+                break
+
+        self.store_current_positions()
+        self.context.logger.info("Staking LP tokens was successful!")
+
+    def _post_execute_unstake_lp_tokens(self, actions, last_executed_action_index):
+        """Handle unstaking LP tokens completion."""
+        action = actions[last_executed_action_index]
+        pool_address = action.get("pool_address")
+        chain = action.get("chain")
+        self.context.logger.info(
+            f"LP token unstaking completed for pool {pool_address} on {chain}"
+        )
+
+        # Update position metadata to remove staking information
+        for position in self.current_positions:
+            if (
+                position.get("pool_address") == pool_address
+                and position.get("chain") == chain
+            ):
+                # Remove staking metadata from position
+                position["staked"] = False
+                position["unstaking_tx_hash"] = self.synchronized_data.final_tx_hash
+                position["unstaking_timestamp"] = int(self._get_current_timestamp())
+
+                # Remove CL-specific staking metadata
+                if "staked_cl_pool" in position:
+                    position["staked_cl_pool"] = False
+
+                self.context.logger.info(
+                    f"Updated position {pool_address} - removed staking metadata"
+                )
+                break
+
+        self.store_current_positions()
+        self.context.logger.info("Unstaking LP tokens was successful!")
+
+    def _post_execute_claim_staking_rewards(self, actions, last_executed_action_index):
+        """Handle claiming staking rewards completion."""
+        action = actions[last_executed_action_index]
+        pool_address = action.get("pool_address")
+        chain = action.get("chain")
+
+        self.context.logger.info(
+            f"Staking rewards claimed for pool {pool_address} on {chain}"
+        )
+
+        # Update position metadata with reward claiming information
+        for position in self.current_positions:
+            if (
+                position.get("pool_address") == pool_address
+                and position.get("chain") == chain
+            ):
+                # Add reward claiming metadata
+                position[
+                    "last_reward_claim_tx_hash"
+                ] = self.synchronized_data.final_tx_hash
+                position["last_reward_claim_timestamp"] = int(
+                    self._get_current_timestamp()
+                )
+
+                self.context.logger.info(
+                    f"Updated position {pool_address} with reward claim metadata"
+                )
+                break
+
+        self.store_current_positions()
+        self.context.logger.info("Claiming staking rewards was successful!")

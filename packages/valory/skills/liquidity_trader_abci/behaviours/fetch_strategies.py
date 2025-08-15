@@ -54,8 +54,10 @@ from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContr
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
+    OLAS_ADDRESSES,
     PORTFOLIO_UPDATE_INTERVAL,
     PositionStatus,
     SAFE_TX_GAS,
@@ -80,6 +82,10 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
 )
 
 
+# Add these constants to the class or base file
+CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
+
+
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that gets the balances of the assets of agent safes."""
 
@@ -101,14 +107,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Current Positions - {self.current_positions}"
                 )
 
-            sender = self.context.agent_address
-
-            if not self.assets:
-                self.assets = self.params.initial_assets
-                self.store_assets()
-
-            self.read_assets()
-
             # Update the amounts of all open positions
             if self.synchronized_data.period_count == 0:
                 self.context.logger.info("Updating position amounts for period 0")
@@ -120,84 +118,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
-            chain = self.params.target_investment_chains[0]
-            yield from self.update_accumulated_rewards_for_chain(chain)
+            sender = self.context.agent_address
 
+            chain = self.params.target_investment_chains[0]
             safe_address = self.params.safe_contract_addresses.get(chain)
 
             # update locally stored eth balance in-case it's incorrect
             eth_balance = yield from self._get_native_balance(chain, safe_address)
             self.context.logger.info(f"Current ETH balance: {eth_balance}")
 
-            res = yield from self._track_eth_transfers_and_reversions(
-                safe_address, chain
-            )
-
-            to_address = res.get("master_safe_address")
-            eth_amount = int(res.get("reversion_amount", 0) * 10**18)
-
-            if eth_amount > 0:
-                if not to_address:
-                    self.context.logger.error(
-                        f"No master safe address found for chain {chain}"
-                    )
-                    # Continue with normal flow
-                else:
-                    self.context.logger.info(
-                        f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}"
-                    )
-
-                    # Create ETH transfer transaction
-                    safe_tx_hash = yield from self.contract_interact(
-                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                        contract_address=safe_address,
-                        contract_public_id=GnosisSafeContract.contract_id,
-                        contract_callable="get_raw_safe_transaction_hash",
-                        data_key="tx_hash",
-                        to_address=to_address,
-                        value=eth_amount,
-                        data=b"",
-                        operation=SafeOperation.CALL.value,
-                        safe_tx_gas=SAFE_TX_GAS,
-                        chain_id=chain,
-                    )
-
-                    if safe_tx_hash:
-                        safe_tx_hash = safe_tx_hash[2:]
-                        payload_string = hash_payload_to_hex(
-                            safe_tx_hash=safe_tx_hash,
-                            ether_value=eth_amount,
-                            safe_tx_gas=SAFE_TX_GAS,
-                            operation=SafeOperation.CALL.value,
-                            to_address=to_address,
-                            data=b"",
-                        )
-
-                        # Create settlement payload
-                        payload = FetchStrategiesPayload(
-                            sender=sender,
-                            content=json.dumps(
-                                {
-                                    "event": "settle",
-                                    "updates": {
-                                        "tx_submitter": FetchStrategiesRound.auto_round_id(),
-                                        "most_voted_tx_hash": payload_string,
-                                        "chain_id": chain,
-                                        "safe_contract_address": safe_address,
-                                    },
-                                },
-                                sort_keys=True,
-                            ),
-                        )
-
-                        with self.context.benchmark_tool.measure(
-                            self.behaviour_id
-                        ).consensus():
-                            yield from self.send_a2a_transaction(payload)
-                            yield from self.wait_until_round_end()
-
-                        self.set_done()
-                        return
+            if self.synchronized_data.period_count == 0:
+                yield from self._check_and_create_eth_revert_transactions(
+                    chain, safe_address, sender
+                )
 
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")
@@ -274,16 +207,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._write_kv({"last_whitelisted_updated": current_time})
 
             # Check if we need to recalculate the portfolio
-            self.context.logger.info("Checking if portfolio recalculation is needed")
-            should_recalculate = yield from self.should_recalculate_portfolio(
-                self.portfolio_data
-            )
-            if should_recalculate:
-                self.context.logger.info("Recalculating user share values")
-                yield from self.calculate_user_share_values()
-                # Store the updated portfolio data
-                self.context.logger.info("Storing updated portfolio data")
-                self.store_portfolio_data()
+            self.context.logger.info("Recalculating user share values")
+            yield from self.calculate_user_share_values()
+            # Store the updated portfolio data
+            self.context.logger.info("Storing updated portfolio data")
+            self.store_portfolio_data()
 
             payload = FetchStrategiesPayload(
                 sender=sender,
@@ -387,6 +315,83 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             "Completed price-based filtering of whitelisted assets"
         )
+
+    def _check_and_create_eth_revert_transactions(
+        self, chain, safe_address, sender
+    ) -> Generator[None, None, None]:
+        """Check if there are any ETH revert transactions and create them if there are."""
+
+        if not safe_address:
+            self.context.logger.error(f"No safe address found for chain {chain}")
+            return
+
+        res = yield from self._track_eth_transfers_and_reversions(safe_address, chain)
+
+        to_address = res.get("master_safe_address")
+        eth_amount = int(res.get("reversion_amount", 0) * 10**18)
+
+        if eth_amount > 0:
+            if not to_address:
+                self.context.logger.error(
+                    f"No master safe address found for chain {chain}"
+                )
+                # Continue with normal flow
+            else:
+                self.context.logger.info(
+                    f"Creating ETH transfer transaction: {eth_amount} wei to {to_address}"
+                )
+
+                # Create ETH transfer transaction
+                safe_tx_hash = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=safe_address,
+                    contract_public_id=GnosisSafeContract.contract_id,
+                    contract_callable="get_raw_safe_transaction_hash",
+                    data_key="tx_hash",
+                    to_address=to_address,
+                    value=eth_amount,
+                    data=b"",
+                    operation=SafeOperation.CALL.value,
+                    safe_tx_gas=SAFE_TX_GAS,
+                    chain_id=chain,
+                )
+
+                if safe_tx_hash:
+                    safe_tx_hash = safe_tx_hash[2:]
+                    payload_string = hash_payload_to_hex(
+                        safe_tx_hash=safe_tx_hash,
+                        ether_value=eth_amount,
+                        safe_tx_gas=SAFE_TX_GAS,
+                        operation=SafeOperation.CALL.value,
+                        to_address=to_address,
+                        data=b"",
+                    )
+
+                    # Create settlement payload
+                    payload = FetchStrategiesPayload(
+                        sender=sender,
+                        content=json.dumps(
+                            {
+                                "event": "settle",
+                                "updates": {
+                                    "tx_submitter": FetchStrategiesRound.auto_round_id(),
+                                    "most_voted_tx_hash": payload_string,
+                                    "chain_id": chain,
+                                    "safe_contract_address": safe_address,
+                                },
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+
+                    with self.context.benchmark_tool.measure(
+                        self.behaviour_id
+                    ).consensus():
+                        yield from self.send_a2a_transaction(payload)
+                        yield from self.wait_until_round_end()
+
+                    self.set_done()
+                    return
 
     def _get_historical_price_for_date(
         self, token_address: str, token_symbol: str, date_str: str, chain: str
@@ -606,6 +611,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         total_safe_value_usd = yield from self._calculate_safe_balances_value(
             portfolio_breakdown
         )
+        staking_rewards_value = yield from self.calculate_stakig_rewards_value()
 
         # Calculate final portfolio metrics
         yield from self._update_portfolio_metrics(
@@ -643,6 +649,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         portfolio_data = self._create_portfolio_data(
             total_user_share_value_usd,
             total_safe_value_usd,
+            staking_rewards_value,
             initial_investment,
             volume,
             allocations,
@@ -914,6 +921,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         self,
         total_pools_value: Decimal,
         total_safe_value: Decimal,
+        staking_rewards_value: Decimal,
         initial_investment: float,
         volume: float,
         allocations: List[Dict],
@@ -932,19 +940,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
             # Convert to percentage by multiplying by 100
-            roi = None
+            total_roi = None
+            partial_roi = None
             if initial_investment is not None and initial_investment > 0:
                 try:
-                    roi_decimal = (
+                    total_roi_decimal = (
+                        float(total_portfolio_value + staking_rewards_value)
+                        / float(initial_investment)
+                    ) - 1
+                    total_roi = round(total_roi_decimal * 100, 2)
+
+                    partial_roi_decimal = (
                         float(total_portfolio_value) / float(initial_investment)
                     ) - 1
-                    roi = round(roi_decimal * 100, 2)
+                    partial_roi = round(partial_roi_decimal * 100, 2)
+
                     self.context.logger.info(
-                        f"ROI calculated: {roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
+                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
                     )
                 except (ValueError, ZeroDivisionError, TypeError) as e:
                     self.context.logger.error(f"Error calculating ROI: {str(e)}")
-                    roi = None
+                    total_roi = None
+                    partial_roi = None
             else:
                 self.context.logger.info(
                     f"ROI not calculated - initial_investment: {initial_investment}"
@@ -967,6 +984,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Always show all portfolio breakdown entries to display complete portfolio
             for entry in portfolio_breakdown:
                 try:
+                    chain = self.params.target_investment_chains[0]
+                    if (
+                        entry.get("address").lower()
+                        == OLAS_ADDRESSES.get(chain).lower()
+                    ):
+                        continue
+
                     filtered_portfolio_breakdown.append(
                         {
                             "asset": entry["asset"],
@@ -1016,7 +1040,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if initial_investment is not None
                 else None,
                 "volume": float(volume) if volume is not None else None,
-                "roi": roi,
+                "total_roi": total_roi,
+                "partial_roi": partial_roi,
                 "agent_hash": agent_hash,
                 "allocations": processed_allocations,
                 "portfolio_breakdown": filtered_portfolio_breakdown,
@@ -1103,11 +1128,31 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         user_balances = yield from self.get_user_share_value_velodrome(
             user_address, pool_address, token_id, chain, position
         )
+
+        # Add VELO rewards to user balances if position is staked
+        if position.get("staked", False):
+            velo_rewards = yield from self._get_velodrome_pending_rewards(
+                position, chain, user_address
+            )
+            if velo_rewards > 0:
+                # Get VELO token address for the chain
+                velo_token_address = self._get_velo_token_address(chain)
+                if velo_token_address:
+                    user_balances[velo_token_address] = velo_rewards // 10**18
+                    self.context.logger.info(
+                        f"Added VELO rewards to position: {velo_rewards}"
+                    )
+
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
         token_info = {
             position.get("token0"): position.get("token0_symbol"),
             position.get("token1"): position.get("token1_symbol"),
         }
+
+        # Add VELO to token_info if rewards exist
+        velo_token_address = self._get_velo_token_address(chain)
+        if velo_token_address and velo_token_address in user_balances:
+            token_info[velo_token_address] = "VELO"
 
         return user_balances, details, token_info
 
@@ -1121,6 +1166,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[Decimal, None, None]:
         """Calculate total value of a position and update portfolio breakdown."""
         user_share = Decimal(0)
+        token_prices = {}
 
         for token_address, token_symbol in token_info.items():
             asset_balance = user_balances.get(token_address)
@@ -1136,6 +1182,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             asset_price = Decimal(str(asset_price))
             asset_value_usd = asset_balance * asset_price
             user_share += asset_value_usd
+
+            # Store price for yield calculation
+            token_prices[token_address] = asset_price
 
             # Update portfolio breakdown
             existing_asset = next(
@@ -1165,59 +1214,250 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     }
                 )
 
-        # Update position with current value and TiP yield calculation
-        self._update_position_with_current_value(position, user_share, chain)
+        # Update position with current value and corrected yield calculation
+        self._update_position_with_current_value(
+            position, user_share, chain, user_balances, token_info, token_prices
+        )
 
         return user_share
 
     def _update_position_with_current_value(
-        self, position: Dict, current_value_usd: Decimal, chain: str
-    ) -> None:
-        """Update position with current value and yield estimate for TiP cost recovery"""
+        self,
+        position: Dict,
+        current_value_usd: Decimal,
+        chain: str,
+        user_balances: Dict = None,
+        token_info: Dict = None,
+        token_prices: Dict = None,
+    ) -> Generator[None, None, None]:
+        """Update position with current value and corrected yield calculation"""
         try:
             # Store current value in position
             position["current_value_usd"] = float(current_value_usd)
             position["last_updated"] = int(self._get_current_timestamp())
 
-            # Simple yield estimate if we have TiP data
-            principal_usd = position.get("principal_usd", 0)
-            entry_cost = position.get("entry_cost", 0)
+            # Get initial token amounts from position data
+            initial_amount0 = position.get("amount0", 0)  # Raw amount (with decimals)
+            initial_amount1 = position.get("amount1", 0)  # Raw amount (with decimals)
 
-            if principal_usd > 0 and entry_cost > 0:
-                # Simple yield = current_value - principal
-                estimated_yield = float(current_value_usd) - principal_usd
+            # Use provided user_balances if available, otherwise get them
+            if user_balances is None:
+                user_balances = yield from self._get_current_token_balances(
+                    position, chain
+                )
 
-                # Check if yield covers entry cost (exact threshold)
-                if estimated_yield >= entry_cost:
+            if (
+                user_balances
+                and initial_amount0 is not None
+                and initial_amount1 is not None
+            ):
+                # Calculate yield as token quantity increases priced at current prices
+                yield_usd = yield from self._calculate_corrected_yield(
+                    position,
+                    initial_amount0,
+                    initial_amount1,
+                    user_balances,
+                    chain,
+                    token_prices,
+                )
+
+                # Check cost recovery using actual yield
+                entry_cost = position.get("entry_cost", 0)
+                if yield_usd >= entry_cost:
                     position["cost_recovered"] = True
+                    position["yield_usd"] = float(yield_usd)
                     self.context.logger.info(
                         f"Position {position.get('pool_address')} has recovered costs: "
-                        f"yield=${estimated_yield:.2f} >= entry_cost=${entry_cost:.2f}"
+                        f"yield=${yield_usd:.2f} >= entry_cost=${entry_cost:.2f}"
                     )
                 else:
-                    # Log progress toward cost recovery
+                    position["cost_recovered"] = False
+                    position["yield_usd"] = float(yield_usd)
                     recovery_percentage = (
-                        (estimated_yield / entry_cost) * 100 if entry_cost > 0 else 0
+                        (yield_usd / entry_cost) * 100 if entry_cost > 0 else 0
                     )
-                    remaining_yield_needed = entry_cost - estimated_yield
+                    remaining_yield_needed = entry_cost - yield_usd
                     self.context.logger.info(
                         f"Position {position.get('pool_address')} cost recovery progress: "
-                        f"{recovery_percentage:.1f}% (${estimated_yield:.2f}/${entry_cost:.2f}), "
+                        f"{recovery_percentage:.1f}% (${yield_usd:.2f}/${entry_cost:.2f}), "
                         f"need ${remaining_yield_needed:.2f} more"
                     )
-            elif entry_cost == 0:
-                # Legacy position without TiP data - mark as recovered
+            else:
+                # Fallback for positions without complete initial data
                 position["cost_recovered"] = False
-                self.context.logger.info(
-                    f"Legacy position {position.get('pool_address')} marked as cost recovered"
-                )
+                position["yield_usd"] = 0.0
 
         except Exception as e:
             self.context.logger.error(
                 f"Error updating position with current value: {e}"
             )
-            # Fallback to 3 weeks hardcoded TiP if yield calculation fails
             position["cost_recovered"] = False
+            position["yield_usd"] = 0.0
+
+    def _calculate_corrected_yield(
+        self,
+        position: Dict,
+        initial_amount0: int,
+        initial_amount1: int,
+        current_balances: Dict,
+        chain: str,
+        token_prices: Dict = None,
+    ) -> Generator[Decimal, None, None]:
+        """Calculate yield as token quantity increases priced at current prices"""
+
+        token0_address = position.get("token0")
+        token1_address = position.get("token1")
+
+        # Get token decimals
+        token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error(
+                "Could not get token decimals for yield calculation"
+            )
+            return Decimal(0)
+
+        # Convert initial amounts to decimal-adjusted values
+        initial_token0_decimal = Decimal(initial_amount0) / Decimal(
+            10**token0_decimals
+        )
+        initial_token1_decimal = Decimal(initial_amount1) / Decimal(
+            10**token1_decimals
+        )
+
+        # Get current balances (already decimal-adjusted)
+        current_token0_balance = current_balances.get(token0_address, Decimal(0))
+        current_token1_balance = current_balances.get(token1_address, Decimal(0))
+
+        # Calculate token quantity increases (the actual yield from fees)
+        token0_increase = max(
+            Decimal(0), current_token0_balance - initial_token0_decimal
+        )
+        token1_increase = max(
+            Decimal(0), current_token1_balance - initial_token1_decimal
+        )
+
+        # Use provided token prices if available, otherwise fetch them
+        if (
+            token_prices
+            and token0_address in token_prices
+            and token1_address in token_prices
+        ):
+            token0_price = token_prices[token0_address]
+            token1_price = token_prices[token1_address]
+        else:
+            # Price the increases at current prices
+            token0_price = yield from self._fetch_token_price(token0_address, chain)
+            token1_price = yield from self._fetch_token_price(token1_address, chain)
+
+            if token0_price is None or token1_price is None:
+                self.context.logger.error(
+                    "Could not fetch current token prices for yield calculation"
+                )
+                return Decimal(0)
+
+            token0_price = Decimal(str(token0_price))
+            token1_price = Decimal(str(token1_price))
+
+        # Calculate base yield from token increases (fees)
+        base_yield_usd = (token0_increase * token0_price) + (
+            token1_increase * token1_price
+        )
+
+        # Add VELO rewards if position is staked
+        velo_rewards_usd = Decimal(0)
+        if position.get("staked", False) and position.get("dex_type") == "velodrome":
+            # Get VELO token address and check if it's in current_balances
+            velo_token_address = self._get_velo_token_address(chain)
+            if velo_token_address and velo_token_address in current_balances:
+                velo_balance = current_balances[velo_token_address]
+                if velo_balance > 0:
+                    # Get VELO price
+                    if token_prices and velo_token_address in token_prices:
+                        velo_price = token_prices[velo_token_address]
+                    else:
+                        velo_price = yield from self._fetch_token_price(
+                            velo_token_address, chain
+                        )
+                        if velo_price is None:
+                            self.context.logger.warning(
+                                "Could not fetch VELO price for yield calculation"
+                            )
+                            velo_price = Decimal(0)
+                        else:
+                            velo_price = Decimal(str(velo_price))
+
+                    velo_rewards_usd = velo_balance * velo_price
+
+        # Total yield = base yield + VELO rewards
+        total_yield_usd = base_yield_usd + velo_rewards_usd
+
+        # Enhanced logging
+        log_message = (
+            f"Corrected yield calculation for {position.get('pool_address', 'unknown')}: "
+            f"Initial amounts: {initial_token0_decimal:.6f} {position.get('token0_symbol', 'TOKEN0')}, "
+            f"{initial_token1_decimal:.6f} {position.get('token1_symbol', 'TOKEN1')} | "
+            f"Current amounts: {current_token0_balance:.6f} {position.get('token0_symbol', 'TOKEN0')}, "
+            f"{current_token1_balance:.6f} {position.get('token1_symbol', 'TOKEN1')} | "
+            f"Token increases: {token0_increase:.6f} @ ${token0_price:.2f} = ${token0_increase * token0_price:.2f}, "
+            f"{token1_increase:.6f} @ ${token1_price:.2f} = ${token1_increase * token1_price:.2f} | "
+            f"Base yield: ${base_yield_usd:.2f}"
+        )
+
+        if velo_rewards_usd > 0:
+            velo_balance = current_balances.get(
+                self._get_velo_token_address(chain), Decimal(0)
+            )
+            velo_price = (
+                velo_rewards_usd / velo_balance if velo_balance > 0 else Decimal(0)
+            )
+            log_message += f" | VELO rewards: {velo_balance:.6f} @ ${velo_price:.2f} = ${velo_rewards_usd:.2f}"
+
+        log_message += f" | Total yield: ${total_yield_usd:.2f}"
+
+        self.context.logger.info(log_message)
+
+        return total_yield_usd
+
+    def _get_current_token_balances(
+        self, position: Dict, chain: str
+    ) -> Generator[Any, Any, Dict[str, Decimal]]:
+        """Get current token balances for a position (reuse existing calculation logic)"""
+        dex_type = position.get("dex_type")
+        current_user_shares = {}
+        if dex_type == DexType.BALANCER.value:
+            user_address = self.params.safe_contract_addresses.get(chain)
+            pool_id = position.get("pool_id")
+            pool_address = position.get("pool_address")
+            current_user_shares = yield from self.get_user_share_value_balancer(
+                user_address, pool_id, pool_address, chain
+            )
+
+        elif dex_type == DexType.UNISWAP_V3.value:
+            pool_address = position.get("pool_address")
+            token_id = position.get("token_id")
+            current_user_shares = yield from self.get_user_share_value_uniswap(
+                pool_address, token_id, chain, position
+            )
+
+        elif dex_type == DexType.VELODROME.value:
+            user_address = self.params.safe_contract_addresses.get(chain)
+            pool_address = position.get("pool_address")
+            token_id = position.get("token_id")
+            current_user_shares = yield from self.get_user_share_value_velodrome(
+                user_address, pool_address, token_id, chain, position
+            )
+
+        elif dex_type == DexType.STURDY.value:
+            user_address = self.params.safe_contract_addresses.get(chain)
+            aggregator_address = position.get("pool_address")
+            asset_address = position.get("token0")
+            current_user_shares = yield from self.get_user_share_value_sturdy(
+                user_address, aggregator_address, asset_address, chain
+            )
+
+        return current_user_shares
 
     def get_user_share_value_velodrome(
         self, user_address: str, pool_address: str, token_id: int, chain: str, position
@@ -1759,6 +1999,45 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return {asset_address: user_asset_balance}
 
+    def _add_to_portfolio_breakdown(
+        self,
+        portfolio_breakdown: List[Dict],
+        token_address: str,
+        token_symbol: str,
+        adjusted_balance: Decimal,
+        token_price: Decimal,
+        token_value_usd: Decimal,
+    ) -> None:
+        """Helper method to add or update portfolio breakdown entries."""
+        existing_asset = next(
+            (
+                entry
+                for entry in portfolio_breakdown
+                if entry["address"].lower() == token_address.lower()
+            ),
+            None,
+        )
+
+        if existing_asset:
+            # Update existing entry by adding balance
+            existing_asset["balance"] = float(
+                Decimal(str(existing_asset["balance"])) + adjusted_balance
+            )
+            existing_asset["value_usd"] = float(
+                Decimal(str(existing_asset["value_usd"])) + token_value_usd
+            )
+        else:
+            # Add new entry
+            portfolio_breakdown.append(
+                {
+                    "asset": token_symbol,
+                    "address": token_address,
+                    "balance": float(adjusted_balance),
+                    "price": float(token_price),
+                    "value_usd": float(token_value_usd),
+                }
+            )
+
     def _calculate_safe_balances_value(
         self, portfolio_breakdown: List[Dict]
     ) -> Generator[Decimal, None, None]:
@@ -1771,126 +2050,127 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(f"No safe address found for chain {chain}")
                 continue
 
-            chain_assets = self.assets.get(chain, {})
-            if not chain_assets:
-                self.context.logger.warning(f"No assets found for chain {chain}")
+            self.context.logger.info(f"Calculating safe balances for chain {chain}")
+            balances = []
+
+            # Get current balances dynamically instead of using static assets
+            if chain == Chain.OPTIMISM.value:
+                balances = yield from self._get_optimism_balances_from_safe_api()
+
+            if chain == Chain.MODE.value:
+                balances = yield from self._get_mode_balances_from_explorer_api()
+
+            if not balances:
+                self.context.logger.warning(f"No balances found for chain {chain}")
                 continue
 
-            self.context.logger.info(f"Calculating safe balances for chain {chain}")
+            for balance in balances:
+                token_address = balance["address"]
+                token_symbol = balance["asset_symbol"]
+                token_balance = balance["balance"]
 
-            for token_address, token_symbol in chain_assets.items():
+                self.context.logger.info(
+                    f"Token balance for {token_symbol} is {token_balance}."
+                )
+
+                if token_balance == 0:
+                    continue
+
+                # Skip OLAS tokens - we'll handle them separately using accumulated rewards
+                olas_address = OLAS_ADDRESSES.get(chain)
+                if olas_address and token_address.lower() == olas_address.lower():
+                    self.context.logger.info(
+                        "Skipping OLAS token from balances - will use accumulated rewards instead"
+                    )
+                    continue
+
+                # Get token decimals and adjust balance
                 if token_address == ZERO_ADDRESS:
-                    eth_balance_wei = yield from self._get_native_balance(
-                        chain, safe_address
-                    )
-                    self.context.logger.info(
-                        f"Token balance for {token_symbol} is {eth_balance_wei}."
-                    )
-                    adjusted_balance = Decimal(str(eth_balance_wei)) / Decimal(
-                        10**18
-                    )  # ETH has 18 decimals
-
-                    if adjusted_balance <= 0:
-                        continue
-
-                    # Get ETH price
-                    token_price = yield from self._fetch_zero_address_price()
-                    if token_price is None:
-                        self.context.logger.warning(
-                            f"Could not fetch price for {token_symbol}"
-                        )
-                        continue
-
-                    token_price = Decimal(str(token_price))
-                    token_value_usd = adjusted_balance * token_price
-                    total_safe_value += token_value_usd
-
-                    self.context.logger.info(
-                        f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
-                    )
+                    # ETH has 18 decimals
+                    adjusted_balance = Decimal(str(token_balance)) / Decimal(10**18)
                 else:
-                    # Handle ERC20 tokens
-                    token_balance = yield from self.contract_interact(
-                        performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                        contract_address=token_address,
-                        contract_public_id=ERC20.contract_id,
-                        contract_callable="check_balance",
-                        data_key="token",
-                        account=safe_address,
-                        chain_id=chain,
-                    )
-                    self.context.logger.info(
-                        f"Token balance for {token_symbol} is {token_balance}."
-                    )
-
-                    if token_balance is None or token_balance == 0:
-                        continue
-
-                    # Get token decimals
+                    # Get token decimals for ERC20 tokens
                     token_decimals = yield from self._get_token_decimals(
                         chain, token_address
                     )
                     if token_decimals is None:
                         continue
-
-                    # Adjust balance for decimals
                     adjusted_balance = Decimal(str(token_balance)) / Decimal(
                         10**token_decimals
                     )
 
-                    if adjusted_balance <= 0:
-                        continue
+                if adjusted_balance <= 0:
+                    continue
 
-                    # Get token price
+                # Get token price
+                if token_address == ZERO_ADDRESS:
+                    token_price = yield from self._fetch_zero_address_price()
+                else:
                     token_price = yield from self._fetch_token_price(
                         token_address, chain
                     )
-                    if token_price is None:
-                        self.context.logger.warning(
-                            f"Could not fetch price for {token_symbol}"
-                        )
-                        continue
 
-                    token_price = Decimal(str(token_price))
-                    token_value_usd = adjusted_balance * token_price
-                    total_safe_value += token_value_usd
-
-                    self.context.logger.info(
-                        f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
+                if token_price is None:
+                    self.context.logger.warning(
+                        f"Could not fetch price for {token_symbol}"
                     )
+                    continue
 
-                # Add to portfolio breakdown if not already present
-                existing_asset = next(
-                    (
-                        entry
-                        for entry in portfolio_breakdown
-                        if entry["address"] == token_address
-                    ),
-                    None,
+                token_price = Decimal(str(token_price))
+                token_value_usd = adjusted_balance * token_price
+                total_safe_value += token_value_usd
+
+                self.context.logger.info(
+                    f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
                 )
 
-                if existing_asset:
-                    # Update existing entry by adding safe balance
-                    existing_asset["balance"] = float(
-                        Decimal(str(existing_asset["balance"])) + adjusted_balance
-                    )
-                    existing_asset["value_usd"] = float(
-                        Decimal(str(existing_asset["value_usd"])) + token_value_usd
-                    )
-                else:
-                    # Add new entry for safe balance
-                    portfolio_breakdown.append(
-                        {
-                            "asset": token_symbol,
-                            "address": token_address,
-                            "balance": float(adjusted_balance),
-                            "price": float(token_price),
-                            "value_usd": float(token_value_usd),
-                        }
-                    )
+                # Add to portfolio breakdown using helper method
+                self._add_to_portfolio_breakdown(
+                    portfolio_breakdown,
+                    token_address,
+                    token_symbol,
+                    adjusted_balance,
+                    token_price,
+                    token_value_usd,
+                )
 
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value
+
+    def calculate_stakig_rewards_value(self) -> Generator[None, None, Decimal]:
+        """Calculates staking rewards equivalent in USD"""
+        chain = self.params.target_investment_chains[0]
+        yield from self.update_accumulated_rewards_for_chain(chain)
+        # After processing all balances, add OLAS rewards separately
+        olas_address = OLAS_ADDRESSES.get(chain)
+        if olas_address:
+            accumulated_olas_rewards = (
+                yield from self.get_accumulated_rewards_for_token(chain, olas_address)
+            )
+            if accumulated_olas_rewards > 0:
+                # Convert from wei to OLAS (18 decimals)
+                olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(
+                    10**18
+                )
+
+                # Get OLAS price
+                olas_price = yield from self._fetch_token_price(olas_address, chain)
+                if olas_price is not None:
+                    olas_price = Decimal(str(olas_price))
+                    olas_value_usd = olas_balance * olas_price
+
+                    self.context.logger.info(
+                        f"OLAS accumulated rewards - OLAS: {olas_balance} (${olas_value_usd})"
+                    )
+                    return olas_value_usd
+
+                else:
+                    self.context.logger.warning(
+                        "Could not fetch price for OLAS rewards"
+                    )
+                    return Decimal(0)
+
+        return Decimal(0)
 
     def _get_aggregator_name(
         self, aggregator_address: str, chain: str
@@ -2396,12 +2676,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Fetch all transfers until current date based on chain
             self.context.logger.info(f"Fetching transfers for chain: {chain}")
-            if chain == "mode":
+            if chain == Chain.MODE.value:
                 self.context.logger.info("Using Mode-specific transfer fetching")
                 all_transfers = self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, fetch_till_date
                 )
-            elif chain == "optimism":
+            elif chain == Chain.OPTIMISM.value:
                 self.context.logger.info("Using Optimism-specific transfer fetching")
                 all_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
@@ -3136,6 +3416,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers_url = f"{base_url}/safes/{address}/incoming-transfers/"
 
             processed_count = 0
+            seen_transfer_ids = set()
             while True:
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
@@ -3172,6 +3453,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # Only process transfers until end_date
                     if tx_date > end_date:
                         continue
+
+                    # Deduplicate by transferId if present, otherwise transactionHash
+                    unique_id = transfer.get("transferId") or transfer.get(
+                        "transactionHash", ""
+                    )
+                    if unique_id in seen_transfer_ids:
+                        continue
+                    seen_transfer_ids.add(unique_id)
 
                     # Process the transfer
                     from_address = transfer.get("from", address)
@@ -3264,10 +3553,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Processed {processed_count} Optimism transfers..."
                     )
 
-                # Check for next page
+                # Check for next page and advance the URL
                 cursor = response_json.get("next")
                 if not cursor:
                     break
+                transfers_url = cursor
 
             self.context.logger.info(
                 f"Completed Optimism transfers: {processed_count} found"
@@ -3290,6 +3580,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             "",
         ]:
             return False
+
+        # Check cache first
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{from_address.lower()}"
+        cached_result = yield from self._read_kv((cache_key,))
+
+        if cached_result and cached_result.get(cache_key):
+            try:
+                cached_data = json.loads(cached_result[cache_key])
+                return cached_data.get("is_eoa", False)
+            except (json.JSONDecodeError, KeyError):
+                pass
 
         try:
             # Use Optimism RPC to check if address is a contract
@@ -3317,25 +3618,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # If code is '0x', it's an EOA
             if code == "0x":
-                return True
+                is_eoa = True
+            else:
+                # If it has code, check if it's a GnosisSafe
+                safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{from_address}/"
+                success, _ = yield from self._request_with_retries(
+                    endpoint=safe_check_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
+                is_eoa = success
 
-            # If it has code, check if it's a GnosisSafe
-            safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{from_address}/"
-            success, _ = yield from self._request_with_retries(
-                endpoint=safe_check_url,
-                headers={"Accept": "application/json"},
-                rate_limited_code=429,
-                rate_limited_callback=self.coingecko.rate_limited_status_callback,
-                retry_wait=self.params.sleep_time,
-            )
+            # Cache the result permanently (no TTL)
+            cache_data = {"is_eoa": is_eoa}
+            yield from self._write_kv({cache_key: json.dumps(cache_data)})
 
-            if success:
-                return True
-
-            self.context.logger.info(
-                f"Excluding transfer from contract: {from_address}"
-            )
-            return False
+            if not is_eoa:
+                self.context.logger.info(
+                    f"Excluding transfer from contract: {from_address}"
+                )
+            return is_eoa
 
         except Exception as e:
             self.context.logger.error(f"Error checking address {from_address}: {e}")
@@ -3390,7 +3694,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Get all transfers until date
             all_incoming_transfers = {}
             all_outgoing_transfers = {}
-            if chain == "optimism":
+            if chain == Chain.OPTIMISM.value:
                 all_incoming_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
                         safe_address, current_date
@@ -3401,7 +3705,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         safe_address, current_date
                     )
                 ) or {}
-            elif chain == "mode":
+            elif chain == Chain.MODE.value:
                 # Use new Mode-specific tracking function
                 transfers = self._track_eth_transfers_mode(safe_address, current_date)
                 all_incoming_transfers = transfers.get("incoming", {})
@@ -3731,6 +4035,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers_url = f"{base_url}/safes/{address}/transfers/"
 
             processed_count = 0
+            seen_tx_ids = set()
             while True:
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
@@ -3774,6 +4079,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if transfer.get("from").lower() == address.lower():
                         transfer_type = transfer.get("type", "")
 
+                        # Deduplicate per tx hash + type
+                        unique_id = f"{transfer.get('transactionHash', '')}:{transfer_type}:{transfer.get('value', '')}"
+                        if unique_id in seen_tx_ids:
+                            continue
+                        seen_tx_ids.add(unique_id)
+
                         if transfer_type == "ETHER_TRANSFER":
                             try:
                                 value_wei = int(transfer.get("value", "0") or "0")
@@ -3806,7 +4117,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(
                     f"Completed Optimism outgoing transfers: {processed_count} found"
                 )
-                return all_transfers
+
+                # Advance pagination if available
+                cursor = response_json.get("next")
+                if not cursor:
+                    return all_transfers
+                transfers_url = cursor
+
+            return all_transfers
 
         except Exception as e:
             self.context.logger.error(
@@ -4042,3 +4360,74 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception:
             self.context.logger.info("Not a GnosisSafe")
             return False
+
+    def _get_velodrome_pending_rewards(
+        self, position: Dict, chain: str, user_address: str
+    ) -> Generator[None, None, Decimal]:
+        """Get pending VELO rewards for a staked Velodrome position."""
+        try:
+            pool_address = position.get("pool_address")
+            is_cl_pool = position.get("is_cl_pool", False)
+
+            if not pool_address:
+                self.context.logger.warning(
+                    "No pool address found for Velodrome position"
+                )
+                return Decimal(0)
+
+            # Get the Velodrome pool behaviour to access reward methods
+            pool = self.pools.get("velodrome")
+            if not pool:
+                self.context.logger.warning("Velodrome pool behaviour not found")
+                return Decimal(0)
+
+            # Get pending rewards based on pool type
+            if is_cl_pool:
+                # For CL pools, we need the gauge address
+                gauge_address = yield from pool.get_gauge_address(
+                    self, pool_address, chain=chain
+                )
+                if not gauge_address:
+                    self.context.logger.warning(
+                        f"No gauge found for CL pool {pool_address}"
+                    )
+                    return Decimal(0)
+                positions_data = position.get("positions", [])
+                token_ids = [pos["token_id"] for pos in positions_data]
+                pending_rewards = 0
+                for token_id in token_ids:
+                    rewards = yield from pool.get_cl_pending_rewards(
+                        self,
+                        account=user_address,
+                        gauge_address=gauge_address,
+                        chain=chain,
+                        token_id=token_id,
+                    )
+                    if rewards:
+                        pending_rewards += rewards
+            else:
+                # For regular pools
+                pending_rewards = yield from pool.get_pending_rewards(
+                    self, lp_token=pool_address, user_address=user_address, chain=chain
+                )
+
+            if pending_rewards and pending_rewards > 0:
+                # Convert from wei to VELO (18 decimals)
+                velo_rewards = Decimal(pending_rewards) / Decimal(10**18)
+                self.context.logger.info(
+                    f"Found VELO rewards: {velo_rewards} for position {pool_address}"
+                )
+                return velo_rewards
+
+            return Decimal(0)
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error getting Velodrome pending rewards: {str(e)}"
+            )
+            return Decimal(0)
+
+    def _get_velo_token_address(self, chain: str) -> Optional[str]:
+        """Get the VELO token address for the specified chain from params."""
+        velo_addresses = self.params.velo_token_contract_addresses
+        return velo_addresses.get(chain)

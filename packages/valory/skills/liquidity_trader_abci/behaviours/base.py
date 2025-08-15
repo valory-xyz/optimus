@@ -22,6 +22,7 @@
 import json
 import logging
 import math
+import time
 import types
 from abc import ABC
 from collections import defaultdict
@@ -49,7 +50,9 @@ from packages.valory.contracts.staking_activity_checker.contract import (
     StakingActivityCheckerContract,
 )
 from packages.valory.contracts.staking_token.contract import StakingTokenContract
-from packages.valory.contracts.velodrome_sugar.contract import VelodromeSugarContract
+from packages.valory.contracts.velodrome_slipstream_helper.contract import (
+    VelodromeSlipstreamHelperContract,
+)
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
@@ -111,12 +114,22 @@ RETRIES = 3  # Number of API call retries
 MIN_TIME_IN_POSITION = 21.0  # 3 weeks
 PRICE_CACHE_KEY_PREFIX = "token_price_cache_"
 CACHE_TTL = 3600  # 1 hour in seconds
-REWARD_UPDATE_INTERVAL = 24 * 3600  # 24 hours
+REWARD_UPDATE_INTERVAL = 12 * 3600  # 12 hours
 REWARD_UPDATE_KEY_PREFIX = "last_reward_update_"
 LAST_EPOCH_KEY_PREFIX = "last_processed_epoch_"
 OLAS_ADDRESSES = {
     "mode": "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9",
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
+}
+
+# Reward tokens that should be excluded from investment consideration
+REWARD_TOKEN_ADDRESSES = {
+    "mode": {
+        "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
+    },
+    "optimism": {
+        "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
+    },
 }
 
 
@@ -145,6 +158,9 @@ class Action(Enum):
     SWITCH_ROUTE = "switch_route"
     WITHDRAW = "withdraw"
     DEPOSIT = "deposit"
+    STAKE_LP_TOKENS = "StakeLpTokens"
+    UNSTAKE_LP_TOKENS = "UnstakeLpTokens"
+    CLAIM_STAKING_REWARDS = "ClaimStakingRewards"
 
 
 class SwapStatus(Enum):
@@ -177,6 +193,13 @@ class TradingType(Enum):
 
     BALANCED = "balanced"
     RISKY = "risky"
+
+
+class Chain(Enum):
+    """Chain Names"""
+
+    OPTIMISM = "optimism"
+    MODE = "mode"
 
 
 THRESHOLDS = {TradingType.BALANCED.value: 0.3374, TradingType.RISKY.value: 0.2892}
@@ -238,7 +261,7 @@ COIN_ID_MAPPING = {
         "wrseth": "wrapped-rseth",
         "wmlt": "bmx-wrapped-mode-liquidity-token",
         "bmx": "bmx",
-        "xvelo": None,
+        "xvelo": "velodrome-finance",  # xVELO can be bridged back 1:1 for native VELO on OP
         "iusdc": "ironclad-usd",
     },
     "optimism": {
@@ -259,6 +282,7 @@ COIN_ID_MAPPING = {
         "ousdt": "openusdt",
         "usdglo": "glo-dollar",
         "iusdc": "ironclad-usd",
+        "velo": "velodrome-finance",
     },
 }
 
@@ -266,9 +290,11 @@ COIN_ID_MAPPING = {
 REWARD_TOKEN_ADDRESSES = {
     "mode": {
         "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
+        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "VELO",  # VELO on Mode
     },
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
+        "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "XVELO",  # VELO on Optimism
     },
 }
 
@@ -281,9 +307,6 @@ class LiquidityTraderBaseBehaviour(
     def __init__(self, **kwargs: Any) -> None:
         """Initialize `LiquidityTraderBaseBehaviour`."""
         super().__init__(**kwargs)
-        self.assets: Dict[str, Any] = {}
-        # TO-DO: this will not work if we run it as a service
-        self.assets_filepath = self.params.store_path / self.params.assets_info_filename
         self.current_positions: List[Dict[str, Any]] = []
         self.current_positions_filepath: str = (
             self.params.store_path / self.params.pool_info_filename
@@ -312,10 +335,8 @@ class LiquidityTraderBaseBehaviour(
         self.initial_investment_values_per_pool = {}
         self._current_entry_costs = 0.0
 
-        # Read the assets and current pool
+        # Read the current pool and other data
         self.read_current_positions()
-        self.read_assets()
-        self.ensure_olas_in_assets()
         self.read_gas_costs()
         self.read_portfolio_data()
 
@@ -403,12 +424,19 @@ class LiquidityTraderBaseBehaviour(
         return data
 
     def get_positions(self) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get positions"""
-        asset_balances = yield from self._get_asset_balances()
+        """Get positions using SafeApi for Optimism, Mode Explorer for Mode"""
         all_balances = defaultdict(list)
-        if asset_balances:
-            for chain, assets in asset_balances.items():
-                all_balances[chain].extend(assets)
+
+        for chain in self.params.target_investment_chains:
+            if chain == Chain.OPTIMISM.value:
+                # Use SafeApi for Optimism
+                balances = yield from self._get_optimism_balances_from_safe_api()
+            elif chain == Chain.MODE.value:
+                # Use Mode Explorer API for Mode
+                balances = yield from self._get_mode_balances_from_explorer_api()
+
+            if balances:
+                all_balances[chain].extend(balances)
 
         positions = [
             {"chain": chain, "assets": assets} for chain, assets in all_balances.items()
@@ -416,44 +444,298 @@ class LiquidityTraderBaseBehaviour(
 
         return positions
 
-    def _get_asset_balances(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Get asset balances"""
-        asset_balances_dict: Dict[str, list] = defaultdict(list)
+    def _get_optimism_balances_from_safe_api(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Get Optimism balances using SafeApi with pagination"""
+        safe_address = self.params.safe_contract_addresses.get("optimism")
+        if not safe_address:
+            self.context.logger.error("No safe address set for Optimism chain")
+            return []
 
-        for chain, assets in self.assets.items():
-            account = self.params.safe_contract_addresses.get(chain)
-            if not account:
-                self.context.logger.error(f"No safe address set for chain {chain}")
-                continue
+        self.context.logger.info(
+            f"Fetching Optimism balances from SafeApi for safe: {safe_address}"
+        )
 
-            for asset_address, asset_symbol in assets.items():
-                if asset_address == ZERO_ADDRESS:
-                    balance = yield from self._get_native_balance(chain, account)
-                    decimal = 18
-                else:
-                    balance = yield from self._get_token_balance(
-                        chain, account, asset_address
-                    )
-                    balance = 0 if balance is None else balance
-                    decimal = yield from self._get_token_decimals(chain, asset_address)
+        # Fetch all balances with pagination
+        all_balances = yield from self._fetch_safe_balances_with_pagination(
+            safe_address
+        )
 
-                asset_balances_dict[chain].append(
+        balances = []
+        for balance_data in all_balances:
+            token_address = balance_data.get("tokenAddress")
+            token_info = balance_data.get("token")
+            balance = balance_data.get("balance", "0")
+
+            if token_address is None:
+                # Native ETH
+                balances.append(
                     {
-                        "asset_symbol": asset_symbol,
-                        "asset_type": (
-                            "native" if asset_address == ZERO_ADDRESS else "erc_20"
-                        ),
-                        "address": to_checksum_address(asset_address),
-                        "balance": balance,
-                        "decimal": decimal,
+                        "asset_symbol": "ETH",
+                        "asset_type": "native",
+                        "address": to_checksum_address(ZERO_ADDRESS),
+                        "balance": int(balance),
                     }
                 )
+            else:
+                # ERC-20 token
+                if token_info:
+                    if (
+                        token_address
+                        == "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84"  # nosec B105
+                    ):
+                        continue
 
-                self.context.logger.info(
-                    f"Balance of account {account} on {chain} for {asset_symbol}: {self._convert_to_token_units(balance, decimal)}"
+                    balances.append(
+                        {
+                            "asset_symbol": token_info.get("symbol", "UNKNOWN"),
+                            "asset_type": "erc_20",
+                            "address": to_checksum_address(token_address),
+                            "balance": int(balance),
+                        }
+                    )
+
+        self.context.logger.info(
+            f"Retrieved {len(balances)} token balances from SafeApi"
+        )
+        return balances
+
+    def _fetch_safe_balances_with_pagination(
+        self, safe_address: str
+    ) -> Generator[None, None, List[Dict]]:
+        """Fetch all balances from SafeApi with pagination support"""
+        all_balances = []
+        offset = 0
+        limit = 100  # Default page size
+
+        while True:
+            url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
+            params = f"?exclude_spam=true&limit={limit}&offset={offset}"
+            endpoint = url + params
+
+            self.context.logger.info(
+                f"Fetching SafeApi page: offset={offset}, limit={limit}"
+            )
+
+            success, response_data = yield from self._request_with_retries(
+                endpoint=endpoint,
+                method="GET",
+                headers={
+                    "Accept": "application/json",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+                rate_limited_callback=lambda: None,  # No specific rate limit callback for SafeApi
+                max_retries=MAX_RETRIES_FOR_API_CALL,
+                retry_wait=2,
+            )
+
+            if not success:
+                self.context.logger.error(
+                    f"Failed to fetch SafeApi data: {response_data}"
                 )
+                break
 
-        return asset_balances_dict
+            results = response_data.get("results", [])
+            if not results:
+                self.context.logger.info("No more results from SafeApi")
+                break
+
+            all_balances.extend(results)
+
+            # Check if there's a next page
+            next_url = response_data.get("next")
+            if not next_url:
+                self.context.logger.info("Reached last page of SafeApi results")
+                break
+
+            offset += limit
+
+        self.context.logger.info(
+            f"Total balances fetched from SafeApi: {len(all_balances)}"
+        )
+        return all_balances
+
+    def _get_mode_balances_from_explorer_api(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Get Mode balances using Mode Explorer API for ERC-20 tokens and RPC for ETH"""
+        safe_address = self.params.safe_contract_addresses.get(Chain.MODE.value)
+        if not safe_address:
+            self.context.logger.error("No safe address set for Mode chain")
+            return []
+
+        self.context.logger.info(
+            f"Fetching Mode balances from Explorer API for safe: {safe_address}"
+        )
+
+        balances = []
+
+        # Get native ETH balance using RPC
+        eth_balance = yield from self._get_native_balance("mode", safe_address)
+        if eth_balance and eth_balance > 0:
+            balances.append(
+                {
+                    "asset_symbol": "ETH",
+                    "asset_type": "native",
+                    "address": to_checksum_address(ZERO_ADDRESS),
+                    "balance": eth_balance,
+                }
+            )
+
+        # Get ERC-20 token balances from Mode Explorer API
+        token_balances = yield from self._fetch_mode_token_balances(safe_address)
+        balances.extend(token_balances)
+
+        self.context.logger.info(
+            f"Retrieved {len(balances)} token balances from Mode Explorer API"
+        )
+        return balances
+
+    def _fetch_mode_token_balances(
+        self, safe_address: str
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Fetch ERC-20 token balances from Mode Explorer API with pagination, filtering out LP tokens"""
+        balances = []
+
+        # Get active LP token addresses to filter out
+        active_lp_addresses = self._get_active_lp_addresses()
+
+        # Fetch all token balances with pagination
+        all_tokens = yield from self._fetch_mode_tokens_with_pagination(safe_address)
+
+        # Convert to the expected format and filter out zero balances and LP tokens
+        # because the API also returns LP token balances which are also ERC20 tokens and there is no direct filter available
+        for token_data in all_tokens:
+            token_info = token_data.get("token", {})
+            token_address = token_info.get("address")
+            token_symbol = token_info.get("symbol", "UNKNOWN")
+            balance_value = token_data.get("value", "0")
+
+            if not token_address or not balance_value or balance_value == "0":
+                continue
+
+            # Filter out LP tokens that correspond to active positions
+            if token_address.lower() in active_lp_addresses:
+                self.context.logger.info(
+                    f"Filtering out LP token {token_symbol} ({token_address}) - active position"
+                )
+                continue
+
+            try:
+                balance = int(balance_value)
+                if balance > 0:
+                    balances.append(
+                        {
+                            "asset_symbol": token_symbol,
+                            "asset_type": "erc_20",
+                            "address": to_checksum_address(token_address),
+                            "balance": balance,
+                        }
+                    )
+            except (ValueError, TypeError):
+                self.context.logger.warning(
+                    f"Invalid balance value for token {token_address}: {balance_value}"
+                )
+                continue
+
+        return balances
+
+    def _get_active_lp_addresses(self) -> set:
+        """Get set of active LP token addresses from current positions"""
+        active_lp_addresses = set()
+
+        for position in self.current_positions:
+            if position.get("status") == PositionStatus.OPEN.value:
+                pool_address = position.get("pool_address")
+                if pool_address:
+                    active_lp_addresses.add(pool_address.lower())
+                    self.context.logger.debug(
+                        f"Added active LP address: {pool_address}"
+                    )
+
+        self.context.logger.info(
+            f"Found {len(active_lp_addresses)} active LP addresses to filter"
+        )
+        return active_lp_addresses
+
+    def _get_reward_token_addresses(self, chain: str) -> set:
+        """Get set of reward token addresses to filter out from investment consideration"""
+        reward_addresses = set()
+
+        chain_rewards = REWARD_TOKEN_ADDRESSES.get(chain, {})
+        for address, symbol in chain_rewards.items():
+            reward_addresses.add(address.lower())
+            self.context.logger.debug(
+                f"Added reward token address for {chain}: {symbol} ({address})"
+            )
+
+        self.context.logger.info(
+            f"Found {len(reward_addresses)} reward token addresses to filter for {chain}"
+        )
+        return reward_addresses
+
+    def _fetch_mode_tokens_with_pagination(
+        self, safe_address: str
+    ) -> Generator[None, None, List[Dict]]:
+        """Fetch all token balances from Mode Explorer API with pagination support"""
+        all_tokens = []
+        next_page_params = None
+        while True:
+            # Build endpoint URL
+            base_url = f"{self.params.mode_explorer_api_base_url}/api/v2/addresses/{safe_address}/tokens"
+            params = "?type=ERC-20"
+
+            if next_page_params:
+                # Add pagination parameters if available
+                for key, value in next_page_params.items():
+                    params += f"&{key}={value}"
+
+            endpoint = base_url + params
+
+            self.context.logger.info(f"Fetching Mode tokens page: {endpoint}")
+
+            success, response_data = yield from self._request_with_retries(
+                endpoint=endpoint,
+                method="GET",
+                headers={
+                    "Accept": "application/json",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+                rate_limited_callback=lambda: None,
+                max_retries=MAX_RETRIES_FOR_API_CALL,
+                retry_wait=2,
+            )
+
+            if not success:
+                self.context.logger.error(
+                    f"Failed to fetch Mode token data: {response_data}"
+                )
+                break
+
+            items = response_data.get("items", [])
+            if not items:
+                self.context.logger.info("No more token results from Mode Explorer API")
+                break
+
+            all_tokens.extend(items)
+
+            # Check if there's a next page
+            next_page_params = response_data.get("next_page_params")
+            if not next_page_params:
+                self.context.logger.info(
+                    "Reached last page of Mode Explorer API results"
+                )
+                break
+
+        self.context.logger.info(
+            f"Total tokens fetched from Mode Explorer API: {len(all_tokens)}"
+        )
+        return all_tokens
 
     def _get_balance(
         self, chain: str, token: str, positions: Optional[List[Dict[str, Any]]] = None
@@ -613,14 +895,6 @@ class LiquidityTraderBaseBehaviour(
             chain_id=chain,
         )
         return token_symbol
-
-    def store_assets(self) -> None:
-        """Store the list of assets as JSON."""
-        self._store_data(self.assets, "assets", self.assets_filepath)
-
-    def read_assets(self) -> None:
-        """Read the list of assets as JSON."""
-        self._read_data("assets", self.assets_filepath)
 
     def store_current_positions(self) -> None:
         """Store the current pool as JSON."""
@@ -992,283 +1266,6 @@ class LiquidityTraderBaseBehaviour(
                 f"Error synchronizing positions with portfolio: {e}"
             )
             # Don't fail the entire portfolio update if position sync fails
-
-    def _get_optimism_balances_from_safe_api(
-        self,
-    ) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get Optimism balances using SafeApi with pagination"""
-        safe_address = self.params.safe_contract_addresses.get("optimism")
-        if not safe_address:
-            self.context.logger.error("No safe address set for Optimism chain")
-            return []
-
-        self.context.logger.info(
-            f"Fetching Optimism balances from SafeApi for safe: {safe_address}"
-        )
-
-        # Fetch all balances with pagination
-        all_balances = yield from self._fetch_safe_balances_with_pagination(
-            safe_address
-        )
-
-        balances = []
-        for balance_data in all_balances:
-            token_address = balance_data.get("tokenAddress")
-            token_info = balance_data.get("token")
-            balance = balance_data.get("balance", "0")
-
-            if token_address is None:
-                # Native ETH
-                balances.append(
-                    {
-                        "asset_symbol": "ETH",
-                        "asset_type": "native",
-                        "address": to_checksum_address(ZERO_ADDRESS),
-                        "balance": int(balance),
-                    }
-                )
-            else:
-                # ERC-20 token
-                if token_info:
-                    balances.append(
-                        {
-                            "asset_symbol": token_info.get("symbol", "UNKNOWN"),
-                            "asset_type": "erc_20",
-                            "address": to_checksum_address(token_address),
-                            "balance": int(balance),
-                        }
-                    )
-
-        self.context.logger.info(
-            f"Retrieved {len(balances)} token balances from SafeApi"
-        )
-        return balances
-
-    def _fetch_safe_balances_with_pagination(
-        self, safe_address: str
-    ) -> Generator[None, None, List[Dict]]:
-        """Fetch all balances from SafeApi with pagination support"""
-        all_balances = []
-        offset = 0
-        limit = 100  # Default page size
-
-        while True:
-            url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
-            params = f"?trusted=true&exclude_spam=true&limit={limit}&offset={offset}"
-            endpoint = url + params
-
-            self.context.logger.info(
-                f"Fetching SafeApi page: offset={offset}, limit={limit}"
-            )
-
-            success, response_data = yield from self._request_with_retries(
-                endpoint=endpoint,
-                method="GET",
-                headers={"Accept": "application/json"},
-                rate_limited_callback=lambda: None,  # No specific rate limit callback for SafeApi
-                max_retries=MAX_RETRIES_FOR_API_CALL,
-                retry_wait=2,
-            )
-
-            if not success:
-                self.context.logger.error(
-                    f"Failed to fetch SafeApi data: {response_data}"
-                )
-                break
-
-            results = response_data.get("results", [])
-            if not results:
-                self.context.logger.info("No more results from SafeApi")
-                break
-
-            all_balances.extend(results)
-
-            # Check if there's a next page
-            next_url = response_data.get("next")
-            if not next_url:
-                self.context.logger.info("Reached last page of SafeApi results")
-                break
-
-            offset += limit
-
-        self.context.logger.info(
-            f"Total balances fetched from SafeApi: {len(all_balances)}"
-        )
-        return all_balances
-
-    def _get_mode_balances_from_explorer_api(
-        self,
-    ) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Get Mode balances using Mode Explorer API for ERC-20 tokens and RPC for ETH"""
-        safe_address = self.params.safe_contract_addresses.get("mode")
-        if not safe_address:
-            self.context.logger.error("No safe address set for Mode chain")
-            return []
-
-        self.context.logger.info(
-            f"Fetching Mode balances from Explorer API for safe: {safe_address}"
-        )
-
-        balances = []
-
-        # Get native ETH balance using RPC
-        eth_balance = yield from self._get_native_balance("mode", safe_address)
-        if eth_balance and eth_balance > 0:
-            balances.append(
-                {
-                    "asset_symbol": "ETH",
-                    "asset_type": "native",
-                    "address": to_checksum_address(ZERO_ADDRESS),
-                    "balance": eth_balance,
-                }
-            )
-
-        # Get ERC-20 token balances from Mode Explorer API
-        token_balances = yield from self._fetch_mode_token_balances(safe_address)
-        balances.extend(token_balances)
-
-        self.context.logger.info(
-            f"Retrieved {len(balances)} token balances from Mode Explorer API"
-        )
-        return balances
-
-    def _fetch_mode_token_balances(
-        self, safe_address: str
-    ) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Fetch ERC-20 token balances from Mode Explorer API with pagination, filtering out LP tokens"""
-        balances = []
-
-        # Get active LP token addresses to filter out
-        active_lp_addresses = self._get_active_lp_addresses()
-
-        # Fetch all token balances with pagination
-        all_tokens = yield from self._fetch_mode_tokens_with_pagination(safe_address)
-
-        # Convert to the expected format and filter out zero balances and LP tokens
-        # because the API also returns LP token balances which are also ERC20 tokens and there is no direct filter available
-        for token_data in all_tokens:
-            token_info = token_data.get("token", {})
-            token_address = token_info.get("address")
-            token_symbol = token_info.get("symbol", "UNKNOWN")
-            balance_value = token_data.get("value", "0")
-
-            if not token_address or not balance_value or balance_value == "0":
-                continue
-
-            # Filter out LP tokens that correspond to active positions
-            if token_address.lower() in active_lp_addresses:
-                self.context.logger.info(
-                    f"Filtering out LP token {token_symbol} ({token_address}) - active position"
-                )
-                continue
-
-            try:
-                balance = int(balance_value)
-                if balance > 0:
-                    balances.append(
-                        {
-                            "asset_symbol": token_symbol,
-                            "asset_type": "erc_20",
-                            "address": to_checksum_address(token_address),
-                            "balance": balance,
-                        }
-                    )
-            except (ValueError, TypeError):
-                self.context.logger.warning(
-                    f"Invalid balance value for token {token_address}: {balance_value}"
-                )
-                continue
-
-        return balances
-
-    def _get_active_lp_addresses(self) -> set:
-        """Get set of active LP token addresses from current positions"""
-        active_lp_addresses = set()
-
-        for position in self.current_positions:
-            if position.get("status") == PositionStatus.OPEN.value:
-                pool_address = position.get("pool_address")
-                if pool_address:
-                    active_lp_addresses.add(pool_address.lower())
-                    self.context.logger.debug(
-                        f"Added active LP address: {pool_address}"
-                    )
-
-        self.context.logger.info(
-            f"Found {len(active_lp_addresses)} active LP addresses to filter"
-        )
-        return active_lp_addresses
-
-    def _get_reward_token_addresses(self, chain: str) -> set:
-        """Get set of reward token addresses to filter out from investment consideration"""
-        reward_addresses = set()
-
-        chain_rewards = REWARD_TOKEN_ADDRESSES.get(chain, {})
-        for address, symbol in chain_rewards.items():
-            reward_addresses.add(address.lower())
-            self.context.logger.debug(
-                f"Added reward token address for {chain}: {symbol} ({address})"
-            )
-
-        self.context.logger.info(
-            f"Found {len(reward_addresses)} reward token addresses to filter for {chain}"
-        )
-        return reward_addresses
-
-    def _fetch_mode_tokens_with_pagination(
-        self, safe_address: str
-    ) -> Generator[None, None, List[Dict]]:
-        """Fetch all token balances from Mode Explorer API with pagination support"""
-        all_tokens = []
-        next_page_params = None
-        while True:
-            # Build endpoint URL
-            base_url = f"{self.params.mode_explorer_api_base_url}/api/v2/addresses/{safe_address}/tokens"
-            params = "?type=ERC-20"
-
-            if next_page_params:
-                # Add pagination parameters if available
-                for key, value in next_page_params.items():
-                    params += f"&{key}={value}"
-
-            endpoint = base_url + params
-
-            self.context.logger.info(f"Fetching Mode tokens page: {endpoint}")
-
-            success, response_data = yield from self._request_with_retries(
-                endpoint=endpoint,
-                method="GET",
-                headers={"Accept": "application/json"},
-                rate_limited_callback=lambda: None,
-                max_retries=MAX_RETRIES_FOR_API_CALL,
-                retry_wait=2,
-            )
-
-            if not success:
-                self.context.logger.error(
-                    f"Failed to fetch Mode token data: {response_data}"
-                )
-                break
-
-            items = response_data.get("items", [])
-            if not items:
-                self.context.logger.info("No more token results from Mode Explorer API")
-                break
-
-            all_tokens.extend(items)
-
-            # Check if there's a next page
-            next_page_params = response_data.get("next_page_params")
-            if not next_page_params:
-                self.context.logger.info(
-                    "Reached last page of Mode Explorer API results"
-                )
-                break
-
-        self.context.logger.info(
-            f"Total tokens fetched from Mode Explorer API: {len(all_tokens)}"
-        )
-        return all_tokens
 
     def _get_native_balance(
         self, chain: str, account: str
@@ -1867,9 +1864,7 @@ class LiquidityTraderBaseBehaviour(
         return None
 
     def _get_current_timestamp(self) -> int:
-        return cast(
-            SharedState, self.context.state
-        ).round_sequence.last_round_transition_timestamp.timestamp()
+        return int(time.time())
 
     def calculate_initial_investment_value(
         self, position: Dict[str, Any]
@@ -2117,51 +2112,20 @@ class LiquidityTraderBaseBehaviour(
         yield from self._write_kv({ETH_REMAINING_KEY: str(amount)})
         return amount
 
-    def ensure_olas_in_assets(self) -> None:
-        """Ensure OLAS token is present in assets for all target investment chains."""
-        assets_updated = False
-
-        for chain in self.params.target_investment_chains:
-            # Get OLAS address for this chain
-            olas_address = OLAS_ADDRESSES.get(chain)
-            if not olas_address:
-                self.context.logger.warning(
-                    f"No OLAS address defined for chain {chain}"
-                )
-                continue
-
-            # Ensure the chain exists in self.assets before accessing it
-            if chain not in self.assets:
-                # Initialize with initial assets for this chain if available
-                initial_assets_for_chain = self.params.initial_assets.get(chain, {})
-                self.assets[chain] = initial_assets_for_chain.copy()
-                assets_updated = True
-                self.context.logger.info(
-                    f"Initialized assets dictionary for chain {chain} with initial assets: {initial_assets_for_chain}"
-                )
-
-            # Check if OLAS is already in assets for this chain
-            if olas_address not in self.assets[chain]:
-                self.assets[chain][olas_address] = "OLAS"
-                assets_updated = True
-                self.context.logger.info(
-                    f"Added OLAS token to assets for chain {chain}: {olas_address}"
-                )
-            else:
-                self.context.logger.info(
-                    f"OLAS token already present in assets for chain {chain}"
-                )
-
-        # Save assets if any updates were made
-        if assets_updated:
-            self.store_assets()
-            self.read_assets()
-            self.context.logger.info("Assets updated and stored with OLAS tokens")
-
     def should_update_rewards_from_subgraph(
-        self, chain: str
+        self, chain: str, period: int = None
     ) -> Generator[None, None, bool]:
-        """Check if rewards should be updated from subgraph (24-hour interval)"""
+        """Check if rewards should be updated from subgraph (period == 0 or 24-hour interval)"""
+        # Update immediately if period == 0
+        if (
+            self.synchronized_data.period_count
+            and self.synchronized_data.period_count == 0
+        ):
+            self.context.logger.info(
+                f"Reward update for {chain}: period == 0, forcing immediate update"
+            )
+            return True
+
         update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
         result = yield from self._read_kv((update_key,))
 
@@ -2187,40 +2151,29 @@ class LiquidityTraderBaseBehaviour(
 
         return should_update
 
-    def query_new_staking_rewards(
-        self, chain: str, last_processed_epoch: Optional[int] = None
-    ) -> Generator[None, None, Optional[List[Dict]]]:
-        """Query subgraph for new checkpoint rewards since last processed epoch"""
+    def query_service_rewards(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Query subgraph for service rewards using service query"""
         endpoint = self.params.staking_subgraph_endpoints.get(chain)
         service_id = self.params.on_chain_service_id
-
-        where_clause = (
-            f"serviceIds_contains: [{service_id!r}]"  # Use serviceIds_contains
-        )
-        if last_processed_epoch is not None:
-            where_clause += f", epoch_gt: {last_processed_epoch!r}"
 
         query = {
             "query": f"""
             {{
-            checkpoints(
-                orderBy: epoch
-                orderDirection: desc
-                where: {{
-                {where_clause}
-                }}
-            ) {{
+            service(id: {service_id!r}) {{
+                blockNumber
+                blockTimestamp
+                currentOlasStaked
                 id
-                epoch
-                rewards
-                serviceIds
+                olasRewardsEarned
             }}
             }}
             """
         }
 
         self.context.logger.info(
-            f"Querying subgraph for {chain} since epoch {last_processed_epoch}"
+            f"Querying subgraph for service {service_id} on {chain}"
         )
 
         response = yield from self.get_http_response(
@@ -2232,11 +2185,17 @@ class LiquidityTraderBaseBehaviour(
 
         if response.status_code in HTTP_OK:
             data = json.loads(response.body)
-            checkpoints = data.get("data", {}).get("checkpoints", [])
-            self.context.logger.info(
-                f"Retrieved {len(checkpoints)} checkpoints from subgraph"
-            )
-            return checkpoints
+            service_data = data.get("data", {}).get("service")
+            if service_data:
+                self.context.logger.info(
+                    f"Retrieved service data from subgraph: olasRewardsEarned={service_data.get('olasRewardsEarned', 0)}"
+                )
+                return service_data
+            else:
+                self.context.logger.warning(
+                    f"No service data found for service ID {service_id}"
+                )
+                return None
 
         self.context.logger.error(
             f"Failed to query subgraph: {response.status_code} - {response.body}"
@@ -2253,79 +2212,40 @@ class LiquidityTraderBaseBehaviour(
         if not should_update_rewards:
             return
 
-        service_id = self.params.on_chain_service_id
         self.context.logger.info(f"Starting reward update for {chain}")
 
-        # Get last processed epoch
-        last_epoch_key = f"{LAST_EPOCH_KEY_PREFIX}{chain}"
-        result = yield from self._read_kv((last_epoch_key,))
-        last_processed_epoch = (
-            int(result.get(last_epoch_key))
-            if result and result.get(last_epoch_key) is not None
-            else None
-        )
+        # Query service data directly using simple GraphQL query
+        service_data = yield from self.query_service_rewards(chain)
 
-        # Query new checkpoints since last processed epoch
-        new_checkpoints = yield from self.query_new_staking_rewards(
-            chain, last_processed_epoch
-        )
-
-        if not new_checkpoints:
-            self.context.logger.info(f"No new checkpoints found for {chain}")
-            # Still mark as updated to avoid querying again for 24 hours
-            update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
-            yield from self._write_kv({update_key: str(self._get_current_timestamp())})
+        if not service_data:
+            self.context.logger.info(f"No service data found for {chain}")
             return
 
-        # Calculate new rewards from all new checkpoints
-        new_rewards = 0
-        for checkpoint in new_checkpoints:
-            service_ids = checkpoint.get("serviceIds", [])
-            rewards = checkpoint.get("rewards", [])
-
-            # Find the index of our service ID in the serviceIds array
-            try:
-                service_index = service_ids.index(str(service_id))
-                # Get the corresponding reward at the same index
-                if service_index < len(rewards):
-                    checkpoint_reward = int(rewards[service_index])
-                    new_rewards += checkpoint_reward
-                else:
-                    self.context.logger.warning(
-                        f"Service ID {service_id} found at index {service_index} but rewards array only has {len(rewards)} elements"
-                    )
-            except ValueError:
-                self.context.logger.warning(
-                    f"Service ID {service_id} not found in serviceIds array: {service_ids}"
-                )
-                continue
+        # Get olasRewardsEarned directly from service data
+        olas_rewards_earned = service_data.get("olasRewardsEarned", "0")
+        try:
+            total_rewards = int(olas_rewards_earned)
+        except (ValueError, TypeError):
+            self.context.logger.error(
+                f"Invalid olasRewardsEarned value: {olas_rewards_earned}"
+            )
+            total_rewards = 0
 
         # Update stored accumulated rewards for OLAS token
         olas_address = OLAS_ADDRESSES.get(chain)
-        # TO-DO: exclude any OLAS rewards withdrawn
-        if olas_address and new_rewards > 0:
+        if olas_address:
             rewards_key = f"accumulated_rewards_{chain}_{olas_address.lower()}"
-            result = yield from self._read_kv((rewards_key,))
-            if not result:
-                current_accumulated = 0
-            else:
-                rewards_value = result.get(rewards_key)
-                current_accumulated = (
-                    int(rewards_value) if rewards_value is not None else 0
-                )
 
-            total_accumulated = current_accumulated + new_rewards
-            yield from self._write_kv({rewards_key: str(total_accumulated)})
-
-            # Update last processed epoch (first element = latest epoch)
-            latest_epoch = new_checkpoints[0]["epoch"]
-            yield from self._write_kv({last_epoch_key: latest_epoch})
+            # Store the total rewards directly (not incremental)
+            yield from self._write_kv({rewards_key: str(total_rewards)})
 
             self.context.logger.info(
-                f"Updated rewards for {chain}: +{new_rewards} OLAS, "
-                f"Total accumulated: {total_accumulated} OLAS (Latest epoch: {latest_epoch})"
+                f"Updated rewards for {chain}: Total accumulated: {total_rewards} OLAS "
+                f"(Block: {service_data.get('blockNumber', 'N/A')}, "
+                f"Timestamp: {service_data.get('blockTimestamp', 'N/A')})"
             )
 
+        # Mark as updated
         update_key = f"{REWARD_UPDATE_KEY_PREFIX}{chain}"
         yield from self._write_kv({update_key: str(int(self._get_current_timestamp()))})
 
@@ -2337,7 +2257,20 @@ class LiquidityTraderBaseBehaviour(
         """Get stored accumulated rewards for a token"""
         rewards_key = f"accumulated_rewards_{chain}_{token_address.lower()}"
         result = yield from self._read_kv((rewards_key,))
-        return int(result.get(rewards_key, 0)) if result else 0
+        if not result:
+            return 0
+
+        rewards_value = result.get(rewards_key)
+        if rewards_value is None:
+            return 0
+
+        try:
+            return int(rewards_value)
+        except (ValueError, TypeError):
+            self.context.logger.warning(
+                f"Invalid rewards value for {rewards_key}: {rewards_value}, returning 0"
+            )
+            return 0
 
     def _calculate_days_since_entry(self, enter_timestamp: int) -> float:
         """Calculate days elapsed since position entry."""
@@ -2351,6 +2284,41 @@ class LiquidityTraderBaseBehaviour(
 
         days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
         return days_elapsed >= position["min_hold_days"]
+
+    def _store_entry_costs(
+        self, chain: str, position_id: str, costs: float
+    ) -> Generator[None, None, None]:
+        """Store entry costs in KV store with unique key"""
+        try:
+            key = self._get_entry_costs_key(chain, position_id)
+
+            # Get existing entry costs dictionary
+            entry_costs_dict = yield from self._get_all_entry_costs()
+
+            # Update the dictionary
+            entry_costs_dict[key] = costs
+
+            # Store back to KV store
+            yield from self._write_kv(
+                {"entry_costs_dict": json.dumps(entry_costs_dict)}
+            )
+
+            self.context.logger.info(f"Stored entry costs: {key} = ${costs:.6f}")
+        except Exception as e:
+            self.context.logger.error(f"Error storing entry costs: {e}")
+
+    def _get_all_entry_costs(self) -> Generator[None, None, Dict[str, float]]:
+        """Get all entry costs from KV store"""
+        try:
+            result = yield from self._read_kv(("entry_costs_dict",))
+            if result and result.get("entry_costs_dict"):
+                entry_costs_dict = json.loads(result["entry_costs_dict"])
+                # Convert string values back to float
+                return {k: float(v) for k, v in entry_costs_dict.items()}
+            return {}
+        except Exception as e:
+            self.context.logger.error(f"Error getting all entry costs: {e}")
+            return {}
 
     def _build_exit_pool_action_base(
         self, position: Dict[str, Any], tokens: List[Dict[str, Any]] = None
@@ -2539,7 +2507,9 @@ class LiquidityTraderBaseBehaviour(
         sqrt_price_x96: int,
     ) -> Generator[None, None, Tuple[int, int]]:
         """Get Velodrome position principal using Sugar contract."""
-        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        sugar_address = self.params.velodrome_slipstream_helper_contract_addresses.get(
+            chain
+        )
         if not sugar_address:
             self.context.logger.error(
                 f"No Velodrome Sugar contract address for chain {chain}"
@@ -2550,7 +2520,7 @@ class LiquidityTraderBaseBehaviour(
         amounts = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=sugar_address,
-            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
             contract_callable="principal",
             data_key="amounts",
             position_manager=position_manager_address,
@@ -2572,7 +2542,9 @@ class LiquidityTraderBaseBehaviour(
         liquidity: int,
     ) -> Generator[None, None, Tuple[int, int]]:
         """Get amounts for liquidity using Velodrome Sugar contract."""
-        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        sugar_address = self.params.velodrome_slipstream_helper_contract_addresses.get(
+            chain
+        )
         if not sugar_address:
             self.context.logger.error(
                 f"No Velodrome Sugar contract address for chain {chain}"
@@ -2583,7 +2555,7 @@ class LiquidityTraderBaseBehaviour(
         amounts = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=sugar_address,
-            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
             contract_callable="get_amounts_for_liquidity",
             data_key="amounts",
             sqrt_price_x96=sqrt_price_x96,
@@ -2601,7 +2573,9 @@ class LiquidityTraderBaseBehaviour(
         self, chain: str, tick: int
     ) -> Generator[None, None, int]:
         """Get sqrt ratio at tick using Velodrome Sugar contract."""
-        sugar_address = self.params.velodrome_sugar_contract_addresses.get(chain)
+        sugar_address = self.params.velodrome_slipstream_helper_contract_addresses.get(
+            chain
+        )
         if not sugar_address:
             self.context.logger.error(
                 f"No Velodrome Sugar contract address for chain {chain}"
@@ -2612,7 +2586,7 @@ class LiquidityTraderBaseBehaviour(
         sqrt_ratio = yield from self.contract_interact(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
             contract_address=sugar_address,
-            contract_public_id=VelodromeSugarContract.contract_id,
+            contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
             contract_callable="get_sqrt_ratio_at_tick",
             data_key="sqrt_ratio",
             tick=tick,
@@ -2620,6 +2594,94 @@ class LiquidityTraderBaseBehaviour(
         )
 
         return sqrt_ratio if sqrt_ratio else 0
+
+    def _has_staking_metadata(self, position: Dict[str, Any]) -> bool:
+        """Check if position has staking metadata."""
+        return bool(
+            position.get("gauge_address")
+            or position.get("staked")
+            or position.get("staked_amount", 0) > 0
+        )
+
+    def _build_unstake_lp_tokens_action(
+        self, position: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Build action for unstaking LP tokens before position exit."""
+        try:
+            chain = position.get("chain")
+            pool_address = position.get("pool_address")
+            dex_type = position.get("dex_type")
+            is_cl_pool = position.get("is_cl_pool", False)
+            gauge_address = position.get("gauge_address")
+
+            # Only create unstaking actions for Velodrome pools
+            if dex_type != "velodrome":
+                self.context.logger.info(
+                    f"Skipping unstaking for non-Velodrome pool: {dex_type}"
+                )
+                return None
+
+            if not all([chain, pool_address]):
+                self.context.logger.error(
+                    "Missing required parameters for unstake action"
+                )
+                return None
+
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address found for chain {chain}")
+                return None
+
+            if is_cl_pool:
+                # For CL pools, we need token_id information
+                positions_data = position.get("positions", [])
+                token_ids = [pos["token_id"] for pos in positions_data]
+                if not token_ids:
+                    # Try to get from single position format
+                    token_id = position.get("token_id")
+                    if token_id is not None:
+                        token_ids = [token_id]
+
+                if not token_ids:
+                    self.context.logger.error(
+                        "No token IDs found for CL pool unstaking"
+                    )
+                    return None
+
+                unstake_action = {
+                    "action": Action.UNSTAKE_LP_TOKENS.value,
+                    "dex_type": dex_type,
+                    "chain": chain,
+                    "pool_address": pool_address,
+                    "is_cl_pool": True,
+                    "token_ids": token_ids,
+                    "description": f"Unstake CL LP tokens for {pool_address}",
+                }
+            else:
+                # For regular pools, we need the staked amount
+                unstake_action = {
+                    "action": Action.UNSTAKE_LP_TOKENS.value,
+                    "dex_type": dex_type,
+                    "chain": chain,
+                    "pool_address": pool_address,
+                    "is_cl_pool": False,
+                    "description": f"Unstake LP tokens for {pool_address}",
+                }
+
+            # Add gauge address if available
+            if gauge_address:
+                unstake_action["gauge_address"] = gauge_address
+
+            self.context.logger.info(
+                f"Created unstake LP tokens action: {unstake_action}"
+            )
+            return unstake_action
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error building unstake LP tokens action: {str(e)}"
+            )
+            return None
 
 
 def execute_strategy(

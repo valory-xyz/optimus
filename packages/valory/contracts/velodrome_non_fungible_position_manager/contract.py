@@ -220,3 +220,95 @@ class VelodromeNonFungiblePositionManagerContract(Contract):
             "tokensOwed0": position[10],
             "tokensOwed1": position[11],
         })
+
+    @classmethod
+    def approve(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        to: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Prepare encoded tx for approving a specific NFT token."""
+        return cls._encode_call(
+            ledger_api,
+            contract_address,
+            "approve",
+            (to, token_id),
+        )
+
+    @classmethod
+    def set_approval_for_all(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        operator: str,
+        approved: bool,
+    ) -> JSONLike:
+        """Prepare encoded tx for setting approval for all NFTs."""
+        return cls._encode_call(
+            ledger_api,
+            contract_address,
+            "setApprovalForAll",
+            (operator, approved),
+        )
+
+    @classmethod
+    def is_approved_for_all(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        owner: str,
+        operator: str,
+    ) -> JSONLike:
+        """Check if operator is approved for all NFTs of owner."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        is_approved = contract_instance.functions.isApprovedForAll(owner, operator).call()
+        return dict(is_approved=is_approved)
+
+    @classmethod
+    def get_approved(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_id: int,
+    ) -> JSONLike:
+        """Get the approved address for a specific NFT token."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        approved = contract_instance.functions.getApproved(token_id).call()
+        return dict(approved=approved)
+
+    @classmethod
+    def token_of_owner_by_index(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        owner: str,
+        index: int,
+    ) -> JSONLike:
+        """Get token ID owned by owner at a given index."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        token_id = contract_instance.functions.tokenOfOwnerByIndex(owner, index).call()
+        return dict(token_id=token_id)
+
+    @classmethod
+    def get_all_token_ids_for_owner(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        owner: str,
+    ) -> JSONLike:
+        """Get all token IDs owned by an address."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        balance = contract_instance.functions.balanceOf(owner).call()
+        
+        token_ids = []
+        for i in range(balance):
+            try:
+                token_id = contract_instance.functions.tokenOfOwnerByIndex(owner, i).call()
+                token_ids.append(token_id)
+            except Exception:
+                # Skip if token doesn't exist or error occurs
+                continue
+        
+        return dict(token_ids=token_ids, count=len(token_ids))

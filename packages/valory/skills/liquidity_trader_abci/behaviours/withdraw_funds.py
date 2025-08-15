@@ -27,6 +27,7 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     LiquidityTraderBaseBehaviour,
+    PositionStatus,
 )
 from packages.valory.skills.liquidity_trader_abci.payloads import WithdrawFundsPayload
 from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
@@ -551,8 +552,17 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             "Getting fresh positions data for action preparation..."
         )
 
-        # Step 1: Check for open positions and create exit actions
+        # Step 1: Check for open positions and create unstaking and exit actions
         self.context.logger.info("=== STEP 1: CHECKING FOR OPEN POSITIONS ===")
+        unstake_actions = self._prepare_unstaking_actions(positions)
+        if unstake_actions:
+            self.context.logger.info(
+                f"Found {len(unstake_actions)} open positions to unstake"
+            )
+            actions.extend(unstake_actions)
+        else:
+            self.context.logger.info("No open positions found to unstake")
+
         exit_actions = self._prepare_exit_pool_actions(positions)
         if exit_actions:
             self.context.logger.info(
@@ -603,6 +613,38 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
         )
         self.context.logger.info(f"Final actions list: {actions}")
 
+        return actions
+
+    def _prepare_unstaking_actions(
+        self, positions: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Prepare unstaking actions in standard action format.
+
+        :param positions: current positions
+        :return: list of unstaking positions actions in standard format
+        """
+        actions = []
+
+        self.context.logger.info("Preparing unstaking actions")
+        self.context.logger.info(f"Positions data: {positions}")
+
+        for i, position in enumerate(positions):
+            self.context.logger.info(f"Processing position {i+1}: {position}")
+            status = position.get("status")
+
+            if status == PositionStatus.OPEN.value:
+                if self._has_staking_metadata(position):
+                    unstake_action = self._build_unstake_lp_tokens_action(
+                        self.position_to_exit
+                    )
+                    if unstake_action:
+                        actions.append(unstake_action)
+                        self.context.logger.info(
+                            "Added unstake LP tokens action before exit"
+                        )
+
+        self.context.logger.info(f"Unstaking actions prepared: {actions}")
         return actions
 
     def _prepare_exit_pool_actions(

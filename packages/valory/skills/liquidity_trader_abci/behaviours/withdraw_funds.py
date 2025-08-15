@@ -636,7 +636,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             if status == PositionStatus.OPEN.value:
                 if self._has_staking_metadata(position):
                     unstake_action = self._build_unstake_lp_tokens_action(
-                        position
+                        self.position_to_exit
                     )
                     if unstake_action:
                         actions.append(unstake_action)

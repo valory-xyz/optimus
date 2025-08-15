@@ -76,3 +76,14 @@ class WeightedPoolContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.functions.getVault().call()
         return dict(vault=data)
+
+    @classmethod
+    def get_total_supply(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get the total supply of BPT tokens."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        total_supply = contract_instance.functions.totalSupply().call()
+        return dict(data=total_supply)

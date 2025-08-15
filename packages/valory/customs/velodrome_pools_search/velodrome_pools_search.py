@@ -1322,7 +1322,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "chain": chain_name,
             "apr": apr,  # Add APR to the formatted pool data
             "is_cl_pool": is_cl_pool,  # Add flag for concentrated liquidity pool
-            "is_stable": pool["is_stable"]
+            "is_stable": pool.get("is_stable")
         }
         
         # Add tokens (should be at least 2 tokens)

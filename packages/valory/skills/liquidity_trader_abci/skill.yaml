@@ -14,7 +14,7 @@ fingerprint:
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeidwd3q3vnagfnjmauiz4x2fjwaeu6atwe2vn4lbasxozlpruwz7a4
   behaviours/evaluate_strategy.py: bafybeifr3lun73kf4cs4vb3fti6p7uoze5jn5p363u3vn6obr4a5ym6cre
-  behaviours/fetch_strategies.py: bafybeidpgmsw4ca7jeele37njwduf2zl3jnut6scociod3mzvubtpwdt3m
+  behaviours/fetch_strategies.py: bafybeid7c7q6nbtspvx445wca3s5w43hqbkchtzoos6mvbiw7k3utvtd3m
   behaviours/get_positions.py: bafybeifrfmlzh7hdk6a6nfzzraedou2szyyv5pijbttqbppvsa6b6zcoy4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -28,9 +28,9 @@ fingerprint:
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
-  pools/balancer.py: bafybeiafwkg3dwban2hlyaistf2litbx32mhbbdnrsuoultc26uii42oma
+  pools/balancer.py: bafybeiaayilrkgelfjkwzi5t5b7mwryexadu42cwoipxusjcomv5l2gfoy
   pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
-  pools/velodrome.py: bafybeialy3mrrdpcgretp2pzvdvueofeho4bcvco4gte3uvzreqot5j7bi
+  pools/velodrome.py: bafybeidegkxxydyvd7ppncs2whkby6qxxyflkplh5rev3l657gxxhkv62y
   rounds.py: bafybeihsstee7burcnrc75bjisbswxrc5h6lvi3e2l6ciiiy4nqepw2zfy
   rounds_info.py: bafybeihtj6mf74ccw6k2vokv7vkf4nwbp7j7cfm7j6cvuqop7gomavxucu
   states/__init__.py: bafybeigzgpxgx6g4ioalm7fdalcckk5lmw6z4k4sb5d4a4cdespv2umogi
@@ -61,7 +61,7 @@ connections:
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um
-- valory/balancer_weighted_pool:0.1.0:bafybeiewnxxzzpso2iuqw6sw5rlxj6p3e4cr2czwnmfm3m2pcuihuit7nu
+- valory/balancer_weighted_pool:0.1.0:bafybeif62wmflaurowogrirtfakxod3ddyjsyubu6f2tpiai4wukpsxtke
 - valory/balancer_vault:0.1.0:bafybeigb3dd34py2jhixmuhy7o52ex572y4d7yhrauywzn4kwzlipscxai
 - valory/balancer_queries:0.1.0:bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu
 - valory/erc20:0.1.0:bafybeigg5xv3bbvv6zfdjykncirh2wi7t7xpf4b4rebao77r2wwjg7uhjy
@@ -80,7 +80,7 @@ contracts:
 - valory/velodrome_gauge:0.1.0:bafybeicbrtp2burhnthqmeme2nihfg6jrhx622edt4bxhtgoxqamjcicdu
 - valory/velodrome_voter:0.1.0:bafybeid2nvctd25mcthgokt7m47f35pofff7gov3qai5aj4jdeo2uojhr4
 - valory/velodrome_cl_gauge:0.1.0:bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm
-- valory/velodrome_slipstream_helper:0.1.0:bafybeidkkemyjdafqloq7yhgk56226u2f2re4uxetpmae2jjyz4iknrmya
+- valory/velodrome_slipstream_helper:0.1.0:bafybeiapaeltu46cu6f3byxqzkz47fyibcijxc7245mnemi6efhwujfn6e
 protocols:
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4

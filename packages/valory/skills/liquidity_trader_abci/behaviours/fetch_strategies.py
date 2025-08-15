@@ -3416,6 +3416,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers_url = f"{base_url}/safes/{address}/incoming-transfers/"
 
             processed_count = 0
+            seen_transfer_ids = set()
             while True:
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
@@ -3452,6 +3453,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     # Only process transfers until end_date
                     if tx_date > end_date:
                         continue
+
+                    # Deduplicate by transferId if present, otherwise transactionHash
+                    unique_id = transfer.get("transferId") or transfer.get(
+                        "transactionHash", ""
+                    )
+                    if unique_id in seen_transfer_ids:
+                        continue
+                    seen_transfer_ids.add(unique_id)
 
                     # Process the transfer
                     from_address = transfer.get("from", address)
@@ -3544,10 +3553,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Processed {processed_count} Optimism transfers..."
                     )
 
-                # Check for next page
+                # Check for next page and advance the URL
                 cursor = response_json.get("next")
                 if not cursor:
                     break
+                transfers_url = cursor
 
             self.context.logger.info(
                 f"Completed Optimism transfers: {processed_count} found"
@@ -4025,6 +4035,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             transfers_url = f"{base_url}/safes/{address}/transfers/"
 
             processed_count = 0
+            seen_tx_ids = set()
             while True:
                 success, response_json = yield from self._request_with_retries(
                     endpoint=transfers_url,
@@ -4068,6 +4079,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if transfer.get("from").lower() == address.lower():
                         transfer_type = transfer.get("type", "")
 
+                        # Deduplicate per tx hash + type
+                        unique_id = f"{transfer.get('transactionHash', '')}:{transfer_type}:{transfer.get('value', '')}"
+                        if unique_id in seen_tx_ids:
+                            continue
+                        seen_tx_ids.add(unique_id)
+
                         if transfer_type == "ETHER_TRANSFER":
                             try:
                                 value_wei = int(transfer.get("value", "0") or "0")
@@ -4100,7 +4117,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(
                     f"Completed Optimism outgoing transfers: {processed_count} found"
                 )
-                return all_transfers
+
+                # Advance pagination if available
+                cursor = response_json.get("next")
+                if not cursor:
+                    return all_transfers
+                transfers_url = cursor
+
+            return all_transfers
 
         except Exception as e:
             self.context.logger.error(

@@ -599,8 +599,8 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=pool_address,
                 contract_public_id=WeightedPoolContract.contract_id,
-                contract_callable="total_supply",
-                data_key="total_supply",
+                contract_callable="get_total_supply",
+                data_key="data",
                 chain_id=chain,
             )
 
@@ -660,8 +660,8 @@ class BalancerPoolBehaviour(PoolBehaviour, ABC):
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
                 contract_address=pool_address,
                 contract_public_id=WeightedPoolContract.contract_id,
-                contract_callable="total_supply",
-                data_key="total_supply",
+                contract_callable="get_total_supply",
+                data_key="data",
                 chain_id=chain,
             )
 

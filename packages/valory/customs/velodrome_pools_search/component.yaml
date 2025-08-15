@@ -9,7 +9,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeig54kazemffrqk7h5ufvfm7n3fzg5pekpx75uxytjs3o7mnhywox4
   velodrome_lp_sugar.json: bafybeiamf3gev3vfeikh2mjmrhaqmyrsuzl6bt34gcilgz375z4o4uap2q
-  velodrome_pools_search.py: bafybeiepobmnqtntj3ttl4bqhkrlhv627ahndygzjol5fuxrrdu7sqzk7q
+  velodrome_pools_search.py: bafybeifgazilghuq6sqz4v3a6rfjebty4q24ejtiifo56whdcymloy6s2e
 fingerprint_ignore_patterns: []
 entry_point: velodrome_pools_search.py
 callable: run

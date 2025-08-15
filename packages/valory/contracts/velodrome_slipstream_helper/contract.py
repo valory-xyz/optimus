@@ -76,3 +76,35 @@ class VelodromeSlipstreamHelperContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.getSqrtRatioAtTick(tick).call()
         return {"sqrt_ratio": result}
+
+    @classmethod
+    def get_amount0_delta(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        sqrt_ratio_a_x96: int,
+        sqrt_ratio_b_x96: int,
+        liquidity_delta: int,
+    ) -> JSONLike:
+        """Get amount0 delta using Velodrome Slipstream Helper contract."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.getAmount0Delta(
+            sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity_delta
+        ).call()
+        return {"amount0_delta": result}
+
+    @classmethod
+    def get_amount1_delta(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        sqrt_ratio_a_x96: int,
+        sqrt_ratio_b_x96: int,
+        liquidity_delta: int,
+    ) -> JSONLike:
+        """Get amount1 delta using Velodrome Slipstream Helper contract."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.getAmount1Delta(
+            sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity_delta
+        ).call()
+        return {"amount1_delta": result}

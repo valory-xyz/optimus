@@ -109,12 +109,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Update the amounts of all open positions
             if self.synchronized_data.period_count == 0:
+                # Validate Velodrome v2 pool addresses before updating position amounts
+                self.context.logger.info("Validating Velodrome v2 pool addresses")
+                yield from self._validate_velodrome_v2_pool_addresses()
+
                 self.context.logger.info("Updating position amounts for period 0")
                 yield from self.update_position_amounts()
                 self.context.logger.info(
                     "Checking and updating zero liquidity positions"
                 )
-                self.check_and_update_zero_liquidity_positions()
+                self.check_and_update_zero_liquidxity_positions()
 
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
@@ -4431,3 +4435,114 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Get the VELO token address for the specified chain from params."""
         velo_addresses = self.params.velo_token_contract_addresses
         return velo_addresses.get(chain)
+
+    def _validate_velodrome_v2_pool_addresses(self) -> Generator[None, None, None]:
+        """Validate Velodrome v2 pool addresses for all positions."""
+        for position in self.current_positions:
+            if (
+                position.get("dex_type") == "velodrome"
+                and not position.get("is_cl_pool", False)
+                and position.get("is_stable", False)
+            ):  # Only validate if isStable is true
+                validation_success = (
+                    yield from self._validate_velodrome_v2_pool_address(position)
+                )
+                if validation_success:
+                    self.context.logger.info(
+                        f"Pool address validation completed for position: {position.get('pool_address')}"
+                    )
+
+        # Store updated positions after validation
+        self.store_current_positions()
+
+    def _validate_velodrome_v2_pool_address(
+        self, position: Dict[str, Any]
+    ) -> Generator[None, None, bool]:
+        """Validate and correct Velodrome v2 pool address from transaction logs."""
+        try:
+            # Skip if already updated or missing required data
+            if position.get("isUpdated", False):
+                return True
+
+            tx_hash = position.get("enter_tx_hash")
+            chain = position.get("chain")
+            stored_pool_address = position.get("pool_address")
+
+            if not all([tx_hash, chain, stored_pool_address]):
+                self.context.logger.warning(
+                    f"Missing required data for pool validation: tx_hash={tx_hash}, chain={chain}, pool_address={stored_pool_address}"
+                )
+                return False
+
+            self.context.logger.info(
+                f"Validating Velodrome v2 pool address for tx: {tx_hash}"
+            )
+
+            # Use existing get_transaction_receipt function
+            response = yield from self.get_transaction_receipt(
+                tx_digest=tx_hash,
+                chain_id=chain,
+            )
+
+            if not response:
+                self.context.logger.error(
+                    f"Error fetching tx receipt! Response: {response}"
+                )
+                return False
+
+            logs = response.get("logs", [])
+
+            # Look for LP token mint events (Transfer from zero address)
+            # Transfer event signature: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
+            transfer_signature = (
+                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+            )
+            zero_address = (
+                "0x0000000000000000000000000000000000000000000000000000000000000000"
+            )
+
+            actual_pool_address = None
+
+            for log in logs:
+                topics = log.get("topics", [])
+                if len(topics) >= 3 and topics[0] == transfer_signature:
+                    # Check if this is a mint (from zero address)
+                    from_address = topics[1]
+                    if from_address == zero_address:
+                        # This is an LP token mint, the contract address is the pool
+                        actual_pool_address = log.get("address")
+                        break
+
+            if not actual_pool_address:
+                self.context.logger.warning(
+                    f"Could not find LP token mint event in transaction {tx_hash}"
+                )
+                return False
+
+            # Normalize addresses for comparison
+            actual_pool_address = actual_pool_address.lower()
+            stored_pool_address = stored_pool_address.lower()
+
+            if actual_pool_address != stored_pool_address:
+                self.context.logger.info(
+                    f"Pool address mismatch detected! Stored: {stored_pool_address}, Actual: {actual_pool_address}"
+                )
+                # Update the position with the correct pool address
+                position["pool_address"] = actual_pool_address
+                position["is_updated"] = True
+                self.context.logger.info(
+                    f"Updated pool address to: {actual_pool_address}"
+                )
+                return True
+            else:
+                self.context.logger.info(
+                    "Pool address validation passed - no update needed"
+                )
+                position["is_updated"] = True
+                return True
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error validating Velodrome v2 pool address: {str(e)}"
+            )
+            return False

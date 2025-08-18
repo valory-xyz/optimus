@@ -84,6 +84,12 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
 
 # Add these constants to the class or base file
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
+TRANSFER_EVENT_SIGNATURE = (
+    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+)
+ZERO_ADDRESS_PADDED = (
+    "0x0000000000000000000000000000000000000000000000000000000000000000"
+)
 
 
 class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
@@ -4493,22 +4499,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             logs = response.get("logs", [])
 
             # Look for LP token mint events (Transfer from zero address)
-            # Transfer event signature: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
-            transfer_signature = (
-                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-            )
-            zero_address = (
-                "0x0000000000000000000000000000000000000000000000000000000000000000"
-            )
-
             actual_pool_address = None
 
             for log in logs:
                 topics = log.get("topics", [])
-                if len(topics) >= 3 and topics[0] == transfer_signature:
+                if len(topics) >= 3 and topics[0] == TRANSFER_EVENT_SIGNATURE:
                     # Check if this is a mint (from zero address)
                     from_address = topics[1]
-                    if from_address == zero_address:
+                    if from_address == ZERO_ADDRESS_PADDED:
                         # This is an LP token mint, the contract address is the pool
                         actual_pool_address = log.get("address")
                         break

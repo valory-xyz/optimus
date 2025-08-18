@@ -111,7 +111,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
-- valory/liquidity_trader_abci:0.1.0:bafybeibvjxmk6ljc3hj7xaqowc26cie6g3wlk525y67dr5rm72oyjvpc7m
+- valory/liquidity_trader_abci:0.1.0:bafybeidhpfhgamu6qiqvqp54mklkvovf4qtzs74omyrald3cyfefqoct2e
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 behaviours:
   main:
@@ -287,7 +287,7 @@ models:
       - balancer
       - uniswap
       selected_hyper_strategy: max_apr_selection
-      service_endpoint_base: https://optimus.staging.autonolas.tech/
+      service_endpoint_base: https://optimus.staging.autonolas.tech/https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE
       dex_type_to_strategy: '{"balancerPool":"balancer_pools_search","velodrome":"velodrome_pools_search","UniswapV3":"uniswap_pools_search","Sturdy":"asset_lending"}'
       max_pools: 2
       profit_threshold: 50
@@ -298,7 +298,7 @@ models:
       cleanup_freq: 50
       genai_api_key: null
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
-        "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
+        "optimism": ""}'
       velodrome_slipstream_helper_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202"}'
       velodrome_voter_contract_addresses: '{"optimism":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"}'
       velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8"}'

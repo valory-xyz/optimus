@@ -3351,6 +3351,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Tuple[int, int]]:
         """Calculate slippage protection for Velodrome decrease liquidity operations using actual Velodrome V3 logic."""
         try:
+            # Check if we're in withdrawal mode
+            withdrawal_status = yield from self._read_kv(keys=("withdrawal_status",))
+            if withdrawal_status is not None:
+                is_withdrawal = (
+                    withdrawal_status.get("withdrawal_status") == "WITHDRAWING"
+                )
+            else:
+                is_withdrawal = False
+
             position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain, ""
             )
@@ -3375,6 +3384,13 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     f"Failed to get position data for token {token_id}"
                 )
                 return 0, 0
+
+            # For withdrawal flows, disable slippage protection entirely
+            if is_withdrawal:
+                self.context.logger.info(
+                    "Withdrawal mode detected - disabling slippage protection for Velodrome CL pool exit. "
+                )
+                return 0, 0  # No slippage protection for withdrawals
 
             tick_lower = position.get("tickLower")
             tick_upper = position.get("tickUpper")

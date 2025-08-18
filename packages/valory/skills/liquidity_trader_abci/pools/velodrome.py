@@ -1049,23 +1049,27 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             self.context.logger.info(f"EMA: {ema} Current_Std_Dev: {current_std_dev}")
 
-            # 8. Define a price to tick conversion function
-            def price_to_tick(price: float) -> int:
-                """Convert price to tick using the base 1.0001 formula."""
-                # log base 1.0001 of the price
-                return int(np.log(price) / np.log(1.0001))
-
-            # 9. Calculate tick range using model band multipliers
+            # 8. Calculate tick range using model band multipliers
             band_multipliers = result["band_multipliers"]
 
-            # Get the most recent EMA value
+            # Get the most recent EMA value (human price space, ~1.0 for stables)
             current_ema = ema[-1]
+
+            # Derive current tick from the pool's raw price (already decimals-adjusted by the AMM)
+            # This anchors band ticks around the actual pool price instead of near zero
+            tick_current = int(np.log(current_price) / np.log(1.0001))
+
+            # Define a converter that maps a human price to a tick relative to tick_current
+            def price_to_tick(price: float) -> int:
+                ratio = price / current_ema if current_ema > 0 else 1.0
+                delta = np.log(ratio) / np.log(1.0001)
+                return int(np.rint(delta) + tick_current)
 
             # Calculate tick range using the exact formula: Upper bound = EMA + (sigma*multiplier)
             tick_range_results = self.calculate_tick_range_from_bands_wrapper(
                 band_multipliers=band_multipliers,
                 standard_deviation=current_std_dev,
-                ema=current_ema,  # Use EMA instead of current_price
+                ema=current_ema,  # Use EMA as the center in human price space
                 tick_spacing=tick_spacing,
                 price_to_tick_function=price_to_tick,
                 min_tick=MIN_TICK,

@@ -1131,59 +1131,81 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self, action, chain, assets, positions, max_amounts
     ) -> Generator[None, None, Optional[List[int]]]:
         """Calculate investment amounts for Velodrome positions based on token percentages."""
-        # Get token balances
-        token0_balance = self._get_balance(chain, assets[0], positions)
-        token1_balance = self._get_balance(chain, assets[1], positions)
+        # Fetch balances and prices to compute total USD principal slice
+        token0_balance = self._get_balance(chain, assets[0], positions) or 0
+        token1_balance = self._get_balance(chain, assets[1], positions) or 0
 
-        # Use token percentages if provided
-        token0_percentage = action.get("token0_percentage")
-        token1_percentage = action.get("token1_percentage")
-
-        # Validate required data
-        if (
-            token0_balance is None
-            or token1_balance is None
-            or token0_percentage is None
-            or token1_percentage is None
-        ):
-            self.context.logger.error(
-                f"Missing required data: token0_balance={token0_balance}, "
-                f"token1_balance={token1_balance}, token0_percentage={token0_percentage}, "
-                f"token1_percentage={token1_percentage}"
-            )
-            yield None
+        # Get decimals
+        token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+        token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+        if token0_decimals is None or token1_decimals is None:
+            self.context.logger.error("Failed to get token decimals")
             return None
 
-        # Convert percentages to floats if needed
+        # Get prices
+        price0 = yield from self._fetch_token_price(assets[0], chain)
+        price1 = yield from self._fetch_token_price(assets[1], chain)
+        if price0 is None or price1 is None:
+            self.context.logger.error("Failed to fetch token prices")
+            return None
+
+        # Compute available USD per side and total
+        usd0 = (token0_balance / (10**token0_decimals)) * float(price0)
+        usd1 = (token1_balance / (10**token1_decimals)) * float(price1)
+        total_usd_available = usd0 + usd1
+
+        if total_usd_available <= 0:
+            self.context.logger.error("Zero total USD available for investment")
+            return None
+
+        # Determine target weights (prefer token_requirements ratios)
+        token_requirements = action.get("token_requirements", {}) or {}
         try:
-            token0_percentage = float(token0_percentage)
-            token1_percentage = float(token1_percentage)
-        except (ValueError, TypeError):
-            self.context.logger.error(
-                f"Invalid percentage values: token0_percentage={token0_percentage}, "
-                f"token1_percentage={token1_percentage}"
+            w0 = float(
+                token_requirements.get("overall_token0_ratio")
+                if token_requirements.get("overall_token0_ratio") is not None
+                else action.get("token0_percentage", 0) / 100.0
             )
-            return None
+        except Exception:
+            w0 = action.get("token0_percentage", 0) / 100.0
+        try:
+            w1 = float(
+                token_requirements.get("overall_token1_ratio")
+                if token_requirements.get("overall_token1_ratio") is not None
+                else action.get("token1_percentage", 0) / 100.0
+            )
+        except Exception:
+            w1 = action.get("token1_percentage", 0) / 100.0
 
-        # Calculate max amounts based on percentages
-        max_amounts_in = [
-            int(token0_balance * token0_percentage / 100),
-            int(token1_balance * token1_percentage / 100),
-        ]
+        # Normalize just in case
+        total_w = max(1e-9, w0 + w1)
+        w0 /= total_w
+        w1 /= total_w
+
+        # Use the entire available USD (full slice) toward this CL mint
+        target_usd0 = total_usd_available * w0
+        target_usd1 = total_usd_available * w1
+
+        # Convert target USD to token units and cap by balances and max_amounts
+        desired0 = int(
+            min((target_usd0 / float(price0)) * (10**token0_decimals), token0_balance)
+        )
+        desired1 = int(
+            min((target_usd1 / float(price1)) * (10**token1_decimals), token1_balance)
+        )
 
         # Apply additional caps if provided
         if len(max_amounts) >= 2:
-            max_amounts_in = [
-                min(max_amounts_in[0], max_amounts[0]),
-                min(max_amounts_in[1], max_amounts[1]),
-            ]
+            desired0 = min(desired0, int(max_amounts[0]))
+            desired1 = min(desired1, int(max_amounts[1]))
+
+        max_amounts_in = [desired0, desired1]
 
         self.context.logger.info(
-            f"Calculated Velodrome investment amounts: {max_amounts_in} "
-            f"based on percentages: {token0_percentage}%, {token1_percentage}%"
+            f"Calculated Velodrome investment amounts from USD principal: {max_amounts_in} "
+            f"with weights: {w0:.6f}/{w1:.6f}, total_usd_available={total_usd_available:.6f}"
         )
 
-        # Validate the calculated amounts
         if any(amount < 0 for amount in max_amounts_in):
             self.context.logger.error(
                 f"Invalid negative amounts calculated: {max_amounts_in}"
@@ -2396,8 +2418,15 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         # Calculate the amount to swap based on the available amount and funds percentage
+        snapshot_balance = action.get("source_initial_balance")
+        if isinstance(snapshot_balance, int) and snapshot_balance > 0:
+            base_amount = snapshot_balance
+        else:
+            base_amount = available_amount if available_amount is not None else 0
+
         amount = min(
-            available_amount, int(available_amount * action.get("funds_percentage", 1))
+            available_amount,
+            int(base_amount * action.get("funds_percentage", 1)),
         )
 
         self.context.logger.info(f"Calculated amount: {amount}")

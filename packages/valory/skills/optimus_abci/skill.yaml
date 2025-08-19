@@ -15,9 +15,9 @@ fingerprint:
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agent-agentsfun-logo-Cl82UKSm.png: bafybeia3nla5pruiurpwvzex6bbsgset4k2foerma2iwy5zxmtjidur454
-  modius-ui-build/assets/index-DIrK5CNq.js: bafybeibpbmimvgogtubiqwe4x7ejcphbugwst4asimflt2qukoda7c2jc4
+  modius-ui-build/assets/index-BM3OGVEJ.js: bafybeibkp7gbvvrkyduvjybjnto3yudty46wzkfz5kalq6gez6xb5yiesy
   modius-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  modius-ui-build/index.html: bafybeid3inm6d3fbj5j6346r47ikj37nvyhfnkn2wwpo3cv4nhrgorpsja
+  modius-ui-build/index.html: bafybeig4iwoktmndzmpg7f3plkseq3kpwguhbpfezr6tprmmzdimkni7by
   modius-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   modius-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   modius-ui-build/logos/networks/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -53,12 +53,13 @@ fingerprint:
   modius-ui-build/logos/tokens/usdt.png: bafybeidhg7xhvqpizest3mi3mpsd47cjda7jq2nhjjzikkkmfowesf4szi
   modius-ui-build/logos/tokens/usdt0.png: bafybeig4muixers6emdrg645t46ggkcgwdrdrghwcsnoizpla56d2aj6gq
   modius-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
+  modius-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   modius-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   optimus-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   optimus-ui-build/assets/agent-agentsfun-logo-Cl82UKSm.png: bafybeia3nla5pruiurpwvzex6bbsgset4k2foerma2iwy5zxmtjidur454
-  optimus-ui-build/assets/index-BEDGRXKF.js: bafybeihrulxuxxl4nprndcuxh2bruhjicjhuowdfuags4n55p2rh7kufbm
+  optimus-ui-build/assets/index-C-czZRKI.js: bafybeihvuilxgmr4zz5d2qtm2u7qpkat24ysxzpok67lkeiliiqai5wroi
   optimus-ui-build/favicon.ico: bafybeigoxdaiyjbhlh3hq7b5myaowqlc22poxirhfjqzesxk4erea2e3pu
-  optimus-ui-build/index.html: bafybeierwjewwikyfqctm4eku3hziglgrk4cwhp5mghm4kwvs43334xl4y
+  optimus-ui-build/index.html: bafybeibfc6phbvafeq4giciqfpfb22c5lzoltm55z4jitdfyqapyvbgta4
   optimus-ui-build/logos/modius-chat.png: bafybeigpfxxcza7y3r4v7qh5ymmjbh2dsofxqgdt2fdwdhe7ffr76xg3te
   optimus-ui-build/logos/modius.png: bafybeih4k42vb6nhnbrez2pc6gfllraupihnwx5y6w4iuupw2rwm6hehty
   optimus-ui-build/logos/networks/mode-network.png: bafybeieacbmo2f6r7uc6i7ftvw6vl2epx4k3gc5rubz7z46ug6q6xc244a
@@ -94,6 +95,7 @@ fingerprint:
   optimus-ui-build/logos/tokens/usdt.png: bafybeidhg7xhvqpizest3mi3mpsd47cjda7jq2nhjjzikkkmfowesf4szi
   optimus-ui-build/logos/tokens/usdt0.png: bafybeig4muixers6emdrg645t46ggkcgwdrdrghwcsnoizpla56d2aj6gq
   optimus-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
+  optimus-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   prompts.py: bafybeifjdttxzozejwc25ywgadytrgz763dlsefgb2og5jwj76nw4gnwnu
 fingerprint_ignore_patterns: []

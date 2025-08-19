@@ -2802,6 +2802,478 @@ class LiquidityTraderBaseBehaviour(
             )
             return None
 
+    def get_agent_type_by_name(
+        self, type_name
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_type_by_name",
+            endpoint=f"api/agent-types/name/{type_name}",
+        )
+        return response
+
+    def create_agent_type(self, type_name, description) -> Generator[None, None, Dict]:
+        """Create a new agent type."""
+        # Prepare agent type data
+        agent_type_data = {"type_name": type_name, "description": description}
+
+        endpoint = "api/agent-types/"
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_type",
+            endpoint=endpoint,
+            data=agent_type_data,
+        )
+
+        return response
+
+    def get_attr_def_by_name(self, attr_name) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_attr_def_by_name",
+            endpoint=f"api/attributes/name/{attr_name}",
+        )
+        return response
+
+    def create_attribute_definition(
+        self, type_id, attr_name, data_type, is_required, default_value, agent_id
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute definition for a specific agent type."""
+        # Prepare attribute definition data
+        attr_def_data = {
+            "type_id": type_id,
+            "attr_name": attr_name,
+            "data_type": data_type,
+            "is_required": is_required,
+            "default_value": default_value,
+        }
+
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agent-types/{type_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
+
+        # Prepare authentication data
+        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_attribute_definition",
+            endpoint=endpoint,
+            data={"attr_def": attr_def_data, "auth": auth_data},
+        )
+
+        return response
+
+    def get_agent_registry_by_address(
+        self, eth_address
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get agent registry by Ethereum address."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_registry_by_address",
+            endpoint=f"api/agent-registry/address/{eth_address}",
+        )
+        return response
+
+    def create_agent_registry(
+        self, agent_name, type_id, eth_address
+    ) -> Generator[None, None, Dict]:
+        """Create a new agent registry."""
+        # Prepare agent registry data
+        agent_registry_data = {
+            "agent_name": agent_name,
+            "type_id": type_id,
+            "eth_address": eth_address,
+        }
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_registry",
+            endpoint="api/agent-registry/",
+            data=agent_registry_data,
+        )
+
+        return response
+
+    def create_agent_attribute(
+        self,
+        agent_id,
+        attr_def_id,
+        json_value=None,
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute value for a specific agent."""
+        # Prepare the agent attribute data with all values set to None initially
+        agent_attr_data = {
+            "agent_id": agent_id,
+            "attr_def_id": attr_def_id,
+            "string_value": None,
+            "integer_value": None,
+            "float_value": None,
+            "boolean_value": None,
+            "date_value": None,
+            "json_value": json_value,
+        }
+
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agents/{agent_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
+
+        # Prepare authentication data
+        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_attribute",
+            endpoint=endpoint,
+            data={"agent_attr": agent_attr_data, "auth": auth_data},
+        )
+
+        return response
+
+    def _get_or_create_agent_type(
+        self, eth_address: str
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Get or create agent type."""
+        data = yield from self._read_kv(keys=("agent_type",))
+        if not data or not data.get("agent_type"):
+            type_name = AGENT_TYPE.get(self.params.target_investment_chains[0])
+            agent_type = yield from self.get_agent_type_by_name(type_name)
+            if not agent_type:
+                agent_type = yield from self.create_agent_type(
+                    type_name,
+                    "An agent for DeFi liquidity management and APR tracking",
+                )
+                if not agent_type:
+                    raise Exception("Failed to create agent type.")
+                yield from self._write_kv({"agent_type": json.dumps(agent_type)})
+            return agent_type
+
+        return json.loads(data["agent_type"])
+
+    def _get_or_create_attr_def(
+        self, type_id: str, agent_id: str
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Get or create APR attribute definition."""
+        data = yield from self._read_kv(keys=("attr_def",))
+        if not data or not data.get("attr_def"):
+            attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+            if not attr_def:
+                attr_def = yield from self.create_attribute_definition(
+                    type_id,
+                    METRICS_NAME,
+                    METRICS_TYPE,
+                    True,
+                    "{}",
+                    agent_id,
+                )
+                if not attr_def:
+                    raise Exception("Failed to create attribute definition.")
+                yield from self._write_kv({"attr_def": json.dumps(attr_def)})
+            return attr_def
+
+        return json.loads(data["attr_def"])
+
+    def _get_or_create_agent_registry(
+        self,
+    ) -> Generator[Optional[Dict[str, Any]], None, None]:
+        """Get or create agent registry entry (copied from APRPopulationBehaviour)."""
+        try:
+            data = yield from self._read_kv(keys=("agent_registry",))
+            if not data or not data.get("agent_registry"):
+                # Get or create agent type first
+                eth_address = self.context.agent_address
+                agent_type = yield from self._get_or_create_agent_type(eth_address)
+                if not agent_type:
+                    self.context.logger.error("Failed to get or create agent type")
+                    return None
+
+                type_id = agent_type["type_id"]
+
+                agent_registry = yield from self.get_agent_registry_by_address(
+                    eth_address
+                )
+                if not agent_registry:
+                    agent_name = self.generate_name(eth_address)
+                    self.context.logger.info(
+                        f"Creating agent registry with name: {agent_name}"
+                    )
+                    agent_registry = yield from self.create_agent_registry(
+                        agent_name, type_id, eth_address
+                    )
+                    if not agent_registry:
+                        self.context.logger.error("Failed to create agent registry")
+                        return None
+                    yield from self._write_kv(
+                        {"agent_registry": json.dumps(agent_registry)}
+                    )
+                return agent_registry
+
+            return json.loads(data["agent_registry"])
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in _get_or_create_agent_registry: {str(e)}"
+            )
+            return None
+
+    def generate_phonetic_syllable(self, seed):
+        """Generates phonetic syllable"""
+        phonetic_syllables = [
+            "ba",
+            "bi",
+            "bu",
+            "ka",
+            "ke",
+            "ki",
+            "ko",
+            "ku",
+            "da",
+            "de",
+            "di",
+            "do",
+            "du",
+            "fa",
+            "fe",
+            "fi",
+            "fo",
+            "fu",
+            "ga",
+            "ge",
+            "gi",
+            "go",
+            "gu",
+            "ha",
+            "he",
+            "hi",
+            "ho",
+            "hu",
+            "ja",
+            "je",
+            "ji",
+            "jo",
+            "ju",
+            "ka",
+            "ke",
+            "ki",
+            "ko",
+            "ku",
+            "la",
+            "le",
+            "li",
+            "lo",
+            "lu",
+            "ma",
+            "me",
+            "mi",
+            "mo",
+            "mu",
+            "na",
+            "ne",
+            "ni",
+            "no",
+            "nu",
+            "pa",
+            "pe",
+            "pi",
+            "po",
+            "pu",
+            "ra",
+            "re",
+            "ri",
+            "ro",
+            "ru",
+            "sa",
+            "se",
+            "si",
+            "so",
+            "su",
+            "ta",
+            "te",
+            "ti",
+            "to",
+            "tu",
+            "va",
+            "ve",
+            "vi",
+            "vo",
+            "vu",
+            "wa",
+            "we",
+            "wi",
+            "wo",
+            "wu",
+            "ya",
+            "ye",
+            "yi",
+            "yo",
+            "yu",
+            "za",
+            "ze",
+            "zi",
+            "zo",
+            "zu",
+            "bal",
+            "ben",
+            "bir",
+            "bom",
+            "bun",
+            "cam",
+            "cen",
+            "cil",
+            "cor",
+            "cus",
+            "dan",
+            "del",
+            "dim",
+            "dor",
+            "dun",
+            "fam",
+            "fen",
+            "fil",
+            "fon",
+            "fur",
+            "gar",
+            "gen",
+            "gil",
+            "gon",
+            "gus",
+            "han",
+            "hel",
+            "him",
+            "hon",
+            "hus",
+            "jan",
+            "jel",
+            "jim",
+            "jon",
+            "jus",
+            "kan",
+            "kel",
+            "kim",
+            "kon",
+            "kus",
+            "lan",
+            "lel",
+            "lim",
+            "lon",
+            "lus",
+            "mar",
+            "mel",
+            "min",
+            "mon",
+            "mus",
+            "nar",
+            "nel",
+            "nim",
+            "nor",
+            "nus",
+            "par",
+            "pel",
+            "pim",
+            "pon",
+            "pus",
+            "rar",
+            "rel",
+            "rim",
+            "ron",
+            "rus",
+            "sar",
+            "sel",
+            "sim",
+            "son",
+            "sus",
+            "tar",
+            "tel",
+            "tim",
+            "ton",
+            "tus",
+            "var",
+            "vel",
+            "vim",
+            "von",
+            "vus",
+            "war",
+            "wel",
+            "wim",
+            "won",
+            "wus",
+            "yar",
+            "yel",
+            "yim",
+            "yon",
+            "yus",
+            "zar",
+            "zel",
+            "zim",
+            "zon",
+            "zus",
+            "zez",
+            "zzt",
+            "bzt",
+            "vzt",
+            "kzt",
+            "mek",
+            "tek",
+            "nek",
+            "lek",
+            "tron",
+            "dron",
+            "kron",
+            "pron",
+            "bot",
+            "rot",
+            "not",
+            "lot",
+            "zap",
+            "blip",
+            "bleep",
+            "beep",
+            "wire",
+            "byte",
+            "bit",
+            "chip",
+        ]
+        return phonetic_syllables[seed % len(phonetic_syllables)]
+
+    def generate_phonetic_name(self, address, start_index, syllables):
+        """Generates phonetic name"""
+        return "".join(
+            self.generate_phonetic_syllable(
+                int(address[start_index + i * 8 : start_index + (i + 1) * 8], 16)
+            )
+            for i in range(syllables)
+        ).lower()
+
+    def generate_name(self, address):
+        """Generates name from address"""
+        first_name = self.generate_phonetic_name(address, 2, 2)
+        last_name_prefix = self.generate_phonetic_name(address, 18, 2)
+        last_name_number = int(address[-4:], 16) % 100
+        return f"{first_name}-{last_name_prefix}{str(last_name_number).zfill(2)}"
+
+    def sign_message(self, message) -> Generator[None, None, Optional[str]]:
+        """Sign a message."""
+        message_bytes = message.encode("utf-8")
+        signature = yield from self.get_signature(message_bytes)
+        if signature:
+            signature_hex = signature[2:]
+            return signature_hex
+        return None
+
 
 def execute_strategy(
     strategy: str, strategies_executables: Dict[str, Tuple[str, str]], **kwargs: Any

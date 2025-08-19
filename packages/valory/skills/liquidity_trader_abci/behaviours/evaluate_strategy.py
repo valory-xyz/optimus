@@ -21,6 +21,7 @@
 
 import asyncio
 import json
+import os
 import traceback
 from concurrent.futures import Future
 from typing import (
@@ -137,6 +138,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Execute strategy and prepare actions
             actions = yield from self.prepare_strategy_actions()
+
+            # Push opportunity data to MirrorDB
+            yield from self._push_opportunity_metrics_to_mirrordb()
 
             # Send final actions
             yield from self.send_actions(actions)
@@ -918,6 +922,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
                     )
 
+            # Track final selected opportunities
+            yield from self._track_opportunities(
+                self.selected_opportunities, "final_selection"
+            )
+
     def get_result(self, future: Future) -> Generator[None, None, Optional[Any]]:
         """Get the completed futures"""
         while True:
@@ -1062,6 +1071,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield  # Yield control to the agent loop
             results = future.result()
 
+            all_raw_opportunities = []
             for next_strategy, result in zip(strategies, results):
                 tried_strategies.add(next_strategy)
                 if not result:
@@ -1089,6 +1099,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     for opportunity in opportunities:
                         try:
                             if isinstance(opportunity, dict):
+                                # Add strategy source to opportunity
+                                opportunity["strategy_source"] = next_strategy
                                 self.context.logger.info(
                                     f"Opportunity: {opportunity.get('pool_address', 'N/A')}, "
                                     f"Chain: {opportunity.get('chain', 'N/A')}, "
@@ -1096,6 +1108,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                     f"Token1: {opportunity.get('token1_symbol', 'N/A')}"
                                 )
                                 valid_opportunities.append(opportunity)
+                                all_raw_opportunities.append(opportunity)
                             else:
                                 self.context.logger.error(
                                     f"Invalid opportunity format from {next_strategy} strategy. "
@@ -1113,12 +1126,356 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         f"No opportunity found using {next_strategy} strategy"
                     )
 
+            # Track raw opportunities with all metrics
+            if all_raw_opportunities:
+                yield from self._track_opportunities(
+                    all_raw_opportunities, "raw_with_metrics"
+                )
+
+            # Track opportunities after basic filtering (whitelist, token count, etc.)
+            # This would be the pools that pass initial filtering but before composite scoring
+            basic_filtered_opportunities = []
+            for opp in all_raw_opportunities:
+                # Basic filtering criteria that we can replicate here
+                if (
+                    opp.get("token_count", 0) >= 2
+                    and opp.get("tvl", 0) > 0
+                    and opp.get("pool_address")
+                    not in [
+                        pos.get("pool_address")
+                        for pos in self.positions_eligible_for_exit
+                        if pos.get("status") == PositionStatus.OPEN.value
+                    ]
+                ):
+                    basic_filtered_opportunities.append(opp)
+
+            if basic_filtered_opportunities:
+                yield from self._track_opportunities(
+                    basic_filtered_opportunities, "basic_filtered"
+                )
+
+            # Track opportunities after composite filtering (APR + TVL scoring)
+            # This would be the top N pools after composite scoring
+            composite_filtered_opportunities = []
+            for opp in all_raw_opportunities:
+                # Composite filtering criteria (simplified version)
+                if (
+                    opp.get("token_count", 0) >= 2
+                    and opp.get("tvl", 0) >= 1000
+                    and opp.get("apr", 0) > 0  # min_tvl_threshold
+                    and opp.get("pool_address")
+                    not in [
+                        pos.get("pool_address")
+                        for pos in self.positions_eligible_for_exit
+                        if pos.get("status") == PositionStatus.OPEN.value
+                    ]
+                ):
+                    composite_filtered_opportunities.append(opp)
+
+            # Sort by composite score if available, otherwise by APR
+            composite_filtered_opportunities.sort(
+                key=lambda x: x.get("composite_score", 0) or x.get("apr", 0),
+                reverse=True,
+            )
+
+            # Take top N (simulating the composite pre-filter)
+            top_n = 10  # This should match the top_n parameter used in strategies
+            composite_filtered_opportunities = composite_filtered_opportunities[:top_n]
+
+            if composite_filtered_opportunities:
+                yield from self._track_opportunities(
+                    composite_filtered_opportunities, "composite_filtered"
+                )
+
         except Exception as e:
             self.context.logger.error(
                 f"Critical error in strategy evaluation: {str(e)}"
             )
             # Ensure we don't lose the error state
             self.trading_opportunities = []
+
+    def _track_opportunities(
+        self, opportunities: List[Dict], stage: str
+    ) -> Generator[None, None, None]:
+        """Track opportunities at different stages for monitoring."""
+        try:
+            # Read existing tracking data
+            existing_data = yield from self._read_kv(keys=("opportunity_tracking",))
+
+            # Handle case where opportunity_tracking key doesn't exist or is None
+            if not existing_data or not existing_data.get("opportunity_tracking"):
+                tracking_data = {}
+            else:
+                try:
+                    tracking_data = json.loads(
+                        existing_data.get("opportunity_tracking", "{}")
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    # If JSON parsing fails, start with empty dict
+                    tracking_data = {}
+
+            # Add current round's data
+            round_key = f"round_{self.synchronized_data.period_count}"
+            if round_key not in tracking_data:
+                tracking_data[round_key] = {}
+
+            # Format opportunities for storage
+            formatted_opportunities = []
+            for opp in opportunities:
+                formatted_opp = self._format_opportunity_for_tracking(opp, stage)
+                formatted_opportunities.append(formatted_opp)
+
+            # Add stage-specific metadata
+            stage_metadata = {
+                "timestamp": self._get_current_timestamp(),
+                "opportunities": formatted_opportunities,
+                "count": len(formatted_opportunities),
+                "strategies_used": list(
+                    set(opp.get("strategy_source", "unknown") for opp in opportunities)
+                ),
+            }
+
+            # Add filtering criteria for each stage
+            if stage == "raw_with_metrics":
+                stage_metadata[
+                    "filtering_criteria"
+                ] = "All pools with calculated metrics"
+            elif stage == "basic_filtered":
+                stage_metadata[
+                    "filtering_criteria"
+                ] = "Token count >= 2, TVL > 0, not current position"
+            elif stage == "composite_filtered":
+                stage_metadata[
+                    "filtering_criteria"
+                ] = "Token count >= 2, TVL >= 1000, APR > 0, top 10 by composite score"
+            elif stage == "final_selection":
+                stage_metadata[
+                    "filtering_criteria"
+                ] = "Selected by hyper-strategy after risk assessment"
+
+            tracking_data[round_key][stage] = stage_metadata
+
+            # Write back to KV store
+            yield from self._write_kv(
+                {"opportunity_tracking": json.dumps(tracking_data)}
+            )
+            self.context.logger.info(
+                f"Tracked {len(formatted_opportunities)} opportunities at stage '{stage!r}'"
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error tracking opportunities: {str(e)}")
+
+    def _format_opportunity_for_tracking(self, opportunity: Dict, stage: str) -> Dict:
+        """Format opportunity data for tracking."""
+        return {
+            # Basic pool info
+            "pool_address": opportunity.get("pool_address"),
+            "pool_id": opportunity.get("pool_id"),
+            "dex_type": opportunity.get("dex_type"),
+            "chain": opportunity.get("chain"),
+            "pool_type": opportunity.get("pool_type", "lp"),
+            "is_stable": opportunity.get("is_stable", False),
+            "is_cl_pool": opportunity.get("is_cl_pool", False),
+            "token_count": opportunity.get("token_count", 2),
+            # Token details
+            "token0_address": opportunity.get("token0"),
+            "token0_symbol": opportunity.get("token0_symbol"),
+            "token1_address": opportunity.get("token1"),
+            "token1_symbol": opportunity.get("token1_symbol"),
+            # Market metrics
+            "apr": opportunity.get("apr"),
+            "tvl": opportunity.get("tvl"),
+            "daily_volume": opportunity.get("daily_volume"),
+            # Evaluation metrics
+            "sharpe_ratio": opportunity.get("sharpe_ratio"),
+            "il_risk_score": opportunity.get("il_risk_score"),
+            "depth_score": opportunity.get("depth_score"),
+            "composite_score": opportunity.get("composite_score"),
+            # Metadata
+            "stage": stage,
+            "strategy_source": opportunity.get("strategy_source"),
+            "timestamp": self._get_current_timestamp(),
+        }
+
+    def _push_opportunity_metrics_to_mirrordb(self) -> Generator[None, None, None]:
+        """Push opportunity data to MirrorDB with complete agent information."""
+        try:
+            # Read opportunity data from KV store
+            opportunity_data = yield from self._read_kv(keys=("opportunity_tracking",))
+            if not opportunity_data or not opportunity_data.get("opportunity_tracking"):
+                self.context.logger.info("No opportunity tracking data to push")
+                return
+
+            opportunity_tracking_value = opportunity_data.get("opportunity_tracking")
+            if opportunity_tracking_value is None:
+                tracking_data = {}
+            else:
+                try:
+                    tracking_data = json.loads(opportunity_tracking_value)
+                except (json.JSONDecodeError, TypeError):
+                    tracking_data = {}
+
+            # Get or create agent registry data (using base behavior helper)
+            agent_registry = yield from self._get_or_create_agent_registry()
+            if not agent_registry:
+                self.context.logger.error("Failed to get or create agent registry")
+                return
+            agent_id = agent_registry["agent_id"]
+
+            # Get agent type data (same pattern as APR population)
+            sender = self.context.agent_address
+            agent_type = yield from self._get_or_create_agent_type(sender)
+            if not agent_type:
+                self.context.logger.error("Failed to get or create agent type")
+                return
+
+            # Get or create attribute definition for opportunities
+            attr_def_data = yield from self._read_kv(keys=("opportunity_attr_def",))
+            if not attr_def_data:
+                # Create opportunity attribute definition
+                attr_def = yield from self._create_opportunity_attr_def(
+                    agent_id, agent_type
+                )
+                if attr_def:
+                    yield from self._write_kv(
+                        {"opportunity_attr_def": json.dumps(attr_def)}
+                    )
+                else:
+                    self.context.logger.error(
+                        "Failed to create opportunity attribute definition"
+                    )
+                    return
+            else:
+                # Handle case where opportunity_attr_def value is None or empty
+                opportunity_attr_def_value = attr_def_data.get("opportunity_attr_def")
+                if opportunity_attr_def_value is None:
+                    self.context.logger.warning(
+                        "Opportunity attribute definition data is None, creating new one"
+                    )
+                    attr_def = yield from self._create_opportunity_attr_def(
+                        agent_id, agent_type
+                    )
+                    if attr_def:
+                        yield from self._write_kv(
+                            {"opportunity_attr_def": json.dumps(attr_def)}
+                        )
+                    else:
+                        self.context.logger.error(
+                            "Failed to create opportunity attribute definition"
+                        )
+                        return
+                else:
+                    try:
+                        attr_def = json.loads(opportunity_attr_def_value)
+                    except (json.JSONDecodeError, TypeError) as e:
+                        self.context.logger.warning(
+                            f"Error parsing opportunity attribute definition: {e}, creating new one"
+                        )
+                        attr_def = yield from self._create_opportunity_attr_def(
+                            agent_id, agent_type
+                        )
+                        if attr_def:
+                            yield from self._write_kv(
+                                {"opportunity_attr_def": json.dumps(attr_def)}
+                            )
+                        else:
+                            self.context.logger.error(
+                                "Failed to create opportunity attribute definition"
+                            )
+                            return
+
+            # Prepare comprehensive opportunity data for MirrorDB
+            opportunity_metrics = {
+                # Agent Information
+                "agent_hash": os.environ.get("AEA_AGENT", "").split(":")[-1]
+                if os.environ.get("AEA_AGENT")
+                else "unknown",
+                "agent_name": agent_registry.get("agent_name", "unknown"),
+                "agent_address": agent_registry.get("agent_address", "unknown"),
+                "agent_type": agent_type.get("type_name", "unknown"),
+                "agent_id": agent_id,
+                # Round Information
+                "round": self.synchronized_data.period_count,
+                "timestamp": self._get_current_timestamp(),
+                # Trading Configuration
+                "trading_type": self.shared_state.trading_type,
+                "selected_protocols": self.shared_state.selected_protocols,
+                "target_chains": self.params.target_investment_chains,
+                # Current State
+                "current_positions_count": len(self.current_positions),
+                "portfolio_value": self.portfolio_data.get("portfolio_value", 0)
+                if hasattr(self, "portfolio_data")
+                else 0,
+                # Opportunity Data
+                "opportunity_data": tracking_data,
+                "final_selection": self.selected_opportunities
+                if self.selected_opportunities
+                else [],
+                # Performance Context
+                "composite_score_threshold": getattr(
+                    self.params, "composite_score_threshold", None
+                ),
+                "max_pools": getattr(self.params, "max_pools", 1),
+            }
+
+            # Push to MirrorDB
+            agent_attr = yield from self.create_agent_attribute(
+                agent_id, attr_def["attr_def_id"], opportunity_metrics
+            )
+
+            if agent_attr:
+                # Clean up KV store after successful push
+                yield from self._write_kv({"opportunity_tracking": "{}"})
+                self.context.logger.info(
+                    "Successfully pushed opportunity data to MirrorDB and cleaned KV store"
+                )
+            else:
+                self.context.logger.error("Failed to push opportunity data to MirrorDB")
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error pushing opportunity metrics to MirrorDB: {str(e)}"
+            )
+
+    def _create_opportunity_attr_def(
+        self, agent_id: str, agent_type: Dict
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Create opportunity attribute definition in MirrorDB."""
+        try:
+            if not agent_type:
+                self.context.logger.error("Agent type is empty or None")
+                return None
+
+            if "type_id" not in agent_type:
+                self.context.logger.error(
+                    f"Agent type missing type_id. Agent type data: {agent_type}"
+                )
+                return None
+
+            type_id = agent_type["type_id"]
+            self.context.logger.info(
+                f"Creating opportunity attribute definition with type_id: {type_id}"
+            )
+
+            # Create attribute definition
+            attr_def = yield from self.create_attribute_definition(
+                type_id,
+                "opportunity_metrics",
+                "json",
+                True,
+                "{}",
+                agent_id,
+            )
+
+            return attr_def
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error creating opportunity attribute definition: {str(e)}"
+            )
+            self.context.logger.error(f"Agent type data: {agent_type}")
+            return None
 
     def download_next_strategy(self) -> None:
         """Download the strategies one by one."""

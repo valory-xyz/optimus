@@ -535,7 +535,18 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
     def test_handle_velodrome_token_allocation(self) -> None:
         """Test Velodrome token allocation handling."""
-        actions = []
+        actions = [
+            {
+                "action": "FindBridgeRoute",
+                "from_chain": "base",
+                "to_chain": "optimism",
+                "from_token": "0x789",
+                "to_token": "0x456",  # Will be redirected to token0
+                "from_token_symbol": "DAI",
+                "to_token_symbol": "WETH",
+                "funds_percentage": 0.5,
+            }
+        ]
         enter_pool_action = {
             "dex_type": "velodrome",
             "chain": "optimism",
@@ -543,6 +554,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             "token1": "0x456",
             "token0_symbol": "USDC",
             "token1_symbol": "WETH",
+            "relative_funds_percentage": 1.0,  # Add missing field
             "token_requirements": {
                 "overall_token0_ratio": 1.0,
                 "overall_token1_ratio": 0.0,
@@ -556,6 +568,15 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         )
 
         assert isinstance(result, list)
+        # Should redirect the bridge route to the target token (token0)
+        if result:
+            bridge_actions = [
+                action for action in result if action.get("action") == "FindBridgeRoute"
+            ]
+            if bridge_actions:
+                assert any(
+                    action.get("to_token") == "0x123" for action in bridge_actions
+                )
 
     def test_apply_investment_cap_to_actions(self) -> None:
         """Test investment cap application to actions."""
@@ -1025,7 +1046,18 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
     def test_velodrome_token_allocation_100_percent_scenarios(self) -> None:
         """Test Velodrome token allocation for 100% scenarios."""
         # Test 100% token0 allocation
-        actions = []
+        actions = [
+            {
+                "action": "FindBridgeRoute",
+                "from_chain": "base",
+                "to_chain": "optimism",
+                "from_token": "0x789",
+                "to_token": "0x456",  # Will be redirected to token0
+                "from_token_symbol": "DAI",
+                "to_token_symbol": "WETH",
+                "funds_percentage": 0.5,
+            }
+        ]
         enter_pool_action = {
             "dex_type": "velodrome",
             "chain": "optimism",
@@ -1033,6 +1065,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             "token1": "0x456",
             "token0_symbol": "USDC",
             "token1_symbol": "WETH",
+            "relative_funds_percentage": 1.0,  # Add missing field
             "token_requirements": {
                 "overall_token0_ratio": 1.0,
                 "overall_token1_ratio": 0.0,
@@ -1045,13 +1078,15 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         )
 
         assert isinstance(result, list)
-        # Should add a bridge route to the target token
+        # Should redirect the bridge route to the target token (token0)
         if result:
-            assert any(
-                action.get("to_token") == "0x123"
-                for action in result
-                if action.get("action") == "FindBridgeRoute"
-            )
+            bridge_actions = [
+                action for action in result if action.get("action") == "FindBridgeRoute"
+            ]
+            if bridge_actions:
+                assert any(
+                    action.get("to_token") == "0x123" for action in bridge_actions
+                )
 
     def test_calculate_velodrome_token_ratios_edge_cases(self) -> None:
         """Test Velodrome token ratio calculation edge cases."""

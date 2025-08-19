@@ -47,7 +47,7 @@ fingerprint:
   states/withdraw_funds.py: bafybeia4qk5rbgvptgwy6a6gocxpkpykwquh5sdcer4qht45b4jqidp3ca
   tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
-  tests/test_evaluate_strategy_behaviour.py: bafybeiazwgrjpmujwg5haahbgysfjq3zbx5efczdzknuz4fx6p24etrkaq
+  tests/test_evaluate_strategy_behaviour.py: bafybeig3kvdpbhpa3yer6vyxa3lrlefzmetirtyr3hfdvqp6anampv3kdu
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju
   tests/test_models.py: bafybeic75ux6ulgpnf4ndrctgsw7jlbc7zs3ltxtue4o4eoij7fqvfqmfe
   tests/test_payloads.py: bafybeied7eaewgmnpc7izscg4hthdrpqo64zz3vhjoh3m73w5e4sqlklyi

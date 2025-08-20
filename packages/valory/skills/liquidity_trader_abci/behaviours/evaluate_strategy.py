@@ -1441,6 +1441,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Extreme allocation detected: 100% to {target_symbol}"
                 )
 
+                # Calculate the full slice for one-sided allocation
+                try:
+                    full_slice = float(
+                        enter_pool_action.get("relative_funds_percentage", 1.0)
+                        or 1.0
+                    )
+                except (ValueError, TypeError):
+                    full_slice = 1.0
+
                 # Track if we found any bridge routes to modify
                 bridge_routes_found = False
 
@@ -1460,13 +1469,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             action["to_token_symbol"] = target_symbol
 
                         # Use the full relative slice for one-sided allocation
-                        try:
-                            full_slice = float(
-                                enter_pool_action.get("relative_funds_percentage", 1.0)
-                                or 1.0
-                            )
-                        except (ValueError, TypeError):
-                            full_slice = 1.0
                         action["funds_percentage"] = full_slice
 
                 # If no FindBridgeRoute actions were found, add one

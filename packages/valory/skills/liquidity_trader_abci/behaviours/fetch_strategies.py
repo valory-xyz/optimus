@@ -125,6 +125,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "Checking and updating zero liquidity positions"
                 )
                 self.check_and_update_zero_liquidity_positions()
+
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             sender = self.context.agent_address
@@ -182,6 +183,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
+
+            # Initialize assets from initial_assets if empty
+            if not self.assets:
+                self.assets = self.params.initial_assets
 
             # Filter whitelisted assets based on price changes
             if not self.whitelisted_assets:
@@ -506,6 +511,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Check if positions have changed by comparing current and last positions."""
         current_positions = self.current_positions
         last_positions = last_portfolio_data.get("allocations", [])
+
+        # If there's no last portfolio data or no allocations key, consider positions as changed
+        if not last_portfolio_data or "allocations" not in last_portfolio_data:
+            self.context.logger.info(
+                "Portfolio update needed: No last portfolio data or allocations key available"
+            )
+            return True
 
         # Early return if the number of positions changed
         if len(current_positions) != len(last_positions):
@@ -2671,7 +2683,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         "Last calculation was today, using cached value"
                     )
-                    investment = yield self._load_chain_total_investment(chain)
+                    investment = yield from self._load_chain_total_investment(chain)
                     if investment:
                         return investment
                     else:
@@ -3023,69 +3035,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     processed_count += 1
 
         self.context.logger.info(f"Completed token transfers: {processed_count} found")
-
-    def _fetch_eth_transfers(
-        self,
-        address: str,
-        end_datetime: datetime,
-        all_transfers_by_date: dict,
-        existing_data: dict,
-    ) -> Generator[None, None, None]:
-        """Fetch ETH transfers from Mode blockchain explorer."""
-        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
-        processed_count = 0
-
-        endpoint = f"{base_url}/addresses/{address}/transactions"
-        success, response_json = yield from self._request_with_retries(
-            endpoint=endpoint,
-            headers={"Accept": "application/json"},
-            rate_limited_code=429,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
-        )
-
-        if not success:
-            self.context.logger.error("Failed to fetch ETH transfers")
-            return None
-
-        eth_transactions = response_json.get("items", [])
-        if not eth_transactions:
-            return None
-
-        for tx in eth_transactions:
-            tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
-            tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
-
-            # Stop if we've gone past our end date
-            if tx_datetime and tx_datetime > end_datetime:
-                continue
-
-            # Skip if date already exists in stored data
-            if tx_date and tx_date in existing_data:
-                continue
-
-            if tx_date and tx_date <= end_datetime.strftime("%Y-%m-%d"):
-                from_address = tx.get("from", {})
-                if self._should_include_transfer(
-                    from_address, tx, is_eth_transfer=True
-                ):
-                    value_wei = int(tx.get("value", "0"))
-                    amount_eth = value_wei / 10**18
-
-                    transfer_data = {
-                        "from_address": from_address.get("hash", ""),
-                        "amount": amount_eth,
-                        "token_address": "",
-                        "symbol": "ETH",
-                        "timestamp": tx.get("timestamp", ""),
-                        "tx_hash": tx.get("hash", ""),
-                        "type": "eth",
-                    }
-
-                    all_transfers_by_date[tx_date].append(transfer_data)
-                    processed_count += 1
-
-        self.context.logger.info(f"Completed ETH transfers: {processed_count} found")
 
     def _is_gnosis_safe(self, address_info: dict) -> bool:
         """Check if an address is a Gnosis Safe."""
@@ -3905,131 +3854,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 reversion_value += reversion_amount * eth_price
 
         return reversion_value
-
-    def _fetch_outgoing_transfers_until_date_mode(
-        self,
-        address: str,
-        current_date: str,
-    ) -> Dict:
-        """Fetch all outgoing transfers from the safe address on Mode until a specific date."""
-        all_transfers = {}
-
-        if not address:
-            self.context.logger.warning(
-                "No address provided for fetching Mode outgoing transfers"
-            )
-            return all_transfers
-
-        try:
-            # Use Mode blockchain explorer API
-            base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
-            endpoint = f"{base_url}/addresses/{address}/transactions"
-
-            has_more_pages = True
-            params = {
-                "filter": "from",  # Only fetch outgoing transfers
-                "limit": 100,  # Maximum items per page
-            }
-            processed_count = 0
-
-            while has_more_pages:
-                response = requests.get(
-                    endpoint,
-                    params=params,
-                    headers={"Accept": "application/json"},
-                    timeout=30,
-                    verify=False,  # nosec B501
-                )
-
-                if not response.status_code == 200:
-                    self.context.logger.error(
-                        f"Failed to fetch Mode outgoing transfers: {response.status_code}"
-                    )
-                    break
-
-                response_data = response.json()
-                transactions = response_data.get("items", [])
-                if not transactions:
-                    break
-
-                for tx in transactions:
-                    # Skip if no timestamp
-                    if not tx.get("timestamp"):
-                        continue
-
-                    # Handle ISO format timestamp
-                    try:
-                        tx_datetime = datetime.fromisoformat(
-                            tx.get("timestamp").replace("Z", "+00:00")
-                        )
-                        tx_date = tx_datetime.strftime("%Y-%m-%d")
-                    except (ValueError, TypeError):
-                        self.context.logger.warning(
-                            f"Invalid timestamp format: {tx.get('timestamp')}"
-                        )
-                        continue
-
-                    if tx_date > current_date:
-                        continue
-
-                    # Process ETH transfers
-                    if tx.get("value"):
-                        try:
-                            value_wei = int(tx.get("value", "0"))
-                            amount_eth = value_wei / 10**18
-
-                            if amount_eth <= 0:
-                                continue
-
-                            # Get to address
-                            to_address = tx.get("to", {}).get("hash", "")
-                            if not to_address or to_address.lower() == address.lower():
-                                continue
-
-                            transfer_data = {
-                                "from_address": address,
-                                "to_address": to_address,
-                                "amount": amount_eth,
-                                "token_address": ZERO_ADDRESS,
-                                "symbol": "ETH",
-                                "timestamp": tx.get("timestamp", ""),
-                                "tx_hash": tx.get("hash", ""),
-                                "type": "eth",
-                            }
-
-                            if tx_date not in all_transfers:
-                                all_transfers[tx_date] = []
-                            all_transfers[tx_date].append(transfer_data)
-                            processed_count += 1
-                        except (ValueError, TypeError) as e:
-                            self.context.logger.warning(
-                                f"Error processing transaction: {e}"
-                            )
-                            continue
-
-                    # Handle pagination
-                    next_page_params = response_data.get("next_page_params")
-                    if next_page_params:
-                        params.update(
-                            {
-                                "block_number": next_page_params.get("block_number"),
-                                "index": next_page_params.get("index"),
-                            }
-                        )
-                        has_more_pages = True
-                    else:
-                        has_more_pages = False
-
-                self.context.logger.info(
-                    f"Completed Mode outgoing transfers: {processed_count} found"
-                )
-                return all_transfers
-
-            return all_transfers
-
-        except Exception as e:
-            self.context.logger.error(f"Error fetching Mode outgoing transfers: {e}")
-            return {}
 
     def _fetch_outgoing_transfers_until_date_optimism(
         self,

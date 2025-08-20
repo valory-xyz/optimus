@@ -7090,8 +7090,10 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             # Setup whitelisted assets
             fetch_behaviour.whitelisted_assets = test_whitelisted_assets.copy()
             
-            # Mock target investment chains to exclude unsupported_chain
+            # Unfreeze params to modify target_investment_chains
+            fetch_behaviour.params.__dict__["_frozen"] = False
             fetch_behaviour.params.target_investment_chains = ["mode"]
+            fetch_behaviour.params.__dict__["_frozen"] = True
             
             def mock_get_historical_price_for_date(token_address, token_symbol, date_str, chain):
                 # This is a generator that yields None and returns the price

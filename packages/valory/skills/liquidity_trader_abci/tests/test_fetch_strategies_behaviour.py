@@ -312,11 +312,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         yield
         return 100.0 
     
-    def mock_wait_until_round_end(self):
-        """Mock wait_until_round_end method."""
-        yield
-        return None
-    
     def mock_store_current_positions(self):
         pass
 

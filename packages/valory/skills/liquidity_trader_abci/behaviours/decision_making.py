@@ -211,14 +211,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._post_execute_exit_pool(
                     actions, last_executed_action_index
                 )
-            if (
-                self.synchronized_data.last_action == Action.BRIDGE_SWAP.value
-                or self.synchronized_data.last_action
-                == Action.BRIDGE_SWAP_EXECUTED.value
-            ):
-                yield from self._post_execute_transfer(
-                    actions, last_executed_action_index
-                )
             if self.synchronized_data.last_action == Action.WITHDRAW.value:
                 yield from self._post_execute_withdraw(
                     actions, last_executed_action_index
@@ -362,11 +354,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
-
-        # Update portfolio data to reflect new USDC balance after swap
-        self.context.logger.info("Updating portfolio data after swap...")
-        yield from self.update_portfolio_after_action()
-        self.context.logger.info("Portfolio data updated after swap.")
 
         # Check if this was a withdrawal swap and log accordingly
         if action.get("description", "").startswith("Withdrawal"):
@@ -609,21 +596,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         # When we exit the pool, it may take time to reflect the balance of our assets in the safe
         yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
 
-        # Refresh portfolio data to reflect the new balances after exiting the pool
-        self.context.logger.info("Refreshing portfolio data after pool exit...")
-        yield from self.update_portfolio_after_action()
-        self.context.logger.info("Portfolio data refreshed after pool exit.")
-
         # Check if this was a withdrawal exit and log accordingly
         if action.get("description", "").startswith("Withdrawal"):
             self.context.logger.info("Withdrawal pool exit completed successfully.")
-
-    def _post_execute_transfer(self, actions, last_executed_action_index):
-        """Handle USDC transfer completion."""
-        # Update portfolio data to reflect final USDC balance after transfer
-        self.context.logger.info("Updating portfolio data after USDC transfer...")
-        yield from self.update_portfolio_after_action()
-        self.context.logger.info("Portfolio data updated after USDC transfer.")
 
     def _post_execute_withdraw(self, actions, last_executed_action_index):
         """Handle withdrawal transfer completion."""

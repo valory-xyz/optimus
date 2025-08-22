@@ -124,8 +124,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(
                     "Checking and updating zero liquidity positions"
                 )
-                self.check_and_update_zero_liquidxity_positions()
-
+                self.check_and_update_zero_liquidity_positions()
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             sender = self.context.agent_address

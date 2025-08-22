@@ -1459,6 +1459,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             action["to_token"] = target_token
                             action["to_token_symbol"] = target_symbol
 
+                        # Use the full relative slice for one-sided allocation
+                        try:
+                            full_slice = float(
+                                enter_pool_action.get("relative_funds_percentage", 1.0)
+                                or 1.0
+                            )
+                        except (ValueError, TypeError):
+                            full_slice = 1.0
+                        action["funds_percentage"] = full_slice
+
                 # If no FindBridgeRoute actions were found, add one
                 if not bridge_routes_found and available_tokens:
                     self.context.logger.info("No bridge routes found, adding a new one")
@@ -1479,7 +1489,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             "from_token_symbol": source_token.get("token_symbol"),
                             "to_token": target_token,
                             "to_token_symbol": target_symbol,
-                            "funds_percentage": 1.0,  # Use 100% allocation
+                            "funds_percentage": full_slice,  # Use full allocation
                         }
 
                         self.context.logger.info(
@@ -1948,6 +1958,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         required_tokens: List[Tuple[str, str]],
         dest_chain: str,
         relative_funds_percentage: float,
+        target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
         """Handle the case where we have all required tokens on the destination chain."""
         bridge_swap_actions = []
@@ -1966,8 +1977,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         idx % len(required_tokens)
                     ]
 
-                    # Calculate percentage based on total required tokens
-                    token_percentage = relative_funds_percentage / len(required_tokens)
+                    # Calculate percentage based on target ratios for each required token
+                    token_percentage = (
+                        relative_funds_percentage
+                        * target_ratios_by_token.get(
+                            dest_token_address, 1.0 / max(1, len(required_tokens))
+                        )
+                    )
 
                     # Add bridge action
                     self._add_bridge_swap_action(
@@ -1979,6 +1995,59 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         token_percentage,
                     )
 
+            # If both required tokens are already on the destination chain, rebalance if off target
+            try:
+                if len(required_tokens) >= 2:
+                    # Map of destination chain tokens by address
+                    dest_tokens_map = {
+                        t.get("token"): t
+                        for t in tokens
+                        if t.get("chain") == dest_chain and t.get("token")
+                    }
+                    token0_addr, token0_sym = required_tokens[0]
+                    token1_addr, token1_sym = required_tokens[1]
+                    tok0 = dest_tokens_map.get(token0_addr)
+                    tok1 = dest_tokens_map.get(token1_addr)
+                    val0 = float(tok0.get("value", 0)) if tok0 else 0.0
+                    val1 = float(tok1.get("value", 0)) if tok1 else 0.0
+                    total_val = val0 + val1
+                    if tok0 and tok1 and total_val > 0:
+                        target0 = float(target_ratios_by_token.get(token0_addr, 0.5))
+                        desired0 = total_val * target0
+                        desired1 = total_val - desired0
+                        surplus0 = max(0.0, val0 - desired0)
+                        surplus1 = max(0.0, val1 - desired1)
+                        deficit0 = max(0.0, desired0 - val0)
+                        deficit1 = max(0.0, desired1 - val1)
+
+                        # Swap from surplus token to the one with deficit, using value-based fraction
+                        if surplus0 > 0 and deficit1 > 0 and val0 > 0:
+                            swap_val = min(surplus0, deficit1)
+                            fraction = min(1.0, swap_val / max(1e-12, val0))
+                            self._add_bridge_swap_action(
+                                bridge_swap_actions,
+                                tok0,
+                                dest_chain,
+                                token1_addr,
+                                token1_sym,
+                                fraction,
+                            )
+                        elif surplus1 > 0 and deficit0 > 0 and val1 > 0:
+                            swap_val = min(surplus1, deficit0)
+                            fraction = min(1.0, swap_val / max(1e-12, val1))
+                            self._add_bridge_swap_action(
+                                bridge_swap_actions,
+                                tok1,
+                                dest_chain,
+                                token0_addr,
+                                token0_sym,
+                                fraction,
+                            )
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error during on-chain rebalance planning: {e}"
+                )
+
         return bridge_swap_actions
 
     def _handle_some_tokens_available(
@@ -1988,6 +2057,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         tokens_we_need: List[Tuple[str, str]],
         dest_chain: str,
         relative_funds_percentage: float,
+        target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
         """Handle the case where we have some but not all required tokens."""
         bridge_swap_actions = []
@@ -2006,7 +2076,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 dest_chain,
                 dest_token_address,
                 dest_token_symbol,
-                relative_funds_percentage,
+                relative_funds_percentage
+                * target_ratios_by_token.get(
+                    dest_token_address, 1.0 / max(1, len(required_tokens))
+                ),
             )
 
         # Then, handle tokens on the destination chain that need to be swapped
@@ -2026,7 +2099,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 dest_chain,
                 dest_token_address,
                 dest_token_symbol,
-                relative_funds_percentage,
+                relative_funds_percentage
+                * target_ratios_by_token.get(
+                    dest_token_address, 1.0 / max(1, len(required_tokens))
+                ),
             )
 
         # If no actions created yet, use available required tokens to get missing ones
@@ -2046,8 +2122,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     if source_token.get("token") == dest_token_address:
                         continue
 
-                    # Calculate percentage based on total required tokens
-                    token_percentage = relative_funds_percentage / len(required_tokens)
+                    # Calculate percentage based on target ratios
+                    token_percentage = (
+                        relative_funds_percentage
+                        * target_ratios_by_token.get(
+                            dest_token_address, 1.0 / max(1, len(required_tokens))
+                        )
+                    )
 
                     self._add_bridge_swap_action(
                         bridge_swap_actions,
@@ -2066,6 +2147,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         required_tokens: List[Tuple[str, str]],
         dest_chain: str,
         relative_funds_percentage: float,
+        target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
         """Handle the case where we need all tokens."""
         bridge_swap_actions = []
@@ -2081,7 +2163,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 ):
                     continue
 
-                token_percentage = relative_funds_percentage / len(required_tokens)
+                # Allocate according to target ratios for each destination token
+                step_percentage = (
+                    relative_funds_percentage
+                    * target_ratios_by_token.get(
+                        dest_token_address, 1.0 / max(1, len(required_tokens))
+                    )
+                )
 
                 self._add_bridge_swap_action(
                     bridge_swap_actions,
@@ -2089,10 +2177,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     dest_chain,
                     dest_token_address,
                     dest_token_symbol,
-                    token_percentage,
+                    step_percentage,
                 )
         else:
-            # Multiple source tokens case
+            # Multiple source tokens case (unchanged)
             tokens.sort(key=lambda x: x["token"])
             dest_tokens = sorted(required_tokens, key=lambda x: x[0])
 
@@ -2108,7 +2196,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 ):
                     continue
 
-                token_percentage = relative_funds_percentage / len(dest_tokens)
+                token_percentage = (
+                    relative_funds_percentage
+                    * target_ratios_by_token.get(
+                        dest_token_address, 1.0 / max(1, len(dest_tokens))
+                    )
+                )
 
                 self._add_bridge_swap_action(
                     bridge_swap_actions,
@@ -2144,6 +2237,41 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("No required tokens identified")
             return None
 
+        # Determine target ratios per required token (prefer ratios in token_requirements; fallback to percentages)
+        token_requirements = opportunity.get("token_requirements", {}) or {}
+        try:
+            overall_token0_ratio = float(
+                token_requirements.get("overall_token0_ratio")
+                if token_requirements.get("overall_token0_ratio") is not None
+                else opportunity.get("token0_percentage", 0) / 100.0
+            )
+        except Exception:
+            overall_token0_ratio = opportunity.get("token0_percentage", 0) / 100.0
+        try:
+            overall_token1_ratio = float(
+                token_requirements.get("overall_token1_ratio")
+                if token_requirements.get("overall_token1_ratio") is not None
+                else opportunity.get("token1_percentage", 0) / 100.0
+            )
+        except Exception:
+            overall_token1_ratio = opportunity.get("token1_percentage", 0) / 100.0
+
+        # Default to 50/50 if not a CL pool or token requirements are missing
+        is_cl_pool = bool(opportunity.get("is_cl_pool", False))
+        if (not is_cl_pool) or (not token_requirements):
+            overall_token0_ratio = 0.5
+            overall_token1_ratio = 0.5
+
+        # Fallback to 50/50 if both ratios end up as zero
+        if overall_token0_ratio == 0 and overall_token1_ratio == 0:
+            overall_token0_ratio = 0.5
+            overall_token1_ratio = 0.5
+
+        target_ratios_by_token = {
+            opportunity.get("token0"): overall_token0_ratio,
+            opportunity.get("token1"): overall_token1_ratio,
+        }
+
         # Group tokens by chain and identify what we have/need
         tokens_by_chain = self._group_tokens_by_chain(tokens)
         dest_chain_tokens = tokens_by_chain.get(dest_chain, [])
@@ -2158,7 +2286,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         if not tokens_we_need:
             # We have all required tokens, just bridge from other chains
             return self._handle_all_tokens_available(
-                tokens, required_tokens, dest_chain, relative_funds_percentage
+                tokens,
+                required_tokens,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
         elif len(tokens_we_need) < len(required_tokens):
             # We have some tokens but not all
@@ -2168,11 +2300,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 tokens_we_need,
                 dest_chain,
                 relative_funds_percentage,
+                target_ratios_by_token,
             )
         else:
             # We need all tokens
             return self._handle_all_tokens_needed(
-                tokens, required_tokens, dest_chain, relative_funds_percentage
+                tokens,
+                required_tokens,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
 
     def _add_bridge_swap_action(
@@ -2216,6 +2353,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "to_token": dest_token_address,
                     "to_token_symbol": dest_token_symbol,
                     "funds_percentage": relative_funds_percentage,
+                    "source_initial_balance": token.get("balance", 0),
                 }
             )
         elif source_token_address != dest_token_address:
@@ -2234,6 +2372,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "to_token": dest_token_address,
                     "to_token_symbol": dest_token_symbol,
                     "funds_percentage": relative_funds_percentage,
+                    "source_initial_balance": token.get("balance", 0),
                 }
             )
         else:

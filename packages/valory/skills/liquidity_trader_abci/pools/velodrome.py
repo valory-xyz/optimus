@@ -231,36 +231,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # For stable pools, we need to get pool reserves and calculate proper amounts
-        if is_stable:
-            # Get pool reserves to calculate proper ratio
-            pool_reserves = yield from self._get_pool_reserves(pool_address, chain)
-            if not pool_reserves:
-                self.context.logger.error(
-                    f"Could not get pool reserves for stable pool {pool_address}"
-                )
-                return None, None
-
-            # Get token decimals
-            token_decimals = yield from self._get_token_decimals_for_assets(
-                assets, chain
-            )
-            if not token_decimals:
-                self.context.logger.error(
-                    f"Could not get token decimals for assets {assets}"
-                )
-                return None, None
-
-            # Calculate proper amounts for stable pool
-            adjusted_amounts = self._calculate_stable_pool_amounts(
-                max_amounts_in, pool_reserves, token_decimals
-            )
-
-            self.context.logger.info(
-                f"Original amounts: {max_amounts_in}, Adjusted for stable pool: {adjusted_amounts}"
-            )
-        else:
-            adjusted_amounts = max_amounts_in
+        adjusted_amounts = max_amounts_in
 
         # Query expected amounts and apply slippage protection
         expected_amounts = yield from self._query_add_liquidity_velodrome(
@@ -1049,23 +1020,27 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             self.context.logger.info(f"EMA: {ema} Current_Std_Dev: {current_std_dev}")
 
-            # 8. Define a price to tick conversion function
-            def price_to_tick(price: float) -> int:
-                """Convert price to tick using the base 1.0001 formula."""
-                # log base 1.0001 of the price
-                return int(np.log(price) / np.log(1.0001))
-
-            # 9. Calculate tick range using model band multipliers
+            # 8. Calculate tick range using model band multipliers
             band_multipliers = result["band_multipliers"]
 
-            # Get the most recent EMA value
+            # Get the most recent EMA value (human price space, ~1.0 for stables)
             current_ema = ema[-1]
+
+            # Derive current tick from the pool's raw price (already decimals-adjusted by the AMM)
+            # This anchors band ticks around the actual pool price instead of near zero
+            tick_current = int(np.log(current_price) / np.log(1.0001))
+
+            # Define a converter that maps a human price to a tick relative to tick_current
+            def price_to_tick(price: float) -> int:
+                ratio = price / current_ema if current_ema > 0 else 1.0
+                delta = np.log(ratio) / np.log(1.0001)
+                return int(np.rint(delta) + tick_current)
 
             # Calculate tick range using the exact formula: Upper bound = EMA + (sigma*multiplier)
             tick_range_results = self.calculate_tick_range_from_bands_wrapper(
                 band_multipliers=band_multipliers,
                 standard_deviation=current_std_dev,
-                ema=current_ema,  # Use EMA instead of current_price
+                ema=current_ema,  # Use EMA as the center in human price space
                 tick_spacing=tick_spacing,
                 price_to_tick_function=price_to_tick,
                 min_tick=MIN_TICK,
@@ -3177,6 +3152,40 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         return total_supply
 
+    def _get_factory_address_velodrome(
+        self, router_address: str, chain: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Get factory address from Velodrome router, using chain-specific method."""
+        # Mode uses factory() method, Optimism uses defaultFactory() method
+        if chain.lower() == "mode":
+            factory_method = "factory"
+        else:
+            factory_method = "defaultFactory"
+
+        self.context.logger.info(
+            f"Getting factory address for chain {chain} using {factory_method}() method"
+        )
+
+        factory = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=router_address,
+            contract_public_id=VelodromeRouterContract.contract_id,
+            contract_callable=factory_method,
+            data_key="factory",
+            chain_id=chain,
+        )
+
+        if not factory:
+            self.context.logger.error(
+                f"No factory address found for router {router_address} using {factory_method}()"
+            )
+            return None
+
+        self.context.logger.info(
+            f"Successfully got factory address using {factory_method}(): {factory}"
+        )
+        return factory
+
     def _calculate_slippage_protection_for_velodrome_mint(
         self,
         pool_address: str,
@@ -3250,20 +3259,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[Dict[str, int]]]:
         """Query expected amounts for Velodrome addLiquidity operation."""
         try:
-            factory = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=router_address,
-                contract_public_id=VelodromeRouterContract.contract_id,
-                contract_callable="factory",
-                data_key="factory",
-                chain_id=chain,
+            factory = yield from self._get_factory_address_velodrome(
+                router_address, chain
             )
 
             if not factory:
                 self.context.logger.info(
                     f"No factory address found for router {router_address}"
                 )
-                return None, None, None
+                return None
 
             result = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -3305,22 +3309,17 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         liquidity: int,
         chain: str,
     ) -> Generator[None, None, Optional[Dict[str, int]]]:
-        """Query expected amounts for Velodrome addLiquidity operation."""
+        """Query expected amounts for Velodrome removeLiquidity operation."""
         try:
-            factory = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=router_address,
-                contract_public_id=VelodromeRouterContract.contract_id,
-                contract_callable="factory",
-                data_key="factory",
-                chain_id=chain,
+            factory = yield from self._get_factory_address_velodrome(
+                router_address, chain
             )
 
             if not factory:
                 self.context.logger.info(
                     f"No factory address found for router {router_address}"
                 )
-                return None, None, None
+                return None
 
             result = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -3356,6 +3355,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Tuple[int, int]]:
         """Calculate slippage protection for Velodrome decrease liquidity operations using actual Velodrome V3 logic."""
         try:
+            # Check if we're in withdrawal mode
+            withdrawal_status = yield from self._read_kv(keys=("withdrawal_status",))
+            if withdrawal_status is not None:
+                is_withdrawal = (
+                    withdrawal_status.get("withdrawal_status") == "WITHDRAWING"
+                )
+            else:
+                is_withdrawal = False
+
             position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain, ""
             )
@@ -3380,6 +3388,13 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     f"Failed to get position data for token {token_id}"
                 )
                 return 0, 0
+
+            # For withdrawal flows, disable slippage protection entirely
+            if is_withdrawal:
+                self.context.logger.info(
+                    "Withdrawal mode detected - disabling slippage protection for Velodrome CL pool exit. "
+                )
+                return 0, 0  # No slippage protection for withdrawals
 
             tick_lower = position.get("tickLower")
             tick_upper = position.get("tickUpper")

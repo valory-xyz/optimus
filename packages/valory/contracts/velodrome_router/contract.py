@@ -163,7 +163,18 @@ class VelodromeRouterContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
     ) -> JSONLike:
-        """Quote expected amounts for removeLiquidity operation."""
+        """Get factory address using factory() method (Mode)."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.factory().call()
+        return {"factory": result}
+
+    @classmethod
+    def defaultFactory(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get factory address using defaultFactory() method (Optimism)."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         result = contract_instance.functions.defaultFactory().call()
         return {"factory": result}

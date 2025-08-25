@@ -2938,13 +2938,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         **kwargs: Any,
     ) -> Generator[None, None, Optional[Dict]]:
         """Get block data from the ledger API."""
-        if block_number is None:
-            block_identifier = "latest"
+        block_identifier = block_number if block_number is not None else "latest"
 
         ledger_api_response = yield from self.get_ledger_api_response(
             performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
             ledger_callable="get_block",
-            block_identifier=block_number,
+            block_identifier=block_identifier,
             **kwargs,
         )
         if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
@@ -4207,6 +4206,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         is_cl_pool = action.get("is_cl_pool", False)
         token0_symbol = None
         token1_symbol = None
+        lp_amount = 0
 
         self.context.logger.info(
             f"LP token staking completed for pool {pool_address} on {chain}"

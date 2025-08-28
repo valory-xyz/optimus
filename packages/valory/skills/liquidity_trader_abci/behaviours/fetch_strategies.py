@@ -222,6 +222,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info("Storing updated portfolio data")
             self.store_portfolio_data()
 
+            # Update agent performance metrics
+            self._update_agent_performance_metrics()
+
             payload = FetchStrategiesPayload(
                 sender=sender,
                 content=json.dumps(
@@ -4543,3 +4546,55 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error validating Velodrome v2 pool address: {str(e)}"
             )
             return False
+
+    def _update_agent_performance_metrics(self):
+        """Update agent performance metrics with portfolio balance and ROI."""
+        try:
+            # Read existing agent performance data or initialize
+            self.read_agent_performance()
+
+            # Get portfolio balance and ROI from current portfolio data
+            portfolio_balance = 0.0
+            total_roi_percentage = 0.0
+            partial_roi_percentage = 0.0
+
+            if self.portfolio_data:
+                # Use portfolio_value instead of total_value_usd
+                portfolio_balance = float(
+                    self.portfolio_data.get("portfolio_value", 0.0)
+                )
+
+                # Use pre-calculated ROI percentages from portfolio data
+                total_roi_percentage = float(self.portfolio_data.get("total_roi", 0.0))
+                partial_roi_percentage = float(
+                    self.portfolio_data.get("partial_roi", 0.0)
+                )
+
+            # Update metrics
+            self.agent_performance["metrics"] = [
+                {
+                    "name": "Portfolio Balance",
+                    "is_primary": True,
+                    "description": "Total value of all assets including liquidity pools and safe balance",
+                    "value": f"${portfolio_balance:.2f}",
+                },
+                {
+                    "name": "Total ROI",
+                    "is_primary": False,
+                    "description": f"Total return on investment including staking rewards. Partial ROI (trading only): <b>{partial_roi_percentage:.1f}%</b>",
+                    "value": f"{total_roi_percentage:.2f}%",
+                },
+            ]
+
+            # Update timestamp and store
+            self.update_agent_performance_timestamp()
+            self.store_agent_performance()
+
+            self.context.logger.info(
+                f"Updated agent performance: Balance=${portfolio_balance:.2f}, Total ROI={total_roi_percentage:.1f}%, Partial ROI={partial_roi_percentage:.1f}%"
+            )
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error updating agent performance metrics: {str(e)}"
+            )

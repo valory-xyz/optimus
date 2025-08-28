@@ -323,6 +323,10 @@ class LiquidityTraderBaseBehaviour(
         self.funding_events_filepath: str = (
             self.params.store_path / self.params.funding_events_filename
         )
+        self.agent_performance: Dict[str, Any] = {}
+        self.agent_performance_filepath: str = (
+            self.params.store_path / self.params.agent_performance_filename
+        )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
@@ -949,6 +953,42 @@ class LiquidityTraderBaseBehaviour(
     def read_portfolio_data(self) -> None:
         """Read the portfolio data from JSON."""
         self._read_data("portfolio_data", self.portfolio_data_filepath)
+
+    def store_agent_performance(self) -> None:
+        """Store the agent performance as JSON."""
+        self._store_data(
+            self.agent_performance, "agent_performance", self.agent_performance_filepath
+        )
+
+    def read_agent_performance(self) -> None:
+        """Read the agent performance as JSON."""
+        try:
+            self._read_data("agent_performance", self.agent_performance_filepath)
+            if not self.agent_performance:
+                self.initialize_agent_performance()
+        except Exception as e:
+            self.context.logger.warning(
+                f"Failed to read agent performance data: {str(e)}"
+            )
+            self.initialize_agent_performance()
+
+    def initialize_agent_performance(self) -> None:
+        """Initialize agent performance with empty state."""
+        self.agent_performance = {
+            "timestamp": None,
+            "metrics": [],
+            "last_activity": None,
+            "agent_behavior": None,
+        }
+
+    def update_agent_performance_timestamp(self) -> None:
+        """Update the timestamp in agent performance data."""
+        try:
+            self.agent_performance["timestamp"] = int(datetime.utcnow().timestamp())
+        except Exception as e:
+            self.context.logger.error(
+                f"Failed to update agent performance timestamp: {str(e)}"
+            )
 
     def update_portfolio_after_action(self) -> Generator[None, None, None]:
         """Update portfolio data after actions like pool exit, swap, or transfer."""

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeib4vw7djueqo3mpwgjbq2pklgfyif2lc5pw5yjzmxuzsujj5tczgq
+agent: valory/optimus:0.1.0:bafybeigfjfh2nd3n7a5d5gfvfnst2d7xfvwolewxwdfi33npeshgl47nua
 number_of_agents: 1
 deployment:
   agent:
@@ -88,6 +88,7 @@ models:
       gas_cost_info_filename: ${GAS_COST_INFO_FILENAME:str:gas_costs.json}
       whitelisted_assets_filename: ${WHITELISTED_ASSETS_FILENAME:str:whitelisted_assets.json}
       funding_events_filename: ${FUNDING_EVENTS_FILENAME:str:funding_events.json}
+      agent_performance_filename: ${AGENT_PERFORMANCE_FILENAME:str:agent_performance.json}
       merkl_fetch_campaigns_args: ${MERKL_FETCH_CAMPAIGNS_ARGS:str:{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}}
       min_investment_amount: ${MIN_INVESTMENT_AMOUNT:int:1}
       max_fee_percentage: ${MAX_FEE_PERCENTAGE:float:0.02}

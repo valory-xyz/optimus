@@ -7,8 +7,8 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigovlecwwk2fgo2rmzhldxgbfdfelraz7mfswakorwkswlpgdqy7a
-  build/contract_interface.json: bafybeidmls5fqsra4idrnukvogf2qlidojq3y6uey63cjey4atxjbthzoi
-  contract.py: bafybeiankmw4ubbgrxuw3algwihnzkbib2kq54ozcka7tp5lmipe7rnuy4
+  build/contract_interface.json: bafybeihmu27srsqj7tmsdrjrgnn657lyaupd6pzbyasytdxdfp3ui5u3nu
+  contract.py: bafybeia2lcaus6m3gfatwgjuxvc3ibl4xlzl43vlx2arpcrdrneeggbbwu
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeRouterContract

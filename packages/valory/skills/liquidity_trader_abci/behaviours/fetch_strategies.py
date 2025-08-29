@@ -167,7 +167,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             ):
                 self.context.logger.info("Updating KV store with validated protocols")
                 yield from self._write_kv(
-                    {"selected_protocols": json.dumps(serialized_protocols)}
+                    {"selected_protocols": json.dumps(serialized_protocols, ensure_ascii=True)}
                 )
 
             if not trading_type:
@@ -233,6 +233,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         "trading_type": trading_type,
                     },
                     sort_keys=True,
+                    ensure_ascii=True,
                 ),
             )
             self.context.logger.info(f"Created payload with content: {payload.content}")

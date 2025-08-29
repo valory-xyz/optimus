@@ -74,7 +74,7 @@ class FetchStrategiesRound(CollectSameUntilThresholdRound):
             if not selected_protocols or not trading_type:
                 return synchronized_data, Event.WAIT
             else:
-                serialized_selected_protocols = json.dumps(selected_protocols)
+                serialized_selected_protocols = json.dumps(selected_protocols, ensure_ascii=True)
                 synchronized_data = synchronized_data.update(
                     synchronized_data_class=SynchronizedData,
                     selected_protocols=serialized_selected_protocols,

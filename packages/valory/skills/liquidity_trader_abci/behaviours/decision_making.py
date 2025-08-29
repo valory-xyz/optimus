@@ -102,6 +102,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                                 "updates": {},
                             },
                             sort_keys=True,
+                            ensure_ascii=True,
                         ),
                     )
                     yield from self.send_a2a_transaction(payload)
@@ -120,6 +121,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                         "updates": updates,
                     },
                     sort_keys=True,
+                    ensure_ascii=True,
                 ),
             )
 
@@ -279,7 +281,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 and self.synchronized_data.final_tx_hash
             ):
                 tx_hashes = [self.synchronized_data.final_tx_hash]
-                update_data["withdrawal_transaction_hashes"] = json.dumps(tx_hashes)
+                update_data["withdrawal_transaction_hashes"] = json.dumps(tx_hashes, ensure_ascii=True)
 
             # Use the existing _write_kv method to update KV store
             yield from self._write_kv(update_data)
@@ -928,7 +930,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                         yield from self._reset_withdrawal_flags()
                     return Event.DONE.value, {}
 
-            serialized_routes = json.dumps(routes)
+            serialized_routes = json.dumps(routes, ensure_ascii=True)
 
             return Event.UPDATE.value, {
                 "routes": serialized_routes,
@@ -2306,7 +2308,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         response = yield from self.get_http_response(
             "POST",
             base_url,
-            json.dumps(step).encode(),
+            json.dumps(step, ensure_ascii=True).encode(),
             headers={
                 "accept": "application/json",
                 "Content-Type": "application/json",  # Ensure the correct content type
@@ -2535,7 +2537,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         routes_response = yield from self.get_http_response(
             "POST",
             url,
-            json.dumps(params).encode(),
+            json.dumps(params, ensure_ascii=True).encode(),
             headers={
                 "accept": "application/json",
                 "Content-Type": "application/json",  # Ensure the correct content type
@@ -2632,7 +2634,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         response = yield from self.get_http_response(
             "POST",
             api_url,
-            json.dumps(body).encode(),
+            json.dumps(body, ensure_ascii=True).encode(),
             headers={
                 "Content-Type": "application/json",
                 "X-Access-Key": self.params.tenderly_access_key,
@@ -3697,7 +3699,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             # Store updated dictionary back to KV store
             yield from self._write_kv(
-                {"entry_costs_dict": json.dumps(entry_costs_dict)}
+                {"entry_costs_dict": json.dumps(entry_costs_dict, ensure_ascii=True)}
             )
 
             self.context.logger.info(

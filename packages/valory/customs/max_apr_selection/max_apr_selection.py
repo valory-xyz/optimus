@@ -82,6 +82,10 @@ def get_max_values(pools):
 
 def il_risk_descriptor(il_score):
     """Map the IL risk score to a qualitative descriptor."""
+    # Handle None values
+    if il_score is None:
+        return "Unknown"
+    
     if il_score < -0.5:
         return "High"
     elif -0.5 <= il_score < -0.2:
@@ -232,7 +236,11 @@ def apply_risk_thresholds_and_select_optimal_strategy(
                 metrics_improved.append("higher risk-adjusted returns")
             if top_opp.get('depth_score', 0) > position_to_exit.get('depth_score', 0):
                 metrics_improved.append("better market liquidity")
-            if top_opp.get('il_risk_score', 0) > position_to_exit.get('il_risk_score', 0):
+            
+            # Safe comparison for il_risk_score that handles None values
+            top_il_risk = top_opp.get('il_risk_score')
+            exit_il_risk = position_to_exit.get('il_risk_score')
+            if top_il_risk is not None and exit_il_risk is not None and top_il_risk > exit_il_risk:
                 metrics_improved.append("lower impermanent loss risk")
 
             reasoning.append(

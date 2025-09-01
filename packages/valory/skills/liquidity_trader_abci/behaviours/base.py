@@ -1568,8 +1568,15 @@ class LiquidityTraderBaseBehaviour(
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
+        self.context.logger.info(
+            f"Fetching current price for token {token_address} on {chain} chain"
+        )
+
         cached_price = yield from self._get_cached_price(token_address, date_str)
         if cached_price is not None:
+            self.context.logger.info(
+                f"Using cached price for token {token_address}: ${cached_price}"
+            )
             return cached_price
 
         headers = {
@@ -1582,6 +1589,10 @@ class LiquidityTraderBaseBehaviour(
         if not platform_id:
             self.context.logger.error(f"Missing platform id for chain {chain}")
             return None
+
+        self.context.logger.info(
+            f"Fetching price from CoinGecko API for token {token_address} on platform {platform_id}"
+        )
 
         success, response_json = yield from self._request_with_retries(
             endpoint=self.coingecko.token_price_endpoint.format(
@@ -1598,8 +1609,19 @@ class LiquidityTraderBaseBehaviour(
             price = token_data.get("usd", 0)
             # Cache the price
             if price:
+                self.context.logger.info(
+                    f"Successfully fetched price for token {token_address}: ${price}"
+                )
                 yield from self._cache_price(token_address, price, date_str)
+            else:
+                self.context.logger.warning(
+                    f"No price data returned for token {token_address}"
+                )
             return price
+        else:
+            self.context.logger.error(
+                f"Failed to fetch price for token {token_address} from CoinGecko"
+            )
 
         return None
 
@@ -1889,8 +1911,11 @@ class LiquidityTraderBaseBehaviour(
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
+        self.context.logger.info("Fetching current price for ETH (Zero Address)")
+
         cached_price = yield from self._get_cached_price(ZERO_ADDRESS, date_str)
         if cached_price is not None:
+            self.context.logger.info(f"Using cached price for ETH: ${cached_price}")
             return cached_price
 
         headers = {
@@ -1898,6 +1923,8 @@ class LiquidityTraderBaseBehaviour(
         }
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
+
+        self.context.logger.info("Fetching ETH price from CoinGecko API")
 
         success, response_json = yield from self._request_with_retries(
             endpoint=self.coingecko.coin_price_endpoint.format(coin_id="ethereum"),
@@ -1911,8 +1938,13 @@ class LiquidityTraderBaseBehaviour(
             token_data = next(iter(response_json.values()), {})
             price = token_data.get("usd", 0)
             if price:
+                self.context.logger.info(f"Successfully fetched ETH price: ${price}")
                 yield from self._cache_price(ZERO_ADDRESS, price, date_str)
+            else:
+                self.context.logger.warning("No price data returned for ETH")
             return price
+        else:
+            self.context.logger.error("Failed to fetch ETH price from CoinGecko")
         return None
 
     def _get_current_timestamp(self) -> int:
@@ -2041,9 +2073,16 @@ class LiquidityTraderBaseBehaviour(
     def _fetch_historical_token_price(
         self, coingecko_id, date_str
     ) -> Generator[None, None, Optional[float]]:
+        self.context.logger.info(
+            f"Fetching historical price for token {coingecko_id} on date {date_str}"
+        )
+
         # First check the cache
         cached_price = yield from self._get_cached_price(coingecko_id, date_str)
         if cached_price is not None:
+            self.context.logger.info(
+                f"Using cached historical price for {coingecko_id} on {date_str}: ${cached_price}"
+            )
             return cached_price
 
         endpoint = self.coingecko.historical_price_endpoint.format(
@@ -2054,6 +2093,10 @@ class LiquidityTraderBaseBehaviour(
         headers = {"Accept": "application/json"}
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
+
+        self.context.logger.info(
+            f"Fetching historical price from CoinGecko API for {coingecko_id} on {date_str}"
+        )
 
         success, response_json = yield from self._request_with_retries(
             endpoint=endpoint,
@@ -2068,17 +2111,20 @@ class LiquidityTraderBaseBehaviour(
                 response_json.get("market_data", {}).get("current_price", {}).get("usd")
             )
             if price:
+                self.context.logger.info(
+                    f"Successfully fetched historical price for {coingecko_id} on {date_str}: ${price}"
+                )
                 # Cache the historical price
                 yield from self._cache_price(coingecko_id, price, date_str)
                 return price
             else:
-                self.context.logger.error(
-                    f"No price in response for token {coingecko_id}"
+                self.context.logger.warning(
+                    f"No price data in response for token {coingecko_id} on {date_str}"
                 )
                 return None
         else:
             self.context.logger.error(
-                f"Failed to fetch historical price for {coingecko_id}"
+                f"Failed to fetch historical price for {coingecko_id} on {date_str} from CoinGecko"
             )
             return None
 

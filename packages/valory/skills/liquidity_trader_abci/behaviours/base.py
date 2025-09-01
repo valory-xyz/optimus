@@ -230,7 +230,7 @@ WHITELISTED_ASSETS = {
         "0xe7903B1F75C534Dd8159b313d92cDCfbC62cB3Cd": "wrsETH",
         "0x8b2EeA0999876AAB1E7955fe01A5D261b570452C": "wMLT",
         "0x66eEd5FF1701E6ed8470DC391F05e27B1d0657eb": "BMX",
-        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "XVELO",
+        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "VELO",
         "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
         "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
@@ -268,7 +268,7 @@ COIN_ID_MAPPING = {
         "wrseth": "wrapped-rseth",
         "wmlt": "bmx-wrapped-mode-liquidity-token",
         "bmx": "bmx",
-        "xvelo": "velodrome-finance",  # xVELO can be bridged back 1:1 for native VELO on OP
+        "velo": "velodrome-finance",  # VELO can be bridged back 1:1 for native VELO on OP
         "iusdc": "ironclad-usd",
     },
     "optimism": {
@@ -623,6 +623,12 @@ class LiquidityTraderBaseBehaviour(
             token_info = token_data.get("token", {})
             token_address = token_info.get("address")
             token_symbol = token_info.get("symbol", "UNKNOWN")
+            
+            # Rename XVELO to VELO for Mode chain
+            if token_symbol == "XVELO":
+                token_symbol = "VELO"
+                self.context.logger.info(f"Renamed XVELO to VELO for Mode chain token at {token_address}")
+            
             balance_value = token_data.get("value", "0")
 
             if not token_address or not balance_value or balance_value == "0":

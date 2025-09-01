@@ -977,7 +977,6 @@ class LiquidityTraderBaseBehaviour(
         self.agent_performance = {
             "timestamp": None,
             "metrics": [],
-            "last_activity": None,
             "agent_behavior": None,
         }
 

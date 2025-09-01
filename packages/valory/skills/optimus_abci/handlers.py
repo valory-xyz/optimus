@@ -73,11 +73,11 @@ from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    THRESHOLDS,
-    TradingType,
+    DECISION_MAKING_TIMEOUT,
     EVALUATE_STRATEGY_TIMEOUT,
     FETCH_STRATEGIES_TIMEOUT,
-    DECISION_MAKING_TIMEOUT,
+    THRESHOLDS,
+    TradingType,
 )
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
@@ -683,16 +683,22 @@ class HttpHandler(BaseHttpHandler):
                 if current_round:
                     # Convert round ID to snake_case for comparison
                     round_name = camel_to_snake(current_round)
-                    
+
                     # Check if in evaluate strategy round
                     if "evaluate_strategy" in round_name:
-                        is_healthy = seconds_since_last_transition < EVALUATE_STRATEGY_TIMEOUT
+                        is_healthy = (
+                            seconds_since_last_transition < EVALUATE_STRATEGY_TIMEOUT
+                        )
                     # Check if in fetch strategies round
                     elif "fetch_strategies" in round_name:
-                        is_healthy = seconds_since_last_transition < FETCH_STRATEGIES_TIMEOUT
+                        is_healthy = (
+                            seconds_since_last_transition < FETCH_STRATEGIES_TIMEOUT
+                        )
                     # Check if in decision making round
                     elif "decision_making" in round_name:
-                        is_healthy = seconds_since_last_transition < DECISION_MAKING_TIMEOUT
+                        is_healthy = (
+                            seconds_since_last_transition < DECISION_MAKING_TIMEOUT
+                        )
                     else:
                         # For other rounds, use the default transitioning fast logic
                         is_healthy = is_transitioning_fast
@@ -1099,7 +1105,7 @@ class HttpHandler(BaseHttpHandler):
         self.context.logger.info(f"trading_type: {trading_type}")
 
         storage_data = {
-                            "selected_protocols": json.dumps(selected_protocols, ensure_ascii=True),
+            "selected_protocols": json.dumps(selected_protocols, ensure_ascii=True),
             "trading_type": trading_type,
             "composite_score": str(composite_score),
             "max_loss_percentage": str(max_loss_percentage),

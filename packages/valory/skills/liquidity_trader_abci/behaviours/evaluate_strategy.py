@@ -147,7 +147,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             actions = []
 
         payload = EvaluateStrategyPayload(
-            sender=self.context.agent_address, actions=json.dumps(actions, ensure_ascii=True)
+            sender=self.context.agent_address,
+            actions=json.dumps(actions, ensure_ascii=True),
         )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():

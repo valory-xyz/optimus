@@ -281,7 +281,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 and self.synchronized_data.final_tx_hash
             ):
                 tx_hashes = [self.synchronized_data.final_tx_hash]
-                update_data["withdrawal_transaction_hashes"] = json.dumps(tx_hashes, ensure_ascii=True)
+                update_data["withdrawal_transaction_hashes"] = json.dumps(
+                    tx_hashes, ensure_ascii=True
+                )
 
             # Use the existing _write_kv method to update KV store
             yield from self._write_kv(update_data)
@@ -576,8 +578,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = action.get("pool_address")
         is_cl_pool = action.get("is_cl_pool", False)
         dex_type = action.get("dex_type")
-        token0_symbol = None
-        token1_symbol = None
 
         # Find all positions with the matching pool address and update their status
         for position in self.current_positions:
@@ -585,8 +585,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["status"] = PositionStatus.CLOSED.value
                 position["exit_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["exit_timestamp"] = int(self._get_current_timestamp())
-                token0_symbol = position.get("token0_symbol")
-                token1_symbol = position.get("token1_symbol")
 
                 # Record TiP performance metrics
                 self._record_tip_performance(position)
@@ -2554,7 +2552,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 "Proceeding without simulation."
             )
             return True
-        
+
         safe_address = self.params.safe_contract_addresses.get(chain)
         agent_address = self.context.agent_address
         safe_tx = yield from self.get_contract_api_response(
@@ -4169,9 +4167,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = action.get("pool_address")
         chain = action.get("chain")
         is_cl_pool = action.get("is_cl_pool", False)
-        token0_symbol = None
-        token1_symbol = None
-        lp_amount = 0
 
         self.context.logger.info(
             f"LP token staking completed for pool {pool_address} on {chain}"
@@ -4188,9 +4183,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["staked"] = True
                 position["staking_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["staking_timestamp"] = int(self._get_current_timestamp())
-                token0_symbol = position.get("token0_symbol")
-                token1_symbol = position.get("token1_symbol")
-                lp_amount = position.get("liquidity")
 
                 # For CL pools, we might want to store additional metadata
                 if is_cl_pool:
@@ -4212,8 +4204,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"LP token unstaking completed for pool {pool_address} on {chain}"
         )
-        token0_symbol = None
-        token1_symbol = None
 
         # Update position metadata to remove staking information
         for position in self.current_positions:
@@ -4225,8 +4215,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["staked"] = False
                 position["unstaking_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["unstaking_timestamp"] = int(self._get_current_timestamp())
-                token0_symbol = position.get("token0_symbol")
-                token1_symbol = position.get("token1_symbol")
 
                 # Remove CL-specific staking metadata
                 if "staked_cl_pool" in position:

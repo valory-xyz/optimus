@@ -135,9 +135,13 @@ REWARD_TOKEN_ADDRESSES = {
 # Round timeout constants for health check
 # These timeouts define how long specific rounds can run before being considered unhealthy
 # Used to prevent false restarts when the agent is performing legitimate long-running operations
-EVALUATE_STRATEGY_TIMEOUT = 300  # 5 minutes - time for executing all strategies in parallel
-FETCH_STRATEGIES_TIMEOUT = 300   # 5 minutes - time for downloading strategy files from IPFS
-DECISION_MAKING_TIMEOUT = 180    # 3 minutes - time for executing on-chain transactions
+EVALUATE_STRATEGY_TIMEOUT = (
+    300  # 5 minutes - time for executing all strategies in parallel
+)
+FETCH_STRATEGIES_TIMEOUT = (
+    300  # 5 minutes - time for downloading strategy files from IPFS
+)
+DECISION_MAKING_TIMEOUT = 180  # 3 minutes - time for executing on-chain transactions
 
 
 class DexType(Enum):
@@ -623,12 +627,14 @@ class LiquidityTraderBaseBehaviour(
             token_info = token_data.get("token", {})
             token_address = token_info.get("address")
             token_symbol = token_info.get("symbol", "UNKNOWN")
-            
+
             # Rename XVELO to VELO for Mode chain
             if token_symbol == "XVELO":
                 token_symbol = "VELO"
-                self.context.logger.info(f"Renamed XVELO to VELO for Mode chain token at {token_address}")
-            
+                self.context.logger.info(
+                    f"Renamed XVELO to VELO for Mode chain token at {token_address}"
+                )
+
             balance_value = token_data.get("value", "0")
 
             if not token_address or not balance_value or balance_value == "0":
@@ -1685,7 +1691,9 @@ class LiquidityTraderBaseBehaviour(
             # For current price, store with timestamp
             price_data["current"] = (price, self._get_current_timestamp())
 
-        yield from self._write_kv({cache_key: json.dumps(price_data, ensure_ascii=True)})
+        yield from self._write_kv(
+            {cache_key: json.dumps(price_data, ensure_ascii=True)}
+        )
 
     def _calculate_rate_limit_wait_time(self) -> int:
         """Calculate the wait time for rate limiting based on the rate limiter state."""
@@ -1824,7 +1832,9 @@ class LiquidityTraderBaseBehaviour(
             srr_message, srr_dialogue = srr_dialogues.create(
                 counterparty=str(MIRRORDB_CONNECTION_PUBLIC_ID),
                 performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps({"method": method, "kwargs": kwargs}, ensure_ascii=True),
+                payload=json.dumps(
+                    {"method": method, "kwargs": kwargs}, ensure_ascii=True
+                ),
             )
             srr_message = cast(SrrMessage, srr_message)
             srr_dialogue = cast(SrrDialogue, srr_dialogue)

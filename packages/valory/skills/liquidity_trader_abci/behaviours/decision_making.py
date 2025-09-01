@@ -1902,37 +1902,73 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         receiver = safe_address
         owner = safe_address
         contract_address = action.get("pool_address")
+        dex_type = action.get("dex_type")
 
         if not receiver or not owner:
             self.context.logger.error(f"Missing information in action: {action}")
             return None, None, None
 
-        # Get the maximum withdrawable amount
-        amount = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=contract_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="max_withdraw",
-            owner=owner,
-            data_key="amount",
-            chain_id=chain,
-        )
-        if not amount:
-            self.context.logger.error("Error fetching max withdraw amount")
-            return None, None, None
+        # For Sturdy vaults, use redeem method instead of withdraw to avoid "too much loss" error
+        if dex_type == "Sturdy":
+            self.context.logger.info("Using redeem method for Sturdy vault to avoid loss constraints")
+            
+            # Get the current balance (shares) instead of max withdraw
+            shares = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=contract_address,
+                contract_public_id=YearnV3VaultContract.contract_id,
+                contract_callable="balance_of",
+                owner=owner,
+                data_key="amount",
+                chain_id=chain,
+            )
+            if not shares:
+                self.context.logger.error("Error fetching current shares balance")
+                return None, None, None
 
-        # Prepare the withdraw transaction
-        tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=contract_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="withdraw",
-            data_key="tx_hash",
-            assets=amount,
-            receiver=receiver,
-            owner=owner,
-            chain_id=chain,
-        )
+            # Prepare the redeem transaction
+            tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=contract_address,
+                contract_public_id=YearnV3VaultContract.contract_id,
+                contract_callable="redeem",
+                data_key="tx_hash",
+                shares=shares,
+                receiver=receiver,
+                owner=owner,
+                chain_id=chain,
+            )
+        else:
+            # For non-Sturdy vaults, use the original withdraw method
+            self.context.logger.info("Using withdraw method for non-Sturdy vault")
+            
+            # Get the maximum withdrawable amount
+            amount = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=contract_address,
+                contract_public_id=YearnV3VaultContract.contract_id,
+                contract_callable="max_withdraw",
+                owner=owner,
+                data_key="amount",
+                chain_id=chain,
+            )
+            if not amount:
+                self.context.logger.error("Error fetching max withdraw amount")
+                return None, None, None
+
+            # Prepare the withdraw transaction
+            tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=contract_address,
+                contract_public_id=YearnV3VaultContract.contract_id,
+                contract_callable="withdraw",
+                data_key="tx_hash",
+                assets=amount,
+                receiver=receiver,
+                owner=owner,
+                chain_id=chain,
+            )
+
         if not tx_hash:
             return None, None, None
 

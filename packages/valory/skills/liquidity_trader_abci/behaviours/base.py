@@ -132,6 +132,13 @@ REWARD_TOKEN_ADDRESSES = {
     },
 }
 
+# Round timeout constants for health check
+# These timeouts define how long specific rounds can run before being considered unhealthy
+# Used to prevent false restarts when the agent is performing legitimate long-running operations
+EVALUATE_STRATEGY_TIMEOUT = 300  # 5 minutes - time for executing all strategies in parallel
+FETCH_STRATEGIES_TIMEOUT = 300   # 5 minutes - time for downloading strategy files from IPFS
+DECISION_MAKING_TIMEOUT = 180    # 3 minutes - time for executing on-chain transactions
+
 
 class DexType(Enum):
     """DexType"""

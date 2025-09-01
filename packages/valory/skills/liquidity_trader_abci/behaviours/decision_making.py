@@ -581,18 +581,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         amount1 = current_position.get("amount1", 0)
 
         # Get token decimals and format amounts for display
-        token0_decimals = (
-            yield from self._get_token_decimals(chain, token0_address)
-            if token0_address
-            else 18
-        )
-        token1_decimals = (
-            yield from self._get_token_decimals(chain, token1_address)
-            if token1_address
-            else 18
-        )
+        if token0_address:
+            token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        else:
+            token0_decimals = 18
+            
+        if token1_address:
+            token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+        else:
+            token1_decimals = 18
 
-        # Convert from raw token units to human-readable format
         amount0_formatted = (
             float(amount0) / (10 ** (token0_decimals or 18)) if amount0 else 0
         )
@@ -1902,37 +1900,73 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         receiver = safe_address
         owner = safe_address
         contract_address = action.get("pool_address")
+        dex_type = action.get("dex_type")
 
         if not receiver or not owner:
             self.context.logger.error(f"Missing information in action: {action}")
             return None, None, None
 
-        # Get the maximum withdrawable amount
-        amount = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=contract_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="max_withdraw",
-            owner=owner,
-            data_key="amount",
-            chain_id=chain,
-        )
-        if not amount:
-            self.context.logger.error("Error fetching max withdraw amount")
-            return None, None, None
+        # For Sturdy vaults, use redeem method instead of withdraw to avoid "too much loss" error
+        if dex_type == "Sturdy":
+            self.context.logger.info("Using redeem method for Sturdy vault to avoid loss constraints")
+            
+            # Get the current balance (shares) instead of max withdraw
+            shares = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=contract_address,
+                contract_public_id=YearnV3VaultContract.contract_id,
+                contract_callable="balance_of",
+                owner=owner,
+                data_key="amount",
+                chain_id=chain,
+            )
+            if not shares:
+                self.context.logger.error("Error fetching current shares balance")
+                return None, None, None
 
-        # Prepare the withdraw transaction
-        tx_hash = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=contract_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="withdraw",
-            data_key="tx_hash",
-            assets=amount,
-            receiver=receiver,
-            owner=owner,
-            chain_id=chain,
-        )
+            # Prepare the redeem transaction
+            tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=contract_address,
+                contract_public_id=YearnV3VaultContract.contract_id,
+                contract_callable="redeem",
+                data_key="tx_hash",
+                shares=shares,
+                receiver=receiver,
+                owner=owner,
+                chain_id=chain,
+            )
+        else:
+            # For non-Sturdy vaults, use the original withdraw method
+            self.context.logger.info("Using withdraw method for non-Sturdy vault")
+            
+            # Get the maximum withdrawable amount
+            amount = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=contract_address,
+                contract_public_id=YearnV3VaultContract.contract_id,
+                contract_callable="max_withdraw",
+                owner=owner,
+                data_key="amount",
+                chain_id=chain,
+            )
+            if not amount:
+                self.context.logger.error("Error fetching max withdraw amount")
+                return None, None, None
+
+            # Prepare the withdraw transaction
+            tx_hash = yield from self.contract_interact(
+                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                contract_address=contract_address,
+                contract_public_id=YearnV3VaultContract.contract_id,
+                contract_callable="withdraw",
+                data_key="tx_hash",
+                assets=amount,
+                receiver=receiver,
+                owner=owner,
+                chain_id=chain,
+            )
+
         if not tx_hash:
             return None, None, None
 
@@ -2366,7 +2400,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         tool = response.get("tool")
         data = response.get("transactionRequest", {}).get("data")
-        tx_hash = bytes.fromhex(data[2:])
+        
+        # Validate the transaction data from LiFi API
+        if not data or not isinstance(data, str) or not data.startswith('0x'):
+            self.context.logger.error(f"Invalid transaction data from LiFi API: {data}")
+            return None
+            
+        try:
+            tx_hash = bytes.fromhex(data[2:])
+            self.context.logger.info(f"Successfully converted LiFi transaction data: {data[:50]}... -> {len(tx_hash)} bytes")
+        except Exception as e:
+            self.context.logger.error(f"Failed to convert LiFi transaction data '{data}': {e}")
+            return None
 
         estimate = response.get("estimate", {})
         fee_costs = estimate.get("feeCosts", [])

@@ -2547,6 +2547,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         chain: str,
         **kwargs: Any,
     ) -> Generator[None, None, bool]:
+        # Skip Tenderly simulation for MODE chain (deprecated on Tenderly)
+        if chain.lower() == "mode":
+            self.context.logger.info(
+                "Skipping Tenderly simulation for MODE chain (deprecated on Tenderly). "
+                "Proceeding without simulation."
+            )
+            return True
+        
         safe_address = self.params.safe_contract_addresses.get(chain)
         agent_address = self.context.agent_address
         safe_tx = yield from self.get_contract_api_response(

@@ -3259,30 +3259,47 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[Dict[str, int]]]:
         """Query expected amounts for Velodrome addLiquidity operation."""
         try:
-            factory = yield from self._get_factory_address_velodrome(
-                router_address, chain
-            )
-
-            if not factory:
-                self.context.logger.info(
-                    f"No factory address found for router {router_address}"
+            # Mode chain uses different quote function without factory parameter
+            if chain.lower() == "mode":
+                result = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=router_address,
+                    contract_public_id=VelodromeRouterContract.contract_id,
+                    contract_callable="quote_add_liquidity_mode",
+                    data_key="result",
+                    token_a=token_a,
+                    token_b=token_b,
+                    stable=is_stable,
+                    amount_a_desired=amounts[0],
+                    amount_b_desired=amounts[1],
+                    chain_id=chain,
                 )
-                return None
+            else:
+                # Other chains (like Optimism) use factory parameter
+                factory = yield from self._get_factory_address_velodrome(
+                    router_address, chain
+                )
 
-            result = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=router_address,
-                contract_public_id=VelodromeRouterContract.contract_id,
-                contract_callable="quote_add_liquidity",
-                data_key="result",
-                token_a=token_a,
-                token_b=token_b,
-                stable=is_stable,
-                factory=factory,
-                amount_a_desired=amounts[0],
-                amount_b_desired=amounts[1],
-                chain_id=chain,
-            )
+                if not factory:
+                    self.context.logger.info(
+                        f"No factory address found for router {router_address}"
+                    )
+                    return None
+
+                result = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=router_address,
+                    contract_public_id=VelodromeRouterContract.contract_id,
+                    contract_callable="quote_add_liquidity",
+                    data_key="result",
+                    token_a=token_a,
+                    token_b=token_b,
+                    stable=is_stable,
+                    factory=factory,
+                    amount_a_desired=amounts[0],
+                    amount_b_desired=amounts[1],
+                    chain_id=chain,
+                )
 
             if result:
                 return {
@@ -3311,29 +3328,45 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[Dict[str, int]]]:
         """Query expected amounts for Velodrome removeLiquidity operation."""
         try:
-            factory = yield from self._get_factory_address_velodrome(
-                router_address, chain
-            )
-
-            if not factory:
-                self.context.logger.info(
-                    f"No factory address found for router {router_address}"
+            # Mode chain uses different quote function without factory parameter
+            if chain.lower() == "mode":
+                result = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=router_address,
+                    contract_public_id=VelodromeRouterContract.contract_id,
+                    contract_callable="quote_remove_liquidity_mode",
+                    data_key="result",
+                    token_a=token_a,
+                    token_b=token_b,
+                    stable=is_stable,
+                    liquidity=liquidity,
+                    chain_id=chain,
                 )
-                return None
+            else:
+                # Other chains (like Optimism) use factory parameter
+                factory = yield from self._get_factory_address_velodrome(
+                    router_address, chain
+                )
 
-            result = yield from self.contract_interact(
-                performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                contract_address=router_address,
-                contract_public_id=VelodromeRouterContract.contract_id,
-                contract_callable="quote_remove_liquidity",
-                data_key="result",
-                token_a=token_a,
-                token_b=token_b,
-                stable=is_stable,
-                factory=factory,
-                liquidity=liquidity,
-                chain_id=chain,
-            )
+                if not factory:
+                    self.context.logger.info(
+                        f"No factory address found for router {router_address}"
+                    )
+                    return None
+
+                result = yield from self.contract_interact(
+                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+                    contract_address=router_address,
+                    contract_public_id=VelodromeRouterContract.contract_id,
+                    contract_callable="quote_remove_liquidity",
+                    data_key="result",
+                    token_a=token_a,
+                    token_b=token_b,
+                    stable=is_stable,
+                    factory=factory,
+                    liquidity=liquidity,
+                    chain_id=chain,
+                )
 
             if result:
                 return {

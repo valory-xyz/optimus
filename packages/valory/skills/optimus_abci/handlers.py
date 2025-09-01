@@ -1072,6 +1072,7 @@ class HttpHandler(BaseHttpHandler):
             "trading_type": trading_type,
             "composite_score": str(composite_score),
             "max_loss_percentage": str(max_loss_percentage),
+            "reasoning": reasoning,
         }
 
         # Offload KV store update to a separate thread
@@ -1117,6 +1118,8 @@ class HttpHandler(BaseHttpHandler):
 
         if len(self.context.state.request_queue) == 1:
             self._write_kv(data)
+
+            self._update_agent_performance_chat(data.get("reasoning"))
 
             # Also update the state values
             if "selected_protocols" in data:
@@ -1525,6 +1528,49 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.info("KV store read failed.")
             self.context.state.last_kv_read_data = {}
         self.context.state.in_flight_req = False
+
+    def _update_agent_performance_chat(self, chat: Optional[str]) -> None:
+        """Update agent performance with agent behavior based on chat."""
+        try:
+            if not chat:
+                return
+            # Construct the agent performance file path
+            agent_performance_filepath = (
+                self.context.params.store_path
+                / self.context.params.agent_performance_filename
+            )
+
+            # Read existing agent performance data or initialize
+            try:
+                with open(agent_performance_filepath, "r", encoding="utf-8") as file:
+                    agent_performance = json.load(file)
+            except (FileNotFoundError, json.JSONDecodeError):
+                agent_performance = {
+                    "timestamp": None,
+                    "metrics": [],
+                    "last_activity": None,
+                    "agent_behavior": None,
+                }
+
+            # Truncate message if too long (keep first 100 characters with ellipsis)
+            truncated_message = chat[:97] + "..." if len(chat) > 100 else chat
+
+            # Update agent behavior based on chat message
+            agent_performance["agent_behavior"] = truncated_message
+            agent_performance["timestamp"] = int(datetime.utcnow().timestamp())
+
+            # Store the updated performance data
+            with open(agent_performance_filepath, "w", encoding="utf-8") as file:
+                json.dump(agent_performance, file)
+
+            self.context.logger.info(
+                f"Updated agent performance behavior: {truncated_message}"
+            )
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error updating agent performance behavior: {str(e)}"
+            )
 
 
 class SrrHandler(AbstractResponseHandler):

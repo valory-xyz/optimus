@@ -158,6 +158,48 @@ class VelodromeRouterContract(Contract):
         return {"result":{"amount_a": result[0], "amount_b": result[1]}}
     
     @classmethod
+    def quote_add_liquidity_mode(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_a: str,
+        token_b: str,
+        stable: bool,
+        amount_a_desired: int,
+        amount_b_desired: int,
+    ) -> JSONLike:
+        """Quote expected amounts for addLiquidity operation (Mode - no factory param)."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.quoteAddLiquidity(
+            token_a,
+            token_b,
+            stable,
+            amount_a_desired,
+            amount_b_desired,
+        ).call()
+        return {"result":{"amount_a": result[0], "amount_b": result[1], "liquidity": result[2]}}
+
+    @classmethod
+    def quote_remove_liquidity_mode(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        token_a: str,
+        token_b: str,
+        stable: bool,
+        liquidity: int,
+    ) -> JSONLike:
+        """Quote expected amounts for removeLiquidity operation (Mode - no factory param)."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        result = contract_instance.functions.quoteRemoveLiquidity(
+            token_a,
+            token_b,
+            stable,
+            liquidity,
+        ).call()
+        return {"result":{"amount_a": result[0], "amount_b": result[1]}}
+    
+    @classmethod
     def factory(
         cls,
         ledger_api: EthereumApi,

@@ -1863,8 +1863,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # For Sturdy vaults, use redeem method instead of withdraw to avoid "too much loss" error
         if dex_type == "Sturdy":
-            self.context.logger.info("Using redeem method for Sturdy vault to avoid loss constraints")
-            
+            self.context.logger.info(
+                "Using redeem method for Sturdy vault to avoid loss constraints"
+            )
+
             # Get the current balance (shares) instead of max withdraw
             shares = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1894,7 +1896,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         else:
             # For non-Sturdy vaults, use the original withdraw method
             self.context.logger.info("Using withdraw method for non-Sturdy vault")
-            
+
             # Get the maximum withdrawable amount
             amount = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -2355,17 +2357,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         tool = response.get("tool")
         data = response.get("transactionRequest", {}).get("data")
-        
+
         # Validate the transaction data from LiFi API
-        if not data or not isinstance(data, str) or not data.startswith('0x'):
-            self.context.logger.error(f"Invalid transaction data from LiFi API: {data}")
+        if not data or not isinstance(data, str) or not data.startswith("0x"):
+            self.context.logger.error(
+                f"Invalid transaction data from LiFi API: {data!r}"
+            )
             return None
-            
+
         try:
             tx_hash = bytes.fromhex(data[2:])
-            self.context.logger.info(f"Successfully converted LiFi transaction data: {data[:50]}... -> {len(tx_hash)} bytes")
+            self.context.logger.info(
+                f"Successfully converted LiFi transaction data: {data[:50]}... -> {len(tx_hash)} bytes"
+            )
         except Exception as e:
-            self.context.logger.error(f"Failed to convert LiFi transaction data '{data}': {e}")
+            self.context.logger.error(
+                f"Failed to convert LiFi transaction data {data!r}: {e}"
+            )
             return None
 
         estimate = response.get("estimate", {})

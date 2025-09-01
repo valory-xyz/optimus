@@ -581,18 +581,16 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         amount1 = current_position.get("amount1", 0)
 
         # Get token decimals and format amounts for display
-        token0_decimals = (
-            yield from self._get_token_decimals(chain, token0_address)
-            if token0_address
-            else 18
-        )
-        token1_decimals = (
-            yield from self._get_token_decimals(chain, token1_address)
-            if token1_address
-            else 18
-        )
+        if token0_address:
+            token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+        else:
+            token0_decimals = 18
+            
+        if token1_address:
+            token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+        else:
+            token1_decimals = 18
 
-        # Convert from raw token units to human-readable format
         amount0_formatted = (
             float(amount0) / (10 ** (token0_decimals or 18)) if amount0 else 0
         )
@@ -2402,7 +2400,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         tool = response.get("tool")
         data = response.get("transactionRequest", {}).get("data")
-        tx_hash = bytes.fromhex(data[2:])
+        
+        # Validate the transaction data from LiFi API
+        if not data or not isinstance(data, str) or not data.startswith('0x'):
+            self.context.logger.error(f"Invalid transaction data from LiFi API: {data}")
+            return None
+            
+        try:
+            tx_hash = bytes.fromhex(data[2:])
+            self.context.logger.info(f"Successfully converted LiFi transaction data: {data[:50]}... -> {len(tx_hash)} bytes")
+        except Exception as e:
+            self.context.logger.error(f"Failed to convert LiFi transaction data '{data}': {e}")
+            return None
 
         estimate = response.get("estimate", {})
         fee_costs = estimate.get("feeCosts", [])

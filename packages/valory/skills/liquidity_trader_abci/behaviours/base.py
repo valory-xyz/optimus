@@ -1651,7 +1651,7 @@ class LiquidityTraderBaseBehaviour(
             # For current price, store with timestamp
             price_data["current"] = (price, self._get_current_timestamp())
 
-        yield from self._write_kv({cache_key: json.dumps(price_data)})
+        yield from self._write_kv({cache_key: json.dumps(price_data, ensure_ascii=True)})
 
     def _calculate_rate_limit_wait_time(self) -> int:
         """Calculate the wait time for rate limiting based on the rate limiter state."""
@@ -1691,7 +1691,7 @@ class LiquidityTraderBaseBehaviour(
         """Request wrapped around a retry mechanism, now also retries on HTTP 503 (Service Unavailable) with exponential backoff."""
 
         self.context.logger.info(f"HTTP {method} call: {endpoint}")
-        content = json.dumps(body).encode(UTF8) if body else None
+        content = json.dumps(body, ensure_ascii=True).encode(UTF8) if body else None
 
         # Add delay before CoinGecko API calls to respect rate limits (20 calls/minute = 3 seconds between calls)
         if "coingecko.com" in endpoint:
@@ -1790,7 +1790,7 @@ class LiquidityTraderBaseBehaviour(
             srr_message, srr_dialogue = srr_dialogues.create(
                 counterparty=str(MIRRORDB_CONNECTION_PUBLIC_ID),
                 performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps({"method": method, "kwargs": kwargs}),
+                payload=json.dumps({"method": method, "kwargs": kwargs}, ensure_ascii=True),
             )
             srr_message = cast(SrrMessage, srr_message)
             srr_dialogue = cast(SrrDialogue, srr_dialogue)
@@ -2219,7 +2219,7 @@ class LiquidityTraderBaseBehaviour(
         response = yield from self.get_http_response(
             method="POST",
             url=endpoint,
-            content=json.dumps(query).encode("utf-8"),
+            content=json.dumps(query, ensure_ascii=True).encode("utf-8"),
             headers={"Content-Type": "application/json"},
         )
 
@@ -2340,7 +2340,7 @@ class LiquidityTraderBaseBehaviour(
 
             # Store back to KV store
             yield from self._write_kv(
-                {"entry_costs_dict": json.dumps(entry_costs_dict)}
+                {"entry_costs_dict": json.dumps(entry_costs_dict, ensure_ascii=True)}
             )
 
             self.context.logger.info(f"Stored entry costs: {key} = ${costs:.6f}")

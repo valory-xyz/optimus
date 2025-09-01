@@ -105,7 +105,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 if not agent_type:
                     raise Exception("Failed to create agent type.")
-                yield from self._write_kv({"agent_type": json.dumps(agent_type)})
+                yield from self._write_kv({"agent_type": json.dumps(agent_type, ensure_ascii=True)})
             return agent_type
 
         return json.loads(data["agent_type"])
@@ -126,7 +126,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 if not agent_registry:
                     raise Exception("Failed to create agent registry.")
                 yield from self._write_kv(
-                    {"agent_registry": json.dumps(agent_registry)}
+                    {"agent_registry": json.dumps(agent_registry, ensure_ascii=True)}
                 )
             return agent_registry
 
@@ -150,7 +150,7 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 if not attr_def:
                     raise Exception("Failed to create attribute definition.")
-                yield from self._write_kv({"attr_def": json.dumps(attr_def)})
+                yield from self._write_kv({"attr_def": json.dumps(attr_def, ensure_ascii=True)})
             return attr_def
 
         return json.loads(data["attr_def"])

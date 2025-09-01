@@ -571,7 +571,7 @@ class HttpHandler(BaseHttpHandler):
             )
             headers = f"{header_content_type}{http_msg.headers}"
         else:
-            body_bytes = json.dumps(data).encode("utf-8")
+            body_bytes = json.dumps(data, ensure_ascii=True).encode("utf-8")
             headers = f"{self.json_content_header}{http_msg.headers}"
 
         http_response = http_dialogue.reply(
@@ -632,7 +632,7 @@ class HttpHandler(BaseHttpHandler):
         portfolio_data["selected_protocols"] = selected_protocol_names
         portfolio_data["trading_type"] = trading_type
 
-        portfolio_data_json = json.dumps(portfolio_data)
+        portfolio_data_json = json.dumps(portfolio_data, ensure_ascii=True)
         self.context.logger.info(f"Portfolio Response - {portfolio_data}")
         # Send the portfolio data as a response
         self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)
@@ -815,7 +815,7 @@ class HttpHandler(BaseHttpHandler):
             request_srr_message, srr_dialogue = srr_dialogues.create(
                 counterparty=str(GENAI_CONNECTION_PUBLIC_ID),
                 performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps(payload_data),
+                payload=json.dumps(payload_data, ensure_ascii=True),
             )
             # Prepare callback args
             callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}
@@ -1068,7 +1068,7 @@ class HttpHandler(BaseHttpHandler):
         self.context.logger.info(f"trading_type: {trading_type}")
 
         storage_data = {
-            "selected_protocols": json.dumps(selected_protocols),
+                            "selected_protocols": json.dumps(selected_protocols, ensure_ascii=True),
             "trading_type": trading_type,
             "composite_score": str(composite_score),
             "max_loss_percentage": str(max_loss_percentage),

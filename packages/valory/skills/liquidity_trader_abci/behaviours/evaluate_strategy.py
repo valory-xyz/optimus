@@ -98,6 +98,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             "updates": {},
                         },
                         sort_keys=True,
+                        ensure_ascii=True,
                     ),
                 )
                 yield from self.send_a2a_transaction(payload)
@@ -146,7 +147,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             actions = []
 
         payload = EvaluateStrategyPayload(
-            sender=self.context.agent_address, actions=json.dumps(actions)
+            sender=self.context.agent_address, actions=json.dumps(actions, ensure_ascii=True)
         )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():

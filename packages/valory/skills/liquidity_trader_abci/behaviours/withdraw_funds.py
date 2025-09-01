@@ -58,7 +58,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                     "No withdrawal requested, transitioning to normal flow"
                 )
                 payload = WithdrawFundsPayload(
-                    sender=self.context.agent_address, withdrawal_actions=json.dumps([])
+                    sender=self.context.agent_address, withdrawal_actions=json.dumps([], ensure_ascii=True)
                 )
                 yield from self.send_a2a_transaction(payload)
                 yield from self.wait_until_round_end()
@@ -149,7 +149,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             # Send withdrawal actions to be executed in subsequent rounds
             payload = WithdrawFundsPayload(
                 sender=self.context.agent_address,
-                withdrawal_actions=json.dumps(withdrawal_actions),
+                withdrawal_actions=json.dumps(withdrawal_actions, ensure_ascii=True),
             )
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():

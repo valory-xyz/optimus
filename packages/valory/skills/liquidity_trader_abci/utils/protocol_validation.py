@@ -17,18 +17,34 @@ def validate_and_fix_protocols(
         "sturdy": "asset_lending",
     }
 
-    # Check if any protocol is invalid
+    # Check if any protocol is invalid or not available on selected chains
     invalid_protocols = []
     valid_protocols = []
+    chain_incompatible_protocols = []
 
     for protocol in selected_protocols:
-        if protocol in VALID_PROTOCOLS:
+        if protocol not in VALID_PROTOCOLS:
+            invalid_protocols.append(protocol)
+            continue
+            
+        # Check if protocol is available on ANY of the target chains
+        protocol_available = False
+        for chain in target_investment_chains:
+            if chain in available_strategies:
+                chain_strategies = available_strategies[chain]
+                strategy_name = VALID_PROTOCOLS[protocol]
+                if strategy_name in chain_strategies:
+                    protocol_available = True
+                    break
+        
+        if protocol_available:
             valid_protocols.append(protocol)
         else:
-            invalid_protocols.append(protocol)
+            chain_incompatible_protocols.append(protocol)
 
-    # If any invalid protocols found, only fix the invalid ones
-    if invalid_protocols:
+
+    # If any invalid or incompatible protocols found, get fallback protocols
+    if invalid_protocols or chain_incompatible_protocols:
         # Get default protocols for all target chains as fallback
         default_protocols = []
         for chain in target_investment_chains:

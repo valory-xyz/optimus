@@ -56,7 +56,9 @@ class WithdrawFundsRound(CollectSameUntilThresholdRound):
             # Store withdrawal actions in the standard actions field for normal flow processing
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
-                actions=json.dumps(withdrawal_actions, ensure_ascii=True),  # Use standard actions field
+                actions=json.dumps(
+                    withdrawal_actions, ensure_ascii=True
+                ),  # Use standard actions field
                 last_action="WITHDRAWAL_INITIATED",
                 last_executed_action_index=None,  # Reset action index for new actions
             )

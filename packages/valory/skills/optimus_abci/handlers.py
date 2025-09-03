@@ -73,6 +73,9 @@ from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    DECISION_MAKING_TIMEOUT,
+    EVALUATE_STRATEGY_TIMEOUT,
+    FETCH_STRATEGIES_TIMEOUT,
     THRESHOLDS,
     TradingType,
 )
@@ -649,6 +652,7 @@ class HttpHandler(BaseHttpHandler):
         seconds_since_last_transition = None
         is_tm_unhealthy = None
         is_transitioning_fast = None
+        is_healthy = None
         current_round = None
         rounds = None
 
@@ -670,6 +674,38 @@ class HttpHandler(BaseHttpHandler):
                 < 2 * self.context.params.reset_pause_duration
             )
 
+            # Determine is_healthy based on round type and timeouts
+            if is_transitioning_fast:
+                # If transitioning fast, service is healthy
+                is_healthy = True
+            else:
+                # Check if we're in a long-running round with allowed timeout
+                if current_round:
+                    # Convert round ID to snake_case for comparison
+                    round_name = camel_to_snake(current_round)
+
+                    # Check if in evaluate strategy round
+                    if "evaluate_strategy" in round_name:
+                        is_healthy = (
+                            seconds_since_last_transition < EVALUATE_STRATEGY_TIMEOUT
+                        )
+                    # Check if in fetch strategies round
+                    elif "fetch_strategies" in round_name:
+                        is_healthy = (
+                            seconds_since_last_transition < FETCH_STRATEGIES_TIMEOUT
+                        )
+                    # Check if in decision making round
+                    elif "decision_making" in round_name:
+                        is_healthy = (
+                            seconds_since_last_transition < DECISION_MAKING_TIMEOUT
+                        )
+                    else:
+                        # For other rounds, use the default transitioning fast logic
+                        is_healthy = is_transitioning_fast
+                else:
+                    # No current round info, use transitioning fast as fallback
+                    is_healthy = is_transitioning_fast
+
         if round_sequence._abci_app:
             current_round = round_sequence._abci_app.current_round.round_id
             rounds = [
@@ -685,6 +721,7 @@ class HttpHandler(BaseHttpHandler):
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,
             "is_tm_healthy": not is_tm_unhealthy,
+            "is_healthy": is_healthy,
             "period": self.synchronized_data.period_count,
             "reset_pause_duration": self.context.params.reset_pause_duration,
             "rounds": rounds,
@@ -1068,7 +1105,7 @@ class HttpHandler(BaseHttpHandler):
         self.context.logger.info(f"trading_type: {trading_type}")
 
         storage_data = {
-                            "selected_protocols": json.dumps(selected_protocols, ensure_ascii=True),
+            "selected_protocols": json.dumps(selected_protocols, ensure_ascii=True),
             "trading_type": trading_type,
             "composite_score": str(composite_score),
             "max_loss_percentage": str(max_loss_percentage),

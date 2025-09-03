@@ -281,7 +281,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 and self.synchronized_data.final_tx_hash
             ):
                 tx_hashes = [self.synchronized_data.final_tx_hash]
-                update_data["withdrawal_transaction_hashes"] = json.dumps(tx_hashes, ensure_ascii=True)
+                update_data["withdrawal_transaction_hashes"] = json.dumps(
+                    tx_hashes, ensure_ascii=True
+                )
 
             # Use the existing _write_kv method to update KV store
             yield from self._write_kv(update_data)
@@ -568,44 +570,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"Enter pool was successful! Updated current positions for pool {current_position['pool_address']}"
         )
 
-        # Update agent performance activity
-        token0_symbol = action.get("token0_symbol", "Token0")
-        token1_symbol = action.get("token1_symbol", "Token1")
-        dex_type = action.get("dex_type", "DEX")
-        chain = action.get("chain")
-        token0_address = action.get("token0")
-        token1_address = action.get("token1")
-
-        # Get amounts from the current position that was just created
-        amount0 = current_position.get("amount0", 0)
-        amount1 = current_position.get("amount1", 0)
-
-        # Get token decimals and format amounts for display
-        if token0_address:
-            token0_decimals = yield from self._get_token_decimals(chain, token0_address)
-        else:
-            token0_decimals = 18
-            
-        if token1_address:
-            token1_decimals = yield from self._get_token_decimals(chain, token1_address)
-        else:
-            token1_decimals = 18
-
-        amount0_formatted = (
-            float(amount0) / (10 ** (token0_decimals or 18)) if amount0 else 0
-        )
-        amount1_formatted = (
-            float(amount1) / (10 ** (token1_decimals or 18)) if amount1 else 0
-        )
-
-        amount0_str = f"{amount0_formatted:.4f}" if amount0_formatted > 0 else "0"
-        amount1_str = f"{amount1_formatted:.4f}" if amount1_formatted > 0 else "0"
-
-        title = f"Entered {token0_symbol}/{token1_symbol} pool on {dex_type}"
-        description = f"Invested {amount0_str} {token0_symbol} and {amount1_str} {token1_symbol} in liquidity pool on {dex_type}. Transaction Hash - {self.synchronized_data.final_tx_hash}"
-
-        self._update_agent_performance_activity(title, description)
-
     def _post_execute_exit_pool(
         self, actions, last_executed_action_index
     ) -> Generator[None, None, None]:
@@ -614,8 +578,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = action.get("pool_address")
         is_cl_pool = action.get("is_cl_pool", False)
         dex_type = action.get("dex_type")
-        token0_symbol = None
-        token1_symbol = None
 
         # Find all positions with the matching pool address and update their status
         for position in self.current_positions:
@@ -623,8 +585,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["status"] = PositionStatus.CLOSED.value
                 position["exit_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["exit_timestamp"] = int(self._get_current_timestamp())
-                token0_symbol = position.get("token0_symbol")
-                token1_symbol = position.get("token1_symbol")
 
                 # Record TiP performance metrics
                 self._record_tip_performance(position)
@@ -660,14 +620,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if action.get("description", "").startswith("Withdrawal"):
             self.context.logger.info("Withdrawal pool exit completed successfully.")
 
-        title = f"Exited {token0_symbol}/{token1_symbol} pool on {dex_type}"
-        description = f"Withdrew {token0_symbol} and {token1_symbol} from liquidity pool on {dex_type}. Transaction Hash - {self.synchronized_data.final_tx_hash}"
-
-        self._update_agent_performance_activity(title, description)
-
     def _post_execute_transfer(self, actions, last_executed_action_index):
         """Handle USDC transfer completion."""
-        # Update agent performance activity for bridge/swap
+        # Log bridge/swap completion
         action = actions[last_executed_action_index]
 
         from_chain = action.get("from_chain", "unknown")
@@ -675,10 +630,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         from_token_symbol = action.get("from_token_symbol")
         to_token_symbol = action.get("to_token_symbol")
 
-        title = "Swap completed"
-        description = f"Swapped {from_token_symbol} {from_chain} to {to_token_symbol} {to_chain}. Transaction Hash - {self.synchronized_data.final_tx_hash}"
-
-        self._update_agent_performance_activity(title, description)
+        self.context.logger.info(
+            f"Swap completed: {from_token_symbol} {from_chain} to {to_token_symbol} {to_chain}. "
+            f"Transaction Hash - {self.synchronized_data.final_tx_hash}"
+        )
 
     def _post_execute_withdraw(
         self, actions, last_executed_action_index
@@ -1908,8 +1863,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # For Sturdy vaults, use redeem method instead of withdraw to avoid "too much loss" error
         if dex_type == "Sturdy":
-            self.context.logger.info("Using redeem method for Sturdy vault to avoid loss constraints")
-            
+            self.context.logger.info(
+                "Using redeem method for Sturdy vault to avoid loss constraints"
+            )
+
             # Get the current balance (shares) instead of max withdraw
             shares = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -1939,7 +1896,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         else:
             # For non-Sturdy vaults, use the original withdraw method
             self.context.logger.info("Using withdraw method for non-Sturdy vault")
-            
+
             # Get the maximum withdrawable amount
             amount = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -2400,17 +2357,23 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         )
         tool = response.get("tool")
         data = response.get("transactionRequest", {}).get("data")
-        
+
         # Validate the transaction data from LiFi API
-        if not data or not isinstance(data, str) or not data.startswith('0x'):
-            self.context.logger.error(f"Invalid transaction data from LiFi API: {data}")
+        if not data or not isinstance(data, str) or not data.startswith("0x"):
+            self.context.logger.error(
+                f"Invalid transaction data from LiFi API: {data!r}"
+            )
             return None
-            
+
         try:
             tx_hash = bytes.fromhex(data[2:])
-            self.context.logger.info(f"Successfully converted LiFi transaction data: {data[:50]}... -> {len(tx_hash)} bytes")
+            self.context.logger.info(
+                f"Successfully converted LiFi transaction data: {data[:50]}... -> {len(tx_hash)} bytes"
+            )
         except Exception as e:
-            self.context.logger.error(f"Failed to convert LiFi transaction data '{data}': {e}")
+            self.context.logger.error(
+                f"Failed to convert LiFi transaction data {data!r}: {e}"
+            )
             return None
 
         estimate = response.get("estimate", {})
@@ -2637,6 +2600,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         chain: str,
         **kwargs: Any,
     ) -> Generator[None, None, bool]:
+        # Skip Tenderly simulation for MODE chain (deprecated on Tenderly)
+        if chain.lower() == "mode":
+            self.context.logger.info(
+                "Skipping Tenderly simulation for MODE chain (deprecated on Tenderly). "
+                "Proceeding without simulation."
+            )
+            return True
+
         safe_address = self.params.safe_contract_addresses.get(chain)
         agent_address = self.context.agent_address
         safe_tx = yield from self.get_contract_api_response(
@@ -4251,9 +4222,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         pool_address = action.get("pool_address")
         chain = action.get("chain")
         is_cl_pool = action.get("is_cl_pool", False)
-        token0_symbol = None
-        token1_symbol = None
-        lp_amount = 0
 
         self.context.logger.info(
             f"LP token staking completed for pool {pool_address} on {chain}"
@@ -4270,9 +4238,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["staked"] = True
                 position["staking_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["staking_timestamp"] = int(self._get_current_timestamp())
-                token0_symbol = position.get("token0_symbol")
-                token1_symbol = position.get("token1_symbol")
-                lp_amount = position.get("liquidity")
 
                 # For CL pools, we might want to store additional metadata
                 if is_cl_pool:
@@ -4286,14 +4251,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.store_current_positions()
         self.context.logger.info("Staking LP tokens was successful!")
 
-        # Format amount for display
-        lp_amount_str = f"{float(lp_amount):.4f}" if lp_amount else "unknown amount"
-
-        title = f"Staked {token0_symbol}/{token1_symbol} LP tokens"
-        description = f"Staked {lp_amount_str} LP tokens for {token0_symbol}/{token1_symbol} pool to earn additional rewards. Transaction Hash - {self.synchronized_data.final_tx_hash}"
-
-        self._update_agent_performance_activity(title, description)
-
     def _post_execute_unstake_lp_tokens(self, actions, last_executed_action_index):
         """Handle unstaking LP tokens completion."""
         action = actions[last_executed_action_index]
@@ -4302,8 +4259,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"LP token unstaking completed for pool {pool_address} on {chain}"
         )
-        token0_symbol = None
-        token1_symbol = None
 
         # Update position metadata to remove staking information
         for position in self.current_positions:
@@ -4315,8 +4270,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 position["staked"] = False
                 position["unstaking_tx_hash"] = self.synchronized_data.final_tx_hash
                 position["unstaking_timestamp"] = int(self._get_current_timestamp())
-                token0_symbol = position.get("token0_symbol")
-                token1_symbol = position.get("token1_symbol")
 
                 # Remove CL-specific staking metadata
                 if "staked_cl_pool" in position:
@@ -4329,11 +4282,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
         self.context.logger.info("Unstaking LP tokens was successful!")
-
-        title = f"Unstaked {token0_symbol}/{token1_symbol} LP tokens"
-        description = f"Unstaked LP tokens for {token0_symbol}/{token1_symbol} pool. Transaction Hash - {self.synchronized_data.final_tx_hash}"
-
-        self._update_agent_performance_activity(title, description)
 
     def _post_execute_claim_staking_rewards(self, actions, last_executed_action_index):
         """Handle claiming staking rewards completion."""
@@ -4366,26 +4314,3 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         self.store_current_positions()
         self.context.logger.info("Claiming staking rewards was successful!")
-
-    def _update_agent_performance_activity(self, title: str, description: str) -> None:
-        """Update agent performance with last activity."""
-        try:
-            # Read existing agent performance data or initialize
-            self.read_agent_performance()
-
-            # Update last activity
-            self.agent_performance["last_activity"] = {
-                "title": title,
-                "description": description,
-            }
-
-            # Update timestamp and store
-            self.update_agent_performance_timestamp()
-            self.store_agent_performance()
-
-            self.context.logger.info(f"Updated agent performance activity: {title}")
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error updating agent performance activity: {str(e)}"
-            )

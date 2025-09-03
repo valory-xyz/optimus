@@ -132,6 +132,17 @@ REWARD_TOKEN_ADDRESSES = {
     },
 }
 
+# Round timeout constants for health check
+# These timeouts define how long specific rounds can run before being considered unhealthy
+# Used to prevent false restarts when the agent is performing legitimate long-running operations
+EVALUATE_STRATEGY_TIMEOUT = (
+    300  # 5 minutes - time for executing all strategies in parallel
+)
+FETCH_STRATEGIES_TIMEOUT = (
+    300  # 5 minutes - time for downloading strategy files from IPFS
+)
+DECISION_MAKING_TIMEOUT = 180  # 3 minutes - time for executing on-chain transactions
+
 
 class DexType(Enum):
     """DexType"""
@@ -223,7 +234,7 @@ WHITELISTED_ASSETS = {
         "0xe7903B1F75C534Dd8159b313d92cDCfbC62cB3Cd": "wrsETH",
         "0x8b2EeA0999876AAB1E7955fe01A5D261b570452C": "wMLT",
         "0x66eEd5FF1701E6ed8470DC391F05e27B1d0657eb": "BMX",
-        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "XVELO",
+        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "VELO",
         "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
         "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
@@ -261,7 +272,7 @@ COIN_ID_MAPPING = {
         "wrseth": "wrapped-rseth",
         "wmlt": "bmx-wrapped-mode-liquidity-token",
         "bmx": "bmx",
-        "xvelo": "velodrome-finance",  # xVELO can be bridged back 1:1 for native VELO on OP
+        "velo": "velodrome-finance",  # VELO can be bridged back 1:1 for native VELO on OP
         "iusdc": "ironclad-usd",
     },
     "optimism": {
@@ -616,6 +627,14 @@ class LiquidityTraderBaseBehaviour(
             token_info = token_data.get("token", {})
             token_address = token_info.get("address")
             token_symbol = token_info.get("symbol", "UNKNOWN")
+
+            # Rename XVELO to VELO for Mode chain
+            if token_symbol == "XVELO":
+                token_symbol = "VELO"
+                self.context.logger.info(
+                    f"Renamed XVELO to VELO for Mode chain token at {token_address}"
+                )
+
             balance_value = token_data.get("value", "0")
 
             if not token_address or not balance_value or balance_value == "0":
@@ -977,7 +996,6 @@ class LiquidityTraderBaseBehaviour(
         self.agent_performance = {
             "timestamp": None,
             "metrics": [],
-            "last_activity": None,
             "agent_behavior": None,
         }
 
@@ -1556,8 +1574,15 @@ class LiquidityTraderBaseBehaviour(
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
+        self.context.logger.info(
+            f"Fetching current price for token {token_address} on {chain} chain"
+        )
+
         cached_price = yield from self._get_cached_price(token_address, date_str)
         if cached_price is not None:
+            self.context.logger.info(
+                f"Using cached price for token {token_address}: ${cached_price}"
+            )
             return cached_price
 
         headers = {
@@ -1570,6 +1595,10 @@ class LiquidityTraderBaseBehaviour(
         if not platform_id:
             self.context.logger.error(f"Missing platform id for chain {chain}")
             return None
+
+        self.context.logger.info(
+            f"Fetching price from CoinGecko API for token {token_address} on platform {platform_id}"
+        )
 
         success, response_json = yield from self._request_with_retries(
             endpoint=self.coingecko.token_price_endpoint.format(
@@ -1586,8 +1615,19 @@ class LiquidityTraderBaseBehaviour(
             price = token_data.get("usd", 0)
             # Cache the price
             if price:
+                self.context.logger.info(
+                    f"Successfully fetched price for token {token_address}: ${price}"
+                )
                 yield from self._cache_price(token_address, price, date_str)
+            else:
+                self.context.logger.warning(
+                    f"No price data returned for token {token_address}"
+                )
             return price
+        else:
+            self.context.logger.error(
+                f"Failed to fetch price for token {token_address} from CoinGecko"
+            )
 
         return None
 
@@ -1651,7 +1691,9 @@ class LiquidityTraderBaseBehaviour(
             # For current price, store with timestamp
             price_data["current"] = (price, self._get_current_timestamp())
 
-        yield from self._write_kv({cache_key: json.dumps(price_data, ensure_ascii=True)})
+        yield from self._write_kv(
+            {cache_key: json.dumps(price_data, ensure_ascii=True)}
+        )
 
     def _calculate_rate_limit_wait_time(self) -> int:
         """Calculate the wait time for rate limiting based on the rate limiter state."""
@@ -1790,7 +1832,9 @@ class LiquidityTraderBaseBehaviour(
             srr_message, srr_dialogue = srr_dialogues.create(
                 counterparty=str(MIRRORDB_CONNECTION_PUBLIC_ID),
                 performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps({"method": method, "kwargs": kwargs}, ensure_ascii=True),
+                payload=json.dumps(
+                    {"method": method, "kwargs": kwargs}, ensure_ascii=True
+                ),
             )
             srr_message = cast(SrrMessage, srr_message)
             srr_dialogue = cast(SrrDialogue, srr_dialogue)
@@ -1877,8 +1921,11 @@ class LiquidityTraderBaseBehaviour(
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
+        self.context.logger.info("Fetching current price for ETH (Zero Address)")
+
         cached_price = yield from self._get_cached_price(ZERO_ADDRESS, date_str)
         if cached_price is not None:
+            self.context.logger.info(f"Using cached price for ETH: ${cached_price}")
             return cached_price
 
         headers = {
@@ -1886,6 +1933,8 @@ class LiquidityTraderBaseBehaviour(
         }
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
+
+        self.context.logger.info("Fetching ETH price from CoinGecko API")
 
         success, response_json = yield from self._request_with_retries(
             endpoint=self.coingecko.coin_price_endpoint.format(coin_id="ethereum"),
@@ -1899,8 +1948,13 @@ class LiquidityTraderBaseBehaviour(
             token_data = next(iter(response_json.values()), {})
             price = token_data.get("usd", 0)
             if price:
+                self.context.logger.info(f"Successfully fetched ETH price: ${price}")
                 yield from self._cache_price(ZERO_ADDRESS, price, date_str)
+            else:
+                self.context.logger.warning("No price data returned for ETH")
             return price
+        else:
+            self.context.logger.error("Failed to fetch ETH price from CoinGecko")
         return None
 
     def _get_current_timestamp(self) -> int:
@@ -2029,9 +2083,16 @@ class LiquidityTraderBaseBehaviour(
     def _fetch_historical_token_price(
         self, coingecko_id, date_str
     ) -> Generator[None, None, Optional[float]]:
+        self.context.logger.info(
+            f"Fetching historical price for token {coingecko_id} on date {date_str}"
+        )
+
         # First check the cache
         cached_price = yield from self._get_cached_price(coingecko_id, date_str)
         if cached_price is not None:
+            self.context.logger.info(
+                f"Using cached historical price for {coingecko_id} on {date_str}: ${cached_price}"
+            )
             return cached_price
 
         endpoint = self.coingecko.historical_price_endpoint.format(
@@ -2042,6 +2103,10 @@ class LiquidityTraderBaseBehaviour(
         headers = {"Accept": "application/json"}
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
+
+        self.context.logger.info(
+            f"Fetching historical price from CoinGecko API for {coingecko_id} on {date_str}"
+        )
 
         success, response_json = yield from self._request_with_retries(
             endpoint=endpoint,
@@ -2056,17 +2121,20 @@ class LiquidityTraderBaseBehaviour(
                 response_json.get("market_data", {}).get("current_price", {}).get("usd")
             )
             if price:
+                self.context.logger.info(
+                    f"Successfully fetched historical price for {coingecko_id} on {date_str}: ${price}"
+                )
                 # Cache the historical price
                 yield from self._cache_price(coingecko_id, price, date_str)
                 return price
             else:
-                self.context.logger.error(
-                    f"No price in response for token {coingecko_id}"
+                self.context.logger.warning(
+                    f"No price data in response for token {coingecko_id} on {date_str}"
                 )
                 return None
         else:
             self.context.logger.error(
-                f"Failed to fetch historical price for {coingecko_id}"
+                f"Failed to fetch historical price for {coingecko_id} on {date_str} from CoinGecko"
             )
             return None
 

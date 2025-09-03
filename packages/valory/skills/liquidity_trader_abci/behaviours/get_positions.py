@@ -52,7 +52,9 @@ class GetPositionsBehaviour(LiquidityTraderBaseBehaviour):
             if positions is None:
                 positions = GetPositionsRound.ERROR_PAYLOAD
 
-            serialized_positions = json.dumps(positions, sort_keys=True, ensure_ascii=True)
+            serialized_positions = json.dumps(
+                positions, sort_keys=True, ensure_ascii=True
+            )
             payload = GetPositionsPayload(sender=sender, positions=serialized_positions)
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():

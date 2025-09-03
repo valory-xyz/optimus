@@ -140,8 +140,7 @@ jobs:
 
 
   test:
-    if: false
-    continue-on-error: True
+    continue-on-error: False
     needs:
       - lock_check
       - copyright_and_dependencies_check
@@ -151,7 +150,7 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, macos-latest, windows-latest ]
-        python-version: [ "3.8", "3.9", "3.10", "3.11" ]
+        python-version: [ "3.9", "3.10", "3.11" ]
 
     timeout-minutes: 30
 
@@ -198,7 +197,7 @@ jobs:
       - if: matrix.os == 'ubuntu-latest'
         name: Unit tests (ubuntu-latest)
         run: |
-          tox -e py${{ matrix.python-version }}-linux -- -m 'not e2e'
+          tox -e py${{ matrix.python-version }}-linux
 
       - if: matrix.os == 'macos-latest'
         name: Install dependencies (macos-latest)
@@ -225,7 +224,7 @@ jobs:
       - if: matrix.os == 'macos-latest'
         name: Skills unit tests macos-latest
         run: |
-          tox -e py${{ matrix.python-version }}-darwin -- -m 'not e2e'
+          tox -e py${{ matrix.python-version }}-darwin
 
       - if: matrix.os == 'windows-latest'
         name: Install dependencies (windows-latest)
@@ -256,7 +255,7 @@ jobs:
       - if: matrix.os == 'windows-latest'
         name: Skills unit tests windows-latest
         run: |
-          tox -e py${{ matrix.python-version }}-win -- -m 'not e2e'
+          tox -e py${{ matrix.python-version }}-win
 
       - if: matrix.os == 'ubuntu-latest'
         name: Upload coverage to Codecov
@@ -269,8 +268,7 @@ jobs:
           fail_ci_if_error: false
 
   e2e-tests:
-    if: false
-    continue-on-error: True
+    continue-on-error: False
     needs:
       - test
     runs-on: ${{ matrix.os }}
@@ -316,4 +314,4 @@ jobs:
 
       - name: e2e tests
         run: |
-          tox -e py${{ matrix.python-version }} -- -m 'e2e'
+          tox -e py${{ matrix.python-version }}-linux -- -m 'e2e'

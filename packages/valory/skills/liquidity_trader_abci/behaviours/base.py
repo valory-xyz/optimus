@@ -1667,10 +1667,10 @@ class LiquidityTraderBaseBehaviour(
             return None
 
     def _cache_price(
-        self, token_address: str, price: float, date: str
+        self, coin_id: str, price: float, date: str
     ) -> Generator[None, None, None]:
         """Cache price for a token."""
-        cache_key = self._get_price_cache_key(token_address, date)
+        cache_key = self._get_price_cache_key(coin_id, date)
 
         # First read existing cache
         result = yield from self._read_kv((cache_key,))
@@ -1681,7 +1681,7 @@ class LiquidityTraderBaseBehaviour(
                 price_data = json.loads(result[cache_key])
             except json.JSONDecodeError:
                 self.context.logger.error(
-                    f"Invalid cache data for token {token_address}, resetting cache"
+                    f"Invalid cache data for token {coin_id}, resetting cache"
                 )
 
         if date:
@@ -1918,14 +1918,21 @@ class LiquidityTraderBaseBehaviour(
 
     def _fetch_zero_address_price(self) -> Generator[None, None, Optional[float]]:
         """Fetch the price for the zero address (Ethereum)."""
+        price = yield from self._fetch_coin_price("ethereum")
+        return price
+
+    def _fetch_coin_price(self, coin_id: str) -> Generator[None, None, Optional[float]]:
+        """Fetch the price for any coin using CoinGecko coin price endpoint."""
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
-        self.context.logger.info("Fetching current price for ETH (Zero Address)")
+        self.context.logger.info(f"Fetching current price for coin {coin_id}")
 
-        cached_price = yield from self._get_cached_price(ZERO_ADDRESS, date_str)
+        cached_price = yield from self._get_cached_price(coin_id, date_str)
         if cached_price is not None:
-            self.context.logger.info(f"Using cached price for ETH: ${cached_price}")
+            self.context.logger.info(
+                f"Using cached price for {coin_id}: ${cached_price}"
+            )
             return cached_price
 
         headers = {
@@ -1934,10 +1941,12 @@ class LiquidityTraderBaseBehaviour(
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
-        self.context.logger.info("Fetching ETH price from CoinGecko API")
+        self.context.logger.info(
+            f"Fetching {coin_id} price from CoinGecko coin price endpoint"
+        )
 
         success, response_json = yield from self._request_with_retries(
-            endpoint=self.coingecko.coin_price_endpoint.format(coin_id="ethereum"),
+            endpoint=self.coingecko.coin_price_endpoint.format(coin_id=coin_id),
             headers=headers,
             rate_limited_code=self.coingecko.rate_limited_code,
             rate_limited_callback=self.coingecko.rate_limited_status_callback,
@@ -1948,13 +1957,15 @@ class LiquidityTraderBaseBehaviour(
             token_data = next(iter(response_json.values()), {})
             price = token_data.get("usd", 0)
             if price:
-                self.context.logger.info(f"Successfully fetched ETH price: ${price}")
-                yield from self._cache_price(ZERO_ADDRESS, price, date_str)
+                self.context.logger.info(
+                    f"Successfully fetched {coin_id} price: ${price}"
+                )
+                yield from self._cache_price(coin_id, price, date_str)
             else:
-                self.context.logger.warning("No price data returned for ETH")
+                self.context.logger.warning(f"No price data returned for {coin_id}")
             return price
         else:
-            self.context.logger.error("Failed to fetch ETH price from CoinGecko")
+            self.context.logger.error(f"Failed to fetch {coin_id} price from CoinGecko")
         return None
 
     def _get_current_timestamp(self) -> int:

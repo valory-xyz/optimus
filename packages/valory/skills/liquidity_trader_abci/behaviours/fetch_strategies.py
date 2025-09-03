@@ -1394,9 +1394,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
-                        velo_price = yield from self._fetch_token_price(
-                            velo_token_address, chain
-                        )
+                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        velo_price = yield from self._fetch_coin_price(velo_coin_id)
                         if velo_price is None:
                             self.context.logger.warning(
                                 "Could not fetch VELO price for yield calculation"

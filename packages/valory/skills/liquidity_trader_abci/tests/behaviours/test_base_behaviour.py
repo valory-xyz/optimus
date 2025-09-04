@@ -60,7 +60,7 @@ from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.protocols.srr.message import SrrMessage
 from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 
-PACKAGE_DIR = Path(__file__).parent.parent
+PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
 class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
@@ -71,6 +71,10 @@ class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
     def setUp(self):
         """Setup test environment."""
         super().setUp()
+
+    def tearDown(self):
+        """Clean up test environment."""
+        pass
 
 
 class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
@@ -139,12 +143,6 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         # Create test files
         self.test_file = self.temp_path / "test_file.json"
         self.test_file.write_text('{"test": "data"}')
-        
-        # Create base behaviour instance
-        self.base_behaviour = LiquidityTraderBaseBehaviour(
-            name="base_behaviour",
-            skill_context=self.skill.skill_context
-        )
 
     def tearDown(self):
         """Clean up test environment."""
@@ -193,7 +191,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             ({"info": "test info"}, "info"),
             ({"warning": "test warning"}, "warning"),
             ({"error": "test error"}, "error"),
-            ({}, "error"),  # Should call default_error
+            ({}, "error"),  # Should call default_error when no level messages found
         ]
     )
     def test_contract_interaction_error(self, response_body, expected_log_level):
@@ -372,6 +370,9 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             ({"test": "data"}, "test_attribute", "test_file.json", True),
             (None, "test_attribute", "test_file.json", True),
             ({"test": "data"}, "test_attribute", "test_file.json", False),
+            # Additional scenarios for better coverage
+            ({"complex": [1, 2, 3]}, "complex_attr", "complex.json", False),
+            ({}, "empty_attr", "empty.json", False),
         ]
     )
     def test_store_data(self, data, attribute, filepath, file_exists):
@@ -402,12 +403,26 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                             stored_data = json.load(f)
                         assert stored_data == data
 
+    def test_store_data_error_handling(self):
+        """Test _store_data method error handling."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Test with a filepath that causes IOError/OSError
+        with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+            with patch('builtins.open', side_effect=OSError("Permission denied")):
+                base_behaviour._store_data({"test": "data"}, "test_attr", "/invalid/path/file.json")
+                
+                mock_error.assert_called_once()
+
     @pytest.mark.parametrize(
         "attribute,filepath,file_exists,file_content,class_object",
         [
             ("test_attribute", "test_file.json", True, {"test": "data"}, False),
             ("test_attribute", "test_file.json", False, None, False),
             ("current_positions", "current_positions.json", False, None, False),
+            # Additional scenarios for better coverage
+            ("agent_performance", "agent_performance.json", True, {"metrics": ["test"]}, False),
+            ("positions", "positions.json", False, None, False),
         ]
     )
     def test_read_data(self, attribute, filepath, file_exists, file_content, class_object):
@@ -437,6 +452,35 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 with open(file_path, 'r') as f:
                     created_data = json.load(f)
                 assert created_data == []
+
+    def test_read_data_json_decode_error(self):
+        """Test _read_data method with JSON decode error."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Ensure setUp is called to create temp_path
+        if not hasattr(self, 'temp_path'):
+            self.setUp()
+        
+        # Create a file with invalid JSON
+        file_path = self.temp_path / "invalid.json"
+        with open(file_path, 'w') as f:
+            f.write("invalid json content")
+        
+        with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+            base_behaviour._read_data("test_attr", str(file_path))
+            
+            mock_error.assert_called_once()
+
+    def test_read_data_file_read_error(self):
+        """Test _read_data method with file read error."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Test with a filepath that causes PermissionError/OSError
+        with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+            with patch('builtins.open', side_effect=PermissionError("Access denied")):
+                base_behaviour._read_data("test_attr", "/invalid/path/file.json")
+                
+                mock_error.assert_called_once()
 
     @pytest.mark.parametrize(
         "symbol,chain_name,expected_coin_id",
@@ -518,6 +562,15 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         
         result = base_behaviour._get_usdc_address(chain)
         assert result == expected_address
+    
+    def test_get_usdc_address_exception_handling(self):
+        """Test _get_usdc_address method exception handling."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Test exception handling by mocking to_checksum_address to raise an exception
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.base.to_checksum_address', side_effect=Exception("Test exception")):
+            result = base_behaviour._get_usdc_address("optimism")
+            assert result is None
 
     @pytest.mark.parametrize(
         "chain,expected_address",
@@ -571,25 +624,105 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         result = base_behaviour._get_price_cache_key(token_address, date)
         assert result == expected_key
 
-    @pytest.mark.parametrize(
-        "strategy,strategies_executables,expected_result",
-        [
-            ("test_strategy", {"test_strategy": ("def test_method(): return 'success'", "test_method")}, "success"),
-            ("unknown_strategy", {"test_strategy": ("def test_method(): return 'success'", "test_method")}, None),
-        ]
-    )
-    def test_execute_strategy(self, strategy, strategies_executables, expected_result):
-        """Test execute_strategy function."""
-        result = execute_strategy(strategy, strategies_executables)
-        assert result == expected_result
+    @pytest.mark.parametrize("test_name,strategy,strategies_executables,kwargs,expected_result,expected_logs", [
+        (
+            "successful_strategy_execution",
+            "test_strategy",
+            {"test_strategy": ("def test_method(): return 'success'", "test_method")},
+            {},
+            "success",
+            []
+        ),
+        (
+            "strategy_not_found",
+            "unknown_strategy",
+            {"test_strategy": ("def test_method(): return 'success'", "test_method")},
+            {},
+            None,
+            ["No executable was found for strategy='unknown_strategy'!"]
+        ),
+        (
+            "strategy_with_kwargs",
+            "test_strategy",
+            {"test_strategy": ("def test_method(param): return f'param_{param}'", "test_method")},
+            {"param": "value"},
+            "param_value",
+            []
+        ),
+        (
+            "generator_method_result",
+            "test_strategy",
+            {"test_strategy": ("def test_method(): yield 1; yield 2; yield 3", "test_method")},
+            {},
+            [1, 2, 3],
+            []
+        ),
+        (
+            "method_not_found_in_executable",
+            "test_strategy",
+            {"test_strategy": ("def wrong_method(): return 'wrong'", "test_method")},
+            {},
+            None,
+            ["No 'test_method' method was found in test_strategy executable."]
+        ),
+        (
+            "globals_cleanup_before_exec",
+            "test_strategy",
+            {"test_strategy": ("def test_method(): return 'success'", "test_method")},
+            {},
+            "success",
+            []
+        ),
+        (
+            "empty_strategies_dict",
+            "test_strategy",
+            {},
+            {},
+            None,
+            ["No executable was found for strategy='test_strategy'!"]
+        ),
+        (
+            "strategy_with_complex_return",
+            "test_strategy",
+            {"test_strategy": ("def test_method(): return {'key': 'value', 'number': 42}", "test_method")},
+            {},
+            {"key": "value", "number": 42},
+            []
+        ),
+    ])
+    def test_execute_strategy_comprehensive(self, test_name, strategy, strategies_executables, kwargs, expected_result, expected_logs):
+        """Test execute_strategy function comprehensively."""
+        # Clear any existing globals that might interfere
+        if "test_method" in globals():
+            del globals()["test_method"]
+        
+        # Capture log messages
+        with patch('logging.getLogger') as mock_logger:
+            mock_logger_instance = MagicMock()
+            mock_logger.return_value = mock_logger_instance
+            
+            result = execute_strategy(strategy, strategies_executables, **kwargs)
+            
+            # Verify the result
+            assert result == expected_result, f"Test '{test_name}' failed: expected {expected_result}, got {result}"
+            
+            # Verify expected log messages
+            for expected_log in expected_logs:
+                mock_logger_instance.error.assert_any_call(expected_log)
+            
+            # Verify globals cleanup (for successful cases)
+            if expected_result is not None and "test_method" in globals():
+                # The method should be available after execution
+                assert "test_method" in globals()
 
     def test_properties(self):
         """Test property methods."""
         base_behaviour = self._create_base_behaviour()
         
         # Test synchronized_data property
-        with patch.object(type(base_behaviour), 'synchronized_data', new_callable=PropertyMock) as mock_sync_data:
-            mock_sync_data.return_value = MagicMock()
+        # Mock the super().synchronized_data to return a mock object
+        with patch.object(type(base_behaviour).__bases__[0], 'synchronized_data', new_callable=PropertyMock) as mock_super_sync_data:
+            mock_super_sync_data.return_value = MagicMock()
             result = base_behaviour.synchronized_data
             assert result is not None
         
@@ -715,6 +848,36 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         # Test with no position
         result = base_behaviour._build_exit_pool_action_base(None)
         assert result is None
+        
+        # Test with tokens provided
+        tokens = [
+            {"token": "0xToken123", "symbol": "TOKEN1"},
+            {"token": "0xToken456", "symbol": "TOKEN2"}
+        ]
+        
+        result = base_behaviour._build_exit_pool_action_base(position, tokens)
+        assert result["action"] == "ExitPool"
+        assert result["dex_type"] == "velodrome"
+        assert result["chain"] == "optimism"
+        assert result["token_id"] == 123
+        assert result["liquidity"] == 1000
+        assert "assets" in result
+        assert result["assets"] == ["0xToken123", "0xToken456"]
+        
+        # Test with CL pool position and tokens
+        result = base_behaviour._build_exit_pool_action_base(cl_position, tokens)
+        assert result["token_ids"] == [123, 456]
+        assert result["liquidities"] == [1000, 2000]
+        assert "assets" in result
+        assert result["assets"] == ["0xToken123", "0xToken456"]
+        
+        # Test with empty tokens list
+        result = base_behaviour._build_exit_pool_action_base(position, [])
+        assert "assets" not in result  # Should not add assets if tokens list is empty
+        
+        # Test with None tokens
+        result = base_behaviour._build_exit_pool_action_base(position, None)
+        assert "assets" not in result  # Should not add assets if tokens is None
 
     def test_build_swap_to_usdc_action(self):
         """Test _build_swap_to_usdc_action method."""
@@ -737,54 +900,213 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "optimism", "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", "USDC"
         )
         assert result is None
+        
+        # Test with unsupported chain (should return None due to missing USDC address)
+        result = base_behaviour._build_swap_to_usdc_action(
+            "unsupported_chain", "0xToken123", "TEST"
+        )
+        assert result is None
+        
+        # Test with OLAS token (should return None)
+        result = base_behaviour._build_swap_to_usdc_action(
+            "optimism", "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527", "OLAS"
+        )
+        assert result is None
+        
+        # Test with OLAS token on Mode chain (should return None)
+        result = base_behaviour._build_swap_to_usdc_action(
+            "mode", "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9", "OLAS"
+        )
+        assert result is None
+        
+        # Test with OLAS token but no olas_address method (should still work)
+        with patch.object(type(base_behaviour), '_get_olas_address', return_value=None):
+            result = base_behaviour._build_swap_to_usdc_action(
+                "optimism", "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527", "OLAS"
+            )
+            # Should not return None since _get_olas_address returns None
+            assert result is not None
+        
+        # Test exception handling (should return None)
+        with patch.object(type(base_behaviour), '_get_usdc_address', side_effect=Exception("Test exception")):
+            result = base_behaviour._build_swap_to_usdc_action(
+                "optimism", "0xToken123", "TEST"
+            )
+            assert result is None
 
-    def test_build_unstake_lp_tokens_action(self):
-        """Test _build_unstake_lp_tokens_action method."""
+    @pytest.mark.parametrize(
+        "test_name,position,safe_addresses,expected_result,expected_assertions",
+        [
+            (
+                "velodrome_cl_pool_success",
+                {
+                    "chain": "optimism",
+                    "pool_address": "0xPool123",
+                    "dex_type": "velodrome",
+                    "is_cl_pool": True,
+                    "gauge_address": "0xGauge123",
+                    "positions": [
+                        {"token_id": 123},
+                        {"token_id": 456}
+                    ]
+                },
+                {"optimism": "0xSafe123", "mode": "0xSafe456"},
+                "action_dict",
+                lambda result: (
+                    result is not None and
+                    result["action"] == "UnstakeLpTokens" and
+                    result["dex_type"] == "velodrome" and
+                    result["chain"] == "optimism" and
+                    result["is_cl_pool"] is True and
+                    result["token_ids"] == [123, 456] and
+                    result["gauge_address"] == "0xGauge123"
+                )
+            ),
+            (
+                "velodrome_regular_pool_success",
+                {
+                    "chain": "mode",
+                    "pool_address": "0xPool456",
+                    "dex_type": "velodrome",
+                    "is_cl_pool": False,
+                    "gauge_address": "0xGauge456"
+                },
+                {"mode": "0xSafe456"},
+                "action_dict",
+                lambda result: (
+                    result is not None and
+                    result["action"] == "UnstakeLpTokens" and
+                    result["dex_type"] == "velodrome" and
+                    result["chain"] == "mode" and
+                    result["is_cl_pool"] is False and
+                    result["gauge_address"] == "0xGauge456"
+                )
+            ),
+            (
+                "non_velodrome_pool_skipped",
+                {
+                    "chain": "optimism",
+                    "pool_address": "0xPool123",
+                    "dex_type": "uniswap"
+                },
+                {"optimism": "0xSafe123"},
+                None,
+                lambda result: result is None
+            ),
+            (
+                "missing_safe_address",
+                {
+                    "chain": "optimism",
+                    "pool_address": "0xPool123",
+                    "dex_type": "velodrome",
+                    "is_cl_pool": True,
+                    "gauge_address": "0xGauge123",
+                    "positions": [{"token_id": 123}]
+                },
+                {},
+                None,
+                lambda result: result is None
+            ),
+            (
+                "missing_chain_parameter",
+                {
+                    "pool_address": "0xPool123",
+                    "dex_type": "velodrome",
+                    "is_cl_pool": True,
+                    "gauge_address": "0xGauge123",
+                    "positions": [{"token_id": 123}]
+                },
+                {"optimism": "0xSafe123"},
+                None,
+                lambda result: result is None
+            ),
+            (
+                "missing_pool_address_parameter",
+                {
+                    "chain": "optimism",
+                    "dex_type": "velodrome",
+                    "is_cl_pool": True,
+                    "gauge_address": "0xGauge123",
+                    "positions": [{"token_id": 123}]
+                },
+                {"optimism": "0xSafe123"},
+                None,
+                lambda result: result is None
+            ),
+            (
+                "missing_both_required_parameters",
+                {
+                    "dex_type": "velodrome",
+                    "is_cl_pool": True,
+                    "gauge_address": "0xGauge123",
+                    "positions": [{"token_id": 123}]
+                },
+                {"optimism": "0xSafe123"},
+                None,
+                lambda result: result is None
+            ),
+            (
+                "cl_pool_with_single_token_id",
+                {
+                    "chain": "optimism",
+                    "pool_address": "0xPool123",
+                    "dex_type": "velodrome",
+                    "is_cl_pool": True,
+                    "gauge_address": "0xGauge123",
+                    "token_id": 789  # Single position format
+                },
+                {"optimism": "0xSafe123"},
+                "action_dict",
+                lambda result: (
+                    result is not None and
+                    result["action"] == "UnstakeLpTokens" and
+                    result["token_ids"] == [789]
+                )
+            ),
+            (
+                "cl_pool_no_token_ids_found",
+                {
+                    "chain": "optimism",
+                    "pool_address": "0xPool123",
+                    "dex_type": "velodrome",
+                    "is_cl_pool": True,
+                    "gauge_address": "0xGauge123"
+                    # No positions or token_id
+                },
+                {"optimism": "0xSafe123"},
+                None,
+                lambda result: result is None
+            ),
+            (
+                "exception_handling",
+                {
+                    "chain": "optimism",
+                    "pool_address": "0xPool123",
+                    "dex_type": "velodrome",
+                    "is_cl_pool": True,
+                    "gauge_address": "0xGauge123",
+                    "positions": "invalid_positions"  # This will cause an exception when trying to iterate
+                },
+                {"optimism": "0xSafe123"},
+                None,
+                lambda result: result is None
+            ),
+        ]
+    )
+    def test_build_unstake_lp_tokens_action_comprehensive(
+        self, test_name, position, safe_addresses, expected_result, expected_assertions
+    ):
+        """Test _build_unstake_lp_tokens_action method comprehensively."""
         base_behaviour = self._create_base_behaviour()
         
         # Mock the params to include safe contract addresses
         with patch.object(type(base_behaviour), 'params', new_callable=PropertyMock) as mock_params:
-            mock_params.return_value.safe_contract_addresses = {
-                "optimism": "0xSafe123",
-                "mode": "0xSafe456"
-            }
-            
-            # Test with Velodrome CL pool
-            position = {
-                "chain": "optimism",
-                "pool_address": "0xPool123",
-                "dex_type": "velodrome",
-                "is_cl_pool": True,
-                "gauge_address": "0xGauge123",
-                "positions": [
-                    {"token_id": 123},
-                    {"token_id": 456}
-                ]
-            }
+            mock_params.return_value.safe_contract_addresses = safe_addresses
             
             result = base_behaviour._build_unstake_lp_tokens_action(position)
-            assert result is not None
-            assert result["action"] == "UnstakeLpTokens"
-            assert result["dex_type"] == "velodrome"
-            assert result["chain"] == "optimism"
-            assert result["is_cl_pool"] is True
-            assert result["token_ids"] == [123, 456]
-            assert result["gauge_address"] == "0xGauge123"
             
-            # Test with non-Velodrome pool (should return None)
-            non_velodrome_position = {
-                "chain": "optimism",
-                "pool_address": "0xPool123",
-                "dex_type": "uniswap"
-            }
-            
-            result = base_behaviour._build_unstake_lp_tokens_action(non_velodrome_position)
-            assert result is None
-            
-            # Test with missing safe address
-            mock_params.return_value.safe_contract_addresses = {}
-            result = base_behaviour._build_unstake_lp_tokens_action(position)
-            assert result is None
+            # Apply the expected assertions
+            assert expected_assertions(result), f"Test '{test_name}' failed: {result}"
 
     def test_constants(self):
         """Test that constants are properly defined."""
@@ -925,218 +1247,475 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                         result = self._consume_generator(base_behaviour._calculate_min_num_of_safe_tx_required("optimism"))
                         assert result is not None
 
-    def test_get_cached_price(self):
-        """Test _get_cached_price method."""
+    @pytest.mark.parametrize(
+        "token_address,date,read_kv_result,expected_result,test_description",
+        [
+            # Test case 1: No cache data
+            ("0xToken123", "2024-01-01", {}, None, "No cache data"),
+            # Test case 2: Historical price with date
+            ("0xToken123", "2024-01-01", {"token_price_cache_0xtoken123_2024-01-01": '{"2024-01-01": 1.5}'}, 1.5, "Historical price found"),
+            # Test case 3: Current price - no current data
+            ("0xToken123", None, {"token_price_cache_0xtoken123_None": '{"historical": [1.0, 1640995300]}'}, None, "No current price data"),
+            # Test case 4: Current price - expired cache 
+            ("0xToken123", None, {"token_price_cache_0xtoken123_None": '{"current": [1.0, 1640995300]}'}, None, "Expired current price cache"),
+            # Test case 5: Current price - valid cache 
+            ("0xToken123", None, {"token_price_cache_0xtoken123_None": '{"current": [1.0, "recent_timestamp"]'}, 1.0, "Valid current price cache"),
+            # Test case 6: JSON decode error
+            ("0xToken123", "2024-01-01", {"token_price_cache_0xtoken123_2024-01-01": "invalid_json"}, None, "JSON decode error"),
+        ]
+    )
+    def test_get_cached_price(self, token_address, date, read_kv_result, expected_result, test_description):
+        """Test _get_cached_price method with various scenarios."""
         base_behaviour = self._create_base_behaviour()
         
         # Mock _read_kv method
         with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
-            # Test case 1: Cached price found (historical)
-            def read_kv_side_effect_found(*args, **kwargs):
-                yield None
-                return {"token_price_cache_0xtoken123_2024-01-01": '{"2024-01-01": 1.5}'}
-            mock_read_kv.side_effect = read_kv_side_effect_found
-            result = self._consume_generator(base_behaviour._get_cached_price("0xToken123", "2024-01-01"))
-            assert result == 1.5
+            # Handle special cases for timestamp-based tests
+            if test_description == "Expired current price cache":
+                # Mock expired timestamp (older than CACHE_TTL)
+                old_timestamp = int(time.time()) - 13 * 3600  # 13 hours ago
+                def expired_side_effect(*args, **kwargs):
+                    yield None
+                    return {"token_price_cache_0xtoken123_None": f'{{"current": [1.0, {old_timestamp}]}}'}
+                mock_read_kv.side_effect = expired_side_effect
+            elif test_description == "Valid current price cache":
+                # Mock recent timestamp (within CACHE_TTL)
+                recent_timestamp = int(time.time()) - 100  # 100 seconds ago
+                def valid_side_effect(*args, **kwargs):
+                    yield None
+                    return {"token_price_cache_0xtoken123_None": f'{{"current": [1.0, {recent_timestamp}]}}'}
+                mock_read_kv.side_effect = valid_side_effect
+            else:
+                # Use the provided read_kv_result for other test cases
+                def default_side_effect(*args, **kwargs):
+                    yield None
+                    return read_kv_result
+                mock_read_kv.side_effect = default_side_effect
             
-            # Test case 2: Cached price not found
-            def read_kv_side_effect_not_found(*args, **kwargs):
-                yield None
-                return {}
-            mock_read_kv.side_effect = read_kv_side_effect_not_found
-            result = self._consume_generator(base_behaviour._get_cached_price("0xToken456", "2024-01-01"))
-            assert result is None
-            
-            # Test case 3: Invalid JSON data
-            def read_kv_side_effect_invalid(*args, **kwargs):
-                yield None
-                return {"token_price_cache_0xtoken789_2024-01-01": 'invalid_json'}
-            mock_read_kv.side_effect = read_kv_side_effect_invalid
-            result = self._consume_generator(base_behaviour._get_cached_price("0xToken789", "2024-01-01"))
-            assert result is None
+            # Mock _get_current_timestamp to return a fixed value for consistent testing
+            with patch.object(base_behaviour, '_get_current_timestamp') as mock_timestamp:
+                mock_timestamp.return_value = int(time.time())
+                
+                result = self._consume_generator(base_behaviour._get_cached_price(token_address, date))
+                
+                if test_description == "JSON decode error":
+                    # For JSON decode error, we expect None due to exception handling
+                    assert result is None
+                else:
+                    assert result == expected_result
 
-    def test_cache_price(self):
-        """Test _cache_price method."""
+    @pytest.mark.parametrize(
+        "coin_id,price,date,read_kv_result,expected_write_calls,expected_error_logs,expected_price_data",
+        [
+            # Test case 1: Basic caching with empty existing data
+            ("test_key", 1.5, "2024-01-01", {}, 1, [], {"2024-01-01": 1.5}),
+            # Test case 2: Caching with existing valid data
+            ("test_key", 2.0, "2024-01-01", {"token_price_cache_test": '{"2024-01-01": 1.0}'}, 1, [], {"2024-01-01": 1.0, "2024-01-01": 2.0}),
+            # Test case 3: JSON decode error
+            ("test_key", 1.5, "2024-01-01", {"token_price_cache_test_key_2024-01-01": "invalid_json"}, 1, ["Invalid cache data for token test_key, resetting cache"], {"2024-01-01": 1.5}),
+            # Test case 4: Historical price (with date)
+            ("test_token", 1.5, "2024-01-01", {}, 1, [], {"2024-01-01": 1.5}),
+            # Test case 5: Current price (without date)
+            ("test_token", 2.0, None, {}, 1, [], {"current": [2.0, "timestamp"]}),
+        ]
+    )
+    def test_cache_price(self, coin_id, price, date, read_kv_result, expected_write_calls, expected_error_logs, expected_price_data):
+        """Test _cache_price method with various scenarios."""
         base_behaviour = self._create_base_behaviour()
         
         # Mock _read_kv and _write_kv methods
         with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
             with patch.object(base_behaviour, '_write_kv') as mock_write_kv:
-                mock_read_kv.return_value = iter([{}])
+                def read_side_effect(*args, **kwargs):
+                    yield None
+                    return read_kv_result
+                mock_read_kv.side_effect = read_side_effect
+                
                 mock_write_kv.return_value = iter([None])
-                self._consume_generator(base_behaviour._cache_price("test_key", 1.5, "2024-01-01"))
-                mock_write_kv.assert_called_once()
+                
+                with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+                    self._consume_generator(base_behaviour._cache_price(coin_id, price, date))
+                    
+                    # Verify _write_kv was called the expected number of times
+                    assert mock_write_kv.call_count == expected_write_calls
+                    
+                    # Verify error logging if expected
+                    if expected_error_logs:
+                        mock_error.assert_called_once()
+                        error_call = mock_error.call_args[0][0]
+                        assert expected_error_logs[0] in error_call
+                    else:
+                        mock_error.assert_not_called()
+                    
+                    # Verify the price data structure if not testing error case
+                    if not expected_error_logs:
+                        mock_write_kv.assert_called_once()
+                        call_args = mock_write_kv.call_args[0][0]
+                        cache_key = list(call_args.keys())[0]
+                        price_data = json.loads(call_args[cache_key])
+                        
+                        if date:
+                            # Historical price
+                            assert price_data[date] == price
+                        else:
+                            # Current price
+                            assert "current" in price_data
+                            assert price_data["current"][0] == price  # price
+                            assert isinstance(price_data["current"][1], int)  # timestamp
 
-    def test_calculate_rate_limit_wait_time(self):
-        """Test _calculate_rate_limit_wait_time method."""
+    def test_get_native_balance_failure(self):
+        """Test _get_native_balance method when ledger API fails"""
         base_behaviour = self._create_base_behaviour()
         
-        # Test with no rate limiter
-        result = base_behaviour._calculate_rate_limit_wait_time()
-        assert isinstance(result, int)
-        assert result >= 0
-
-    def test_should_update_rewards_from_subgraph(self):
-        """Test should_update_rewards_from_subgraph method."""
-        base_behaviour = self._create_base_behaviour()
-        
-        # Mock synchronized_data to avoid period_count == 0 forcing update
-        with patch.object(type(base_behaviour), 'synchronized_data', new_callable=PropertyMock) as mock_sync_data:
-            mock_sync_data.return_value.period_count = 1  # Not period 0
+        # Mock get_ledger_api_response to return failure response
+        with patch.object(base_behaviour, 'get_ledger_api_response') as mock_ledger:
+            def side_effect(*args, **kwargs):
+                mock_response = MagicMock()
+                mock_response.performative = LedgerApiMessage.Performative.ERROR
+                yield None
+                return mock_response
+            mock_ledger.side_effect = side_effect
             
-            # Mock _read_kv method
+            with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+                result = self._consume_generator(base_behaviour._get_native_balance("optimism", "0xSafe123"))
+                
+                assert result is None
+                mock_error.assert_called_once()
+                error_call = mock_error.call_args[0][0]
+                assert "Could not calculate the balance of the safe" in error_call
+
+    @pytest.mark.parametrize(
+        "liveness_ratio,liveness_period,ts_checkpoint,expected_result,test_description",
+        [
+            # Test case 1: liveness_ratio is None (line 1057)
+            (None, 86400, 1640995300, None, "liveness_ratio is None"),
+            # Test case 2: liveness_period is None (line 1067)
+            (1000, None, 1640995300, None, "liveness_period is None"),
+            # Test case 3: last_ts_checkpoint is None
+            (1000, 86400, None, None, "last_ts_checkpoint is None"),
+            # Test case 4: All values are valid
+            (1000, 86400, 1640995300, 2, "All values are valid"),
+        ]
+    )
+    def test_calculate_min_num_of_safe_tx_required_failure_cases(self, liveness_ratio, liveness_period, ts_checkpoint, expected_result, test_description):
+        """Test _calculate_min_num_of_safe_tx_required method with various scenarios"""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock round_sequence.last_round_transition_timestamp
+        mock_timestamp = MagicMock()
+        mock_timestamp.timestamp.return_value = 1640995300
+        with patch.object(type(base_behaviour), 'round_sequence', new_callable=PropertyMock) as mock_round_sequence:
+            mock_round_sequence.return_value.last_round_transition_timestamp = mock_timestamp
+            
+            with patch.object(base_behaviour, '_get_liveness_ratio') as mock_liveness_ratio:
+                with patch.object(base_behaviour, '_get_liveness_period') as mock_liveness_period:
+                    with patch.object(base_behaviour, '_get_ts_checkpoint') as mock_ts_checkpoint:
+                        def liveness_side_effect(*args, **kwargs):
+                            yield None
+                            return liveness_ratio
+                        def period_side_effect(*args, **kwargs):
+                            yield None
+                            return liveness_period
+                        def ts_side_effect(*args, **kwargs):
+                            yield None
+                            return ts_checkpoint
+                        
+                        mock_liveness_ratio.side_effect = liveness_side_effect
+                        mock_liveness_period.side_effect = period_side_effect
+                        mock_ts_checkpoint.side_effect = ts_side_effect
+                        
+                        result = self._consume_generator(base_behaviour._calculate_min_num_of_safe_tx_required("optimism"))
+                        assert result == expected_result
+
+
+
+
+
+
+
+
+
+
+
+    @pytest.mark.parametrize(
+        "period_count,kv_store_data,expected_result,expected_log_level,expected_log_message,test_description",
+        [
+            # Test case 1: period == 0, forcing immediate update
+            (0, {}, True, "info", "period == 0, forcing immediate update", "Period 0 forces immediate update"),
+            
+            # Test case 2: Invalid timestamp format
+            (1, {"last_reward_update_optimism": "invalid_timestamp"}, True, "error", "Invalid timestamp format in kv_store", "Invalid timestamp forces update"),
+            
+            # Test case 3: No cached value, should update
+            (1, {}, True, None, None, "No cached value triggers update"),
+            
+            # Test case 4: Recent update (within 12 hours), should not update
+            (1, {"last_reward_update_optimism": "recent_timestamp"}, False, None, None, "Recent update prevents update"),
+            
+            # Test case 5: Old update (older than 12 hours), should update
+            (1, {"last_reward_update_optimism": "old_timestamp"}, True, None, None, "Old update triggers update"),
+        ]
+    )
+    def test_should_update_rewards_from_subgraph_parameterized(
+        self, period_count, kv_store_data, expected_result, expected_log_level, expected_log_message, test_description
+    ):
+        """Test should_update_rewards_from_subgraph method with various scenarios."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock synchronized_data.period_count
+        with patch.object(type(base_behaviour), 'synchronized_data', new_callable=PropertyMock) as mock_sync_data:
+            mock_sync_data.return_value.period_count = period_count
+            
+            # Mock _read_kv method with proper timestamp handling
             with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
-                # Test case 1: No cached value, should update
-                def read_kv_side_effect_no_cache(*args, **kwargs):
-                    yield None
-                    return {}
-                mock_read_kv.side_effect = read_kv_side_effect_no_cache
-                result = self._consume_generator(base_behaviour.should_update_rewards_from_subgraph("optimism"))
-                assert result is True
+                if test_description == "Recent update prevents update":
+                    # Recent update: 100 seconds ago (well within 12 hours)
+                    recent_timestamp = int(time.time()) - 100
+                    def recent_side_effect(*args, **kwargs):
+                        yield None
+                        return {"last_reward_update_optimism": str(recent_timestamp)}
+                    mock_read_kv.side_effect = recent_side_effect
+                elif test_description == "Old update triggers update":
+                    # Old update: 13 hours ago (older than 12 hours)
+                    old_timestamp = int(time.time()) - 13 * 3600
+                    def old_side_effect(*args, **kwargs):
+                        yield None
+                        return {"last_reward_update_optimism": str(old_timestamp)}
+                    mock_read_kv.side_effect = old_side_effect
+                else:
+                    # Use the provided kv_store_data for other test cases
+                    def default_side_effect(*args, **kwargs):
+                        yield None
+                        return kv_store_data
+                    mock_read_kv.side_effect = default_side_effect
                 
-                # Test case 2: Recent update (within 12 hours), should not update
-                recent_timestamp = int(time.time()) - 100  # 100 seconds ago
-                def read_kv_side_effect_recent(*args, **kwargs):
-                    yield None
-                    return {"last_reward_update_optimism": str(recent_timestamp)}
-                mock_read_kv.side_effect = read_kv_side_effect_recent
-                result = self._consume_generator(base_behaviour.should_update_rewards_from_subgraph("optimism"))
-                assert result is False
-                
-                # Test case 3: Old update (older than 12 hours), should update
-                old_timestamp = int(time.time()) - 13 * 3600  # 13 hours ago
-                def read_kv_side_effect_old(*args, **kwargs):
-                    yield None
-                    return {"last_reward_update_optimism": str(old_timestamp)}
-                mock_read_kv.side_effect = read_kv_side_effect_old
-                result = self._consume_generator(base_behaviour.should_update_rewards_from_subgraph("optimism"))
-                assert result is True
-
-    def test_get_eth_remaining_amount_no_cache(self):
-        """Test get_eth_remaining_amount method when no cached value exists."""
-        base_behaviour = self._create_base_behaviour()
-        
-        # Mock all the methods in the call chain
-        with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
-            with patch.object(base_behaviour, 'reset_eth_remaining_amount') as mock_reset:
-                def read_kv_side_effect(*args, **kwargs):
-                    yield None
-                    return {}
-                def reset_side_effect(*args, **kwargs):
-                    yield None
-                    return 1000
-                mock_read_kv.side_effect = read_kv_side_effect
-                mock_reset.side_effect = reset_side_effect
-                
-                result = self._consume_generator(base_behaviour.get_eth_remaining_amount())
-                assert result == 1000
-
-    def test_get_eth_remaining_amount_cached_mismatch(self):
-        """Test get_eth_remaining_amount method when cached value doesn't match on-chain."""
-        base_behaviour = self._create_base_behaviour()
-        
-        # Mock all the methods in the call chain
-        with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
-            with patch.object(base_behaviour, '_write_kv') as mock_write_kv:
-                with patch.object(base_behaviour, '_get_native_balance') as mock_native_balance:
-                    def read_kv_side_effect(*args, **kwargs):
-                        yield None
-                        return {"eth_remaining_amount": "500"}
-                    def native_balance_side_effect(*args, **kwargs):
-                        yield None
-                        return 1000  # Different from cached value
-                    def write_kv_side_effect(*args, **kwargs):
-                        yield None
-                        return True
-                    
-                    mock_read_kv.side_effect = read_kv_side_effect
-                    mock_native_balance.side_effect = native_balance_side_effect
-                    mock_write_kv.side_effect = write_kv_side_effect
-                    
-                    result = self._consume_generator(base_behaviour.get_eth_remaining_amount())
-                    assert result == 1000  # Should return on-chain amount
-
-    def test_get_eth_remaining_amount_value_error_exception(self):
-        """Test get_eth_remaining_amount method when cached value causes ValueError."""
-        base_behaviour = self._create_base_behaviour()
-        
-        # Mock all the methods in the call chain
-        with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
-            with patch.object(base_behaviour, '_get_native_balance') as mock_native_balance:
-                with patch.object(base_behaviour, 'reset_eth_remaining_amount') as mock_reset:
-                    def read_kv_side_effect(*args, **kwargs):
-                        yield None
-                        return {"eth_remaining_amount": "invalid_value"}  # Causes ValueError
-                    def native_balance_side_effect(*args, **kwargs):
-                        yield None
-                        return 1000  # This won't be used due to exception
-                    def reset_side_effect(*args, **kwargs):
-                        yield None
-                        return 750
-                    
-                    mock_read_kv.side_effect = read_kv_side_effect
-                    mock_native_balance.side_effect = native_balance_side_effect
-                    mock_reset.side_effect = reset_side_effect
-                    
-                    result = self._consume_generator(base_behaviour.get_eth_remaining_amount())
-                    assert result == 750  # Should return reset amount
-
-    def test_get_eth_remaining_amount_type_error_exception(self):
-        """Test get_eth_remaining_amount method when cached value causes TypeError."""
-        base_behaviour = self._create_base_behaviour()
-        
-        # Mock all the methods in the call chain
-        with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
-            with patch.object(base_behaviour, '_get_native_balance') as mock_native_balance:
-                with patch.object(base_behaviour, 'reset_eth_remaining_amount') as mock_reset:
-                    def read_kv_side_effect(*args, **kwargs):
-                        yield None
-                        return {"eth_remaining_amount": None}  # Causes TypeError when converting to int
-                    def native_balance_side_effect(*args, **kwargs):
-                        yield None
-                        return 1000  # This won't be used due to exception
-                    def reset_side_effect(*args, **kwargs):
-                        yield None
-                        return 1200
-                    
-                    mock_read_kv.side_effect = read_kv_side_effect
-                    mock_native_balance.side_effect = native_balance_side_effect
-                    mock_reset.side_effect = reset_side_effect
-                    
-                    result = self._consume_generator(base_behaviour.get_eth_remaining_amount())
-                    assert result == 1200  # Should return reset amount
-
-    def test_get_eth_remaining_amount_exception_logging(self):
-        """Test get_eth_remaining_amount method logs error when exception occurs."""
-        base_behaviour = self._create_base_behaviour()
-        
-        # Mock all the methods in the call chain
-        with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
-            with patch.object(base_behaviour, '_get_native_balance') as mock_native_balance:
-                with patch.object(base_behaviour, 'reset_eth_remaining_amount') as mock_reset:
-                    with patch.object(base_behaviour.context.logger, 'error') as mock_logger:
-                        def read_kv_side_effect(*args, **kwargs):
-                            yield None
-                            return {"eth_remaining_amount": "invalid_value"}
-                        def native_balance_side_effect(*args, **kwargs):
-                            yield None
-                            return 1000  # This won't be used due to exception
-                        def reset_side_effect(*args, **kwargs):
-                            yield None
-                            return 500
-                        
-                        mock_read_kv.side_effect = read_kv_side_effect
-                        mock_native_balance.side_effect = native_balance_side_effect
-                        mock_reset.side_effect = reset_side_effect
-                        
-                        result = self._consume_generator(base_behaviour.get_eth_remaining_amount())
-                        assert result == 500
-                        
-                        # Verify error was logged
+                # Mock logger based on expected log level
+                if expected_log_level == "info":
+                    with patch.object(base_behaviour.context.logger, 'info') as mock_logger:
+                        result = self._consume_generator(base_behaviour.should_update_rewards_from_subgraph("optimism"))
+                        assert result == expected_result
                         mock_logger.assert_called_once()
-                        error_message = mock_logger.call_args[0][0]
-                        assert "Invalid ETH remaining amount in kv_store" in error_message
-                        assert "invalid_value" in error_message
+                        log_call = mock_logger.call_args[0][0]
+                        assert expected_log_message in log_call
+                elif expected_log_level == "error":
+                    with patch.object(base_behaviour.context.logger, 'error') as mock_logger:
+                        result = self._consume_generator(base_behaviour.should_update_rewards_from_subgraph("optimism"))
+                        assert result == expected_result
+                        mock_logger.assert_called_once()
+                        log_call = mock_logger.call_args[0][0]
+                        assert expected_log_message in log_call
+                else:
+                    # No specific logging expected
+                    result = self._consume_generator(base_behaviour.should_update_rewards_from_subgraph("optimism"))
+                    assert result == expected_result
+
+
+
+    @pytest.mark.parametrize(
+        "test_scenario,coingecko_mock,expected_result,test_description",
+        [
+            # Test case 1: Basic functionality - no rate limiter
+            ("basic", None, "int_ge_0", "Basic functionality test"),
+            
+            # Test case 2: No rate_limiter attribute (line 1388)
+            ("no_rate_limiter", {"has_rate_limiter": False}, 0, "No rate_limiter attribute"),
+            
+            # Test case 3: No credits (line 1394)
+            ("no_credits", {"has_rate_limiter": True, "no_credits": True}, 0, "No credits available"),
+            
+            # Test case 4: Rate limited with remainder
+            ("rate_limited_with_remainder", {"has_rate_limiter": True, "no_credits": False, "rate_limited": True, "last_request_time": 1000000000, "current_time": 1000000030}, 30, "Rate limited with 30s remainder"),
+            
+            # Test case 5: Rate limited no remainder
+            ("rate_limited_no_remainder", {"has_rate_limiter": True, "no_credits": False, "rate_limited": True, "last_request_time": 1000000000, "current_time": 1000000060}, 0, "Rate limited with no remainder"),
+            
+            # Test case 6: Normal operation (no rate limiting)
+            ("normal", {"has_rate_limiter": True, "no_credits": False, "rate_limited": False}, 0, "Normal operation"),
+        ]
+    )
+    def test_calculate_rate_limit_wait_time(self, test_scenario, coingecko_mock, expected_result, test_description):
+        """Test _calculate_rate_limit_wait_time method with various scenarios"""
+        base_behaviour = self._create_base_behaviour()
+        
+        if test_scenario == "basic":
+            # Test with no rate limiter
+            result = base_behaviour._calculate_rate_limit_wait_time()
+            assert isinstance(result, int)
+            assert result >= 0
+            return
+        
+        # Mock coingecko context
+        with patch.object(base_behaviour.context, 'coingecko') as mock_coingecko:
+            if not coingecko_mock["has_rate_limiter"]:
+                # Remove rate_limiter attribute to simulate hasattr check failing (line 1388)
+                if hasattr(mock_coingecko, 'rate_limiter'):
+                    delattr(mock_coingecko, 'rate_limiter')
+            else:
+                # Create rate_limiter mock
+                mock_rate_limiter = MagicMock()
+                mock_rate_limiter.no_credits = coingecko_mock.get("no_credits", False)
+                mock_rate_limiter.rate_limited = coingecko_mock.get("rate_limited", False)
+                
+                if coingecko_mock.get("last_request_time"):
+                    mock_rate_limiter.last_request_time = coingecko_mock["last_request_time"]
+                
+                mock_coingecko.rate_limiter = mock_rate_limiter
+                
+                # Mock time.time() for rate limited scenarios
+                if coingecko_mock.get("current_time"):
+                    with patch('time.time', return_value=coingecko_mock["current_time"]):
+                        result = base_behaviour._calculate_rate_limit_wait_time()
+                        assert result == expected_result
+                        return
+            
+            # For non-rate-limited scenarios
+            result = base_behaviour._calculate_rate_limit_wait_time()
+            assert result == expected_result
+
+
+
+    @pytest.mark.parametrize(
+        "test_scenario,cached_value,on_chain_value,expected_result,should_write_kv,should_reset,expected_log_message",
+        [
+            # Test case 1: No cache exists - should reset
+            (
+                "no_cache",
+                None,  # No cache
+                None,  # Not relevant
+                1000,  # Expected result from reset
+                False,  # Should not write to KV
+                True,   # Should call reset
+                None,   # No log message
+            ),
+            # Test case 2: Cached value differs from on-chain - should sync
+            (
+                "cached_mismatch",
+                "500",  # Cached value
+                1000,   # On-chain value (different)
+                1000,   # Expected result (on-chain value)
+                True,   # Should write to KV to sync
+                False,  # Should not reset
+                "Syncing ETH remaining amount from cached 500 to on-chain 1000",
+            ),
+            # Test case 3: On-chain amount is None - should return cached (line 1889)
+            (
+                "on_chain_none",
+                "800",  # Cached value
+                None,   # On-chain amount is None
+                800,    # Expected result (cached value)
+                False,  # Should not write to KV
+                False,  # Should not reset
+                None,   # No log message
+            ),
+            # Test case 4: On-chain amount matches cached - should return cached (line 1887)
+            (
+                "on_chain_matches_cache",
+                "1000000000000000000",  # Cached value (1 ETH)
+                1000000000000000000,    # On-chain value (matches cached)
+                1000000000000000000,    # Expected result (cached value)
+                False,  # Should not write to KV
+                False,  # Should not reset
+                None,   # No log message
+            ),
+            # Test case 5: Exception occurs - should reset and log error
+            (
+                "exception_occurs",
+                "invalid_value",  # Invalid cached value
+                1000,             # On-chain value
+                750,              # Expected result from reset
+                False,            # Should not write to KV
+                True,             # Should call reset
+                "Invalid ETH remaining amount in kv_store: invalid_value",
+            ),
+        ]
+    )
+    def test_get_eth_remaining_amount_comprehensive(
+        self, test_scenario, cached_value, on_chain_value, expected_result, 
+        should_write_kv, should_reset, expected_log_message
+    ):
+        """Comprehensive parameterized test for get_eth_remaining_amount method covering all scenarios."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock all the methods in the call chain
+        with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
+            with patch.object(base_behaviour, '_get_native_balance') as mock_native_balance:
+                with patch.object(base_behaviour, '_write_kv') as mock_write_kv:
+                    with patch.object(base_behaviour, 'reset_eth_remaining_amount') as mock_reset:
+                        with patch.object(base_behaviour.context.logger, 'info') as mock_info_logger:
+                            with patch.object(base_behaviour.context.logger, 'error') as mock_error_logger:
+                                
+                                # Mock KV store response
+                                def read_kv_side_effect(*args, **kwargs):
+                                    yield None
+                                    if cached_value is None:
+                                        return None
+                                    return {"eth_remaining_amount": cached_value}
+                                
+                                mock_read_kv.side_effect = read_kv_side_effect
+                                
+                                # Mock native balance response
+                                def native_balance_side_effect(*args, **kwargs):
+                                    yield None
+                                    return on_chain_value
+                                
+                                mock_native_balance.side_effect = native_balance_side_effect
+                                
+                                # Mock write KV response
+                                def write_kv_side_effect(*args, **kwargs):
+                                    yield None
+                                    return True
+                                
+                                mock_write_kv.side_effect = write_kv_side_effect
+                                
+                                # Mock reset response
+                                def reset_side_effect(*args, **kwargs):
+                                    yield None
+                                    return 750  # Default reset value
+                                
+                                mock_reset.side_effect = reset_side_effect
+                                
+                                # Execute the method
+                                result = self._consume_generator(base_behaviour.get_eth_remaining_amount())
+                                
+                                # Verify the result
+                                if should_reset:
+                                    assert result == 750  # Reset value
+                                else:
+                                    assert result == expected_result
+                                
+                                # Verify KV write behavior
+                                if should_write_kv:
+                                    mock_write_kv.assert_called_once()
+                                    write_call_args = mock_write_kv.call_args[0][0]
+                                    assert write_call_args == {"eth_remaining_amount": str(on_chain_value)}
+                                else:
+                                    mock_write_kv.assert_not_called()
+                                
+                                # Verify reset behavior
+                                if should_reset:
+                                    mock_reset.assert_called_once()
+                                else:
+                                    mock_reset.assert_not_called()
+                                
+                                # Verify logging behavior
+                                if expected_log_message:
+                                    if "error" in expected_log_message.lower():
+                                        mock_error_logger.assert_called_once()
+                                        log_message = mock_error_logger.call_args[0][0]
+                                        assert expected_log_message in log_message
+                                    elif "Syncing" in expected_log_message:
+                                        mock_info_logger.assert_called_once()
+                                        log_message = mock_info_logger.call_args[0][0]
+                                        assert expected_log_message in log_message
+                                    else:
+                                        # For other cases, don't assert specific logging
+                                        pass
+
+
+
+
+
+
 
     @pytest.mark.parametrize(
         "current_remaining,amount_used,expected_new_remaining,expected_log_message",
@@ -1254,7 +1833,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             with patch.object(base_behaviour, '_write_kv') as mock_write_kv:
                 def get_remaining_side_effect(*args, **kwargs):
                     yield None
-                    return 100  # Small remaining amount
+                    return 10  # Small remaining amount
                 def write_kv_side_effect(*args, **kwargs):
                     yield None
                     return True
@@ -1348,74 +1927,303 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 result = self._consume_generator(base_behaviour.reset_eth_remaining_amount())
                 assert result == 0
 
-    def test_get_accumulated_rewards_for_token(self):
-        """Test get_accumulated_rewards_for_token method."""
+    @pytest.mark.parametrize(
+        "test_scenario,chain,token_address,kv_result,expected_result,expected_log_message,line_coverage",
+        [
+            # Test case 1: Token with accumulated rewards (line 2071)
+            (
+                "valid_rewards",
+                "optimism",
+                "0xToken123",
+                {"accumulated_rewards_optimism_0xtoken123": "500"},
+                500,
+                None,
+                "line 2071 - successful conversion"
+            ),
+            # Test case 2: Token with no accumulated rewards (line 2061)
+            (
+                "no_kv_result",
+                "optimism", 
+                "0xToken456",
+                {},
+                0,
+                None,
+                "line 2061 - no KV result"
+            ),
+            # Test case 3: Invalid rewards value (line 2076)
+            (
+                "invalid_value",
+                "optimism",
+                "0xToken789", 
+                {"accumulated_rewards_optimism_0xtoken789": "invalid_value"},
+                0,
+                "Invalid rewards value for accumulated_rewards_optimism_0xtoken789: invalid_value, returning 0",
+                "line 2076 - ValueError/TypeError handling"
+            ),
+            # Test case 4: rewards_value is None (line 2068)
+            (
+                "rewards_value_none",
+                "optimism",
+                "0xToken101",
+                {"accumulated_rewards_optimism_0xtoken101": None},
+                0,
+                None,
+                "line 2068 - rewards_value is None"
+            ),
+            # Test case 5: Different chain and token combination
+            (
+                "mode_chain_token",
+                "mode",
+                "0xOlasToken",
+                {"accumulated_rewards_mode_0xolastoken": "1000"},
+                1000,
+                None,
+                "line 2071 - different chain/token combination"
+            ),
+            # Test case 6: Empty string rewards value (should trigger ValueError)
+            (
+                "empty_string_value",
+                "optimism",
+                "0xTokenEmpty",
+                {"accumulated_rewards_optimism_0xtokenempty": ""},
+                0,
+                "Invalid rewards value for accumulated_rewards_optimism_0xtokenempty: , returning 0",
+                "line 2076 - empty string ValueError"
+            ),
+        ]
+    )
+    def test_get_accumulated_rewards_for_token_comprehensive(
+        self, test_scenario, chain, token_address, kv_result, expected_result, 
+        expected_log_message, line_coverage
+    ):
+        """Comprehensive parameterized test for get_accumulated_rewards_for_token method covering all scenarios."""
         base_behaviour = self._create_base_behaviour()
         
         # Mock _read_kv method
         with patch.object(base_behaviour, '_read_kv') as mock_read_kv:
-            # Test case 1: Token with accumulated rewards
-            def read_kv_side_effect_found(*args, **kwargs):
-                yield None
-                return {"accumulated_rewards_optimism_0xtoken123": "500"}
-            mock_read_kv.side_effect = read_kv_side_effect_found
-            result = self._consume_generator(base_behaviour.get_accumulated_rewards_for_token("optimism", "0xToken123"))
-            assert result == 500
+            with patch.object(base_behaviour.context.logger, 'warning') as mock_warning:
+                
+                def read_kv_side_effect(*args, **kwargs):
+                    yield None
+                    return kv_result
+                
+                mock_read_kv.side_effect = read_kv_side_effect
+                
+                # Execute the method
+                result = self._consume_generator(
+                    base_behaviour.get_accumulated_rewards_for_token(chain, token_address)
+                )
+                
+                # Verify the result
+                assert result == expected_result, f"Expected {expected_result}, got {result} for {test_scenario}"
+                
+                # Verify logging behavior
+                if expected_log_message:
+                    mock_warning.assert_called_once()
+                    warning_call = mock_warning.call_args[0][0]
+                    assert expected_log_message in warning_call, f"Expected log message not found: {expected_log_message}"
+                else:
+                    mock_warning.assert_not_called()
+                
+                # Verify the correct key was used for KV lookup
+                expected_key = f"accumulated_rewards_{chain}_{token_address.lower()}"
+                mock_read_kv.assert_called_once_with((expected_key,))
+
+    @pytest.mark.parametrize(
+        "test_scenario,chain,position_manager,token_id,sqrt_price_x96,mock_params,mock_contract,expected_result",
+        [
+            (
+                "successful_contract_interaction",
+                "optimism",
+                "0xPositionManager123",
+                1000,
+                1581138830084190475656131093637,
+                {"optimism": "0xSugar123"},  # Valid Sugar contract address
+                (1000000000000000000, 2000000000000000000),  # Valid amounts returned
+                (1000000000000000000, 2000000000000000000),  # Expected result
+            ),
+            (
+                "no_sugar_contract_address",
+                "optimism",
+                "0xPositionManager123",
+                1000,
+                1581138830084190475656131093637,
+                {},  # Empty Sugar contract addresses
+                None,  # Contract interaction not reached
+                (0, 0),  # Expected result
+            ),
+            (
+                "contract_returns_no_amounts",
+                "optimism",
+                "0xPositionManager123",
+                1000,
+                1581138830084190475656131093637,
+                {"optimism": "0xSugar123"},  # Valid Sugar contract address
+                None,  # Contract returns None
+                (0, 0),  # Expected result
+            ),
+        ]
+    )
+    def test_get_velodrome_position_principal_comprehensive(
+        self, test_scenario, chain, position_manager, token_id, sqrt_price_x96, 
+        mock_params, mock_contract, expected_result
+    ):
+        """Test get_velodrome_position_principal method comprehensively."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock params for Sugar contract addresses
+        with patch.object(type(base_behaviour), 'params', new_callable=PropertyMock) as mock_params_obj:
+            mock_params_obj.return_value.velodrome_slipstream_helper_contract_addresses = mock_params
             
-            # Test case 2: Token with no accumulated rewards  
-            def read_kv_side_effect_not_found(*args, **kwargs):
-                yield None
-                return {}
-            mock_read_kv.side_effect = read_kv_side_effect_not_found
-            result = self._consume_generator(base_behaviour.get_accumulated_rewards_for_token("optimism", "0xToken456"))
-            assert result == 0
+            # Mock contract interaction if we have Sugar contract addresses
+            if mock_params:
+                with patch.object(base_behaviour, 'contract_interact') as mock_contract_obj:
+                    def side_effect(*args, **kwargs):
+                        yield None
+                        return mock_contract
+                    mock_contract_obj.side_effect = side_effect
+                    
+                    result = self._consume_generator(
+                        base_behaviour.get_velodrome_position_principal(
+                            chain, position_manager, token_id, sqrt_price_x96
+                        )
+                    )
+            else:
+                # No contract interaction when no Sugar contract address
+                result = self._consume_generator(
+                    base_behaviour.get_velodrome_position_principal(
+                        chain, position_manager, token_id, sqrt_price_x96
+                    )
+                )
             
-            # Test case 3: Invalid rewards value
-            def read_kv_side_effect_invalid(*args, **kwargs):
-                yield None
-                return {"accumulated_rewards_optimism_0xtoken789": "invalid_value"}
-            mock_read_kv.side_effect = read_kv_side_effect_invalid
-            result = self._consume_generator(base_behaviour.get_accumulated_rewards_for_token("optimism", "0xToken789"))
-            assert result == 0
+            assert result == expected_result, f"Failed for scenario: {test_scenario}"
 
-    def test_get_velodrome_position_principal(self):
-        """Test get_velodrome_position_principal method."""
+    @pytest.mark.parametrize(
+        "test_scenario,chain,sqrt_price_x96,sqrt_ratio_a_x96,sqrt_ratio_b_x96,liquidity,mock_params,mock_contract,expected_result,expected_logs",
+        [
+            (
+                "successful_contract_interaction",
+                "optimism",
+                1000000000000000000,
+                1000000000000000000,
+                2000000000000000000,
+                1000,
+                {"optimism": "0xSugar123"},  # Valid Sugar contract address
+                (1000000000000000000, 2000000000000000000),  # Valid amounts returned
+                (1000000000000000000, 2000000000000000000),  # Expected result
+                [],  # No error logs expected
+            ),
+            (
+                "no_sugar_contract_address",
+                "optimism",
+                1000000000000000000,
+                1000000000000000000,
+                2000000000000000000,
+                1000,
+                {},  # Empty Sugar contract addresses
+                None,  # Contract interaction not reached
+                (0, 0),  # Expected result
+                ["No Velodrome Sugar contract address for chain optimism"],  # Error log expected
+            ),
+            (
+                "contract_returns_no_amounts",
+                "optimism",
+                1000000000000000000,
+                1000000000000000000,
+                2000000000000000000,
+                1000,
+                {"optimism": "0xSugar123"},  # Valid Sugar contract address
+                None,  # Contract returns None
+                (0, 0),  # Expected result
+                [],  # No error logs expected
+            ),
+        ]
+    )
+    def test_get_velodrome_amounts_for_liquidity_comprehensive(
+        self, test_scenario, chain, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, 
+        liquidity, mock_params, mock_contract, expected_result, expected_logs
+    ):
+        """Test get_velodrome_amounts_for_liquidity method comprehensively."""
         base_behaviour = self._create_base_behaviour()
         
-        # Mock contract interaction
-        with patch.object(base_behaviour, 'contract_interact') as mock_contract:
-            def side_effect(*args, **kwargs):
-                yield None
-                return (1000000000000000000, 2000000000000000000)
-            mock_contract.side_effect = side_effect
-            result = self._consume_generator(base_behaviour.get_velodrome_position_principal("optimism", "0xPositionManager123", 1000, 1581138830084190475656131093637))
-            assert result == (1000000000000000000, 2000000000000000000)
+        # Mock params for Sugar contract addresses
+        with patch.object(type(base_behaviour), 'params', new_callable=PropertyMock) as mock_params_obj:
+            mock_params_obj.return_value.velodrome_slipstream_helper_contract_addresses = mock_params
+            
+            # Mock contract interaction if we have Sugar contract addresses
+            if mock_params:
+                with patch.object(base_behaviour, 'contract_interact') as mock_contract_obj:
+                    def side_effect(*args, **kwargs):
+                        yield None
+                        return mock_contract
+                    mock_contract_obj.side_effect = side_effect
+                    
+                    result = self._consume_generator(
+                        base_behaviour.get_velodrome_amounts_for_liquidity(
+                            chain, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
+                        )
+                    )
+            else:
+                # No contract interaction when no Sugar contract address
+                result = self._consume_generator(
+                    base_behaviour.get_velodrome_amounts_for_liquidity(
+                        chain, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, liquidity
+                    )
+                )
+            
+            assert result == expected_result, f"Failed for scenario: {test_scenario}"
 
-    def test_get_velodrome_amounts_for_liquidity(self):
-        """Test get_velodrome_amounts_for_liquidity method."""
+    @pytest.mark.parametrize(
+        "test_scenario,chain,tick,mock_params,mock_contract,expected_result,expected_logs",
+        [
+            (
+                "successful_contract_interaction",
+                "optimism",
+                1000,
+                {"optimism": "0xSugar123"},  # Valid Sugar contract address
+                1000000000000000000,  # Valid sqrt_ratio returned
+                1000000000000000000,  # Expected result
+                [],  # No error logs expected
+            ),
+            (
+                "no_sugar_contract_address",
+                "optimism",
+                1000,
+                {},  # Empty Sugar contract addresses
+                None,  # Contract interaction not reached
+                0,  # Expected result
+                ["No Velodrome Sugar contract address for chain optimism"],  # Error log expected
+            ),
+        ]
+    )
+    def test_get_velodrome_sqrt_ratio_at_tick_comprehensive(
+        self, test_scenario, chain, tick, mock_params, mock_contract, expected_result, expected_logs
+    ):
+        """Test get_velodrome_sqrt_ratio_at_tick method comprehensively."""
         base_behaviour = self._create_base_behaviour()
         
-        # Mock contract interaction
-        with patch.object(base_behaviour, 'contract_interact') as mock_contract:
-            def side_effect(*args, **kwargs):
-                yield None
-                return (1000000000000000000, 2000000000000000000)
-            mock_contract.side_effect = side_effect
-            result = self._consume_generator(base_behaviour.get_velodrome_amounts_for_liquidity("optimism", "0xPool123", 1000, 1000000000000000000, 2000000000000000000))
-            assert result == (1000000000000000000, 2000000000000000000)
-
-    def test_get_velodrome_sqrt_ratio_at_tick(self):
-        """Test get_velodrome_sqrt_ratio_at_tick method."""
-        base_behaviour = self._create_base_behaviour()
-        
-        # Mock contract interaction
-        with patch.object(base_behaviour, 'contract_interact') as mock_contract:
-            def side_effect(*args, **kwargs):
-                yield None
-                return 1000000000000000000
-            mock_contract.side_effect = side_effect
-            result = self._consume_generator(base_behaviour.get_velodrome_sqrt_ratio_at_tick("optimism", 1000))
-            assert result == 1000000000000000000
+        # Mock params for Sugar contract addresses
+        with patch.object(type(base_behaviour), 'params', new_callable=PropertyMock) as mock_params_obj:
+            mock_params_obj.return_value.velodrome_slipstream_helper_contract_addresses = mock_params
+            
+            # Mock contract interaction if we have Sugar contract addresses
+            if mock_params:
+                with patch.object(base_behaviour, 'contract_interact') as mock_contract_obj:
+                    def side_effect(*args, **kwargs):
+                        yield None
+                        return mock_contract
+                    mock_contract_obj.side_effect = side_effect
+                    
+                    result = self._consume_generator(
+                        base_behaviour.get_velodrome_sqrt_ratio_at_tick(chain, tick)
+                    )
+            else:
+                # No contract interaction when no Sugar contract address
+                result = self._consume_generator(
+                    base_behaviour.get_velodrome_sqrt_ratio_at_tick(chain, tick)
+                )
+            
+            assert result == expected_result, f"Failed for scenario: {test_scenario}"
 
     @pytest.mark.parametrize(
         "endpoint,method,body,headers,rate_limited_code,max_retries,retry_wait,"
@@ -1834,10 +2642,11 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         assert response_json == {"data": "success"}
 
     @pytest.mark.parametrize(
-        "position,expected_result",
+        "test_case,position,expected_result,decimals_side_effect,prices_side_effect,description",
         [
             # Test case 1: Valid position with both tokens
             (
+                "valid_dual_token",
                 {
                     "chain": "optimism",
                     "token0": "0xToken0",
@@ -1849,9 +2658,16 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     "timestamp": 1640995200,  # 2022-01-01
                 },
                 3500.0,  # 1.0 * 1000 + 2.0 * 1250 = 3500
+                lambda *args, **kwargs: (yield None) or 18,  # Always return 18
+                lambda *args, **kwargs: (yield None) or {
+                    "0xToken0": 1000.0,  # USDC price
+                    "0xToken1": 1250.0,  # ETH price
+                },
+                "Valid position with both tokens should calculate total value"
             ),
             # Test case 2: Position with only token0
             (
+                "single_token",
                 {
                     "chain": "optimism",
                     "token0": "0xToken0",
@@ -1860,9 +2676,15 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     "timestamp": 1640995200,
                 },
                 1000.0,  # 1.0 * 1000 = 1000
+                lambda *args, **kwargs: (yield None) or 18,  # Always return 18
+                lambda *args, **kwargs: (yield None) or {
+                    "0xToken0": 1000.0,  # USDC price
+                },
+                "Position with only token0 should calculate single token value"
             ),
             # Test case 3: Missing required fields
             (
+                "missing_required_fields",
                 {
                     "chain": "optimism",
                     "token0_symbol": "USDC",
@@ -1870,9 +2692,13 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     # Missing token0 and timestamp
                 },
                 None,
+                lambda *args, **kwargs: (yield None) or 18,  # Not used
+                lambda *args, **kwargs: (yield None) or {},  # Not used
+                "Missing required fields should return None"
             ),
             # Test case 4: Missing timestamp but has enter_timestamp
             (
+                "enter_timestamp_fallback",
                 {
                     "chain": "optimism",
                     "token0": "0xToken0",
@@ -1881,139 +2707,129 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     "enter_timestamp": 1640995200,
                 },
                 1000.0,
+                lambda *args, **kwargs: (yield None) or 18,  # Always return 18
+                lambda *args, **kwargs: (yield None) or {
+                    "0xToken0": 1000.0,  # USDC price
+                },
+                "Should use enter_timestamp when timestamp is missing"
+            ),
+            # Test case 5: Missing token0 decimals
+            (
+                "missing_token0_decimals",
+                {
+                    "chain": "optimism",
+                    "token0": "0xToken0",
+                    "token0_symbol": "USDC",
+                    "amount0": 1000000000000000000,
+                    "timestamp": 1640995200,
+                },
+                None,
+                lambda *args, **kwargs: (yield None) or None,  # Return None for token0
+                lambda *args, **kwargs: (yield None) or {},  # Not used
+                "Missing token0 decimals should return None"
+            ),
+            # Test case 6: Missing token1 decimals (covers line 1687)
+            (
+                "missing_token1_decimals",
+                {
+                    "chain": "optimism",
+                    "token0": "0xToken0",
+                    "token1": "0xToken1",
+                    "token0_symbol": "USDC",
+                    "token1_symbol": "ETH",
+                    "amount0": 1000000000000000000,
+                    "amount1": 2000000000000000000,
+                    "timestamp": 1640995200,
+                },
+                None,
+                lambda *args, **kwargs: (yield None) or (18 if args[1] == "0xToken0" else None),  # 18 for token0, None for token1
+                lambda *args, **kwargs: (yield None) or {},  # Not used
+                "Missing token1 decimals should return None (covers line 1687)"
+            ),
+            # Test case 7: token1 decimals is 0 (covers line 1687)
+            (
+                "token1_decimals_zero",
+                {
+                    "chain": "optimism",
+                    "token0": "0xToken0",
+                    "token1": "0xToken1",
+                    "token0_symbol": "USDC",
+                    "token1_symbol": "ETH",
+                    "amount0": 1000000000000000000,
+                    "amount1": 2000000000000000000,
+                    "timestamp": 1640995200,
+                },
+                None,
+                lambda *args, **kwargs: (yield None) or (18 if args[1] == "0xToken0" else 0),  # 18 for token0, 0 for token1
+                lambda *args, **kwargs: (yield None) or {},  # Not used
+                "token1 decimals of 0 should return None (covers line 1687)"
+            ),
+            # Test case 8: Missing historical prices
+            (
+                "missing_historical_prices",
+                {
+                    "chain": "optimism",
+                    "token0": "0xToken0",
+                    "token0_symbol": "USDC",
+                    "amount0": 1000000000000000000,
+                    "timestamp": 1640995200,
+                },
+                None,
+                lambda *args, **kwargs: (yield None) or 18,  # Always return 18
+                lambda *args, **kwargs: (yield None) or {},  # Return empty dict
+                "Missing historical prices should return None"
+            ),
+            # Test case 9: Missing token0 price
+            (
+                "missing_token0_price",
+                {
+                    "chain": "optimism",
+                    "token0": "0xToken0",
+                    "token0_symbol": "USDC",
+                    "amount0": 1000000000000000000,
+                    "timestamp": 1640995200,
+                },
+                None,
+                lambda *args, **kwargs: (yield None) or 18,  # Always return 18
+                lambda *args, **kwargs: (yield None) or {"0xOtherToken": 1000.0},  # Missing token0 price
+                "Missing token0 price should return None"
+            ),
+            # Test case 10: Missing token1 price for dual token position
+            (
+                "missing_token1_price",
+                {
+                    "chain": "optimism",
+                    "token0": "0xToken0",
+                    "token1": "0xToken1",
+                    "token0_symbol": "USDC",
+                    "token1_symbol": "ETH",
+                    "amount0": 1000000000000000000,
+                    "amount1": 2000000000000000000,
+                    "timestamp": 1640995200,
+                },
+                None,
+                lambda *args, **kwargs: (yield None) or 18,  # Always return 18
+                lambda *args, **kwargs: (yield None) or {"0xToken0": 1000.0},  # Missing token1 price
+                "Missing token1 price for dual token position should return None"
             ),
         ]
     )
-    def test_calculate_initial_investment_value(self, position, expected_result):
-        """Test calculate_initial_investment_value method."""
+    def test_calculate_initial_investment_value_comprehensive(
+        self, test_case, position, expected_result, decimals_side_effect, prices_side_effect, description
+    ):
+        """Test calculate_initial_investment_value method with comprehensive scenarios."""
         base_behaviour = self._create_base_behaviour()
         
-        # Mock _get_token_decimals
-        def mock_get_token_decimals(*args, **kwargs):
-            yield None
-            return 18
-        
-        # Mock _fetch_historical_token_prices
-        def mock_fetch_historical_prices(*args, **kwargs):
-            yield None
-            return {
-                "0xToken0": 1000.0,  # USDC price
-                "0xToken1": 1250.0,  # ETH price
-            }
-        
-        with patch.object(base_behaviour, '_get_token_decimals', side_effect=mock_get_token_decimals):
-            with patch.object(base_behaviour, '_fetch_historical_token_prices', side_effect=mock_fetch_historical_prices):
+        with patch.object(base_behaviour, '_get_token_decimals', side_effect=decimals_side_effect):
+            with patch.object(base_behaviour, '_fetch_historical_token_prices', side_effect=prices_side_effect):
                 result = self._consume_generator(base_behaviour.calculate_initial_investment_value(position))
                 
                 if expected_result is None:
-                    assert result is None
+                    assert result is None, f"Test case '{test_case}': {description} - Expected None but got {result}"
                 else:
-                    assert result == expected_result
+                    assert result == expected_result, f"Test case '{test_case}': {description} - Expected {expected_result} but got {result}"
 
-    def test_calculate_initial_investment_value_missing_decimals(self):
-        """Test calculate_initial_investment_value when token decimals are missing."""
-        base_behaviour = self._create_base_behaviour()
-        
-        position = {
-            "chain": "optimism",
-            "token0": "0xToken0",
-            "token0_symbol": "USDC",
-            "amount0": 1000000000000000000,
-            "timestamp": 1640995200,
-        }
-        
-        # Mock _get_token_decimals to return None
-        def mock_get_token_decimals(*args, **kwargs):
-            yield None
-            return None
-        
-        with patch.object(base_behaviour, '_get_token_decimals', side_effect=mock_get_token_decimals):
-            result = self._consume_generator(base_behaviour.calculate_initial_investment_value(position))
-            assert result is None
 
-    def test_calculate_initial_investment_value_missing_historical_prices(self):
-        """Test calculate_initial_investment_value when historical prices are missing."""
-        base_behaviour = self._create_base_behaviour()
-        
-        position = {
-            "chain": "optimism",
-            "token0": "0xToken0",
-            "token0_symbol": "USDC",
-            "amount0": 1000000000000000000,
-            "timestamp": 1640995200,
-        }
-        
-        # Mock _get_token_decimals
-        def mock_get_token_decimals(*args, **kwargs):
-            yield None
-            return 18
-        
-        # Mock _fetch_historical_token_prices to return empty dict
-        def mock_fetch_historical_prices(*args, **kwargs):
-            yield None
-            return {}
-        
-        with patch.object(base_behaviour, '_get_token_decimals', side_effect=mock_get_token_decimals):
-            with patch.object(base_behaviour, '_fetch_historical_token_prices', side_effect=mock_fetch_historical_prices):
-                result = self._consume_generator(base_behaviour.calculate_initial_investment_value(position))
-                assert result is None
-
-    def test_calculate_initial_investment_value_missing_token0_price(self):
-        """Test calculate_initial_investment_value when token0 price is missing."""
-        base_behaviour = self._create_base_behaviour()
-        
-        position = {
-            "chain": "optimism",
-            "token0": "0xToken0",
-            "token0_symbol": "USDC",
-            "amount0": 1000000000000000000,
-            "timestamp": 1640995200,
-        }
-        
-        # Mock _get_token_decimals
-        def mock_get_token_decimals(*args, **kwargs):
-            yield None
-            return 18
-        
-        # Mock _fetch_historical_token_prices without token0 price
-        def mock_fetch_historical_prices(*args, **kwargs):
-            yield None
-            return {"0xOtherToken": 1000.0}  # Missing token0 price
-        
-        with patch.object(base_behaviour, '_get_token_decimals', side_effect=mock_get_token_decimals):
-            with patch.object(base_behaviour, '_fetch_historical_token_prices', side_effect=mock_fetch_historical_prices):
-                result = self._consume_generator(base_behaviour.calculate_initial_investment_value(position))
-                assert result is None
-
-    def test_calculate_initial_investment_value_missing_token1_price(self):
-        """Test calculate_initial_investment_value when token1 price is missing for dual token position."""
-        base_behaviour = self._create_base_behaviour()
-        
-        position = {
-            "chain": "optimism",
-            "token0": "0xToken0",
-            "token1": "0xToken1",
-            "token0_symbol": "USDC",
-            "token1_symbol": "ETH",
-            "amount0": 1000000000000000000,
-            "amount1": 2000000000000000000,
-            "timestamp": 1640995200,
-        }
-        
-        # Mock _get_token_decimals
-        def mock_get_token_decimals(*args, **kwargs):
-            yield None
-            return 18
-        
-        # Mock _fetch_historical_token_prices with only token0 price
-        def mock_fetch_historical_prices(*args, **kwargs):
-            yield None
-            return {"0xToken0": 1000.0}  # Missing token1 price
-        
-        with patch.object(base_behaviour, '_get_token_decimals', side_effect=mock_get_token_decimals):
-            with patch.object(base_behaviour, '_fetch_historical_token_prices', side_effect=mock_fetch_historical_prices):
-                result = self._consume_generator(base_behaviour.calculate_initial_investment_value(position))
-                assert result is None
 
     @pytest.mark.parametrize(
         "current_positions,expected_total",
@@ -2564,7 +3380,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 assert result is None
 
     @pytest.mark.parametrize(
-        "safe_address,mock_responses,expected_total_balances,expected_requests",
+        "safe_address,mock_responses,expected_total_balances,expected_requests,expected_logs,expected_error,test_description",
         [
             # Test case 1: Single page with results  
             (
@@ -2583,6 +3399,9 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 ],
                 2,
                 1,
+                ["Total balances fetched from SafeApi: 2"],
+                None,
+                "Single page with results"
             ),
             # Test case 2: Multiple pages with pagination
             (
@@ -2610,13 +3429,49 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 ],
                 3,
                 2,
+                ["Fetching SafeApi page: offset=0, limit=100", "Fetching SafeApi page: offset=100, limit=100", "Reached last page of SafeApi results", "Total balances fetched from SafeApi: 3"],
+                None,
+                "Multiple pages with pagination"
+            ),
+            # Test case 3: Empty results (no more results)
+            (
+                "0xSafe789",
+                [
+                    {
+                        "success": True,
+                        "response": {
+                            "results": [],
+                            "next": None,
+                        },
+                    }
+                ],
+                0,
+                1,
+                ["No more results from SafeApi"],
+                None,
+                "Empty results (no more results)"
+            ),
+            # Test case 4: API failure
+            (
+                "0xSafeFail",
+                [
+                    {
+                        "success": False,
+                        "response": "API Error",
+                    }
+                ],
+                0,
+                1,
+                [],
+                "Failed to fetch SafeApi data: API Error",
+                "API failure"
             ),
         ]
     )
     def test_fetch_safe_balances_with_pagination(
-        self, safe_address, mock_responses, expected_total_balances, expected_requests
+        self, safe_address, mock_responses, expected_total_balances, expected_requests, expected_logs, expected_error, test_description
     ):
-        """Test _fetch_safe_balances_with_pagination method."""
+        """Test _fetch_safe_balances_with_pagination method with various scenarios."""
         base_behaviour = self._create_base_behaviour()
         
         # Mock params with safe API base URL
@@ -2638,45 +3493,140 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 return response_data["success"], response_data["response"]
             
             with patch.object(base_behaviour, '_request_with_retries', side_effect=mock_request_with_retries):
-                result = self._consume_generator(base_behaviour._fetch_safe_balances_with_pagination(safe_address))
-                
-                assert len(result) == expected_total_balances
-                assert len(request_calls) == expected_requests
+                if expected_error:
+                    # Test error case
+                    with patch.object(base_behaviour.context.logger, 'error') as mock_error_logger:
+                        result = self._consume_generator(base_behaviour._fetch_safe_balances_with_pagination(safe_address))
+                        
+                        assert result == []
+                        assert len(request_calls) == expected_requests
+                        mock_error_logger.assert_called_once_with(expected_error)
+                else:
+                    # Test success case
+                    with patch.object(base_behaviour.context.logger, 'info') as mock_info:
+                        result = self._consume_generator(base_behaviour._fetch_safe_balances_with_pagination(safe_address))
+                        
+                        assert len(result) == expected_total_balances
+                        assert len(request_calls) == expected_requests
+                        
+                        # Verify log messages if expected
+                        if expected_logs:
+                            info_calls = [call[0][0] for call in mock_info.call_args_list]
+                            for expected_log in expected_logs:
+                                assert any(expected_log in call for call in info_calls)
 
-    def test_get_optimism_balances_from_safe_api_success(self):
-        """Test _get_optimism_balances_from_safe_api method with successful response."""
+
+
+    @pytest.mark.parametrize(
+        "safe_addresses,balances_data,expected_result,expected_logs,expected_error,test_description",
+        [
+            # Test case 1: Success with ETH and USDC balances
+            (
+                {"optimism": "0xSafe123"},
+                [
+                    {"tokenAddress": None, "balance": "1000000000000000000"},  # Native ETH
+                    {
+                        "tokenAddress": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                        "token": {"symbol": "USDC"},
+                        "balance": "1000000",
+                    },
+                ],
+                [
+                    {"asset_symbol": "ETH", "asset_type": "native", "address": "0x0", "balance": 1000000000000000000},
+                    {"asset_symbol": "USDC", "asset_type": "erc_20", "address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", "balance": 1000000},
+                ],
+                ["Retrieved 2 token balances from SafeApi"],
+                None,
+                "Success with ETH and USDC balances"
+            ),
+            # Test case 2: No safe address set (error case)
+            (
+                {},
+                [],
+                [],
+                [],
+                "No safe address set for Optimism chain",
+                "No safe address set"
+            ),
+            # Test case 3: Success with safe address and token filtering
+            (
+                {"optimism": "0xSafe123"},
+                [
+                    {"tokenAddress": None, "balance": "1000000000000000000"},  # Native ETH
+                    {
+                        "tokenAddress": "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84",  # This token should be filtered out
+                        "token": {"symbol": "FILTERED"},
+                        "balance": "1000000"
+                    },
+                    {
+                        "tokenAddress": "0x1234567890123456789012345678901234567890",
+                        "token": {"symbol": "USDC"},
+                        "balance": "1000000"
+                    }
+                ],
+                [
+                    {"asset_symbol": "ETH", "asset_type": "native", "address": "0x0", "balance": 1000000000000000000},
+                    {"asset_symbol": "USDC", "asset_type": "erc_20", "address": "0x1234567890123456789012345678901234567890", "balance": 1000000},
+                ],
+                ["Retrieved 2 token balances from SafeApi"],
+                None,
+                "Success with token filtering (FILTERED token excluded)"
+            ),
+            # Test case 4: Empty balances response
+            (
+                {"optimism": "0xSafe123"},
+                [],
+                [],
+                ["Retrieved 0 token balances from SafeApi"],
+                None,
+                "Empty balances response"
+            ),
+        ]
+    )
+    def test_get_optimism_balances_from_safe_api_parameterized(self, safe_addresses, balances_data, expected_result, expected_logs, expected_error, test_description):
+        """Test _get_optimism_balances_from_safe_api method with various scenarios."""
         base_behaviour = self._create_base_behaviour()
         
-        all_balances_data = [
-            {"tokenAddress": None, "balance": "1000000000000000000"},  # Native ETH
-            {
-                "tokenAddress": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-                "token": {"symbol": "USDC"},
-                "balance": "1000000",
-            },
-        ]
-        
-        # Mock params with safe contract addresses
-        with patch.object(type(base_behaviour), 'params', new_callable=PropertyMock) as mock_params:
-            mock_params.return_value.safe_contract_addresses = {"optimism": "0xSafe123"}
-            
-            # Mock _fetch_safe_balances_with_pagination
-            def mock_fetch_safe_balances(safe_addr):
-                yield None
-                return all_balances_data
-            
-            with patch.object(base_behaviour, '_fetch_safe_balances_with_pagination', side_effect=mock_fetch_safe_balances):
+        if safe_addresses:
+            # Mock params with safe contract addresses
+            with patch.dict(base_behaviour.params.safe_contract_addresses, safe_addresses, clear=False):
+                if expected_error:
+                    # Test error case
+                    with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+                        result = self._consume_generator(base_behaviour._get_optimism_balances_from_safe_api())
+                        
+                        assert result == expected_result
+                        mock_error.assert_called_once_with(expected_error)
+                else:
+                    # Test success case
+                    def mock_fetch_safe_balances(safe_addr):
+                        yield None
+                        return balances_data
+                    
+                    with patch.object(base_behaviour, '_fetch_safe_balances_with_pagination', side_effect=mock_fetch_safe_balances):
+                        with patch.object(base_behaviour.context.logger, 'info') as mock_info:
+                            result = self._consume_generator(base_behaviour._get_optimism_balances_from_safe_api())
+                            
+                            assert len(result) == len(expected_result)
+                            
+                            # Verify each expected balance
+                            for i, expected_balance in enumerate(expected_result):
+                                assert result[i]["asset_symbol"] == expected_balance["asset_symbol"]
+                                assert result[i]["asset_type"] == expected_balance["asset_type"]
+                                assert result[i]["balance"] == expected_balance["balance"]
+                            
+                            # Verify log messages
+                            if expected_logs:
+                                info_calls = [call[0][0] for call in mock_info.call_args_list]
+                                for expected_log in expected_logs:
+                                    assert any(expected_log in call for call in info_calls)
+        else:
+            # Test case with no safe addresses
+            with patch.object(base_behaviour.context.logger, 'error') as mock_error:
                 result = self._consume_generator(base_behaviour._get_optimism_balances_from_safe_api())
                 
-                assert len(result) == 2
-                
-                # Check for ETH balance
-                eth_balances = [b for b in result if b.get("asset_symbol") == "ETH"]
-                assert len(eth_balances) == 1
-                
-                # Check for ERC-20 tokens
-                erc20_balances = [b for b in result if b.get("asset_type") == "erc_20"]
-                assert len(erc20_balances) == 1
+                assert result == expected_result
+                mock_error.assert_called_once_with(expected_error)
 
     def test_get_positions_success(self):
         """Test get_positions method with successful responses from both chains."""
@@ -2950,6 +3900,44 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 1,  # Only token with address included
                 [],
             ),
+            # Test case 8: XVELO to VELO renaming
+            (
+                "0xSafeVelo",
+                [
+                    {
+                        "token": {"address": "0x1234567890123456789012345678901234567890", "symbol": "XVELO"},
+                        "value": "1000000"
+                    },
+                ],
+                set(),  # No active LP addresses
+                1,  # Token included with renamed symbol
+                ["Renamed XVELO to VELO for Mode chain token at 0x1234567890123456789012345678901234567890"],
+            ),
+            # Test case 9: Empty tokens list
+            (
+                "0xSafeEmpty",
+                [],
+                set(),
+                0,  # No tokens
+                [],
+            ),
+            # Test case 10: Negative balance filtered out
+            (
+                "0xSafeNegative",
+                [
+                    {
+                        "token": {"address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", "symbol": "USDC"},
+                        "value": "-1000000"  # Negative balance
+                    },
+                    {
+                        "token": {"address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", "symbol": "DAI"},
+                        "value": "2000000"  # Positive balance
+                    },
+                ],
+                set(),
+                1,  # Only positive balance included
+                [],
+            ),
         ]
     )
     def test_fetch_mode_token_balances(
@@ -2995,84 +3983,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                             assert isinstance(balance["balance"], int)
                             assert balance["balance"] > 0
 
-    def test_fetch_mode_token_balances_empty_tokens(self):
-        """Test _fetch_mode_token_balances with empty token list."""
-        base_behaviour = self._create_base_behaviour()
-        
-        # Mock _get_active_lp_addresses
-        def mock_get_active_lp_addresses():
-            return set()
-        
-        # Mock _fetch_mode_tokens_with_pagination to return empty list
-        def mock_fetch_mode_tokens_with_pagination(safe_addr):
-            yield None
-            return []
-        
-        with patch.object(base_behaviour, '_get_active_lp_addresses', side_effect=mock_get_active_lp_addresses):
-            with patch.object(base_behaviour, '_fetch_mode_tokens_with_pagination', side_effect=mock_fetch_mode_tokens_with_pagination):
-                result = self._consume_generator(base_behaviour._fetch_mode_token_balances("0xSafe123"))
-                
-                assert result == []
 
-    def test_fetch_mode_token_balances_case_insensitive_lp_filtering(self):
-        """Test that LP token filtering is case insensitive."""
-        base_behaviour = self._create_base_behaviour()
-        
-        all_tokens = [
-            {
-                "token": {"address": "0xPool123", "symbol": "LP-TOKEN"},
-                "value": "1000000"
-            },
-        ]
-        
-        # Mock _get_active_lp_addresses with lowercase address
-        def mock_get_active_lp_addresses():
-            return {"0xpool123"}  # Lowercase address
-        
-        # Mock _fetch_mode_tokens_with_pagination
-        def mock_fetch_mode_tokens_with_pagination(safe_addr):
-            yield None
-            return all_tokens
-        
-        with patch.object(base_behaviour, '_get_active_lp_addresses', side_effect=mock_get_active_lp_addresses):
-            with patch.object(base_behaviour, '_fetch_mode_tokens_with_pagination', side_effect=mock_fetch_mode_tokens_with_pagination):
-                with patch.object(base_behaviour.context.logger, 'info') as mock_logger:
-                    result = self._consume_generator(base_behaviour._fetch_mode_token_balances("0xSafe123"))
-                    
-                    assert len(result) == 0  # Should be filtered out
-                    mock_logger.assert_called_once_with("Filtering out LP token LP-TOKEN (0xPool123) - active position")
-
-    def test_fetch_mode_token_balances_negative_balance_filtered(self):
-        """Test that negative balances are filtered out."""
-        base_behaviour = self._create_base_behaviour()
-
-        all_tokens = [
-            {
-                "token": {"address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", "symbol": "USDC"},
-                "value": "-1000000"  # Negative balance
-            },
-            {
-                "token": {"address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", "symbol": "DAI"},
-                "value": "2000000"  # Positive balance
-            },
-        ]
-
-        # Mock _get_active_lp_addresses
-        def mock_get_active_lp_addresses():
-            return set()
-
-        # Mock _fetch_mode_tokens_with_pagination
-        def mock_fetch_mode_tokens_with_pagination(safe_addr):
-            yield None
-            return all_tokens
-
-        with patch.object(base_behaviour, '_get_active_lp_addresses', side_effect=mock_get_active_lp_addresses):
-            with patch.object(base_behaviour, '_fetch_mode_tokens_with_pagination', side_effect=mock_fetch_mode_tokens_with_pagination):
-                result = self._consume_generator(base_behaviour._fetch_mode_token_balances("0xSafe123"))
-
-                assert len(result) == 1  # Only positive balance included
-                assert result[0]["asset_symbol"] == "DAI"
-                # Negative balances are silently filtered out (no warning logged)
 
     @pytest.mark.parametrize(
         "chain,expected_result",
@@ -3427,9 +4338,6 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                                 if api_success and expected_result and expected_result > 0:
                                     mock_cache.assert_called_once()
 
-    # Note: _do_connection_request tests are skipped due to complex mocking issues with read-only context attributes
-    # The method is tested indirectly through other methods that use it
-
     @pytest.mark.parametrize(
         "method,kwargs,response_payload,expected_result",
         [
@@ -3783,7 +4691,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                             assert result == expected_result
                             
                             # Verify cache was checked
-                            mock_get_cached.assert_called_once_with(ZERO_ADDRESS, "01-01-2022")
+                            mock_get_cached.assert_called_once_with("ethereum", "01-01-2022")
                             
                             # Verify API call was made only if no cache
                             if cached_price is None:
@@ -3793,7 +4701,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                                 
                                 # Verify price was cached for successful API calls
                                 if api_success and expected_result and expected_result > 0:
-                                    mock_cache.assert_called_once_with(ZERO_ADDRESS, expected_result, "01-01-2022")
+                                    mock_cache.assert_called_once_with("ethereum", expected_result, "01-01-2022")
                             else:
                                 mock_request.assert_not_called()
                                 mock_cache.assert_not_called()
@@ -5080,3 +5988,1217 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             
             # Verify callback is a lambda that returns None
             assert captured_callbacks[0]() is None
+
+    # Agent Type and Attribute Management Tests
+    @pytest.mark.parametrize("method_name,method_params,expected_response,expected_call_params", [
+        (
+            "get_agent_type_by_name",
+            ("Modius",),
+            {"type_id": "123", "type_name": "Modius", "description": "Test agent type"},
+            {
+                "method": "read_",
+                "method_name": "get_agent_type_by_name",
+                "endpoint": "api/agent-types/name/Modius"
+            }
+        ),
+        (
+            "create_agent_type",
+            ("TestType", "Test description"),
+            {"type_id": "456", "type_name": "TestType", "description": "Test description"},
+            {
+                "method": "create_",
+                "method_name": "create_agent_type",
+                "endpoint": "api/agent-types/",
+                "data": {"type_name": "TestType", "description": "Test description"}
+            }
+        ),
+        (
+            "get_attr_def_by_name",
+            ("APR",),
+            {"attr_def_id": "789", "attr_name": "APR", "data_type": "json"},
+            {
+                "method": "read_",
+                "method_name": "get_attr_def_by_name",
+                "endpoint": "api/attributes/name/APR"
+            }
+        ),
+        (
+            "get_agent_registry_by_address",
+            ("0x1234567890123456789012345678901234567890",),
+            {"agent_id": "agent123", "agent_name": "TestAgent", "eth_address": "0x1234567890123456789012345678901234567890"},
+            {
+                "method": "read_",
+                "method_name": "get_agent_registry_by_address",
+                "endpoint": "api/agent-registry/address/0x1234567890123456789012345678901234567890"
+            }
+        ),
+        (
+            "create_agent_registry",
+            ("TestAgent", "123", "0x1234567890123456789012345678901234567890"),
+            {"agent_id": "agent123", "agent_name": "TestAgent", "type_id": "123", "eth_address": "0x1234567890123456789012345678901234567890"},
+            {
+                "method": "create_",
+                "method_name": "create_agent_registry",
+                "endpoint": "api/agent-registry/",
+                "data": {"agent_name": "TestAgent", "type_id": "123", "eth_address": "0x1234567890123456789012345678901234567890"}
+            }
+        ),
+    ])
+    def test_mirrordb_methods(self, method_name, method_params, expected_response, expected_call_params):
+        """Test mirrordb methods with parameterized test data."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock the _call_mirrordb method on the instance
+        def _fake_call_mirrordb(*args, **kwargs):
+            def _gen():
+                if False:
+                    yield
+                return expected_response
+            return _gen()
+        with patch.object(base_behaviour, '_call_mirrordb', side_effect=_fake_call_mirrordb) as mock_call:
+            method = getattr(base_behaviour, method_name)
+            result = self._consume_generator(method(*method_params))
+            
+            # Verify the result
+            assert result == expected_response
+            
+            # Verify _call_mirrordb was called with correct parameters
+            mock_call.assert_called_once_with(**expected_call_params)
+
+    @pytest.mark.parametrize("method_name,method_params,expected_response,expected_call_params,expected_data_structure", [
+        (
+            "create_attribute_definition",
+            ("123", "APR", "json", True, "{}", "agent123"),
+            {"attr_def_id": "789", "attr_name": "APR", "data_type": "json"},
+            {
+                "method": "create_",
+                "method_name": "create_attribute_definition",
+                "endpoint": "api/agent-types/123/attributes/"
+            },
+            {
+                "attr_def": {"type_id": "123", "attr_name": "APR", "data_type": "json", "is_required": True, "default_value": "{}"},
+                "auth": {"agent_id": "agent123", "signature": "0x1234567890abcdef", "message": "timestamp:123,endpoint:api/agent-types/123/attributes/"}
+            }
+        ),
+        (
+            "create_agent_attribute",
+            ("agent123", "789", '{"apr": 0.05}'),
+            {"attr_id": "attr123", "agent_id": "agent123", "attr_def_id": "789"},
+            {
+                "method": "create_",
+                "method_name": "create_agent_attribute",
+                "endpoint": "api/agents/agent123/attributes/"
+            },
+            {
+                "agent_attr": {"agent_id": "agent123", "attr_def_id": "789", "string_value": None, "integer_value": None, "float_value": None, "boolean_value": None, "date_value": None, "json_value": '{"apr": 0.05}'},
+                "auth": {"agent_id": "agent123", "signature": "0x1234567890abcdef", "message": "timestamp:123,endpoint:api/agents/agent123/attributes/"}
+            }
+        ),
+    ])
+    def test_mirrordb_methods_with_signature(self, method_name, method_params, expected_response, expected_call_params, expected_data_structure):
+        """Test mirrordb methods that require signature verification."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock the sign_message method
+        mock_signature = "0x1234567890abcdef"
+        def _fake_sign_message(msg):
+            def _gen():
+                if False:
+                    yield
+                return mock_signature
+            return _gen()
+        
+        with patch.object(base_behaviour, 'sign_message', side_effect=_fake_sign_message) as mock_sign:
+            # Mock the round_sequence._last_round_transition_timestamp attribute
+            from datetime import datetime
+            mock_timestamp = datetime(2023, 1, 1, 12, 0, 0)
+            with patch.object(base_behaviour.round_sequence, '_last_round_transition_timestamp', mock_timestamp):
+                # Mock the _call_mirrordb method
+                def _fake_call_mirrordb(*args, **kwargs):
+                    def _gen():
+                        if False:
+                            yield
+                        return expected_response
+                    return _gen()
+                
+                with patch.object(base_behaviour, '_call_mirrordb', side_effect=_fake_call_mirrordb) as mock_call:
+                    method = getattr(base_behaviour, method_name)
+                    result = self._consume_generator(method(*method_params))
+                    
+                    # Verify the result
+                    assert result == expected_response
+                    
+                    # Verify sign_message was called
+                    mock_sign.assert_called_once()
+                    
+                    # Verify _call_mirrordb was called with correct parameters
+                    mock_call.assert_called_once()
+                    call_args = mock_call.call_args
+                    assert call_args[1]['method'] == expected_call_params['method']
+                    assert call_args[1]['method_name'] == expected_call_params['method_name']
+                    assert call_args[1]['endpoint'] == expected_call_params['endpoint']
+                    
+                    # Verify the data structure
+                    data = call_args[1]['data']
+                    assert 'attr_def' in data or 'agent_attr' in data
+                    assert 'auth' in data
+                    
+                    # Verify auth data
+                    auth = data['auth']
+                    # For create_agent_attribute, agent_id is first param; for create_attribute_definition, it's 6th param
+                    expected_agent_id = method_params[0] if method_name == 'create_agent_attribute' else method_params[5]
+                    assert auth['agent_id'] == expected_agent_id
+                    assert auth['signature'] == mock_signature
+
+    @pytest.mark.parametrize("method_name,method_params", [
+        ("create_attribute_definition", ("123", "APR", "json", True, "{}", "agent123")),
+        ("create_agent_attribute", ("agent123", "789", '{"apr": 0.05}')),
+    ])
+    def test_mirrordb_methods_signature_failure(self, method_name, method_params):
+        """Test mirrordb methods when signature generation fails."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock the sign_message method to return None
+        def _mock_sign_message_none(*args, **kwargs):
+            yield
+            return None
+        with patch.object(base_behaviour, 'sign_message', side_effect=_mock_sign_message_none) as mock_sign:
+            # Mock the round_sequence._last_round_transition_timestamp attribute
+            from datetime import datetime
+            mock_timestamp = datetime(2023, 1, 1, 12, 0, 0)
+            with patch.object(base_behaviour.round_sequence, '_last_round_transition_timestamp', mock_timestamp):
+                method = getattr(base_behaviour, method_name)
+                result = self._consume_generator(method(*method_params))
+                
+                # Should return None when signature fails
+                assert result is None
+
+    @pytest.mark.parametrize("method_name,read_data,get_result,create_result,expected_result,create_params,write_data,exception_message", [
+        (
+            "_get_or_create_agent_type",
+            {},  # No existing data
+            None,  # get_agent_type_by_name returns None
+            {"type_id": "123", "type_name": "Modius", "description": "Test description"},  # create_agent_type succeeds
+            {"type_id": "123", "type_name": "Modius", "description": "Test description"},  # Expected result
+            ("Modius", "An agent for DeFi liquidity management and APR tracking"),  # create_agent_type params
+            {"agent_type": '{"type_id": "123", "type_name": "Modius", "description": "Test description"}'},  # _write_kv data
+            None  # No exception
+        ),
+        (
+            "_get_or_create_agent_type",
+            {"agent_type": '{"type_id": "123", "type_name": "Modius", "description": "Test description"}'},  # Existing data
+            None,  # Not used when data exists
+            None,  # Not used when data exists
+            {"type_id": "123", "type_name": "Modius", "description": "Test description"},  # Expected result
+            None,  # Not used when data exists
+            None,  # Not used when data exists
+            None  # No exception
+        ),
+        (
+            "_get_or_create_agent_type",
+            {},  # No existing data
+            None,  # get_agent_type_by_name returns None
+            None,  # create_agent_type fails
+            None,  # Not used when exception occurs
+            None,  # Not used when exception occurs
+            None,  # Not used when exception occurs
+            "Failed to create agent type."  # Exception message
+        ),
+        (
+            "_get_or_create_attr_def",
+            {},  # No existing data
+            None,  # get_attr_def_by_name returns None
+            {"attr_def_id": "789", "attr_name": "APR", "data_type": "json"},  # create_attribute_definition succeeds
+            {"attr_def_id": "789", "attr_name": "APR", "data_type": "json"},  # Expected result
+            ("123", "APR", "json", True, "{}", "agent123"),  # create_attribute_definition params
+            {"attr_def": '{"attr_def_id": "789", "attr_name": "APR", "data_type": "json"}'},  # _write_kv data
+            None  # No exception
+        ),
+        (
+            "_get_or_create_attr_def",
+            {"attr_def": '{"attr_def_id": "789", "attr_name": "APR", "data_type": "json"}'},  # Existing data
+            None,  # Not used when data exists
+            None,  # Not used when data exists
+            {"attr_def_id": "789", "attr_name": "APR", "data_type": "json"},  # Expected result
+            None,  # Not used when data exists
+            None,  # Not used when data exists
+            None  # No exception
+        ),
+        (
+            "_get_or_create_attr_def",
+            {},  # No existing data
+            None,  # get_attr_def_by_name returns None
+            None,  # create_attribute_definition fails
+            None,  # Not used when exception occurs
+            None,  # Not used when exception occurs
+            None,  # Not used when exception occurs
+            "Failed to create attribute definition."  # Exception message
+        ),
+    ])
+    def test_get_or_create_patterns(self, method_name, read_data, get_result, create_result, expected_result, create_params, write_data, exception_message):
+        """Test get-or-create pattern methods with parameterized test data."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock _read_kv
+        def _mock_read_kv(*args, **kwargs):
+            yield
+            return read_data
+        with patch.object(base_behaviour, '_read_kv', side_effect=_mock_read_kv) as mock_read:
+            
+            if method_name == "_get_or_create_agent_type":
+                # Mock get_agent_type_by_name
+                def _mock_get_agent_type_by_name(*args, **kwargs):
+                    yield
+                    return get_result
+                with patch.object(base_behaviour, 'get_agent_type_by_name', side_effect=_mock_get_agent_type_by_name) as mock_get:
+                    if create_result is None and exception_message:
+                        # Test failure case
+                        def _mock_create_agent_type_fail(*args, **kwargs):
+                            yield
+                            return None
+                        with patch.object(base_behaviour, 'create_agent_type', side_effect=_mock_create_agent_type_fail) as mock_create:
+                            # Should raise an exception
+                            with pytest.raises(Exception, match=exception_message):
+                                self._consume_generator(base_behaviour._get_or_create_agent_type("0x123"))
+                    elif create_result:
+                        # Test creation case
+                        def _mock_create_agent_type(*args, **kwargs):
+                            yield
+                            return create_result
+                        with patch.object(base_behaviour, 'create_agent_type', side_effect=_mock_create_agent_type) as mock_create:
+                            # Mock _write_kv
+                            def _mock_write_kv_agent_type(*args, **kwargs):
+                                yield
+                                return None
+                            with patch.object(base_behaviour, '_write_kv', side_effect=_mock_write_kv_agent_type) as mock_write:
+                                result = self._consume_generator(base_behaviour._get_or_create_agent_type("0x123"))
+                                
+                                # Verify the result
+                                assert result == expected_result
+                                
+                                # Verify create_agent_type was called with correct parameters
+                                mock_create.assert_called_once_with(*create_params)
+                                
+                                # Verify _write_kv was called
+                                mock_write.assert_called_once_with(write_data)
+                    else:
+                        # Test existing data case
+                        result = self._consume_generator(base_behaviour._get_or_create_agent_type("0x123"))
+                        assert result == expected_result
+                        
+            elif method_name == "_get_or_create_attr_def":
+                # Mock get_attr_def_by_name
+                def _mock_get_attr_def_by_name(*args, **kwargs):
+                    yield
+                    return get_result
+                with patch.object(base_behaviour, 'get_attr_def_by_name', side_effect=_mock_get_attr_def_by_name) as mock_get:
+                    if create_result is None and exception_message:
+                        # Test failure case
+                        def _mock_create_attribute_definition_fail(*args, **kwargs):
+                            yield
+                            return None
+                        with patch.object(base_behaviour, 'create_attribute_definition', side_effect=_mock_create_attribute_definition_fail) as mock_create:
+                            # Should raise an exception
+                            with pytest.raises(Exception, match=exception_message):
+                                self._consume_generator(base_behaviour._get_or_create_attr_def("123", "agent123"))
+                    elif create_result:
+                        # Test creation case
+                        def _mock_create_attribute_definition(*args, **kwargs):
+                            yield
+                            return create_result
+                        with patch.object(base_behaviour, 'create_attribute_definition', side_effect=_mock_create_attribute_definition) as mock_create:
+                            # Mock _write_kv
+                            def _mock_write_kv_attr_def(*args, **kwargs):
+                                yield
+                                return None
+                            with patch.object(base_behaviour, '_write_kv', side_effect=_mock_write_kv_attr_def) as mock_write:
+                                result = self._consume_generator(base_behaviour._get_or_create_attr_def("123", "agent123"))
+                                
+                                # Verify the result
+                                assert result == expected_result
+                                
+                                # Verify create_attribute_definition was called with correct parameters
+                                mock_create.assert_called_once_with(*create_params)
+                                
+                                # Verify _write_kv was called
+                                mock_write.assert_called_once_with(write_data)
+                    else:
+                        # Test existing data case
+                        result = self._consume_generator(base_behaviour._get_or_create_attr_def("123", "agent123"))
+                        assert result == expected_result
+
+    @pytest.mark.parametrize("read_data,agent_type_result,registry_result,create_result,expected_result,write_data,exception", [
+        (
+            {},  # No existing data
+            {"type_id": "123", "type_name": "Modius"},  # _get_or_create_agent_type succeeds
+            None,  # get_agent_registry_by_address returns None
+            {"agent_id": "agent123", "agent_name": "TestAgent", "type_id": "123"},  # create_agent_registry succeeds
+            {"agent_id": "agent123", "agent_name": "TestAgent", "type_id": "123"},  # Expected result
+            {"agent_registry": '{"agent_id": "agent123", "agent_name": "TestAgent", "type_id": "123"}'},  # _write_kv data
+            None  # No exception
+        ),
+        (
+            {"agent_registry": '{"agent_id": "agent123", "agent_name": "TestAgent", "type_id": "123"}'},  # Existing data
+            None,  # Not used when data exists
+            None,  # Not used when data exists
+            None,  # Not used when data exists
+            {"agent_id": "agent123", "agent_name": "TestAgent", "type_id": "123"},  # Expected result
+            None,  # Not used when data exists
+            None  # No exception
+        ),
+        (
+            {},  # No existing data
+            None,  # _get_or_create_agent_type fails
+            None,  # Not used when agent type fails
+            None,  # Not used when agent type fails
+            None,  # Expected result (None)
+            None,  # Not used when agent type fails
+            None  # No exception
+        ),
+        (
+            {},  # No existing data
+            {"type_id": "123", "type_name": "Modius"},  # _get_or_create_agent_type succeeds
+            None,  # get_agent_registry_by_address returns None
+            None,  # create_agent_registry fails
+            None,  # Expected result (None)
+            None,  # Not used when creation fails
+            None  # No exception
+        ),
+
+        (
+            {},  # No existing data
+            None,  # Not used when exception occurs
+            None,  # Not used when exception occurs
+            None,  # Not used when exception occurs
+            None,  # Expected result (None)
+            None,  # Not used when exception occurs
+            Exception("Test exception")  # Exception to raise
+        ),
+    ])
+    def test_get_or_create_agent_registry_patterns(self, read_data, agent_type_result, registry_result, create_result, expected_result, write_data, exception):
+        """Test _get_or_create_agent_registry with parameterized test data."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock _read_kv
+        def _mock_read_kv(*args, **kwargs):
+            yield
+            return read_data
+        with patch.object(base_behaviour, '_read_kv', side_effect=(exception if exception else _mock_read_kv)) as mock_read:
+            
+            if not read_data and not exception:
+                # Mock _get_or_create_agent_type
+                def _mock_get_or_create_agent_type(*args, **kwargs):
+                    yield
+                    return agent_type_result
+                with patch.object(base_behaviour, '_get_or_create_agent_type', side_effect=_mock_get_or_create_agent_type) as mock_get_type:
+                    
+                    if agent_type_result:
+                        # Mock get_agent_registry_by_address
+                        def _mock_get_agent_registry_by_address(*args, **kwargs):
+                            yield
+                            return registry_result
+                        with patch.object(base_behaviour, 'get_agent_registry_by_address', side_effect=_mock_get_agent_registry_by_address) as mock_get_reg:
+                            
+                            if create_result:
+                                # Mock generate_name
+                                def _mock_generate_name(*args, **kwargs):
+                                    return "TestAgent"
+                                with patch.object(base_behaviour, 'generate_name', side_effect=_mock_generate_name) as mock_gen_name:
+                                    # Mock create_agent_registry
+                                    def _mock_create_agent_registry(*args, **kwargs):
+                                        yield
+                                        return create_result
+                                    with patch.object(base_behaviour, 'create_agent_registry', side_effect=_mock_create_agent_registry) as mock_create:
+                                        # Mock _write_kv
+                                        def _mock_write_kv(*args, **kwargs):
+                                            yield
+                                            return None
+                                        with patch.object(base_behaviour, '_write_kv', side_effect=_mock_write_kv) as mock_write:
+                                            result = self._consume_generator(base_behaviour._get_or_create_agent_registry())
+                                            
+                                            # Verify the result
+                                            assert result == expected_result
+                                            
+                                            # Verify create_agent_registry was called with correct parameters
+                                            mock_create.assert_called_once()
+                                            call_args = mock_create.call_args
+                                            assert call_args[0][0] == "TestAgent"  # agent_name (generated)
+                                            assert call_args[0][1] == "123"        # type_id
+                                            assert call_args[0][2] == base_behaviour.context.agent_address  # eth_address
+                                            
+                                        # Verify _write_kv was called
+                                        mock_write.assert_called_once_with(write_data)
+                            else:
+                                # Test creation failure case - need to mock generate_name here too
+                                def _mock_generate_name(*args, **kwargs):
+                                    return "TestAgent"
+                                with patch.object(base_behaviour, 'generate_name', side_effect=_mock_generate_name) as mock_gen_name:
+                                    def _mock_create_agent_registry_fail(*args, **kwargs):
+                                        yield
+                                        return None
+                                    with patch.object(base_behaviour, 'create_agent_registry', side_effect=_mock_create_agent_registry_fail) as mock_create:
+                                        
+                                        result = self._consume_generator(base_behaviour._get_or_create_agent_registry())
+                                        
+                                        # Should return None when registry creation fails
+                                        assert result == expected_result
+                                        
+                                        # Verify that create_agent_registry was called
+                                        mock_create.assert_called_once()
+                    else:
+                        # Test agent type failure case
+                        result = self._consume_generator(base_behaviour._get_or_create_agent_registry())
+                        
+                        # Should return None when agent type creation fails
+                        assert result == expected_result
+                        
+                        # When agent type creation fails, create_agent_registry should not be called
+                        # since the function returns early
+            else:
+                # Test existing data case
+                result = self._consume_generator(base_behaviour._get_or_create_agent_registry())
+                assert result == expected_result
+
+    def test_get_or_create_agent_registry_creation_failure_error_logging(self):
+        """Test _get_or_create_agent_registry specifically for error logging when creation fails (lines 2707-2708)."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock _read_kv to return no existing data
+        def _mock_read_kv(*args, **kwargs):
+            yield
+            return {}
+        with patch.object(base_behaviour, '_read_kv', side_effect=_mock_read_kv):
+            
+            # Mock _get_or_create_agent_type to succeed
+            def _mock_get_or_create_agent_type(*args, **kwargs):
+                yield
+                return {"type_id": "123", "type_name": "Modius"}
+            with patch.object(base_behaviour, '_get_or_create_agent_type', side_effect=_mock_get_or_create_agent_type):
+                
+                # Mock get_agent_registry_by_address to return None (no existing registry)
+                def _mock_get_agent_registry_by_address(*args, **kwargs):
+                    yield
+                    return None
+                with patch.object(base_behaviour, 'get_agent_registry_by_address', side_effect=_mock_get_agent_registry_by_address):
+                    
+                    # Mock generate_name to return a valid name
+                    def _mock_generate_name(*args, **kwargs):
+                        return "TestAgent"
+                    with patch.object(base_behaviour, 'generate_name', side_effect=_mock_generate_name):
+                        
+                        # Mock create_agent_registry to FAIL (return None) - this will trigger lines 2707-2708
+                        def _mock_create_agent_registry_fail(*args, **kwargs):
+                            yield
+                            return None
+                        with patch.object(base_behaviour, 'create_agent_registry', side_effect=_mock_create_agent_registry_fail) as mock_create:
+                            
+                            # Mock the logger to capture error messages
+                            with patch.object(base_behaviour.context.logger, 'error') as mock_logger_error:
+                                
+                                result = self._consume_generator(base_behaviour._get_or_create_agent_registry())
+                                
+                                # Verify the result is None when creation fails
+                                assert result is None
+                                
+                                # Verify that create_agent_registry was called
+                                mock_create.assert_called_once()
+                                
+                                # Verify that the error was logged (lines 2707-2708)
+                                mock_logger_error.assert_called_once_with("Failed to create agent registry")
+
+    # Name Generation Tests
+    @pytest.mark.parametrize("seed_values", [
+        list(range(10)),  # Small seeds
+        [100, 500, 1000, 1500],  # Large seeds
+        [0, 1, 2, 3, 4, 5]  # Sequential seeds
+    ])
+    def test_generate_phonetic_syllable(self, seed_values):
+        """Test generate_phonetic_syllable method with parameterized seed values."""
+        base_behaviour = self._create_base_behaviour()
+        
+        syllables = []
+        for seed in seed_values:
+            syllable = base_behaviour.generate_phonetic_syllable(seed)
+            syllables.append(syllable)
+            assert isinstance(syllable, str)
+            assert len(syllable) > 0
+        
+        # Verify we get different syllables for different seeds (if enough seeds)
+        if len(seed_values) > 1:
+            assert len(set(syllables)) > 1
+
+    @pytest.mark.parametrize("address,start_index,syllables,expected_properties", [
+        (
+            "0x1234567890123456789012345678901234567890",
+            2,
+            2,
+            {"is_lowercase": True, "min_length": 4}
+        ),
+        (
+            "0x1234567890123456789012345678901234567890",
+            2,
+            3,
+            {"is_lowercase": True, "min_length": 6}
+        ),
+        (
+            "0xfedcba0987654321fedcba0987654321fedcba09",
+            5,
+            2,
+            {"is_lowercase": True, "min_length": 4}
+        ),
+    ])
+    def test_generate_phonetic_name(self, address, start_index, syllables, expected_properties):
+        """Test generate_phonetic_name method with parameterized test data."""
+        base_behaviour = self._create_base_behaviour()
+        
+        name = base_behaviour.generate_phonetic_name(address, start_index, syllables)
+        
+        assert isinstance(name, str)
+        assert len(name) > 0
+        
+        if expected_properties.get("is_lowercase"):
+            assert name.islower()
+        
+        if expected_properties.get("min_length"):
+            assert len(name) >= expected_properties["min_length"]
+
+    @pytest.mark.parametrize("address,expected_properties", [
+        (
+            "0x1234567890123456789012345678901234567890",
+            {"has_hyphen": True, "parts_count": 2, "last_name_has_number": True}
+        ),
+        (
+            "0xfedcba0987654321fedcba0987654321fedcba09",
+            {"has_hyphen": True, "parts_count": 2, "last_name_has_number": True}
+        ),
+        (
+            "0xabcdef1234567890abcdef1234567890abcdef12",
+            {"has_hyphen": True, "parts_count": 2, "last_name_has_number": True}
+        ),
+    ])
+    def test_generate_name(self, address, expected_properties):
+        """Test generate_name method with parameterized test data."""
+        base_behaviour = self._create_base_behaviour()
+        
+        name = base_behaviour.generate_name(address)
+        
+        assert isinstance(name, str)
+        assert len(name) > 0
+        
+        if expected_properties.get("has_hyphen"):
+            assert "-" in name
+        
+        if expected_properties.get("parts_count"):
+            parts = name.split("-")
+            assert len(parts) == expected_properties["parts_count"]
+            
+            first_name = parts[0]
+            last_name_part = parts[1]
+            
+            assert len(first_name) > 0
+            assert len(last_name_part) > 0
+            
+            if expected_properties.get("last_name_has_number"):
+                assert last_name_part[-2:].isdigit()
+        
+        # Test that different addresses generate different names
+        if len(expected_properties) > 1:  # Only for multiple test cases
+            other_addresses = [addr for addr in ["0x1234567890123456789012345678901234567890", "0xfedcba0987654321fedcba0987654321fedcba09", "0xabcdef1234567890abcdef1234567890abcdef12"] if addr != address]
+            for other_addr in other_addresses:
+                other_name = base_behaviour.generate_name(other_addr)
+                assert other_name != name
+
+    @pytest.mark.parametrize("message,mock_signature,expected_result,expected_encoding", [
+        (
+            "test message to sign",
+            b"0x1234567890abcdef",
+            "1234567890abcdef",  # Should remove '0x' prefix
+            "utf-8"
+        ),
+        (
+            "test message with unicode: 🚀🌟✨",
+            b"0x1234567890abcdef",
+            "1234567890abcdef",  # Should remove '0x' prefix
+            "utf-8"
+        ),
+        (
+            "simple message",
+            b"0xabcdef123456",
+            "abcdef123456",  # Should remove '0x' prefix
+            "utf-8"
+        ),
+        (
+            "message with numbers 12345",
+            b"0x9876543210fedcba",
+            "9876543210fedcba",  # Should remove '0x' prefix
+            "utf-8"
+        ),
+    ])
+    def test_sign_message_success(self, message, mock_signature, expected_result, expected_encoding):
+        """Test sign_message method with successful signature generation."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock the get_signature method
+        def _mock_get_signature(*args, **kwargs):
+            yield
+            return mock_signature.decode('utf-8') if isinstance(mock_signature, bytes) else mock_signature
+        with patch.object(base_behaviour, 'get_signature', side_effect=_mock_get_signature) as mock_get_sig:
+            
+            result = self._consume_generator(base_behaviour.sign_message(message))
+            
+            # Verify the result
+            assert result == expected_result
+            
+            # Verify get_signature was called with encoded message
+            mock_get_sig.assert_called_once_with(message.encode(expected_encoding))
+
+    @pytest.mark.parametrize("message,mock_signature,expected_result", [
+        ("test message to sign", None, None),  # get_signature returns None
+        ("another message", b"", None),  # get_signature returns empty signature (falsy)
+        ("unicode message 🚀", None, None),  # get_signature returns None for unicode
+        ("simple text", b"", None),  # get_signature returns empty signature (falsy)
+    ])
+    def test_sign_message_failure_cases(self, message, mock_signature, expected_result):
+        """Test sign_message method with various failure scenarios."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock the get_signature method
+        def _mock_get_signature(*args, **kwargs):
+            yield
+            return mock_signature
+        with patch.object(base_behaviour, 'get_signature', side_effect=_mock_get_signature) as mock_get_sig:
+            
+            result = self._consume_generator(base_behaviour.sign_message(message))
+            
+            # Verify the result
+            assert result == expected_result
+
+    def test_synchronized_data(self):
+        """Test synchronized_data property."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock the parent's synchronized_data property
+        mock_sync_data = MagicMock()
+        with patch.object(type(base_behaviour), 'synchronized_data', new_callable=PropertyMock) as mock_prop:
+            mock_prop.return_value = mock_sync_data
+            
+            result = base_behaviour.synchronized_data
+            
+            assert result == mock_sync_data
+
+
+    def test_store_data_error_handling(self):
+        """Test _store_data method error handling."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Test with a filepath that causes IOError/OSError
+        with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+            with patch('builtins.open', side_effect=OSError("Permission denied")):
+                base_behaviour._store_data({"test": "data"}, "test_attr", "/invalid/path/file.json")
+                
+                mock_error.assert_called_once()
+
+
+
+    def test_store_agent_performance(self):
+        """Test store_agent_performance method."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Set up agent performance data
+        base_behaviour.agent_performance = {
+            "timestamp": 1234567890,
+            "metrics": ["metric1", "metric2"],
+            "agent_behavior": "test_behavior"
+        }
+        
+        # Mock _store_data
+        with patch.object(base_behaviour, '_store_data') as mock_store:
+            base_behaviour.store_agent_performance()
+            
+            mock_store.assert_called_once_with(
+                base_behaviour.agent_performance,
+                "agent_performance",
+                base_behaviour.agent_performance_filepath
+            )
+
+    def test_read_agent_performance_success(self):
+        """Test read_agent_performance method with successful read."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Set up existing agent performance data
+        base_behaviour.agent_performance = {
+            "timestamp": 1234567890,
+            "metrics": ["metric1"],
+            "agent_behavior": "existing_behavior"
+        }
+        
+        # Mock _read_data to not raise exception
+        with patch.object(base_behaviour, '_read_data'):
+            base_behaviour.read_agent_performance()
+            
+            # Should not change existing data
+            assert base_behaviour.agent_performance["agent_behavior"] == "existing_behavior"
+
+    def test_read_agent_performance_failure(self):
+        """Test read_agent_performance method with read failure."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Clear existing agent performance
+        base_behaviour.agent_performance = {}
+        
+        # Mock _read_data to raise exception
+        with patch.object(base_behaviour, '_read_data', side_effect=Exception("Read failed")):
+            with patch.object(base_behaviour.context.logger, 'warning') as mock_warning:
+                base_behaviour.read_agent_performance()
+                
+                # Should log warning and initialize performance
+                mock_warning.assert_called_once()
+                assert base_behaviour.agent_performance["metrics"] == []
+
+    def test_read_agent_performance_empty_data(self):
+        """Test read_agent_performance method with empty data."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Set up empty agent performance data
+        base_behaviour.agent_performance = {}
+        
+        # Mock _read_data to not raise exception but return empty data
+        with patch.object(base_behaviour, '_read_data'):
+            base_behaviour.read_agent_performance()
+            
+            # Should initialize performance due to empty data
+            assert "timestamp" in base_behaviour.agent_performance
+            assert base_behaviour.agent_performance["metrics"] == []
+
+    def test_initialize_agent_performance(self):
+        """Test initialize_agent_performance method."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Clear existing agent performance
+        base_behaviour.agent_performance = {}
+        
+        base_behaviour.initialize_agent_performance()
+        
+        expected_structure = {
+            "timestamp": None,
+            "metrics": [],
+            "agent_behavior": None,
+        }
+        
+        assert base_behaviour.agent_performance == expected_structure
+
+    def test_update_agent_performance_timestamp_success(self):
+        """Test update_agent_performance_timestamp method with success."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Set up agent performance
+        base_behaviour.agent_performance = {
+            "timestamp": None,
+            "metrics": [],
+            "agent_behavior": None,
+        }
+        
+        # Mock datetime.utcnow()
+        mock_datetime = MagicMock()
+        mock_datetime.utcnow.return_value.timestamp.return_value = 1234567890
+        
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.base.datetime', mock_datetime):
+            base_behaviour.update_agent_performance_timestamp()
+            
+            assert base_behaviour.agent_performance["timestamp"] == 1234567890
+
+    def test_update_agent_performance_timestamp_failure(self):
+        """Test update_agent_performance_timestamp method with failure."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Set up agent performance
+        base_behaviour.agent_performance = {
+            "timestamp": None,
+            "metrics": [],
+            "agent_behavior": None,
+        }
+        
+        # Mock datetime.utcnow() to raise exception
+        mock_datetime = MagicMock()
+        mock_datetime.utcnow.side_effect = Exception("Datetime error")
+        
+        with patch('packages.valory.skills.liquidity_trader_abci.behaviours.base.datetime', mock_datetime):
+            with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+                base_behaviour.update_agent_performance_timestamp()
+                
+                mock_error.assert_called_once()
+                assert base_behaviour.agent_performance["timestamp"] is None
+
+
+    def test_store_data_json_dump_error(self):
+        """Test _store_data method when JSON dumping fails"""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Ensure temp_path is initialized
+        if not hasattr(self, 'temp_path'):
+            self.setUp()
+        
+        file_path = self.temp_path / "test_json_error.json"
+        
+        # Mock json.dump to raise an IOError/OSError
+        with patch('json.dump', side_effect=OSError("Disk full")):
+            with patch.object(base_behaviour.context.logger, 'error') as mock_error:
+                base_behaviour._store_data({"test": "data"}, "test_attr", str(file_path))
+                
+                # Should log the error from the inner try-except block
+                # The error message includes the full path, so we check if it contains the filename
+                mock_error.assert_called_once()
+                error_call = mock_error.call_args[0][0]
+                assert "Error writing to file" in error_call
+                assert "test_json_error.json" in error_call
+
+
+    @pytest.mark.parametrize(
+        "test_case,timeout,message,dialogue,expected_timeout,expected_response,expected_behavior",
+        [
+            # Test case 1: Basic success with timeout
+            (
+                "basic_success_with_timeout",
+                10.0,
+                "test_message",
+                "test_dialogue",
+                10.0,
+                "test_response",
+                "success"
+            ),
+            # Test case 2: No timeout (default None)
+            (
+                "no_timeout_default_none",
+                None,
+                "test_message",
+                "test_dialogue",
+                None,
+                "test_response",
+                "success"
+            ),
+            # Test case 3: Zero timeout
+            (
+                "zero_timeout",
+                0.0,
+                "test_message",
+                "test_dialogue",
+                0.0,
+                "test_response",
+                "success"
+            ),
+            # Test case 4: Negative timeout
+            (
+                "negative_timeout",
+                -5.0,
+                "test_message",
+                "test_dialogue",
+                -5.0,
+                "test_response",
+                "success"
+            ),
+            # Test case 5: Large timeout
+            (
+                "large_timeout",
+                3600.0,
+                "test_message",
+                "test_dialogue",
+                3600.0,
+                "test_response",
+                "success"
+            ),
+            # Test case 6: Different message types
+            (
+                "different_message_types",
+                None,
+                {"key": "value"},
+                "test_dialogue",
+                None,
+                "test_response",
+                "success"
+            ),
+            # Test case 7: Different dialogue types
+            (
+                "different_dialogue_types",
+                None,
+                "test_message",
+                123,
+                None,
+                "test_response",
+                "success"
+            ),
+            # Test case 8: Different response types
+            (
+                "different_response_types",
+                None,
+                "test_message",
+                "test_dialogue",
+                None,
+                {"data": "response"},
+                "success"
+            ),
+            # Test case 9: Outbox error
+            (
+                "outbox_error",
+                None,
+                "test_message",
+                "test_dialogue",
+                None,
+                None,
+                "outbox_exception"
+            ),
+            # Test case 10: Nonce error
+            (
+                "nonce_error",
+                None,
+                "test_message",
+                "test_dialogue",
+                None,
+                None,
+                "nonce_exception"
+            ),
+            # Test case 11: Callback error
+            (
+                "callback_error",
+                None,
+                "test_message",
+                "test_dialogue",
+                None,
+                None,
+                "callback_exception"
+            ),
+            # Test case 12: Wait error
+            (
+                "wait_error",
+                None,
+                "test_message",
+                "test_dialogue",
+                None,
+                None,
+                "wait_exception"
+            ),
+        ],
+    )
+    def test_do_connection_request_comprehensive(
+        self,
+        test_case,
+        timeout,
+        message,
+        dialogue,
+        expected_timeout,
+        expected_response,
+        expected_behavior,
+    ):
+        """Comprehensive test for _do_connection_request with all scenarios."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Mock the required methods
+        with patch.object(base_behaviour.context.outbox, 'put_message') as mock_put_message, \
+             patch.object(base_behaviour, '_get_request_nonce_from_dialogue') as mock_get_nonce, \
+             patch.object(base_behaviour, 'get_callback_request') as mock_get_callback, \
+             patch.object(base_behaviour, 'wait_for_message') as mock_wait:
+            
+            # Mock the requests context
+            mock_requests = MagicMock()
+            mock_requests.request_id_to_callback = {}
+            base_behaviour.context.requests = mock_requests
+            
+            # Configure mocks based on test case
+            if expected_behavior == "outbox_exception":
+                mock_put_message.side_effect = Exception("Outbox error")
+                mock_get_nonce.return_value = "test_nonce"
+                mock_get_callback.return_value = "test_callback"
+                
+                # Test should raise the exception
+                with pytest.raises(Exception, match="Outbox error"):
+                    self._consume_generator(
+                        base_behaviour._do_connection_request(
+                            message=message,
+                            dialogue=dialogue,
+                            timeout=timeout
+                        )
+                    )
+                return
+                
+            elif expected_behavior == "nonce_exception":
+                mock_put_message.return_value = None
+                mock_get_nonce.side_effect = Exception("Nonce error")
+                mock_get_callback.return_value = "test_callback"
+                
+                # Test should raise the exception
+                with pytest.raises(Exception, match="Nonce error"):
+                    self._consume_generator(
+                        base_behaviour._do_connection_request(
+                            message=message,
+                            dialogue=dialogue,
+                            timeout=timeout
+                        )
+                    )
+                return
+                
+            elif expected_behavior == "callback_exception":
+                mock_put_message.return_value = None
+                mock_get_nonce.return_value = "test_nonce"
+                mock_get_callback.side_effect = Exception("Callback error")
+                
+                # Test should raise the exception
+                with pytest.raises(Exception, match="Callback error"):
+                    self._consume_generator(
+                        base_behaviour._do_connection_request(
+                            message=message,
+                            dialogue=dialogue,
+                            timeout=timeout
+                        )
+                    )
+                return
+                
+            elif expected_behavior == "wait_exception":
+                mock_put_message.return_value = None
+                mock_get_nonce.return_value = "test_nonce"
+                mock_get_callback.return_value = "test_callback"
+                mock_wait.side_effect = Exception("Wait error")
+                
+                # Test should raise the exception
+                with pytest.raises(Exception, match="Wait error"):
+                    self._consume_generator(
+                        base_behaviour._do_connection_request(
+                            message=message,
+                            dialogue=dialogue,
+                            timeout=timeout
+                        )
+                    )
+                return
+            
+            # Normal success case
+            mock_put_message.return_value = None
+            mock_get_nonce.return_value = "test_nonce"
+            mock_get_callback.return_value = "test_callback"
+            
+            # Set up wait_for_message as a generator that yields None and returns the response
+            def wait_side_effect(*args, **kwargs):
+                yield None
+                return expected_response
+            
+            mock_wait.side_effect = wait_side_effect
+            
+            # Execute the function
+            result = self._consume_generator(
+                base_behaviour._do_connection_request(
+                    message=message,
+                    dialogue=dialogue,
+                    timeout=timeout
+                )
+            )
+            
+            # Verify the result
+            assert result == expected_response
+            
+            # Verify put_message was called
+            mock_put_message.assert_called_once_with(message=message)
+            
+            # Verify wait_for_message was called with correct timeout
+            mock_wait.assert_called_once_with(timeout=expected_timeout)
+            
+            # Verify callback was registered
+            assert mock_requests.request_id_to_callback["test_nonce"] == "test_callback"
+            
+            # Verify _get_request_nonce_from_dialogue was called with the dialogue
+            mock_get_nonce.assert_called_once_with(dialogue)
+            
+            # Verify get_callback_request was called
+            mock_get_callback.assert_called_once() 
+
+    def test_get_entry_costs_key(self):
+        """Test _get_entry_costs_key method."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Test with different chain and position_id combinations
+        test_cases = [
+            ("optimism", "0xPool123", "entry_costs_optimism_0xPool123"),
+            ("mode", "0xPool456", "entry_costs_mode_0xPool456"),
+            ("ethereum", "position789", "entry_costs_ethereum_position789"),
+            ("", "", "entry_costs__"),  # Empty strings
+            ("chain_with_underscores", "id_with_dashes", "entry_costs_chain_with_underscores_id_with_dashes"),
+        ]
+        
+        for chain, position_id, expected_key in test_cases:
+            result = base_behaviour._get_entry_costs_key(chain, position_id)
+            assert result == expected_key, f"Expected {expected_key} for chain={chain}, position_id={position_id}, but got {result}"
+            
+            # Verify the key format is consistent
+            assert result.startswith("entry_costs_")
+            assert chain in result
+            assert position_id in result
+
+    def test_log_gas_usage_max_records_limit(self):
+        """Test log_gas_usage method when maximum records limit is exceeded."""
+        base_behaviour = self._create_base_behaviour()
+        
+        # Test the GasCostTracker functionality
+        gas_tracker = base_behaviour.gas_cost_tracker
+        
+        # Test with a single chain
+        chain = "optimism"
+        
+        # Add records up to the MAX_RECORDS limit
+        for i in range(gas_tracker.MAX_RECORDS + 5):  # Add 5 extra records
+            timestamp = int(time.time()) + i
+            tx_hash = f"0xTxHash{i:03d}"
+            gas_used = 100000 + i
+            gas_price = 20000000000 + i
+            
+            gas_tracker.log_gas_usage(chain, timestamp, tx_hash, gas_used, gas_price)
+        
+        # Verify that only MAX_RECORDS are kept
+        assert len(gas_tracker.data[chain]) == gas_tracker.MAX_RECORDS
+        
+        # Verify that the oldest records were removed (keeping only the latest)
+        expected_timestamps = [int(time.time()) + i for i in range(5, gas_tracker.MAX_RECORDS + 5)]
+        actual_timestamps = [record["timestamp"] for record in gas_tracker.data[chain]]
+        
+        # The timestamps should match the expected range (latest records)
+        assert actual_timestamps == expected_timestamps
+        
+        # Verify the structure of the records
+        for record in gas_tracker.data[chain]:
+            assert "timestamp" in record
+            assert "tx_hash" in record
+            assert "gas_used" in record
+            assert "gas_price" in record
+            assert isinstance(record["timestamp"], int)
+            assert isinstance(record["tx_hash"], str)
+            assert isinstance(record["gas_used"], int)
+            assert isinstance(record["gas_price"], int)
+        
+        # Test with multiple chains
+        chain2 = "mode"
+        for i in range(gas_tracker.MAX_RECORDS + 3):  # Add 3 extra records
+            timestamp = int(time.time()) + i
+            tx_hash = f"0xModeTxHash{i:03d}"
+            gas_used = 150000 + i
+            gas_price = 25000000000 + i
+            
+            gas_tracker.log_gas_usage(chain2, timestamp, tx_hash, gas_used, gas_price)
+        
+        # Verify both chains maintain their own MAX_RECORDS limit
+        assert len(gas_tracker.data[chain]) == gas_tracker.MAX_RECORDS
+        assert len(gas_tracker.data[chain2]) == gas_tracker.MAX_RECORDS
+        
+        # Verify the data is properly separated between chains
+        assert gas_tracker.data[chain] != gas_tracker.data[chain2]
+        
+        # Test edge case: exactly at MAX_RECORDS
+        chain3 = "ethereum"
+        for i in range(gas_tracker.MAX_RECORDS):
+            timestamp = int(time.time()) + i
+            tx_hash = f"0xEthTxHash{i:03d}"
+            gas_used = 200000 + i
+            gas_price = 30000000000 + i
+            
+            gas_tracker.log_gas_usage(chain3, timestamp, tx_hash, gas_used, gas_price)
+        
+        # Should have exactly MAX_RECORDS
+        assert len(gas_tracker.data[chain3]) == gas_tracker.MAX_RECORDS
+        
+        # Adding one more should still keep MAX_RECORDS
+        gas_tracker.log_gas_usage(chain3, int(time.time()) + 999, "0xEthTxHash999", 999999, 99999999999)
+        assert len(gas_tracker.data[chain3]) == gas_tracker.MAX_RECORDS

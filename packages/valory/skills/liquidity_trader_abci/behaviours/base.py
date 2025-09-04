@@ -1923,10 +1923,7 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, bool]:
         """Check if rewards should be updated from subgraph (period == 0 or 24-hour interval)"""
         # Update immediately if period == 0
-        if (
-            self.synchronized_data.period_count
-            and self.synchronized_data.period_count == 0
-        ):
+        if self.synchronized_data.period_count == 0:
             self.context.logger.info(
                 f"Reward update for {chain}: period == 0, forcing immediate update"
             )

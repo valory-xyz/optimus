@@ -28,6 +28,7 @@ from abc import ABC
 from collections import defaultdict
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
 
 from aea.configurations.data_types import PublicId
@@ -319,24 +320,27 @@ class LiquidityTraderBaseBehaviour(
         """Initialize `LiquidityTraderBaseBehaviour`."""
         super().__init__(**kwargs)
         self.current_positions: List[Dict[str, Any]] = []
+        # Convert store_path to Path object for file operations
+        store_path = Path(self.params.store_path)
+        
         self.current_positions_filepath: str = (
-            self.params.store_path / self.params.pool_info_filename
+            store_path / self.params.pool_info_filename
         )
         self.portfolio_data: Dict[str, Any] = {}
         self.portfolio_data_filepath: str = (
-            self.params.store_path / self.params.portfolio_info_filename
+            store_path / self.params.portfolio_info_filename
         )
         self.whitelisted_assets: Dict[str, Any] = {}
         self.whitelisted_assets_filepath: str = (
-            self.params.store_path / self.params.whitelisted_assets_filename
+            store_path / self.params.whitelisted_assets_filename
         )
         self.funding_events: Dict[str, Any] = {}
         self.funding_events_filepath: str = (
-            self.params.store_path / self.params.funding_events_filename
+            store_path / self.params.funding_events_filename
         )
         self.agent_performance: Dict[str, Any] = {}
         self.agent_performance_filepath: str = (
-            self.params.store_path / self.params.agent_performance_filename
+            store_path / self.params.agent_performance_filename
         )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
@@ -345,7 +349,7 @@ class LiquidityTraderBaseBehaviour(
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(
-            file_path=self.params.store_path / self.params.gas_cost_info_filename
+            file_path=store_path / self.params.gas_cost_info_filename
         )
         self.initial_investment_values_per_pool = {}
         self._current_entry_costs = 0.0

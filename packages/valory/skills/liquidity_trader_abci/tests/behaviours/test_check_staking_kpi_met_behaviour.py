@@ -45,7 +45,7 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
 class TestCheckStakingKPIMetBehaviour(FSMBehaviourBaseCase):
     """Test CheckStakingKPIMetBehaviour."""
 
-    path_to_skill = Path(__file__).parent.parent
+    path_to_skill = Path(__file__).parent.parent.parent
 
     @pytest.fixture
     def check_staking_kpi_behaviour(self):

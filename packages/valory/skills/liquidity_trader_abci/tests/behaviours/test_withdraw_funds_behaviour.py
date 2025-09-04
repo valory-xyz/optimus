@@ -47,7 +47,7 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-PACKAGE_DIR = Path(__file__).parent.parent
+PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
 class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
@@ -131,6 +131,16 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             name="withdraw_funds_behaviour",
             skill_context=self.skill.skill_context
         )
+
+    def _consume_generator(self, generator):
+        """Helper method to consume a generator and return its final value."""
+        result = None
+        try:
+            while True:
+                result = next(generator)
+        except StopIteration as e:
+            result = e.value
+        return result
 
     def setup_default_test_data(self):
         """Setup default test data."""
@@ -539,12 +549,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_withdrawal_data()
             
             # Consume the generator to get the final return value
-            result = None
-            try:
-                while True:
-                    result = next(generator)
-            except StopIteration as e:
-                result = e.value
+            result = self._consume_generator(generator)
             
             # Should return the complete withdrawal data
             assert result == mock_kv_response
@@ -572,12 +577,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_withdrawal_data()
             
             # Consume the generator to get the final return value
-            result = None
-            try:
-                while True:
-                    result = next(generator)
-            except StopIteration as e:
-                result = e.value
+            result = self._consume_generator(generator)
             
             # Should return the partial data
             assert result == mock_kv_response
@@ -597,12 +597,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_withdrawal_data()
             
             # Consume the generator to get the final return value
-            result = None
-            try:
-                while True:
-                    result = next(generator)
-            except StopIteration as e:
-                result = e.value
+            result = self._consume_generator(generator)
             
             # Should return None when KV store returns None
             assert result is None
@@ -619,12 +614,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_withdrawal_data()
             
             # Consume the generator to get the final return value
-            result = None
-            try:
-                while True:
-                    result = next(generator)
-            except StopIteration as e:
-                result = e.value
+            result = self._consume_generator(generator)
             
             # Should return empty dict
             assert result == {}
@@ -710,11 +700,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_withdrawal_data()
             
             # Consume the generator
-            try:
-                while True:
-                    next(generator)
-            except StopIteration:
-                pass
+            self._consume_generator(generator)
 
     def test_read_withdrawal_data_different_statuses(self):
         """Test _read_withdrawal_data with different withdrawal statuses."""
@@ -737,12 +723,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 generator = withdraw_behaviour._read_withdrawal_data()
                 
                 # Consume the generator to get the final return value
-                result = None
-                try:
-                    while True:
-                        result = next(generator)
-                except StopIteration as e:
-                    result = e.value
+                result = self._consume_generator(generator)
                 
                 # Should return the data with correct status
                 assert result["withdrawal_status"] == status
@@ -1008,10 +989,24 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             list(withdraw_behaviour._update_withdrawal_status("WITHDRAWING", "Test message"))
 
     def test_reset_withdrawal_flags_success(self):
-        """Test successful reset of withdrawal flags."""
+        """Test successful reset of withdrawal flags to cover line 526."""
         withdraw_behaviour = self._create_withdraw_behaviour()
-        with patch.object(withdraw_behaviour, '_write_kv', return_value=True):
-            list(withdraw_behaviour._reset_withdrawal_flags())
+        
+        # Mock the _write_kv method to return successfully
+        with patch.object(withdraw_behaviour, '_write_kv') as mock_write_kv:
+            # Mock the generator to yield successfully
+            def mock_generator():
+                yield
+                return True
+            
+            mock_write_kv.return_value = mock_generator()
+            
+            # Call the method and consume the generator to execute the yield from self._write_kv(reset_data) line
+            generator = withdraw_behaviour._reset_withdrawal_flags()
+            self._consume_generator(generator)
+            
+            # Verify that _write_kv was called
+            mock_write_kv.assert_called_once()
 
     def test_reset_withdrawal_flags_failure(self):
         """Test reset of withdrawal flags when KV store fails."""
@@ -1158,12 +1153,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_investing_paused()
             
             # Consume the generator to get the final return value
-            result = None
-            try:
-                while True:
-                    result = next(generator)
-            except StopIteration as e:
-                result = e.value
+            result = self._consume_generator(generator)
             
             # Should return False for "false" value
             assert result is False
@@ -1180,12 +1170,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_investing_paused()
             
             # Consume the generator to get the final return value
-            result = None
-            try:
-                while True:
-                    result = next(generator)
-            except StopIteration as e:
-                result = e.value
+            result = self._consume_generator(generator)
             
             # Should return False when KV store returns None
             assert result is False
@@ -1205,12 +1190,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_investing_paused()
             
             # Consume the generator to get the final return value
-            result = None
-            try:
-                while True:
-                    result = next(generator)
-            except StopIteration as e:
-                result = e.value
+            result = self._consume_generator(generator)
             
             # Should return False when value is None
             assert result is False
@@ -1227,12 +1207,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._read_investing_paused()
             
             # Consume the generator to get the final return value
-            result = None
-            try:
-                while True:
-                    result = next(generator)
-            except StopIteration as e:
-                result = e.value
+            result = self._consume_generator(generator)
             
             # Should return False when exception occurs
             assert result is False
@@ -1263,12 +1238,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 generator = withdraw_behaviour._read_investing_paused()
                 
                 # Consume the generator to get the final return value
-                result = None
-                try:
-                    while True:
-                        result = next(generator)
-                except StopIteration as e:
-                    result = e.value
+                result = self._consume_generator(generator)
                 
                 # Should return expected value
                 assert result is expected
@@ -1320,12 +1290,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                         )
                         
                         # Consume the generator to get the final return value
-                        result = None
-                        try:
-                            while True:
-                                result = next(generator)
-                        except StopIteration as e:
-                            result = e.value
+                        result = self._consume_generator(generator)
                         
                         # Should return all actions including unstaking
                         assert len(result) == 4
@@ -1359,12 +1324,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                                 )
                                 
                                 # Consume the generator to get the final return value
-                                result = None
-                                try:
-                                    while True:
-                                        result = next(generator)
-                                except StopIteration as e:
-                                    result = e.value
+                                result = self._consume_generator(generator)
                                 
                                 # Should return only exit actions
                                 assert len(result) == 1
@@ -1407,11 +1367,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._update_withdrawal_status("COMPLETED", "Test message")
             
             # Consume the generator
-            try:
-                while True:
-                    next(generator)
-            except StopIteration:
-                pass
+            self._consume_generator(generator)
             
             # Should handle specific exception gracefully (no assertion needed as it logs error)
 
@@ -1442,12 +1398,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                                 generator = withdraw_behaviour._prepare_withdrawal_actions(
                                     positions, portfolio_data, target_address
                                 )
-                                result = None
-                                try:
-                                    while True:
-                                        result = next(generator)
-                                except StopIteration as e:
-                                    result = e.value
+                                result = self._consume_generator(generator)
                                 
                                 # Should return empty list when no actions are created
                                 assert result == []
@@ -1480,12 +1431,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                             positions, portfolio_data, target_address
                         )
                         
-                        result = None
-                        try:
-                            while True:
-                                result = next(generator)
-                        except StopIteration as e:
-                            result = e.value
+                        result = self._consume_generator(generator)
                         # Should return actions with exit and transfer but no swap
                         assert len(result) == 2
                         assert any(action.get("action") == "exit" for action in result)
@@ -1614,11 +1560,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._update_withdrawal_status("COMPLETED", "Test message")
             
             # Consume the generator
-            try:
-                while True:
-                    next(generator)
-            except StopIteration:
-                pass
+            self._consume_generator(generator)
             
             # Should handle exception gracefully (no assertion needed as it logs error)
 
@@ -1634,11 +1576,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._update_withdrawal_status("COMPLETED", "Test completed")
             
             # Consume the generator
-            try:
-                while True:
-                    next(generator)
-            except StopIteration:
-                pass
+            self._consume_generator(generator)
             
             # Should handle COMPLETED status (no assertion needed as it updates data)
 
@@ -1654,11 +1592,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._update_withdrawal_status("FAILED", "Test failed")
             
             # Consume the generator
-            try:
-                while True:
-                    next(generator)
-            except StopIteration:
-                pass
+            self._consume_generator(generator)
             
             # Should handle FAILED status (no assertion needed as it updates data)
 
@@ -1674,10 +1608,38 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             generator = withdraw_behaviour._reset_withdrawal_flags()
             
             # Consume the generator
-            try:
-                while True:
-                    next(generator)
-            except StopIteration:
-                pass
+            self._consume_generator(generator)
             
             # Should handle exception gracefully (no assertion needed as it logs error)
+
+    def test_prepare_unstaking_actions_with_staking_metadata(self):
+        """Test _prepare_unstaking_actions when position has staking metadata and unstake action is created."""
+        withdraw_behaviour = self._create_withdraw_behaviour()
+        
+        # Create a position with OPEN status and staking metadata
+        positions = [
+            {
+                "status": "open",  # Use PositionStatus.OPEN.value (lowercase)
+                "pool_address": "0x123",
+                "gauge_address": "0xGaugeAddress",  # This will make _has_staking_metadata return True
+                "dex_type": "velodrome",  # Required for _build_unstake_lp_tokens_action
+                "chain": "mode",  # Required for _build_unstake_lp_tokens_action
+                "is_cl_pool": False  # Required for _build_unstake_lp_tokens_action
+            }
+        ]
+        
+        # Mock the unstake action creation to return a valid action
+        mock_unstake_action = {
+            "action": "unstake",
+            "pool_address": "0x123",
+            "description": "Unstake LP tokens"
+        }
+        with patch.object(withdraw_behaviour, '_build_unstake_lp_tokens_action', return_value=mock_unstake_action):
+            result = withdraw_behaviour._prepare_unstaking_actions(positions)
+            
+            # Should return the unstake action
+            assert len(result) == 1
+            assert result[0]["action"] == "unstake"
+            assert result[0]["pool_address"] == "0x123"
+
+

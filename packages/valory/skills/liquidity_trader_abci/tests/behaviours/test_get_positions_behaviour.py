@@ -20,7 +20,7 @@ from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
 )
 
 
-PACKAGE_DIR = Path(__file__).parent.parent
+PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
 class TestGetPositionsBehaviour(FSMBehaviourBaseCase):

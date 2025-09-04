@@ -43,7 +43,7 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-PACKAGE_DIR = Path(__file__).parent.parent
+PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
 class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
@@ -91,6 +91,28 @@ class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         
         # Update path_to_skill to use temp directory
         cls.path_to_skill = Path(cls.temp_skill_dir)
+        
+        # Create data directory for store_path
+        data_dir = Path(cls.temp_skill_dir) / "data"
+        data_dir.mkdir(exist_ok=True)
+        
+        # Add parameter overrides for testing
+        param_overrides = {
+            "store_path": str(data_dir),
+            "initial_assets": {
+                "0x4200000000000000000000000000000000000006": "WETH",
+                "0xd988097fb8612cc24eeC14542bC03424c656005f": "USDC",
+                "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",
+            },
+            "target_investment_chains": ["mode"],
+            "safe_contract_addresses": {"mode": "0xSafeAddress"}
+        }
+        
+        # Merge with existing kwargs
+        if "param_overrides" in kwargs:
+            kwargs["param_overrides"].update(param_overrides)
+        else:
+            kwargs["param_overrides"] = param_overrides
         
         super().setup_class(**kwargs)
     

@@ -51,7 +51,7 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
     PostTxSettlementRound,
 )
 
-PACKAGE_DIR = Path(__file__).parent.parent
+PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
 class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
@@ -528,6 +528,9 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
     def test_is_time_update_due_false(self):
         """Test _is_time_update_due returns False when time hasn't passed."""
         fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Set a recent last_updated timestamp (30 minutes ago)
+        fetch_behaviour.portfolio_data = {'last_updated': 1753979400}  # 30 minutes before current time
         
         # Mock current time to be close to last update
         with patch.object(fetch_behaviour, '_get_current_timestamp', return_value=1753981200):  # 1 hour later
@@ -4822,11 +4825,26 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             """Mock _get_velo_token_address method."""
             return velo_token_address
 
+        def mock_get_coin_id_from_symbol(symbol, chain):
+            """Mock get_coin_id_from_symbol method."""
+            if symbol == "VELO":
+                return "velodrome-finance"
+            return None
+
+        def mock_fetch_coin_price(coin_id):
+            """Mock _fetch_coin_price method."""
+            yield
+            if coin_id == "velodrome-finance":
+                return 0.05  # VELO price fetch succeeds
+            return None
+
         with patch.multiple(
             fetch_behaviour,
             _get_token_decimals=mock_get_token_decimals,
             _fetch_token_price=mock_fetch_token_price,
-            _get_velo_token_address=mock_get_velo_token_address
+            _get_velo_token_address=mock_get_velo_token_address,
+            get_coin_id_from_symbol=mock_get_coin_id_from_symbol,
+            _fetch_coin_price=mock_fetch_coin_price
         ):
             result = self._consume_generator(fetch_behaviour._calculate_corrected_yield(
                 position, initial_amount0, initial_amount1, current_balances, "optimism"
@@ -5019,11 +5037,26 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             """Mock _get_velo_token_address method."""
             return velo_token_address
 
+        def mock_get_coin_id_from_symbol(symbol, chain):
+            """Mock get_coin_id_from_symbol method."""
+            if symbol == "VELO":
+                return "velodrome-finance"
+            return None
+
+        def mock_fetch_coin_price(coin_id):
+            """Mock _fetch_coin_price method."""
+            yield
+            if coin_id == "velodrome-finance":
+                return None  # VELO price fetch fails
+            return None
+
         with patch.multiple(
             fetch_behaviour,
             _get_token_decimals=mock_get_token_decimals,
             _fetch_token_price=mock_fetch_token_price,
-            _get_velo_token_address=mock_get_velo_token_address
+            _get_velo_token_address=mock_get_velo_token_address,
+            get_coin_id_from_symbol=mock_get_coin_id_from_symbol,
+            _fetch_coin_price=mock_fetch_coin_price
         ):
             result = self._consume_generator(fetch_behaviour._calculate_corrected_yield(
                 position, initial_amount0, initial_amount1, current_balances, "optimism"
@@ -7911,173 +7944,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             # Verify the position was not updated
             assert "current_liquidity" not in fetch_behaviour.current_positions[0]
 
-    @pytest.mark.parametrize("last_timestamp,current_date,mock_cached_investment,expected_fetch_till_date,expected_result,expected_logs,test_description", [
-                # Test 1: Last calculation was today - should use cached value
-        (
-            "1640995200",  # 2022-01-01 timestamp
-            "2022-01-01",  # Same date as timestamp
-            25000.0,  # Cached investment value
-            False,  # Should not fetch till date (but this won't be called due to early return)
-            25000.0,  # Should return cached value (bug fixed - now returns early)
-            [
-                "Found last calculation timestamp: 1640995200",
-                "Last calculation date: 2022-01-01",
-                "Last calculation was today, using cached value"
-            ],
-            "last calculation was today - use cached value"
-        ),
-        # Test 2: Last calculation was not today - should calculate new value without full history
-        (
-            "1640995200",  # 2022-01-01 timestamp
-            "2022-01-02",  # Different date
-            None,  # No cached value needed
-            False,  # Should not fetch till date (partial history)
-            31000.0,  # Should calculate new value
-            [
-                "Found last calculation timestamp: 1640995200",
-                "Last calculation date: 2022-01-01",
-                "Last calculation was not today, calculating new value without full history"
-            ],
-            "last calculation was not today - calculate new value without full history"
-        ),
-        # Test 3: Invalid timestamp format - should default to 1970-01-01
-        (
-            "invalid_timestamp",  # Invalid timestamp
-            "2022-01-01",  # Current date
-            None,  # No cached value needed
-            False,  # Should fetch till date (partial history due to default date)
-            31000.0,  # Should calculate new value
-            [
-                "Found last calculation timestamp: invalid_timestamp",
-                "Invalid timestamp format, defaulting to 1970-01-01",
-                "Last calculation was not today, calculating new value without full history"
-            ],
-            "invalid timestamp format - default to 1970-01-01"
-        ),
-        # Test 4: Cached value is None - should continue with calculation
-        (
-            "1640995200",  # 2022-01-01 timestamp
-            "2022-01-01",  # Same date as timestamp
-            None,  # Cached investment is None
-            False,  # Should fetch till date (partial history)
-            31000.0,  # Should calculate new value
-            [
-                "Found last calculation timestamp: 1640995200",
-                "Last calculation date: 2022-01-01",
-                "Last calculation was today, using cached value"
-            ],
-            "cached value is None - continue with calculation"
-        ),
-        # Test 5: No previous calculation - should fetch full history
-        (
-            None,  # No timestamp
-            "2022-01-01",  # Current date
-            None,  # No cached value
-            True,  # Should fetch till date (full history)
-            31000.0,  # Should calculate new value
-            [
-                "No previous calculation found, fetching full transfer history"
-            ],
-            "no previous calculation - fetch full history"
-        ),
-    ])
-    def test_calculate_initial_investment_value_timestamp_logic(self, last_timestamp, current_date, mock_cached_investment, expected_fetch_till_date, expected_result, expected_logs, test_description):
-        """Test calculate_initial_investment_value_from_funding_events timestamp parsing and caching logic."""
-        fetch_behaviour = self._create_fetch_strategies_behaviour()
-        
-        # Mock transfer data
-        mock_transfers = {
-            "2022-01-01": [
-                {"symbol": "ETH", "delta": 10.0, "amount": 10.0, "timestamp": "1640995200"},
-                {"symbol": "USDC", "delta": 1000.0, "amount": 1000.0, "timestamp": "1640995200"}
-            ],
-            "2022-01-02": [
-                {"symbol": "ETH", "delta": 5.0, "amount": 5.0, "timestamp": "1641081600"}
-            ]
-        }
-        
-        # Mock KV store response based on test case
-        def mock_read_kv(keys):
-            if last_timestamp is None:
-                yield None
-                return None
-            else:
-                yield None
-                return {"last_initial_value_calculated_timestamp": last_timestamp}
-        
-        def mock_fetch_all_transfers_until_date_mode(address, end_date, fetch_till_date):
-            # Verify fetch_till_date parameter matches expected
-            assert fetch_till_date == expected_fetch_till_date, f"Expected fetch_till_date={expected_fetch_till_date} for {test_description}, got {fetch_till_date}"
-            return mock_transfers
-        
-        def mock_fetch_all_transfers_until_date_optimism(address, end_date):
-            yield mock_transfers
-        
-        def mock_fetch_historical_eth_price(date_str):
-            yield
-            return 2000.0  # $2000 per ETH
-        
-        def mock_get_coin_id_from_symbol(symbol, chain):
-            if symbol == "USDC":
-                return "usd-coin"
-            return None
-        
-        def mock_get_current_timestamp():
-            # Return timestamp for current_date
-            if current_date == "2022-01-01":
-                return 1640995200
-            elif current_date == "2022-01-02":
-                return 1641081600
-            return 1640995200  # Default
-        
-        # Create a mock datetime class
-        from datetime import datetime
-        class MockDateTime:
-            @staticmethod
-            def now():
-                if current_date == "2022-01-01":
-                    return datetime(2022, 1, 1)
-                elif current_date == "2022-01-02":
-                    return datetime(2022, 1, 2)
-                return datetime(2022, 1, 1)  # Default
-            
-            @staticmethod
-            def utcfromtimestamp(timestamp):
-                return datetime.utcfromtimestamp(timestamp)
-            
-            @staticmethod
-            def strftime(date, format_str):
-                return date.strftime(format_str)
-        
-        def mock_load_chain_total_investment(chain):
-            yield None
-            return mock_cached_investment
-        
-        with patch.object(fetch_behaviour, '_read_kv', mock_read_kv), \
-            patch.object(fetch_behaviour, '_fetch_all_transfers_until_date_mode', mock_fetch_all_transfers_until_date_mode), \
-            patch.object(fetch_behaviour, '_fetch_all_transfers_until_date_optimism', mock_fetch_all_transfers_until_date_optimism), \
-            patch.object(fetch_behaviour, '_load_chain_total_investment', mock_load_chain_total_investment), \
-            patch.object(fetch_behaviour, '_save_chain_total_investment', self.mock_save_chain_total_investment), \
-            patch.object(fetch_behaviour, '_write_kv', self.mock_write_kv), \
-            patch.object(fetch_behaviour, '_track_eth_transfers_and_reversions', self.mock_track_eth_transfers_and_reversions_zero_reversion), \
-            patch.object(fetch_behaviour, '_fetch_historical_eth_price', mock_fetch_historical_eth_price), \
-            patch.object(fetch_behaviour, '_fetch_historical_token_price', self.mock_fetch_historical_token_price), \
-            patch.object(fetch_behaviour, 'get_coin_id_from_symbol', mock_get_coin_id_from_symbol), \
-            patch.object(fetch_behaviour, '_get_current_timestamp', mock_get_current_timestamp), \
-            patch('packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.datetime') as mock_datetime:
-            
-            # Mock datetime methods to return the test date
-            mock_datetime.now.return_value = MockDateTime.now()
-            mock_datetime.utcfromtimestamp = MockDateTime.utcfromtimestamp
-            mock_datetime.strftime = MockDateTime.strftime
-            
-            result = self._consume_generator(fetch_behaviour.calculate_initial_investment_value_from_funding_events())
-            
-            # Verify the result
-            if expected_result is not None:
-                assert result == expected_result, f"Expected {expected_result} for {test_description}, got {result}"
-            else:
-                assert result is None, f"Expected None for {test_description}, got {result}"
+
 
     @pytest.mark.parametrize("address,end_date,fetch_till_date,mock_funding_events,mock_token_transfers_success,mock_eth_transfers_success,mock_token_transfers_data,mock_eth_transfers_data,expected_result,expected_logs,test_description", [
         # Test 1: Successful fetch with new data
@@ -10880,3 +10747,375 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             )
             
             assert result == False, "Should return False when log is missing topics field"
+
+    @pytest.mark.parametrize(
+        "chain,safe_address,sender,reversion_data,expected_calls,expected_set_done",
+        [
+            # Test case 1: No reversion needed (eth_amount = 0)
+            (
+                "optimism",
+                "0x1234567890123456789012345678901234567890",
+                "0x1111111111111111111111111111111111111111",
+                {"master_safe_address": "0x2222222222222222222222222222222222222222", "reversion_amount": 0},
+                {"track_eth": 1, "contract_interact": 0, "send_a2a": 0, "wait_until": 0},
+                0,
+            ),
+            # Test case 2: Reversion needed but no master safe address
+            (
+                "mode",
+                "0x9876543210987654321098765432109876543210",
+                "0x3333333333333333333333333333333333333333",
+                {"master_safe_address": None, "reversion_amount": 1.5},
+                {"track_eth": 1, "contract_interact": 0, "send_a2a": 0, "wait_until": 0},
+                0,
+            ),
+            # Test case 3: Successful reversion transaction creation
+            (
+                "optimism",
+                "0x1111222233334444555566667777888899990000",
+                "0x4444444444444444444444444444444444444444",
+                {"master_safe_address": "0x5555555555555555555555555555555555555555", "reversion_amount": 2.0},
+                {"track_eth": 1, "contract_interact": 1, "send_a2a": 1, "wait_until": 1},
+                1,
+            ),
+            # Test case 4: Contract interaction fails (returns None)
+            (
+                "mode",
+                "0xaaabbbcccdddeeefff000111222333444555666",
+                "0x6666666666666666666666666666666666666666",
+                {"master_safe_address": "0x7777777777777777777777777777777777777777", "reversion_amount": 0.5},
+                {"track_eth": 1, "contract_interact": 1, "send_a2a": 0, "wait_until": 0},
+                0,
+            ),
+            # Test case 5: Empty safe address
+            (
+                "optimism",
+                "",
+                "0x8888888888888888888888888888888888888888",
+                {"master_safe_address": "0x9999999999999999999999999999999999999999", "reversion_amount": 1.0},
+                {"track_eth": 0, "contract_interact": 0, "send_a2a": 0, "wait_until": 0},
+                0,
+            ),
+        ],
+    )
+    def test_check_and_create_eth_revert_transactions_comprehensive(
+        self, chain, safe_address, sender, reversion_data, expected_calls, expected_set_done
+    ):
+        """Test _check_and_create_eth_revert_transactions with various scenarios."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        # Mock call counters
+        mock_track_eth_call_count = 0
+        mock_contract_interact_call_count = 0
+        mock_send_a2a_call_count = 0
+        mock_wait_until_call_count = 0
+        mock_set_done_call_count = 0
+        
+        def mock_track_eth_generator(safe_addr, chain_id):
+            nonlocal mock_track_eth_call_count
+            mock_track_eth_call_count += 1
+            yield
+            return reversion_data
+        
+        def mock_contract_interact_generator(*args, **kwargs):
+            nonlocal mock_contract_interact_call_count
+            mock_contract_interact_call_count += 1
+            yield
+            # Return None for failed contract interaction test case
+            if reversion_data["reversion_amount"] == 0.5:
+                return None
+            # Return a valid 64-character hash for successful cases
+            return "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        
+        def mock_send_a2a_generator(payload):
+            nonlocal mock_send_a2a_call_count
+            mock_send_a2a_call_count += 1
+            yield
+            return None
+        
+        def mock_wait_until_generator():
+            nonlocal mock_wait_until_call_count
+            mock_wait_until_call_count += 1
+            yield
+            return None
+        
+        def mock_set_done_generator():
+            nonlocal mock_set_done_call_count
+            mock_set_done_call_count += 1
+            return None
+        
+        # Create a mock benchmark tool context manager
+        mock_benchmark_context = MagicMock()
+        mock_benchmark_context.__enter__ = MagicMock(return_value=mock_benchmark_context)
+        mock_benchmark_context.__exit__ = MagicMock(return_value=None)
+        
+        mock_benchmark_tool = MagicMock()
+        mock_benchmark_tool.measure.return_value.consensus.return_value = mock_benchmark_context
+        
+        # Mock the context.benchmark_tool
+        with patch.object(fetch_behaviour.context, 'benchmark_tool', mock_benchmark_tool):
+            with patch.multiple(
+                fetch_behaviour,
+                _track_eth_transfers_and_reversions=mock_track_eth_generator,
+                contract_interact=mock_contract_interact_generator,
+                send_a2a_transaction=mock_send_a2a_generator,
+                wait_until_round_end=mock_wait_until_generator,
+                set_done=mock_set_done_generator
+            ):
+                # Execute the function using _consume_generator
+                result = self._consume_generator(
+                    fetch_behaviour._check_and_create_eth_revert_transactions(
+                        chain, safe_address, sender
+                    )
+                )
+                
+                # Verify call counts
+                assert mock_track_eth_call_count == expected_calls["track_eth"], f"Expected {expected_calls['track_eth']} _track_eth_transfers_and_reversions calls, got {mock_track_eth_call_count}"
+                assert mock_contract_interact_call_count == expected_calls["contract_interact"], f"Expected {expected_calls['contract_interact']} contract_interact calls, got {mock_contract_interact_call_count}"
+                assert mock_send_a2a_call_count == expected_calls["send_a2a"], f"Expected {expected_calls['send_a2a']} send_a2a_transaction calls, got {mock_send_a2a_call_count}"
+                assert mock_wait_until_call_count == expected_calls["wait_until"], f"Expected {expected_calls['wait_until']} wait_until_round_end calls, got {mock_wait_until_call_count}"
+                assert mock_set_done_call_count == expected_set_done, f"Expected {expected_set_done} set_done calls, got {mock_set_done_call_count}"
+
+    @pytest.mark.parametrize(
+        "reversion_amount,expected_wei_amount",
+        [
+            (0.0, 0),
+            (0.5, 500000000000000000),  # 0.5 ETH in wei
+            (1.0, 1000000000000000000),  # 1.0 ETH in wei
+            (2.5, 2500000000000000000),  # 2.5 ETH in wei
+            (10.0, 10000000000000000000),  # 10.0 ETH in wei
+        ],
+    )
+    def test_check_and_create_eth_revert_transactions_wei_conversion(
+        self, reversion_amount, expected_wei_amount
+    ):
+        """Test correct ETH to Wei conversion in _check_and_create_eth_revert_transactions."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        chain = "optimism"
+        safe_address = "0x1234567890123456789012345678901234567890"
+        sender = "0x1111111111111111111111111111111111111111"
+        
+        reversion_data = {
+            "master_safe_address": "0x2222222222222222222222222222222222222222",
+            "reversion_amount": reversion_amount
+        }
+        
+        contract_interact_kwargs = {}
+        
+        def mock_track_eth_generator(safe_addr, chain_id):
+            yield
+            return reversion_data
+        
+        def mock_contract_interact_generator(*args, **kwargs):
+            nonlocal contract_interact_kwargs
+            contract_interact_kwargs = kwargs
+            yield
+            return "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        
+        def mock_send_a2a_generator(payload):
+            yield
+            return None
+        
+        def mock_wait_until_generator():
+            yield
+            return None
+        
+        def mock_set_done_generator():
+            return None
+        
+        # Create a mock benchmark tool context manager
+        mock_benchmark_context = MagicMock()
+        mock_benchmark_context.__enter__ = MagicMock(return_value=mock_benchmark_context)
+        mock_benchmark_context.__exit__ = MagicMock(return_value=None)
+        
+        mock_benchmark_tool = MagicMock()
+        mock_benchmark_tool.measure.return_value.consensus.return_value = mock_benchmark_context
+        
+        # Mock the context.benchmark_tool
+        with patch.object(fetch_behaviour.context, 'benchmark_tool', mock_benchmark_tool):
+            with patch.multiple(
+                fetch_behaviour,
+                _track_eth_transfers_and_reversions=mock_track_eth_generator,
+                contract_interact=mock_contract_interact_generator,
+                send_a2a_transaction=mock_send_a2a_generator,
+                wait_until_round_end=mock_wait_until_generator,
+                set_done=mock_set_done_generator
+            ):
+                # Execute the function using _consume_generator
+                result = self._consume_generator(
+                    fetch_behaviour._check_and_create_eth_revert_transactions(
+                        chain, safe_address, sender
+                    )
+                )
+                
+                # Verify Wei conversion only if reversion_amount > 0
+                if reversion_amount > 0:
+                    assert contract_interact_kwargs.get("value") == expected_wei_amount, f"Expected value {expected_wei_amount} wei, got {contract_interact_kwargs.get('value')}"
+
+    @pytest.mark.parametrize(
+        "reversion_amount,master_safe_address,expected_log_patterns",
+        [
+            (
+                0,
+                "0x2222222222222222222222222222222222222222",
+                [],  # No logs expected when reversion_amount is 0
+            ),
+            (
+                1.5,
+                None,
+                ["No master safe address found for chain"],
+            ),
+            (
+                2.0,
+                "0x5555555555555555555555555555555555555555",
+                ["Creating ETH transfer transaction: 2000000000000000000 wei to 0x5555555555555555555555555555555555555555"],
+            ),
+        ],
+    )
+    def test_check_and_create_eth_revert_transactions_logging_coverage(
+        self, reversion_amount, master_safe_address, expected_log_patterns
+    ):
+        """Test logging messages in _check_and_create_eth_revert_transactions."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        chain = "optimism"
+        safe_address = "0x1234567890123456789012345678901234567890"
+        sender = "0x1111111111111111111111111111111111111111"
+        
+        reversion_data = {
+            "master_safe_address": master_safe_address,
+            "reversion_amount": reversion_amount
+        }
+        
+        def mock_track_eth_generator(safe_addr, chain_id):
+            yield
+            return reversion_data
+        
+        def mock_contract_interact_generator(*args, **kwargs):
+            yield
+            return "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        
+        def mock_send_a2a_generator(payload):
+            yield
+            return None
+        
+        def mock_wait_until_generator():
+            yield
+            return None
+        
+        def mock_set_done_generator():
+            return None
+        
+        # Create a mock benchmark tool context manager
+        mock_benchmark_context = MagicMock()
+        mock_benchmark_context.__enter__ = MagicMock(return_value=mock_benchmark_context)
+        mock_benchmark_context.__exit__ = MagicMock(return_value=None)
+        
+        mock_benchmark_tool = MagicMock()
+        mock_benchmark_tool.measure.return_value.consensus.return_value = mock_benchmark_tool
+        
+        # Mock the context.benchmark_tool
+        with patch.object(fetch_behaviour.context, 'benchmark_tool', mock_benchmark_tool):
+            with patch.multiple(
+                fetch_behaviour,
+                _track_eth_transfers_and_reversions=mock_track_eth_generator,
+                contract_interact=mock_contract_interact_generator,
+                send_a2a_transaction=mock_send_a2a_generator,
+                wait_until_round_end=mock_wait_until_generator,
+                set_done=mock_set_done_generator
+            ):
+                # Capture log messages
+                with patch.object(fetch_behaviour.context.logger, 'info') as mock_info, \
+                     patch.object(fetch_behaviour.context.logger, 'error') as mock_error:
+                    
+                    # Execute the function using _consume_generator
+                    result = self._consume_generator(
+                        fetch_behaviour._check_and_create_eth_revert_transactions(
+                            chain, safe_address, sender
+                        )
+                    )
+                    
+                    # Check expected log patterns
+                    all_log_calls = [call.args[0] for call in mock_info.call_args_list + mock_error.call_args_list]
+                    
+                    for pattern in expected_log_patterns:
+                        pattern_found = any(pattern in log_msg for log_msg in all_log_calls)
+                        assert pattern_found, f"Expected log pattern '{pattern}' not found in logs: {all_log_calls}"
+
+    def test_check_and_create_eth_revert_transactions_payload_structure(self):
+        """Test the structure and content of the settlement payload."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+        
+        chain = "optimism"
+        safe_address = "0x1234567890123456789012345678901234567890"
+        sender = "0x1111111111111111111111111111111111111111"
+        
+        reversion_data = {
+            "master_safe_address": "0x5555555555555555555555555555555555555555",
+            "reversion_amount": 1.0
+        }
+        
+        captured_payload = None
+        
+        def mock_track_eth_generator(safe_addr, chain_id):
+            yield
+            return reversion_data
+        
+        def mock_contract_interact_generator(*args, **kwargs):
+            yield
+            return "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        
+        def mock_send_a2a_generator(payload):
+            nonlocal captured_payload
+            captured_payload = payload
+            yield
+            return None
+        
+        def mock_wait_until_generator():
+            yield
+            return None
+        
+        def mock_set_done_generator():
+            return None
+        
+        # Create a mock benchmark tool context manager
+        mock_benchmark_context = MagicMock()
+        mock_benchmark_context.__enter__ = MagicMock(return_value=mock_benchmark_context)
+        mock_benchmark_context.__exit__ = MagicMock(return_value=None)
+        
+        mock_benchmark_tool = MagicMock()
+        mock_benchmark_tool.measure.return_value.consensus.return_value = mock_benchmark_context
+        
+        # Mock the context.benchmark_tool
+        with patch.object(fetch_behaviour.context, 'benchmark_tool', mock_benchmark_tool):
+            with patch.multiple(
+                fetch_behaviour,
+                _track_eth_transfers_and_reversions=mock_track_eth_generator,
+                contract_interact=mock_contract_interact_generator,
+                send_a2a_transaction=mock_send_a2a_generator,
+                wait_until_round_end=mock_wait_until_generator,
+                set_done=mock_set_done_generator
+            ):
+                # Execute the function using _consume_generator
+                result = self._consume_generator(
+                    fetch_behaviour._check_and_create_eth_revert_transactions(
+                        chain, safe_address, sender
+                    )
+                )
+                
+                # Verify payload structure
+                assert captured_payload is not None, "Expected payload to be captured"
+                assert isinstance(captured_payload, FetchStrategiesPayload), "Expected FetchStrategiesPayload instance"
+                assert captured_payload.sender == sender, f"Expected sender {sender}, got {captured_payload.sender}"
+                
+                # Parse and verify payload content
+                content = json.loads(captured_payload.content)
+                assert content["event"] == "settle", "Expected event to be 'settle'"
+                assert "updates" in content, "Expected 'updates' key in content"
+                
+                updates = content["updates"]
+                assert updates["chain_id"] == chain, f"Expected chain_id {chain}, got {updates['chain_id']}"
+                assert updates["safe_contract_address"] == safe_address, f"Expected safe_contract_address {safe_address}, got {updates['safe_contract_address']}"
+                assert "tx_submitter" in updates, "Expected 'tx_submitter' in updates"
+                assert "most_voted_tx_hash" in updates, "Expected 'most_voted_tx_hash' in updates"

@@ -55,10 +55,6 @@ class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
 
     path_to_skill = PACKAGE_DIR
 
-    def setUp(self):
-        """Setup test environment."""
-        super(LiquidityTraderAbciFSMBehaviourBaseCase, self).setUp()
-
 
 class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
     """Test cases for WithdrawFundsBehaviour."""
@@ -112,9 +108,14 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         
         super().teardown_class()
 
-    def setUp(self):
-        """Setup test environment."""
-        super().setUp()
+    def setup_method(self, **kwargs: Any) -> None:
+        """Set up the test method with mocked dependencies."""
+        # Mock the store path validation before calling super().setup()
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
+            return_value=Path("/tmp/mock_store"),
+        ):
+            super().setup(**kwargs)
         
         # Create individual behaviour instance for testing
         self.withdraw_behaviour = WithdrawFundsBehaviour(
@@ -124,6 +125,10 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
         # Setup default test data
         self.setup_default_test_data()
+
+    def teardown_method(self, **kwargs: Any) -> None:
+        """Teardown the test method."""
+        super().teardown(**kwargs)
 
     def _create_withdraw_behaviour(self):
         """Create a WithdrawFundsBehaviour instance for testing."""

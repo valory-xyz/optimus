@@ -65,11 +65,20 @@ class TestCheckStakingKPIMetBehaviour(FSMBehaviourBaseCase):
             result = e.value
         return result
 
-    def setUp(self):
-        """Set up the test."""
-        super().setUp()
+    def setup_method(self, **kwargs: Any) -> None:
+        """Set up the test method with mocked dependencies."""
+        # Mock the store path validation before calling super().setup()
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
+            return_value=Path("/tmp/mock_store"),
+        ):
+            super().setup(**kwargs)
         self.check_staking_kpi_behaviour = self._create_check_staking_kpi_behaviour()
         self.setup_default_test_data()
+
+    def teardown_method(self, **kwargs: Any) -> None:
+        """Teardown the test method."""
+        super().teardown(**kwargs)
 
     def _create_check_staking_kpi_behaviour(self):
         """Create a CheckStakingKPIMetBehaviour instance for testing."""

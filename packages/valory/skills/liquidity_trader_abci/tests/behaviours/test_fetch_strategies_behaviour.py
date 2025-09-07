@@ -20,15 +20,13 @@
 """Tests for FetchStrategiesBehaviour of the liquidity_trader_abci skill."""
 
 import json
-import os
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import MagicMock, patch, PropertyMock
 from datetime import datetime
 
 import pytest
-from hypothesis import given, strategies as st
 
 from packages.valory.skills.abstract_round_abci.test_tools.base import (
     FSMBehaviourBaseCase,
@@ -38,12 +36,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies im
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 from packages.valory.skills.liquidity_trader_abci.payloads import FetchStrategiesPayload
-from packages.valory.skills.liquidity_trader_abci.states.base import (
-    StakingState,
-)
-from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    TradingType,
-)
 from packages.valory.skills.liquidity_trader_abci.states.fetch_strategies import (
     FetchStrategiesRound,
 )
@@ -58,10 +50,6 @@ class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
     """Base case for testing FSMBehaviour."""
 
     path_to_skill = PACKAGE_DIR
-
-    def setUp(self):
-        """Setup test environment."""
-        super().setUp()
 
 
 class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
@@ -121,9 +109,14 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
         super().teardown_class()
 
-    def setUp(self):
-        """Setup test environment."""
-        super().setUp()
+    def setup_method(self, **kwargs: Any) -> None:
+        """Set up the test method with mocked dependencies."""
+        # Mock the store path validation before calling super().setup()
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
+            return_value=Path("/tmp/mock_store"),
+        ):
+            super().setup(**kwargs)
 
         self.fetch_strategies_behaviour = FetchStrategiesBehaviour(
             name="fetch_strategies_behaviour",
@@ -131,6 +124,10 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         )
 
         self.setup_default_test_data()
+
+    def teardown_method(self, **kwargs: Any) -> None:
+        """Teardown the test method."""
+        super().teardown(**kwargs)
 
     def _create_fetch_strategies_behaviour(self):
         """Create a FetchStrategiesBehaviour instance for testing."""

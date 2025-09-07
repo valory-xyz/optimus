@@ -51,10 +51,6 @@ class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
 
     path_to_skill = PACKAGE_DIR
 
-    def setUp(self):
-        """Setup test environment."""
-        super(LiquidityTraderAbciFSMBehaviourBaseCase, self).setUp()
-
 
 class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
     """Test cases for CallCheckpointBehaviour."""
@@ -130,9 +126,14 @@ class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         
         super().teardown_class()
 
-    def setUp(self):
-        """Setup test environment."""
-        super().setUp()
+    def setup_method(self, **kwargs: Any) -> None:
+        """Set up the test method with mocked dependencies."""
+        # Mock the store path validation before calling super().setup()
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
+            return_value=Path("/tmp/mock_store"),
+        ):
+            super().setup(**kwargs)
         
         # Create individual behaviour instance for testing
         self.checkpoint_behaviour = CallCheckpointBehaviour(
@@ -142,6 +143,10 @@ class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
         # Setup default test data
         self.setup_default_test_data()
+
+    def teardown_method(self, **kwargs: Any) -> None:
+        """Teardown the test method."""
+        super().teardown(**kwargs)
 
     def _create_checkpoint_behaviour(self):
         """Create a CallCheckpointBehaviour instance for testing."""

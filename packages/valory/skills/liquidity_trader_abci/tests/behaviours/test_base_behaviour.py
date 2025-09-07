@@ -68,14 +68,6 @@ class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
 
     path_to_skill = PACKAGE_DIR
 
-    def setUp(self):
-        """Setup test environment."""
-        super().setUp()
-
-    def tearDown(self):
-        """Clean up test environment."""
-        pass
-
 
 class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
     """Test cases for LiquidityTraderBaseBehaviour."""
@@ -134,8 +126,15 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
         super().teardown_class()
 
-    def setUp(self):
-        """Setup test environment."""
+    def setup_method(self, **kwargs: Any) -> None:
+        """Set up the test method with mocked dependencies."""
+        # Mock the store path validation before calling super().setup()
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
+            return_value=Path("/tmp/mock_store"),
+        ):
+            super().setup(**kwargs)
+        
         # Create temporary directory for test files
         self.temp_dir = tempfile.mkdtemp()
         self.temp_path = Path(self.temp_dir)
@@ -144,11 +143,13 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         self.test_file = self.temp_path / "test_file.json"
         self.test_file.write_text('{"test": "data"}')
 
-    def tearDown(self):
-        """Clean up test environment."""
+    def teardown_method(self, **kwargs: Any) -> None:
+        """Teardown the test method."""
+        # Clean up test environment
         import shutil
         if hasattr(self, 'temp_dir'):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
+        super().teardown(**kwargs)
 
     def _create_base_behaviour(self) -> LiquidityTraderBaseBehaviour:
         """Create a base behaviour instance for testing."""

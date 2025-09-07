@@ -3696,8 +3696,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error renaming entry costs key: {e}")
 
-    # ==================== STAKING EXECUTION METHODS ====================
-
     def get_stake_lp_tokens_tx_hash(
         self, action
     ) -> Generator[None, None, Tuple[Optional[str], Optional[str], Optional[str]]]:

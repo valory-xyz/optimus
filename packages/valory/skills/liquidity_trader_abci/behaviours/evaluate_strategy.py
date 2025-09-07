@@ -583,14 +583,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                     / requirements["overall_token1_ratio"]
                                 )
 
-                                if required_token0 < max_amount0:
-                                    # We have excess of both tokens, so use the calculated amounts
-                                    max_amount0 = required_token0
-                                    max_amount1 = max_amount1
-                                else:
-                                    # We have excess token1 but not enough token0
-                                    scale_factor = max_amount0 / required_token0
-                                    max_amount1 = int(max_amount1 * scale_factor)
+                                # We have excess token1 but need to scale based on available token0
+                                scale_factor = max_amount0 / required_token0
+                                max_amount1 = int(max_amount1 * scale_factor)
 
                         opportunity["max_amounts_in"] = [max_amount0, max_amount1]
                         self.context.logger.info(
@@ -942,6 +937,89 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
+    async def _async_execute_strategy(
+        self, strategy_name: str, strategies_executables: Dict, **kwargs
+    ) -> Dict:
+        """Execute a single strategy asynchronously."""
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None,
+                lambda: execute_strategy(
+                    strategy_name, strategies_executables, **kwargs
+                ),
+            )
+        except TypeError as e:
+            # Handle missing arguments error
+            return {
+                "error": [
+                    f"Strategy {strategy_name} missing required argument: {str(e)}"
+                ],
+                "result": [],
+            }
+        except Exception as e:
+            # Handle any other unexpected errors
+            return {
+                "error": [
+                    f"Unexpected error in strategy {strategy_name}: {str(e)}"
+                ],
+                "result": [],
+            }
+
+    async def _run_all_strategies(
+        self, strategy_kwargs_list: List, strategies_executables: Dict
+    ) -> List[Dict]:
+        """Run all strategies in parallel."""
+        tasks = []
+        results = []
+
+        for strategy_name, kwargs in strategy_kwargs_list:
+            try:
+                kwargs_without_strategy = {
+                    k: v for k, v in kwargs.items() if k != "strategy"
+                }
+                tasks.append(
+                    self._async_execute_strategy(
+                        strategy_name,
+                        strategies_executables,
+                        **kwargs_without_strategy,
+                    )
+                )
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error setting up strategy {strategy_name}: {str(e)}"
+                )
+                results.append(
+                    {"error": [f"Strategy setup error: {str(e)}"], "result": []}
+                )
+
+        if tasks:
+            try:
+                strategy_results = await asyncio.gather(
+                    *tasks, return_exceptions=True
+                )
+                for result in strategy_results:
+                    if isinstance(result, Exception):
+                        results.append(
+                            {
+                                "error": [
+                                    f"Strategy execution error: {str(result)}"
+                                ],
+                                "result": [],
+                            }
+                        )
+                    else:
+                        results.append(result)
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error running strategies in parallel: {str(e)}"
+                )
+                results.append(
+                    {"error": [f"Parallel execution error: {str(e)}"], "result": []}
+                )
+
+        return results
+
     def fetch_all_trading_opportunities(self) -> Generator[None, None, None]:
         """Fetches all the trading opportunities using asyncio for concurrency."""
         self.trading_opportunities.clear()
@@ -985,88 +1063,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         strategies_executables = self.shared_state.strategies_executables
 
-        async def async_execute_strategy(
-            strategy_name, strategies_executables, **kwargs
-        ):
-            try:
-                loop = asyncio.get_event_loop()
-                return await loop.run_in_executor(
-                    None,
-                    lambda: execute_strategy(
-                        strategy_name, strategies_executables, **kwargs
-                    ),
-                )
-            except TypeError as e:
-                # Handle missing arguments error
-                return {
-                    "error": [
-                        f"Strategy {strategy_name} missing required argument: {str(e)}"
-                    ],
-                    "result": [],
-                }
-            except Exception as e:
-                # Handle any other unexpected errors
-                return {
-                    "error": [
-                        f"Unexpected error in strategy {strategy_name}: {str(e)}"
-                    ],
-                    "result": [],
-                }
-
-        async def run_all_strategies():
-            tasks = []
-            results = []
-
-            for strategy_name, kwargs in strategy_kwargs_list:
-                try:
-                    kwargs_without_strategy = {
-                        k: v for k, v in kwargs.items() if k != "strategy"
-                    }
-                    tasks.append(
-                        async_execute_strategy(
-                            strategy_name,
-                            strategies_executables,
-                            **kwargs_without_strategy,
-                        )
-                    )
-                except Exception as e:
-                    self.context.logger.error(
-                        f"Error setting up strategy {strategy_name}: {str(e)}"
-                    )
-                    results.append(
-                        {"error": [f"Strategy setup error: {str(e)}"], "result": []}
-                    )
-
-            if tasks:
-                try:
-                    strategy_results = await asyncio.gather(
-                        *tasks, return_exceptions=True
-                    )
-                    for result in strategy_results:
-                        if isinstance(result, Exception):
-                            results.append(
-                                {
-                                    "error": [
-                                        f"Strategy execution error: {str(result)}"
-                                    ],
-                                    "result": [],
-                                }
-                            )
-                        else:
-                            results.append(result)
-                except Exception as e:
-                    self.context.logger.error(
-                        f"Error running strategies in parallel: {str(e)}"
-                    )
-                    results.append(
-                        {"error": [f"Parallel execution error: {str(e)}"], "result": []}
-                    )
-
-            return results
-
         # Main execution loop
         try:
-            future = asyncio.ensure_future(run_all_strategies())
+            future = asyncio.ensure_future(self._run_all_strategies(strategy_kwargs_list, strategies_executables))
             while not future.done():
                 yield  # Yield control to the agent loop
             results = future.result()
@@ -1194,6 +1193,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Ensure we don't lose the error state
             self.trading_opportunities = []
 
+    
     def _track_opportunities(
         self, opportunities: List[Dict], stage: str
     ) -> Generator[None, None, None]:
@@ -1800,6 +1800,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Extreme allocation detected: 100% to {target_symbol}"
                 )
 
+                # Calculate the full slice for one-sided allocation
+                try:
+                    full_slice = float(
+                        enter_pool_action.get("relative_funds_percentage", 1.0)
+                        or 1.0
+                    )
+                except (ValueError, TypeError):
+                    full_slice = 1.0
+
                 # Track if we found any bridge routes to modify
                 bridge_routes_found = False
 
@@ -1819,13 +1828,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             action["to_token_symbol"] = target_symbol
 
                         # Use the full relative slice for one-sided allocation
-                        try:
-                            full_slice = float(
-                                enter_pool_action.get("relative_funds_percentage", 1.0)
-                                or 1.0
-                            )
-                        except (ValueError, TypeError):
-                            full_slice = 1.0
                         action["funds_percentage"] = full_slice
 
                 # If no FindBridgeRoute actions were found, add one

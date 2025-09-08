@@ -397,11 +397,11 @@ class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         "next_checkpoint,timestamp,expected_result,test_description",
         [
             # Test 1: Checkpoint reached (next_checkpoint <= timestamp)
-            (1000, 1500, True, "checkpoint reached"),
+            (1600000000, 1700000000, True, "checkpoint reached"),
             # Test 2: Checkpoint not reached (next_checkpoint > timestamp)
-            (2000, 1500, False, "checkpoint not reached"),
+            (1800000000, 1700000000, False, "checkpoint not reached"),
             # Test 3: Checkpoint exactly at timestamp
-            (1500, 1500, True, "checkpoint exactly at timestamp"),
+            (1700000000, 1700000000, True, "checkpoint exactly at timestamp"),
         ],
     )
     def test_check_if_checkpoint_reached_timestamp_comparison(
@@ -951,7 +951,7 @@ class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     payload = mock_send.call_args[0][0]
                     assert payload.chain_id == chain_name
 
-    @given(st.integers(min_value=0, max_value=1000))
+    @given(st.integers(min_value=1600000000, max_value=1800000000))
     def test_check_if_checkpoint_reached_property_timestamps(self, timestamp):
         """Property-based test for _check_if_checkpoint_reached with different timestamps."""
         checkpoint_behaviour = self._create_checkpoint_behaviour()

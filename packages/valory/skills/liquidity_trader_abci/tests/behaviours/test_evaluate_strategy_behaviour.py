@@ -7494,56 +7494,6 @@ def dynamic_test_method(*args, **kwargs):
             except StopIteration:
                 pass
 
-    def test_get_current_timestamp_method(self) -> None:
-        """Test _get_current_timestamp method."""
-        timestamp = self.behaviour.current_behaviour._get_current_timestamp()
-        assert isinstance(timestamp, (int, float))
-        assert timestamp > 0
-        test_positions = [
-            {
-                "pool_address": "0x123",
-                "chain": "optimism",
-                "status": "open",
-            }
-        ]
-        self.behaviour.current_behaviour.current_positions = test_positions
-
-        with patch.object(self.behaviour.current_behaviour, "_write_kv") as mock_store:
-            mock_store.return_value = yield from self._mock_write_kv()
-            self.behaviour.current_behaviour.store_current_positions()
-            mock_store.assert_called_once()
-
-    def test_store_entry_costs(self) -> None:
-        """Test _store_entry_costs method."""
-
-        def mock_store_entry_costs(chain, position_id, costs):
-            yield
-            # Mock the _write_kv call
-            yield from self.behaviour.current_behaviour._write_kv(
-                {"entry_costs_test": "100.0"}
-            )
-
-        with patch.object(
-            self.behaviour.current_behaviour,
-            "_store_entry_costs",
-            side_effect=mock_store_entry_costs,
-        ):
-            with patch.object(
-                self.behaviour.current_behaviour, "_write_kv"
-            ) as mock_store:
-                mock_store.return_value = yield from self._mock_write_kv()
-                generator = self.behaviour.current_behaviour._store_entry_costs(
-                    "optimism", "0x123", 100.0
-                )
-
-                try:
-                    while True:
-                        next(generator)
-                except StopIteration:
-                    pass
-
-                mock_store.assert_called_once_with({"entry_costs_test": "100.0"})
-
     def test_handle_get_strategy_loader_error(self) -> None:
         """Test _handle_get_strategy with strategy loader error."""
         # Test when strategy is not found

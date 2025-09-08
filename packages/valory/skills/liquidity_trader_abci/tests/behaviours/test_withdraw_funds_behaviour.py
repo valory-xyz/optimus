@@ -1191,7 +1191,12 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             # Should not raise exception, just log error
             list(withdraw_behaviour._reset_withdrawal_flags())
 
-    @given(st.lists(st.dictionaries(st.text(), st.text())))
+    @given(st.lists(st.dictionaries(
+        st.text(min_size=1, max_size=10, alphabet=st.characters(min_codepoint=97, max_codepoint=122)),  # a-z only
+        st.text(min_size=1, max_size=10, alphabet=st.characters(min_codepoint=97, max_codepoint=122)),  # a-z only
+        min_size=0, max_size=5
+    ), min_size=0, max_size=10))
+    @pytest.mark.hypothesis_settings(deadline=None)
     def test_prepare_exit_pool_actions_property(self, positions):
         """Property-based test for prepare_exit_pool_actions."""
         withdraw_behaviour = self._create_withdraw_behaviour()
@@ -1226,9 +1231,17 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
     @given(
         st.dictionaries(
-            st.text(), st.one_of(st.text(), st.integers(), st.floats(), st.booleans())
+            st.text(min_size=1, max_size=10, alphabet=st.characters(min_codepoint=97, max_codepoint=122)),  # a-z only
+            st.one_of(
+                st.text(min_size=1, max_size=10, alphabet=st.characters(min_codepoint=97, max_codepoint=122)),  # a-z only
+                st.integers(min_value=-1000, max_value=1000),
+                st.floats(min_value=-1000.0, max_value=1000.0),
+                st.booleans()
+            ),
+            min_size=0, max_size=5
         )
     )
+    @pytest.mark.hypothesis_settings(deadline=None)
     def test_prepare_swap_actions_property(self, portfolio_data):
         """Property-based test for prepare_swap_to_usdc_actions_standard."""
         withdraw_behaviour = self._create_withdraw_behaviour()

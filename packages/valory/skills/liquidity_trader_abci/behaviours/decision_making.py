@@ -339,7 +339,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if decision == Decision.CONTINUE:
             # Add slippage costs after swap completion
             yield from self._add_slippage_costs(self.synchronized_data.final_tx_hash)
-            res = yield from self._update_assets_after_swap(
+            res = self._update_assets_after_swap(
                 actions, last_executed_action_index
             )
             return res
@@ -357,7 +357,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _update_assets_after_swap(
         self, actions, last_executed_action_index
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
 
@@ -625,7 +625,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             f"Transaction Hash - {self.synchronized_data.final_tx_hash}"
         )
 
-    def _post_execute_withdraw(self, actions, last_executed_action_index) -> Generator[None, None, None]:
+    def _post_execute_withdraw(
+        self, actions, last_executed_action_index
+    ) -> Generator[None, None, None]:
         """Handle withdrawal transfer completion."""
         investing_paused = yield from self._read_investing_paused()
         withdrawal_status = yield from self._read_withdrawal_status()

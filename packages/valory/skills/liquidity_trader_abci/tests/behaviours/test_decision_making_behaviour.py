@@ -11410,7 +11410,6 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
                 return None
 
             def mock_update_assets_side_effect(actions, index):
-                yield
                 return ("done", {"test": "result"})
 
             mock_get_decision.side_effect = mock_get_decision_side_effect
@@ -11528,7 +11527,6 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
                 return None
 
             def mock_update_assets_side_effect(actions, index):
-                yield
                 return ("continue", {"updated": "assets"})
 
             mock_get_decision.side_effect = mock_get_decision_side_effect

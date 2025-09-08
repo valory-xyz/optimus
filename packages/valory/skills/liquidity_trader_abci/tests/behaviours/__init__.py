@@ -17,4 +17,4 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Tests for the liquidity_trader_abci skill behaviours.""" 
+"""Tests for the liquidity_trader_abci skill behaviours."""

@@ -322,7 +322,7 @@ class LiquidityTraderBaseBehaviour(
         self.current_positions: List[Dict[str, Any]] = []
         # Convert store_path to Path object for file operations
         store_path = Path(self.params.store_path)
-        
+
         self.current_positions_filepath: str = (
             store_path / self.params.pool_info_filename
         )

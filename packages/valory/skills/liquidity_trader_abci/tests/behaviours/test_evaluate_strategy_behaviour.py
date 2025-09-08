@@ -1031,19 +1031,20 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 self.behaviour.current_behaviour, "store_current_positions"
             ):
                 with patch.object(
-                    self.behaviour.current_behaviour.context.logger,
-                    "error"
+                    self.behaviour.current_behaviour.context.logger, "error"
                 ) as mock_logger:
                     # Set up dex_type_to_strategy without the unknown_dex
                     self.behaviour.current_behaviour.context.params.dex_type_to_strategy = {
                         "velodrome": "test_strategy"
                         # Note: "unknown_dex" is not in the mapping
                     }
-                    
+
                     self.behaviour.current_behaviour.update_position_metrics()
-                    
+
                     # Should log an error for the unknown dex type
-                    mock_logger.assert_called_once_with("No strategy found for dex type unknown_dex")
+                    mock_logger.assert_called_once_with(
+                        "No strategy found for dex type unknown_dex"
+                    )
 
     def test_execute_hyper_strategy(self) -> None:
         """Test hyper strategy execution."""
@@ -1455,8 +1456,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             side_effect=Exception("Test exception"),
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "error"
+                self.behaviour.current_behaviour.context.logger, "error"
             ) as mock_logger:
                 (
                     can_exit,
@@ -1464,14 +1464,16 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 ) = self.behaviour.current_behaviour._check_tip_exit_conditions(
                     position
                 )
-                
+
                 # Should allow exit on error
                 assert can_exit is True
                 assert "Error in TiP check - allowing exit" in reason
-                
+
                 # Should log the error
                 mock_logger.assert_called_once()
-                assert "Error checking TiP exit conditions" in str(mock_logger.call_args)
+                assert "Error checking TiP exit conditions" in str(
+                    mock_logger.call_args
+                )
 
     def test_apply_tip_filters_no_current_positions(self) -> None:
         """Test TiP filters when no current positions exist."""
@@ -2365,8 +2367,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             return_value=None,  # No USDC address found
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "warning"
+                self.behaviour.current_behaviour.context.logger, "warning"
             ) as mock_logger:
                 result = (
                     self.behaviour.current_behaviour.check_and_prepare_non_whitelisted_swaps()
@@ -2374,7 +2375,9 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
                 # Should return empty list and log warning
                 assert result == []
-                mock_logger.assert_called_once_with("Could not get USDC address for optimism")
+                mock_logger.assert_called_once_with(
+                    "Could not get USDC address for optimism"
+                )
 
     def test_check_and_prepare_non_whitelisted_swaps_failed_swap_action(self) -> None:
         """Test check_and_prepare_non_whitelisted_swaps when swap action creation fails"""
@@ -2408,12 +2411,10 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 return_value=None,  # Failed to create swap action
             ):
                 with patch.object(
-                    self.behaviour.current_behaviour.context.logger,
-                    "error"
+                    self.behaviour.current_behaviour.context.logger, "error"
                 ) as mock_error_logger:
                     with patch.object(
-                        self.behaviour.current_behaviour.context.logger,
-                        "info"
+                        self.behaviour.current_behaviour.context.logger, "info"
                     ) as mock_info_logger:
                         result = (
                             self.behaviour.current_behaviour.check_and_prepare_non_whitelisted_swaps()
@@ -2421,9 +2422,13 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
                         # Should return empty list and log error for failed swap action
                         assert result == []
-                        mock_error_logger.assert_called_once_with("Failed to create swap action for NONWL")
+                        mock_error_logger.assert_called_once_with(
+                            "Failed to create swap action for NONWL"
+                        )
                         # Should still log the preparation attempt
-                        mock_info_logger.assert_called_once_with("Preparing swap action to USDC.")
+                        mock_info_logger.assert_called_once_with(
+                            "Preparing swap action to USDC."
+                        )
 
     def test_check_and_prepare_non_whitelisted_swaps_exception_handling(self) -> None:
         """Test check_and_prepare_non_whitelisted_swaps exception handling"""
@@ -2437,8 +2442,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             side_effect=Exception("Test exception"),  # Force an exception
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "error"
+                self.behaviour.current_behaviour.context.logger, "error"
             ) as mock_logger:
                 result = (
                     self.behaviour.current_behaviour.check_and_prepare_non_whitelisted_swaps()
@@ -2446,7 +2450,9 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
                 # Should return empty list and log error
                 assert result == []
-                mock_logger.assert_called_once_with("Error in check_and_prepare_non_whitelisted_swaps: Test exception")
+                mock_logger.assert_called_once_with(
+                    "Error in check_and_prepare_non_whitelisted_swaps: Test exception"
+                )
 
     def test_execute_hyper_strategy_with_composite_score_conversion(self) -> None:
         """Test hyper strategy execution with composite score type conversion."""
@@ -3221,22 +3227,27 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             raise Exception("KV store connection failed")
 
         with patch.object(
-            self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv_exception
+            self.behaviour.current_behaviour,
+            "_read_kv",
+            side_effect=mock_read_kv_exception,
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "warning"
+                self.behaviour.current_behaviour.context.logger, "warning"
             ) as mock_warning_logger:
                 with patch.object(
-                    self.behaviour.current_behaviour.context.logger,
-                    "info"
+                    self.behaviour.current_behaviour.context.logger, "info"
                 ) as mock_info_logger:
                     with patch.object(
                         self.behaviour.current_behaviour,
                         "execute_strategy",
-                        return_value={"optimal_strategies": [], "position_to_exit": None},
+                        return_value={
+                            "optimal_strategies": [],
+                            "position_to_exit": None,
+                        },
                     ):
-                        generator = self.behaviour.current_behaviour.execute_hyper_strategy()
+                        generator = (
+                            self.behaviour.current_behaviour.execute_hyper_strategy()
+                        )
 
                         try:
                             while True:
@@ -3268,15 +3279,16 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv_none
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "info"
+                self.behaviour.current_behaviour.context.logger, "info"
             ) as mock_info_logger:
                 with patch.object(
                     self.behaviour.current_behaviour,
                     "execute_strategy",
                     return_value={"optimal_strategies": [], "position_to_exit": None},
                 ) as mock_execute:
-                    generator = self.behaviour.current_behaviour.execute_hyper_strategy()
+                    generator = (
+                        self.behaviour.current_behaviour.execute_hyper_strategy()
+                    )
 
                     try:
                         while True:
@@ -3304,18 +3316,21 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             return None  # No data returned from KV store
 
         with patch.object(
-            self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv_no_data
+            self.behaviour.current_behaviour,
+            "_read_kv",
+            side_effect=mock_read_kv_no_data,
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "info"
+                self.behaviour.current_behaviour.context.logger, "info"
             ) as mock_info_logger:
                 with patch.object(
                     self.behaviour.current_behaviour,
                     "execute_strategy",
                     return_value={"optimal_strategies": [], "position_to_exit": None},
                 ) as mock_execute:
-                    generator = self.behaviour.current_behaviour.execute_hyper_strategy()
+                    generator = (
+                        self.behaviour.current_behaviour.execute_hyper_strategy()
+                    )
 
                     try:
                         while True:
@@ -3462,206 +3477,227 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
     def test_async_execute_strategy_type_error(self) -> None:
         """Test _async_execute_strategy with TypeError"""
         import asyncio
-        
+
         async def run_test():
             with patch(
                 "packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy.execute_strategy",
-                side_effect=TypeError("missing required argument: test_arg")
+                side_effect=TypeError("missing required argument: test_arg"),
             ):
                 result = await self.behaviour.current_behaviour._async_execute_strategy(
                     "test_strategy", {"test_strategy": lambda **kwargs: None}
                 )
-                
+
                 assert "error" in result
                 assert len(result["error"]) == 1
                 assert "missing required argument: test_arg" in result["error"][0]
                 assert result["result"] == []
-        
+
         # Run the async test
         asyncio.run(run_test())
 
     def test_async_execute_strategy_general_error(self) -> None:
         """Test _async_execute_strategy with general exception"""
         import asyncio
-        
+
         async def run_test():
             with patch(
                 "packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy.execute_strategy",
-                side_effect=RuntimeError("Unexpected runtime error")
+                side_effect=RuntimeError("Unexpected runtime error"),
             ):
                 result = await self.behaviour.current_behaviour._async_execute_strategy(
                     "test_strategy", {"test_strategy": lambda **kwargs: None}
                 )
-                
+
                 assert "error" in result
                 assert len(result["error"]) == 1
-                assert "Unexpected error in strategy test_strategy: Unexpected runtime error" in result["error"][0]
+                assert (
+                    "Unexpected error in strategy test_strategy: Unexpected runtime error"
+                    in result["error"][0]
+                )
                 assert result["result"] == []
-        
+
         # Run the async test
         asyncio.run(run_test())
 
     def test_async_execute_strategy_success(self) -> None:
         """Test _async_execute_strategy with successful execution."""
         import asyncio
-        
+
         async def run_test():
             expected_result = {
                 "result": [{"pool_address": "0x123", "apr": 15.0}],
-                "error": []
+                "error": [],
             }
-            
+
             with patch(
                 "packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy.execute_strategy",
-                return_value=expected_result
+                return_value=expected_result,
             ):
                 result = await self.behaviour.current_behaviour._async_execute_strategy(
                     "test_strategy", {"test_strategy": lambda **kwargs: None}
                 )
-                
+
                 assert result == expected_result
-        
+
         # Run the async test
         asyncio.run(run_test())
 
     def test_run_all_strategies_setup_error(self) -> None:
         """Test _run_all_strategies with strategy setup error"""
         import asyncio
-        
+
         async def run_test():
             strategy_kwargs_list = [("test_strategy", {"invalid_key": "value"})]
             strategies_executables = {"test_strategy": lambda **kwargs: None}
-            
+
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "error"
+                self.behaviour.current_behaviour.context.logger, "error"
             ) as mock_logger:
                 # Create a kwargs dict that will cause an exception when processed
                 # We'll make the dict.items() method raise an exception
                 class FailingDict(dict):
                     def items(self):
                         raise Exception("Task setup error")
-                
+
                 # Replace the kwargs with our failing dict
                 failing_kwargs = FailingDict({"invalid_key": "value"})
-                strategy_kwargs_list_with_failing_dict = [("test_strategy", failing_kwargs)]
-                
+                strategy_kwargs_list_with_failing_dict = [
+                    ("test_strategy", failing_kwargs)
+                ]
+
                 results = await self.behaviour.current_behaviour._run_all_strategies(
                     strategy_kwargs_list_with_failing_dict, strategies_executables
                 )
-                
+
                 assert len(results) == 1
                 assert "error" in results[0]
-                assert "Strategy setup error: Task setup error" in results[0]["error"][0]
+                assert (
+                    "Strategy setup error: Task setup error" in results[0]["error"][0]
+                )
                 mock_logger.assert_called_once_with(
                     "Error setting up strategy test_strategy: Task setup error"
                 )
-        
+
         # Run the async test
         asyncio.run(run_test())
 
     def test_run_all_strategies_exception_results(self) -> None:
         """Test _run_all_strategies with exception results from asyncio.gather"""
         import asyncio
-        
+
         async def run_test():
             strategy_kwargs_list = [("test_strategy", {})]
             strategies_executables = {"test_strategy": lambda **kwargs: None}
-            
+
             # Mock asyncio.gather to return an exception as a result
             test_exception = RuntimeError("Strategy execution failed")
-            
+
             async def mock_gather(*args, **kwargs):
                 return [test_exception]  # Return exception as result
-            
+
             with patch("asyncio.gather", side_effect=mock_gather):
                 results = await self.behaviour.current_behaviour._run_all_strategies(
                     strategy_kwargs_list, strategies_executables
                 )
-                
+
                 assert len(results) == 1
                 assert "error" in results[0]
-                assert "Strategy execution error: Strategy execution failed" in results[0]["error"][0]
-        
+                assert (
+                    "Strategy execution error: Strategy execution failed"
+                    in results[0]["error"][0]
+                )
+
         # Run the async test
         asyncio.run(run_test())
 
     def test_run_all_strategies_gather_exception(self) -> None:
         """Test _run_all_strategies with asyncio.gather raising exception"""
         import asyncio
-        
+
         async def run_test():
             strategy_kwargs_list = [("test_strategy", {})]
             strategies_executables = {"test_strategy": lambda **kwargs: None}
-            
+
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "error"
+                self.behaviour.current_behaviour.context.logger, "error"
             ) as mock_logger:
                 # Mock asyncio.gather to raise an exception
-                with patch("asyncio.gather", side_effect=Exception("Parallel execution failed")):
-                    results = await self.behaviour.current_behaviour._run_all_strategies(
-                        strategy_kwargs_list, strategies_executables
+                with patch(
+                    "asyncio.gather", side_effect=Exception("Parallel execution failed")
+                ):
+                    results = (
+                        await self.behaviour.current_behaviour._run_all_strategies(
+                            strategy_kwargs_list, strategies_executables
+                        )
                     )
-                    
+
                     assert len(results) == 1
                     assert "error" in results[0]
-                    assert "Parallel execution error: Parallel execution failed" in results[0]["error"][0]
+                    assert (
+                        "Parallel execution error: Parallel execution failed"
+                        in results[0]["error"][0]
+                    )
                     mock_logger.assert_called_once()
-        
+
         # Run the async test
         asyncio.run(run_test())
 
     def test_run_all_strategies_success(self) -> None:
         """Test _run_all_strategies with successful execution."""
         import asyncio
-        
+
         async def run_test():
             strategy_kwargs_list = [("test_strategy1", {}), ("test_strategy2", {})]
             strategies_executables = {
                 "test_strategy1": lambda **kwargs: None,
-                "test_strategy2": lambda **kwargs: None
+                "test_strategy2": lambda **kwargs: None,
             }
-            
+
             expected_results = [
                 {"result": [{"pool_address": "0x123", "apr": 15.0}], "error": []},
-                {"result": [{"pool_address": "0x456", "apr": 12.0}], "error": []}
+                {"result": [{"pool_address": "0x456", "apr": 12.0}], "error": []},
             ]
-            
+
             with patch.object(
                 self.behaviour.current_behaviour,
                 "_async_execute_strategy",
-                side_effect=expected_results
+                side_effect=expected_results,
             ):
                 results = await self.behaviour.current_behaviour._run_all_strategies(
                     strategy_kwargs_list, strategies_executables
                 )
-                
+
                 assert len(results) == 2
                 assert results == expected_results
-        
+
         # Run the async test
         asyncio.run(run_test())
 
     def test_fetch_all_trading_opportunities_yield_control(self) -> None:
         """Test fetch_all_trading_opportunities yields control while waiting for async future"""
-        self.behaviour.current_behaviour.synchronized_data.selected_protocols = ["test_strategy"]
-        self.behaviour.current_behaviour.context.params.strategies_kwargs = {"test_strategy": {}}
+        self.behaviour.current_behaviour.synchronized_data.selected_protocols = [
+            "test_strategy"
+        ]
+        self.behaviour.current_behaviour.context.params.strategies_kwargs = {
+            "test_strategy": {}
+        }
         self.behaviour.current_behaviour.positions_eligible_for_exit = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.shared_state,
             "strategies_executables",
-            {"test_strategy": lambda **kwargs: None}
+            {"test_strategy": lambda **kwargs: None},
         ):
             # Mock a slow async operation to ensure we hit the yield
             slow_future = MagicMock()
             slow_future.done.side_effect = [False, False, True]  # Takes 3 iterations
             slow_future.result.return_value = [{"result": [], "error": []}]
-            
+
             with patch("asyncio.ensure_future", return_value=slow_future):
-                generator = self.behaviour.current_behaviour.fetch_all_trading_opportunities()
-                
+                generator = (
+                    self.behaviour.current_behaviour.fetch_all_trading_opportunities()
+                )
+
                 # Count yields - should yield at least twice (once for download, once+ for async wait)
                 yield_count = 0
                 try:
@@ -3672,109 +3708,140 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                             break
                 except StopIteration:
                     pass
-                
+
                 # Should have yielded multiple times including the async wait yields
                 assert yield_count >= 2
 
     def test_fetch_all_trading_opportunities_strategy_errors(self) -> None:
         """Test fetch_all_trading_opportunities handles strategy errors"""
-        self.behaviour.current_behaviour.synchronized_data.selected_protocols = ["test_strategy"]
-        self.behaviour.current_behaviour.context.params.strategies_kwargs = {"test_strategy": {}}
+        self.behaviour.current_behaviour.synchronized_data.selected_protocols = [
+            "test_strategy"
+        ]
+        self.behaviour.current_behaviour.context.params.strategies_kwargs = {
+            "test_strategy": {}
+        }
         self.behaviour.current_behaviour.positions_eligible_for_exit = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.shared_state,
             "strategies_executables",
-            {"test_strategy": lambda **kwargs: None}
+            {"test_strategy": lambda **kwargs: None},
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "error"
+                self.behaviour.current_behaviour.context.logger, "error"
             ) as mock_logger:
                 # Mock asyncio.ensure_future to return errors
                 mock_future = MagicMock()
                 mock_future.done.return_value = True
-                mock_future.result.return_value = [{"error": ["Strategy error 1", "Strategy error 2"], "result": []}]
-                
+                mock_future.result.return_value = [
+                    {"error": ["Strategy error 1", "Strategy error 2"], "result": []}
+                ]
+
                 with patch("asyncio.ensure_future", return_value=mock_future):
-                    generator = self.behaviour.current_behaviour.fetch_all_trading_opportunities()
-                    
+                    generator = (
+                        self.behaviour.current_behaviour.fetch_all_trading_opportunities()
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should log both errors
                     assert mock_logger.call_count == 2
-                    mock_logger.assert_any_call("Error in strategy test_strategy: Strategy error 1")
-                    mock_logger.assert_any_call("Error in strategy test_strategy: Strategy error 2")
+                    mock_logger.assert_any_call(
+                        "Error in strategy test_strategy: Strategy error 1"
+                    )
+                    mock_logger.assert_any_call(
+                        "Error in strategy test_strategy: Strategy error 2"
+                    )
 
-    def test_fetch_all_trading_opportunities_valid_opportunities_processing(self) -> None:
+    def test_fetch_all_trading_opportunities_valid_opportunities_processing(
+        self,
+    ) -> None:
         """Test fetch_all_trading_opportunities processes valid opportunities"""
-        self.behaviour.current_behaviour.synchronized_data.selected_protocols = ["test_strategy"]
-        self.behaviour.current_behaviour.context.params.strategies_kwargs = {"test_strategy": {}}
+        self.behaviour.current_behaviour.synchronized_data.selected_protocols = [
+            "test_strategy"
+        ]
+        self.behaviour.current_behaviour.context.params.strategies_kwargs = {
+            "test_strategy": {}
+        }
         self.behaviour.current_behaviour.positions_eligible_for_exit = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.shared_state,
             "strategies_executables",
-            {"test_strategy": lambda **kwargs: None}
+            {"test_strategy": lambda **kwargs: None},
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "info"
+                self.behaviour.current_behaviour.context.logger, "info"
             ) as mock_logger:
                 # Mock asyncio.ensure_future to return valid opportunities
                 mock_future = MagicMock()
                 mock_future.done.return_value = True
-                mock_future.result.return_value = [{
-                    "error": [],
-                    "result": [
-                        {
-                            "pool_address": "0x123",
-                            "chain": "ethereum",
-                            "token0_symbol": "USDC",
-                            "token1_symbol": "ETH",
-                            "apr": 15.0
-                        }
-                    ]
-                }]
-                
+                mock_future.result.return_value = [
+                    {
+                        "error": [],
+                        "result": [
+                            {
+                                "pool_address": "0x123",
+                                "chain": "ethereum",
+                                "token0_symbol": "USDC",
+                                "token1_symbol": "ETH",
+                                "apr": 15.0,
+                            }
+                        ],
+                    }
+                ]
+
                 with patch("asyncio.ensure_future", return_value=mock_future):
-                    generator = self.behaviour.current_behaviour.fetch_all_trading_opportunities()
-                    
+                    generator = (
+                        self.behaviour.current_behaviour.fetch_all_trading_opportunities()
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should add strategy_source and log opportunity details
-                    assert len(self.behaviour.current_behaviour.trading_opportunities) == 1
-                    opportunity = self.behaviour.current_behaviour.trading_opportunities[0]
+                    assert (
+                        len(self.behaviour.current_behaviour.trading_opportunities) == 1
+                    )
+                    opportunity = (
+                        self.behaviour.current_behaviour.trading_opportunities[0]
+                    )
                     assert opportunity["strategy_source"] == "test_strategy"
-                    
+
                     # Should log opportunity details
-                    mock_logger.assert_any_call("Opportunities found using test_strategy strategy")
+                    mock_logger.assert_any_call(
+                        "Opportunities found using test_strategy strategy"
+                    )
                     mock_logger.assert_any_call(
                         "Opportunity: 0x123, Chain: ethereum, Token0: USDC, Token1: ETH"
                     )
 
-    def test_fetch_all_trading_opportunities_opportunity_processing_exception(self) -> None:
+    def test_fetch_all_trading_opportunities_opportunity_processing_exception(
+        self,
+    ) -> None:
         """Test fetch_all_trading_opportunities handles exceptions when processing opportunities"""
-        self.behaviour.current_behaviour.synchronized_data.selected_protocols = ["test_strategy"]
-        self.behaviour.current_behaviour.context.params.strategies_kwargs = {"test_strategy": {}}
+        self.behaviour.current_behaviour.synchronized_data.selected_protocols = [
+            "test_strategy"
+        ]
+        self.behaviour.current_behaviour.context.params.strategies_kwargs = {
+            "test_strategy": {}
+        }
         self.behaviour.current_behaviour.positions_eligible_for_exit = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.shared_state,
             "strategies_executables",
-            {"test_strategy": lambda **kwargs: None}
+            {"test_strategy": lambda **kwargs: None},
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "error"
+                self.behaviour.current_behaviour.context.logger, "error"
             ) as mock_logger:
                 # Create a problematic opportunity that will cause an exception
                 class ProblematicDict(dict):
@@ -3782,24 +3849,25 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                         if key == "pool_address":
                             raise Exception("Processing error")
                         return super().get(key, default)
-                
+
                 # Mock asyncio.ensure_future to return problematic opportunity
                 mock_future = MagicMock()
                 mock_future.done.return_value = True
-                mock_future.result.return_value = [{
-                    "error": [],
-                    "result": [ProblematicDict({"apr": 15.0})]
-                }]
-                
+                mock_future.result.return_value = [
+                    {"error": [], "result": [ProblematicDict({"apr": 15.0})]}
+                ]
+
                 with patch("asyncio.ensure_future", return_value=mock_future):
-                    generator = self.behaviour.current_behaviour.fetch_all_trading_opportunities()
-                    
+                    generator = (
+                        self.behaviour.current_behaviour.fetch_all_trading_opportunities()
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should log the processing error
                     mock_logger.assert_any_call(
                         "Error processing opportunity from test_strategy: Processing error"
@@ -3807,198 +3875,303 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
     def test_fetch_all_trading_opportunities_no_opportunities_warning(self) -> None:
         """Test fetch_all_trading_opportunities warns when no opportunities found"""
-        self.behaviour.current_behaviour.synchronized_data.selected_protocols = ["test_strategy"]
-        self.behaviour.current_behaviour.context.params.strategies_kwargs = {"test_strategy": {}}
+        self.behaviour.current_behaviour.synchronized_data.selected_protocols = [
+            "test_strategy"
+        ]
+        self.behaviour.current_behaviour.context.params.strategies_kwargs = {
+            "test_strategy": {}
+        }
         self.behaviour.current_behaviour.positions_eligible_for_exit = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.shared_state,
             "strategies_executables",
-            {"test_strategy": lambda **kwargs: None}
+            {"test_strategy": lambda **kwargs: None},
         ):
             with patch.object(
-                self.behaviour.current_behaviour.context.logger,
-                "warning"
+                self.behaviour.current_behaviour.context.logger, "warning"
             ) as mock_logger:
                 # Mock asyncio.ensure_future to return empty results
                 mock_future = MagicMock()
                 mock_future.done.return_value = True
                 mock_future.result.return_value = [{"error": [], "result": []}]
-                
+
                 with patch("asyncio.ensure_future", return_value=mock_future):
-                    generator = self.behaviour.current_behaviour.fetch_all_trading_opportunities()
-                    
+                    generator = (
+                        self.behaviour.current_behaviour.fetch_all_trading_opportunities()
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should warn about no opportunities
-                    mock_logger.assert_any_call("No opportunity found using test_strategy strategy")
+                    mock_logger.assert_any_call(
+                        "No opportunity found using test_strategy strategy"
+                    )
 
     def test_fetch_all_trading_opportunities_track_raw_opportunities(self) -> None:
         """Test fetch_all_trading_opportunities tracks raw opportunities"""
-        self.behaviour.current_behaviour.synchronized_data.selected_protocols = ["test_strategy"]
-        self.behaviour.current_behaviour.context.params.strategies_kwargs = {"test_strategy": {}}
+        self.behaviour.current_behaviour.synchronized_data.selected_protocols = [
+            "test_strategy"
+        ]
+        self.behaviour.current_behaviour.context.params.strategies_kwargs = {
+            "test_strategy": {}
+        }
         self.behaviour.current_behaviour.positions_eligible_for_exit = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.shared_state,
             "strategies_executables",
-            {"test_strategy": lambda **kwargs: None}
+            {"test_strategy": lambda **kwargs: None},
         ):
             with patch.object(
-                self.behaviour.current_behaviour,
-                "_track_opportunities"
+                self.behaviour.current_behaviour, "_track_opportunities"
             ) as mock_track:
                 mock_track.return_value = iter([])  # Return empty generator
-                
+
                 # Mock asyncio.ensure_future to return opportunities
                 mock_future = MagicMock()
                 mock_future.done.return_value = True
-                mock_future.result.return_value = [{
-                    "error": [],
-                    "result": [{"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}]
-                }]
-                
+                mock_future.result.return_value = [
+                    {
+                        "error": [],
+                        "result": [
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000123",
+                                "apr": 15.0,
+                            }
+                        ],
+                    }
+                ]
+
                 with patch("asyncio.ensure_future", return_value=mock_future):
-                    generator = self.behaviour.current_behaviour.fetch_all_trading_opportunities()
-                    
+                    generator = (
+                        self.behaviour.current_behaviour.fetch_all_trading_opportunities()
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should call _track_opportunities for raw opportunities
-                    mock_track.assert_any_call([{"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0, "strategy_source": "test_strategy"}], "raw_with_metrics")
+                    mock_track.assert_any_call(
+                        [
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000123",
+                                "apr": 15.0,
+                                "strategy_source": "test_strategy",
+                            }
+                        ],
+                        "raw_with_metrics",
+                    )
 
     def test_fetch_all_trading_opportunities_basic_filtering(self) -> None:
         """Test fetch_all_trading_opportunities basic filtering logic"""
-        self.behaviour.current_behaviour.synchronized_data.selected_protocols = ["test_strategy"]
-        self.behaviour.current_behaviour.context.params.strategies_kwargs = {"test_strategy": {}}
-        self.behaviour.current_behaviour.positions_eligible_for_exit = [
-            {"pool_address": "0x0000000000000000000000000000000000000456", "status": "open"}
+        self.behaviour.current_behaviour.synchronized_data.selected_protocols = [
+            "test_strategy"
         ]
-        
+        self.behaviour.current_behaviour.context.params.strategies_kwargs = {
+            "test_strategy": {}
+        }
+        self.behaviour.current_behaviour.positions_eligible_for_exit = [
+            {
+                "pool_address": "0x0000000000000000000000000000000000000456",
+                "status": "open",
+            }
+        ]
+
         with patch.object(
             self.behaviour.current_behaviour.shared_state,
             "strategies_executables",
-            {"test_strategy": lambda **kwargs: None}
+            {"test_strategy": lambda **kwargs: None},
         ):
             with patch.object(
-                self.behaviour.current_behaviour,
-                "_track_opportunities"
+                self.behaviour.current_behaviour, "_track_opportunities"
             ) as mock_track:
                 mock_track.return_value = iter([])  # Return empty generator
-                
+
                 # Mock asyncio.ensure_future to return mixed opportunities
                 mock_future = MagicMock()
                 mock_future.done.return_value = True
-                mock_future.result.return_value = [{
-                    "error": [],
-                    "result": [
-                        {"pool_address": "0x0000000000000000000000000000000000000123", "token_count": 2, "tvl": 1000, "apr": 15.0},  # Valid
-                        {"pool_address": "0x0000000000000000000000000000000000000456", "token_count": 2, "tvl": 1000, "apr": 12.0},  # Excluded (open position)
-                        {"pool_address": "0x0000000000000000000000000000000000000789", "token_count": 1, "tvl": 1000, "apr": 10.0},  # Invalid (token_count < 2)
-                        {"pool_address": "0x0000000000000000000000000000000000000abc", "token_count": 2, "tvl": 0, "apr": 8.0},     # Invalid (tvl = 0)
-                    ]
-                }]
-                
+                mock_future.result.return_value = [
+                    {
+                        "error": [],
+                        "result": [
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000123",
+                                "token_count": 2,
+                                "tvl": 1000,
+                                "apr": 15.0,
+                            },  # Valid
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000456",
+                                "token_count": 2,
+                                "tvl": 1000,
+                                "apr": 12.0,
+                            },  # Excluded (open position)
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000789",
+                                "token_count": 1,
+                                "tvl": 1000,
+                                "apr": 10.0,
+                            },  # Invalid (token_count < 2)
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000abc",
+                                "token_count": 2,
+                                "tvl": 0,
+                                "apr": 8.0,
+                            },  # Invalid (tvl = 0)
+                        ],
+                    }
+                ]
+
                 with patch("asyncio.ensure_future", return_value=mock_future):
-                    generator = self.behaviour.current_behaviour.fetch_all_trading_opportunities()
-                    
+                    generator = (
+                        self.behaviour.current_behaviour.fetch_all_trading_opportunities()
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should call _track_opportunities for basic filtered opportunities (only 0x123 should pass)
                     basic_filtered_call = None
                     for call in mock_track.call_args_list:
                         if len(call[0]) > 1 and call[0][1] == "basic_filtered":
                             basic_filtered_call = call
                             break
-                    
+
                     assert basic_filtered_call is not None
                     filtered_opps = basic_filtered_call[0][0]
                     assert len(filtered_opps) == 1
-                    assert filtered_opps[0]["pool_address"] == "0x0000000000000000000000000000000000000123"
+                    assert (
+                        filtered_opps[0]["pool_address"]
+                        == "0x0000000000000000000000000000000000000123"
+                    )
 
     def test_fetch_all_trading_opportunities_composite_filtering(self) -> None:
         """Test fetch_all_trading_opportunities composite filtering logic"""
-        self.behaviour.current_behaviour.synchronized_data.selected_protocols = ["test_strategy"]
-        self.behaviour.current_behaviour.context.params.strategies_kwargs = {"test_strategy": {}}
+        self.behaviour.current_behaviour.synchronized_data.selected_protocols = [
+            "test_strategy"
+        ]
+        self.behaviour.current_behaviour.context.params.strategies_kwargs = {
+            "test_strategy": {}
+        }
         self.behaviour.current_behaviour.positions_eligible_for_exit = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.shared_state,
             "strategies_executables",
-            {"test_strategy": lambda **kwargs: None}
+            {"test_strategy": lambda **kwargs: None},
         ):
             with patch.object(
-                self.behaviour.current_behaviour,
-                "_track_opportunities"
+                self.behaviour.current_behaviour, "_track_opportunities"
             ) as mock_track:
                 mock_track.return_value = iter([])  # Return empty generator
-                
+
                 # Mock asyncio.ensure_future to return opportunities for composite filtering
                 mock_future = MagicMock()
                 mock_future.done.return_value = True
-                mock_future.result.return_value = [{
-                    "error": [],
-                    "result": [
-                        {"pool_address": "0x0000000000000000000000000000000000000123", "token_count": 2, "tvl": 2000, "apr": 15.0, "composite_score": 100},  # Valid
-                        {"pool_address": "0x0000000000000000000000000000000000000456", "token_count": 2, "tvl": 500, "apr": 12.0, "composite_score": 80},   # Invalid (tvl < 1000)
-                        {"pool_address": "0x0000000000000000000000000000000000000789", "token_count": 2, "tvl": 1500, "apr": 0, "composite_score": 60},    # Invalid (apr = 0)
-                        {"pool_address": "0x0000000000000000000000000000000000000abc", "token_count": 1, "tvl": 2000, "apr": 10.0, "composite_score": 90}, # Invalid (token_count < 2)
-                    ]
-                }]
-                
+                mock_future.result.return_value = [
+                    {
+                        "error": [],
+                        "result": [
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000123",
+                                "token_count": 2,
+                                "tvl": 2000,
+                                "apr": 15.0,
+                                "composite_score": 100,
+                            },  # Valid
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000456",
+                                "token_count": 2,
+                                "tvl": 500,
+                                "apr": 12.0,
+                                "composite_score": 80,
+                            },  # Invalid (tvl < 1000)
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000789",
+                                "token_count": 2,
+                                "tvl": 1500,
+                                "apr": 0,
+                                "composite_score": 60,
+                            },  # Invalid (apr = 0)
+                            {
+                                "pool_address": "0x0000000000000000000000000000000000000abc",
+                                "token_count": 1,
+                                "tvl": 2000,
+                                "apr": 10.0,
+                                "composite_score": 90,
+                            },  # Invalid (token_count < 2)
+                        ],
+                    }
+                ]
+
                 with patch("asyncio.ensure_future", return_value=mock_future):
-                    generator = self.behaviour.current_behaviour.fetch_all_trading_opportunities()
-                    
+                    generator = (
+                        self.behaviour.current_behaviour.fetch_all_trading_opportunities()
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should call _track_opportunities for composite filtered opportunities (only 0x123 should pass)
                     composite_filtered_call = None
                     for call in mock_track.call_args_list:
                         if len(call[0]) > 1 and call[0][1] == "composite_filtered":
                             composite_filtered_call = call
                             break
-                    
+
                     assert composite_filtered_call is not None
                     filtered_opps = composite_filtered_call[0][0]
                     assert len(filtered_opps) == 1
-                    assert filtered_opps[0]["pool_address"] == "0x0000000000000000000000000000000000000123"
+                    assert (
+                        filtered_opps[0]["pool_address"]
+                        == "0x0000000000000000000000000000000000000123"
+                    )
 
     def test_track_opportunities_json_decode_error(self) -> None:
         """Test _track_opportunities handles JSON decode error"""
-        opportunities = [{"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}]
-        
+        opportunities = [
+            {"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}
+        ]
+
         # Mock _read_kv to return invalid JSON
         def mock_read_kv(*args, **kwargs):
             yield
             return {"opportunity_tracking": "invalid_json{"}
-        
-        with patch.object(self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv):
-            with patch.object(self.behaviour.current_behaviour, "_write_kv") as mock_write_kv:
-                with patch.object(self.behaviour.current_behaviour.context.logger, "info") as mock_logger:
+
+        with patch.object(
+            self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
+        ):
+            with patch.object(
+                self.behaviour.current_behaviour, "_write_kv"
+            ) as mock_write_kv:
+                with patch.object(
+                    self.behaviour.current_behaviour.context.logger, "info"
+                ) as mock_logger:
                     # Call _track_opportunities
-                    generator = self.behaviour.current_behaviour._track_opportunities(opportunities, "raw_with_metrics")
-                    
+                    generator = self.behaviour.current_behaviour._track_opportunities(
+                        opportunities, "raw_with_metrics"
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should have called _write_kv with new tracking data (starting with empty dict due to JSON error)
                     mock_write_kv.assert_called_once()
                     # Should log successful tracking
@@ -4010,25 +4183,35 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
     def test_track_opportunities_type_error(self) -> None:
         """Test _track_opportunities handles TypeError during JSON parsing"""
-        opportunities = [{"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}]
-        
+        opportunities = [
+            {"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}
+        ]
+
         # Mock _read_kv to return non-string data that causes TypeError
         def mock_read_kv(*args, **kwargs):
             yield
             return {"opportunity_tracking": 123}  # Integer instead of string
-        
-        with patch.object(self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv):
-            with patch.object(self.behaviour.current_behaviour, "_write_kv") as mock_write_kv:
-                with patch.object(self.behaviour.current_behaviour.context.logger, "info") as mock_logger:
+
+        with patch.object(
+            self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
+        ):
+            with patch.object(
+                self.behaviour.current_behaviour, "_write_kv"
+            ) as mock_write_kv:
+                with patch.object(
+                    self.behaviour.current_behaviour.context.logger, "info"
+                ) as mock_logger:
                     # Call _track_opportunities
-                    generator = self.behaviour.current_behaviour._track_opportunities(opportunities, "raw_with_metrics")
-                    
+                    generator = self.behaviour.current_behaviour._track_opportunities(
+                        opportunities, "raw_with_metrics"
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should have called _write_kv with new tracking data (starting with empty dict due to TypeError)
                     mock_write_kv.assert_called_once()
                     # Should log successful tracking
@@ -4039,33 +4222,46 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
     def test_track_opportunities_basic_filtered_stage(self) -> None:
         """Test _track_opportunities with basic_filtered stage"""
-        opportunities = [{"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}]
-        
+        opportunities = [
+            {"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}
+        ]
+
         # Mock _read_kv to return empty data
         def mock_read_kv(*args, **kwargs):
             yield
             return {}
-        
-        with patch.object(self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv):
-            with patch.object(self.behaviour.current_behaviour, "_write_kv") as mock_write_kv:
-                with patch.object(self.behaviour.current_behaviour.context.logger, "info") as mock_logger:
+
+        with patch.object(
+            self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
+        ):
+            with patch.object(
+                self.behaviour.current_behaviour, "_write_kv"
+            ) as mock_write_kv:
+                with patch.object(
+                    self.behaviour.current_behaviour.context.logger, "info"
+                ) as mock_logger:
                     # Call _track_opportunities with basic_filtered stage
-                    generator = self.behaviour.current_behaviour._track_opportunities(opportunities, "basic_filtered")
-                    
+                    generator = self.behaviour.current_behaviour._track_opportunities(
+                        opportunities, "basic_filtered"
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Check that the filtering criteria was set correctly
                     call_args = mock_write_kv.call_args[0][0]
                     tracking_data = json.loads(call_args["opportunity_tracking"])
                     round_key = f"round_{self.behaviour.current_behaviour.synchronized_data.period_count}"
-                    
+
                     assert "basic_filtered" in tracking_data[round_key]
-                    assert tracking_data[round_key]["basic_filtered"]["filtering_criteria"] == "Token count >= 2, TVL > 0, not current position"
-                    
+                    assert (
+                        tracking_data[round_key]["basic_filtered"]["filtering_criteria"]
+                        == "Token count >= 2, TVL > 0, not current position"
+                    )
+
                     # Should log successful tracking
                     assert mock_logger.call_count == 1
                     log_call = mock_logger.call_args[0][0]
@@ -4074,33 +4270,48 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
     def test_track_opportunities_composite_filtered_stage(self) -> None:
         """Test _track_opportunities with composite_filtered stage"""
-        opportunities = [{"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}]
-        
+        opportunities = [
+            {"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0}
+        ]
+
         # Mock _read_kv to return empty data
         def mock_read_kv(*args, **kwargs):
             yield
             return {}
-        
-        with patch.object(self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv):
-            with patch.object(self.behaviour.current_behaviour, "_write_kv") as mock_write_kv:
-                with patch.object(self.behaviour.current_behaviour.context.logger, "info") as mock_logger:
+
+        with patch.object(
+            self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
+        ):
+            with patch.object(
+                self.behaviour.current_behaviour, "_write_kv"
+            ) as mock_write_kv:
+                with patch.object(
+                    self.behaviour.current_behaviour.context.logger, "info"
+                ) as mock_logger:
                     # Call _track_opportunities with composite_filtered stage
-                    generator = self.behaviour.current_behaviour._track_opportunities(opportunities, "composite_filtered")
-                    
+                    generator = self.behaviour.current_behaviour._track_opportunities(
+                        opportunities, "composite_filtered"
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Check that the filtering criteria was set correctly
                     call_args = mock_write_kv.call_args[0][0]
                     tracking_data = json.loads(call_args["opportunity_tracking"])
                     round_key = f"round_{self.behaviour.current_behaviour.synchronized_data.period_count}"
-                    
+
                     assert "composite_filtered" in tracking_data[round_key]
-                    assert tracking_data[round_key]["composite_filtered"]["filtering_criteria"] == "Token count >= 2, TVL >= 1000, APR > 0, top 10 by composite score"
-                    
+                    assert (
+                        tracking_data[round_key]["composite_filtered"][
+                            "filtering_criteria"
+                        ]
+                        == "Token count >= 2, TVL >= 1000, APR > 0, top 10 by composite score"
+                    )
+
                     # Should log successful tracking
                     assert mock_logger.call_count == 1
                     log_call = mock_logger.call_args[0][0]
@@ -4111,26 +4322,32 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         """Test _track_opportunities logs successful tracking"""
         opportunities = [
             {"pool_address": "0x0000000000000000000000000000000000000123", "apr": 15.0},
-            {"pool_address": "0x0000000000000000000000000000000000000456", "apr": 12.0}
+            {"pool_address": "0x0000000000000000000000000000000000000456", "apr": 12.0},
         ]
-        
+
         # Mock _read_kv to return empty data
         def mock_read_kv(*args, **kwargs):
             yield
             return {}
-        
-        with patch.object(self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv):
+
+        with patch.object(
+            self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
+        ):
             with patch.object(self.behaviour.current_behaviour, "_write_kv"):
-                with patch.object(self.behaviour.current_behaviour.context.logger, "info") as mock_logger:
+                with patch.object(
+                    self.behaviour.current_behaviour.context.logger, "info"
+                ) as mock_logger:
                     # Call _track_opportunities
-                    generator = self.behaviour.current_behaviour._track_opportunities(opportunities, "final_selection")
-                    
+                    generator = self.behaviour.current_behaviour._track_opportunities(
+                        opportunities, "final_selection"
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should log successful tracking with correct count
                     assert mock_logger.call_count == 1
                     log_call = mock_logger.call_args[0][0]
@@ -4142,66 +4359,80 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
+
             def mock_read_kv(*args, **kwargs):
                 yield
                 return {}
-            
+
             with patch.object(
                 self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_logger.assert_called_once_with("No opportunity tracking data to push")
+
+                mock_logger.assert_called_once_with(
+                    "No opportunity tracking data to push"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_empty_tracking_data(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when opportunity_tracking is empty"""
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
+
             def mock_read_kv(*args, **kwargs):
                 yield
                 return {"opportunity_tracking": ""}
-            
+
             with patch.object(
                 self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_logger.assert_called_once_with("No opportunity tracking data to push")
 
+                mock_logger.assert_called_once_with(
+                    "No opportunity tracking data to push"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_json_decode_error(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb with JSON decode error"""
+
         def mock_get_agent_registry(*args, **kwargs):
             yield
-            return {"agent_id": "test_agent_id", "agent_name": "test_agent", "agent_address": "0x123"}
-        
+            return {
+                "agent_id": "test_agent_id",
+                "agent_name": "test_agent",
+                "agent_address": "0x123",
+            }
+
         def mock_get_agent_type(*args, **kwargs):
             yield
             return {"type_name": "test_type"}
-        
+
         def mock_create_agent_attr(*args, **kwargs):
             yield
             return {"success": True}
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
             # Mock the second _read_kv call for attr_def
             call_count = 0
-            
+
             def side_effect_read_kv(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
@@ -4211,119 +4442,156 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 else:
                     yield
                     return {"opportunity_attr_def": '{"attr_def_id": "test_attr_def"}'}
-            
+
             # Mock required attributes to avoid NoneType errors
             self.behaviour.current_behaviour.synchronized_data.period_count = 5
             self.behaviour.current_behaviour.shared_state.trading_type = "test_trading"
-            self.behaviour.current_behaviour.shared_state.selected_protocols = ["protocol1"]
+            self.behaviour.current_behaviour.shared_state.selected_protocols = [
+                "protocol1"
+            ]
             self.behaviour.current_behaviour.current_positions = [{"test": "position"}]
-            self.behaviour.current_behaviour.selected_opportunities = [{"test": "opportunity"}]
-            self.behaviour.current_behaviour.params.target_investment_chains = ["chain1"]
-            
+            self.behaviour.current_behaviour.selected_opportunities = [
+                {"test": "opportunity"}
+            ]
+            self.behaviour.current_behaviour.params.target_investment_chains = [
+                "chain1"
+            ]
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ), patch.object(
-                self.behaviour.current_behaviour, "create_agent_attribute", side_effect=mock_create_agent_attr
+                self.behaviour.current_behaviour,
+                "create_agent_attribute",
+                side_effect=mock_create_agent_attr,
             ), patch.object(
                 self.behaviour.current_behaviour, "_write_kv"
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_current_timestamp", return_value=1234567890
+                self.behaviour.current_behaviour,
+                "_get_current_timestamp",
+                return_value=1234567890,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_logger.assert_called_with("Successfully pushed opportunity data to MirrorDB and cleaned KV store")
+
+                mock_logger.assert_called_with(
+                    "Successfully pushed opportunity data to MirrorDB and cleaned KV store"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_failed_agent_registry(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when agent registry fails"""
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
+
             def mock_read_kv(*args, **kwargs):
                 yield
                 return {"opportunity_tracking": '{"test": "data"}'}
-            
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
                 return None
-            
+
             with patch.object(
                 self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_logger.assert_called_once_with("Failed to get or create agent registry")
+
+                mock_logger.assert_called_once_with(
+                    "Failed to get or create agent registry"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_failed_agent_type(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when agent type fails"""
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
+
             def mock_read_kv(*args, **kwargs):
                 yield
                 return {"opportunity_tracking": '{"test": "data"}'}
-            
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
                 return {"agent_id": "test_agent_id", "agent_name": "test_agent"}
-            
+
             def mock_get_agent_type(*args, **kwargs):
                 yield
                 return None
-            
+
             with patch.object(
                 self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_logger.assert_called_once_with("Failed to get or create agent type")
+
+                mock_logger.assert_called_once_with(
+                    "Failed to get or create agent type"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_failed_create_attr_def(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when creating attr def fails"""
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
                 return {"agent_id": "test_agent_id", "agent_name": "test_agent"}
-            
+
             def mock_get_agent_type(*args, **kwargs):
                 yield
                 return {"type_name": "test_type"}
-            
+
             def mock_create_attr_def(*args, **kwargs):
                 yield
                 return None
-            
+
             call_count = 0
-            
+
             def side_effect_read_kv(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
@@ -4333,25 +4601,37 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 else:
                     yield
                     return {}  # No attr_def data
-            
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ), patch.object(
-                self.behaviour.current_behaviour, "_create_opportunity_attr_def", side_effect=mock_create_attr_def
+                self.behaviour.current_behaviour,
+                "_create_opportunity_attr_def",
+                side_effect=mock_create_attr_def,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_logger.assert_called_once_with("Failed to create opportunity attribute definition")
+
+                mock_logger.assert_called_once_with(
+                    "Failed to create opportunity attribute definition"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_none_attr_def_value(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when attr def value is None"""
@@ -4360,24 +4640,29 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         ) as mock_warning_logger, patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_info_logger:
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
-                return {"agent_id": "test_agent_id", "agent_name": "test_agent", "agent_address": "0x123"}
-            
+                return {
+                    "agent_id": "test_agent_id",
+                    "agent_name": "test_agent",
+                    "agent_address": "0x123",
+                }
+
             def mock_get_agent_type(*args, **kwargs):
                 yield
                 return {"type_name": "test_type"}
-            
+
             def mock_create_attr_def(*args, **kwargs):
                 yield
                 return {"attr_def_id": "new_attr_def"}
-            
+
             def mock_create_agent_attr(*args, **kwargs):
                 yield
                 return {"success": True}
-            
+
             call_count = 0
-            
+
             def side_effect_read_kv(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
@@ -4387,40 +4672,64 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 else:
                     yield
                     return {"opportunity_attr_def": None}  # None value
-            
+
             # Mock required attributes to avoid NoneType errors
             self.behaviour.current_behaviour.synchronized_data.period_count = 5
             self.behaviour.current_behaviour.shared_state.trading_type = "test_trading"
-            self.behaviour.current_behaviour.shared_state.selected_protocols = ["protocol1"]
+            self.behaviour.current_behaviour.shared_state.selected_protocols = [
+                "protocol1"
+            ]
             self.behaviour.current_behaviour.current_positions = [{"test": "position"}]
-            self.behaviour.current_behaviour.selected_opportunities = [{"test": "opportunity"}]
-            self.behaviour.current_behaviour.params.target_investment_chains = ["chain1"]
-            
+            self.behaviour.current_behaviour.selected_opportunities = [
+                {"test": "opportunity"}
+            ]
+            self.behaviour.current_behaviour.params.target_investment_chains = [
+                "chain1"
+            ]
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ), patch.object(
-                self.behaviour.current_behaviour, "_create_opportunity_attr_def", side_effect=mock_create_attr_def
+                self.behaviour.current_behaviour,
+                "_create_opportunity_attr_def",
+                side_effect=mock_create_attr_def,
             ), patch.object(
-                self.behaviour.current_behaviour, "create_agent_attribute", side_effect=mock_create_agent_attr
+                self.behaviour.current_behaviour,
+                "create_agent_attribute",
+                side_effect=mock_create_agent_attr,
             ), patch.object(
                 self.behaviour.current_behaviour, "_write_kv"
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_current_timestamp", return_value=1234567890
+                self.behaviour.current_behaviour,
+                "_get_current_timestamp",
+                return_value=1234567890,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_warning_logger.assert_called_once_with("Opportunity attribute definition data is None, creating new one")
-                mock_info_logger.assert_called_with("Successfully pushed opportunity data to MirrorDB and cleaned KV store")
+
+                mock_warning_logger.assert_called_once_with(
+                    "Opportunity attribute definition data is None, creating new one"
+                )
+                mock_info_logger.assert_called_with(
+                    "Successfully pushed opportunity data to MirrorDB and cleaned KV store"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_attr_def_json_error(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb with attr def JSON error"""
@@ -4429,24 +4738,29 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         ) as mock_warning_logger, patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_info_logger:
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
-                return {"agent_id": "test_agent_id", "agent_name": "test_agent", "agent_address": "0x123"}
-            
+                return {
+                    "agent_id": "test_agent_id",
+                    "agent_name": "test_agent",
+                    "agent_address": "0x123",
+                }
+
             def mock_get_agent_type(*args, **kwargs):
                 yield
                 return {"type_name": "test_type"}
-            
+
             def mock_create_attr_def(*args, **kwargs):
                 yield
                 return {"attr_def_id": "new_attr_def"}
-            
+
             def mock_create_agent_attr(*args, **kwargs):
                 yield
                 return {"success": True}
-            
+
             call_count = 0
-            
+
             def side_effect_read_kv(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
@@ -4456,65 +4770,92 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 else:
                     yield
                     return {"opportunity_attr_def": "invalid_json{"}  # Invalid JSON
-            
+
             # Mock required attributes to avoid NoneType errors
             self.behaviour.current_behaviour.synchronized_data.period_count = 5
             self.behaviour.current_behaviour.shared_state.trading_type = "test_trading"
-            self.behaviour.current_behaviour.shared_state.selected_protocols = ["protocol1"]
+            self.behaviour.current_behaviour.shared_state.selected_protocols = [
+                "protocol1"
+            ]
             self.behaviour.current_behaviour.current_positions = [{"test": "position"}]
-            self.behaviour.current_behaviour.selected_opportunities = [{"test": "opportunity"}]
-            self.behaviour.current_behaviour.params.target_investment_chains = ["chain1"]
-            
+            self.behaviour.current_behaviour.selected_opportunities = [
+                {"test": "opportunity"}
+            ]
+            self.behaviour.current_behaviour.params.target_investment_chains = [
+                "chain1"
+            ]
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ), patch.object(
-                self.behaviour.current_behaviour, "_create_opportunity_attr_def", side_effect=mock_create_attr_def
+                self.behaviour.current_behaviour,
+                "_create_opportunity_attr_def",
+                side_effect=mock_create_attr_def,
             ), patch.object(
-                self.behaviour.current_behaviour, "create_agent_attribute", side_effect=mock_create_agent_attr
+                self.behaviour.current_behaviour,
+                "create_agent_attribute",
+                side_effect=mock_create_agent_attr,
             ), patch.object(
                 self.behaviour.current_behaviour, "_write_kv"
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_current_timestamp", return_value=1234567890
+                self.behaviour.current_behaviour,
+                "_get_current_timestamp",
+                return_value=1234567890,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
+
                 # Should log warning about JSON error
                 assert mock_warning_logger.call_count == 1
                 warning_call = mock_warning_logger.call_args[0][0]
                 assert "Error parsing opportunity attribute definition:" in warning_call
                 assert "creating new one" in warning_call
-                
-                mock_info_logger.assert_called_with("Successfully pushed opportunity data to MirrorDB and cleaned KV store")
+
+                mock_info_logger.assert_called_with(
+                    "Successfully pushed opportunity data to MirrorDB and cleaned KV store"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_failed_mirrordb_push(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when MirrorDB push fails"""
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
-                return {"agent_id": "test_agent_id", "agent_name": "test_agent", "agent_address": "0x123"}
-            
+                return {
+                    "agent_id": "test_agent_id",
+                    "agent_name": "test_agent",
+                    "agent_address": "0x123",
+                }
+
             def mock_get_agent_type(*args, **kwargs):
                 yield
                 return {"type_name": "test_type"}
-            
+
             def mock_create_agent_attr(*args, **kwargs):
                 yield
                 return None  # Failed push
-            
+
             call_count = 0
-            
+
             def side_effect_read_kv(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
@@ -4524,66 +4865,93 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 else:
                     yield
                     return {"opportunity_attr_def": '{"attr_def_id": "test_attr_def"}'}
-            
+
             # Mock required attributes to avoid NoneType errors
             self.behaviour.current_behaviour.synchronized_data.period_count = 5
             self.behaviour.current_behaviour.shared_state.trading_type = "test_trading"
-            self.behaviour.current_behaviour.shared_state.selected_protocols = ["protocol1"]
+            self.behaviour.current_behaviour.shared_state.selected_protocols = [
+                "protocol1"
+            ]
             self.behaviour.current_behaviour.current_positions = [{"test": "position"}]
-            self.behaviour.current_behaviour.selected_opportunities = [{"test": "opportunity"}]
-            self.behaviour.current_behaviour.params.target_investment_chains = ["chain1"]
-            
+            self.behaviour.current_behaviour.selected_opportunities = [
+                {"test": "opportunity"}
+            ]
+            self.behaviour.current_behaviour.params.target_investment_chains = [
+                "chain1"
+            ]
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ), patch.object(
-                self.behaviour.current_behaviour, "create_agent_attribute", side_effect=mock_create_agent_attr
+                self.behaviour.current_behaviour,
+                "create_agent_attribute",
+                side_effect=mock_create_agent_attr,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_current_timestamp", return_value=1234567890
+                self.behaviour.current_behaviour,
+                "_get_current_timestamp",
+                return_value=1234567890,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_logger.assert_called_once_with("Failed to push opportunity data to MirrorDB")
+
+                mock_logger.assert_called_once_with(
+                    "Failed to push opportunity data to MirrorDB"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_exception_handling(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb exception handling"""
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
+
             def mock_read_kv_exception(*args, **kwargs):
                 yield
                 raise Exception("Test exception")
-            
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv_exception
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=mock_read_kv_exception,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
-                mock_logger.assert_called_once_with("Error pushing opportunity metrics to MirrorDB: Test exception")
+
+                mock_logger.assert_called_once_with(
+                    "Error pushing opportunity metrics to MirrorDB: Test exception"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_none_tracking_value(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when opportunity_tracking value is None"""
-        
+
         class TrickyDict(dict):
             def __init__(self):
                 super().__init__()
                 self.call_count = 0
-                
+
             def get(self, key, default=None):
                 self.call_count += 1
                 if key == "opportunity_tracking":
@@ -4592,62 +4960,74 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                     else:
                         return None
                 return super().get(key, default)
-            
+
             def __bool__(self):
                 # Make sure the dict itself is truthy
                 return True
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
+
             def mock_read_kv(*args, **kwargs):
                 yield
                 return TrickyDict()
-            
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
-                return None  
-            
+                return None
+
             with patch.object(
                 self.behaviour.current_behaviour, "_read_kv", side_effect=mock_read_kv
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
+
                 # Should fail at agent registry step
-                mock_logger.assert_called_once_with("Failed to get or create agent registry")
+                mock_logger.assert_called_once_with(
+                    "Failed to get or create agent registry"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_create_attr_def_success(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when creating attr def succeeds"""
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
-                return {"agent_id": "test_agent_id", "agent_name": "test_agent", "agent_address": "0x123"}
-            
+                return {
+                    "agent_id": "test_agent_id",
+                    "agent_name": "test_agent",
+                    "agent_address": "0x123",
+                }
+
             def mock_get_agent_type(*args, **kwargs):
                 yield
                 return {"type_name": "test_type"}
-            
+
             def mock_create_attr_def(*args, **kwargs):
                 yield
                 return {"attr_def_id": "new_attr_def"}  # Success
-            
+
             def mock_create_agent_attr(*args, **kwargs):
                 yield
                 return {"success": True}
-            
+
             call_count = 0
-            
+
             def side_effect_read_kv(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
@@ -4657,115 +5037,94 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 else:
                     yield
                     return {}  # No attr_def data, triggers creation path
-            
+
             # Mock required attributes
             self.behaviour.current_behaviour.synchronized_data.period_count = 5
             self.behaviour.current_behaviour.shared_state.trading_type = "test_trading"
-            self.behaviour.current_behaviour.shared_state.selected_protocols = ["protocol1"]
+            self.behaviour.current_behaviour.shared_state.selected_protocols = [
+                "protocol1"
+            ]
             self.behaviour.current_behaviour.current_positions = [{"test": "position"}]
-            self.behaviour.current_behaviour.selected_opportunities = [{"test": "opportunity"}]
-            self.behaviour.current_behaviour.params.target_investment_chains = ["chain1"]
-            
+            self.behaviour.current_behaviour.selected_opportunities = [
+                {"test": "opportunity"}
+            ]
+            self.behaviour.current_behaviour.params.target_investment_chains = [
+                "chain1"
+            ]
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ), patch.object(
-                self.behaviour.current_behaviour, "_create_opportunity_attr_def", side_effect=mock_create_attr_def
+                self.behaviour.current_behaviour,
+                "_create_opportunity_attr_def",
+                side_effect=mock_create_attr_def,
             ), patch.object(
-                self.behaviour.current_behaviour, "create_agent_attribute", side_effect=mock_create_agent_attr
+                self.behaviour.current_behaviour,
+                "create_agent_attribute",
+                side_effect=mock_create_agent_attr,
             ), patch.object(
                 self.behaviour.current_behaviour, "_write_kv"
             ) as mock_write_kv, patch.object(
-                self.behaviour.current_behaviour, "_get_current_timestamp", return_value=1234567890
+                self.behaviour.current_behaviour,
+                "_get_current_timestamp",
+                return_value=1234567890,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
+
                 # Should have called _write_kv twice: once for attr_def and once for cleanup
                 assert mock_write_kv.call_count == 2
                 # First call should be for attr_def creation
                 first_call = mock_write_kv.call_args_list[0][0][0]
                 assert "opportunity_attr_def" in first_call
-                mock_logger.assert_called_with("Successfully pushed opportunity data to MirrorDB and cleaned KV store")
+                mock_logger.assert_called_with(
+                    "Successfully pushed opportunity data to MirrorDB and cleaned KV store"
+                )
 
-    def test_push_opportunity_metrics_to_mirrordb_none_attr_def_create_fails(self) -> None:
+    def test_push_opportunity_metrics_to_mirrordb_none_attr_def_create_fails(
+        self,
+    ) -> None:
         """Test _push_opportunity_metrics_to_mirrordb when attr def creation fails after None value"""
-        
-        with patch.object(
-            self.behaviour.current_behaviour.context.logger, "error"
-        ) as mock_logger:
-            def mock_get_agent_registry(*args, **kwargs):
-                yield
-                return {"agent_id": "test_agent_id", "agent_name": "test_agent", "agent_address": "0x123"}
-            
-            def mock_get_agent_type(*args, **kwargs):
-                yield
-                return {"type_name": "test_type"}
-            
-            def mock_create_attr_def(*args, **kwargs):
-                yield
-                return None  # Creation fails
-            
-            call_count = 0
-            
-            def side_effect_read_kv(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                if call_count == 1:
-                    yield
-                    return {"opportunity_tracking": '{"test": "data"}'}
-                else:
-                    yield
-                    return {"opportunity_attr_def": None}  # None value, triggers creation path
-            
-            with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
-            ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
-            ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
-            ), patch.object(
-                self.behaviour.current_behaviour, "_create_opportunity_attr_def", side_effect=mock_create_attr_def
-            ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
-                try:
-                    while True:
-                        next(generator)
-                except StopIteration:
-                    pass
-                
-                # Should log error
-                mock_logger.assert_called_once_with("Failed to create opportunity attribute definition")
 
-    def test_push_opportunity_metrics_to_mirrordb_json_error_attr_def_create_fails(self) -> None:
-        """Test _push_opportunity_metrics_to_mirrordb when attr def creation fails after JSON error"""
-        
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
-                return {"agent_id": "test_agent_id", "agent_name": "test_agent", "agent_address": "0x123"}
-            
+                return {
+                    "agent_id": "test_agent_id",
+                    "agent_name": "test_agent",
+                    "agent_address": "0x123",
+                }
+
             def mock_get_agent_type(*args, **kwargs):
                 yield
                 return {"type_name": "test_type"}
-            
+
             def mock_create_attr_def(*args, **kwargs):
                 yield
                 return None  # Creation fails
-            
+
             call_count = 0
-            
+
             def side_effect_read_kv(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
@@ -4774,27 +5133,112 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                     return {"opportunity_tracking": '{"test": "data"}'}
                 else:
                     yield
-                    return {"opportunity_attr_def": "invalid_json{"}  # Invalid JSON, triggers creation path
-            
+                    return {
+                        "opportunity_attr_def": None
+                    }  # None value, triggers creation path
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ), patch.object(
-                self.behaviour.current_behaviour, "_create_opportunity_attr_def", side_effect=mock_create_attr_def
+                self.behaviour.current_behaviour,
+                "_create_opportunity_attr_def",
+                side_effect=mock_create_attr_def,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
+
                 # Should log error
-                mock_logger.assert_called_once_with("Failed to create opportunity attribute definition")
+                mock_logger.assert_called_once_with(
+                    "Failed to create opportunity attribute definition"
+                )
+
+    def test_push_opportunity_metrics_to_mirrordb_json_error_attr_def_create_fails(
+        self,
+    ) -> None:
+        """Test _push_opportunity_metrics_to_mirrordb when attr def creation fails after JSON error"""
+
+        with patch.object(
+            self.behaviour.current_behaviour.context.logger, "error"
+        ) as mock_logger:
+
+            def mock_get_agent_registry(*args, **kwargs):
+                yield
+                return {
+                    "agent_id": "test_agent_id",
+                    "agent_name": "test_agent",
+                    "agent_address": "0x123",
+                }
+
+            def mock_get_agent_type(*args, **kwargs):
+                yield
+                return {"type_name": "test_type"}
+
+            def mock_create_attr_def(*args, **kwargs):
+                yield
+                return None  # Creation fails
+
+            call_count = 0
+
+            def side_effect_read_kv(*args, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    yield
+                    return {"opportunity_tracking": '{"test": "data"}'}
+                else:
+                    yield
+                    return {
+                        "opportunity_attr_def": "invalid_json{"
+                    }  # Invalid JSON, triggers creation path
+
+            with patch.object(
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
+            ), patch.object(
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
+            ), patch.object(
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
+            ), patch.object(
+                self.behaviour.current_behaviour,
+                "_create_opportunity_attr_def",
+                side_effect=mock_create_attr_def,
+            ):
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
+                try:
+                    while True:
+                        next(generator)
+                except StopIteration:
+                    pass
+
+                # Should log error
+                mock_logger.assert_called_once_with(
+                    "Failed to create opportunity attribute definition"
+                )
 
     def test_push_opportunity_metrics_to_mirrordb_success_path(self) -> None:
         """Test _push_opportunity_metrics_to_mirrordb successful execution"""
@@ -4802,25 +5246,25 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger, patch("os.environ.get") as mock_env:
             mock_env.return_value = "test:agent:hash"
-            
+
             def mock_get_agent_registry(*args, **kwargs):
                 yield
                 return {
-                    "agent_id": "test_agent_id", 
+                    "agent_id": "test_agent_id",
                     "agent_name": "test_agent",
-                    "agent_address": "0x123"
+                    "agent_address": "0x123",
                 }
-            
+
             def mock_get_agent_type(*args, **kwargs):
                 yield
                 return {"type_name": "test_type"}
-            
+
             def mock_create_agent_attr(*args, **kwargs):
                 yield
                 return {"success": True}
-            
+
             call_count = 0
-            
+
             def side_effect_read_kv(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
@@ -4830,39 +5274,59 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 else:
                     yield
                     return {"opportunity_attr_def": '{"attr_def_id": "test_attr_def"}'}
-            
+
             # Mock required attributes
             self.behaviour.current_behaviour.synchronized_data.period_count = 5
             self.behaviour.current_behaviour.shared_state.trading_type = "test_trading"
-            self.behaviour.current_behaviour.shared_state.selected_protocols = ["protocol1"]
+            self.behaviour.current_behaviour.shared_state.selected_protocols = [
+                "protocol1"
+            ]
             self.behaviour.current_behaviour.current_positions = [{"test": "position"}]
-            self.behaviour.current_behaviour.selected_opportunities = [{"test": "opportunity"}]
-            self.behaviour.current_behaviour.params.target_investment_chains = ["chain1"]
-            
+            self.behaviour.current_behaviour.selected_opportunities = [
+                {"test": "opportunity"}
+            ]
+            self.behaviour.current_behaviour.params.target_investment_chains = [
+                "chain1"
+            ]
+
             with patch.object(
-                self.behaviour.current_behaviour, "_read_kv", side_effect=side_effect_read_kv
+                self.behaviour.current_behaviour,
+                "_read_kv",
+                side_effect=side_effect_read_kv,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_registry", side_effect=mock_get_agent_registry
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_registry",
+                side_effect=mock_get_agent_registry,
             ), patch.object(
-                self.behaviour.current_behaviour, "_get_or_create_agent_type", side_effect=mock_get_agent_type
+                self.behaviour.current_behaviour,
+                "_get_or_create_agent_type",
+                side_effect=mock_get_agent_type,
             ), patch.object(
-                self.behaviour.current_behaviour, "create_agent_attribute", side_effect=mock_create_agent_attr
+                self.behaviour.current_behaviour,
+                "create_agent_attribute",
+                side_effect=mock_create_agent_attr,
             ), patch.object(
                 self.behaviour.current_behaviour, "_write_kv"
             ) as mock_write_kv, patch.object(
-                self.behaviour.current_behaviour, "_get_current_timestamp", return_value=1234567890
+                self.behaviour.current_behaviour,
+                "_get_current_timestamp",
+                return_value=1234567890,
             ):
-                generator = self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
-                
+                generator = (
+                    self.behaviour.current_behaviour._push_opportunity_metrics_to_mirrordb()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
+
                 # Should clean up KV store after success
                 mock_write_kv.assert_called_with({"opportunity_tracking": "{}"})
-                mock_logger.assert_called_with("Successfully pushed opportunity data to MirrorDB and cleaned KV store")
+                mock_logger.assert_called_with(
+                    "Successfully pushed opportunity data to MirrorDB and cleaned KV store"
+                )
 
     def test_create_opportunity_attr_def_empty_agent_type(self) -> None:
         """Test _create_opportunity_attr_def with empty agent_type."""
@@ -4873,7 +5337,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             generator = self.behaviour.current_behaviour._create_opportunity_attr_def(
                 "test_agent_id", None
             )
-            
+
             try:
                 result = next(generator)
                 # Should return None immediately
@@ -4881,7 +5345,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             except StopIteration as e:
                 result = e.value
                 assert result is None
-            
+
             mock_logger.assert_called_once_with("Agent type is empty or None")
 
     def test_create_opportunity_attr_def_empty_dict_agent_type(self) -> None:
@@ -4893,7 +5357,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             generator = self.behaviour.current_behaviour._create_opportunity_attr_def(
                 "test_agent_id", {}
             )
-            
+
             try:
                 result = next(generator)
                 # Should return None immediately
@@ -4901,7 +5365,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             except StopIteration as e:
                 result = e.value
                 assert result is None
-            
+
             mock_logger.assert_called_once_with("Agent type is empty or None")
 
     def test_create_opportunity_attr_def_missing_type_id(self) -> None:
@@ -4910,11 +5374,11 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
             agent_type = {"name": "test_agent", "other_field": "value"}
-            
+
             generator = self.behaviour.current_behaviour._create_opportunity_attr_def(
                 "test_agent_id", agent_type
             )
-            
+
             try:
                 result = next(generator)
                 # Should return None immediately
@@ -4922,7 +5386,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             except StopIteration as e:
                 result = e.value
                 assert result is None
-            
+
             mock_logger.assert_called_once_with(
                 f"Agent type missing type_id. Agent type data: {agent_type}"
             )
@@ -4934,39 +5398,42 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         ) as mock_info_logger:
             agent_type = {"type_id": "test_type_id", "name": "test_agent"}
             expected_attr_def = {"attr_def_id": "created_attr_def", "success": True}
-            
+
             def mock_create_attribute_definition(*args, **kwargs):
                 yield
                 return expected_attr_def
-            
+
             with patch.object(
-                self.behaviour.current_behaviour, "create_attribute_definition", 
-                side_effect=mock_create_attribute_definition
+                self.behaviour.current_behaviour,
+                "create_attribute_definition",
+                side_effect=mock_create_attribute_definition,
             ) as mock_create_attr:
-                generator = self.behaviour.current_behaviour._create_opportunity_attr_def(
-                    "test_agent_id", agent_type
+                generator = (
+                    self.behaviour.current_behaviour._create_opportunity_attr_def(
+                        "test_agent_id", agent_type
+                    )
                 )
-                
+
                 # First yield from create_attribute_definition
                 next(generator)
-                
+
                 try:
                     result = next(generator)
                 except StopIteration as e:
                     result = e.value
-                
+
                 assert result == expected_attr_def
-                
+
                 # Verify the create_attribute_definition was called with correct parameters
                 mock_create_attr.assert_called_once_with(
                     "test_type_id",
-                    "opportunity_metrics", 
+                    "opportunity_metrics",
                     "json",
                     True,
                     "{}",
-                    "test_agent_id"
+                    "test_agent_id",
                 )
-                
+
                 # Verify info log was called
                 mock_info_logger.assert_called_once_with(
                     "Creating opportunity attribute definition with type_id: test_type_id"
@@ -4978,37 +5445,38 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
             agent_type = {"type_id": "test_type_id", "name": "test_agent"}
-            
+
             def mock_create_attribute_definition(*args, **kwargs):
                 yield
                 raise Exception("Test exception during attribute creation")
-            
+
             with patch.object(
-                self.behaviour.current_behaviour, "create_attribute_definition", 
-                side_effect=mock_create_attribute_definition
+                self.behaviour.current_behaviour,
+                "create_attribute_definition",
+                side_effect=mock_create_attribute_definition,
             ):
-                generator = self.behaviour.current_behaviour._create_opportunity_attr_def(
-                    "test_agent_id", agent_type
+                generator = (
+                    self.behaviour.current_behaviour._create_opportunity_attr_def(
+                        "test_agent_id", agent_type
+                    )
                 )
-                
+
                 # First yield from create_attribute_definition
                 next(generator)
-                
+
                 try:
                     result = next(generator)
                 except StopIteration as e:
                     result = e.value
-                
+
                 assert result is None
-                
+
                 # Verify error logs were called
                 assert mock_error_logger.call_count == 2
                 mock_error_logger.assert_any_call(
                     "Error creating opportunity attribute definition: Test exception during attribute creation"
                 )
-                mock_error_logger.assert_any_call(
-                    f"Agent type data: {agent_type}"
-                )
+                mock_error_logger.assert_any_call(f"Agent type data: {agent_type}")
 
     def test_create_opportunity_attr_def_create_attr_def_returns_none(self) -> None:
         """Test _create_opportunity_attr_def when create_attribute_definition returns None."""
@@ -5016,29 +5484,32 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_info_logger:
             agent_type = {"type_id": "test_type_id", "name": "test_agent"}
-            
+
             def mock_create_attribute_definition(*args, **kwargs):
                 yield
                 return None  # Simulate failure in create_attribute_definition
-            
+
             with patch.object(
-                self.behaviour.current_behaviour, "create_attribute_definition", 
-                side_effect=mock_create_attribute_definition
+                self.behaviour.current_behaviour,
+                "create_attribute_definition",
+                side_effect=mock_create_attribute_definition,
             ):
-                generator = self.behaviour.current_behaviour._create_opportunity_attr_def(
-                    "test_agent_id", agent_type
+                generator = (
+                    self.behaviour.current_behaviour._create_opportunity_attr_def(
+                        "test_agent_id", agent_type
+                    )
                 )
-                
+
                 # First yield from create_attribute_definition
                 next(generator)
-                
+
                 try:
                     result = next(generator)
                 except StopIteration as e:
                     result = e.value
-                
+
                 assert result is None
-                
+
                 # Verify info log was still called
                 mock_info_logger.assert_called_once_with(
                     "Creating opportunity attribute definition with type_id: test_type_id"
@@ -5053,7 +5524,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             result = self.behaviour.current_behaviour.execute_strategy(
                 "arg1", "arg2", other_param="value"
             )
-            
+
             assert result is None
             mock_logger.assert_called_once_with(
                 "No trading strategy was given in kwargs={'other_param': 'value'}!"
@@ -5068,7 +5539,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             result = self.behaviour.current_behaviour.execute_strategy(
                 "arg1", "arg2", strategy=None, other_param="value"
             )
-            
+
             assert result is None
             mock_logger.assert_called_once_with(
                 "No trading strategy was given in kwargs={'other_param': 'value'}!"
@@ -5086,7 +5557,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                 result = self.behaviour.current_behaviour.execute_strategy(
                     "arg1", "arg2", strategy="test_strategy", other_param="value"
                 )
-                
+
                 assert result is None
                 mock_strategy_exec.assert_called_once_with("test_strategy")
                 mock_logger.assert_called_once_with(
@@ -5101,15 +5572,16 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             # Mock strategy_exec to return valid strategy data
             strategy_exec = "def some_other_function(): pass"
             callable_method = "missing_method"
-            
+
             with patch.object(
-                self.behaviour.current_behaviour, "strategy_exec", 
-                return_value=(strategy_exec, callable_method)
+                self.behaviour.current_behaviour,
+                "strategy_exec",
+                return_value=(strategy_exec, callable_method),
             ):
                 result = self.behaviour.current_behaviour.execute_strategy(
                     "arg1", "arg2", strategy="test_strategy", other_param="value"
                 )
-                
+
                 assert result is None
                 # The actual error message includes the strategy tuple, not just the strategy name
                 mock_logger.assert_called_once_with(
@@ -5125,41 +5597,45 @@ def test_method(*args, **kwargs):
 """
         callable_method = "test_method"
         expected_result = {
-            "success": True, 
-            "args": ("arg1", "arg2"), 
-            "kwargs": {"other_param": "value"}
+            "success": True,
+            "args": ("arg1", "arg2"),
+            "kwargs": {"other_param": "value"},
         }
-        
+
         with patch.object(
-            self.behaviour.current_behaviour, "strategy_exec", 
-            return_value=(strategy_exec, callable_method)
+            self.behaviour.current_behaviour,
+            "strategy_exec",
+            return_value=(strategy_exec, callable_method),
         ):
             result = self.behaviour.current_behaviour.execute_strategy(
                 "arg1", "arg2", strategy="test_strategy", other_param="value"
             )
-            
+
             assert result == expected_result
 
     def test_execute_strategy_method_cleanup_in_globals(self) -> None:
         """Test execute_strategy cleans up method from globals if it exists."""
         # Mock strategy_exec to return valid strategy data
-        callable_method = "test_cleanup_method_unique_12345"  # Use unique name to avoid conflicts
+        callable_method = (
+            "test_cleanup_method_unique_12345"  # Use unique name to avoid conflicts
+        )
         strategy_exec = f"""
 def {callable_method}(*args, **kwargs):
     return {{"cleaned_up": True}}
 """
-        
+
         # Pre-populate globals with the method name to trigger the cleanup logic
         globals()[callable_method] = lambda: "old_method"
-        
+
         with patch.object(
-            self.behaviour.current_behaviour, "strategy_exec", 
-            return_value=(strategy_exec, callable_method)
+            self.behaviour.current_behaviour,
+            "strategy_exec",
+            return_value=(strategy_exec, callable_method),
         ):
             result = self.behaviour.current_behaviour.execute_strategy(
                 strategy="test_strategy"
             )
-            
+
             assert result == {"cleaned_up": True}
             # The method should exist in globals after exec
             assert callable_method in globals()
@@ -5175,21 +5651,24 @@ def dynamic_test_method(*args, **kwargs):
     return {"dynamic": True, "total_args": len(args) + len(kwargs)}
 """
         callable_method = "dynamic_test_method"
-        
+
         with patch.object(
-            self.behaviour.current_behaviour, "strategy_exec", 
-            return_value=(strategy_exec, callable_method)
+            self.behaviour.current_behaviour,
+            "strategy_exec",
+            return_value=(strategy_exec, callable_method),
         ):
             result = self.behaviour.current_behaviour.execute_strategy(
                 "a", "b", "c", strategy="test_strategy", x=1, y=2
             )
-            
+
             assert result == {"dynamic": True, "total_args": 5}  # 3 args + 2 kwargs
 
-    def test_merge_duplicate_bridge_swap_actions_redundant_same_chain_token(self) -> None:
+    def test_merge_duplicate_bridge_swap_actions_redundant_same_chain_token(
+        self,
+    ) -> None:
         """Test _merge_duplicate_bridge_swap_actions removes redundant same-chain same-token actions."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
-        
+
         # Create actions with redundant bridge swap (same chain and token)
         actions = [
             {"action": "other_action", "data": "test"},
@@ -5201,65 +5680,79 @@ def dynamic_test_method(*args, **kwargs):
                 "to_token": "0x123",  # Same token
                 "from_token_symbol": "USDC",
                 "to_token_symbol": "USDC",
-                "funds_percentage": 50
+                "funds_percentage": 50,
             },
-            {"action": "another_action", "data": "test2"}
+            {"action": "another_action", "data": "test2"},
         ]
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
-            
+            result = (
+                self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+                    actions
+                )
+            )
+
             # Should remove the redundant action
             assert len(result) == 2
             assert result[0]["action"] == "other_action"
             assert result[1]["action"] == "another_action"
-            
+
             # Should log the removal
             mock_logger.assert_called_once()
             log_call = mock_logger.call_args[0][0]
             assert "Removing redundant bridge swap action" in log_call
             assert "USDC on ethereum to USDC on ethereum" in log_call
 
-    def test_merge_duplicate_bridge_swap_actions_redundant_exception_handling(self) -> None:
+    def test_merge_duplicate_bridge_swap_actions_redundant_exception_handling(
+        self,
+    ) -> None:
         """Test _merge_duplicate_bridge_swap_actions handles exceptions when checking redundant actions."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
-        
+
         # Create action that will cause exception when accessing attributes
         class FailingAction(dict):
             def get(self, key, default=None):
                 if key == "from_chain":
                     raise ValueError("Test exception in redundant check")
                 return super().get(key, default)
-        
+
         actions = [
-            FailingAction({
-                "action": Action.FIND_BRIDGE_ROUTE.value,
-                "from_token": "0x123",
-                "to_token": "0x456"
-            })
+            FailingAction(
+                {
+                    "action": Action.FIND_BRIDGE_ROUTE.value,
+                    "from_token": "0x123",
+                    "to_token": "0x456",
+                }
+            )
         ]
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
-            
+            result = (
+                self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+                    actions
+                )
+            )
+
             # Should return original actions despite exception
             assert len(result) == 1
             assert result[0]["action"] == Action.FIND_BRIDGE_ROUTE.value
-            
+
             # Should log the error
             mock_logger.assert_called_once()
             log_call = mock_logger.call_args[0][0]
             assert "Error checking for redundant bridge swap action" in log_call
             assert "Test exception in redundant check" in log_call
 
-    def test_merge_duplicate_bridge_swap_actions_remove_redundant_and_update_list(self) -> None:
+    def test_merge_duplicate_bridge_swap_actions_remove_redundant_and_update_list(
+        self,
+    ) -> None:
         """Test _merge_duplicate_bridge_actions removes redundant actions and updates bridge_swap_actions list."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
-        
+
         actions = [
             {"action": "other_action"},
             {
@@ -5269,7 +5762,7 @@ def dynamic_test_method(*args, **kwargs):
                 "from_token": "0x123",
                 "to_token": "0x123",
                 "from_token_symbol": "USDC",
-                "to_token_symbol": "USDC"
+                "to_token_symbol": "USDC",
             },
             {
                 "action": Action.FIND_BRIDGE_ROUTE.value,
@@ -5277,15 +5770,17 @@ def dynamic_test_method(*args, **kwargs):
                 "to_chain": "arbitrum",
                 "from_token": "0x456",
                 "to_token": "0x789",
-                "funds_percentage": 30
-            }
+                "funds_percentage": 30,
+            },
         ]
-        
-        with patch.object(
-            self.behaviour.current_behaviour.context.logger, "info"
-        ):
-            result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
-            
+
+        with patch.object(self.behaviour.current_behaviour.context.logger, "info"):
+            result = (
+                self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+                    actions
+                )
+            )
+
             # Should remove redundant action but keep valid bridge action
             assert len(result) == 2
             assert result[0]["action"] == "other_action"
@@ -5296,7 +5791,7 @@ def dynamic_test_method(*args, **kwargs):
     def test_merge_duplicate_bridge_swap_actions_processing_exception(self) -> None:
         """Test _merge_duplicate_bridge_swap_actions handles exceptions when processing actions."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
-        
+
         # Simple test that exercises the function - the exception lines are covered by the overall function flow
         actions = [
             {
@@ -5305,12 +5800,14 @@ def dynamic_test_method(*args, **kwargs):
                 "to_chain": "polygon",
                 "from_token": "0x123",
                 "to_token": "0x456",
-                "funds_percentage": 50
+                "funds_percentage": 50,
             }
         ]
-        
-        result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
-        
+
+        result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+            actions
+        )
+
         # Should return actions (the function processes them)
         assert len(result) == 1
         assert result[0]["action"] == Action.FIND_BRIDGE_ROUTE.value
@@ -5318,7 +5815,7 @@ def dynamic_test_method(*args, **kwargs):
     def test_merge_duplicate_bridge_swap_actions_no_duplicates(self) -> None:
         """Test _merge_duplicate_bridge_swap_actions returns actions when no duplicates found."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
-        
+
         # Create actions with no duplicates
         actions = [
             {
@@ -5327,7 +5824,7 @@ def dynamic_test_method(*args, **kwargs):
                 "to_chain": "polygon",
                 "from_token": "0x123",
                 "to_token": "0x456",
-                "funds_percentage": 50
+                "funds_percentage": 50,
             },
             {
                 "action": Action.FIND_BRIDGE_ROUTE.value,
@@ -5335,12 +5832,14 @@ def dynamic_test_method(*args, **kwargs):
                 "to_chain": "arbitrum",
                 "from_token": "0x789",
                 "to_token": "0xabc",
-                "funds_percentage": 30
-            }
+                "funds_percentage": 30,
+            },
         ]
-        
-        result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
-        
+
+        result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+            actions
+        )
+
         # Should return original actions unchanged
         assert result == actions
         assert len(result) == 2
@@ -5350,14 +5849,14 @@ def dynamic_test_method(*args, **kwargs):
     def test_merge_duplicate_bridge_swap_actions_merge_exception_handling(self) -> None:
         """Test _merge_duplicate_bridge_swap_actions handles exceptions when merging duplicates."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
-        
+
         # Create duplicate actions that will cause exception during merging
         class FailingAction(dict):
             def get(self, key, default=None):
                 if key == "funds_percentage":
                     raise ValueError("Test exception in merging")
                 return super().get(key, default)
-        
+
         actions = [
             {
                 "action": Action.FIND_BRIDGE_ROUTE.value,
@@ -5365,36 +5864,44 @@ def dynamic_test_method(*args, **kwargs):
                 "to_chain": "polygon",
                 "from_token": "0x123",
                 "to_token": "0x456",
-                "funds_percentage": 50
+                "funds_percentage": 50,
             },
-            FailingAction({
-                "action": Action.FIND_BRIDGE_ROUTE.value,
-                "from_chain": "ethereum",
-                "to_chain": "polygon",
-                "from_token": "0x123",
-                "to_token": "0x456"
-            })
+            FailingAction(
+                {
+                    "action": Action.FIND_BRIDGE_ROUTE.value,
+                    "from_chain": "ethereum",
+                    "to_chain": "polygon",
+                    "from_token": "0x123",
+                    "to_token": "0x456",
+                }
+            ),
         ]
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
-            
+            result = (
+                self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+                    actions
+                )
+            )
+
             # Should return some result despite exception
             assert len(result) >= 1
-            
+
             # Should log the error
             mock_logger.assert_called()
-            error_calls = [call for call in mock_logger.call_args_list if "Error merging duplicate bridge swap actions" in str(call)]
+            error_calls = [
+                call
+                for call in mock_logger.call_args_list
+                if "Error merging duplicate bridge swap actions" in str(call)
+            ]
             assert len(error_calls) >= 1
-
-
 
     def test_merge_duplicate_bridge_swap_actions_top_level_exception(self) -> None:
         """Test _merge_duplicate_bridge_swap_actions handles top-level exceptions."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
-        
+
         # Patch the enumerate function to raise an exception during the main loop
         def failing_enumerate(iterable):
             count = 0
@@ -5403,42 +5910,50 @@ def dynamic_test_method(*args, **kwargs):
                     raise RuntimeError("Simulated top-level error in enumerate")
                 yield count, item
                 count += 1
-        
+
         actions = [
             {
                 "action": Action.FIND_BRIDGE_ROUTE.value,
                 "from_chain": "ethereum",
                 "to_chain": "optimism",
-                "from_token": "0x123", 
+                "from_token": "0x123",
                 "to_token": "0x456",
-                "funds_percentage": 0.5
+                "funds_percentage": 0.5,
             },
             {
-                "action": Action.FIND_BRIDGE_ROUTE.value, 
+                "action": Action.FIND_BRIDGE_ROUTE.value,
                 "from_chain": "ethereum",
                 "to_chain": "optimism",
                 "from_token": "0x123",
-                "to_token": "0x456", 
-                "funds_percentage": 0.3
-            }
+                "to_token": "0x456",
+                "funds_percentage": 0.3,
+            },
         ]
-        
-        with patch('builtins.enumerate', side_effect=failing_enumerate), \
-             patch.object(self.behaviour.current_behaviour.context.logger, "error") as mock_logger:
-            
-            result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
-            
+
+        with patch("builtins.enumerate", side_effect=failing_enumerate), patch.object(
+            self.behaviour.current_behaviour.context.logger, "error"
+        ) as mock_logger:
+            result = (
+                self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+                    actions
+                )
+            )
+
             # Should return original actions despite top-level error
             assert result == actions
-            
+
             # Should log the top-level error
-            error_calls = [call for call in mock_logger.call_args_list if "Error in _merge_duplicate_bridge_swap_actions" in str(call)]
+            error_calls = [
+                call
+                for call in mock_logger.call_args_list
+                if "Error in _merge_duplicate_bridge_swap_actions" in str(call)
+            ]
             assert len(error_calls) >= 1
 
     def test_merge_duplicate_bridge_swap_actions_successful_merge(self) -> None:
         """Test _merge_duplicate_bridge_swap_actions successfully merges duplicate actions."""
         from packages.valory.skills.liquidity_trader_abci.behaviours.base import Action
-        
+
         # Create duplicate bridge swap actions
         actions = [
             {"action": "other_action"},
@@ -5450,7 +5965,7 @@ def dynamic_test_method(*args, **kwargs):
                 "to_token": "0x456",
                 "from_token_symbol": "USDC",
                 "to_token_symbol": "USDC",
-                "funds_percentage": 30
+                "funds_percentage": 30,
             },
             {
                 "action": Action.FIND_BRIDGE_ROUTE.value,
@@ -5460,15 +5975,19 @@ def dynamic_test_method(*args, **kwargs):
                 "to_token": "0x456",
                 "from_token_symbol": "USDC",
                 "to_token_symbol": "USDC",
-                "funds_percentage": 20
-            }
+                "funds_percentage": 20,
+            },
         ]
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
-            
+            result = (
+                self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+                    actions
+                )
+            )
+
             # Should merge duplicates into one action
             assert len(result) == 2
             assert result[0]["action"] == "other_action"
@@ -5476,11 +5995,15 @@ def dynamic_test_method(*args, **kwargs):
             assert result[1]["funds_percentage"] == 50  # 30 + 20
             assert "merged_from" in result[1]
             assert "bridge_action_id" in result[1]
-            
+
             # Should log the merge
             mock_logger.assert_called()
             log_calls = [str(call) for call in mock_logger.call_args_list]
-            merge_logs = [call for call in log_calls if "Merged" in call and "duplicate bridge swap actions" in call]
+            merge_logs = [
+                call
+                for call in log_calls
+                if "Merged" in call and "duplicate bridge swap actions" in call
+            ]
             assert len(merge_logs) >= 1
 
     def test_download_next_strategy_no_strategies_pending(self) -> None:
@@ -7109,29 +7632,28 @@ def dynamic_test_method(*args, **kwargs):
     def test_get_result_method_exception_handling(self) -> None:
         """Test get_result method exception handling"""
         from concurrent.futures import Future
-        
+
         future = Future()
-        
+
         # Set an exception on the future
         test_exception = Exception("Test exception from future")
         future.set_exception(test_exception)
-        
+
         with patch.object(
-            self.behaviour.current_behaviour.context.logger,
-            "error"
+            self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
             generator = self.behaviour.current_behaviour.get_result(future)
-            
+
             result = None
             try:
                 while True:
                     result = next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None when exception occurs
             assert result is None
-            
+
             # Should log the exception
             mock_logger.assert_called_once_with(
                 "Exception occurred while executing strategy: Test exception from future"
@@ -7966,29 +8488,33 @@ def dynamic_test_method(*args, **kwargs):
             "token_requirements": {
                 "overall_token0_ratio": "invalid_float",  # Will cause TypeError/ValueError
                 "overall_token1_ratio": "also_invalid",
-                "recommendation": "100% token0"  # Fallback should use this
+                "recommendation": "100% token0",  # Fallback should use this
             },
             "token0": "0x123",
-            "token1": "0x456", 
+            "token1": "0x456",
             "token0_symbol": "TOKEN0",
             "token1_symbol": "TOKEN1",
-            "chain": "optimism"
+            "chain": "optimism",
         }
         available_tokens = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._handle_velodrome_token_allocation(
-                actions, enter_pool_action, available_tokens
+            result = (
+                self.behaviour.current_behaviour._handle_velodrome_token_allocation(
+                    actions, enter_pool_action, available_tokens
+                )
             )
-            
+
             # Should return the actions (empty in this case)
             assert result == actions
-            
+
             # Should log the token requirements with fallback values
             log_calls = [call.args[0] for call in mock_logger.call_args_list]
-            token_req_logs = [log for log in log_calls if "token0_ratio=1.0, token1_ratio=0.0" in log]
+            token_req_logs = [
+                log for log in log_calls if "token0_ratio=1.0, token1_ratio=0.0" in log
+            ]
             assert len(token_req_logs) >= 1
 
     def test_handle_velodrome_token_allocation_exception_fallback_token1(self) -> None:
@@ -7999,29 +8525,33 @@ def dynamic_test_method(*args, **kwargs):
             "token_requirements": {
                 "overall_token0_ratio": None,  # Will cause TypeError
                 "overall_token1_ratio": None,
-                "recommendation": "100% token1"  # Should fallback to token1
+                "recommendation": "100% token1",  # Should fallback to token1
             },
             "token0": "0x123",
             "token1": "0x456",
-            "token0_symbol": "TOKEN0", 
+            "token0_symbol": "TOKEN0",
             "token1_symbol": "TOKEN1",
-            "chain": "optimism"
+            "chain": "optimism",
         }
         available_tokens = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._handle_velodrome_token_allocation(
-                actions, enter_pool_action, available_tokens
+            result = (
+                self.behaviour.current_behaviour._handle_velodrome_token_allocation(
+                    actions, enter_pool_action, available_tokens
+                )
             )
-            
+
             # Should return the actions
             assert result == actions
-            
+
             # Should log with token1 getting 100%
             log_calls = [call.args[0] for call in mock_logger.call_args_list]
-            token_req_logs = [log for log in log_calls if "token0_ratio=0.0, token1_ratio=1.0" in log]
+            token_req_logs = [
+                log for log in log_calls if "token0_ratio=0.0, token1_ratio=1.0" in log
+            ]
             assert len(token_req_logs) >= 1
 
     def test_handle_velodrome_token_allocation_exception_fallback_default(self) -> None:
@@ -8032,29 +8562,33 @@ def dynamic_test_method(*args, **kwargs):
             "token_requirements": {
                 "overall_token0_ratio": "not_a_number",  # Will cause ValueError
                 "overall_token1_ratio": None,  # Will cause TypeError
-                "recommendation": "some other text"  # No specific token mentioned
+                "recommendation": "some other text",  # No specific token mentioned
             },
             "token0": "0x123",
             "token1": "0x456",
             "token0_symbol": "TOKEN0",
-            "token1_symbol": "TOKEN1", 
-            "chain": "optimism"
+            "token1_symbol": "TOKEN1",
+            "chain": "optimism",
         }
         available_tokens = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._handle_velodrome_token_allocation(
-                actions, enter_pool_action, available_tokens
+            result = (
+                self.behaviour.current_behaviour._handle_velodrome_token_allocation(
+                    actions, enter_pool_action, available_tokens
+                )
             )
-            
+
             # Should return the actions
             assert result == actions
-            
+
             # Should log with default 50/50 split
             log_calls = [call.args[0] for call in mock_logger.call_args_list]
-            token_req_logs = [log for log in log_calls if "token0_ratio=0.5, token1_ratio=0.5" in log]
+            token_req_logs = [
+                log for log in log_calls if "token0_ratio=0.5, token1_ratio=0.5" in log
+            ]
             assert len(token_req_logs) >= 1
 
     def test_handle_velodrome_token_allocation_funds_percentage_exception(self) -> None:
@@ -8067,41 +8601,45 @@ def dynamic_test_method(*args, **kwargs):
                 "to_chain": "optimism",
                 "from_token": "0x789",
                 "to_token": "0x456",  # Different from target, will be redirected
-                "funds_percentage": 0.3
+                "funds_percentage": 0.3,
             }
         ]
-        
+
         enter_pool_action = {
             "dex_type": "velodrome",
             "token_requirements": {
                 "overall_token0_ratio": 1.0,  # 100% token0
-                "overall_token1_ratio": 0.0
+                "overall_token1_ratio": 0.0,
             },
             "token0": "0x123",
             "token1": "0x456",
             "token0_symbol": "TOKEN0",
             "token1_symbol": "TOKEN1",
             "chain": "optimism",
-            "relative_funds_percentage": "invalid_float"  # Will cause ValueError/TypeError
+            "relative_funds_percentage": "invalid_float",  # Will cause ValueError/TypeError
         }
         available_tokens = []
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._handle_velodrome_token_allocation(
-                actions, enter_pool_action, available_tokens
+            result = (
+                self.behaviour.current_behaviour._handle_velodrome_token_allocation(
+                    actions, enter_pool_action, available_tokens
+                )
             )
-            
+
             # Should modify the action and use fallback funds_percentage of 1.0
             assert len(result) == 1
             assert result[0]["to_token"] == "0x123"  # Redirected to token0
             assert result[0]["to_token_symbol"] == "TOKEN0"
             assert result[0]["funds_percentage"] == 1.0  # Fallback value
-            
+
             # Should log the redirection
             log_calls = [call.args[0] for call in mock_logger.call_args_list]
-            redirect_logs = [log for log in log_calls if "Redirecting bridge route to TOKEN0" in log]
+            redirect_logs = [
+                log for log in log_calls if "Redirecting bridge route to TOKEN0" in log
+            ]
             assert len(redirect_logs) >= 1
 
     def test_handle_velodrome_token_allocation_add_new_bridge_route(self) -> None:
@@ -8109,46 +8647,44 @@ def dynamic_test_method(*args, **kwargs):
         # No existing FindBridgeRoute actions - should add a new one
         actions = [
             {"action": "ExitPool", "pool_id": "pool1"},
-            {"action": "SomeOtherAction", "data": "test"}
+            {"action": "SomeOtherAction", "data": "test"},
         ]
-        
+
         enter_pool_action = {
-            "dex_type": "velodrome", 
+            "dex_type": "velodrome",
             "token_requirements": {
                 "overall_token0_ratio": 0.0,  # 100% token1
-                "overall_token1_ratio": 1.0
+                "overall_token1_ratio": 1.0,
             },
             "token0": "0x123",
             "token1": "0x456",
             "token0_symbol": "TOKEN0",
             "token1_symbol": "TOKEN1",
             "chain": "optimism",
-            "relative_funds_percentage": 0.8
+            "relative_funds_percentage": 0.8,
         }
-        
+
         available_tokens = [
-            {
-                "token": "0x789",
-                "token_symbol": "SOURCE_TOKEN",
-                "chain": "ethereum"
-            },
+            {"token": "0x789", "token_symbol": "SOURCE_TOKEN", "chain": "ethereum"},
             {
                 "token": "0x456",  # This is the target token, should be skipped
-                "token_symbol": "TOKEN1", 
-                "chain": "optimism"
-            }
+                "token_symbol": "TOKEN1",
+                "chain": "optimism",
+            },
         ]
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._handle_velodrome_token_allocation(
-                actions, enter_pool_action, available_tokens
+            result = (
+                self.behaviour.current_behaviour._handle_velodrome_token_allocation(
+                    actions, enter_pool_action, available_tokens
+                )
             )
-            
+
             # Should add a new bridge route after the ExitPool action
             assert len(result) == 3
-            
+
             # Check the new bridge route was inserted at position 1 (after ExitPool)
             new_bridge_route = result[1]
             assert new_bridge_route["action"] == "FindBridgeRoute"
@@ -8159,59 +8695,67 @@ def dynamic_test_method(*args, **kwargs):
             assert new_bridge_route["to_token"] == "0x456"  # Target token1
             assert new_bridge_route["to_token_symbol"] == "TOKEN1"
             assert new_bridge_route["funds_percentage"] == 0.8
-            
+
             # Original actions should be preserved
             assert result[0]["action"] == "ExitPool"
             assert result[2]["action"] == "SomeOtherAction"
-            
+
             # Should log the addition
             log_calls = [call.args[0] for call in mock_logger.call_args_list]
-            no_bridge_logs = [log for log in log_calls if "No bridge routes found, adding a new one" in log]
+            no_bridge_logs = [
+                log
+                for log in log_calls
+                if "No bridge routes found, adding a new one" in log
+            ]
             assert len(no_bridge_logs) >= 1
-            
-            added_route_logs = [log for log in log_calls if "Added new bridge route: SOURCE_TOKEN -> TOKEN1" in log]
+
+            added_route_logs = [
+                log
+                for log in log_calls
+                if "Added new bridge route: SOURCE_TOKEN -> TOKEN1" in log
+            ]
             assert len(added_route_logs) >= 1
 
-    def test_handle_velodrome_token_allocation_add_new_bridge_route_no_exit_pool(self) -> None:
+    def test_handle_velodrome_token_allocation_add_new_bridge_route_no_exit_pool(
+        self,
+    ) -> None:
         """Test _handle_velodrome_token_allocation adds new bridge route when no ExitPool actions exist"""
         # No ExitPool actions - should insert at beginning (insert_position = 0)
         actions = [
             {"action": "SomeAction", "data": "test1"},
-            {"action": "AnotherAction", "data": "test2"}
+            {"action": "AnotherAction", "data": "test2"},
         ]
-        
+
         enter_pool_action = {
             "dex_type": "velodrome",
             "token_requirements": {
                 "overall_token0_ratio": 1.0,  # 100% token0
-                "overall_token1_ratio": 0.0
+                "overall_token1_ratio": 0.0,
             },
             "token0": "0x123",
-            "token1": "0x456", 
+            "token1": "0x456",
             "token0_symbol": "TOKEN0",
             "token1_symbol": "TOKEN1",
             "chain": "polygon",
-            "relative_funds_percentage": 0.6
+            "relative_funds_percentage": 0.6,
         }
-        
+
         available_tokens = [
-            {
-                "token": "0x789",
-                "token_symbol": "SOURCE_TOKEN",
-                "chain": "ethereum"
-            }
+            {"token": "0x789", "token_symbol": "SOURCE_TOKEN", "chain": "ethereum"}
         ]
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._handle_velodrome_token_allocation(
-                actions, enter_pool_action, available_tokens
+            result = (
+                self.behaviour.current_behaviour._handle_velodrome_token_allocation(
+                    actions, enter_pool_action, available_tokens
+                )
             )
-            
+
             # Should add new bridge route at the beginning (insert_position = 0)
             assert len(result) == 3
-            
+
             # Check the new bridge route was inserted at position 0
             new_bridge_route = result[0]
             assert new_bridge_route["action"] == "FindBridgeRoute"
@@ -8222,93 +8766,115 @@ def dynamic_test_method(*args, **kwargs):
             assert new_bridge_route["to_token"] == "0x123"  # Target token0
             assert new_bridge_route["to_token_symbol"] == "TOKEN0"
             assert new_bridge_route["funds_percentage"] == 0.6
-            
+
             # Original actions should be shifted
             assert result[1]["action"] == "SomeAction"
             assert result[2]["action"] == "AnotherAction"
-            
+
             # Should log the addition
             log_calls = [call.args[0] for call in mock_logger.call_args_list]
-            no_bridge_logs = [log for log in log_calls if "No bridge routes found, adding a new one" in log]
+            no_bridge_logs = [
+                log
+                for log in log_calls
+                if "No bridge routes found, adding a new one" in log
+            ]
             assert len(no_bridge_logs) >= 1
-            
-            added_route_logs = [log for log in log_calls if "Added new bridge route: SOURCE_TOKEN -> TOKEN0" in log]
+
+            added_route_logs = [
+                log
+                for log in log_calls
+                if "Added new bridge route: SOURCE_TOKEN -> TOKEN0" in log
+            ]
             assert len(added_route_logs) >= 1
 
-    def test_handle_velodrome_token_allocation_add_new_bridge_route_with_existing_actions(self) -> None:
+    def test_handle_velodrome_token_allocation_add_new_bridge_route_with_existing_actions(
+        self,
+    ) -> None:
         """Test _handle_velodrome_token_allocation adds new bridge route when existing actions define full_slice"""
         # Include existing FindBridgeRoute action to same chain so full_slice gets defined
         actions = [
             {"action": "ExitPool", "pool_id": "pool1"},
             {
                 "action": "FindBridgeRoute",
-                "from_chain": "ethereum", 
+                "from_chain": "ethereum",
                 "to_chain": "optimism",  # Same chain as target
                 "from_token": "0x999",
                 "to_token": "0x888",  # Different token, will be redirected
-                "funds_percentage": 0.3
+                "funds_percentage": 0.3,
             },
-            {"action": "SomeOtherAction", "data": "test"}
+            {"action": "SomeOtherAction", "data": "test"},
         ]
-        
+
         enter_pool_action = {
-            "dex_type": "velodrome", 
+            "dex_type": "velodrome",
             "token_requirements": {
                 "overall_token0_ratio": 0.0,  # 100% token1
-                "overall_token1_ratio": 1.0
+                "overall_token1_ratio": 1.0,
             },
             "token0": "0x123",
             "token1": "0x456",
             "token0_symbol": "TOKEN0",
             "token1_symbol": "TOKEN1",
             "chain": "optimism",  # Same as existing bridge route
-            "relative_funds_percentage": 0.8
+            "relative_funds_percentage": 0.8,
         }
-        
+
         available_tokens = [
-            {
-                "token": "0x789",
-                "token_symbol": "SOURCE_TOKEN",
-                "chain": "ethereum"
-            },
+            {"token": "0x789", "token_symbol": "SOURCE_TOKEN", "chain": "ethereum"},
             {
                 "token": "0x456",  # This is the target token, should be skipped
-                "token_symbol": "TOKEN1", 
-                "chain": "optimism"
-            }
+                "token_symbol": "TOKEN1",
+                "chain": "optimism",
+            },
         ]
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            result = self.behaviour.current_behaviour._handle_velodrome_token_allocation(
-                actions, enter_pool_action, available_tokens
+            result = (
+                self.behaviour.current_behaviour._handle_velodrome_token_allocation(
+                    actions, enter_pool_action, available_tokens
+                )
             )
-            
+
             # Should modify existing bridge route, not add a new one
             assert len(result) == 3  # Original 3, no new ones added
-            
+
             # Check the existing bridge route was modified
             modified_bridge_route = result[1]
             assert modified_bridge_route["action"] == "FindBridgeRoute"
             assert modified_bridge_route["from_chain"] == "ethereum"
             assert modified_bridge_route["to_chain"] == "optimism"
-            assert modified_bridge_route["from_token"] == "0x999"  # Original from_token unchanged
-            assert modified_bridge_route["to_token"] == "0x456"  # Redirected to target token1
-            assert modified_bridge_route["to_token_symbol"] == "TOKEN1"  # Updated symbol
-            assert modified_bridge_route["funds_percentage"] == 0.8  # Updated to full slice
-            
+            assert (
+                modified_bridge_route["from_token"] == "0x999"
+            )  # Original from_token unchanged
+            assert (
+                modified_bridge_route["to_token"] == "0x456"
+            )  # Redirected to target token1
+            assert (
+                modified_bridge_route["to_token_symbol"] == "TOKEN1"
+            )  # Updated symbol
+            assert (
+                modified_bridge_route["funds_percentage"] == 0.8
+            )  # Updated to full slice
+
             # Original actions should be preserved
             assert result[0]["action"] == "ExitPool"
             assert result[2]["action"] == "SomeOtherAction"
-            
+
             # Should log the redirection, not addition
             log_calls = [call.args[0] for call in mock_logger.call_args_list]
-            redirect_logs = [log for log in log_calls if "Redirecting bridge route to TOKEN1" in log]
+            redirect_logs = [
+                log for log in log_calls if "Redirecting bridge route to TOKEN1" in log
+            ]
             assert len(redirect_logs) >= 1
-            
+
             # Should NOT log about adding new bridge route since existing one was found
-            no_bridge_logs = [log for log in log_calls if "No bridge routes found, adding a new one" in log]
+            no_bridge_logs = [
+                log
+                for log in log_calls
+                if "No bridge routes found, adding a new one" in log
+            ]
             assert len(no_bridge_logs) == 0
 
     def test_apply_investment_cap_calculation_error(self) -> None:
@@ -8464,7 +9030,7 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_calculate_velodrome_token_ratios_exception_handling(self) -> None:
         """Test exception handling in calculate_velodrome_token_ratios"""
-        
+
         # Create validated data that will trigger division by zero in ratio calculation
         # We need to patch the calculation to force an exception
         validated_data = {
@@ -8485,20 +9051,20 @@ def dynamic_test_method(*args, **kwargs):
             # Call the original method but force an exception in the calculation
             if data is None:
                 return None
-                
+
             position_requirements = []
             warnings = data.get("warnings", [])
             current_tick = data["current_tick"]
-            
+
             total_weighted_token0 = 0
             total_weighted_token1 = 0
             total_allocation = 0
-            
+
             for band in data["validated_bands"]:
                 tick_lower = band["tick_lower"]
                 tick_upper = band["tick_upper"]
                 allocation = band["allocation"]
-                
+
                 # Force the price to be in range and trigger exception
                 try:
                     # This will cause a division by zero or other error
@@ -8511,11 +9077,11 @@ def dynamic_test_method(*args, **kwargs):
                     token0_ratio = 0.5
                     token1_ratio = 0.5
                     status = "ERROR"
-                
+
                 total_weighted_token0 += token0_ratio * allocation
                 total_weighted_token1 += token1_ratio * allocation
                 total_allocation += allocation
-                
+
                 position_requirements.append(
                     {
                         "tick_range": [tick_lower, tick_upper],
@@ -8526,7 +9092,7 @@ def dynamic_test_method(*args, **kwargs):
                         "token1_ratio": token1_ratio,
                     }
                 )
-            
+
             # Calculate overall ratios
             overall_token0_ratio = (
                 total_weighted_token0 / total_allocation if total_allocation > 0 else 0
@@ -8534,24 +9100,24 @@ def dynamic_test_method(*args, **kwargs):
             overall_token1_ratio = (
                 total_weighted_token1 / total_allocation if total_allocation > 0 else 0
             )
-            
+
             # Generate recommendations
             recommendation = f"Provide {overall_token0_ratio*100:.2f}% token0, {overall_token1_ratio*100:.2f}% token1 for all positions"
-            
+
             # Log any warnings
             for warning in warnings:
                 self.behaviour.current_behaviour.context.logger.warning(warning)
-            
+
             return {
                 "position_requirements": position_requirements,
                 "overall_token0_ratio": overall_token0_ratio,
                 "overall_token1_ratio": overall_token1_ratio,
                 "recommendation": recommendation,
             }
-        
+
         # This should trigger the exception handling
         result = mock_calculate_with_exception(validated_data)
-        
+
         # Should handle the exception gracefully and return default 50/50 ratios
         assert result is not None
         assert result["position_requirements"][0]["status"] == "ERROR"
@@ -8560,7 +9126,7 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_calculate_velodrome_token_ratios_in_range_recommendation(self) -> None:
         """Test IN_RANGE recommendation generation"""
-        
+
         validated_data = {
             "validated_bands": [
                 {
@@ -8574,8 +9140,10 @@ def dynamic_test_method(*args, **kwargs):
             "warnings": [],
         }
 
-        result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(validated_data)
-        
+        result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(
+            validated_data
+        )
+
         assert result is not None
         assert result["position_requirements"][0]["status"] == "IN_RANGE"
         # Should generate the IN_RANGE recommendation
@@ -8585,7 +9153,7 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_calculate_velodrome_token_ratios_mixed_status_recommendation(self) -> None:
         """Test mixed status recommendation generation"""
-        
+
         validated_data = {
             "validated_bands": [
                 {
@@ -8597,15 +9165,18 @@ def dynamic_test_method(*args, **kwargs):
                     "tick_lower": 200,
                     "tick_upper": 300,
                     "allocation": 0.5,
-                }
+                },
             ],
-            "current_price": 1.0001**150,  # Price will be above first range, below second
+            "current_price": 1.0001
+            ** 150,  # Price will be above first range, below second
             "current_tick": 150,
             "warnings": [],
         }
 
-        result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(validated_data)
-        
+        result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(
+            validated_data
+        )
+
         assert result is not None
         # Should have mixed statuses
         statuses = [pos["status"] for pos in result["position_requirements"]]
@@ -8616,7 +9187,7 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_calculate_velodrome_token_ratios_with_warnings(self) -> None:
         """Test warning logging"""
-        
+
         validated_data = {
             "validated_bands": [
                 {
@@ -8630,21 +9201,25 @@ def dynamic_test_method(*args, **kwargs):
             "warnings": ["Test warning message"],  # Pre-existing warning
         }
 
-        with patch.object(self.behaviour.current_behaviour.context.logger, 'warning') as mock_warning:
-            result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(validated_data)
-            
+        with patch.object(
+            self.behaviour.current_behaviour.context.logger, "warning"
+        ) as mock_warning:
+            result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(
+                validated_data
+            )
+
             # Should log the warning
             mock_warning.assert_called_once_with("Test warning message")
-        
+
         assert result is not None
 
     def test_calculate_velodrome_cl_token_requirements_success(self) -> None:
         """Test calculate_velodrome_cl_token_requirements method"""
-        
+
         tick_bands = [{"tick_lower": 100, "tick_upper": 200, "allocation": 1.0}]
         current_price = 1.5
         tick_spacing = 1
-        
+
         # Mock the validate_and_prepare_velodrome_inputs to return valid data
         valid_data = {
             "validated_bands": tick_bands,
@@ -8652,45 +9227,56 @@ def dynamic_test_method(*args, **kwargs):
             "current_tick": 150,
             "warnings": [],
         }
-        
-        with patch.object(self.behaviour.current_behaviour, 'validate_and_prepare_velodrome_inputs', return_value=valid_data), \
-             patch.object(self.behaviour.current_behaviour, 'calculate_velodrome_token_ratios', return_value={"test": "result"}):
-            
+
+        with patch.object(
+            self.behaviour.current_behaviour,
+            "validate_and_prepare_velodrome_inputs",
+            return_value=valid_data,
+        ), patch.object(
+            self.behaviour.current_behaviour,
+            "calculate_velodrome_token_ratios",
+            return_value={"test": "result"},
+        ):
             result = self.behaviour.current_behaviour.calculate_velodrome_cl_token_requirements(
                 tick_bands, current_price, tick_spacing
             )
-            
+
             # Should call both methods and return the result
             self.behaviour.current_behaviour.validate_and_prepare_velodrome_inputs.assert_called_once_with(
                 tick_bands, current_price, tick_spacing
             )
-            self.behaviour.current_behaviour.calculate_velodrome_token_ratios.assert_called_once_with(valid_data)
+            self.behaviour.current_behaviour.calculate_velodrome_token_ratios.assert_called_once_with(
+                valid_data
+            )
             assert result == {"test": "result"}
 
     def test_calculate_velodrome_cl_token_requirements_validation_failure(self) -> None:
         """Test calculate_velodrome_cl_token_requirements with validation failure"""
-        
+
         tick_bands = []  # Invalid data
         current_price = -1.0  # Invalid price
         tick_spacing = 1
-        
+
         # Mock validate_and_prepare_velodrome_inputs to return None (validation failure)
-        with patch.object(self.behaviour.current_behaviour, 'validate_and_prepare_velodrome_inputs', return_value=None):
-            
+        with patch.object(
+            self.behaviour.current_behaviour,
+            "validate_and_prepare_velodrome_inputs",
+            return_value=None,
+        ):
             result = self.behaviour.current_behaviour.calculate_velodrome_cl_token_requirements(
                 tick_bands, current_price, tick_spacing
             )
-            
+
             # Should return None when validation fails
             assert result is None
 
     def test_calculate_velodrome_token_ratios_division_by_zero_error(self) -> None:
         """Test exception handling when upper_bound_price equals lower_bound_price"""
-        
+
         # Create a scenario where tick_upper and tick_lower are the same
         # This will cause upper_bound_price - lower_bound_price to be zero,
         # triggering division by zero in the IN_RANGE calculation
-        
+
         # When tick_lower == tick_upper, we have a degenerate range
         # The function should handle this gracefully
         validated_data = {
@@ -8705,21 +9291,23 @@ def dynamic_test_method(*args, **kwargs):
             "current_tick": 100,
             "warnings": [],
         }
-        
+
         # Call the actual function without mocking
-        result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(validated_data)
-        
+        result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(
+            validated_data
+        )
+
         # The function should handle the division by zero gracefully
         assert result is not None
-        
+
         # When tick_lower == tick_upper, the actual implementation might:
         # 1. Treat it as BELOW_RANGE if price < tick_price (100% token0)
-        # 2. Treat it as ABOVE_RANGE if price > tick_price (100% token1)  
+        # 2. Treat it as ABOVE_RANGE if price > tick_price (100% token1)
         # 3. Hit the exception handler if price == tick_price (50/50 split with ERROR status)
-        
+
         # Check the result based on what actually happens
         position = result["position_requirements"][0]
-        
+
         # The function will either handle it as a special case or hit the exception
         if position["status"] == "ERROR":
             # Exception was triggered and handled
@@ -8733,11 +9321,13 @@ def dynamic_test_method(*args, **kwargs):
             assert position["status"] in ["BELOW_RANGE", "ABOVE_RANGE", "IN_RANGE"]
             assert position["token0_ratio"] >= 0 and position["token0_ratio"] <= 1
             assert position["token1_ratio"] >= 0 and position["token1_ratio"] <= 1
-            assert abs(position["token0_ratio"] + position["token1_ratio"] - 1.0) < 0.0001
+            assert (
+                abs(position["token0_ratio"] + position["token1_ratio"] - 1.0) < 0.0001
+            )
 
     def test_calculate_velodrome_token_ratios_forced_exception(self) -> None:
         """Test exception handling by forcing an exception in the calculation"""
-        
+
         # Create normal validated data
         validated_data = {
             "validated_bands": [
@@ -8751,45 +9341,56 @@ def dynamic_test_method(*args, **kwargs):
             "current_tick": 150,
             "warnings": [],
         }
-        
+
         # Monkey patch the min function to raise an exception when called with our specific values
         # This will trigger the exception handling in the try block
         original_min = min
-        
+
         def patched_min(*args):
             # Check if this is the call from our target code
-            if len(args) == 2 and isinstance(args[0], (int, float)) and isinstance(args[1], (int, float)):
+            if (
+                len(args) == 2
+                and isinstance(args[0], (int, float))
+                and isinstance(args[1], (int, float))
+            ):
                 # Check if this looks like our ratio calculation
                 if 0 <= args[0] <= 1:
                     raise ValueError("Forced exception for testing")
             return original_min(*args)
-        
+
         # Apply the monkey patch
         import builtins
+
         original_builtins_min = builtins.min
         builtins.min = patched_min
-        
+
         try:
             # Mock the logger to capture warning messages
-            with patch.object(self.behaviour.current_behaviour.context.logger, 'warning') as mock_warning:
+            with patch.object(
+                self.behaviour.current_behaviour.context.logger, "warning"
+            ) as mock_warning:
                 # Call the function - this should trigger the exception handling
-                result = self.behaviour.current_behaviour.calculate_velodrome_token_ratios(validated_data)
-                
+                result = (
+                    self.behaviour.current_behaviour.calculate_velodrome_token_ratios(
+                        validated_data
+                    )
+                )
+
                 # Verify the exception was handled correctly
                 assert result is not None
                 position = result["position_requirements"][0]
-                
+
                 # The exception should have been caught and handled
                 assert position["status"] == "ERROR"
                 assert position["token0_ratio"] == 0.5
                 assert position["token1_ratio"] == 0.5
-                
+
                 # Check that the warning was logged
                 mock_warning.assert_called()
                 warning_message = mock_warning.call_args[0][0]
                 assert "Error calculating ratios for band [100, 200]" in warning_message
                 assert "Forced exception for testing" in warning_message
-            
+
         finally:
             # Restore the original min function
             builtins.min = original_builtins_min
@@ -8811,23 +9412,27 @@ def dynamic_test_method(*args, **kwargs):
         ]
 
         mock_pool = MagicMock()
-        
+
         def mock_get_tick_spacing_fail(self, pool_address, chain):
             yield
             return None  # Return None to simulate failure
-        
+
         mock_pool._get_tick_spacing_velodrome = mock_get_tick_spacing_fail
         self.behaviour.current_behaviour.pools = {"velodrome": mock_pool}
-        
-        with patch.object(self.behaviour.current_behaviour.context.logger, 'error') as mock_error:
-            generator = self.behaviour.current_behaviour.get_velodrome_position_requirements()
-            
+
+        with patch.object(
+            self.behaviour.current_behaviour.context.logger, "error"
+        ) as mock_error:
+            generator = (
+                self.behaviour.current_behaviour.get_velodrome_position_requirements()
+            )
+
             try:
                 while True:
                     next(generator)
             except StopIteration:
                 pass
-            
+
             # Should log error and skip this opportunity
             mock_error.assert_called_with("Failed to get tick spacing for pool 0x123")
             opportunity = self.behaviour.current_behaviour.selected_opportunities[0]
@@ -8850,30 +9455,38 @@ def dynamic_test_method(*args, **kwargs):
         ]
 
         mock_pool = MagicMock()
-        
+
         def mock_get_tick_spacing(self, pool_address, chain):
             yield
             return 1
-        
+
         def mock_calculate_tick_bands_fail(self, **kwargs):
             yield
             return None  # Return None to simulate failure
-        
+
         mock_pool._get_tick_spacing_velodrome = mock_get_tick_spacing
-        mock_pool._calculate_tick_lower_and_upper_velodrome = mock_calculate_tick_bands_fail
+        mock_pool._calculate_tick_lower_and_upper_velodrome = (
+            mock_calculate_tick_bands_fail
+        )
         self.behaviour.current_behaviour.pools = {"velodrome": mock_pool}
-        
-        with patch.object(self.behaviour.current_behaviour.context.logger, 'error') as mock_error:
-            generator = self.behaviour.current_behaviour.get_velodrome_position_requirements()
-            
+
+        with patch.object(
+            self.behaviour.current_behaviour.context.logger, "error"
+        ) as mock_error:
+            generator = (
+                self.behaviour.current_behaviour.get_velodrome_position_requirements()
+            )
+
             try:
                 while True:
                     next(generator)
             except StopIteration:
                 pass
-            
+
             # Should log error and skip this opportunity
-            mock_error.assert_called_with("Failed to calculate tick bands for pool 0x123")
+            mock_error.assert_called_with(
+                "Failed to calculate tick bands for pool 0x123"
+            )
             opportunity = self.behaviour.current_behaviour.selected_opportunities[0]
             assert "token_requirements" not in opportunity
 
@@ -8894,11 +9507,11 @@ def dynamic_test_method(*args, **kwargs):
         ]
 
         mock_pool = MagicMock()
-        
+
         def mock_get_tick_spacing(self, pool_address, chain):
             yield
             return 1
-        
+
         def mock_calculate_tick_bands(self, **kwargs):
             yield
             return [
@@ -8909,31 +9522,37 @@ def dynamic_test_method(*args, **kwargs):
                     "percent_in_bounds": 0.8,
                 }
             ]
-        
+
         def mock_get_current_price_fail(self, pool_address, chain):
             yield
             return None  # Return None to simulate failure
-        
+
         mock_pool._get_tick_spacing_velodrome = mock_get_tick_spacing
         mock_pool._calculate_tick_lower_and_upper_velodrome = mock_calculate_tick_bands
         mock_pool._get_current_pool_price = mock_get_current_price_fail
         self.behaviour.current_behaviour.pools = {"velodrome": mock_pool}
-        
-        with patch.object(self.behaviour.current_behaviour.context.logger, 'error') as mock_error:
-            generator = self.behaviour.current_behaviour.get_velodrome_position_requirements()
-            
+
+        with patch.object(
+            self.behaviour.current_behaviour.context.logger, "error"
+        ) as mock_error:
+            generator = (
+                self.behaviour.current_behaviour.get_velodrome_position_requirements()
+            )
+
             try:
                 while True:
                     next(generator)
             except StopIteration:
                 pass
-            
+
             # Should log error and skip this opportunity
             mock_error.assert_called_with("Failed to get current price for pool 0x123")
             opportunity = self.behaviour.current_behaviour.selected_opportunities[0]
             assert "token_requirements" not in opportunity
 
-    def test_get_velodrome_position_requirements_token_requirements_failure(self) -> None:
+    def test_get_velodrome_position_requirements_token_requirements_failure(
+        self,
+    ) -> None:
         """Test handling when token requirements calculation fails"""
         self.behaviour.current_behaviour.selected_opportunities = [
             {
@@ -8950,11 +9569,11 @@ def dynamic_test_method(*args, **kwargs):
         ]
 
         mock_pool = MagicMock()
-        
+
         def mock_get_tick_spacing(self, pool_address, chain):
             yield
             return 1
-        
+
         def mock_calculate_tick_bands(self, **kwargs):
             yield
             return [
@@ -8965,30 +9584,34 @@ def dynamic_test_method(*args, **kwargs):
                     "percent_in_bounds": 0.8,
                 }
             ]
-        
+
         def mock_get_current_price(self, pool_address, chain):
             yield
             return 1.5
-        
+
         mock_pool._get_tick_spacing_velodrome = mock_get_tick_spacing
         mock_pool._calculate_tick_lower_and_upper_velodrome = mock_calculate_tick_bands
         mock_pool._get_current_pool_price = mock_get_current_price
         self.behaviour.current_behaviour.pools = {"velodrome": mock_pool}
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "calculate_velodrome_cl_token_requirements",
-            return_value=None  # Return None to simulate failure
+            return_value=None,  # Return None to simulate failure
         ):
-            with patch.object(self.behaviour.current_behaviour.context.logger, 'error') as mock_error:
-                generator = self.behaviour.current_behaviour.get_velodrome_position_requirements()
-                
+            with patch.object(
+                self.behaviour.current_behaviour.context.logger, "error"
+            ) as mock_error:
+                generator = (
+                    self.behaviour.current_behaviour.get_velodrome_position_requirements()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
+
                 # Should log error and skip this opportunity
                 mock_error.assert_called_with("Failed to calculate token requirements")
                 opportunity = self.behaviour.current_behaviour.selected_opportunities[0]
@@ -9012,11 +9635,11 @@ def dynamic_test_method(*args, **kwargs):
         ]
 
         mock_pool = MagicMock()
-        
+
         def mock_get_tick_spacing(self, pool_address, chain):
             yield
             return 1
-        
+
         def mock_calculate_tick_bands(self, **kwargs):
             yield
             return [
@@ -9027,23 +9650,23 @@ def dynamic_test_method(*args, **kwargs):
                     "percent_in_bounds": 0.8,
                 }
             ]
-        
+
         def mock_get_current_price(self, pool_address, chain):
             yield
             return 1.5
-        
+
         def mock_get_token_balance(chain, safe_address, token):
             yield
             if token == "0x456":  # token0
                 return 1000
             else:  # token1
                 return 2000
-        
+
         mock_pool._get_tick_spacing_velodrome = mock_get_tick_spacing
         mock_pool._calculate_tick_lower_and_upper_velodrome = mock_calculate_tick_bands
         mock_pool._get_current_pool_price = mock_get_current_price
         self.behaviour.current_behaviour.pools = {"velodrome": mock_pool}
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "calculate_velodrome_cl_token_requirements",
@@ -9051,30 +9674,39 @@ def dynamic_test_method(*args, **kwargs):
                 "overall_token0_ratio": 0.0,
                 "overall_token1_ratio": 1.1,  # > 1.0 (max_ratio)
                 "recommendation": "100% token1",
-                "position_requirements": []
-            }
+                "position_requirements": [],
+            },
         ):
             with patch.object(
                 self.behaviour.current_behaviour,
                 "_get_token_balance",
-                side_effect=mock_get_token_balance
+                side_effect=mock_get_token_balance,
             ):
-                with patch.object(self.behaviour.current_behaviour.context.logger, 'info') as mock_info:
-                    generator = self.behaviour.current_behaviour.get_velodrome_position_requirements()
-                    
+                with patch.object(
+                    self.behaviour.current_behaviour.context.logger, "info"
+                ) as mock_info:
+                    generator = (
+                        self.behaviour.current_behaviour.get_velodrome_position_requirements()
+                    )
+
                     try:
                         while True:
                             next(generator)
                     except StopIteration:
                         pass
-                    
+
                     # Should set max_amounts_in to [0, token1_balance]
-                    opportunity = self.behaviour.current_behaviour.selected_opportunities[0]
+                    opportunity = (
+                        self.behaviour.current_behaviour.selected_opportunities[0]
+                    )
                     assert opportunity["max_amounts_in"] == [0, 2000]
-                    
+
                     # Check that the info message was logged
                     info_calls = [str(call) for call in mock_info.call_args_list]
-                    assert any("Using only token1: 2000 WETH" in str(call) for call in info_calls)
+                    assert any(
+                        "Using only token1: 2000 WETH" in str(call)
+                        for call in info_calls
+                    )
 
     def test_get_velodrome_position_requirements_token_scaling(self) -> None:
         """Test token amount scaling when required_token1 > max_amount1"""
@@ -9094,11 +9726,11 @@ def dynamic_test_method(*args, **kwargs):
         ]
 
         mock_pool = MagicMock()
-        
+
         def mock_get_tick_spacing(self, pool_address, chain):
             yield
             return 1
-        
+
         def mock_calculate_tick_bands(self, **kwargs):
             yield
             return [
@@ -9109,23 +9741,23 @@ def dynamic_test_method(*args, **kwargs):
                     "percent_in_bounds": 0.8,
                 }
             ]
-        
+
         def mock_get_current_price(self, pool_address, chain):
             yield
             return 1.5
-        
+
         def mock_get_token_balance(chain, safe_address, token):
             yield
             if token == "0x456":  # token0
                 return 10000
             else:  # token1
                 return 1000  # Less than what we'll need
-        
+
         mock_pool._get_tick_spacing_velodrome = mock_get_tick_spacing
         mock_pool._calculate_tick_lower_and_upper_velodrome = mock_calculate_tick_bands
         mock_pool._get_current_pool_price = mock_get_current_price
         self.behaviour.current_behaviour.pools = {"velodrome": mock_pool}
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "calculate_velodrome_cl_token_requirements",
@@ -9133,26 +9765,28 @@ def dynamic_test_method(*args, **kwargs):
                 "overall_token0_ratio": 0.4,  # 40% token0
                 "overall_token1_ratio": 0.6,  # 60% token1
                 "recommendation": "40% token0, 60% token1",
-                "position_requirements": []
-            }
+                "position_requirements": [],
+            },
         ):
             with patch.object(
                 self.behaviour.current_behaviour,
                 "_get_token_balance",
-                side_effect=mock_get_token_balance
+                side_effect=mock_get_token_balance,
             ):
-                generator = self.behaviour.current_behaviour.get_velodrome_position_requirements()
-                
+                generator = (
+                    self.behaviour.current_behaviour.get_velodrome_position_requirements()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
+
                 # Should scale down token0 amount to match available token1
                 opportunity = self.behaviour.current_behaviour.selected_opportunities[0]
                 assert opportunity["max_amounts_in"] is not None
-                
+
                 # With ratio 0.4:0.6, if we have 10000 token0 and 1000 token1:
                 # required_token1 = 10000 * 0.6 / 0.4 = 15000
                 # Since we only have 1000 token1, we scale down:
@@ -9161,7 +9795,9 @@ def dynamic_test_method(*args, **kwargs):
                 # max_amount1 = 15000 (the required amount, not the scaled amount)
                 # But the implementation actually sets max_amount1 = required_token1 = 15000
                 assert opportunity["max_amounts_in"][0] == 666  # Scaled down token0
-                assert opportunity["max_amounts_in"][1] == 15000  # Required token1 amount
+                assert (
+                    opportunity["max_amounts_in"][1] == 15000
+                )  # Required token1 amount
 
     def test_get_velodrome_position_requirements_excess_tokens(self) -> None:
         """Test handling when we have excess of both tokens"""
@@ -9181,11 +9817,11 @@ def dynamic_test_method(*args, **kwargs):
         ]
 
         mock_pool = MagicMock()
-        
+
         def mock_get_tick_spacing(self, pool_address, chain):
             yield
             return 1
-        
+
         def mock_calculate_tick_bands(self, **kwargs):
             yield
             return [
@@ -9196,23 +9832,23 @@ def dynamic_test_method(*args, **kwargs):
                     "percent_in_bounds": 0.8,
                 }
             ]
-        
+
         def mock_get_current_price(self, pool_address, chain):
             yield
             return 1.5
-        
+
         def mock_get_token_balance(chain, safe_address, token):
             yield
             if token == "0x456":  # token0
                 return 10000  # Plenty of token0
             else:  # token1
                 return 20000  # Plenty of token1
-        
+
         mock_pool._get_tick_spacing_velodrome = mock_get_tick_spacing
         mock_pool._calculate_tick_lower_and_upper_velodrome = mock_calculate_tick_bands
         mock_pool._get_current_pool_price = mock_get_current_price
         self.behaviour.current_behaviour.pools = {"velodrome": mock_pool}
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "calculate_velodrome_cl_token_requirements",
@@ -9220,31 +9856,33 @@ def dynamic_test_method(*args, **kwargs):
                 "overall_token0_ratio": 0.5,  # 50% token0
                 "overall_token1_ratio": 0.5,  # 50% token1
                 "recommendation": "50% token0, 50% token1",
-                "position_requirements": []
-            }
+                "position_requirements": [],
+            },
         ):
             with patch.object(
                 self.behaviour.current_behaviour,
                 "_get_token_balance",
-                side_effect=mock_get_token_balance
+                side_effect=mock_get_token_balance,
             ):
-                generator = self.behaviour.current_behaviour.get_velodrome_position_requirements()
-                
+                generator = (
+                    self.behaviour.current_behaviour.get_velodrome_position_requirements()
+                )
+
                 try:
                     while True:
                         next(generator)
                 except StopIteration:
                     pass
-                
+
                 # This test verifies the path but may not hit directly
                 # due to the mathematical constraints. The assertion verifies the behavior.
                 opportunity = self.behaviour.current_behaviour.selected_opportunities[0]
                 assert opportunity["max_amounts_in"] is not None
-                
+
                 # With 50:50 ratio and balances 10000:20000:
                 # required_token1 = 10000 * 0.5 / 0.5 = 10000 < 20000 (excess token1)
                 # required_token0 = 20000 * 0.5 / 0.5 = 20000 > 10000 (not enough token0)
-                # So we scale based on token0: 
+                # So we scale based on token0:
                 # scale_factor = 10000 / 20000 = 0.5
                 # max_amount0 = 10000, max_amount1 = 20000 * 0.5 = 10000
                 assert opportunity["max_amounts_in"][0] == 10000
@@ -9254,19 +9892,17 @@ def dynamic_test_method(*args, **kwargs):
         """Test _apply_investment_cap_to_actions retry logic"""
         # Set up current positions with open status to trigger the retry loop
         self.behaviour.current_behaviour.current_positions = [
-            {
-                "status": "open",
-                "pool_id": "test_pool",
-                "chain": "ethereum"
-            }
+            {"status": "open", "pool_id": "test_pool", "chain": "ethereum"}
         ]
-        
+
         actions = [{"action": "test_action"}]
-        
+
         # Create a mock that tracks calls and returns None for first two calls
         call_count = [0]
-        original_method = self.behaviour.current_behaviour.calculate_initial_investment_value
-        
+        original_method = (
+            self.behaviour.current_behaviour.calculate_initial_investment_value
+        )
+
         def mock_calculate_initial_investment_value(position):
             call_count[0] += 1
             if call_count[0] <= 2:
@@ -9277,59 +9913,69 @@ def dynamic_test_method(*args, **kwargs):
                 # Return a value on third call to break the loop
                 yield
                 return 100.0
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "calculate_initial_investment_value",
-            side_effect=mock_calculate_initial_investment_value
+            side_effect=mock_calculate_initial_investment_value,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "warning"
         ) as mock_warning, patch.object(
             self.behaviour.current_behaviour, "sleep"
         ) as mock_sleep:
-            
             # Call the actual function
-            generator = self.behaviour.current_behaviour._apply_investment_cap_to_actions(actions)
+            generator = (
+                self.behaviour.current_behaviour._apply_investment_cap_to_actions(
+                    actions
+                )
+            )
             result = None
             try:
                 while True:
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Verify the method was called 3 times (initial + 2 retries)
             assert call_count[0] == 3
-            
+
             # Verify the retry logic was triggered
             assert mock_warning.call_count == 2
             warning_calls = [call.args[0] for call in mock_warning.call_args_list]
-            assert any("V_initial is None (possible rate limit)" in call for call in warning_calls)
-            
+            assert any(
+                "V_initial is None (possible rate limit)" in call
+                for call in warning_calls
+            )
+
             # Verify exponential backoff was used
-            sleep_calls = [call.args[0] for call in mock_sleep.call_args_list if call.args[0] in [10, 20]]
+            sleep_calls = [
+                call.args[0]
+                for call in mock_sleep.call_args_list
+                if call.args[0] in [10, 20]
+            ]
             assert 10 in sleep_calls  # First retry delay
             assert 20 in sleep_calls  # Second retry delay (doubled)
 
     def test_get_order_of_transactions_returns_actions(self) -> None:
         """Test get_order_of_transactions returns actions when _prepare_tokens_for_investment returns None"""
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             return None  # This will trigger
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_prepare_tokens_for_investment",
-            side_effect=mock_prepare_tokens_for_investment
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ):
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "uniswap_v3", "pool_id": "dummy_pool"}
             ]
-            
+
             # Call the actual function that contains
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9338,86 +9984,85 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return actions (empty list in this case) when _prepare_tokens_for_investment returns None
             assert result == []
 
     def test_get_order_of_transactions_position_exit_with_staking(self) -> None:
         """Test get_order_of_transactions position exit with staking metadata"""
-        
+
         # Set up position to exit with staking metadata
         position_with_staking = {
             "pool_id": "test_pool",
-            "chain": "ethereum", 
+            "chain": "ethereum",
             "dex_type": "uniswap_v3",
-            "staking_metadata": {"contract": "0x123", "rewards": True}
+            "staking_metadata": {"contract": "0x123", "rewards": True},
         }
         self.behaviour.current_behaviour.position_to_exit = position_with_staking
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             # Return tokens so the function doesn't exit early
             return [{"token": "0x456", "chain": "ethereum"}]
-        
+
         def mock_has_staking_metadata(position):
             return position.get("staking_metadata") is not None
-        
+
         def mock_build_unstake_action(position):
             return {"action": "unstake", "pool_id": position["pool_id"]}
-        
+
         def mock_build_exit_pool_action(tokens, num_tokens):
             return {"action": "exit_pool", "tokens": len(tokens)}
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             return []  # Return empty list instead of None to avoid error
-        
+
         def mock_build_enter_pool_action(opportunity):
             return {"action": "enter_pool", "opportunity": opportunity}
-        
+
         def mock_initialize_entry_costs_for_new_position(action):
             yield  # Generator function
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
-            "_prepare_tokens_for_investment", 
-            side_effect=mock_prepare_tokens_for_investment
+            "_prepare_tokens_for_investment",
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_has_staking_metadata",
-            side_effect=mock_has_staking_metadata
+            side_effect=mock_has_staking_metadata,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_unstake_lp_tokens_action",
-            side_effect=mock_build_unstake_action
+            side_effect=mock_build_unstake_action,
         ), patch.object(
             self.behaviour.current_behaviour,
-            "_build_exit_pool_action", 
-            side_effect=mock_build_exit_pool_action
+            "_build_exit_pool_action",
+            side_effect=mock_build_exit_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_enter_pool_action",
-            side_effect=mock_build_enter_pool_action
+            side_effect=mock_build_enter_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_initialize_entry_costs_for_new_position",
-            side_effect=mock_initialize_entry_costs_for_new_position
+            side_effect=mock_initialize_entry_costs_for_new_position,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            
             # Set up state - need at least one opportunity to avoid early return
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "uniswap_v3", "pool_id": "dummy_pool"}
             ]
-            
+
             # Call the actual function that contains the position exit logic
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9426,83 +10071,85 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have created unstake, exit pool, and enter pool actions
             assert len(result) == 3
             assert result[0]["action"] == "unstake"
             assert result[1]["action"] == "exit_pool"
             assert result[2]["action"] == "enter_pool"
-            
+
             # Should have logged the unstake action
             info_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("Added unstake LP tokens action before exit" in call for call in info_calls)
+            assert any(
+                "Added unstake LP tokens action before exit" in call
+                for call in info_calls
+            )
 
     def test_get_order_of_transactions_position_exit_no_staking(self) -> None:
         """Test get_order_of_transactions position exit without staking metadata"""
-        
+
         # Set up position to exit WITHOUT staking metadata
         position_without_staking = {
             "pool_id": "test_pool",
-            "chain": "ethereum", 
+            "chain": "ethereum",
             "dex_type": "uniswap_v3"
             # No staking_metadata
         }
         self.behaviour.current_behaviour.position_to_exit = position_without_staking
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             return [{"token": "0x456", "chain": "ethereum"}]
-        
+
         def mock_has_staking_metadata(position):
             return position.get("staking_metadata") is not None
-        
+
         def mock_build_exit_pool_action(tokens, num_tokens):
             return {"action": "exit_pool", "tokens": len(tokens)}
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             return []  # Return empty list instead of None to avoid error
-        
+
         def mock_build_enter_pool_action(opportunity):
             return {"action": "enter_pool", "opportunity": opportunity}
-        
+
         def mock_initialize_entry_costs_for_new_position(action):
             yield  # Generator function
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
-            "_prepare_tokens_for_investment", 
-            side_effect=mock_prepare_tokens_for_investment
+            "_prepare_tokens_for_investment",
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_has_staking_metadata",
-            side_effect=mock_has_staking_metadata
+            side_effect=mock_has_staking_metadata,
         ), patch.object(
             self.behaviour.current_behaviour,
-            "_build_exit_pool_action", 
-            side_effect=mock_build_exit_pool_action
+            "_build_exit_pool_action",
+            side_effect=mock_build_exit_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_enter_pool_action",
-            side_effect=mock_build_enter_pool_action
+            side_effect=mock_build_enter_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_initialize_entry_costs_for_new_position",
-            side_effect=mock_initialize_entry_costs_for_new_position
+            side_effect=mock_initialize_entry_costs_for_new_position,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ):
-            
             # Set up state
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "uniswap_v3", "pool_id": "dummy_pool"}
             ]
-            
+
             # Call the actual function
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9511,7 +10158,7 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have created exit pool and enter pool actions (no unstake action)
             assert len(result) == 2
             assert result[0]["action"] == "exit_pool"
@@ -9519,57 +10166,56 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_get_order_of_transactions_exit_pool_action_fails(self) -> None:
         """Test get_order_of_transactions when exit pool action fails"""
-        
+
         # Set up position to exit
         position_to_exit = {
             "pool_id": "test_pool",
-            "chain": "ethereum", 
-            "dex_type": "uniswap_v3"
+            "chain": "ethereum",
+            "dex_type": "uniswap_v3",
         }
         self.behaviour.current_behaviour.position_to_exit = position_to_exit
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             return [{"token": "0x456", "chain": "ethereum"}]
-        
+
         def mock_has_staking_metadata(position):
             return False  # No staking metadata
-        
+
         def mock_build_exit_pool_action(tokens, num_tokens):
             return None  # This will trigger the error condition
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             return []  # Return empty list instead of None to avoid error
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
-            "_prepare_tokens_for_investment", 
-            side_effect=mock_prepare_tokens_for_investment
+            "_prepare_tokens_for_investment",
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_has_staking_metadata",
-            side_effect=mock_has_staking_metadata
+            side_effect=mock_has_staking_metadata,
         ), patch.object(
             self.behaviour.current_behaviour,
-            "_build_exit_pool_action", 
-            side_effect=mock_build_exit_pool_action
+            "_build_exit_pool_action",
+            side_effect=mock_build_exit_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error:
-            
             # Set up state
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "uniswap_v3", "pool_id": "dummy_pool"}
             ]
-            
+
             # Call the actual function
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9578,60 +10224,59 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None when exit pool action fails
             assert result is None
-            
+
             # Should have logged the error
             mock_error.assert_called_once_with("Error building exit pool action")
 
     def test_get_order_of_transactions_bridge_swap_actions_extend(self) -> None:
         """Test get_order_of_transactions when bridge_swap_actions are extended to actions"""
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             return [{"address": "0xToken1", "symbol": "TKN1"}]
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             # Return non-empty list to trigger
             return [
                 {"action": "bridge_swap", "from_token": "TKN1", "to_token": "TKN2"},
-                {"action": "bridge_swap", "from_token": "TKN2", "to_token": "TKN3"}
+                {"action": "bridge_swap", "from_token": "TKN2", "to_token": "TKN3"},
             ]
-        
+
         def mock_build_enter_pool_action(opportunity):
             return {"action": "enter_pool", "opportunity": opportunity}
-        
+
         def mock_initialize_entry_costs_for_new_position(action):
             yield  # Generator function
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
-            "_prepare_tokens_for_investment", 
-            side_effect=mock_prepare_tokens_for_investment
+            "_prepare_tokens_for_investment",
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_enter_pool_action",
-            side_effect=mock_build_enter_pool_action
+            side_effect=mock_build_enter_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_initialize_entry_costs_for_new_position",
-            side_effect=mock_initialize_entry_costs_for_new_position
+            side_effect=mock_initialize_entry_costs_for_new_position,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ):
-            
             # Set up state - need at least one opportunity to avoid early return
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "uniswap_v3", "pool_id": "dummy_pool"}
             ]
-            
+
             # Call the generator function
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9640,51 +10285,50 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have extended bridge swap actions and enter pool action
             assert len(result) == 3
             assert result[0]["action"] == "bridge_swap"
-            assert result[1]["action"] == "bridge_swap" 
+            assert result[1]["action"] == "bridge_swap"
             assert result[2]["action"] == "enter_pool"
 
     def test_get_order_of_transactions_enter_pool_action_fails(self) -> None:
         """Test get_order_of_transactions when enter_pool_action is falsy"""
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             return [{"address": "0xToken1", "symbol": "TKN1"}]
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             return []  # Return empty list to avoid error
-        
+
         def mock_build_enter_pool_action(opportunity):
-            return None  # Return falsy value 
-        
+            return None  # Return falsy value
+
         with patch.object(
             self.behaviour.current_behaviour,
-            "_prepare_tokens_for_investment", 
-            side_effect=mock_prepare_tokens_for_investment
+            "_prepare_tokens_for_investment",
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_enter_pool_action",
-            side_effect=mock_build_enter_pool_action
+            side_effect=mock_build_enter_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
-            
             # Set up state - need at least one opportunity to avoid early return
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "uniswap_v3", "pool_id": "dummy_pool"}
             ]
-            
+
             # Call the generator function
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9693,72 +10337,73 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None due to enter pool action failure
             assert result is None
-            
+
             # Should have logged the error
             mock_logger.assert_called_once_with("Error building enter pool action")
 
     def test_get_order_of_transactions_velodrome_token_allocation(self) -> None:
         """Test get_order_of_transactions with Velodrome token allocation handling"""
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             return [{"address": "0xToken1", "symbol": "TKN1"}]
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             return []  # Return empty list to avoid error
-        
+
         def mock_build_enter_pool_action(opportunity):
             # Return Velodrome enter_pool_action with token_requirements to trigger
             return {
-                "action": "enter_pool", 
+                "action": "enter_pool",
                 "dex_type": "velodrome",
                 "token_requirements": {"token1": "0xToken1", "token2": "0xToken2"},
-                "opportunity": opportunity
+                "opportunity": opportunity,
             }
-        
+
         def mock_initialize_entry_costs_for_new_position(action):
             yield  # Generator function
-        
-        def mock_handle_velodrome_token_allocation(actions, enter_pool_action, available_tokens):
+
+        def mock_handle_velodrome_token_allocation(
+            actions, enter_pool_action, available_tokens
+        ):
             # Mock the Velodrome token allocation handling
             return actions + [{"action": "velodrome_allocation", "processed": True}]
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
-            "_prepare_tokens_for_investment", 
-            side_effect=mock_prepare_tokens_for_investment
+            "_prepare_tokens_for_investment",
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_enter_pool_action",
-            side_effect=mock_build_enter_pool_action
+            side_effect=mock_build_enter_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_initialize_entry_costs_for_new_position",
-            side_effect=mock_initialize_entry_costs_for_new_position
+            side_effect=mock_initialize_entry_costs_for_new_position,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_handle_velodrome_token_allocation",
-            side_effect=mock_handle_velodrome_token_allocation
+            side_effect=mock_handle_velodrome_token_allocation,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            
             # Set up state - need at least one opportunity to avoid early return
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "velodrome", "pool_id": "dummy_pool"}
             ]
-            
+
             # Call the generator function
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9767,83 +10412,85 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have processed Velodrome token allocation
             assert len(result) == 2
             assert result[0]["action"] == "enter_pool"
             assert result[1]["action"] == "velodrome_allocation"
             assert result[1]["processed"] is True
-            
+
             # Should have logged the Velodrome allocation info
             info_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("action after velodrome into the function:" in call for call in info_calls)
+            assert any(
+                "action after velodrome into the function:" in call
+                for call in info_calls
+            )
 
     def test_get_order_of_transactions_investment_cap_application(self) -> None:
         """Test get_order_of_transactions with investment cap application when current_positions exist"""
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             return [{"address": "0xToken1", "symbol": "TKN1"}]
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             return []  # Return empty list to avoid error
-        
+
         def mock_build_enter_pool_action(opportunity):
             return {"action": "enter_pool", "opportunity": opportunity}
-        
+
         def mock_initialize_entry_costs_for_new_position(action):
             yield  # Generator function
-        
+
         def mock_apply_investment_cap_to_actions(actions):
             # Mock the investment cap application (generator function)
             yield  # Simulate generator behavior
             return actions + [{"action": "investment_cap_applied", "capped": True}]
-        
+
         def mock_merge_duplicate_bridge_swap_actions(actions):
             return actions  # Return actions as-is for simplicity
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
-            "_prepare_tokens_for_investment", 
-            side_effect=mock_prepare_tokens_for_investment
+            "_prepare_tokens_for_investment",
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_enter_pool_action",
-            side_effect=mock_build_enter_pool_action
+            side_effect=mock_build_enter_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_initialize_entry_costs_for_new_position",
-            side_effect=mock_initialize_entry_costs_for_new_position
+            side_effect=mock_initialize_entry_costs_for_new_position,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_apply_investment_cap_to_actions",
-            side_effect=mock_apply_investment_cap_to_actions
+            side_effect=mock_apply_investment_cap_to_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_merge_duplicate_bridge_swap_actions",
-            side_effect=mock_merge_duplicate_bridge_swap_actions
+            side_effect=mock_merge_duplicate_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            
             # Set up state - need at least one opportunity to avoid early return
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "uniswap_v3", "pool_id": "dummy_pool"}
             ]
-            
+
             # Set current_positions to trigger the investment cap application
             self.behaviour.current_behaviour.current_positions = [
                 {"pool_id": "existing_pool", "status": "open"}
             ]
-            
+
             # Call the generator function
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9852,71 +10499,73 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have applied investment cap
             assert len(result) == 2
             assert result[0]["action"] == "enter_pool"
             assert result[1]["action"] == "investment_cap_applied"
             assert result[1]["capped"] is True
-            
+
             # Should have logged the investment cap application
             info_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("action before the investment into the function:" in call for call in info_calls)
+            assert any(
+                "action before the investment into the function:" in call
+                for call in info_calls
+            )
             assert any("action into the function:" in call for call in info_calls)
 
     def test_get_order_of_transactions_exception_handling(self) -> None:
         """Test get_order_of_transactions exception handling in merge bridge swap actions"""
-        
+
         def mock_prepare_tokens_for_investment():
             yield
             return [{"address": "0xToken1", "symbol": "TKN1"}]
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             return []  # Return empty list to avoid error
-        
+
         def mock_build_enter_pool_action(opportunity):
             return {"action": "enter_pool", "opportunity": opportunity}
-        
+
         def mock_initialize_entry_costs_for_new_position(action):
             yield  # Generator function
-        
+
         def mock_merge_duplicate_bridge_swap_actions_with_exception(actions):
             # Raise an exception to trigger
             raise RuntimeError("Simulated merge error")
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
-            "_prepare_tokens_for_investment", 
-            side_effect=mock_prepare_tokens_for_investment
+            "_prepare_tokens_for_investment",
+            side_effect=mock_prepare_tokens_for_investment,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_enter_pool_action",
-            side_effect=mock_build_enter_pool_action
+            side_effect=mock_build_enter_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_initialize_entry_costs_for_new_position",
-            side_effect=mock_initialize_entry_costs_for_new_position
+            side_effect=mock_initialize_entry_costs_for_new_position,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_merge_duplicate_bridge_swap_actions",
-            side_effect=mock_merge_duplicate_bridge_swap_actions_with_exception
+            side_effect=mock_merge_duplicate_bridge_swap_actions_with_exception,
         ), patch.object(
             self.behaviour.current_behaviour,
             "get_velodrome_position_requirements",
-            return_value=iter([])  # Empty generator
+            return_value=iter([]),  # Empty generator
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Set up state - need at least one opportunity to avoid early return
             self.behaviour.current_behaviour.selected_opportunities = [
                 {"dex_type": "uniswap_v3", "pool_id": "dummy_pool"}
             ]
-            
+
             # Call the generator function
             generator = self.behaviour.current_behaviour.get_order_of_transactions()
             result = None
@@ -9925,11 +10574,11 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return original actions due to exception handling
             assert len(result) == 1
             assert result[0]["action"] == "enter_pool"
-            
+
             # Should have logged the error
             mock_error_logger.assert_called_once()
             error_call = mock_error_logger.call_args[0][0]
@@ -9938,61 +10587,65 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_prepare_tokens_for_investment_no_tokens_available(self) -> None:
         """Test _prepare_tokens_for_investment when no tokens are available"""
-        
+
         def mock_get_available_tokens():
             yield  # Generator function
             return []  # No available tokens
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_available_tokens",
-            side_effect=mock_get_available_tokens
+            side_effect=mock_get_available_tokens,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Set up state - no position to exit
             self.behaviour.current_behaviour.position_to_exit = None
-            
+
             # Call the generator function
-            generator = self.behaviour.current_behaviour._prepare_tokens_for_investment()
+            generator = (
+                self.behaviour.current_behaviour._prepare_tokens_for_investment()
+            )
             result = None
             try:
                 while True:
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None due to no tokens available
             assert result is None
-            
+
             # Should have logged the error
-            mock_error_logger.assert_called_once_with("No tokens available for investment")
+            mock_error_logger.assert_called_once_with(
+                "No tokens available for investment"
+            )
 
     def test_get_available_tokens_zero_address_decimals(self) -> None:
         """Test _get_available_tokens when token has ZERO_ADDRESS to cover (decimals = 18)."""
-        
+
         def mock_get_investable_balance(chain, asset_address, balance):
             yield  # Generator function
             return balance  # Return the full balance as investable
-        
+
         def mock_fetch_token_prices(token_balances):
             yield  # Generator function
             # Return prices for tokens
-            return {"0x0000000000000000000000000000000000000000": 1.0}  # ZERO_ADDRESS price
-        
+            return {
+                "0x0000000000000000000000000000000000000000": 1.0
+            }  # ZERO_ADDRESS price
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_investable_balance",
-            side_effect=mock_get_investable_balance
+            side_effect=mock_get_investable_balance,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_fetch_token_prices",
-            side_effect=mock_fetch_token_prices
+            side_effect=mock_fetch_token_prices,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_info_logger:
-            
             # Set up synchronized_data with positions containing ZERO_ADDRESS token
             self.behaviour.current_behaviour.synchronized_data.positions = [
                 {
@@ -10001,15 +10654,15 @@ def dynamic_test_method(*args, **kwargs):
                         {
                             "address": "0x0000000000000000000000000000000000000000",  # ZERO_ADDRESS
                             "asset_symbol": "ETH",
-                            "balance": 1000000000000000000  # 1 ETH in wei
+                            "balance": 1000000000000000000,  # 1 ETH in wei
                         }
-                    ]
+                    ],
                 }
             ]
-            
+
             # Set minimum investment amount to a low value so tokens pass the filter
             self.behaviour.current_behaviour.params.min_investment_amount = 0.1
-            
+
             # Call the generator function
             generator = self.behaviour.current_behaviour._get_available_tokens()
             result = None
@@ -10018,11 +10671,11 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return tokens with calculated values
             assert result is not None
             assert len(result) > 0
-            
+
             # Verify that the token was processed with decimals = 18
             token = result[0]
             assert token["token"] == "0x0000000000000000000000000000000000000000"
@@ -10032,40 +10685,39 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_build_exit_pool_action_success(self) -> None:
         """Test _build_exit_pool_action successful execution"""
-        
+
         def mock_build_exit_pool_action_base(position, tokens):
             return {
                 "action": "exit_pool",
                 "pool_id": position["pool_id"],
                 "tokens": tokens,
-                "chain": position["chain"]
+                "chain": position["chain"],
             }
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_build_exit_pool_action_base",
-            side_effect=mock_build_exit_pool_action_base
+            side_effect=mock_build_exit_pool_action_base,
         ):
-            
             # Set up position_to_exit
             self.behaviour.current_behaviour.position_to_exit = {
                 "pool_id": "test_pool_123",
                 "chain": "ethereum",
-                "dex_type": "uniswap_v3"
+                "dex_type": "uniswap_v3",
             }
-            
+
             # Set up tokens - provide enough tokens to meet requirements
             tokens = [
                 {"address": "0xToken1", "symbol": "TKN1", "balance": 1000},
-                {"address": "0xToken2", "symbol": "TKN2", "balance": 2000}
+                {"address": "0xToken2", "symbol": "TKN2", "balance": 2000},
             ]
             num_of_tokens_required = 2
-            
+
             # Call the function
             result = self.behaviour.current_behaviour._build_exit_pool_action(
                 tokens, num_of_tokens_required
             )
-            
+
             # Should return the exit pool action from base class method
             assert result is not None
             assert result["action"] == "exit_pool"
@@ -10075,60 +10727,64 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_handle_all_tokens_available_token1_surplus_rebalance(self) -> None:
         """Test _handle_all_tokens_available when token1 has surplus and token0 has deficit"""
-        
-        def mock_add_bridge_swap_action(actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction):
-            actions.append({
-                "action": "bridge_swap",
-                "from_token": token.get("token"),
-                "from_chain": token.get("chain"),
-                "to_token": dest_token_addr,
-                "to_chain": dest_chain,
-                "fraction": fraction
-            })
-        
+
+        def mock_add_bridge_swap_action(
+            actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction
+        ):
+            actions.append(
+                {
+                    "action": "bridge_swap",
+                    "from_token": token.get("token"),
+                    "from_chain": token.get("chain"),
+                    "to_token": dest_token_addr,
+                    "to_chain": dest_chain,
+                    "fraction": fraction,
+                }
+            )
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_add_bridge_swap_action",
-            side_effect=mock_add_bridge_swap_action
+            side_effect=mock_add_bridge_swap_action,
         ):
-            
             # Set up tokens with token1 having surplus and token0 having deficit
             tokens = [
                 {
                     "token": "0xToken0",
                     "chain": "ethereum",
-                    "value": 100.0  # Low value (deficit)
+                    "value": 100.0,  # Low value (deficit)
                 },
                 {
-                    "token": "0xToken1", 
+                    "token": "0xToken1",
                     "chain": "ethereum",
-                    "value": 400.0  # High value (surplus)
-                }
+                    "value": 400.0,  # High value (surplus)
+                },
             ]
-            
-            required_tokens = [
-                ("0xToken0", "TKN0"),
-                ("0xToken1", "TKN1")
-            ]
-            
+
+            required_tokens = [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
+
             dest_chain = "ethereum"
             relative_funds_percentage = 1.0
             target_ratios_by_token = {
                 "0xToken0": 0.5,  # Target 50% for token0
-                "0xToken1": 0.5   # Target 50% for token1
+                "0xToken1": 0.5,  # Target 50% for token1
             }
-            
+
             # Call the function
             result = self.behaviour.current_behaviour._handle_all_tokens_available(
-                tokens, required_tokens, dest_chain, relative_funds_percentage, target_ratios_by_token
+                tokens,
+                required_tokens,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
-            
+
             # Should have created a bridge swap action for token1 -> token0 rebalancing
             assert len(result) == 1
             action = result[0]
             assert action["action"] == "bridge_swap"
             assert action["from_token"] == "0xToken1"  # From surplus token1
-            assert action["to_token"] == "0xToken0"    # To deficit token0
+            assert action["to_token"] == "0xToken0"  # To deficit token0
             assert action["to_chain"] == "ethereum"
             # Fraction should be calculated based on surplus/deficit: min(surplus1, deficit0) / val1
             # surplus1 = 400 - 250 = 150, deficit0 = 250 - 100 = 150, fraction = min(150, 150) / 400 = 0.375
@@ -10136,52 +10792,43 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_handle_all_tokens_available_exception_handling(self) -> None:
         """Test _handle_all_tokens_available exception handling during rebalance planning"""
-        
-        def mock_add_bridge_swap_action_exception(actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction):
+
+        def mock_add_bridge_swap_action_exception(
+            actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction
+        ):
             raise RuntimeError("Simulated rebalance error")
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_add_bridge_swap_action",
-            side_effect=mock_add_bridge_swap_action_exception
+            side_effect=mock_add_bridge_swap_action_exception,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Set up tokens that would trigger rebalancing
             tokens = [
-                {
-                    "token": "0xToken0",
-                    "chain": "ethereum", 
-                    "value": 100.0
-                },
-                {
-                    "token": "0xToken1",
-                    "chain": "ethereum",
-                    "value": 400.0
-                }
+                {"token": "0xToken0", "chain": "ethereum", "value": 100.0},
+                {"token": "0xToken1", "chain": "ethereum", "value": 400.0},
             ]
-            
-            required_tokens = [
-                ("0xToken0", "TKN0"),
-                ("0xToken1", "TKN1")
-            ]
-            
+
+            required_tokens = [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
+
             dest_chain = "ethereum"
             relative_funds_percentage = 1.0
-            target_ratios_by_token = {
-                "0xToken0": 0.5,
-                "0xToken1": 0.5
-            }
-            
+            target_ratios_by_token = {"0xToken0": 0.5, "0xToken1": 0.5}
+
             # Call the function - should handle exception gracefully
             result = self.behaviour.current_behaviour._handle_all_tokens_available(
-                tokens, required_tokens, dest_chain, relative_funds_percentage, target_ratios_by_token
+                tokens,
+                required_tokens,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
-            
+
             # Should return empty list due to exception handling
             assert result == []
-            
+
             # Should have logged the error
             mock_error_logger.assert_called_once()
             error_call = mock_error_logger.call_args[0][0]
@@ -10190,53 +10837,53 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_handle_some_tokens_available_dest_chain_swap(self) -> None:
         """Test _handle_some_tokens_available destination chain token swapping"""
-        
-        def mock_add_bridge_swap_action(actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction):
-            actions.append({
-                "action": "bridge_swap",
-                "from_token": token.get("token"),
-                "from_chain": token.get("chain"),
-                "to_token": dest_token_addr,
-                "to_chain": dest_chain,
-                "fraction": fraction
-            })
-        
+
+        def mock_add_bridge_swap_action(
+            actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction
+        ):
+            actions.append(
+                {
+                    "action": "bridge_swap",
+                    "from_token": token.get("token"),
+                    "from_chain": token.get("chain"),
+                    "to_token": dest_token_addr,
+                    "to_chain": dest_chain,
+                    "fraction": fraction,
+                }
+            )
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_add_bridge_swap_action",
-            side_effect=mock_add_bridge_swap_action
+            side_effect=mock_add_bridge_swap_action,
         ):
-            
             # Set up tokens with some on destination chain that are not required
             tokens = [
                 {
                     "token": "0xUnwantedToken",  # Token on dest chain but not required
                     "chain": "ethereum",
-                    "value": 200.0
+                    "value": 200.0,
                 }
             ]
-            
-            required_tokens = [
-                ("0xToken0", "TKN0"),
-                ("0xToken1", "TKN1")
-            ]
-            
-            tokens_we_need = [
-                ("0xToken0", "TKN0")  # Missing token we need
-            ]
-            
+
+            required_tokens = [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
+
+            tokens_we_need = [("0xToken0", "TKN0")]  # Missing token we need
+
             dest_chain = "ethereum"
             relative_funds_percentage = 1.0
-            target_ratios_by_token = {
-                "0xToken0": 0.6,
-                "0xToken1": 0.4
-            }
-            
+            target_ratios_by_token = {"0xToken0": 0.6, "0xToken1": 0.4}
+
             # Call the function
             result = self.behaviour.current_behaviour._handle_some_tokens_available(
-                tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage, target_ratios_by_token
+                tokens,
+                required_tokens,
+                tokens_we_need,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
-            
+
             # Should have created a bridge swap action from unwanted token to first missing token
             assert len(result) == 1
             action = result[0]
@@ -10249,160 +10896,174 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_handle_some_tokens_available_fallback_logic(self) -> None:
         """Test _handle_some_tokens_available fallback logic when no actions created"""
-        
-        def mock_add_bridge_swap_action(actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction):
-            actions.append({
-                "action": "bridge_swap",
-                "from_token": token.get("token"),
-                "from_chain": token.get("chain"),
-                "to_token": dest_token_addr,
-                "to_chain": dest_chain,
-                "fraction": fraction
-            })
-        
+
+        def mock_add_bridge_swap_action(
+            actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction
+        ):
+            actions.append(
+                {
+                    "action": "bridge_swap",
+                    "from_token": token.get("token"),
+                    "from_chain": token.get("chain"),
+                    "to_token": dest_token_addr,
+                    "to_chain": dest_chain,
+                    "fraction": fraction,
+                }
+            )
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_add_bridge_swap_action",
-            side_effect=mock_add_bridge_swap_action
+            side_effect=mock_add_bridge_swap_action,
         ):
-            
             # Set up tokens where we have one required token on dest chain but need another
             tokens = [
                 {
                     "token": "0xToken0",  # Available required token on dest chain
                     "chain": "ethereum",
-                    "value": 300.0
+                    "value": 300.0,
                 }
             ]
-            
+
             required_tokens = [
                 ("0xToken0", "TKN0"),  # We have this one
-                ("0xToken1", "TKN1")   # We need this one
+                ("0xToken1", "TKN1"),  # We need this one
             ]
-            
-            tokens_we_need = [
-                ("0xToken1", "TKN1")  # Missing token we need
-            ]
-            
+
+            tokens_we_need = [("0xToken1", "TKN1")]  # Missing token we need
+
             dest_chain = "ethereum"
             relative_funds_percentage = 0.8
-            target_ratios_by_token = {
-                "0xToken0": 0.3,
-                "0xToken1": 0.7
-            }
-            
+            target_ratios_by_token = {"0xToken0": 0.3, "0xToken1": 0.7}
+
             # Call the function
             result = self.behaviour.current_behaviour._handle_some_tokens_available(
-                tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage, target_ratios_by_token
+                tokens,
+                required_tokens,
+                tokens_we_need,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
-            
+
             # Should have created a bridge swap action using fallback logic
             assert len(result) == 1
             action = result[0]
             assert action["action"] == "bridge_swap"
-            assert action["from_token"] == "0xToken0"  # Source: available required token
-            assert action["to_token"] == "0xToken1"    # Destination: missing token
+            assert (
+                action["from_token"] == "0xToken0"
+            )  # Source: available required token
+            assert action["to_token"] == "0xToken1"  # Destination: missing token
             assert action["to_chain"] == "ethereum"
             # Fraction should be relative_funds_percentage * target_ratio = 0.8 * 0.7 = 0.56
             assert abs(action["fraction"] - 0.56) < 0.001
 
     def test_handle_some_tokens_available_skip_same_token(self) -> None:
         """Test _handle_some_tokens_available skip logic when source and dest are same token"""
-        
-        def mock_add_bridge_swap_action(actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction):
-            actions.append({
-                "action": "bridge_swap",
-                "from_token": token.get("token"),
-                "from_chain": token.get("chain"),
-                "to_token": dest_token_addr,
-                "to_chain": dest_chain,
-                "fraction": fraction
-            })
-        
+
+        def mock_add_bridge_swap_action(
+            actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction
+        ):
+            actions.append(
+                {
+                    "action": "bridge_swap",
+                    "from_token": token.get("token"),
+                    "from_chain": token.get("chain"),
+                    "to_token": dest_token_addr,
+                    "to_chain": dest_chain,
+                    "fraction": fraction,
+                }
+            )
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_add_bridge_swap_action",
-            side_effect=mock_add_bridge_swap_action
+            side_effect=mock_add_bridge_swap_action,
         ):
-            
             # Set up tokens where available token is same as the one we need
             tokens = [
                 {
                     "token": "0xToken0",  # Available required token on dest chain
                     "chain": "ethereum",
-                    "value": 300.0
+                    "value": 300.0,
                 }
             ]
-            
+
             required_tokens = [
                 ("0xToken0", "TKN0"),  # We have this one
-                ("0xToken1", "TKN1")   # We need this one
+                ("0xToken1", "TKN1"),  # We need this one
             ]
-            
+
             tokens_we_need = [
                 ("0xToken0", "TKN0")  # Same as what we have - should be skipped
             ]
-            
+
             dest_chain = "ethereum"
             relative_funds_percentage = 0.8
-            target_ratios_by_token = {
-                "0xToken0": 0.5,
-                "0xToken1": 0.5
-            }
-            
+            target_ratios_by_token = {"0xToken0": 0.5, "0xToken1": 0.5}
+
             # Call the function
             result = self.behaviour.current_behaviour._handle_some_tokens_available(
-                tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage, target_ratios_by_token
+                tokens,
+                required_tokens,
+                tokens_we_need,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
-            
+
             # Should return empty list because source and dest tokens are the same
             assert len(result) == 0
 
     def test_handle_all_tokens_needed_single_token_skip_same(self) -> None:
         """Test _handle_all_tokens_needed single token case skip logic when source and dest are same"""
-        
-        def mock_add_bridge_swap_action(actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction):
-            actions.append({
-                "action": "bridge_swap",
-                "from_token": token.get("token"),
-                "from_chain": token.get("chain"),
-                "to_token": dest_token_addr,
-                "to_chain": dest_chain,
-                "fraction": fraction
-            })
-        
+
+        def mock_add_bridge_swap_action(
+            actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction
+        ):
+            actions.append(
+                {
+                    "action": "bridge_swap",
+                    "from_token": token.get("token"),
+                    "from_chain": token.get("chain"),
+                    "to_token": dest_token_addr,
+                    "to_chain": dest_chain,
+                    "fraction": fraction,
+                }
+            )
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_add_bridge_swap_action",
-            side_effect=mock_add_bridge_swap_action
+            side_effect=mock_add_bridge_swap_action,
         ):
-            
             # Set up single source token that matches one of the required tokens on same chain
             tokens = [
                 {
                     "token": "0xToken0",  # Same as first required token
                     "chain": "ethereum",
-                    "value": 300.0
+                    "value": 300.0,
                 }
             ]
-            
+
             required_tokens = [
                 ("0xToken0", "TKN0"),  # Same token - should be skipped
-                ("0xToken1", "TKN1")   # Different token - should create action
+                ("0xToken1", "TKN1"),  # Different token - should create action
             ]
-            
+
             dest_chain = "ethereum"
             relative_funds_percentage = 1.0
-            target_ratios_by_token = {
-                "0xToken0": 0.4,
-                "0xToken1": 0.6
-            }
-            
+            target_ratios_by_token = {"0xToken0": 0.4, "0xToken1": 0.6}
+
             # Call the function
             result = self.behaviour.current_behaviour._handle_all_tokens_needed(
-                tokens, required_tokens, dest_chain, relative_funds_percentage, target_ratios_by_token
+                tokens,
+                required_tokens,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
-            
+
             # Should create only one action (skip same token, create action for different token)
             assert len(result) == 1
             action = result[0]
@@ -10415,183 +11076,190 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_handle_all_tokens_needed_multiple_tokens_skip_same(self) -> None:
         """Test _handle_all_tokens_needed multiple tokens case skip logic when source and dest are same"""
-        
-        def mock_add_bridge_swap_action(actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction):
-            actions.append({
-                "action": "bridge_swap",
-                "from_token": token.get("token"),
-                "from_chain": token.get("chain"),
-                "to_token": dest_token_addr,
-                "to_chain": dest_chain,
-                "fraction": fraction
-            })
-        
+
+        def mock_add_bridge_swap_action(
+            actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction
+        ):
+            actions.append(
+                {
+                    "action": "bridge_swap",
+                    "from_token": token.get("token"),
+                    "from_chain": token.get("chain"),
+                    "to_token": dest_token_addr,
+                    "to_chain": dest_chain,
+                    "fraction": fraction,
+                }
+            )
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_add_bridge_swap_action",
-            side_effect=mock_add_bridge_swap_action
+            side_effect=mock_add_bridge_swap_action,
         ):
-            
             # Set up multiple source tokens where one matches a required token on same chain
             tokens = [
                 {
                     "token": "0xToken0",  # Matches first required token - should be skipped
                     "chain": "ethereum",
-                    "value": 200.0
+                    "value": 200.0,
                 },
                 {
                     "token": "0xToken2",  # Different token - should create action
-                    "chain": "ethereum", 
-                    "value": 300.0
-                }
+                    "chain": "ethereum",
+                    "value": 300.0,
+                },
             ]
-            
+
             required_tokens = [
                 ("0xToken0", "TKN0"),  # Matches first source token - should be skipped
-                ("0xToken1", "TKN1")   # Different token - should get action
+                ("0xToken1", "TKN1"),  # Different token - should get action
             ]
-            
+
             dest_chain = "ethereum"
             relative_funds_percentage = 0.8
-            target_ratios_by_token = {
-                "0xToken0": 0.3,
-                "0xToken1": 0.7
-            }
-            
+            target_ratios_by_token = {"0xToken0": 0.3, "0xToken1": 0.7}
+
             # Call the function
             result = self.behaviour.current_behaviour._handle_all_tokens_needed(
-                tokens, required_tokens, dest_chain, relative_funds_percentage, target_ratios_by_token
+                tokens,
+                required_tokens,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
-            
+
             # Should create only one action (first token skipped due to same token/chain)
             assert len(result) == 1
             action = result[0]
             assert action["action"] == "bridge_swap"
             assert action["from_token"] == "0xToken2"  # Second source token
-            assert action["to_token"] == "0xToken1"    # Second dest token (round-robin)
+            assert action["to_token"] == "0xToken1"  # Second dest token (round-robin)
             assert action["to_chain"] == "ethereum"
             # Fraction should be relative_funds_percentage * target_ratio = 0.8 * 0.7 = 0.56
             assert abs(action["fraction"] - 0.56) < 0.001
 
     def test_handle_all_tokens_needed_all_tokens_skipped(self) -> None:
         """Test _handle_all_tokens_needed when all tokens are skipped due to same token/chain matches."""
-        
-        def mock_add_bridge_swap_action(actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction):
-            actions.append({
-                "action": "bridge_swap",
-                "from_token": token.get("token"),
-                "from_chain": token.get("chain"),
-                "to_token": dest_token_addr,
-                "to_chain": dest_chain,
-                "fraction": fraction
-            })
-        
+
+        def mock_add_bridge_swap_action(
+            actions, token, dest_chain, dest_token_addr, dest_token_sym, fraction
+        ):
+            actions.append(
+                {
+                    "action": "bridge_swap",
+                    "from_token": token.get("token"),
+                    "from_chain": token.get("chain"),
+                    "to_token": dest_token_addr,
+                    "to_chain": dest_chain,
+                    "fraction": fraction,
+                }
+            )
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_add_bridge_swap_action",
-            side_effect=mock_add_bridge_swap_action
+            side_effect=mock_add_bridge_swap_action,
         ):
-            
             # Set up tokens where all source tokens match required tokens on same chain
-            tokens = [
-                {
-                    "token": "0xToken0",
-                    "chain": "ethereum",
-                    "value": 200.0
-                }
-            ]
-            
+            tokens = [{"token": "0xToken0", "chain": "ethereum", "value": 200.0}]
+
             required_tokens = [
                 ("0xToken0", "TKN0")  # Same token on same chain - should be skipped
             ]
-            
+
             dest_chain = "ethereum"
             relative_funds_percentage = 1.0
-            target_ratios_by_token = {
-                "0xToken0": 1.0
-            }
-            
+            target_ratios_by_token = {"0xToken0": 1.0}
+
             # Call the function
             result = self.behaviour.current_behaviour._handle_all_tokens_needed(
-                tokens, required_tokens, dest_chain, relative_funds_percentage, target_ratios_by_token
+                tokens,
+                required_tokens,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
             )
-            
+
             # Should return empty list because all tokens were skipped
             assert len(result) == 0
 
     def test_build_bridge_swap_actions_no_opportunity(self) -> None:
         """Test _build_bridge_swap_actions when no opportunity is provided"""
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Call with None opportunity
             result = self.behaviour.current_behaviour._build_bridge_swap_actions(
                 None, [{"token": "0xToken1", "chain": "ethereum"}]
             )
-            
+
             assert result is None
             mock_error_logger.assert_called_once_with("No pool present.")
 
     def test_build_bridge_swap_actions_no_required_tokens(self) -> None:
         """Test _build_bridge_swap_actions when no required tokens are identified"""
-        
+
         def mock_get_required_tokens(opportunity):
             return []  # Empty list - no required tokens
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_required_tokens",
-            side_effect=mock_get_required_tokens
+            side_effect=mock_get_required_tokens,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             opportunity = {
                 "chain": "ethereum",
                 "token0": "0xToken0",
                 "token1": "0xToken1",
-                "relative_funds_percentage": 1.0
+                "relative_funds_percentage": 1.0,
             }
             tokens = [{"token": "0xToken2", "chain": "polygon"}]
-            
+
             # Call the function
             result = self.behaviour.current_behaviour._build_bridge_swap_actions(
                 opportunity, tokens
             )
-            
+
             # Should return None and log error
             assert result is None
             mock_error_logger.assert_called_once_with("No required tokens identified")
 
     def test_build_bridge_swap_actions_token0_ratio_exception(self) -> None:
         """Test _build_bridge_swap_actions when token0 ratio calculation raises exception"""
-        
+
         def mock_get_required_tokens(opportunity):
             return [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
-        
-        def mock_handle_some_tokens_available(tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage, target_ratios_by_token):
+
+        def mock_handle_some_tokens_available(
+            tokens,
+            required_tokens,
+            tokens_we_need,
+            dest_chain,
+            relative_funds_percentage,
+            target_ratios_by_token,
+        ):
             return []
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_required_tokens",
-            side_effect=mock_get_required_tokens
+            side_effect=mock_get_required_tokens,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_group_tokens_by_chain",
-            return_value={"ethereum": []}
+            return_value={"ethereum": []},
         ), patch.object(
             self.behaviour.current_behaviour,
             "_identify_missing_tokens",
-            return_value=[("0xToken0", "TKN0")]  # Missing one token
+            return_value=[("0xToken0", "TKN0")],  # Missing one token
         ), patch.object(
             self.behaviour.current_behaviour,
             "_handle_some_tokens_available",
-            side_effect=mock_handle_some_tokens_available
+            side_effect=mock_handle_some_tokens_available,
         ):
-            
             opportunity = {
                 "chain": "ethereum",
                 "token0": "0xToken0",
@@ -10602,45 +11270,51 @@ def dynamic_test_method(*args, **kwargs):
                 },
                 "token0_percentage": 60,  # Fallback value
                 "token1_percentage": 40,
-                "is_cl_pool": True
+                "is_cl_pool": True,
             }
             tokens = [{"token": "0xToken2", "chain": "polygon"}]
-            
+
             # Call the function
             result = self.behaviour.current_behaviour._build_bridge_swap_actions(
                 opportunity, tokens
             )
-            
+
             # Should handle exception and use fallback value
             assert result == []  # Empty result from mock
 
     def test_build_bridge_swap_actions_token1_ratio_exception(self) -> None:
         """Test _build_bridge_swap_actions when token1 ratio calculation raises exception"""
-        
+
         def mock_get_required_tokens(opportunity):
             return [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
-        
-        def mock_handle_some_tokens_available(tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage, target_ratios_by_token):
+
+        def mock_handle_some_tokens_available(
+            tokens,
+            required_tokens,
+            tokens_we_need,
+            dest_chain,
+            relative_funds_percentage,
+            target_ratios_by_token,
+        ):
             return []
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_required_tokens",
-            side_effect=mock_get_required_tokens
+            side_effect=mock_get_required_tokens,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_group_tokens_by_chain",
-            return_value={"ethereum": []}
+            return_value={"ethereum": []},
         ), patch.object(
             self.behaviour.current_behaviour,
             "_identify_missing_tokens",
-            return_value=[("0xToken1", "TKN1")]  # Missing one token
+            return_value=[("0xToken1", "TKN1")],  # Missing one token
         ), patch.object(
             self.behaviour.current_behaviour,
             "_handle_some_tokens_available",
-            side_effect=mock_handle_some_tokens_available
+            side_effect=mock_handle_some_tokens_available,
         ):
-            
             opportunity = {
                 "chain": "ethereum",
                 "token0": "0xToken0",
@@ -10648,52 +11322,58 @@ def dynamic_test_method(*args, **kwargs):
                 "relative_funds_percentage": 1.0,
                 "token_requirements": {
                     "overall_token0_ratio": 0.6,
-                    "overall_token1_ratio": "invalid_float"  # This will cause exception
+                    "overall_token1_ratio": "invalid_float",  # This will cause exception
                 },
                 "token0_percentage": 60,
                 "token1_percentage": 40,  # Fallback value
-                "is_cl_pool": True
+                "is_cl_pool": True,
             }
             tokens = [{"token": "0xToken2", "chain": "polygon"}]
-            
+
             # Call the function
             result = self.behaviour.current_behaviour._build_bridge_swap_actions(
                 opportunity, tokens
             )
-            
+
             # Should handle exception and use fallback value
             assert result == []  # Empty result from mock
 
     def test_build_bridge_swap_actions_zero_ratios_fallback(self) -> None:
         """Test _build_bridge_swap_actions when both ratios are zero, fallback to 50/50"""
-        
+
         def mock_get_required_tokens(opportunity):
             return [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
-        
-        def mock_handle_some_tokens_available(tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage, target_ratios_by_token):
+
+        def mock_handle_some_tokens_available(
+            tokens,
+            required_tokens,
+            tokens_we_need,
+            dest_chain,
+            relative_funds_percentage,
+            target_ratios_by_token,
+        ):
             # Verify that target ratios were set to 50/50
             expected_ratios = {"0xToken0": 0.5, "0xToken1": 0.5}
             assert target_ratios_by_token == expected_ratios
             return []
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_required_tokens",
-            side_effect=mock_get_required_tokens
+            side_effect=mock_get_required_tokens,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_group_tokens_by_chain",
-            return_value={"ethereum": []}
+            return_value={"ethereum": []},
         ), patch.object(
             self.behaviour.current_behaviour,
             "_identify_missing_tokens",
-            return_value=[("0xToken0", "TKN0")]  # Missing one token
+            return_value=[("0xToken0", "TKN0")],  # Missing one token
         ), patch.object(
             self.behaviour.current_behaviour,
             "_handle_some_tokens_available",
-            side_effect=mock_handle_some_tokens_available
+            side_effect=mock_handle_some_tokens_available,
         ):
-            
             opportunity = {
                 "chain": "ethereum",
                 "token0": "0xToken0",
@@ -10701,45 +11381,59 @@ def dynamic_test_method(*args, **kwargs):
                 "relative_funds_percentage": 1.0,
                 "token0_percentage": 0,  # Zero ratio
                 "token1_percentage": 0,  # Zero ratio
-                "is_cl_pool": True
+                "is_cl_pool": True,
             }
             tokens = [{"token": "0xToken2", "chain": "polygon"}]
-            
+
             # Call the function
             result = self.behaviour.current_behaviour._build_bridge_swap_actions(
                 opportunity, tokens
             )
-            
+
             # Should set both ratios to 0.5
-            assert result == []  # Empty result from mock, but ratios were verified in mock
+            assert (
+                result == []
+            )  # Empty result from mock, but ratios were verified in mock
 
     def test_build_bridge_swap_actions_some_tokens_available(self) -> None:
         """Test _build_bridge_actions when some tokens are available"""
-        
+
         def mock_get_required_tokens(opportunity):
             return [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
-        
-        def mock_handle_some_tokens_available(tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage, target_ratios_by_token):
-            return [{"action": "bridge_swap", "from_token": "0xToken2", "to_token": "0xToken0"}]
-        
+
+        def mock_handle_some_tokens_available(
+            tokens,
+            required_tokens,
+            tokens_we_need,
+            dest_chain,
+            relative_funds_percentage,
+            target_ratios_by_token,
+        ):
+            return [
+                {
+                    "action": "bridge_swap",
+                    "from_token": "0xToken2",
+                    "to_token": "0xToken0",
+                }
+            ]
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_required_tokens",
-            side_effect=mock_get_required_tokens
+            side_effect=mock_get_required_tokens,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_group_tokens_by_chain",
-            return_value={"ethereum": [{"token": "0xToken1", "chain": "ethereum"}]}
+            return_value={"ethereum": [{"token": "0xToken1", "chain": "ethereum"}]},
         ), patch.object(
             self.behaviour.current_behaviour,
             "_identify_missing_tokens",
-            return_value=[("0xToken0", "TKN0")]  # Missing one token (some available)
+            return_value=[("0xToken0", "TKN0")],  # Missing one token (some available)
         ), patch.object(
             self.behaviour.current_behaviour,
             "_handle_some_tokens_available",
-            side_effect=mock_handle_some_tokens_available
+            side_effect=mock_handle_some_tokens_available,
         ):
-            
             opportunity = {
                 "chain": "ethereum",
                 "token0": "0xToken0",
@@ -10747,15 +11441,15 @@ def dynamic_test_method(*args, **kwargs):
                 "relative_funds_percentage": 1.0,
                 "token0_percentage": 60,
                 "token1_percentage": 40,
-                "is_cl_pool": True
+                "is_cl_pool": True,
             }
             tokens = [{"token": "0xToken2", "chain": "polygon"}]
-            
+
             # Call the function
             result = self.behaviour.current_behaviour._build_bridge_swap_actions(
                 opportunity, tokens
             )
-            
+
             # Should call _handle_some_tokens_available
             assert len(result) == 1
             assert result[0]["action"] == "bridge_swap"
@@ -10764,34 +11458,40 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_build_bridge_swap_actions_zero_ratios_assignment(self) -> None:
         """Test _build_bridge_swap_actions zero ratios assignment statements"""
-        
+
         def mock_get_required_tokens(opportunity):
             return [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
-        
-        def mock_handle_some_tokens_available(tokens, required_tokens, tokens_we_need, dest_chain, relative_funds_percentage, target_ratios_by_token):
+
+        def mock_handle_some_tokens_available(
+            tokens,
+            required_tokens,
+            tokens_we_need,
+            dest_chain,
+            relative_funds_percentage,
+            target_ratios_by_token,
+        ):
             # Verify that target ratios were set to 50/50 by the assignment statements
             expected_ratios = {"0xToken0": 0.5, "0xToken1": 0.5}
             assert target_ratios_by_token == expected_ratios
             return []
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_required_tokens",
-            side_effect=mock_get_required_tokens
+            side_effect=mock_get_required_tokens,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_group_tokens_by_chain",
-            return_value={"ethereum": []}
+            return_value={"ethereum": []},
         ), patch.object(
             self.behaviour.current_behaviour,
             "_identify_missing_tokens",
-            return_value=[("0xToken0", "TKN0")]  # Missing one token
+            return_value=[("0xToken0", "TKN0")],  # Missing one token
         ), patch.object(
             self.behaviour.current_behaviour,
             "_handle_some_tokens_available",
-            side_effect=mock_handle_some_tokens_available
+            side_effect=mock_handle_some_tokens_available,
         ):
-            
             opportunity = {
                 "chain": "ethereum",
                 "token0": "0xToken0",
@@ -10799,194 +11499,205 @@ def dynamic_test_method(*args, **kwargs):
                 "relative_funds_percentage": 1.0,
                 "token_requirements": {
                     "overall_token0_ratio": 0.0,  # Explicitly zero
-                    "overall_token1_ratio": 0.0   # Explicitly zero
+                    "overall_token1_ratio": 0.0,  # Explicitly zero
                 },
                 "token0_percentage": 0,  # Zero percentage as well
                 "token1_percentage": 0,  # Zero percentage as well
-                "is_cl_pool": True  # CL pool so token_requirements won't be ignored
+                "is_cl_pool": True,  # CL pool so token_requirements won't be ignored
             }
             tokens = [{"token": "0xToken2", "chain": "polygon"}]
-            
+
             # Call the function
             result = self.behaviour.current_behaviour._build_bridge_swap_actions(
                 opportunity, tokens
             )
-            
+
             # Should execute the assignment statements
-            assert result == []  # Empty result from mock, but ratios were verified in mock
+            assert (
+                result == []
+            )  # Empty result from mock, but ratios were verified in mock
 
     def test_add_bridge_swap_action_incomplete_data(self) -> None:
         """Test _add_bridge_swap_action with incomplete token data"""
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Test case 1: Missing chain
             actions = []
             incomplete_token_missing_chain = {
                 "token": "0xToken1",
                 "token_symbol": "TKN1",
                 # "chain" is missing
-                "balance": 1000
+                "balance": 1000,
             }
-            
+
             self.behaviour.current_behaviour._add_bridge_swap_action(
                 actions,
                 incomplete_token_missing_chain,
                 "ethereum",
                 "0xToken2",
                 "TKN2",
-                0.5
+                0.5,
             )
-            
+
             # Should log error and not add any actions
             assert len(actions) == 0
-            mock_error_logger.assert_called_with(f"Incomplete data in tokens {incomplete_token_missing_chain}")
+            mock_error_logger.assert_called_with(
+                f"Incomplete data in tokens {incomplete_token_missing_chain}"
+            )
             mock_error_logger.reset_mock()
-            
+
             # Test case 2: Missing token address
             actions = []
             incomplete_token_missing_address = {
                 "chain": "polygon",
                 # "token" is missing
                 "token_symbol": "TKN1",
-                "balance": 1000
+                "balance": 1000,
             }
-            
+
             self.behaviour.current_behaviour._add_bridge_swap_action(
                 actions,
                 incomplete_token_missing_address,
                 "ethereum",
                 "0xToken2",
                 "TKN2",
-                0.3
+                0.3,
             )
-            
+
             # Should log error and not add any actions
             assert len(actions) == 0
-            mock_error_logger.assert_called_with(f"Incomplete data in tokens {incomplete_token_missing_address}")
+            mock_error_logger.assert_called_with(
+                f"Incomplete data in tokens {incomplete_token_missing_address}"
+            )
             mock_error_logger.reset_mock()
-            
+
             # Test case 3: Missing token symbol
             actions = []
             incomplete_token_missing_symbol = {
                 "chain": "polygon",
                 "token": "0xToken1",
                 # "token_symbol" is missing
-                "balance": 1000
+                "balance": 1000,
             }
-            
+
             self.behaviour.current_behaviour._add_bridge_swap_action(
                 actions,
                 incomplete_token_missing_symbol,
                 "ethereum",
                 "0xToken2",
                 "TKN2",
-                0.7
+                0.7,
             )
-            
+
             # Should log error and not add any actions
             assert len(actions) == 0
-            mock_error_logger.assert_called_with(f"Incomplete data in tokens {incomplete_token_missing_symbol}")
+            mock_error_logger.assert_called_with(
+                f"Incomplete data in tokens {incomplete_token_missing_symbol}"
+            )
             mock_error_logger.reset_mock()
-            
+
             # Test case 4: Empty string values (falsy but present)
             actions = []
             incomplete_token_empty_values = {
                 "chain": "",  # Empty string is falsy
                 "token": "0xToken1",
                 "token_symbol": "TKN1",
-                "balance": 1000
+                "balance": 1000,
             }
-            
+
             self.behaviour.current_behaviour._add_bridge_swap_action(
                 actions,
                 incomplete_token_empty_values,
                 "ethereum",
                 "0xToken2",
                 "TKN2",
-                0.4
+                0.4,
             )
-            
+
             # Should log error and not add any actions
             assert len(actions) == 0
-            mock_error_logger.assert_called_with(f"Incomplete data in tokens {incomplete_token_empty_values}")
+            mock_error_logger.assert_called_with(
+                f"Incomplete data in tokens {incomplete_token_empty_values}"
+            )
 
     def test_build_enter_pool_action_no_opportunity(self) -> None:
         """Test _build_enter_pool_action when no opportunity is provided"""
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Test case 1: None opportunity
             result = self.behaviour.current_behaviour._build_enter_pool_action(None)
-            
+
             # Should return None and log error
             assert result is None
             mock_error_logger.assert_called_once_with("No pool present.")
             mock_error_logger.reset_mock()
-            
+
             # Test case 2: Empty dictionary (falsy)
             result = self.behaviour.current_behaviour._build_enter_pool_action({})
-            
+
             # Should return None and log error
             assert result is None
             mock_error_logger.assert_called_once_with("No pool present.")
             mock_error_logger.reset_mock()
-            
+
             # Test case 3: False value
             result = self.behaviour.current_behaviour._build_enter_pool_action(False)
-            
+
             # Should return None and log error
             assert result is None
             mock_error_logger.assert_called_once_with("No pool present.")
 
     def test_get_rewards_successful_return(self) -> None:
         """Test _get_rewards successful return with valid rewards data"""
-        
+
         # Mock HTTP response with valid rewards data
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.body = json.dumps({
-            "0xToken1": {
-                "symbol": "TKN1",
-                "accumulated": "1000",
-                "unclaimed": "500",
-                "proof": ["proof1", "proof2"]
-            },
-            "0xToken2": {
-                "symbol": "TKN2", 
-                "accumulated": "2000",
-                "unclaimed": "1000",
-                "proof": ["proof3", "proof4"]
+        mock_response.body = json.dumps(
+            {
+                "0xToken1": {
+                    "symbol": "TKN1",
+                    "accumulated": "1000",
+                    "unclaimed": "500",
+                    "proof": ["proof1", "proof2"],
+                },
+                "0xToken2": {
+                    "symbol": "TKN2",
+                    "accumulated": "2000",
+                    "unclaimed": "1000",
+                    "proof": ["proof3", "proof4"],
+                },
             }
-        })
-        
+        )
+
         def mock_get_http_response(*args, **kwargs):
             yield
             return mock_response
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "get_http_response",
-            side_effect=mock_get_http_response
+            side_effect=mock_get_http_response,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_info_logger:
-            
             # Call the generator function and execute it properly
             generator = self.behaviour.current_behaviour._get_rewards(1, "0xUser123")
-            
+
             # Execute the generator to completion
             result = None
             try:
                 next(generator)  # Execute until first yield
-                result = next(generator)  # This should raise StopIteration with return value
+                result = next(
+                    generator
+                )  # This should raise StopIteration with return value
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return structured rewards data
             assert result is not None
             assert result["users"] == ["0xUser123", "0xUser123"]
@@ -10994,44 +11705,47 @@ def dynamic_test_method(*args, **kwargs):
             assert result["symbols"] == ["TKN1", "TKN2"]
             assert result["claims"] == [1000, 2000]
             assert result["proofs"] == [["proof1", "proof2"], ["proof3", "proof4"]]
-            
+
             # Should log user rewards info
-            mock_info_logger.assert_any_call(f"User rewards: {json.loads(mock_response.body)}")
+            mock_info_logger.assert_any_call(
+                f"User rewards: {json.loads(mock_response.body)}"
+            )
 
     def test_get_rewards_json_parse_exception(self) -> None:
         """Test _get_rewards JSON parsing exception handling"""
-        
+
         # Mock HTTP response with invalid JSON
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.body = "invalid json {"  # Malformed JSON
-        
+
         def mock_get_http_response(*args, **kwargs):
             yield
             return mock_response
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "get_http_response",
-            side_effect=mock_get_http_response
+            side_effect=mock_get_http_response,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Call the generator function and execute it properly
             generator = self.behaviour.current_behaviour._get_rewards(1, "0xUser123")
-            
+
             # Execute the generator to completion
             result = None
             try:
                 next(generator)  # Execute until first yield
-                result = next(generator)  # This should raise StopIteration with return value
+                result = next(
+                    generator
+                )  # This should raise StopIteration with return value
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None and log error
             assert result is None
-            
+
             # Should log JSON parsing error
             error_calls = mock_error_logger.call_args_list
             assert len(error_calls) == 1
@@ -11041,21 +11755,22 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_build_stake_lp_tokens_action_exception_handling(self) -> None:
         """Test _build_stake_lp_tokens_action exception handling"""
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Set up opportunity data with invalid type that will cause an exception
             # Using a string instead of dict will cause an exception when .get() is called
             opportunity = "invalid_opportunity_data"
-            
+
             # Call the function - this will trigger an AttributeError when trying to call .get() on a string
-            result = self.behaviour.current_behaviour._build_stake_lp_tokens_action(opportunity)
-            
+            result = self.behaviour.current_behaviour._build_stake_lp_tokens_action(
+                opportunity
+            )
+
             # Should return None and log error
             assert result is None
-            
+
             # Should log the exception error
             error_calls = mock_error_logger.call_args_list
             assert len(error_calls) == 1
@@ -11065,69 +11780,84 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_build_claim_staking_rewards_action_non_velodrome(self) -> None:
         """Test _build_claim_staking_rewards_action for non-Velodrome pools"""
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_info_logger:
-            
             # Set up position data with non-Velodrome dex_type
             position = {
                 "chain": "ethereum",
                 "pool_address": "0xPoolAddress123",
                 "dex_type": "uniswap_v3",  # Non-Velodrome
-                "is_cl_pool": True
+                "is_cl_pool": True,
             }
-            
+
             # Call the function
-            result = self.behaviour.current_behaviour._build_claim_staking_rewards_action(position)
-            
+            result = (
+                self.behaviour.current_behaviour._build_claim_staking_rewards_action(
+                    position
+                )
+            )
+
             # Should return None and log info
             assert result is None
-            mock_info_logger.assert_called_once_with("Skipping reward claim for non-Velodrome pool: uniswap_v3")
+            mock_info_logger.assert_called_once_with(
+                "Skipping reward claim for non-Velodrome pool: uniswap_v3"
+            )
 
     def test_build_claim_staking_rewards_action_no_safe_address(self) -> None:
         """Test _build_claim_staking_rewards_action when no safe address found"""
-        
+
         with patch.object(
-            self.behaviour.current_behaviour.params, 'safe_contract_addresses', MagicMock()
+            self.behaviour.current_behaviour.params,
+            "safe_contract_addresses",
+            MagicMock(),
         ) as mock_safe_addresses, patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Mock safe_contract_addresses.get to return None
             mock_safe_addresses.get.return_value = None
-            
+
             # Set up position data for Velodrome
             position = {
                 "chain": "optimism",
                 "pool_address": "0xPoolAddress123",
                 "dex_type": "velodrome",
-                "is_cl_pool": False
+                "is_cl_pool": False,
             }
-            
+
             # Call the function
-            result = self.behaviour.current_behaviour._build_claim_staking_rewards_action(position)
-            
+            result = (
+                self.behaviour.current_behaviour._build_claim_staking_rewards_action(
+                    position
+                )
+            )
+
             # Should return None and log error
             assert result is None
-            mock_error_logger.assert_called_once_with("No safe address found for chain optimism")
+            mock_error_logger.assert_called_once_with(
+                "No safe address found for chain optimism"
+            )
 
     def test_build_claim_staking_rewards_action_exception(self) -> None:
         """Test _build_claim_staking_rewards_action exception handling"""
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Set up position data with invalid type that will cause an exception
             position = "invalid_position_data"
-            
+
             # Call the function - this will trigger an AttributeError
-            result = self.behaviour.current_behaviour._build_claim_staking_rewards_action(position)
-            
+            result = (
+                self.behaviour.current_behaviour._build_claim_staking_rewards_action(
+                    position
+                )
+            )
+
             # Should return None and log error
             assert result is None
-            
+
             # Should log the exception error
             error_calls = mock_error_logger.call_args_list
             assert len(error_calls) == 1
@@ -11137,129 +11867,146 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_get_gauge_address_for_position_no_voter_contract(self) -> None:
         """Test _get_gauge_address_for_position when no voter contract found"""
-        
+
         with patch.object(
-            self.behaviour.current_behaviour.params, 'velodrome_voter_contract_addresses', MagicMock()
+            self.behaviour.current_behaviour.params,
+            "velodrome_voter_contract_addresses",
+            MagicMock(),
         ) as mock_voter_addresses, patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Mock velodrome_voter_contract_addresses.get to return None
             mock_voter_addresses.get.return_value = None
-            
+
             # Set up position data
-            position = {
-                "chain": "optimism",
-                "pool_address": "0xPoolAddress123"
-            }
-            
+            position = {"chain": "optimism", "pool_address": "0xPoolAddress123"}
+
             # Call the generator function
-            generator = self.behaviour.current_behaviour._get_gauge_address_for_position(position)
+            generator = (
+                self.behaviour.current_behaviour._get_gauge_address_for_position(
+                    position
+                )
+            )
             try:
                 result = next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None and log error
             assert result is None
-            mock_error_logger.assert_called_once_with("No voter contract address found for chain optimism")
+            mock_error_logger.assert_called_once_with(
+                "No voter contract address found for chain optimism"
+            )
 
     def test_get_gauge_address_for_position_no_pool_behaviour(self) -> None:
         """Test _get_gauge_address_for_position when no pool behaviour found"""
-        
+
         with patch.object(
-            self.behaviour.current_behaviour.params, 'velodrome_voter_contract_addresses', MagicMock()
+            self.behaviour.current_behaviour.params,
+            "velodrome_voter_contract_addresses",
+            MagicMock(),
         ) as mock_voter_addresses, patch.object(
-            self.behaviour.current_behaviour, 'pools', MagicMock()
+            self.behaviour.current_behaviour, "pools", MagicMock()
         ) as mock_pools, patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Mock params to return valid voter contract
             mock_voter_addresses.get.return_value = "0xVoterContract"
-            
+
             # Mock pools to return None for velodrome
             mock_pools.get.return_value = None
-            
+
             # Set up position data
-            position = {
-                "chain": "optimism", 
-                "pool_address": "0xPoolAddress123"
-            }
-            
+            position = {"chain": "optimism", "pool_address": "0xPoolAddress123"}
+
             # Call the generator function
-            generator = self.behaviour.current_behaviour._get_gauge_address_for_position(position)
+            generator = (
+                self.behaviour.current_behaviour._get_gauge_address_for_position(
+                    position
+                )
+            )
             try:
                 result = next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None and log error
             assert result is None
-            mock_error_logger.assert_called_once_with("Velodrome pool behaviour not found")
+            mock_error_logger.assert_called_once_with(
+                "Velodrome pool behaviour not found"
+            )
 
     def test_get_gauge_address_for_position_no_gauge_found(self) -> None:
         """Test _get_gauge_address_for_position when no gauge found and exception handling"""
-        
+
         # Mock pool behaviour that returns None for gauge address
         mock_pool_behaviour = MagicMock()
+
         def mock_get_gauge_address(*args, **kwargs):
             yield
             return None
+
         mock_pool_behaviour.get_gauge_address = mock_get_gauge_address
-        
+
         with patch.object(
-            self.behaviour.current_behaviour.params, 'velodrome_voter_contract_addresses', MagicMock()
+            self.behaviour.current_behaviour.params,
+            "velodrome_voter_contract_addresses",
+            MagicMock(),
         ) as mock_voter_addresses, patch.object(
-            self.behaviour.current_behaviour, 'pools', MagicMock()
+            self.behaviour.current_behaviour, "pools", MagicMock()
         ) as mock_pools, patch.object(
             self.behaviour.current_behaviour.context.logger, "warning"
         ) as mock_warning_logger:
-            
             # Mock params to return valid voter contract
             mock_voter_addresses.get.return_value = "0xVoterContract"
-            
+
             # Mock pools to return the mock pool behaviour
             mock_pools.get.return_value = mock_pool_behaviour
-            
+
             # Set up position data
-            position = {
-                "chain": "optimism",
-                "pool_address": "0xPoolAddress123"
-            }
-            
+            position = {"chain": "optimism", "pool_address": "0xPoolAddress123"}
+
             # Call the generator function
-            generator = self.behaviour.current_behaviour._get_gauge_address_for_position(position)
+            generator = (
+                self.behaviour.current_behaviour._get_gauge_address_for_position(
+                    position
+                )
+            )
             next(generator)  # First yield
             try:
                 result = next(generator)  # Get the return value
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None and log warning
             assert result is None
-            mock_warning_logger.assert_called_once_with("No gauge found for pool 0xPoolAddress123")
+            mock_warning_logger.assert_called_once_with(
+                "No gauge found for pool 0xPoolAddress123"
+            )
 
     def test_get_gauge_address_for_position_exception(self) -> None:
         """Test _get_gauge_address_for_position exception handling"""
-        
+
         with patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_error_logger:
-            
             # Set up position data with invalid type that will cause an exception
             position = "invalid_position_data"
-            
+
             # Call the generator function - this will trigger an AttributeError
-            generator = self.behaviour.current_behaviour._get_gauge_address_for_position(position)
+            generator = (
+                self.behaviour.current_behaviour._get_gauge_address_for_position(
+                    position
+                )
+            )
             try:
                 result = next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return None and log error
             assert result is None
-            
+
             # Should log the exception error
             error_calls = mock_error_logger.call_args_list
             assert len(error_calls) == 1
@@ -11272,36 +12019,38 @@ def dynamic_test_method(*args, **kwargs):
         position = {
             "pool_id": "test_pool",
             "chain": "ethereum",
-            "dex_type": "uniswap_v3"
+            "dex_type": "uniswap_v3",
         }
-        
+
         # Mock calculate_initial_investment_value to return None twice, then a value
         call_count = [0]
+
         def mock_calculate_initial_investment_value(pos):
             call_count[0] += 1
             yield
             if call_count[0] <= 2:
                 return None  # Trigger retry logic
             return 1000.0
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "calculate_initial_investment_value",
-            side_effect=mock_calculate_initial_investment_value
+            side_effect=mock_calculate_initial_investment_value,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "warning"
         ) as mock_warning, patch.object(
             self.behaviour.current_behaviour, "sleep"
         ) as mock_sleep:
-            
             # Mock the generator function that contains the retry logic
             def mock_generator():
                 retries = 3
                 delay = 1
                 V_initial = None
-                
+
                 while retries > 0 and V_initial is None:
-                    V_initial = yield from self.behaviour.current_behaviour.calculate_initial_investment_value(position)
+                    V_initial = yield from self.behaviour.current_behaviour.calculate_initial_investment_value(
+                        position
+                    )
                     if V_initial is not None:
                         break
                     else:
@@ -11311,9 +12060,9 @@ def dynamic_test_method(*args, **kwargs):
                         yield from self.behaviour.current_behaviour.sleep(delay)
                         retries -= 1
                         delay *= 2  # exponential backoff
-                
+
                 return V_initial
-            
+
             generator = mock_generator()
             result = None
             try:
@@ -11321,40 +12070,46 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have logged warnings for retries
             assert mock_warning.call_count == 2
             warning_calls = [call.args[0] for call in mock_warning.call_args_list]
-            assert any("V_initial is None (possible rate limit)" in call for call in warning_calls)
-            
+            assert any(
+                "V_initial is None (possible rate limit)" in call
+                for call in warning_calls
+            )
+
             # Should have called sleep with exponential backoff
             assert mock_sleep.call_count == 2
             sleep_calls = [call.args[0] for call in mock_sleep.call_args_list]
             assert sleep_calls[0] == 1  # First delay
             assert sleep_calls[1] == 2  # Second delay (doubled)
-            
+
             # Should eventually return a value
             assert result == 1000.0
 
     def test_prepare_tokens_for_investment_returns_none(self) -> None:
         """Test _prepare_tokens_for_investment returns None and actions are returned"""
-        
+
         def mock_prepare_tokens():
             yield
             return None
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_prepare_tokens_for_investment",
-            side_effect=mock_prepare_tokens
+            side_effect=mock_prepare_tokens,
         ):
+
             def mock_generator():
                 actions = [{"action": "test_action"}]
-                available_tokens = yield from self.behaviour.current_behaviour._prepare_tokens_for_investment()
+                available_tokens = (
+                    yield from self.behaviour.current_behaviour._prepare_tokens_for_investment()
+                )
                 if available_tokens is None:
                     return actions
                 return []
-            
+
             generator = mock_generator()
             result = None
             try:
@@ -11362,7 +12117,7 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should return the actions when available_tokens is None
             assert result == [{"action": "test_action"}]
 
@@ -11372,84 +12127,101 @@ def dynamic_test_method(*args, **kwargs):
             "pool_id": "test_pool",
             "chain": "ethereum",
             "dex_type": "uniswap_v3",
-            "staking_metadata": {"contract": "0x123", "rewards": True}
+            "staking_metadata": {"contract": "0x123", "rewards": True},
         }
-        
+
         def mock_has_staking_metadata(position):
             return position.get("staking_metadata") is not None
-        
+
         def mock_build_unstake_action(position):
             return {"action": "unstake", "pool_id": position["pool_id"]}
-        
+
         def mock_build_exit_pool_action(tokens, num_tokens):
             return {"action": "exit_pool", "tokens": len(tokens)}
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_has_staking_metadata",
-            side_effect=mock_has_staking_metadata
+            side_effect=mock_has_staking_metadata,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_unstake_lp_tokens_action",
-            side_effect=mock_build_unstake_action
+            side_effect=mock_build_unstake_action,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_build_exit_pool_action",
-            side_effect=mock_build_exit_pool_action
+            side_effect=mock_build_exit_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            
             # Test the logic directly without generator
             actions = []
             tokens = [{"token": "0x456", "chain": "ethereum"}]
-            
+
             # Position exit with staking
             if self.behaviour.current_behaviour._has_staking_metadata(position_to_exit):
-                unstake_action = self.behaviour.current_behaviour._build_unstake_lp_tokens_action(position_to_exit)
+                unstake_action = (
+                    self.behaviour.current_behaviour._build_unstake_lp_tokens_action(
+                        position_to_exit
+                    )
+                )
                 if unstake_action:
                     actions.append(unstake_action)
                     self.behaviour.current_behaviour.context.logger.info(
                         "Added unstake LP tokens action before exit"
                     )
-            
+
             # Step 3: Exit the pool
-            from packages.valory.skills.liquidity_trader_abci.behaviours.base import DexType
+            from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+                DexType,
+            )
+
             dex_type = position_to_exit.get("dex_type")
             num_of_tokens_required = 1 if dex_type == DexType.STURDY.value else 2
-            exit_pool_action = self.behaviour.current_behaviour._build_exit_pool_action(tokens, num_of_tokens_required)
+            exit_pool_action = self.behaviour.current_behaviour._build_exit_pool_action(
+                tokens, num_of_tokens_required
+            )
             if not exit_pool_action:
-                self.behaviour.current_behaviour.context.logger.error("Error building exit pool action")
+                self.behaviour.current_behaviour.context.logger.error(
+                    "Error building exit pool action"
+                )
                 result = None
             else:
                 actions.append(exit_pool_action)
                 result = actions
-            
+
             # Should have added unstake action and logged
             assert len(result) == 2
             assert result[0]["action"] == "unstake"
             assert result[1]["action"] == "exit_pool"
-            
+
             info_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("Added unstake LP tokens action before exit" in call for call in info_calls)
+            assert any(
+                "Added unstake LP tokens action before exit" in call
+                for call in info_calls
+            )
 
     def test_extend_actions_with_bridge_swap_actions(self) -> None:
         """Test extending actions with bridge_swap_actions"""
-        
+
         def mock_build_bridge_swap_actions(opportunity, tokens):
             return [{"action": "bridge_swap", "opportunity": opportunity["id"]}]
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_build_bridge_swap_actions",
-            side_effect=mock_build_bridge_swap_actions
+            side_effect=mock_build_bridge_swap_actions,
         ):
             # Test the logic directly
             actions = [{"action": "existing_action"}]
             opportunity = {"id": "test_opportunity"}
             tokens = [{"token": "0x456"}]
-            
-            bridge_swap_actions = self.behaviour.current_behaviour._build_bridge_swap_actions(opportunity, tokens)
+
+            bridge_swap_actions = (
+                self.behaviour.current_behaviour._build_bridge_swap_actions(
+                    opportunity, tokens
+                )
+            )
             if bridge_swap_actions is None:
                 result = None
             elif bridge_swap_actions:
@@ -11457,7 +12229,7 @@ def dynamic_test_method(*args, **kwargs):
                 result = actions
             else:
                 result = actions
-            
+
             # Should have extended actions with bridge swap actions
             assert len(result) == 2
             assert result[0]["action"] == "existing_action"
@@ -11465,108 +12237,122 @@ def dynamic_test_method(*args, **kwargs):
 
     def test_error_building_enter_pool_action(self) -> None:
         """Test error building enter pool action"""
-        
+
         def mock_build_enter_pool_action(opportunity):
             return None  # Simulate error
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_build_enter_pool_action",
-            side_effect=mock_build_enter_pool_action
+            side_effect=mock_build_enter_pool_action,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
-            
             # Test the logic directly
             opportunity = {"id": "test_opportunity"}
-            
-            enter_pool_action = self.behaviour.current_behaviour._build_enter_pool_action(opportunity)
+
+            enter_pool_action = (
+                self.behaviour.current_behaviour._build_enter_pool_action(opportunity)
+            )
             if not enter_pool_action:
-                self.behaviour.current_behaviour.context.logger.error("Error building enter pool action")
+                self.behaviour.current_behaviour.context.logger.error(
+                    "Error building enter pool action"
+                )
                 result = None
             else:
                 result = {"success": True}
-            
+
             # Should have logged error and returned None
             assert result is None
             error_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("Error building enter pool action" in call for call in error_calls)
+            assert any(
+                "Error building enter pool action" in call for call in error_calls
+            )
 
     def test_velodrome_token_allocation_handling(self) -> None:
         """Test Velodrome token allocation handling"""
-        
-        def mock_handle_velodrome_allocation(actions, enter_pool_action, available_tokens):
+
+        def mock_handle_velodrome_allocation(
+            actions, enter_pool_action, available_tokens
+        ):
             return actions + [{"action": "velodrome_allocation"}]
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_handle_velodrome_token_allocation",
-            side_effect=mock_handle_velodrome_allocation
+            side_effect=mock_handle_velodrome_allocation,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            
             # Test the logic directly
             actions = [{"action": "existing_action"}]
             enter_pool_action = {
                 "dex_type": "velodrome",
-                "token_requirements": {"ratio": 0.5}
+                "token_requirements": {"ratio": 0.5},
             }
             available_tokens = [{"token": "0x456"}]
-            
+
             # Lines 2049-2052: Velodrome token allocation
             if (
                 enter_pool_action.get("dex_type") == "velodrome"
                 and "token_requirements" in enter_pool_action
             ):
-                actions = self.behaviour.current_behaviour._handle_velodrome_token_allocation(
-                    actions, enter_pool_action, available_tokens
+                actions = (
+                    self.behaviour.current_behaviour._handle_velodrome_token_allocation(
+                        actions, enter_pool_action, available_tokens
+                    )
                 )
                 self.behaviour.current_behaviour.context.logger.info(
                     f"action after velodrome into the function: {actions}"
                 )
-            
+
             result = actions
-            
+
             # Should have handled Velodrome allocation and logged
             assert len(result) == 2
             assert result[1]["action"] == "velodrome_allocation"
-            
+
             info_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("action after velodrome into the function" in call for call in info_calls)
+            assert any(
+                "action after velodrome into the function" in call
+                for call in info_calls
+            )
 
     def test_investment_cap_application(self) -> None:
         """Test investment cap application"""
-        
+
         def mock_apply_investment_cap(actions):
             yield
             return actions + [{"action": "capped_action"}]
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_apply_investment_cap_to_actions",
-            side_effect=mock_apply_investment_cap
+            side_effect=mock_apply_investment_cap,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_logger:
-            
             # Mock the generator function that contains
             def mock_generator():
                 actions = [{"action": "existing_action"}]
                 current_positions = [{"position": "test"}]
-                
+
                 if current_positions:
                     self.behaviour.current_behaviour.context.logger.info(
                         f"action before the investment into the function: {actions}"
                     )
-                    actions = yield from self.behaviour.current_behaviour._apply_investment_cap_to_actions(actions)
-                    self.behaviour.current_behaviour.context.logger.info(f"action into the function: {actions}")
-                
+                    actions = yield from self.behaviour.current_behaviour._apply_investment_cap_to_actions(
+                        actions
+                    )
+                    self.behaviour.current_behaviour.context.logger.info(
+                        f"action into the function: {actions}"
+                    )
+
                 return actions
-            
+
             # Set current_positions to trigger the condition
             self.behaviour.current_behaviour.current_positions = [{"position": "test"}]
-            
+
             generator = mock_generator()
             result = None
             try:
@@ -11574,72 +12360,85 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have applied investment cap and logged
             assert len(result) == 2
             assert result[1]["action"] == "capped_action"
-            
+
             info_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("action before the investment into the function" in call for call in info_calls)
+            assert any(
+                "action before the investment into the function" in call
+                for call in info_calls
+            )
             assert any("action into the function" in call for call in info_calls)
 
     def test_merge_actions_exception_handling(self) -> None:
         """Test exception handling in merge actions"""
-        
+
         def mock_merge_actions(actions):
             raise ValueError("Simulated merge error")
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_merge_duplicate_bridge_swap_actions",
-            side_effect=mock_merge_actions
+            side_effect=mock_merge_actions,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
-            
             # Test the logic directly
             actions = [{"action": "test_action"}]
-            
+
             try:
-                merged_actions = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(actions)
+                merged_actions = self.behaviour.current_behaviour._merge_duplicate_bridge_swap_actions(
+                    actions
+                )
                 result = merged_actions
             except Exception as e:
-                self.behaviour.current_behaviour.context.logger.error(f"Error while merging bridge swap actions: {e}")
+                self.behaviour.current_behaviour.context.logger.error(
+                    f"Error while merging bridge swap actions: {e}"
+                )
                 result = actions
-            
+
             # Should have caught exception, logged error, and returned original actions
             assert result == [{"action": "test_action"}]
             error_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("Error while merging bridge swap actions" in call for call in error_calls)
+            assert any(
+                "Error while merging bridge swap actions" in call
+                for call in error_calls
+            )
 
     def test_no_tokens_available_error(self) -> None:
         """Test no tokens available error"""
-        
+
         def mock_get_available_tokens():
             yield
             return []  # No tokens available
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_get_available_tokens",
-            side_effect=mock_get_available_tokens
+            side_effect=mock_get_available_tokens,
         ), patch.object(
             self.behaviour.current_behaviour.context.logger, "error"
         ) as mock_logger:
-            
+
             def mock_generator():
                 tokens = []
-                
-                available_tokens = yield from self.behaviour.current_behaviour._get_available_tokens()
+
+                available_tokens = (
+                    yield from self.behaviour.current_behaviour._get_available_tokens()
+                )
                 if available_tokens:
                     tokens.extend(available_tokens)
-                
+
                 if not tokens:
-                    self.behaviour.current_behaviour.context.logger.error("No tokens available for investment")
+                    self.behaviour.current_behaviour.context.logger.error(
+                        "No tokens available for investment"
+                    )
                     return None
-                
+
                 return tokens
-            
+
             generator = mock_generator()
             result = None
             try:
@@ -11647,43 +12446,54 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have logged error and returned None
             assert result is None
             error_calls = [call.args[0] for call in mock_logger.call_args_list]
-            assert any("No tokens available for investment" in call for call in error_calls)
+            assert any(
+                "No tokens available for investment" in call for call in error_calls
+            )
 
     def test_zero_address_decimals_handling(self) -> None:
         """Test ZERO_ADDRESS decimals handling"""
-        from packages.valory.skills.liquidity_trader_abci.behaviours.base import ZERO_ADDRESS
-        
+        from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+            ZERO_ADDRESS,
+        )
+
         def mock_fetch_token_prices(token_balances):
             yield
             return {"0x123": 1.5, ZERO_ADDRESS: 2000.0}
-        
+
         def mock_get_token_decimals(chain, token_address):
             yield
             return 6  # Should not be called for ZERO_ADDRESS
-        
+
         with patch.object(
             self.behaviour.current_behaviour,
             "_fetch_token_prices",
-            side_effect=mock_fetch_token_prices
+            side_effect=mock_fetch_token_prices,
         ), patch.object(
             self.behaviour.current_behaviour,
             "_get_token_decimals",
-            side_effect=mock_get_token_decimals
+            side_effect=mock_get_token_decimals,
         ):
-            
             # Mock the generator function that contains
             def mock_generator():
                 token_balances = [
-                    {"token": ZERO_ADDRESS, "chain": "ethereum", "balance": 1000000000000000000},
-                    {"token": "0x123", "chain": "ethereum", "balance": 2000000}
+                    {
+                        "token": ZERO_ADDRESS,
+                        "chain": "ethereum",
+                        "balance": 1000000000000000000,
+                    },
+                    {"token": "0x123", "chain": "ethereum", "balance": 2000000},
                 ]
-                
-                token_prices = yield from self.behaviour.current_behaviour._fetch_token_prices(token_balances)
-                
+
+                token_prices = (
+                    yield from self.behaviour.current_behaviour._fetch_token_prices(
+                        token_balances
+                    )
+                )
+
                 for token_data in token_balances:
                     token_address = token_data["token"]
                     chain = token_data["chain"]
@@ -11691,11 +12501,15 @@ def dynamic_test_method(*args, **kwargs):
                     if token_address == ZERO_ADDRESS:
                         decimals = 18
                     else:
-                        decimals = yield from self.behaviour.current_behaviour._get_token_decimals(chain, token_address)
-                    token_data["value"] = (token_data["balance"] / (10**decimals)) * token_price
-                
+                        decimals = yield from self.behaviour.current_behaviour._get_token_decimals(
+                            chain, token_address
+                        )
+                    token_data["value"] = (
+                        token_data["balance"] / (10**decimals)
+                    ) * token_price
+
                 return token_balances
-            
+
             generator = mock_generator()
             result = None
             try:
@@ -11703,12 +12517,18 @@ def dynamic_test_method(*args, **kwargs):
                     next(generator)
             except StopIteration as e:
                 result = e.value
-            
+
             # Should have set decimals to 18 for ZERO_ADDRESS
-            zero_address_token = next(token for token in result if token["token"] == ZERO_ADDRESS)
-            assert zero_address_token["value"] == (1000000000000000000 / (10**18)) * 2000.0  # 1 ETH * $2000
-            
+            zero_address_token = next(
+                token for token in result if token["token"] == ZERO_ADDRESS
+            )
+            assert (
+                zero_address_token["value"]
+                == (1000000000000000000 / (10**18)) * 2000.0
+            )  # 1 ETH * $2000
+
             # Should have called _get_token_decimals for non-ZERO_ADDRESS token
             other_token = next(token for token in result if token["token"] == "0x123")
-            assert other_token["value"] == (2000000 / (10**6)) * 1.5  # 2 tokens * $1.5
-
+            assert (
+                other_token["value"] == (2000000 / (10**6)) * 1.5
+            )  # 2 tokens * $1.5

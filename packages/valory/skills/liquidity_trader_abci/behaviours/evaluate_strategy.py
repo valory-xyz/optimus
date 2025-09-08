@@ -960,9 +960,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             # Handle any other unexpected errors
             return {
-                "error": [
-                    f"Unexpected error in strategy {strategy_name}: {str(e)}"
-                ],
+                "error": [f"Unexpected error in strategy {strategy_name}: {str(e)}"],
                 "result": [],
             }
 
@@ -995,16 +993,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         if tasks:
             try:
-                strategy_results = await asyncio.gather(
-                    *tasks, return_exceptions=True
-                )
+                strategy_results = await asyncio.gather(*tasks, return_exceptions=True)
                 for result in strategy_results:
                     if isinstance(result, Exception):
                         results.append(
                             {
-                                "error": [
-                                    f"Strategy execution error: {str(result)}"
-                                ],
+                                "error": [f"Strategy execution error: {str(result)}"],
                                 "result": [],
                             }
                         )
@@ -1065,7 +1059,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         # Main execution loop
         try:
-            future = asyncio.ensure_future(self._run_all_strategies(strategy_kwargs_list, strategies_executables))
+            future = asyncio.ensure_future(
+                self._run_all_strategies(strategy_kwargs_list, strategies_executables)
+            )
             while not future.done():
                 yield  # Yield control to the agent loop
             results = future.result()
@@ -1193,7 +1189,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Ensure we don't lose the error state
             self.trading_opportunities = []
 
-    
     def _track_opportunities(
         self, opportunities: List[Dict], stage: str
     ) -> Generator[None, None, None]:
@@ -1803,8 +1798,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 # Calculate the full slice for one-sided allocation
                 try:
                     full_slice = float(
-                        enter_pool_action.get("relative_funds_percentage", 1.0)
-                        or 1.0
+                        enter_pool_action.get("relative_funds_percentage", 1.0) or 1.0
                     )
                 except (ValueError, TypeError):
                     full_slice = 1.0

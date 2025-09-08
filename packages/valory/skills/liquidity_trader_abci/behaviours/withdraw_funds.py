@@ -23,7 +23,6 @@ import json
 import time
 from typing import Any, Dict, Generator, List, Optional
 
-from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     Action,
     LiquidityTraderBaseBehaviour,

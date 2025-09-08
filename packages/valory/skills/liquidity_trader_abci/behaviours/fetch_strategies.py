@@ -642,6 +642,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             portfolio_breakdown
         )
         staking_rewards_value = yield from self.calculate_stakig_rewards_value()
+        airdrop_rewards_value = yield from self.calculate_airdrop_rewards_value()
 
         # Calculate final portfolio metrics
         yield from self._update_portfolio_metrics(
@@ -680,6 +681,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             total_user_share_value_usd,
             total_safe_value_usd,
             staking_rewards_value,
+            airdrop_rewards_value,
             initial_investment,
             volume,
             allocations,
@@ -952,6 +954,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         total_pools_value: Decimal,
         total_safe_value: Decimal,
         staking_rewards_value: Decimal,
+        airdrop_rewards_value: Decimal,
         initial_investment: float,
         volume: float,
         allocations: List[Dict],
@@ -965,8 +968,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
-            # Calculate total portfolio value
-            total_portfolio_value = total_pools_value + total_safe_value
+            # Calculate total portfolio value including airdrop rewards
+            total_portfolio_value = total_pools_value + total_safe_value + airdrop_rewards_value
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
             # Convert to percentage by multiplying by 100
@@ -974,19 +977,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             partial_roi = None
             if initial_investment is not None and initial_investment > 0:
                 try:
+                    # Total ROI includes staking rewards + airdrop rewards
                     total_roi_decimal = (
                         float(total_portfolio_value + staking_rewards_value)
                         / float(initial_investment)
                     ) - 1
                     total_roi = round(total_roi_decimal * 100, 2)
 
+                    # Partial ROI includes airdrop rewards (trading + airdrop)
                     partial_roi_decimal = (
                         float(total_portfolio_value) / float(initial_investment)
                     ) - 1
                     partial_roi = round(partial_roi_decimal * 100, 2)
 
                     self.context.logger.info(
-                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
+                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% "
+                        f"(Portfolio: ${float(total_portfolio_value):.2f}, Airdrop: ${float(airdrop_rewards_value):.2f}, "
+                        f"Staking: ${float(staking_rewards_value):.2f}, Initial: ${float(initial_investment):.2f})"
                     )
                 except (ValueError, ZeroDivisionError, TypeError) as e:
                     self.context.logger.error(f"Error calculating ROI: {str(e)}")
@@ -2165,6 +2172,36 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value
+
+    def calculate_airdrop_rewards_value(self) -> Generator[None, None, Decimal]:
+        """Calculate airdrop rewards equivalent in USD (MODE chain only)"""
+        chain = self.params.target_investment_chains[0]
+        if chain != "mode":
+            return Decimal(0)
+            
+        airdrop_rewards_wei = yield from self._get_total_airdrop_rewards(chain)
+        if airdrop_rewards_wei > 0:
+            # Convert from wei to OLAS (18 decimals)
+            airdrop_olas_balance = Decimal(str(airdrop_rewards_wei)) / Decimal(10**18)
+            
+            # Get OLAS price
+            olas_address = OLAS_ADDRESSES.get(chain)
+            if olas_address:
+                olas_price = yield from self._fetch_token_price(olas_address, chain)
+                if olas_price is not None:
+                    olas_price = Decimal(str(olas_price))
+                    airdrop_value_usd = airdrop_olas_balance * olas_price
+                    
+                    self.context.logger.info(
+                        f"OLAS airdrop rewards - OLAS: {airdrop_olas_balance} (${airdrop_value_usd})"
+                    )
+                    return airdrop_value_usd
+                else:
+                    self.context.logger.warning(
+                        "Could not fetch price for OLAS airdrop rewards"
+                    )
+        
+        return Decimal(0)
 
     def calculate_stakig_rewards_value(self) -> Generator[None, None, Decimal]:
         """Calculates staking rewards equivalent in USD"""

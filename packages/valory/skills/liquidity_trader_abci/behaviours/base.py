@@ -28,6 +28,7 @@ from abc import ABC
 from collections import defaultdict
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
 
 from aea.configurations.data_types import PublicId
@@ -319,24 +320,28 @@ class LiquidityTraderBaseBehaviour(
         """Initialize `LiquidityTraderBaseBehaviour`."""
         super().__init__(**kwargs)
         self.current_positions: List[Dict[str, Any]] = []
+        # Convert store_path to Path object for file operations
+        store_path = Path(self.params.store_path)
+
         self.current_positions_filepath: str = (
-            self.params.store_path / self.params.pool_info_filename
+            store_path / self.params.pool_info_filename
         )
         self.portfolio_data: Dict[str, Any] = {}
         self.portfolio_data_filepath: str = (
-            self.params.store_path / self.params.portfolio_info_filename
+            store_path / self.params.portfolio_info_filename
         )
+        self.assets: Dict[str, Any] = {}
         self.whitelisted_assets: Dict[str, Any] = {}
         self.whitelisted_assets_filepath: str = (
-            self.params.store_path / self.params.whitelisted_assets_filename
+            store_path / self.params.whitelisted_assets_filename
         )
         self.funding_events: Dict[str, Any] = {}
         self.funding_events_filepath: str = (
-            self.params.store_path / self.params.funding_events_filename
+            store_path / self.params.funding_events_filename
         )
         self.agent_performance: Dict[str, Any] = {}
         self.agent_performance_filepath: str = (
-            self.params.store_path / self.params.agent_performance_filename
+            store_path / self.params.agent_performance_filename
         )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
@@ -345,7 +350,7 @@ class LiquidityTraderBaseBehaviour(
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(
-            file_path=self.params.store_path / self.params.gas_cost_info_filename
+            file_path=store_path / self.params.gas_cost_info_filename
         )
         self.initial_investment_values_per_pool = {}
         self._current_entry_costs = 0.0
@@ -629,8 +634,8 @@ class LiquidityTraderBaseBehaviour(
             token_symbol = token_info.get("symbol", "UNKNOWN")
 
             # Rename XVELO to VELO for Mode chain
-            if token_symbol == "XVELO":
-                token_symbol = "VELO"
+            if token_symbol == "XVELO":  # nosec B105
+                token_symbol = "VELO"  # nosec B105
                 self.context.logger.info(
                     f"Renamed XVELO to VELO for Mode chain token at {token_address}"
                 )
@@ -1007,323 +1012,6 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.error(
                 f"Failed to update agent performance timestamp: {str(e)}"
             )
-
-    def update_portfolio_after_action(self) -> Generator[None, None, None]:
-        """Update portfolio data after actions like pool exit, swap, or transfer."""
-        try:
-            self.context.logger.info("Updating portfolio data after action...")
-
-            # Read existing portfolio data to preserve structure
-            self.read_portfolio_data()
-
-            if not hasattr(self, "portfolio_data") or not self.portfolio_data:
-                self.context.logger.warning(
-                    "No existing portfolio data found to update"
-                )
-                return
-
-            # Get current positions to calculate value_in_pools dynamically
-            positions = yield from self.get_positions()
-
-            # Calculate value_in_pools from current positions
-            value_in_pools = yield from self._calculate_pools_value(positions)
-
-            # Fetch fresh balances from blockchain APIs
-            balances = yield from self._fetch_fresh_balances()
-
-            # Calculate USD values for all tokens
-            balance_map, total_safe_value = yield from self._calculate_token_usd_values(
-                balances
-            )
-
-            # Update portfolio breakdown with fresh data
-            (
-                updated_breakdown,
-                total_portfolio_value,
-            ) = yield from self._update_portfolio_breakdown(balance_map)
-
-            # Calculate asset ratios
-            yield from self._calculate_portfolio_ratios(
-                updated_breakdown, total_portfolio_value
-            )
-
-            # Update main portfolio data
-            yield from self._update_portfolio_data(
-                updated_breakdown,
-                total_portfolio_value,
-                total_safe_value,
-                value_in_pools,
-            )
-
-            # Synchronize position data with portfolio data for consistency
-            yield from self._sync_positions_with_portfolio(balance_map)
-
-            self.context.logger.info(
-                f"Portfolio data updated with fresh blockchain data. Total value: ${total_portfolio_value + value_in_pools:.2f} (Safe: ${total_safe_value:.2f}, Pools: ${value_in_pools:.2f})"
-            )
-
-        except Exception as e:
-            self.context.logger.error(f"Error updating portfolio data: {e}")
-
-    def _calculate_pools_value(
-        self, positions: List[Dict[str, Any]]
-    ) -> Generator[None, None, float]:
-        """Calculate total value in pools from current positions."""
-        value_in_pools = 0.0
-        for position in positions:
-            if position.get("status") == PositionStatus.OPEN.value:
-                position_value = position.get("value_usd", 0)
-                if isinstance(position_value, str):
-                    position_value = float(position_value) if position_value else 0.0
-                value_in_pools += position_value
-        return value_in_pools
-
-    def _fetch_fresh_balances(self) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Fetch fresh balances from blockchain APIs."""
-        chain = self.context.params.target_investment_chains[0]
-        if chain == "optimism":
-            balances = yield from self._get_optimism_balances_from_safe_api()
-        elif chain == "mode":
-            balances = yield from self._get_mode_balances_from_explorer_api()
-        else:
-            self.context.logger.error(f"Unsupported chain: {chain}")
-            return []
-        return balances
-
-    def _calculate_token_usd_values(
-        self, balances: List[Dict[str, Any]]
-    ) -> Generator[None, None, Tuple[Dict[str, Dict[str, Any]], float]]:
-        """Calculate USD values for all tokens in balances."""
-        balance_map = {}
-        total_safe_value = 0
-        chain = self.context.params.target_investment_chains[0]
-
-        for balance in balances:
-            # Handle different balance formats
-            if "tokenAddress" in balance:
-                # Format from SafeApi (has balanceUsd)
-                token_address = balance.get("tokenAddress")
-                balance_amount = balance.get("balance", "0")
-                balance_usd = float(balance.get("balanceUsd", 0))
-                token_symbol = balance.get("tokenSymbol", "")
-            else:
-                # Format from _get_optimism_balances_from_safe_api (no balanceUsd)
-                token_address = balance.get("address")
-                balance_amount = balance.get("balance", 0)
-                token_symbol = balance.get("asset_symbol", "")
-
-                # Calculate USD value for this token
-                balance_usd = yield from self._calculate_single_token_usd_value(
-                    token_address, balance_amount, chain
-                )
-
-            if token_address:
-                balance_map[token_address.lower()] = {
-                    "balance": balance_amount,
-                    "balance_usd": balance_usd,
-                    "symbol": token_symbol,
-                }
-                total_safe_value += balance_usd
-
-        return balance_map, total_safe_value
-
-    def _calculate_single_token_usd_value(
-        self, token_address: str, balance_amount: Any, chain: str
-    ) -> Generator[None, None, float]:
-        """Calculate USD value for a single token."""
-        if not token_address or balance_amount <= 0:
-            return 0.0
-
-        try:
-            if token_address.lower() == ZERO_ADDRESS.lower():
-                # ETH
-                token_price = yield from self._fetch_zero_address_price()
-            else:
-                # ERC20 token
-                token_price = yield from self._fetch_token_price(token_address, chain)
-
-            if token_price:
-                # Convert balance to human-readable format
-                token_decimals = yield from self._get_token_decimals(
-                    chain, token_address
-                )
-                if token_decimals is not None:
-                    adjusted_balance = float(balance_amount) / (10**token_decimals)
-                    return adjusted_balance * token_price
-                else:
-                    return 0.0
-            else:
-                return 0.0
-        except Exception as e:
-            self.context.logger.error(
-                f"Error calculating USD value for {token_address}: {e}"
-            )
-            return 0.0
-
-    def _update_portfolio_breakdown(
-        self, balance_map: Dict[str, Dict[str, Any]]
-    ) -> Generator[None, None, Tuple[List[Dict[str, Any]], float]]:
-        """Update portfolio breakdown with fresh balance data."""
-        # Get existing portfolio breakdown to preserve structure
-        portfolio_breakdown = self.portfolio_data.get("portfolio_breakdown", [])
-        existing_assets = {
-            asset.get("address", "").lower(): asset for asset in portfolio_breakdown
-        }
-
-        # Update existing assets and add new ones
-        updated_breakdown = []
-        total_portfolio_value = 0
-
-        # Process existing assets
-        for asset in portfolio_breakdown:
-            asset_address = asset.get("address", "").lower()
-            asset_symbol = asset.get("asset", "")
-
-            # Get fresh balance data for this asset
-            if asset_address in balance_map:
-                fresh_data = balance_map[asset_address]
-                updated_asset = {
-                    "asset": asset_symbol,
-                    "address": asset.get("address"),  # Preserve original address format
-                    "balance": float(fresh_data["balance"]),
-                    "price": asset.get("price", 0),  # Preserve existing price
-                    "value_usd": fresh_data["balance_usd"],
-                    "ratio": 0,  # Will be calculated below
-                }
-                total_portfolio_value += fresh_data["balance_usd"]
-            else:
-                # Asset not found in current balances, set balance to 0
-                updated_asset = {
-                    "asset": asset_symbol,
-                    "address": asset.get("address"),
-                    "balance": 0.0,
-                    "price": asset.get("price", 0),
-                    "value_usd": 0.0,
-                    "ratio": 0.0,
-                }
-
-            updated_breakdown.append(updated_asset)
-
-        # Add new assets that weren't in the original portfolio
-        for token_address, balance_data in balance_map.items():
-            if token_address not in existing_assets:
-                # This is a new asset (e.g., from a swap)
-                new_asset = {
-                    "asset": balance_data["symbol"],
-                    "address": token_address,  # Use the address from balance_map
-                    "balance": float(balance_data["balance"]),
-                    "price": 0,  # Will need to be fetched if needed
-                    "value_usd": balance_data["balance_usd"],
-                    "ratio": 0,  # Will be calculated below
-                }
-                updated_breakdown.append(new_asset)
-                total_portfolio_value += balance_data["balance_usd"]
-                self.context.logger.info(
-                    f"Added new asset to portfolio: {balance_data['symbol']} (${balance_data['balance_usd']:.2f})"
-                )
-
-        return updated_breakdown, total_portfolio_value
-
-    def _calculate_portfolio_ratios(
-        self, updated_breakdown: List[Dict[str, Any]], total_portfolio_value: float
-    ) -> Generator[None, None, None]:
-        """Calculate ratios for all assets in portfolio breakdown."""
-        if total_portfolio_value > 0:
-            for asset in updated_breakdown:
-                asset["ratio"] = (asset["value_usd"] / total_portfolio_value) * 100
-
-    def _update_portfolio_data(
-        self,
-        updated_breakdown: List[Dict[str, Any]],
-        total_portfolio_value: float,
-        total_safe_value: float,
-        value_in_pools: float,
-    ) -> Generator[None, None, None]:
-        """Update main portfolio data with calculated values."""
-        # Update portfolio data while preserving all existing fields
-        self.portfolio_data.update(
-            {
-                "portfolio_value": float(
-                    total_portfolio_value + value_in_pools
-                ),  # Total = safe + pools
-                "value_in_safe": float(total_safe_value),
-                "value_in_pools": float(
-                    value_in_pools
-                ),  # Calculated dynamically from positions
-                "portfolio_breakdown": updated_breakdown,
-                "last_updated": int(self._get_current_timestamp()),
-            }
-        )
-
-        # Preserve all other existing fields (initial_investment, volume, roi, agent_hash, allocations, address)
-        # These fields remain unchanged
-
-        # Store updated portfolio data
-        self.store_portfolio_data()
-
-    def _sync_positions_with_portfolio(
-        self, balance_map: Dict[str, Dict[str, Any]]
-    ) -> Generator[None, None, None]:
-        """Synchronize position data with portfolio data for consistency."""
-        try:
-            # Get current positions from synchronized data
-            current_positions = self.synchronized_data.positions
-
-            if not current_positions:
-                self.context.logger.info("No positions to synchronize")
-                return
-
-            # Update asset balances in positions to match portfolio data
-            updated_positions = []
-            for position in current_positions:
-                updated_assets = []
-                for asset in position.get("assets", []):
-                    asset_address = asset.get("address", "").lower()
-
-                    # Update balance from fresh portfolio data
-                    if asset_address in balance_map:
-                        fresh_data = balance_map[asset_address]
-                        updated_asset = {
-                            **asset,  # Preserve all existing fields
-                            "balance": fresh_data[
-                                "balance"
-                            ],  # Update with fresh balance
-                        }
-                        self.context.logger.debug(
-                            f"Updated position asset {asset.get('asset_symbol')} balance: {asset.get('balance')} -> {fresh_data['balance']}"
-                        )
-                    else:
-                        # Asset not found in fresh data, set balance to 0
-                        updated_asset = {
-                            **asset,  # Preserve all existing fields
-                            "balance": 0,  # Set to 0 if not found
-                        }
-                        self.context.logger.debug(
-                            f"Asset {asset.get('asset_symbol')} not found in fresh data, setting balance to 0"
-                        )
-
-                    updated_assets.append(updated_asset)
-
-                # Update position with new assets
-                updated_position = {
-                    **position,  # Preserve all existing fields
-                    "assets": updated_assets,
-                }
-                updated_positions.append(updated_position)
-
-            # Update current positions in base behaviour
-            self.current_positions = updated_positions
-            self.store_current_positions()
-
-            self.context.logger.info(
-                f"Synchronized {len(updated_positions)} positions with fresh portfolio data"
-            )
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error synchronizing positions with portfolio: {e}"
-            )
-            # Don't fail the entire portfolio update if position sync fails
 
     def _get_native_balance(
         self, chain: str, account: str
@@ -2236,10 +1924,7 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, bool]:
         """Check if rewards should be updated from subgraph (period == 0 or 24-hour interval)"""
         # Update immediately if period == 0
-        if (
-            self.synchronized_data.period_count
-            and self.synchronized_data.period_count == 0
-        ):
+        if self.synchronized_data.period_count == 0:
             self.context.logger.info(
                 f"Reward update for {chain}: period == 0, forcing immediate update"
             )
@@ -2425,6 +2110,10 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.info(f"Stored entry costs: {key} = ${costs:.6f}")
         except Exception as e:
             self.context.logger.error(f"Error storing entry costs: {e}")
+
+    def _get_entry_costs_key(self, chain: str, position_id: str) -> str:
+        """Generate unique key for entry costs storage"""
+        return f"entry_costs_{chain}_{position_id}"
 
     def _get_all_entry_costs(self) -> Generator[None, None, Dict[str, float]]:
         """Get all entry costs from KV store"""
@@ -2801,6 +2490,478 @@ class LiquidityTraderBaseBehaviour(
                 f"Error building unstake LP tokens action: {str(e)}"
             )
             return None
+
+    def get_agent_type_by_name(
+        self, type_name
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_type_by_name",
+            endpoint=f"api/agent-types/name/{type_name}",
+        )
+        return response
+
+    def create_agent_type(self, type_name, description) -> Generator[None, None, Dict]:
+        """Create a new agent type."""
+        # Prepare agent type data
+        agent_type_data = {"type_name": type_name, "description": description}
+
+        endpoint = "api/agent-types/"
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_type",
+            endpoint=endpoint,
+            data=agent_type_data,
+        )
+
+        return response
+
+    def get_attr_def_by_name(self, attr_name) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_attr_def_by_name",
+            endpoint=f"api/attributes/name/{attr_name}",
+        )
+        return response
+
+    def create_attribute_definition(
+        self, type_id, attr_name, data_type, is_required, default_value, agent_id
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute definition for a specific agent type."""
+        # Prepare attribute definition data
+        attr_def_data = {
+            "type_id": type_id,
+            "attr_name": attr_name,
+            "data_type": data_type,
+            "is_required": is_required,
+            "default_value": default_value,
+        }
+
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agent-types/{type_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
+
+        # Prepare authentication data
+        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_attribute_definition",
+            endpoint=endpoint,
+            data={"attr_def": attr_def_data, "auth": auth_data},
+        )
+
+        return response
+
+    def get_agent_registry_by_address(
+        self, eth_address
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get agent registry by Ethereum address."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_registry_by_address",
+            endpoint=f"api/agent-registry/address/{eth_address}",
+        )
+        return response
+
+    def create_agent_registry(
+        self, agent_name, type_id, eth_address
+    ) -> Generator[None, None, Dict]:
+        """Create a new agent registry."""
+        # Prepare agent registry data
+        agent_registry_data = {
+            "agent_name": agent_name,
+            "type_id": type_id,
+            "eth_address": eth_address,
+        }
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_registry",
+            endpoint="api/agent-registry/",
+            data=agent_registry_data,
+        )
+
+        return response
+
+    def create_agent_attribute(
+        self,
+        agent_id,
+        attr_def_id,
+        json_value=None,
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute value for a specific agent."""
+        # Prepare the agent attribute data with all values set to None initially
+        agent_attr_data = {
+            "agent_id": agent_id,
+            "attr_def_id": attr_def_id,
+            "string_value": None,
+            "integer_value": None,
+            "float_value": None,
+            "boolean_value": None,
+            "date_value": None,
+            "json_value": json_value,
+        }
+
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agents/{agent_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
+
+        # Prepare authentication data
+        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_attribute",
+            endpoint=endpoint,
+            data={"agent_attr": agent_attr_data, "auth": auth_data},
+        )
+
+        return response
+
+    def _get_or_create_agent_type(
+        self, eth_address: str
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Get or create agent type."""
+        data = yield from self._read_kv(keys=("agent_type",))
+        if not data or not data.get("agent_type"):
+            type_name = AGENT_TYPE.get(self.params.target_investment_chains[0])
+            agent_type = yield from self.get_agent_type_by_name(type_name)
+            if not agent_type:
+                agent_type = yield from self.create_agent_type(
+                    type_name,
+                    "An agent for DeFi liquidity management and APR tracking",
+                )
+                if not agent_type:
+                    raise Exception("Failed to create agent type.")
+                yield from self._write_kv({"agent_type": json.dumps(agent_type)})
+            return agent_type
+
+        return json.loads(data["agent_type"])
+
+    def _get_or_create_attr_def(
+        self, type_id: str, agent_id: str
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Get or create APR attribute definition."""
+        data = yield from self._read_kv(keys=("attr_def",))
+        if not data or not data.get("attr_def"):
+            attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+            if not attr_def:
+                attr_def = yield from self.create_attribute_definition(
+                    type_id,
+                    METRICS_NAME,
+                    METRICS_TYPE,
+                    True,
+                    "{}",
+                    agent_id,
+                )
+                if not attr_def:
+                    raise Exception("Failed to create attribute definition.")
+                yield from self._write_kv({"attr_def": json.dumps(attr_def)})
+            return attr_def
+
+        return json.loads(data["attr_def"])
+
+    def _get_or_create_agent_registry(
+        self,
+    ) -> Generator[Optional[Dict[str, Any]], None, None]:
+        """Get or create agent registry entry (copied from APRPopulationBehaviour)."""
+        try:
+            data = yield from self._read_kv(keys=("agent_registry",))
+            if not data or not data.get("agent_registry"):
+                # Get or create agent type first
+                eth_address = self.context.agent_address
+                agent_type = yield from self._get_or_create_agent_type(eth_address)
+                if not agent_type:
+                    self.context.logger.error("Failed to get or create agent type")
+                    return None
+
+                type_id = agent_type["type_id"]
+
+                agent_registry = yield from self.get_agent_registry_by_address(
+                    eth_address
+                )
+                if not agent_registry:
+                    agent_name = self.generate_name(eth_address)
+                    self.context.logger.info(
+                        f"Creating agent registry with name: {agent_name}"
+                    )
+                    agent_registry = yield from self.create_agent_registry(
+                        agent_name, type_id, eth_address
+                    )
+                    if not agent_registry:
+                        self.context.logger.error("Failed to create agent registry")
+                        return None
+                    yield from self._write_kv(
+                        {"agent_registry": json.dumps(agent_registry)}
+                    )
+                return agent_registry
+
+            return json.loads(data["agent_registry"])
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in _get_or_create_agent_registry: {str(e)}"
+            )
+            return None
+
+    def generate_phonetic_syllable(self, seed):
+        """Generates phonetic syllable"""
+        phonetic_syllables = [
+            "ba",
+            "bi",
+            "bu",
+            "ka",
+            "ke",
+            "ki",
+            "ko",
+            "ku",
+            "da",
+            "de",
+            "di",
+            "do",
+            "du",
+            "fa",
+            "fe",
+            "fi",
+            "fo",
+            "fu",
+            "ga",
+            "ge",
+            "gi",
+            "go",
+            "gu",
+            "ha",
+            "he",
+            "hi",
+            "ho",
+            "hu",
+            "ja",
+            "je",
+            "ji",
+            "jo",
+            "ju",
+            "ka",
+            "ke",
+            "ki",
+            "ko",
+            "ku",
+            "la",
+            "le",
+            "li",
+            "lo",
+            "lu",
+            "ma",
+            "me",
+            "mi",
+            "mo",
+            "mu",
+            "na",
+            "ne",
+            "ni",
+            "no",
+            "nu",
+            "pa",
+            "pe",
+            "pi",
+            "po",
+            "pu",
+            "ra",
+            "re",
+            "ri",
+            "ro",
+            "ru",
+            "sa",
+            "se",
+            "si",
+            "so",
+            "su",
+            "ta",
+            "te",
+            "ti",
+            "to",
+            "tu",
+            "va",
+            "ve",
+            "vi",
+            "vo",
+            "vu",
+            "wa",
+            "we",
+            "wi",
+            "wo",
+            "wu",
+            "ya",
+            "ye",
+            "yi",
+            "yo",
+            "yu",
+            "za",
+            "ze",
+            "zi",
+            "zo",
+            "zu",
+            "bal",
+            "ben",
+            "bir",
+            "bom",
+            "bun",
+            "cam",
+            "cen",
+            "cil",
+            "cor",
+            "cus",
+            "dan",
+            "del",
+            "dim",
+            "dor",
+            "dun",
+            "fam",
+            "fen",
+            "fil",
+            "fon",
+            "fur",
+            "gar",
+            "gen",
+            "gil",
+            "gon",
+            "gus",
+            "han",
+            "hel",
+            "him",
+            "hon",
+            "hus",
+            "jan",
+            "jel",
+            "jim",
+            "jon",
+            "jus",
+            "kan",
+            "kel",
+            "kim",
+            "kon",
+            "kus",
+            "lan",
+            "lel",
+            "lim",
+            "lon",
+            "lus",
+            "mar",
+            "mel",
+            "min",
+            "mon",
+            "mus",
+            "nar",
+            "nel",
+            "nim",
+            "nor",
+            "nus",
+            "par",
+            "pel",
+            "pim",
+            "pon",
+            "pus",
+            "rar",
+            "rel",
+            "rim",
+            "ron",
+            "rus",
+            "sar",
+            "sel",
+            "sim",
+            "son",
+            "sus",
+            "tar",
+            "tel",
+            "tim",
+            "ton",
+            "tus",
+            "var",
+            "vel",
+            "vim",
+            "von",
+            "vus",
+            "war",
+            "wel",
+            "wim",
+            "won",
+            "wus",
+            "yar",
+            "yel",
+            "yim",
+            "yon",
+            "yus",
+            "zar",
+            "zel",
+            "zim",
+            "zon",
+            "zus",
+            "zez",
+            "zzt",
+            "bzt",
+            "vzt",
+            "kzt",
+            "mek",
+            "tek",
+            "nek",
+            "lek",
+            "tron",
+            "dron",
+            "kron",
+            "pron",
+            "bot",
+            "rot",
+            "not",
+            "lot",
+            "zap",
+            "blip",
+            "bleep",
+            "beep",
+            "wire",
+            "byte",
+            "bit",
+            "chip",
+        ]
+        return phonetic_syllables[seed % len(phonetic_syllables)]
+
+    def generate_phonetic_name(self, address, start_index, syllables):
+        """Generates phonetic name"""
+        return "".join(
+            self.generate_phonetic_syllable(
+                int(address[start_index + i * 8 : start_index + (i + 1) * 8], 16)
+            )
+            for i in range(syllables)
+        ).lower()
+
+    def generate_name(self, address):
+        """Generates name from address"""
+        first_name = self.generate_phonetic_name(address, 2, 2)
+        last_name_prefix = self.generate_phonetic_name(address, 18, 2)
+        last_name_number = int(address[-4:], 16) % 100
+        return f"{first_name}-{last_name_prefix}{str(last_name_number).zfill(2)}"
+
+    def sign_message(self, message) -> Generator[None, None, Optional[str]]:
+        """Sign a message."""
+        message_bytes = message.encode("utf-8")
+        signature = yield from self.get_signature(message_bytes)
+        if signature:
+            signature_hex = signature[2:]
+            return signature_hex
+        return None
 
 
 def execute_strategy(

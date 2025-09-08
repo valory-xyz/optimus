@@ -26,7 +26,7 @@ def validate_and_fix_protocols(
         if protocol not in VALID_PROTOCOLS:
             invalid_protocols.append(protocol)
             continue
-            
+
         # Check if protocol is available on ANY of the target chains
         protocol_available = False
         for chain in target_investment_chains:
@@ -36,12 +36,11 @@ def validate_and_fix_protocols(
                 if strategy_name in chain_strategies:
                     protocol_available = True
                     break
-        
+
         if protocol_available:
             valid_protocols.append(protocol)
         else:
             chain_incompatible_protocols.append(protocol)
-
 
     # If any invalid or incompatible protocols found, get fallback protocols
     if invalid_protocols or chain_incompatible_protocols:

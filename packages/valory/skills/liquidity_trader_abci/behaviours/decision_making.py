@@ -339,9 +339,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if decision == Decision.CONTINUE:
             # Add slippage costs after swap completion
             yield from self._add_slippage_costs(self.synchronized_data.final_tx_hash)
-            res = yield from self._update_assets_after_swap(
-                actions, last_executed_action_index
-            )
+            res = self._update_assets_after_swap(actions, last_executed_action_index)
             return res
 
     def _wait_for_swap_confirmation(self) -> Generator[None, None, Optional[Decision]]:
@@ -357,14 +355,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
     def _update_assets_after_swap(
         self, actions, last_executed_action_index
-    ) -> Generator[None, None, Tuple[Optional[str], Optional[Dict]]]:
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """Update assets after a successful swap."""
         action = actions[last_executed_action_index]
-
-        # Update portfolio data to reflect new USDC balance after swap
-        self.context.logger.info("Updating portfolio data after swap...")
-        yield from self.update_portfolio_after_action()
-        self.context.logger.info("Portfolio data updated after swap.")
 
         # Check if this was a withdrawal swap and log accordingly
         if action.get("description", "").startswith("Withdrawal"):
@@ -610,11 +603,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # When we exit the pool, it may take time to reflect the balance of our assets in the safe
         yield from self.sleep(WAITING_PERIOD_FOR_BALANCE_TO_REFLECT)
-
-        # Refresh portfolio data to reflect the new balances after exiting the pool
-        self.context.logger.info("Refreshing portfolio data after pool exit...")
-        yield from self.update_portfolio_after_action()
-        self.context.logger.info("Portfolio data refreshed after pool exit.")
 
         # Check if this was a withdrawal exit and log accordingly
         if action.get("description", "").startswith("Withdrawal"):
@@ -3724,8 +3712,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error renaming entry costs key: {e}")
-
-    # ==================== STAKING EXECUTION METHODS ====================
 
     def get_stake_lp_tokens_tx_hash(
         self, action

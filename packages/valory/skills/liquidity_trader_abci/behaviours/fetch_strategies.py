@@ -2137,10 +2137,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 if adjusted_balance <= 0:
                     continue
-
+                
+                velo_token_address = self._get_velo_token_address(chain)
                 # Get token price
                 if token_address == ZERO_ADDRESS:
                     token_price = yield from self._fetch_zero_address_price()
+                elif token_address.lower() == velo_token_address:
+                    velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                    token_price = yield from self._fetch_coin_price(velo_coin_id)
                 else:
                     token_price = yield from self._fetch_token_price(
                         token_address, chain

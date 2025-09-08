@@ -397,13 +397,8 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 f"Token: {token_symbol}, Address: {token_address}, Value: {value_usd}"
             )
 
-            # Skip if it's already USDC or OLAS by address
+            # Skip if it's already USDC
             usdc_address = self._get_usdc_address(chain)
-            olas_address = (
-                self._get_olas_address(chain)
-                if hasattr(self, "_get_olas_address")
-                else None
-            )
             if (
                 token_address
                 and usdc_address
@@ -411,13 +406,58 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             ):
                 self.context.logger.info("Skipping USDC - it's USDC (by address)")
                 continue
+
+            # Special handling for OLAS on MODE chain
+            olas_address = (
+                self._get_olas_address(chain)
+                if hasattr(self, "_get_olas_address")
+                else None
+            )
             if (
+                token_address
+                and olas_address
+                and token_address.lower() == olas_address.lower()
+                and chain == "mode"
+            ):
+                # For MODE chain OLAS, only swap airdrop rewards portion
+                airdrop_rewards_wei = yield from self._get_total_airdrop_rewards(chain)
+                if airdrop_rewards_wei > 0:
+                    # Get current OLAS balance in wallet
+                    wallet_olas_balance_wei = yield from self._get_token_balance(
+                        chain, 
+                        self.context.params.safe_contract_addresses.get(chain),
+                        olas_address
+                    )
+                    
+                    if wallet_olas_balance_wei and wallet_olas_balance_wei > 0:
+                        # Calculate percentage of airdrop rewards vs total OLAS balance
+                        airdrop_percentage = min(1.0, airdrop_rewards_wei / wallet_olas_balance_wei)
+                        
+                        self.context.logger.info(
+                            f"OLAS airdrop handling: {airdrop_rewards_wei} wei airdrop / {wallet_olas_balance_wei} wei total = {airdrop_percentage:.4f} percentage"
+                        )
+                        
+                        # Create swap action for airdrop portion only
+                        swap_action = self._build_swap_to_usdc_action(
+                            chain=chain,
+                            from_token_address=token_address,
+                            from_token_symbol=token_symbol,
+                            funds_percentage=airdrop_percentage,
+                            description=f"Swap airdrop OLAS to USDC for withdrawal",
+                        )
+                        
+                        if swap_action:
+                            actions.append(swap_action)
+                            self.context.logger.info(f"Created airdrop OLAS swap action: {swap_action}")
+                        
+                continue
+            elif (
                 token_address
                 and olas_address
                 and token_address.lower() == olas_address.lower()
             ):
                 self.context.logger.info(
-                    "Skipping OLAS - do not swap OLAS during withdrawal (by address)"
+                    "Skipping OLAS - do not swap OLAS during withdrawal (non-MODE chain)"
                 )
                 continue
 

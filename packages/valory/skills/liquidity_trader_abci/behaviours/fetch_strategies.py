@@ -54,7 +54,6 @@ from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContr
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    AIRDROP_TOTAL_KEY,
     Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
@@ -969,7 +968,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
             # Calculate total portfolio value including airdrop rewards
-            total_portfolio_value = total_pools_value + total_safe_value + airdrop_rewards_value
+            total_portfolio_value = (
+                total_pools_value + total_safe_value + airdrop_rewards_value
+            )
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
             # Convert to percentage by multiplying by 100
@@ -2137,7 +2138,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 if adjusted_balance <= 0:
                     continue
-                
+
                 velo_token_address = self._get_velo_token_address(chain)
                 # Get token price
                 if token_address == ZERO_ADDRESS:
@@ -2182,12 +2183,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         chain = self.params.target_investment_chains[0]
         if chain != "mode":
             return Decimal(0)
-            
+
         airdrop_rewards_wei = yield from self._get_total_airdrop_rewards(chain)
         if airdrop_rewards_wei > 0:
             # Convert from wei to OLAS (18 decimals)
             airdrop_olas_balance = Decimal(str(airdrop_rewards_wei)) / Decimal(10**18)
-            
+
             # Get OLAS price
             olas_address = OLAS_ADDRESSES.get(chain)
             if olas_address:
@@ -2195,7 +2196,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if olas_price is not None:
                     olas_price = Decimal(str(olas_price))
                     airdrop_value_usd = airdrop_olas_balance * olas_price
-                    
+
                     self.context.logger.info(
                         f"OLAS airdrop rewards - OLAS: {airdrop_olas_balance} (${airdrop_value_usd})"
                     )
@@ -2204,7 +2205,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.warning(
                         "Could not fetch price for OLAS airdrop rewards"
                     )
-        
+
         return Decimal(0)
 
     def calculate_stakig_rewards_value(self) -> Generator[None, None, Decimal]:
@@ -3205,7 +3206,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     total = tx.get("total", {})
                     value_raw = int(total.get("value", "0"))
                     yield from self._update_airdrop_rewards(value_raw, "mode")
-                    
+
                     token = tx.get("token", {})
                     decimals = int(token.get("decimals", 18))
                     amount = value_raw / (10**decimals)
@@ -4435,14 +4436,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Check if a transfer is an OLAS airdrop transfer."""
         if not self.params.airdrop_started or not self.params.airdrop_contract_address:
             return False
-            
+
         from_address = tx.get("from", {})
         token = tx.get("token", {})
         symbol = token.get("symbol", "Unknown")
-        
-        return (symbol.upper() == "OLAS" and
-                token.get("address", "").lower() == OLAS_ADDRESSES.get("mode", "").lower() and
-                from_address.get("hash", "").lower() == self.params.airdrop_contract_address.lower())
+
+        return (
+            symbol.upper() == "OLAS"
+            and token.get("address", "").lower()
+            == OLAS_ADDRESSES.get("mode", "").lower()
+            and from_address.get("hash", "").lower()
+            == self.params.airdrop_contract_address.lower()
+        )
 
     def _update_agent_performance_metrics(self):
         """Update agent performance metrics with portfolio balance and ROI."""

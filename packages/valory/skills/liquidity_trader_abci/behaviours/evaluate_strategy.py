@@ -2228,17 +2228,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         accumulated_rewards = yield from self.get_accumulated_rewards_for_token(
             chain, token_address
         )
-        
+
         # Subtract airdrop rewards for OLAS on MODE chain
         airdrop_rewards = 0
-        if (chain == "mode" and 
-            token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()):
+        if (
+            chain == "mode"
+            and token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
+        ):
             airdrop_rewards = yield from self._get_total_airdrop_rewards(chain)
             self.context.logger.info(
                 f"OLAS airdrop rewards to exclude from investment: {airdrop_rewards} wei"
             )
-        
-        investable_balance = max(0, total_balance - accumulated_rewards - airdrop_rewards)
+
+        investable_balance = max(
+            0, total_balance - accumulated_rewards - airdrop_rewards
+        )
 
         self.context.logger.info(
             f"Token {token_address} on {chain}: "

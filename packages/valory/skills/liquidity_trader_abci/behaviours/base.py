@@ -2991,23 +2991,25 @@ class LiquidityTraderBaseBehaviour(
                 return int(result[total_key])
             return 0
         except (ValueError, TypeError):
-            self.context.logger.warning(f"Invalid airdrop total for {chain}, returning 0")
+            self.context.logger.warning(
+                f"Invalid airdrop total for {chain}, returning 0"
+            )
             return 0
 
     def _is_airdrop_transfer(self, transfer: Dict, airdrop_contract: str) -> bool:
         """Check if a transfer is from the airdrop contract."""
         if not airdrop_contract:
             return False
-        
+
         from_address = transfer.get("from_address", "")
         token_address = transfer.get("token_address", "")
         symbol = transfer.get("symbol", "")
-        
+
         # Check if transfer is from airdrop contract and is OLAS token
         return (
-            from_address.lower() == airdrop_contract.lower() and
-            symbol.upper() == "OLAS" and
-            token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
+            from_address.lower() == airdrop_contract.lower()
+            and symbol.upper() == "OLAS"
+            and token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
         )
 
 

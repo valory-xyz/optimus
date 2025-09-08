@@ -424,32 +424,36 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 if airdrop_rewards_wei > 0:
                     # Get current OLAS balance in wallet
                     wallet_olas_balance_wei = yield from self._get_token_balance(
-                        chain, 
+                        chain,
                         self.context.params.safe_contract_addresses.get(chain),
-                        olas_address
+                        olas_address,
                     )
-                    
+
                     if wallet_olas_balance_wei and wallet_olas_balance_wei > 0:
                         # Calculate percentage of airdrop rewards vs total OLAS balance
-                        airdrop_percentage = min(1.0, airdrop_rewards_wei / wallet_olas_balance_wei)
-                        
+                        airdrop_percentage = min(
+                            1.0, airdrop_rewards_wei / wallet_olas_balance_wei
+                        )
+
                         self.context.logger.info(
                             f"OLAS airdrop handling: {airdrop_rewards_wei} wei airdrop / {wallet_olas_balance_wei} wei total = {airdrop_percentage:.4f} percentage"
                         )
-                        
+
                         # Create swap action for airdrop portion only
                         swap_action = self._build_swap_to_usdc_action(
                             chain=chain,
                             from_token_address=token_address,
                             from_token_symbol=token_symbol,
                             funds_percentage=airdrop_percentage,
-                            description=f"Swap airdrop OLAS to USDC for withdrawal",
+                            description="Swap airdrop OLAS to USDC for withdrawal",
                         )
-                        
+
                         if swap_action:
                             actions.append(swap_action)
-                            self.context.logger.info(f"Created airdrop OLAS swap action: {swap_action}")
-                        
+                            self.context.logger.info(
+                                f"Created airdrop OLAS swap action: {swap_action}"
+                            )
+
                 continue
             elif (
                 token_address

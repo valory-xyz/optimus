@@ -382,7 +382,9 @@ class Params(BaseParams):
         )
         self.mode_api_timeout = self._ensure("mode_api_timeout", kwargs, int)
         self.airdrop_started = self._ensure("airdrop_started", kwargs, bool)
-        self.airdrop_contract_address = self._ensure("airdrop_contract_address", kwargs, str)
+        self.airdrop_contract_address = self._ensure(
+            "airdrop_contract_address", kwargs, str
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

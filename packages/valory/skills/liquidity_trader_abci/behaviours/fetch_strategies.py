@@ -54,6 +54,7 @@ from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContr
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
+    AIRDROP_TOTAL_KEY,
     Chain,
     DexType,
     LiquidityTraderBaseBehaviour,
@@ -3158,6 +3159,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if from_address.get("hash", address).lower() == address.lower():
                     continue
 
+                # Check for airdrop transfers first
+                if self._is_olas_airdrop_transfer(tx):
+                    total = tx.get("total", {})
+                    value_raw = int(total.get("value", "0"))
+                    yield from self._update_airdrop_rewards(value_raw, "mode")
+                    
+                    token = tx.get("token", {})
+                    decimals = int(token.get("decimals", 18))
+                    amount = value_raw / (10**decimals)
+                    self.context.logger.info(
+                        f"Detected OLAS airdrop transfer: {amount} OLAS from {from_address.get('hash', '')} "
+                        f"tx_hash: {tx.get('transaction_hash', '')}"
+                    )
+
                 if self._should_include_transfer_mode(
                     from_address, tx, is_eth_transfer=False
                 ):
@@ -4374,6 +4389,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error validating Velodrome v2 pool address: {str(e)}"
             )
             return False
+
+    def _is_olas_airdrop_transfer(self, tx: Dict) -> bool:
+        """Check if a transfer is an OLAS airdrop transfer."""
+        if not self.params.airdrop_started or not self.params.airdrop_contract_address:
+            return False
+            
+        from_address = tx.get("from", {})
+        token = tx.get("token", {})
+        symbol = token.get("symbol", "Unknown")
+        
+        return (symbol.upper() == "OLAS" and
+                token.get("address", "").lower() == OLAS_ADDRESSES.get("mode", "").lower() and
+                from_address.get("hash", "").lower() == self.params.airdrop_contract_address.lower())
 
     def _update_agent_performance_metrics(self):
         """Update agent performance metrics with portfolio balance and ROI."""

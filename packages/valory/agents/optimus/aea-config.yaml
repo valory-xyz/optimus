@@ -309,3 +309,5 @@ models:
       default_acceptance_time: ${int:5}
       genai_api_key: ${str:""}
       slippage_tolerance: ${float:0.005}
+      airdrop_started: ${bool:false}
+      airdrop_contract_address: ${str:""}

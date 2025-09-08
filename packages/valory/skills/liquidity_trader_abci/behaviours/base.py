@@ -123,6 +123,10 @@ OLAS_ADDRESSES = {
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
 }
 
+# Airdrop reward tracking constants
+AIRDROP_REWARDS_KEY_PREFIX = "airdrop_rewards_"
+AIRDROP_TOTAL_KEY = "total_airdrop_rewards"
+
 # Reward tokens that should be excluded from investment consideration
 REWARD_TOKEN_ADDRESSES = {
     "mode": {
@@ -2962,6 +2966,49 @@ class LiquidityTraderBaseBehaviour(
             signature_hex = signature[2:]
             return signature_hex
         return None
+
+    def _update_airdrop_rewards(
+        self, new_amount: int, chain: str
+    ) -> Generator[None, None, None]:
+        """Update total airdrop rewards in KV store."""
+        try:
+            total_key = f"{AIRDROP_TOTAL_KEY}_{chain}"
+            current_total = yield from self._get_total_airdrop_rewards(chain)
+            new_total = current_total + new_amount
+            yield from self._write_kv({total_key: str(new_total)})
+            self.context.logger.info(
+                f"Updated airdrop rewards for {chain}: +{new_amount}, total: {new_total}"
+            )
+        except Exception as e:
+            self.context.logger.error(f"Error updating airdrop rewards: {e}")
+
+    def _get_total_airdrop_rewards(self, chain: str) -> Generator[None, None, int]:
+        """Get total accumulated airdrop rewards for a chain."""
+        try:
+            total_key = f"{AIRDROP_TOTAL_KEY}_{chain}"
+            result = yield from self._read_kv((total_key,))
+            if result and result.get(total_key):
+                return int(result[total_key])
+            return 0
+        except (ValueError, TypeError):
+            self.context.logger.warning(f"Invalid airdrop total for {chain}, returning 0")
+            return 0
+
+    def _is_airdrop_transfer(self, transfer: Dict, airdrop_contract: str) -> bool:
+        """Check if a transfer is from the airdrop contract."""
+        if not airdrop_contract:
+            return False
+        
+        from_address = transfer.get("from_address", "")
+        token_address = transfer.get("token_address", "")
+        symbol = transfer.get("symbol", "")
+        
+        # Check if transfer is from airdrop contract and is OLAS token
+        return (
+            from_address.lower() == airdrop_contract.lower() and
+            symbol.upper() == "OLAS" and
+            token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
+        )
 
 
 def execute_strategy(

@@ -109,6 +109,8 @@ models:
       available_strategies: ${AVAILABLE_STRATEGIES:str:{"mode":["balancer_pools_search","asset_lending","velodrome_pools_search"],"optimism":["balancer_pools_search","uniswap_pools_search","velodrome_pools_search"],"base":["balancer_pools_search","uniswap_pools_search"]}}
       default_acceptance_time: ${DEFAULT_ACCEPTANCE_TIME:int:5}
       genai_api_key: ${GENAI_API_KEY:str:""}
+      airdrop_started: ${AIRDROP_STARTED:bool:false}
+      airdrop_contract_address: ${AIRDROP_CONTRACT_ADDRESS:str:""}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

@@ -89,12 +89,14 @@ class TestCheckStakingKPIMetBehaviour(FSMBehaviourBaseCase):
 
     def setup_default_test_data(self):
         """Setup default test data."""
-        # Set default parameters
+        # Unfreeze params to set default parameters
+        self.check_staking_kpi_behaviour.params.__dict__["_frozen"] = False
         self.check_staking_kpi_behaviour.params.staking_chain = "optimism"
         self.check_staking_kpi_behaviour.params.safe_contract_addresses = {
             "optimism": "0xSafeAddress123456789012345678901234567890123456"
         }
         self.check_staking_kpi_behaviour.params.staking_threshold_period = 5
+        self.check_staking_kpi_behaviour.params.__dict__["_frozen"] = True
 
     @pytest.mark.parametrize("is_staking_kpi_met,period_count,period_number_at_last_cp,threshold_period,min_num_of_safe_tx_required,multisig_nonces_since_last_cp,expected_vanity_tx,expected_is_staking_kpi_met,test_description", [
         # Test 1: KPI already met

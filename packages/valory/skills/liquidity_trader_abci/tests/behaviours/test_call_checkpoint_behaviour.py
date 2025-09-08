@@ -167,12 +167,14 @@ class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
     def setup_default_test_data(self):
         """Setup default test data."""
-        # Set default parameters
+        # Unfreeze params to set default parameters
+        self.checkpoint_behaviour.params.__dict__["_frozen"] = False
         self.checkpoint_behaviour.params.staking_chain = "optimism"
         self.checkpoint_behaviour.params.safe_contract_addresses = {
             "optimism": "0xSafeAddress123456789012345678901234567890123456"
         }
         self.checkpoint_behaviour.params.staking_token_contract_address = "0xStakingToken123456789012345678901234567890123456"
+        self.checkpoint_behaviour.params.__dict__["_frozen"] = True
 
     @pytest.mark.parametrize("staking_chain,mock_staking_state,mock_min_tx_required,mock_checkpoint_reached,mock_checkpoint_tx,expected_tx_hex,expected_min_tx,expected_staking_state,test_description", [
         # Test 1: No staking chain configured

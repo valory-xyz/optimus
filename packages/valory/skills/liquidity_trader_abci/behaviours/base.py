@@ -633,8 +633,8 @@ class LiquidityTraderBaseBehaviour(
             token_symbol = token_info.get("symbol", "UNKNOWN")
 
             # Rename XVELO to VELO for Mode chain
-            if token_symbol == "XVELO":
-                token_symbol = "VELO"
+            if token_symbol == "XVELO":  # nosec B105
+                token_symbol = "VELO"  # nosec B105
                 self.context.logger.info(
                     f"Renamed XVELO to VELO for Mode chain token at {token_address}"
                 )

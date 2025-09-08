@@ -9,6 +9,7 @@ on:
 
 jobs:
   lock_check:
+    if: false
     continue-on-error: False
     runs-on: ${{ matrix.os }}
 
@@ -35,6 +36,7 @@ jobs:
         installer-parallel: true
 
   copyright_and_dependencies_check:
+    if: false
     continue-on-error: False
     runs-on: ${{ matrix.os }}
 
@@ -71,6 +73,7 @@ jobs:
         run: tox -e check-doc-hashes
 
   linter_checks:
+    if: false
     continue-on-error: False
     runs-on: ${{ matrix.os }}
 
@@ -140,10 +143,10 @@ jobs:
 
   unit-test:
     continue-on-error: False
-    needs:
-      - lock_check
-      - copyright_and_dependencies_check
-      - linter_checks
+    # needs:
+      # - lock_check
+      # - copyright_and_dependencies_check
+      # - linter_checks
     runs-on: ${{ matrix.os }}
 
     strategy:

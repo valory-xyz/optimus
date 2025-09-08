@@ -330,6 +330,7 @@ class LiquidityTraderBaseBehaviour(
         self.portfolio_data_filepath: str = (
             store_path / self.params.portfolio_info_filename
         )
+        self.assets: Dict[str, Any] = {}
         self.whitelisted_assets: Dict[str, Any] = {}
         self.whitelisted_assets_filepath: str = (
             store_path / self.params.whitelisted_assets_filename

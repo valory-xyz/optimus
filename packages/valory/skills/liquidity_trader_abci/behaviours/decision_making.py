@@ -213,6 +213,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._post_execute_exit_pool(
                     actions, last_executed_action_index
                 )
+            if self.synchronized_data.last_action == Action.BRIDGE_SWAP_EXECUTED.value:
+                self._post_execute_transfer(actions, last_executed_action_index)
             if self.synchronized_data.last_action == Action.WITHDRAW.value:
                 yield from self._post_execute_withdraw(
                     actions, last_executed_action_index
@@ -608,7 +610,22 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if action.get("description", "").startswith("Withdrawal"):
             self.context.logger.info("Withdrawal pool exit completed successfully.")
 
-    def _post_execute_withdraw(self, actions, last_executed_action_index):
+    def _post_execute_transfer(self, actions, last_executed_action_index):
+        """Handle USDC transfer completion."""
+        # Log bridge/swap completion
+        action = actions[last_executed_action_index]
+
+        from_chain = action.get("from_chain", "unknown")
+        to_chain = action.get("to_chain", "unknown")
+        from_token_symbol = action.get("from_token_symbol")
+        to_token_symbol = action.get("to_token_symbol")
+
+        self.context.logger.info(
+            f"Swap completed: {from_token_symbol} {from_chain} to {to_token_symbol} {to_chain}. "
+            f"Transaction Hash - {self.synchronized_data.final_tx_hash}"
+        )
+
+    def _post_execute_withdraw(self, actions, last_executed_action_index) -> Generator[None, None, None]:
         """Handle withdrawal transfer completion."""
         investing_paused = yield from self._read_investing_paused()
         withdrawal_status = yield from self._read_withdrawal_status()

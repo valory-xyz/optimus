@@ -5165,7 +5165,8 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 result = fetch_behaviour._create_portfolio_data(
                     total_pools_value,
                     total_safe_value,
-                    Decimal("0.0"),
+                    Decimal("0.0"),  # staking_rewards_value
+                    Decimal("0.0"),  # airdrop_rewards_value
                     initial_investment,
                     volume,
                     allocations,
@@ -5193,11 +5194,12 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 result = fetch_behaviour._create_portfolio_data(
                     Decimal("1000.0"),
                     Decimal("500.0"),
-                    Decimal("0.0"),
-                    0.0,
-                    500.0,
-                    [],
-                    [],
+                    Decimal("0.0"),  # staking_rewards_value
+                    Decimal("0.0"),  # airdrop_rewards_value
+                    0.0,             # initial_investment
+                    500.0,           # volume
+                    [],              # allocations
+                    [],              # portfolio_breakdown
                 )
 
         assert result["total_roi"] is None
@@ -5213,11 +5215,12 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 result = fetch_behaviour._create_portfolio_data(
                     Decimal("1000.0"),
                     Decimal("500.0"),
-                    Decimal("0.0"),
-                    -100.0,
-                    500.0,
-                    [],
-                    [],
+                    Decimal("0.0"),  # staking_rewards_value
+                    Decimal("0.0"),  # airdrop_rewards_value
+                    -100.0,          # initial_investment
+                    500.0,           # volume
+                    [],              # allocations
+                    [],              # portfolio_breakdown
                 )
 
                 assert result["total_roi"] is None
@@ -5233,11 +5236,12 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 result = fetch_behaviour._create_portfolio_data(
                     Decimal("1000.0"),
                     Decimal("500.0"),
-                    Decimal("0.0"),
-                    1000.0,
-                    500.0,
-                    [],
-                    [],
+                    Decimal("0.0"),  # staking_rewards_value
+                    Decimal("0.0"),  # airdrop_rewards_value
+                    1000.0,          # initial_investment
+                    500.0,           # volume
+                    [],              # allocations
+                    [],              # portfolio_breakdown
                 )
 
                 assert result["agent_hash"] == "Not found"
@@ -6348,6 +6352,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             result = fetch_behaviour._fetch_token_transfers_mode(
                 "0x123", "2022-01-01", {}, False
             )
+            result = self._consume_generator(result)
             assert (
                 result is expected_result
             ), f"Expected {expected_result} for {test_description}"
@@ -9829,6 +9834,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 raise Exception("Test exception")
             if mock_token_transfers_success:
                 all_transfers_by_date.update(mock_token_transfers_data)
+            yield
             return mock_token_transfers_success
 
         def mock_fetch_eth_transfers_mode(
@@ -9848,6 +9854,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             result = fetch_behaviour._fetch_all_transfers_until_date_mode(
                 address, end_date, fetch_till_date
             )
+            result = self._consume_generator(result)
 
             # Verify result
             assert result == expected_result, f"Failed for {test_description}"
@@ -9874,6 +9881,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             result = fetch_behaviour._fetch_all_transfers_until_date_mode(
                 "0x1234567890123456789012345678901234567890", "2024-01-15", False
             )
+            result = self._consume_generator(result)
 
             # Should return existing data on exception
             assert result == existing_data["mode"]
@@ -9913,6 +9921,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             all_transfers_by_date.update(
                 {"2024-01-15": [{"type": "token", "amount": 300}]}
             )
+            yield
             return True
 
         def mock_fetch_eth_transfers_mode(
@@ -9935,6 +9944,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             result = fetch_behaviour._fetch_all_transfers_until_date_mode(
                 "0x1234567890123456789012345678901234567890", "2024-01-15", False
             )
+            result = self._consume_generator(result)
 
             # Should return only new data (existing data was cleared)
             expected_result = {
@@ -9975,6 +9985,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             all_transfers_by_date.update(
                 {"2024-01-15": [{"type": "token", "amount": 300}]}
             )
+            yield
             return True
 
         def mock_fetch_eth_transfers_mode(
@@ -9997,6 +10008,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             result = fetch_behaviour._fetch_all_transfers_until_date_mode(
                 "0x1234567890123456789012345678901234567890", "2024-01-15", False
             )
+            result = self._consume_generator(result)
 
             # Should return only new data (existing data is stored but not returned)
             expected_result = {

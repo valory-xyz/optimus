@@ -135,8 +135,7 @@ jobs:
       - run: |
           wget https://github.com/zricethezav/gitleaks/releases/download/v8.10.1/gitleaks_8.10.1_linux_x64.tar.gz && \
           tar -xzf gitleaks_8.10.1_linux_x64.tar.gz && \
-          sudo install gitleaks /usr/bin && \
-          gitleaks detect --report-format json --report-path leak_report
+          sudo install gitleaks /usr/bin
       - name: Scan for leaks
         id: gitleaks
         continue-on-error: true
@@ -147,7 +146,7 @@ jobs:
       - name: Print detected leaks
         run: |
           echo "Detected leaks:"
-          cat leak_report 
+          cat leak_report  
 
   unit-test:
     continue-on-error: False

@@ -137,6 +137,17 @@ jobs:
           tar -xzf gitleaks_8.10.1_linux_x64.tar.gz && \
           sudo install gitleaks /usr/bin && \
           gitleaks detect --report-format json --report-path leak_report
+      - name: Scan for leaks
+        id: gitleaks
+        continue-on-error: true
+        run: |
+          gitleaks detect --report-format json --report-path leak_report
+
+          echo "::set-output name=exit_code::$?"
+      - name: Print detected leaks
+        run: |
+          echo "Detected leaks:"
+          cat leak_report 
 
   unit-test:
     continue-on-error: False

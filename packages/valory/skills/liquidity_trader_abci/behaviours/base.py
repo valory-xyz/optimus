@@ -307,6 +307,7 @@ REWARD_TOKEN_ADDRESSES = {
     "mode": {
         "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
         "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "VELO",  # VELO on Mode
+        "0xd988097fb8612cc24eeC14542bC03424c656005f": "USDC",  # USDC on Mode (for airdrop exclusion)
     },
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism

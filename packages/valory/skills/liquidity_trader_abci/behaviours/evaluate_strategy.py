@@ -2229,15 +2229,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             chain, token_address
         )
 
-        # Subtract airdrop rewards for OLAS on MODE chain
+        # Subtract airdrop rewards for USDC on MODE chain
         airdrop_rewards = 0
         if (
             chain == "mode"
-            and token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
+            and self.context.params.airdrop_started
+            and token_address.lower() == self._get_usdc_address(chain).lower()
         ):
             airdrop_rewards = yield from self._get_total_airdrop_rewards(chain)
             self.context.logger.info(
-                f"OLAS airdrop rewards to exclude from investment: {airdrop_rewards} wei"
+                f"USDC airdrop rewards to exclude from investment: {airdrop_rewards} wei"
             )
 
         investable_balance = max(

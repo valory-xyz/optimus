@@ -2186,25 +2186,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         airdrop_rewards_wei = yield from self._get_total_airdrop_rewards(chain)
         if airdrop_rewards_wei > 0:
-            # Convert from wei to OLAS (18 decimals)
-            airdrop_olas_balance = Decimal(str(airdrop_rewards_wei)) / Decimal(10**18)
+            # Convert from wei to USDC (6 decimals for USDC)
+            airdrop_usdc_balance = Decimal(str(airdrop_rewards_wei)) / Decimal(10**6)
 
-            # Get OLAS price
-            olas_address = OLAS_ADDRESSES.get(chain)
-            if olas_address:
-                olas_price = yield from self._fetch_token_price(olas_address, chain)
-                if olas_price is not None:
-                    olas_price = Decimal(str(olas_price))
-                    airdrop_value_usd = airdrop_olas_balance * olas_price
+            # Fetch actual USDC price
+            usdc_address = self._get_usdc_address(chain)
+            usdc_price = yield from self._fetch_token_price(usdc_address, chain)
 
-                    self.context.logger.info(
-                        f"OLAS airdrop rewards - OLAS: {airdrop_olas_balance} (${airdrop_value_usd})"
-                    )
-                    return airdrop_value_usd
-                else:
-                    self.context.logger.warning(
-                        "Could not fetch price for OLAS airdrop rewards"
-                    )
+            if usdc_price is not None:
+                usdc_price_decimal = Decimal(str(usdc_price))
+                airdrop_value_usd = airdrop_usdc_balance * usdc_price_decimal
+
+                self.context.logger.info(
+                    f"USDC airdrop rewards - USDC: {airdrop_usdc_balance} @ ${usdc_price} = ${airdrop_value_usd}"
+                )
+            else:
+                # Fallback to $1 if price fetch fails
+                airdrop_value_usd = airdrop_usdc_balance
+                self.context.logger.warning(
+                    f"Could not fetch USDC price, using $1 fallback - USDC: {airdrop_usdc_balance} (${airdrop_value_usd})"
+                )
+
+            return airdrop_value_usd
 
         return Decimal(0)
 
@@ -2693,63 +2696,86 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Default to not fetching full history
             fetch_till_date = False
 
-            # Check when we last calculated initial value
-            last_calculated_timestamp = yield from self._read_kv(
-                keys=("last_initial_value_calculated_timestamp",)
-            )
-
-            if (
-                last_calculated_timestamp
-                and (
-                    timestamp := last_calculated_timestamp.get(
-                        "last_initial_value_calculated_timestamp"
-                    )
+            # Check if airdrop detection is enabled and if we need a full historical scan
+            if chain == "mode" and self.params.airdrop_started:
+                airdrop_scan_completed = yield from self._read_kv(
+                    ("airdrop_full_scan_completed",)
                 )
-                and timestamp is not None
-            ):
-                self.context.logger.info(
-                    f"Found last calculation timestamp: {timestamp}"
-                )
-                try:
-                    last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
-                        "%Y-%m-%d"
-                    )
-                    self.context.logger.info(f"Last calculation date: {last_date}")
-                except (ValueError, TypeError):
-                    self.context.logger.warning(
-                        "Invalid timestamp format, defaulting to 1970-01-01"
-                    )
-                    last_date = "1970-01-01"
 
-                # If last calculation was today, return cached value
-                if last_date == current_date:
+                if not airdrop_scan_completed or not airdrop_scan_completed.get(
+                    "airdrop_full_scan_completed"
+                ):
+                    # First time airdrop is enabled - do full historical scan
                     self.context.logger.info(
-                        "Last calculation was today, using cached value"
+                        "Airdrop detection enabled for first time - performing full historical scan"
                     )
-                    investment = yield from self._load_chain_total_investment(chain)
-                    if investment:
-                        return investment
-                    else:
-                        fetch_till_date = True
-
-                # Otherwise need to calculate new value but not full history
-                self.context.logger.info(
-                    "Last calculation was not today, calculating new value without full history"
-                )
-                fetch_till_date = False
-
-            # No previous calculation, need to fetch full history
+                    fetch_till_date = True
+                    # Mark scan as completed after this run
+                    yield from self._write_kv({"airdrop_full_scan_completed": "true"})
+                else:
+                    self.context.logger.info(
+                        "Airdrop detection enabled - using incremental scan (full scan already completed)"
+                    )
+                    fetch_till_date = False
             else:
-                self.context.logger.info(
-                    "No previous calculation found, fetching full transfer history"
+                # Normal logic when airdrop is not started
+                # Check when we last calculated initial value
+                last_calculated_timestamp = yield from self._read_kv(
+                    keys=("last_initial_value_calculated_timestamp",)
                 )
-                fetch_till_date = True
+
+                if (
+                    last_calculated_timestamp
+                    and (
+                        timestamp := last_calculated_timestamp.get(
+                            "last_initial_value_calculated_timestamp"
+                        )
+                    )
+                    and timestamp is not None
+                ):
+                    self.context.logger.info(
+                        f"Found last calculation timestamp: {timestamp}"
+                    )
+                    try:
+                        last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
+                            "%Y-%m-%d"
+                        )
+                        self.context.logger.info(f"Last calculation date: {last_date}")
+                    except (ValueError, TypeError):
+                        self.context.logger.warning(
+                            "Invalid timestamp format, defaulting to 1970-01-01"
+                        )
+                        last_date = "1970-01-01"
+
+                    # If last calculation was today, return cached value
+                    if last_date == current_date:
+                        self.context.logger.info(
+                            "Last calculation was today, using cached value"
+                        )
+                        investment = yield from self._load_chain_total_investment(chain)
+                        if investment:
+                            return investment
+                        else:
+                            fetch_till_date = True
+
+                    # Otherwise need to calculate new value but not full history
+                    self.context.logger.info(
+                        "Last calculation was not today, calculating new value without full history"
+                    )
+                    fetch_till_date = False
+
+                # No previous calculation, need to fetch full history
+                else:
+                    self.context.logger.info(
+                        "No previous calculation found, fetching full transfer history"
+                    )
+                    fetch_till_date = True
 
             # Fetch all transfers until current date based on chain
             self.context.logger.info(f"Fetching transfers for chain: {chain}")
             if chain == Chain.MODE.value:
                 self.context.logger.info("Using Mode-specific transfer fetching")
-                all_transfers = self._fetch_all_transfers_until_date_mode(
+                all_transfers = yield from self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, fetch_till_date
                 )
             elif chain == Chain.OPTIMISM.value:
@@ -2833,6 +2859,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if amount <= 0:
                         continue
 
+                    # Check if this is an airdropped USDC transfer and exclude it from initial investment
+                    if (
+                        chain == "mode"
+                        and token_symbol.upper() == "USDC"
+                        and self.params.airdrop_started
+                        and self.params.airdrop_contract_address
+                    ):
+                        from_address = transfer.get("from_address", "")
+                        if (
+                            from_address.lower()
+                            == self.params.airdrop_contract_address.lower()
+                        ):
+                            self.context.logger.info(
+                                f"Excluding airdropped USDC transfer from initial investment: {amount} USDC from {from_address}"
+                            )
+                            continue
+
                     # Get historical price for the transfer date
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
 
@@ -2872,7 +2915,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _fetch_all_transfers_until_date_mode(
         self, address: str, end_date: str, fetch_till_date: bool
-    ) -> Dict:
+    ) -> Generator[None, None, Dict]:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
@@ -2917,7 +2960,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Fetch token transfers
             self.context.logger.info("Fetching Mode token transfers...")
 
-            success = self._fetch_token_transfers_mode(
+            success = yield from self._fetch_token_transfers_mode(
                 address, end_datetime, all_transfers_by_date, fetch_till_date
             )
             if not success:
@@ -3134,7 +3177,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         target_date: str,
         all_transfers_by_date: dict,
         fetch_all_till_date: bool = False,
-    ) -> bool:
+    ) -> Generator[None, None, bool]:
         """
         Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date.
 
@@ -3202,7 +3245,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     continue
 
                 # Check for airdrop transfers first
-                if self._is_olas_airdrop_transfer(tx):
+                if self._is_airdrop_transfer(tx):
                     total = tx.get("total", {})
                     value_raw = int(total.get("value", "0"))
                     yield from self._update_airdrop_rewards(value_raw, "mode")
@@ -3211,7 +3254,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     decimals = int(token.get("decimals", 18))
                     amount = value_raw / (10**decimals)
                     self.context.logger.info(
-                        f"Detected OLAS airdrop transfer: {amount} OLAS from {from_address.get('hash', '')} "
+                        f"Detected USDC airdrop transfer: {amount} USDC from {from_address.get('hash', '')} "
                         f"tx_hash: {tx.get('transaction_hash', '')}"
                     )
 
@@ -4432,8 +4475,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return False
 
-    def _is_olas_airdrop_transfer(self, tx: Dict) -> bool:
-        """Check if a transfer is an OLAS airdrop transfer."""
+    def _is_airdrop_transfer(self, tx: Dict) -> bool:
+        """Check if a transfer is an airdrop transfer."""
         if not self.params.airdrop_started or not self.params.airdrop_contract_address:
             return False
 
@@ -4441,10 +4484,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         token = tx.get("token", {})
         symbol = token.get("symbol", "Unknown")
 
+        # Check for USDC airdrop transfers on MODE chain
+        usdc_address = self._get_usdc_address("mode")
         return (
-            symbol.upper() == "OLAS"
-            and token.get("address", "").lower()
-            == OLAS_ADDRESSES.get("mode", "").lower()
+            symbol.upper() == "USDC"
+            and token.get("address", "").lower() == usdc_address.lower()
             and from_address.get("hash", "").lower()
             == self.params.airdrop_contract_address.lower()
         )

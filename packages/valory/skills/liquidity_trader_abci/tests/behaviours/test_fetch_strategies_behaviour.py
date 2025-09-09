@@ -48,7 +48,21 @@ PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
 class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
-    """Base case for testing FSMBehaviour."""
+    """
+    Base test case for FetchStrategiesBehaviour with improved mock isolation.
+    
+    This class addresses the issue where tests pass individually but fail when run together
+    due to shared mock state. The solution includes:
+    
+    1. Fresh mock instances for each test via _ensure_fresh_mocks()
+    2. Proper teardown/cleanup in _reset_mock_state()
+    3. Context manager _with_fresh_mocks() for additional isolation when needed
+    
+    Usage:
+    - Tests automatically get fresh mocks via setup_method()
+    - For extra isolation, use: with self._with_fresh_mocks(): ... in test methods
+    - All mock methods are recreated as fresh instances to prevent state sharing
+    """
 
     path_to_skill = PACKAGE_DIR
 
@@ -124,21 +138,112 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         ):
             super().setup(**kwargs)
 
+        # Create a fresh behaviour instance for each test
         self.fetch_strategies_behaviour = FetchStrategiesBehaviour(
             name="fetch_strategies_behaviour", skill_context=self.skill.skill_context
         )
 
         self.setup_default_test_data()
+        
+        # Ensure all mocks are fresh to prevent state persistence between tests
+        self._ensure_fresh_mocks()
 
     def teardown_method(self, **kwargs: Any) -> None:
         """Teardown the test method."""
+        # Reset any shared state that might persist between tests
+        self._reset_mock_state()
         super().teardown(**kwargs)
+    
+    def _reset_mock_state(self):
+        """Reset mock state to prevent test interference."""
+        # Reset any instance variables that might be shared
+        if hasattr(self, 'fetch_strategies_behaviour'):
+            # Reset any stateful attributes on the behaviour instance
+            if hasattr(self.fetch_strategies_behaviour, 'portfolio_data'):
+                self.fetch_strategies_behaviour.portfolio_data = None
+            if hasattr(self.fetch_strategies_behaviour, 'current_positions'):
+                self.fetch_strategies_behaviour.current_positions = []
+            if hasattr(self.fetch_strategies_behaviour, 'assets'):
+                self.fetch_strategies_behaviour.assets = {}
+        
+        # Reset any other shared state
+        if hasattr(self, '_mock_call_counts'):
+            self._mock_call_counts = {}
 
     def _create_fetch_strategies_behaviour(self):
         """Create a FetchStrategiesBehaviour instance for testing."""
         return FetchStrategiesBehaviour(
             name="fetch_strategies_behaviour", skill_context=self.skill.skill_context
         )
+    
+    def _create_fresh_mock_generator(self, return_value=None):
+        """Create a fresh mock generator function to prevent state sharing."""
+        def fresh_mock(*args, **kwargs):
+            yield
+            return return_value
+        return fresh_mock
+    
+    def _create_fresh_mock_function(self, return_value=None):
+        """Create a fresh mock function to prevent state sharing."""
+        def fresh_mock(*args, **kwargs):
+            return return_value
+        return fresh_mock
+    
+    def _ensure_fresh_mocks(self):
+        """Ensure all mock methods are fresh instances to prevent state sharing."""
+        # Recreate all mock methods as fresh instances
+        
+        # Generator mocks (methods that yield then return)
+        self.mock_update_position_amounts = self._create_fresh_mock_generator(None)
+        self.mock_track_whitelisted_assets = self._create_fresh_mock_generator(None)
+        self.mock_update_accumulated_rewards = self._create_fresh_mock_generator(None)
+        self.mock_get_signature = self._create_fresh_mock_generator(b"mocked_signature")
+        self.mock_send_a2a_transaction = self._create_fresh_mock_generator(None)
+        self.mock_wait_until_round_end = self._create_fresh_mock_generator(None)
+        self.mock_contract_interact = self._create_fresh_mock_generator("0" * 64)
+        self.mock_write_kv = self._create_fresh_mock_generator(True)
+        self.mock_should_recalculate_portfolio = self._create_fresh_mock_generator(True)
+        self.mock_calculate_user_share_values = self._create_fresh_mock_generator(None)
+        self.mock_get_native_balance = self._create_fresh_mock_generator(1000000000000000000)
+        self.mock_track_eth_transfers_and_reversions_zero_reversion = self._create_fresh_mock_generator({
+            "reversion_amount": 0.0,
+            "historical_reversion_value": 0.0,
+            "reversion_date": None,
+        })
+        self.mock_read_kv_none = self._create_fresh_mock_generator(None)
+        self.mock_read_kv_empty = self._create_fresh_mock_generator({})
+        self.mock_read_kv_default = self._create_fresh_mock_generator({"selected_protocols": "[]", "trading_type": "balanced"})
+        self.mock_fetch_historical_token_price = self._create_fresh_mock_generator(1.0)
+        self.mock_calculate_chain_investment_value = self._create_fresh_mock_generator(100.0)
+        self.mock_load_chain_total_investment = self._create_fresh_mock_generator(100.0)
+        self.mock_update_portfolio_metrics = self._create_fresh_mock_generator(None)
+        self.mock_save_chain_total_investment = self._create_fresh_mock_generator(None)
+        
+        # Function mocks (methods that just return without yielding)
+        self.mock_store_whitelisted_assets = self._create_fresh_mock_function(None)
+        self.mock_read_whitelisted_assets = self._create_fresh_mock_function(None)
+        self.mock_store_portfolio_data = self._create_fresh_mock_function(None)
+        self.mock_check_and_update_zero_liquidity_positions = self._create_fresh_mock_function(None)
+        self.mock_get_current_timestamp = self._create_fresh_mock_function(int(datetime.now().timestamp()))
+        self.mock_store_current_positions = self._create_fresh_mock_function(None)
+        
+        # Reset any call tracking
+        self._mock_call_counts = {}
+    
+    def _with_fresh_mocks(self):
+        """Context manager to ensure fresh mocks for a test."""
+        class FreshMockContext:
+            def __init__(self, test_instance):
+                self.test_instance = test_instance
+                
+            def __enter__(self):
+                self.test_instance._ensure_fresh_mocks()
+                return self.test_instance
+                
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                self.test_instance._reset_mock_state()
+        
+        return FreshMockContext(self)
 
     def setup_default_test_data(self):
         """Setup default test data."""
@@ -207,131 +312,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             }
         }
 
-    def mock_update_position_amounts(self):
-        yield
-        return None
-
-    def mock_store_whitelisted_assets(self):
-        pass
-
-    def mock_read_whitelisted_assets(self):
-        pass
-
-    def mock_track_whitelisted_assets(self):
-        yield
-        pass
-
-    def mock_store_portfolio_data(self):
-        pass
-
-    def mock_check_and_update_zero_liquidity_positions(self):
-        pass
-
-    def mock_update_accumulated_rewards(self, chain):
-        yield
-        return None
-
-    def mock_get_signature(self, payload_bytes):
-        """Mock get_signature method."""
-        yield
-        return b"mocked_signature"
-
-    def mock_send_a2a_transaction(self, payload):
-        """Mock send_a2a_transaction method."""
-        yield
-        return None
-
-    def mock_wait_until_round_end(self):
-        """Mock wait_until_round_end method."""
-        yield
-        return None
-
-    def mock_contract_interact(self, **kwargs):
-        """Mock contract_interact method."""
-        yield
-        return "0" * 64
-
-    def mock_write_kv(self, data):
-        """Mock write_kv method."""
-        yield
-        return True
-
-    def mock_should_recalculate_portfolio(self, last_portfolio_data):
-        """Mock should_recalculate_portfolio method."""
-        yield
-        return True
-
-    def mock_calculate_user_share_values(self):
-        """Mock calculate_user_share_values method."""
-        yield
-        return None
-
-    def mock_get_native_balance(self, chain, address):
-        """Mock get_native_balance method."""
-        yield
-        return 1000000000000000000
-
-    def mock_track_eth_transfers_and_reversions_zero_reversion(
-        self, safe_address, chain
-    ):
-        """Mock track_eth_transfers_and_reversions method."""
-        yield
-        return {
-            "reversion_amount": 0.0,
-            "historical_reversion_value": 0.0,
-            "reversion_date": None,
-        }
-
-    def mock_read_kv_none(self, keys):
-        """Mock read_kv method."""
-        yield
-        return None
-
-    def mock_read_kv_empty(self, keys):
-        """Mock read_kv method."""
-        yield
-        return {}
-
-    def mock_read_kv_default(self, keys):
-        """Mock read_kv method."""
-        yield
-        return {"selected_protocols": "[]", "trading_type": "balanced"}
-
-    def mock_get_current_timestamp(self):
-        """Mock get_current_timestamp method."""
-        return int(datetime.now().timestamp())
-
-    def mock_fetch_historical_token_price(self, coingecko_id, date_str):
-        """Mock fetch_historical_token_price method."""
-        yield
-        return 1.0
-
-    def mock_calculate_chain_investment_value(self, all_transfers, chain, safe_address):
-        """Mock calculate_chain_investment_value method."""
-        yield
-        return 100.0
-
-    def mock_load_chain_total_investment(self, chain):
-        """Mock load_chain_total_investment method."""
-        yield
-        return 100.0
-
-    def mock_store_current_positions(self):
-        pass
-
-    def mock_update_portfolio_metrics(
-        self,
-        total_user_share_value_usd,
-        individual_shares,
-        portfolio_breakdown,
-        allocations,
-    ):
-        yield
-        pass
-
-    def mock_save_chain_total_investment(self, chain, total):
-        yield
-        pass
 
     def _consume_generator(self, gen):
         """Helper to run generator and return final value."""

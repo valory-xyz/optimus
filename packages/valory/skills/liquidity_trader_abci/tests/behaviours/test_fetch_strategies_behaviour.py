@@ -50,14 +50,14 @@ PACKAGE_DIR = Path(__file__).parent.parent.parent
 class LiquidityTraderAbciFSMBehaviourBaseCase(FSMBehaviourBaseCase):
     """
     Base test case for FetchStrategiesBehaviour with improved mock isolation.
-    
+
     This class addresses the issue where tests pass individually but fail when run together
     due to shared mock state. The solution includes:
-    
+
     1. Fresh mock instances for each test via _ensure_fresh_mocks()
     2. Proper teardown/cleanup in _reset_mock_state()
     3. Context manager _with_fresh_mocks() for additional isolation when needed
-    
+
     Usage:
     - Tests automatically get fresh mocks via setup_method()
     - For extra isolation, use: with self._with_fresh_mocks(): ... in test methods
@@ -144,7 +144,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         )
 
         self.setup_default_test_data()
-        
+
         # Ensure all mocks are fresh to prevent state persistence between tests
         self._ensure_fresh_mocks()
 
@@ -153,21 +153,21 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         # Reset any shared state that might persist between tests
         self._reset_mock_state()
         super().teardown(**kwargs)
-    
+
     def _reset_mock_state(self):
         """Reset mock state to prevent test interference."""
         # Reset any instance variables that might be shared
-        if hasattr(self, 'fetch_strategies_behaviour'):
+        if hasattr(self, "fetch_strategies_behaviour"):
             # Reset any stateful attributes on the behaviour instance
-            if hasattr(self.fetch_strategies_behaviour, 'portfolio_data'):
+            if hasattr(self.fetch_strategies_behaviour, "portfolio_data"):
                 self.fetch_strategies_behaviour.portfolio_data = None
-            if hasattr(self.fetch_strategies_behaviour, 'current_positions'):
+            if hasattr(self.fetch_strategies_behaviour, "current_positions"):
                 self.fetch_strategies_behaviour.current_positions = []
-            if hasattr(self.fetch_strategies_behaviour, 'assets'):
+            if hasattr(self.fetch_strategies_behaviour, "assets"):
                 self.fetch_strategies_behaviour.assets = {}
-        
+
         # Reset any other shared state
-        if hasattr(self, '_mock_call_counts'):
+        if hasattr(self, "_mock_call_counts"):
             self._mock_call_counts = {}
 
     def _create_fetch_strategies_behaviour(self):
@@ -175,24 +175,28 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         return FetchStrategiesBehaviour(
             name="fetch_strategies_behaviour", skill_context=self.skill.skill_context
         )
-    
+
     def _create_fresh_mock_generator(self, return_value=None):
         """Create a fresh mock generator function to prevent state sharing."""
+
         def fresh_mock(*args, **kwargs):
             yield
             return return_value
+
         return fresh_mock
-    
+
     def _create_fresh_mock_function(self, return_value=None):
         """Create a fresh mock function to prevent state sharing."""
+
         def fresh_mock(*args, **kwargs):
             return return_value
+
         return fresh_mock
-    
+
     def _ensure_fresh_mocks(self):
         """Ensure all mock methods are fresh instances to prevent state sharing."""
         # Recreate all mock methods as fresh instances
-        
+
         # Generator mocks (methods that yield then return)
         self.mock_update_position_amounts = self._create_fresh_mock_generator(None)
         self.mock_track_whitelisted_assets = self._create_fresh_mock_generator(None)
@@ -204,45 +208,60 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         self.mock_write_kv = self._create_fresh_mock_generator(True)
         self.mock_should_recalculate_portfolio = self._create_fresh_mock_generator(True)
         self.mock_calculate_user_share_values = self._create_fresh_mock_generator(None)
-        self.mock_get_native_balance = self._create_fresh_mock_generator(1000000000000000000)
-        self.mock_track_eth_transfers_and_reversions_zero_reversion = self._create_fresh_mock_generator({
-            "reversion_amount": 0.0,
-            "historical_reversion_value": 0.0,
-            "reversion_date": None,
-        })
+        self.mock_get_native_balance = self._create_fresh_mock_generator(
+            1000000000000000000
+        )
+        self.mock_track_eth_transfers_and_reversions_zero_reversion = (
+            self._create_fresh_mock_generator(
+                {
+                    "reversion_amount": 0.0,
+                    "historical_reversion_value": 0.0,
+                    "reversion_date": None,
+                }
+            )
+        )
         self.mock_read_kv_none = self._create_fresh_mock_generator(None)
         self.mock_read_kv_empty = self._create_fresh_mock_generator({})
-        self.mock_read_kv_default = self._create_fresh_mock_generator({"selected_protocols": "[]", "trading_type": "balanced"})
+        self.mock_read_kv_default = self._create_fresh_mock_generator(
+            {"selected_protocols": "[]", "trading_type": "balanced"}
+        )
         self.mock_fetch_historical_token_price = self._create_fresh_mock_generator(1.0)
-        self.mock_calculate_chain_investment_value = self._create_fresh_mock_generator(100.0)
+        self.mock_calculate_chain_investment_value = self._create_fresh_mock_generator(
+            100.0
+        )
         self.mock_load_chain_total_investment = self._create_fresh_mock_generator(100.0)
         self.mock_update_portfolio_metrics = self._create_fresh_mock_generator(None)
         self.mock_save_chain_total_investment = self._create_fresh_mock_generator(None)
-        
+
         # Function mocks (methods that just return without yielding)
         self.mock_store_whitelisted_assets = self._create_fresh_mock_function(None)
         self.mock_read_whitelisted_assets = self._create_fresh_mock_function(None)
         self.mock_store_portfolio_data = self._create_fresh_mock_function(None)
-        self.mock_check_and_update_zero_liquidity_positions = self._create_fresh_mock_function(None)
-        self.mock_get_current_timestamp = self._create_fresh_mock_function(int(datetime.now().timestamp()))
+        self.mock_check_and_update_zero_liquidity_positions = (
+            self._create_fresh_mock_function(None)
+        )
+        self.mock_get_current_timestamp = self._create_fresh_mock_function(
+            int(datetime.now().timestamp())
+        )
         self.mock_store_current_positions = self._create_fresh_mock_function(None)
-        
+
         # Reset any call tracking
         self._mock_call_counts = {}
-    
+
     def _with_fresh_mocks(self):
         """Context manager to ensure fresh mocks for a test."""
+
         class FreshMockContext:
             def __init__(self, test_instance):
                 self.test_instance = test_instance
-                
+
             def __enter__(self):
                 self.test_instance._ensure_fresh_mocks()
                 return self.test_instance
-                
+
             def __exit__(self, exc_type, exc_val, exc_tb):
                 self.test_instance._reset_mock_state()
-        
+
         return FreshMockContext(self)
 
     def setup_default_test_data(self):
@@ -311,7 +330,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",
             }
         }
-
 
     def _consume_generator(self, gen):
         """Helper to run generator and return final value."""
@@ -5176,10 +5194,10 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     Decimal("500.0"),
                     Decimal("0.0"),  # staking_rewards_value
                     Decimal("0.0"),  # airdrop_rewards_value
-                    0.0,             # initial_investment
-                    500.0,           # volume
-                    [],              # allocations
-                    [],              # portfolio_breakdown
+                    0.0,  # initial_investment
+                    500.0,  # volume
+                    [],  # allocations
+                    [],  # portfolio_breakdown
                 )
 
         assert result["total_roi"] is None
@@ -5197,10 +5215,10 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     Decimal("500.0"),
                     Decimal("0.0"),  # staking_rewards_value
                     Decimal("0.0"),  # airdrop_rewards_value
-                    -100.0,          # initial_investment
-                    500.0,           # volume
-                    [],              # allocations
-                    [],              # portfolio_breakdown
+                    -100.0,  # initial_investment
+                    500.0,  # volume
+                    [],  # allocations
+                    [],  # portfolio_breakdown
                 )
 
                 assert result["total_roi"] is None
@@ -5218,10 +5236,10 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     Decimal("500.0"),
                     Decimal("0.0"),  # staking_rewards_value
                     Decimal("0.0"),  # airdrop_rewards_value
-                    1000.0,          # initial_investment
-                    500.0,           # volume
-                    [],              # allocations
-                    [],              # portfolio_breakdown
+                    1000.0,  # initial_investment
+                    500.0,  # volume
+                    [],  # allocations
+                    [],  # portfolio_breakdown
                 )
 
                 assert result["agent_hash"] == "Not found"

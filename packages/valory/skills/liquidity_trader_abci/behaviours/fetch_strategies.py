@@ -3178,15 +3178,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         all_transfers_by_date: dict,
         fetch_all_till_date: bool = False,
     ) -> Generator[None, None, bool]:
-        """
-        Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date.
-
-        :param address: The wallet address to fetch token transfers for.
-        :param target_date: The specific date to fetch transfers for (format: "YYYY-MM-DD").
-        :param all_transfers_by_date: Dictionary to store the fetched transfers organized by date.
-        :param fetch_all_till_date: If True, fetch all transfers up to target_date. If False, fetch only target_date transfers.
-        :return: None
-        """
+        """Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"

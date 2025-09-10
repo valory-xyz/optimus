@@ -397,13 +397,8 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 f"Token: {token_symbol}, Address: {token_address}, Value: {value_usd}"
             )
 
-            # Skip if it's already USDC or OLAS by address
+            # Skip if it's already USDC
             usdc_address = self._get_usdc_address(chain)
-            olas_address = (
-                self._get_olas_address(chain)
-                if hasattr(self, "_get_olas_address")
-                else None
-            )
             if (
                 token_address
                 and usdc_address
@@ -411,13 +406,20 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             ):
                 self.context.logger.info("Skipping USDC - it's USDC (by address)")
                 continue
+
+            # Skip OLAS tokens - do not swap OLAS during withdrawal
+            olas_address = (
+                self._get_olas_address(chain)
+                if hasattr(self, "_get_olas_address")
+                else None
+            )
             if (
                 token_address
                 and olas_address
                 and token_address.lower() == olas_address.lower()
             ):
                 self.context.logger.info(
-                    "Skipping OLAS - do not swap OLAS during withdrawal (by address)"
+                    "Skipping OLAS - do not swap OLAS during withdrawal"
                 )
                 continue
 

@@ -2209,7 +2209,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _get_investable_balance(
         self, chain: str, token_address: str, total_balance: int
     ) -> Generator[None, None, int]:
-        """Get the portion of token balance available for investment (total - reserved rewards)"""
+        """Get the portion of token balance available for investment (total - reserved rewards - airdrop rewards)"""
 
         # Check if this is a reward token
         reward_addresses = REWARD_TOKEN_ADDRESSES.get(chain, {})
@@ -2224,15 +2224,30 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return 0  # Pure reward token, not for investment
 
-        # This is a whitelisted reward token - subtract accumulated rewards
+        # This is a whitelisted reward token - subtract accumulated rewards and airdrop rewards
         accumulated_rewards = yield from self.get_accumulated_rewards_for_token(
             chain, token_address
         )
-        investable_balance = max(0, total_balance - accumulated_rewards)
+
+        # Subtract airdrop rewards for USDC on MODE chain
+        airdrop_rewards = 0
+        if (
+            chain == "mode"
+            and self.context.params.airdrop_started
+            and token_address.lower() == self._get_usdc_address(chain).lower()
+        ):
+            airdrop_rewards = yield from self._get_total_airdrop_rewards(chain)
+            self.context.logger.info(
+                f"USDC airdrop rewards to exclude from investment: {airdrop_rewards} wei"
+            )
+
+        investable_balance = max(
+            0, total_balance - accumulated_rewards - airdrop_rewards
+        )
 
         self.context.logger.info(
             f"Token {token_address} on {chain}: "
-            f"Total={total_balance}, Reserved={accumulated_rewards}, Investable={investable_balance}"
+            f"Total={total_balance}, Reserved={accumulated_rewards}, Airdrop={airdrop_rewards}, Investable={investable_balance}"
         )
 
         return investable_balance

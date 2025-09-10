@@ -641,6 +641,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             portfolio_breakdown
         )
         staking_rewards_value = yield from self.calculate_stakig_rewards_value()
+        airdrop_rewards_value = yield from self.calculate_airdrop_rewards_value()
 
         # Calculate final portfolio metrics
         yield from self._update_portfolio_metrics(
@@ -679,6 +680,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             total_user_share_value_usd,
             total_safe_value_usd,
             staking_rewards_value,
+            airdrop_rewards_value,
             initial_investment,
             volume,
             allocations,
@@ -951,6 +953,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         total_pools_value: Decimal,
         total_safe_value: Decimal,
         staking_rewards_value: Decimal,
+        airdrop_rewards_value: Decimal,
         initial_investment: float,
         volume: float,
         allocations: List[Dict],
@@ -964,8 +967,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
-            # Calculate total portfolio value
-            total_portfolio_value = total_pools_value + total_safe_value
+            # Calculate total portfolio value including airdrop rewards
+            total_portfolio_value = (
+                total_pools_value + total_safe_value + airdrop_rewards_value
+            )
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
             # Convert to percentage by multiplying by 100
@@ -973,19 +978,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             partial_roi = None
             if initial_investment is not None and initial_investment > 0:
                 try:
+                    # Total ROI includes staking rewards + airdrop rewards
                     total_roi_decimal = (
                         float(total_portfolio_value + staking_rewards_value)
                         / float(initial_investment)
                     ) - 1
                     total_roi = round(total_roi_decimal * 100, 2)
 
+                    # Partial ROI includes airdrop rewards (trading + airdrop)
                     partial_roi_decimal = (
                         float(total_portfolio_value) / float(initial_investment)
                     ) - 1
                     partial_roi = round(partial_roi_decimal * 100, 2)
 
                     self.context.logger.info(
-                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
+                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% "
+                        f"(Portfolio: ${float(total_portfolio_value):.2f}, Airdrop: ${float(airdrop_rewards_value):.2f}, "
+                        f"Staking: ${float(staking_rewards_value):.2f}, Initial: ${float(initial_investment):.2f})"
                     )
                 except (ValueError, ZeroDivisionError, TypeError) as e:
                     self.context.logger.error(f"Error calculating ROI: {str(e)}")
@@ -2130,9 +2139,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if adjusted_balance <= 0:
                     continue
 
+                velo_token_address = self._get_velo_token_address(chain)
                 # Get token price
                 if token_address == ZERO_ADDRESS:
                     token_price = yield from self._fetch_zero_address_price()
+                elif token_address.lower() == velo_token_address:
+                    velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                    token_price = yield from self._fetch_coin_price(velo_coin_id)
                 else:
                     token_price = yield from self._fetch_token_price(
                         token_address, chain
@@ -2164,6 +2177,39 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value
+
+    def calculate_airdrop_rewards_value(self) -> Generator[None, None, Decimal]:
+        """Calculate airdrop rewards equivalent in USD (MODE chain only)"""
+        chain = self.params.target_investment_chains[0]
+        if chain != "mode":
+            return Decimal(0)
+
+        airdrop_rewards_wei = yield from self._get_total_airdrop_rewards(chain)
+        if airdrop_rewards_wei > 0:
+            # Convert from wei to USDC (6 decimals for USDC)
+            airdrop_usdc_balance = Decimal(str(airdrop_rewards_wei)) / Decimal(10**6)
+
+            # Fetch actual USDC price
+            usdc_address = self._get_usdc_address(chain)
+            usdc_price = yield from self._fetch_token_price(usdc_address, chain)
+
+            if usdc_price is not None:
+                usdc_price_decimal = Decimal(str(usdc_price))
+                airdrop_value_usd = airdrop_usdc_balance * usdc_price_decimal
+
+                self.context.logger.info(
+                    f"USDC airdrop rewards - USDC: {airdrop_usdc_balance} @ ${usdc_price} = ${airdrop_value_usd}"
+                )
+            else:
+                # Fallback to $1 if price fetch fails
+                airdrop_value_usd = airdrop_usdc_balance
+                self.context.logger.warning(
+                    f"Could not fetch USDC price, using $1 fallback - USDC: {airdrop_usdc_balance} (${airdrop_value_usd})"
+                )
+
+            return airdrop_value_usd
+
+        return Decimal(0)
 
     def calculate_stakig_rewards_value(self) -> Generator[None, None, Decimal]:
         """Calculates staking rewards equivalent in USD"""
@@ -2650,63 +2696,86 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Default to not fetching full history
             fetch_till_date = False
 
-            # Check when we last calculated initial value
-            last_calculated_timestamp = yield from self._read_kv(
-                keys=("last_initial_value_calculated_timestamp",)
-            )
-
-            if (
-                last_calculated_timestamp
-                and (
-                    timestamp := last_calculated_timestamp.get(
-                        "last_initial_value_calculated_timestamp"
-                    )
+            # Check if airdrop detection is enabled and if we need a full historical scan
+            if chain == "mode" and self.params.airdrop_started:
+                airdrop_scan_completed = yield from self._read_kv(
+                    ("airdrop_full_scan_completed",)
                 )
-                and timestamp is not None
-            ):
-                self.context.logger.info(
-                    f"Found last calculation timestamp: {timestamp}"
-                )
-                try:
-                    last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
-                        "%Y-%m-%d"
-                    )
-                    self.context.logger.info(f"Last calculation date: {last_date}")
-                except (ValueError, TypeError):
-                    self.context.logger.warning(
-                        "Invalid timestamp format, defaulting to 1970-01-01"
-                    )
-                    last_date = "1970-01-01"
 
-                # If last calculation was today, return cached value
-                if last_date == current_date:
+                if not airdrop_scan_completed or not airdrop_scan_completed.get(
+                    "airdrop_full_scan_completed"
+                ):
+                    # First time airdrop is enabled - do full historical scan
                     self.context.logger.info(
-                        "Last calculation was today, using cached value"
+                        "Airdrop detection enabled for first time - performing full historical scan"
                     )
-                    investment = yield from self._load_chain_total_investment(chain)
-                    if investment:
-                        return investment
-                    else:
-                        fetch_till_date = True
-
-                # Otherwise need to calculate new value but not full history
-                self.context.logger.info(
-                    "Last calculation was not today, calculating new value without full history"
-                )
-                fetch_till_date = False
-
-            # No previous calculation, need to fetch full history
+                    fetch_till_date = True
+                    # Mark scan as completed after this run
+                    yield from self._write_kv({"airdrop_full_scan_completed": "true"})
+                else:
+                    self.context.logger.info(
+                        "Airdrop detection enabled - using incremental scan (full scan already completed)"
+                    )
+                    fetch_till_date = False
             else:
-                self.context.logger.info(
-                    "No previous calculation found, fetching full transfer history"
+                # Normal logic when airdrop is not started
+                # Check when we last calculated initial value
+                last_calculated_timestamp = yield from self._read_kv(
+                    keys=("last_initial_value_calculated_timestamp",)
                 )
-                fetch_till_date = True
+
+                if (
+                    last_calculated_timestamp
+                    and (
+                        timestamp := last_calculated_timestamp.get(
+                            "last_initial_value_calculated_timestamp"
+                        )
+                    )
+                    and timestamp is not None
+                ):
+                    self.context.logger.info(
+                        f"Found last calculation timestamp: {timestamp}"
+                    )
+                    try:
+                        last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
+                            "%Y-%m-%d"
+                        )
+                        self.context.logger.info(f"Last calculation date: {last_date}")
+                    except (ValueError, TypeError):
+                        self.context.logger.warning(
+                            "Invalid timestamp format, defaulting to 1970-01-01"
+                        )
+                        last_date = "1970-01-01"
+
+                    # If last calculation was today, return cached value
+                    if last_date == current_date:
+                        self.context.logger.info(
+                            "Last calculation was today, using cached value"
+                        )
+                        investment = yield from self._load_chain_total_investment(chain)
+                        if investment:
+                            return investment
+                        else:
+                            fetch_till_date = True
+
+                    # Otherwise need to calculate new value but not full history
+                    self.context.logger.info(
+                        "Last calculation was not today, calculating new value without full history"
+                    )
+                    fetch_till_date = False
+
+                # No previous calculation, need to fetch full history
+                else:
+                    self.context.logger.info(
+                        "No previous calculation found, fetching full transfer history"
+                    )
+                    fetch_till_date = True
 
             # Fetch all transfers until current date based on chain
             self.context.logger.info(f"Fetching transfers for chain: {chain}")
             if chain == Chain.MODE.value:
                 self.context.logger.info("Using Mode-specific transfer fetching")
-                all_transfers = self._fetch_all_transfers_until_date_mode(
+                all_transfers = yield from self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, fetch_till_date
                 )
             elif chain == Chain.OPTIMISM.value:
@@ -2790,6 +2859,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if amount <= 0:
                         continue
 
+                    # Check if this is an airdropped USDC transfer and exclude it from initial investment
+                    if (
+                        chain == "mode"
+                        and token_symbol.upper() == "USDC"
+                        and self.params.airdrop_started
+                        and self.params.airdrop_contract_address
+                    ):
+                        from_address = transfer.get("from_address", "")
+                        if (
+                            from_address.lower()
+                            == self.params.airdrop_contract_address.lower()
+                        ):
+                            self.context.logger.info(
+                                f"Excluding airdropped USDC transfer from initial investment: {amount} USDC from {from_address}"
+                            )
+                            continue
+
                     # Get historical price for the transfer date
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
 
@@ -2829,7 +2915,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _fetch_all_transfers_until_date_mode(
         self, address: str, end_date: str, fetch_till_date: bool
-    ) -> Dict:
+    ) -> Generator[None, None, Dict]:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
@@ -2874,7 +2960,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Fetch token transfers
             self.context.logger.info("Fetching Mode token transfers...")
 
-            success = self._fetch_token_transfers_mode(
+            success = yield from self._fetch_token_transfers_mode(
                 address, end_datetime, all_transfers_by_date, fetch_till_date
             )
             if not success:
@@ -3091,16 +3177,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         target_date: str,
         all_transfers_by_date: dict,
         fetch_all_till_date: bool = False,
-    ) -> bool:
-        """
-        Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date.
-
-        :param address: The wallet address to fetch token transfers for.
-        :param target_date: The specific date to fetch transfers for (format: "YYYY-MM-DD").
-        :param all_transfers_by_date: Dictionary to store the fetched transfers organized by date.
-        :param fetch_all_till_date: If True, fetch all transfers up to target_date. If False, fetch only target_date transfers.
-        :return: None
-        """
+    ) -> Generator[None, None, bool]:
+        """Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
@@ -3157,6 +3235,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 from_address = tx.get("from", {})
                 if from_address.get("hash", address).lower() == address.lower():
                     continue
+
+                # Check for airdrop transfers first
+                if self._is_airdrop_transfer(tx):
+                    total = tx.get("total", {})
+                    value_raw = int(total.get("value", "0"))
+                    yield from self._update_airdrop_rewards(value_raw, "mode")
+
+                    token = tx.get("token", {})
+                    decimals = int(token.get("decimals", 18))
+                    amount = value_raw / (10**decimals)
+                    self.context.logger.info(
+                        f"Detected USDC airdrop transfer: {amount} USDC from {from_address.get('hash', '')} "
+                        f"tx_hash: {tx.get('transaction_hash', '')}"
+                    )
 
                 if self._should_include_transfer_mode(
                     from_address, tx, is_eth_transfer=False
@@ -4374,6 +4466,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error validating Velodrome v2 pool address: {str(e)}"
             )
             return False
+
+    def _is_airdrop_transfer(self, tx: Dict) -> bool:
+        """Check if a transfer is an airdrop transfer."""
+        if not self.params.airdrop_started or not self.params.airdrop_contract_address:
+            return False
+
+        from_address = tx.get("from", {})
+        token = tx.get("token", {})
+        symbol = token.get("symbol", "Unknown")
+
+        # Check for USDC airdrop transfers on MODE chain
+        usdc_address = self._get_usdc_address("mode")
+        return (
+            symbol.upper() == "USDC"
+            and token.get("address", "").lower() == usdc_address.lower()
+            and from_address.get("hash", "").lower()
+            == self.params.airdrop_contract_address.lower()
+        )
 
     def _update_agent_performance_metrics(self):
         """Update agent performance metrics with portfolio balance and ROI."""

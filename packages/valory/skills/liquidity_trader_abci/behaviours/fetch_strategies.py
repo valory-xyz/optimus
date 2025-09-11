@@ -972,7 +972,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate total portfolio value including airdrop rewards
             total_portfolio_value = (
-                total_pools_value + total_safe_value + airdrop_rewards_value + withdrawals_value
+                total_pools_value
+                + total_safe_value
+                + airdrop_rewards_value
+                + withdrawals_value
             )
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
@@ -2260,18 +2263,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 datetime.now().timestamp(),
             )
             if all_erc20_transfers_mode is None:
-                self.context.logger.warning("Failed to fetch ERC20 transfers, returning zero withdrawal value")
+                self.context.logger.warning(
+                    "Failed to fetch ERC20 transfers, returning zero withdrawal value"
+                )
                 return Decimal(0)
             outgoing_erc20_transfers_mode = all_erc20_transfers_mode["outgoing"]
-            self.context.logger.info(f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_mode}")
-            withdrawal_value = yield from self._track_and_calculate_withdrawal_value_mode(
-                outgoing_erc20_transfers_mode,
+            self.context.logger.info(
+                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_mode}"
+            )
+            withdrawal_value = (
+                yield from self._track_and_calculate_withdrawal_value_mode(
+                    outgoing_erc20_transfers_mode,
+                )
             )
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
             return withdrawal_value
         else:
             return Decimal(0)
-
 
     def _track_and_calculate_withdrawal_value_mode(
         self,
@@ -2280,14 +2288,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         """Track USDC transfers from safe address and handle withdrawal logic."""
         try:
             if not outgoing_erc20_transfers:
-                self.context.logger.warning("No outgoing transfers found for Mode chain")
+                self.context.logger.warning(
+                    "No outgoing transfers found for Mode chain"
+                )
                 return Decimal(0)
-            
+
             # Track USDC transfers
             usdc_transfers = []
             withdrawal_transfers = []
             withdrawal_value = Decimal(0)
-            
+
             # Sort transfers by timestamp
             sorted_outgoing_transfers = []
             for _, transfers in outgoing_erc20_transfers.items():
@@ -2308,7 +2318,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return withdrawal_value
         except Exception as e:
-            self.context.logger.error(f"Error calculating total withdrawal value: {str(e)}")
+            self.context.logger.error(
+                f"Error calculating total withdrawal value: {str(e)}"
+            )
             return Decimal(0)
 
     def _calculate_total_withdrawal_value(
@@ -2324,15 +2336,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if timestamp_str:
                 try:
                     # Parse ISO format timestamp
-                    transfer_datetime = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    transfer_datetime = datetime.fromisoformat(
+                        timestamp_str.replace("Z", "+00:00")
+                    )
                     transfer_date = transfer_datetime.strftime("%d-%m-%Y")
                 except (ValueError, TypeError) as e:
-                    self.context.logger.error(f"Error parsing timestamp {timestamp_str}: {e}")
+                    self.context.logger.error(
+                        f"Error parsing timestamp {timestamp_str}: {e}"
+                    )
                     continue
             else:
                 self.context.logger.warning("No timestamp found in transfer")
                 continue
-            usdc_price = yield from self._fetch_historical_token_price("mode-bridged-usdc-mode", transfer_date)
+            usdc_price = yield from self._fetch_historical_token_price(
+                "mode-bridged-usdc-mode", transfer_date
+            )
             if usdc_price:
                 withdrawal_amount = Decimal(str(transfer.get("amount", 0)))
                 usdc_price_decimal = Decimal(str(usdc_price))
@@ -4299,7 +4317,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             for tx in transactions:
                 # Skip if no timestamp or value is 0
-                if not tx.get("timestamp") or int(tx.get("total", {}).get("value", "0")) <= 0:
+                if (
+                    not tx.get("timestamp")
+                    or int(tx.get("total", {}).get("value", "0")) <= 0
+                ):
                     continue
 
                 try:
@@ -4307,9 +4328,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
                     if not tx_datetime:
                         continue
-                    
+
                     tx_date = tx_datetime.strftime("%Y-%m-%d")
-                    current_date = datetime.fromtimestamp(final_timestamp).strftime("%Y-%m-%d")
+                    current_date = datetime.fromtimestamp(final_timestamp).strftime(
+                        "%Y-%m-%d"
+                    )
                     if tx_date > current_date:
                         continue
 
@@ -4318,7 +4341,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     token_address = token.get("address", "")
                     token_symbol = token.get("symbol", "Unknown")
                     token_decimals = int(token.get("decimals", 18))
-                    
+
                     # Convert value from raw units to token units
                     total = tx.get("total", {})
                     value_raw = int(total.get("value", "0"))

@@ -24,7 +24,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, Mock, PropertyMock, patch
 
 import pytest
 
@@ -5190,6 +5190,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     total_safe_value,
                     Decimal("0.0"),  # staking_rewards_value
                     Decimal("0.0"),  # airdrop_rewards_value
+                    Decimal("0.0"),  # withdrawals_value
                     initial_investment,
                     volume,
                     allocations,
@@ -5219,6 +5220,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     Decimal("500.0"),
                     Decimal("0.0"),  # staking_rewards_value
                     Decimal("0.0"),  # airdrop_rewards_value
+                    Decimal("0.0"),  # withdrawals_value
                     0.0,  # initial_investment
                     500.0,  # volume
                     [],  # allocations
@@ -5240,6 +5242,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     Decimal("500.0"),
                     Decimal("0.0"),  # staking_rewards_value
                     Decimal("0.0"),  # airdrop_rewards_value
+                    Decimal("0.0"),  # withdrawals_value
                     -100.0,  # initial_investment
                     500.0,  # volume
                     [],  # allocations
@@ -5261,6 +5264,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     Decimal("500.0"),
                     Decimal("0.0"),  # staking_rewards_value
                     Decimal("0.0"),  # airdrop_rewards_value
+                    Decimal("0.0"),  # withdrawals_value
                     1000.0,  # initial_investment
                     500.0,  # volume
                     [],  # allocations
@@ -13686,3 +13690,1067 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             # Verify result
             expected_value = Decimal("0")
             assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_withdrawals_value_mode_success(self):
+        """Test calculate_withdrawals_value method for Mode chain with successful transfers."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock the chain parameter - unfreeze params first
+        fetch_behaviour.params.__dict__["_frozen"] = False
+        fetch_behaviour.params.target_investment_chains = ["mode"]
+        fetch_behaviour.params.safe_contract_addresses = {
+            "mode": "0x1234567890123456789012345678901234567890"
+        }
+        fetch_behaviour.params.__dict__["_frozen"] = True
+
+        # Mock outgoing transfers data
+        mock_outgoing_transfers = {
+            "2025-09-01": [
+                {
+                    "from_address": "0x1234567890123456789012345678901234567890",
+                    "to_address": "0x7c21f16D1844539725A33FAA246038821d5BbfDe",
+                    "amount": 29.663353,
+                    "token_address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                    "symbol": "USDC",
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "tx_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                    "type": "token",
+                }
+            ]
+        }
+
+        # Mock _track_erc20_transfers_mode to return dictionary directly
+        def mock_track_erc20_transfers_mode(*args, **kwargs):
+            return {"outgoing": mock_outgoing_transfers}
+
+        # Mock _track_and_calculate_withdrawal_value_mode
+        def mock_track_and_calculate_withdrawal_value_mode(*args, **kwargs):
+            yield
+            return Decimal("29.66")
+
+        fetch_behaviour._track_erc20_transfers_mode = mock_track_erc20_transfers_mode
+        fetch_behaviour._track_and_calculate_withdrawal_value_mode = (
+            mock_track_and_calculate_withdrawal_value_mode
+        )
+
+        # Test the method
+        result = self._consume_generator(fetch_behaviour.calculate_withdrawals_value())
+
+        # Verify result
+        expected_value = Decimal("29.66")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_withdrawals_value_mode_no_transfers(self):
+        """Test calculate_withdrawals_value method for Mode chain when _track_erc20_transfers_mode returns None."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock the chain parameter - unfreeze params first
+        fetch_behaviour.params.__dict__["_frozen"] = False
+        fetch_behaviour.params.target_investment_chains = ["mode"]
+        fetch_behaviour.params.safe_contract_addresses = {
+            "mode": "0x1234567890123456789012345678901234567890"
+        }
+        fetch_behaviour.params.__dict__["_frozen"] = True
+
+        # Mock _track_erc20_transfers_mode to return None
+        def mock_track_erc20_transfers_mode(*args, **kwargs):
+            return None
+
+        fetch_behaviour._track_erc20_transfers_mode = mock_track_erc20_transfers_mode
+
+        # Test the method
+        result = self._consume_generator(fetch_behaviour.calculate_withdrawals_value())
+
+        # Verify result
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_withdrawals_value_non_mode_chain(self):
+        """Test calculate_withdrawals_value method for non-Mode chain."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock the chain parameter to be non-mode - unfreeze params first
+        fetch_behaviour.params.__dict__["_frozen"] = False
+        fetch_behaviour.params.target_investment_chains = ["optimism"]
+        fetch_behaviour.params.__dict__["_frozen"] = True
+
+        # Test the method
+        result = self._consume_generator(fetch_behaviour.calculate_withdrawals_value())
+
+        # Verify result
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_track_and_calculate_withdrawal_value_mode_success(self):
+        """Test _track_and_calculate_withdrawal_value_mode method with successful transfers."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock outgoing transfers data
+        mock_outgoing_transfers = {
+            "2025-09-01": [
+                {
+                    "from_address": "0x1234567890123456789012345678901234567890",
+                    "to_address": "0x7c21f16D1844539725A33FAA246038821d5BbfDe",
+                    "amount": 29.663353,
+                    "token_address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                    "symbol": "USDC",
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "tx_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                    "type": "token",
+                }
+            ]
+        }
+
+        # Mock _calculate_total_withdrawal_value
+        def mock_calculate_total_withdrawal_value(*args, **kwargs):
+            yield
+            return Decimal("29.66")
+
+        fetch_behaviour._calculate_total_withdrawal_value = (
+            mock_calculate_total_withdrawal_value
+        )
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._track_and_calculate_withdrawal_value_mode(
+                mock_outgoing_transfers
+            )
+        )
+
+        # Verify result
+        expected_value = Decimal("29.66")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_track_and_calculate_withdrawal_value_mode_empty_transfers(self):
+        """Test _track_and_calculate_withdrawal_value_mode method with empty transfers."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Test the method with empty transfers
+        result = self._consume_generator(
+            fetch_behaviour._track_and_calculate_withdrawal_value_mode({})
+        )
+
+        # Verify result
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_track_and_calculate_withdrawal_value_mode_exception(self):
+        """Test _track_and_calculate_withdrawal_value_mode method when exception occurs."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock _calculate_total_withdrawal_value to raise an exception
+        def mock_calculate_total_withdrawal_value(*args, **kwargs):
+            yield
+            raise Exception("Test exception")
+
+        fetch_behaviour._calculate_total_withdrawal_value = (
+            mock_calculate_total_withdrawal_value
+        )
+
+        # Mock outgoing transfers data
+        mock_outgoing_transfers = {
+            "2025-09-01": [
+                {
+                    "from_address": "0x1234567890123456789012345678901234567890",
+                    "to_address": "0x7c21f16D1844539725A33FAA246038821d5BbfDe",
+                    "amount": 29.663353,
+                    "token_address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                    "symbol": "USDC",
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "tx_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                    "type": "token",
+                }
+            ]
+        }
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._track_and_calculate_withdrawal_value_mode(
+                mock_outgoing_transfers
+            )
+        )
+
+        # Verify result (should return Decimal(0) on exception)
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_track_and_calculate_withdrawal_value_mode_no_timestamp(self):
+        """Test _track_and_calculate_withdrawal_value_mode method with transfers missing timestamp."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock outgoing transfers data without timestamp
+        mock_outgoing_transfers = {
+            "2025-09-01": [
+                {
+                    "from_address": "0x1234567890123456789012345678901234567890",
+                    "to_address": "0x7c21f16D1844539725A33FAA246038821d5BbfDe",
+                    "amount": 29.663353,
+                    "token_address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                    "symbol": "USDC",
+                    "tx_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                    "type": "token",
+                }
+            ]
+        }
+
+        # Mock _calculate_total_withdrawal_value
+        def mock_calculate_total_withdrawal_value(*args, **kwargs):
+            yield
+            return Decimal("0")
+
+        fetch_behaviour._calculate_total_withdrawal_value = (
+            mock_calculate_total_withdrawal_value
+        )
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._track_and_calculate_withdrawal_value_mode(
+                mock_outgoing_transfers
+            )
+        )
+
+        # Verify result
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_total_withdrawal_value_success(self):
+        """Test _calculate_total_withdrawal_value method with successful price fetch."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock withdrawal transfers data
+        mock_withdrawal_transfers = [
+            {
+                "amount": 29.663353,
+                "symbol": "USDC",
+                "timestamp": "2025-09-01T16:20:53.000000Z",
+            }
+        ]
+
+        # Mock get_coin_id_from_symbol
+        def mock_get_coin_id_from_symbol(symbol, chain):
+            return "mode-bridged-usdc-mode"
+
+        # Mock _fetch_historical_token_price
+        def mock_fetch_historical_token_price(coin_id, date):
+            yield
+            return 1.0  # $1.00 USDC price
+
+        fetch_behaviour.get_coin_id_from_symbol = mock_get_coin_id_from_symbol
+        fetch_behaviour._fetch_historical_token_price = (
+            mock_fetch_historical_token_price
+        )
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._calculate_total_withdrawal_value(mock_withdrawal_transfers)
+        )
+
+        # Verify result (29.663353 * 1.0 = 29.663353)
+        expected_value = Decimal("29.663353")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_total_withdrawal_value_no_timestamp(self):
+        """Test _calculate_total_withdrawal_value method with transfer missing timestamp."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock withdrawal transfers data without timestamp
+        mock_withdrawal_transfers = [
+            {
+                "amount": 29.663353,
+                "symbol": "USDC"
+                # No timestamp
+            }
+        ]
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._calculate_total_withdrawal_value(mock_withdrawal_transfers)
+        )
+
+        # Verify result (should be 0 since no timestamp)
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_total_withdrawal_value_empty_timestamp(self):
+        """Test _calculate_total_withdrawal_value method with empty timestamp."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock withdrawal transfers data with empty timestamp
+        mock_withdrawal_transfers = [
+            {"amount": 29.663353, "symbol": "USDC", "timestamp": ""}
+        ]
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._calculate_total_withdrawal_value(mock_withdrawal_transfers)
+        )
+
+        # Verify result (should be 0 since empty timestamp)
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_total_withdrawal_value_invalid_timestamp(self):
+        """Test _calculate_total_withdrawal_value method with invalid timestamp format."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock withdrawal transfers data with invalid timestamp
+        mock_withdrawal_transfers = [
+            {"amount": 29.663353, "symbol": "USDC", "timestamp": "invalid-timestamp"}
+        ]
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._calculate_total_withdrawal_value(mock_withdrawal_transfers)
+        )
+
+        # Verify result (should be 0 since invalid timestamp)
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_total_withdrawal_value_no_coin_id(self):
+        """Test _calculate_total_withdrawal_value method when coin ID is not found."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock withdrawal transfers data
+        mock_withdrawal_transfers = [
+            {
+                "amount": 29.663353,
+                "symbol": "USDC",
+                "timestamp": "2025-09-01T16:20:53.000000Z",
+            }
+        ]
+
+        # Mock get_coin_id_from_symbol to return None
+        def mock_get_coin_id_from_symbol(symbol, chain):
+            return None
+
+        fetch_behaviour.get_coin_id_from_symbol = mock_get_coin_id_from_symbol
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._calculate_total_withdrawal_value(mock_withdrawal_transfers)
+        )
+
+        # Verify result (should be 0 since no coin ID)
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_total_withdrawal_value_no_price(self):
+        """Test _calculate_total_withdrawal_value method when price fetch fails."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock withdrawal transfers data
+        mock_withdrawal_transfers = [
+            {
+                "amount": 29.663353,
+                "symbol": "USDC",
+                "timestamp": "2025-09-01T16:20:53.000000Z",
+            }
+        ]
+
+        # Mock get_coin_id_from_symbol
+        def mock_get_coin_id_from_symbol(symbol, chain):
+            return "mode-bridged-usdc-mode"
+
+        # Mock _fetch_historical_token_price to return None
+        def mock_fetch_historical_token_price(coin_id, date):
+            yield
+            return None
+
+        fetch_behaviour.get_coin_id_from_symbol = mock_get_coin_id_from_symbol
+        fetch_behaviour._fetch_historical_token_price = (
+            mock_fetch_historical_token_price
+        )
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._calculate_total_withdrawal_value(mock_withdrawal_transfers)
+        )
+
+        # Verify result (should be 0 since no price)
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_total_withdrawal_value_multiple_transfers(self):
+        """Test _calculate_total_withdrawal_value method with multiple transfers."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock withdrawal transfers data with multiple transfers
+        mock_withdrawal_transfers = [
+            {
+                "amount": 10.0,
+                "symbol": "USDC",
+                "timestamp": "2025-09-01T16:20:53.000000Z",
+            },
+            {
+                "amount": 20.0,
+                "symbol": "USDC",
+                "timestamp": "2025-09-02T16:20:53.000000Z",
+            },
+        ]
+
+        # Mock get_coin_id_from_symbol
+        def mock_get_coin_id_from_symbol(symbol, chain):
+            return "mode-bridged-usdc-mode"
+
+        # Mock _fetch_historical_token_price to return different prices
+        def mock_fetch_historical_token_price(coin_id, date):
+            yield
+            if "01-09-2025" in date:
+                return 1.0  # $1.00 USDC price
+            else:
+                return 1.1  # $1.10 USDC price
+
+        fetch_behaviour.get_coin_id_from_symbol = mock_get_coin_id_from_symbol
+        fetch_behaviour._fetch_historical_token_price = (
+            mock_fetch_historical_token_price
+        )
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._calculate_total_withdrawal_value(mock_withdrawal_transfers)
+        )
+
+        # Verify result (10.0 * 1.0 + 20.0 * 1.1 = 10.0 + 22.0 = 32.0)
+        expected_value = Decimal("32.0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_calculate_total_withdrawal_value_missing_amount(self):
+        """Test _calculate_total_withdrawal_value method with transfer missing amount."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock withdrawal transfers data without amount
+        mock_withdrawal_transfers = [
+            {
+                "symbol": "USDC",
+                "timestamp": "2025-09-01T16:20:53.000000Z"
+                # No amount
+            }
+        ]
+
+        # Mock get_coin_id_from_symbol
+        def mock_get_coin_id_from_symbol(symbol, chain):
+            return "mode-bridged-usdc-mode"
+
+        # Mock _fetch_historical_token_price
+        def mock_fetch_historical_token_price(coin_id, date):
+            yield
+            return 1.0  # $1.00 USDC price
+
+        fetch_behaviour.get_coin_id_from_symbol = mock_get_coin_id_from_symbol
+        fetch_behaviour._fetch_historical_token_price = (
+            mock_fetch_historical_token_price
+        )
+
+        # Test the method
+        result = self._consume_generator(
+            fetch_behaviour._calculate_total_withdrawal_value(mock_withdrawal_transfers)
+        )
+
+        # Verify result (0 * 1.0 = 0)
+        expected_value = Decimal("0")
+        assert result == expected_value, f"Expected {expected_value}, got {result}"
+
+    def test_track_erc20_transfers_mode_success(self):
+        """Test _track_erc20_transfers_mode method with successful API response."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return successful response
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "total": {"value": "29663353"},  # 29.663353 USDC (6 decimals)
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                }
+            ]
+        }
+
+        # Mock requests.get
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Mock _get_datetime_from_timestamp
+            def mock_get_datetime_from_timestamp(timestamp):
+                return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+            # Mock _should_include_transfer_mode
+            def mock_should_include_transfer_mode(to_address, tx, is_eth_transfer):
+                return True
+
+            fetch_behaviour._get_datetime_from_timestamp = (
+                mock_get_datetime_from_timestamp
+            )
+            fetch_behaviour._should_include_transfer_mode = (
+                mock_should_include_transfer_mode
+            )
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp (after 2025-09-01)
+            )
+
+            # Verify result
+            expected_result = {
+                "outgoing": {
+                    "2025-09-01": [
+                        {
+                            "from_address": "0x1234567890123456789012345678901234567890",
+                            "to_address": "0x7c21f16D1844539725A33FAA246038821d5BbfDe",
+                            "amount": 29.663353,
+                            "token_address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                            "symbol": "USDC",
+                            "timestamp": "2025-09-01T16:20:53.000000Z",
+                            "tx_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                            "type": "token",
+                        }
+                    ]
+                }
+            }
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_api_failure(self):
+        """Test _track_erc20_transfers_mode method with API failure (non-200 status)."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return error response
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 500
+            mock_get.return_value = mock_response
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result (should return empty structure)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_empty_transactions(self):
+        """Test _track_erc20_transfers_mode method with empty transactions list."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return empty items
+        mock_response_data = {"items": []}
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_no_timestamp(self):
+        """Test _track_erc20_transfers_mode method with transaction missing timestamp."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return transaction without timestamp
+        mock_response_data = {
+            "items": [
+                {
+                    "total": {"value": "29663353000"},
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158"
+                    # No timestamp
+                }
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result (should skip transaction)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_zero_value(self):
+        """Test _track_erc20_transfers_mode method with transaction having zero value."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return transaction with zero value
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "total": {"value": "0"},  # Zero value
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                }
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result (should skip transaction)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_invalid_timestamp(self):
+        """Test _track_erc20_transfers_mode method with invalid timestamp format."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return transaction with invalid timestamp
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "invalid-timestamp",
+                    "total": {"value": "29663353000"},
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                }
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Mock _get_datetime_from_timestamp to return None for invalid timestamp
+            def mock_get_datetime_from_timestamp(timestamp):
+                return None
+
+            fetch_behaviour._get_datetime_from_timestamp = (
+                mock_get_datetime_from_timestamp
+            )
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result (should skip transaction)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_future_date(self):
+        """Test _track_erc20_transfers_mode method with future transaction date."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return transaction with future date
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "2025-12-31T16:20:53.000000Z",  # Future date
+                    "total": {"value": "29663353000"},
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                }
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Mock _get_datetime_from_timestamp
+            def mock_get_datetime_from_timestamp(timestamp):
+                return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+            fetch_behaviour._get_datetime_from_timestamp = (
+                mock_get_datetime_from_timestamp
+            )
+
+            # Test the method with current timestamp (2025-09-11)
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1726000000,  # 2025-09-11 timestamp
+            )
+
+            # Verify result (should skip future transaction)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_should_not_include(self):
+        """Test _track_erc20_transfers_mode method when _should_include_transfer_mode returns False."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return valid transaction
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "total": {"value": "29663353000"},
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                }
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Mock _get_datetime_from_timestamp
+            def mock_get_datetime_from_timestamp(timestamp):
+                return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+            # Mock _should_include_transfer_mode to return False
+            def mock_should_include_transfer_mode(to_address, tx, is_eth_transfer):
+                return False
+
+            fetch_behaviour._get_datetime_from_timestamp = (
+                mock_get_datetime_from_timestamp
+            )
+            fetch_behaviour._should_include_transfer_mode = (
+                mock_should_include_transfer_mode
+            )
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result (should skip transaction)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_non_usdc_token(self):
+        """Test _track_erc20_transfers_mode method with non-USDC token."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return transaction with non-USDC token
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "total": {"value": "1000000000000000000"},  # 1 ETH
+                    "token": {
+                        "address": "0x4200000000000000000000000000000000000006",
+                        "symbol": "WETH",  # Not USDC
+                        "decimals": 18,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                }
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Mock _get_datetime_from_timestamp
+            def mock_get_datetime_from_timestamp(timestamp):
+                return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+            # Mock _should_include_transfer_mode
+            def mock_should_include_transfer_mode(to_address, tx, is_eth_transfer):
+                return True
+
+            fetch_behaviour._get_datetime_from_timestamp = (
+                mock_get_datetime_from_timestamp
+            )
+            fetch_behaviour._should_include_transfer_mode = (
+                mock_should_include_transfer_mode
+            )
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result (should skip non-USDC token)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_wrong_from_address(self):
+        """Test _track_erc20_transfers_mode method with transaction not from safe address."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return transaction from different address
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "total": {"value": "29663353000"},
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {
+                        "hash": "0x9999999999999999999999999999999999999999"
+                    },  # Different address
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                }
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Mock _get_datetime_from_timestamp
+            def mock_get_datetime_from_timestamp(timestamp):
+                return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+            # Mock _should_include_transfer_mode
+            def mock_should_include_transfer_mode(to_address, tx, is_eth_transfer):
+                return True
+
+            fetch_behaviour._get_datetime_from_timestamp = (
+                mock_get_datetime_from_timestamp
+            )
+            fetch_behaviour._should_include_transfer_mode = (
+                mock_should_include_transfer_mode
+            )
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",  # Different safe address
+                1735680000,
+            )
+
+            # Verify result (should skip transaction not from safe address)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_processing_error(self):
+        """Test _track_erc20_transfers_mode method with ValueError/TypeError during processing."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return transaction that will cause processing error
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "total": {"value": "invalid_value"},  # This will cause ValueError
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
+                }
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Mock _get_datetime_from_timestamp
+            def mock_get_datetime_from_timestamp(timestamp):
+                return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+            # Mock _should_include_transfer_mode
+            def mock_should_include_transfer_mode(to_address, tx, is_eth_transfer):
+                return True
+
+            fetch_behaviour._get_datetime_from_timestamp = (
+                mock_get_datetime_from_timestamp
+            )
+            fetch_behaviour._should_include_transfer_mode = (
+                mock_should_include_transfer_mode
+            )
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result (should skip transaction with error)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_general_exception(self):
+        """Test _track_erc20_transfers_mode method with general exception."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to raise an exception
+        with patch("requests.get") as mock_get:
+            mock_get.side_effect = Exception("Network error")
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result (should return empty structure on exception)
+            expected_result = {"outgoing": {}}
+            assert result == expected_result
+
+    def test_track_erc20_transfers_mode_multiple_transactions(self):
+        """Test _track_erc20_transfers_mode method with multiple valid transactions."""
+        fetch_behaviour = self._create_fetch_strategies_behaviour()
+
+        # Mock requests.get to return multiple transactions
+        mock_response_data = {
+            "items": [
+                {
+                    "timestamp": "2025-09-01T16:20:53.000000Z",
+                    "total": {"value": "10000000"},  # 10 USDC
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                },
+                {
+                    "timestamp": "2025-09-02T16:20:53.000000Z",
+                    "total": {"value": "20000000"},  # 20 USDC
+                    "token": {
+                        "address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                        "symbol": "USDC",
+                        "decimals": 6,
+                    },
+                    "from": {"hash": "0x1234567890123456789012345678901234567890"},
+                    "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
+                    "transaction_hash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                },
+            ]
+        }
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+            mock_get.return_value = mock_response
+
+            # Mock _get_datetime_from_timestamp
+            def mock_get_datetime_from_timestamp(timestamp):
+                return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+            # Mock _should_include_transfer_mode
+            def mock_should_include_transfer_mode(to_address, tx, is_eth_transfer):
+                return True
+
+            fetch_behaviour._get_datetime_from_timestamp = (
+                mock_get_datetime_from_timestamp
+            )
+            fetch_behaviour._should_include_transfer_mode = (
+                mock_should_include_transfer_mode
+            )
+
+            # Test the method
+            result = fetch_behaviour._track_erc20_transfers_mode(
+                "0x1234567890123456789012345678901234567890",
+                1759257000,  # 2025-10-01 timestamp
+            )
+
+            # Verify result
+            expected_result = {
+                "outgoing": {
+                    "2025-09-01": [
+                        {
+                            "from_address": "0x1234567890123456789012345678901234567890",
+                            "to_address": "0x7c21f16D1844539725A33FAA246038821d5BbfDe",
+                            "amount": 10.0,
+                            "token_address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                            "symbol": "USDC",
+                            "timestamp": "2025-09-01T16:20:53.000000Z",
+                            "tx_hash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                            "type": "token",
+                        }
+                    ],
+                    "2025-09-02": [
+                        {
+                            "from_address": "0x1234567890123456789012345678901234567890",
+                            "to_address": "0x7c21f16D1844539725A33FAA246038821d5BbfDe",
+                            "amount": 20.0,
+                            "token_address": "0xd988097fb8612cc24eec14542bc03424c656005f",
+                            "symbol": "USDC",
+                            "timestamp": "2025-09-02T16:20:53.000000Z",
+                            "tx_hash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                            "type": "token",
+                        }
+                    ],
+                }
+            }
+            assert result == expected_result

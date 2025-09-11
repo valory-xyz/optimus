@@ -2348,8 +2348,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 self.context.logger.warning("No timestamp found in transfer")
                 continue
+            # Get USDC coin ID for Mode chain
+            usdc_coin_id = self.get_coin_id_from_symbol("USDC", "mode")
+            if not usdc_coin_id:
+                self.context.logger.warning("No coin ID found for USDC on Mode chain")
+                continue
+
             usdc_price = yield from self._fetch_historical_token_price(
-                "mode-bridged-usdc-mode", transfer_date
+                usdc_coin_id, transfer_date
             )
             if usdc_price:
                 withdrawal_amount = Decimal(str(transfer.get("amount", 0)))
@@ -4358,7 +4364,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if not should_include:
                         continue
 
-                    if token_symbol == "USDC":
+                    if token_symbol == "USDC":  # nosec B105
                         transfer_data = {
                             "from_address": from_address.get("hash", ""),
                             "to_address": to_address.get("hash", ""),

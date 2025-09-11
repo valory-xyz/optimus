@@ -722,6 +722,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 {
                     "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9",
                     "0x7f9adfbd38b669f03d1d11000bc76b9aaea28a81",
+                    "0xd988097fb8612cc24eec14542bc03424c656005f",
                 },
             ),
             (

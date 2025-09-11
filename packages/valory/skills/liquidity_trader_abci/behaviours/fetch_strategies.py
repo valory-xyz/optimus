@@ -642,6 +642,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
         staking_rewards_value = yield from self.calculate_stakig_rewards_value()
         airdrop_rewards_value = yield from self.calculate_airdrop_rewards_value()
+        withdrawals_value = yield from self.calculate_withdrawals_value()
 
         # Calculate final portfolio metrics
         yield from self._update_portfolio_metrics(
@@ -681,6 +682,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             total_safe_value_usd,
             staking_rewards_value,
             airdrop_rewards_value,
+            withdrawals_value,
             initial_investment,
             volume,
             allocations,
@@ -954,6 +956,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         total_safe_value: Decimal,
         staking_rewards_value: Decimal,
         airdrop_rewards_value: Decimal,
+        withdrawals_value: Decimal,
         initial_investment: float,
         volume: float,
         allocations: List[Dict],
@@ -967,10 +970,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
-            # Calculate total portfolio value including airdrop rewards
-            total_portfolio_value = (
-                total_pools_value + total_safe_value + airdrop_rewards_value
-            )
+            # Calculate total portfolio value
+            total_portfolio_value = total_pools_value + total_safe_value
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
             # Convert to percentage by multiplying by 100
@@ -980,20 +981,25 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 try:
                     # Total ROI includes staking rewards + airdrop rewards
                     total_roi_decimal = (
-                        float(total_portfolio_value + staking_rewards_value)
+                        float(
+                            total_portfolio_value
+                            + staking_rewards_value
+                            + withdrawals_value
+                        )
                         / float(initial_investment)
                     ) - 1
                     total_roi = round(total_roi_decimal * 100, 2)
 
                     # Partial ROI includes airdrop rewards (trading + airdrop)
                     partial_roi_decimal = (
-                        float(total_portfolio_value) / float(initial_investment)
+                        float(total_portfolio_value + withdrawals_value)
+                        / float(initial_investment)
                     ) - 1
                     partial_roi = round(partial_roi_decimal * 100, 2)
 
                     self.context.logger.info(
                         f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% "
-                        f"(Portfolio: ${float(total_portfolio_value):.2f}, Airdrop: ${float(airdrop_rewards_value):.2f}, "
+                        f"(Portfolio: ${float(total_portfolio_value):.2f}, Airdrop: ${float(airdrop_rewards_value):.2f}, Withdrawals: ${float(withdrawals_value):.2f}, "
                         f"Staking: ${float(staking_rewards_value):.2f}, Initial: ${float(initial_investment):.2f})"
                     )
                 except (ValueError, ZeroDivisionError, TypeError) as e:
@@ -1074,9 +1080,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "portfolio_value": float(total_portfolio_value),
                 "value_in_pools": float(total_pools_value),
                 "value_in_safe": float(total_safe_value),
+                "value_in_withdrawals": float(withdrawals_value),
                 "initial_investment": float(initial_investment)
                 if initial_investment is not None
                 else None,
+                "airdropped_rewards": float(airdrop_rewards_value),
                 "volume": float(volume) if volume is not None else None,
                 "total_roi": total_roi,
                 "partial_roi": partial_roi,
@@ -2246,6 +2254,119 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return Decimal(0)
 
+    def calculate_withdrawals_value(self) -> Generator[None, None, Decimal]:
+        """Calculate the value of withdrawals."""
+        chain = self.params.target_investment_chains[0]
+
+        if chain == "mode":
+            all_erc20_transfers_mode = self._track_erc20_transfers_mode(
+                self.params.safe_contract_addresses.get(chain),
+                datetime.now().timestamp(),
+            )
+            if all_erc20_transfers_mode is None:
+                self.context.logger.warning(
+                    "Failed to fetch ERC20 transfers, returning zero withdrawal value"
+                )
+                return Decimal(0)
+            outgoing_erc20_transfers_mode = all_erc20_transfers_mode["outgoing"]
+            self.context.logger.info(
+                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_mode}"
+            )
+            withdrawal_value = (
+                yield from self._track_and_calculate_withdrawal_value_mode(
+                    outgoing_erc20_transfers_mode,
+                )
+            )
+            self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
+            return withdrawal_value
+        else:
+            return Decimal(0)
+
+    def _track_and_calculate_withdrawal_value_mode(
+        self,
+        outgoing_erc20_transfers: Dict,
+    ) -> Generator[None, None, Decimal]:
+        """Track USDC transfers from safe address and handle withdrawal logic."""
+        try:
+            if not outgoing_erc20_transfers:
+                self.context.logger.warning(
+                    "No outgoing transfers found for Mode chain"
+                )
+                return Decimal(0)
+
+            # Track USDC transfers
+            usdc_transfers = []
+            withdrawal_transfers = []
+            withdrawal_value = Decimal(0)
+
+            # Sort transfers by timestamp
+            sorted_outgoing_transfers = []
+            for _, transfers in outgoing_erc20_transfers.items():
+                for transfer in transfers:
+                    if isinstance(transfer, dict) and "timestamp" in transfer:
+                        sorted_outgoing_transfers.append(transfer)
+
+            sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
+
+            for transfer in sorted_outgoing_transfers:
+                if transfer.get("symbol") == "USDC":
+                    usdc_transfers.append(transfer)
+                    withdrawal_transfers.append(transfer)
+            self.context.logger.info(f"USDC transfers: {usdc_transfers}")
+            self.context.logger.info(f"Withdrawal transfers: {withdrawal_transfers}")
+            withdrawal_value = yield from self._calculate_total_withdrawal_value(
+                withdrawal_transfers
+            )
+            return withdrawal_value
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating total withdrawal value: {str(e)}"
+            )
+            return Decimal(0)
+
+    def _calculate_total_withdrawal_value(
+        self,
+        withdrawal_transfers: List[Dict],
+    ) -> Generator[None, None, Decimal]:
+        """Calculate the total withdrawal value."""
+        withdrawal_value = Decimal(0)
+
+        for _, transfer in enumerate(withdrawal_transfers):
+            # Parse ISO timestamp format
+            timestamp_str = transfer.get("timestamp", "")
+            if timestamp_str:
+                try:
+                    # Parse ISO format timestamp
+                    transfer_datetime = datetime.fromisoformat(
+                        timestamp_str.replace("Z", "+00:00")
+                    )
+                    transfer_date = transfer_datetime.strftime("%d-%m-%Y")
+                except (ValueError, TypeError) as e:
+                    self.context.logger.error(
+                        f"Error parsing timestamp {timestamp_str}: {e}"
+                    )
+                    continue
+            else:
+                self.context.logger.warning("No timestamp found in transfer")
+                continue
+            # Get USDC coin ID for Mode chain
+            usdc_coin_id = self.get_coin_id_from_symbol("USDC", "mode")
+            if not usdc_coin_id:
+                self.context.logger.warning("No coin ID found for USDC on Mode chain")
+                continue
+
+            usdc_price = yield from self._fetch_historical_token_price(
+                usdc_coin_id, transfer_date
+            )
+            if usdc_price:
+                withdrawal_amount = Decimal(str(transfer.get("amount", 0)))
+                usdc_price_decimal = Decimal(str(usdc_price))
+                withdrawal_value += withdrawal_amount * usdc_price_decimal
+            else:
+                self.context.logger.warning(f"No USDC price found for {transfer_date}")
+
+        return withdrawal_value
+
     def _get_aggregator_name(
         self, aggregator_address: str, chain: str
     ) -> Generator[None, None, Optional[str]]:
@@ -3240,14 +3361,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if self._is_airdrop_transfer(tx):
                     total = tx.get("total", {})
                     value_raw = int(total.get("value", "0"))
-                    yield from self._update_airdrop_rewards(value_raw, "mode")
+                    tx_hash = tx.get("transaction_hash", "")
+                    yield from self._update_airdrop_rewards(value_raw, "mode", tx_hash)
 
                     token = tx.get("token", {})
                     decimals = int(token.get("decimals", 18))
                     amount = value_raw / (10**decimals)
                     self.context.logger.info(
                         f"Detected USDC airdrop transfer: {amount} USDC from {from_address.get('hash', '')} "
-                        f"tx_hash: {tx.get('transaction_hash', '')}"
+                        f"tx_hash: {tx_hash}"
                     )
 
                 if self._should_include_transfer_mode(
@@ -4168,6 +4290,111 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error tracking Mode ETH transfers: {e}")
             return {"incoming": {}, "outgoing": {}}
+
+    def _track_erc20_transfers_mode(
+        self,
+        safe_address: str,
+        final_timestamp: int,
+    ) -> Dict[str, Dict[str, List[Dict]]]:
+        """Fetch and organize ERC20 token transfers for Mode chain using the Mode explorer API."""
+        try:
+            all_transfers = {"outgoing": {}}
+
+            # Use Mode Explorer API (same as _fetch_token_transfers_mode)
+            base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+            endpoint = f"{base_url}/addresses/{safe_address}/token-transfers"
+            params = {"filter": "from"}  # Only fetch outgoing transfers
+
+            response = requests.get(
+                endpoint,
+                params=params,
+                headers={"Accept": "application/json"},
+                timeout=30,
+                verify=False,  # nosec B501
+            )
+
+            if response.status_code != 200:
+                self.context.logger.error(
+                    f"Failed to fetch Mode ERC20 transfers: {response.status_code}"
+                )
+                return all_transfers
+
+            response_data = response.json()
+            transactions = response_data.get("items", [])
+            processed_count = 0
+
+            for tx in transactions:
+                # Skip if no timestamp or value is 0
+                if (
+                    not tx.get("timestamp")
+                    or int(tx.get("total", {}).get("value", "0")) <= 0
+                ):
+                    continue
+
+                try:
+                    # Use the same timestamp parsing as _fetch_token_transfers_mode
+                    tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
+                    if not tx_datetime:
+                        continue
+
+                    tx_date = tx_datetime.strftime("%Y-%m-%d")
+                    current_date = datetime.fromtimestamp(final_timestamp).strftime(
+                        "%Y-%m-%d"
+                    )
+                    if tx_date > current_date:
+                        continue
+
+                    # Get token information (Mode Explorer API format)
+                    token = tx.get("token", {})
+                    token_address = token.get("address", "")
+                    token_symbol = token.get("symbol", "Unknown")
+                    token_decimals = int(token.get("decimals", 18))
+
+                    # Convert value from raw units to token units
+                    total = tx.get("total", {})
+                    value_raw = int(total.get("value", "0"))
+                    amount = value_raw / (10**token_decimals)
+
+                    # Get addresses (Mode Explorer API format)
+                    from_address = tx.get("from", {})
+                    to_address = tx.get("to", {})
+                    safe_address_lower = safe_address.lower()
+
+                    should_include = self._should_include_transfer_mode(
+                        to_address, tx, is_eth_transfer=False
+                    )
+                    if not should_include:
+                        continue
+
+                    if token_symbol == "USDC":  # nosec B105
+                        transfer_data = {
+                            "from_address": from_address.get("hash", ""),
+                            "to_address": to_address.get("hash", ""),
+                            "amount": amount,
+                            "token_address": token_address,
+                            "symbol": token_symbol,
+                            "timestamp": tx.get("timestamp", ""),
+                            "tx_hash": tx.get("transaction_hash", ""),
+                            "type": "token",
+                        }
+
+                        # Since we're filtering for outgoing transfers, safe_address is always the sender
+                        if from_address.get("hash", "").lower() == safe_address_lower:
+                            # Outgoing transfer - safe_address is sender
+                            if tx_date not in all_transfers["outgoing"]:
+                                all_transfers["outgoing"][tx_date] = []
+                            all_transfers["outgoing"][tx_date].append(transfer_data)
+                            processed_count += 1
+
+                except (ValueError, TypeError) as e:
+                    self.context.logger.error(f"Error processing transaction: {e}")
+                    continue
+
+            return all_transfers
+
+        except Exception as e:
+            self.context.logger.error(f"Error tracking Mode ERC20 transfers: {e}")
+            return {"outgoing": {}}
 
     def get_master_safe_address(self) -> Generator[None, None, Optional[str]]:
         """Get the master safe address by checking service staking state."""

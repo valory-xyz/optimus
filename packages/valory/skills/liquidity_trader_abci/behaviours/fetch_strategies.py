@@ -972,10 +972,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate total portfolio value including airdrop rewards
             total_portfolio_value = (
-                total_pools_value
-                + total_safe_value
-                + airdrop_rewards_value
-                + withdrawals_value
+                total_pools_value + total_safe_value + airdrop_rewards_value
             )
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
@@ -986,14 +983,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 try:
                     # Total ROI includes staking rewards + airdrop rewards
                     total_roi_decimal = (
-                        float(total_portfolio_value + staking_rewards_value)
+                        float(
+                            total_portfolio_value
+                            + staking_rewards_value
+                            + withdrawals_value
+                        )
                         / float(initial_investment)
                     ) - 1
                     total_roi = round(total_roi_decimal * 100, 2)
 
                     # Partial ROI includes airdrop rewards (trading + airdrop)
                     partial_roi_decimal = (
-                        float(total_portfolio_value) / float(initial_investment)
+                        float(total_portfolio_value + withdrawals_value)
+                        / float(initial_investment)
                     ) - 1
                     partial_roi = round(partial_roi_decimal * 100, 2)
 

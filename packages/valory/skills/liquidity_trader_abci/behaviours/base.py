@@ -2969,10 +2969,24 @@ class LiquidityTraderBaseBehaviour(
         return None
 
     def _update_airdrop_rewards(
-        self, new_amount: int, chain: str
+        self, new_amount: int, chain: str, tx_hash: str = None
     ) -> Generator[None, None, None]:
-        """Update total airdrop rewards in KV store."""
+        """Update total airdrop rewards in KV store with deduplication."""
         try:
+            # If tx_hash is provided, check for deduplication
+            if tx_hash:
+                processed_key = f"airdrop_processed_{chain}_{tx_hash}"
+                result = yield from self._read_kv((processed_key,))
+
+                if result and result.get(processed_key):
+                    self.context.logger.info(
+                        f"Airdrop transaction {tx_hash} already processed for {chain}, skipping"
+                    )
+                    return
+
+                # Mark transaction as processed
+                yield from self._write_kv({processed_key: "true"})
+
             total_key = f"{AIRDROP_TOTAL_KEY}_{chain}"
             current_total = yield from self._get_total_airdrop_rewards(chain)
             new_total = current_total + new_amount

@@ -1086,6 +1086,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "initial_investment": float(initial_investment)
                 if initial_investment is not None
                 else None,
+                "airdropped_rewards": float(airdrop_rewards_value),
                 "volume": float(volume) if volume is not None else None,
                 "total_roi": total_roi,
                 "partial_roi": partial_roi,
@@ -3362,14 +3363,15 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if self._is_airdrop_transfer(tx):
                     total = tx.get("total", {})
                     value_raw = int(total.get("value", "0"))
-                    yield from self._update_airdrop_rewards(value_raw, "mode")
+                    tx_hash = tx.get("transaction_hash", "")
+                    yield from self._update_airdrop_rewards(value_raw, "mode", tx_hash)
 
                     token = tx.get("token", {})
                     decimals = int(token.get("decimals", 18))
                     amount = value_raw / (10**decimals)
                     self.context.logger.info(
                         f"Detected USDC airdrop transfer: {amount} USDC from {from_address.get('hash', '')} "
-                        f"tx_hash: {tx.get('transaction_hash', '')}"
+                        f"tx_hash: {tx_hash}"
                     )
 
                 if self._should_include_transfer_mode(

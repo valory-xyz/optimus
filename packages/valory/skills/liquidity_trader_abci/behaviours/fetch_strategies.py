@@ -970,10 +970,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
 
-            # Calculate total portfolio value including airdrop rewards
-            total_portfolio_value = (
-                total_pools_value + total_safe_value + airdrop_rewards_value
-            )
+            # Calculate total portfolio value
+            total_portfolio_value = total_pools_value + total_safe_value
 
             # Calculate ROI using the provided formula: (final_value / initial_value) - 1
             # Convert to percentage by multiplying by 100

@@ -1156,8 +1156,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 velo_token_address = self._get_velo_token_address(chain)
                 if velo_token_address:
                     user_balances[velo_token_address] = velo_rewards // 10**18
+                    token_symbol = "AERO" if chain == "base" else "VELO"
                     self.context.logger.info(
-                        f"Added VELO rewards to position: {velo_rewards}"
+                        f"Added {token_symbol} rewards to position: {velo_rewards}"
                     )
 
         details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
@@ -1166,10 +1167,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             position.get("token1"): position.get("token1_symbol"),
         }
 
-        # Add VELO to token_info if rewards exist
+        # Add VELO/AERO to token_info if rewards exist
         velo_token_address = self._get_velo_token_address(chain)
         if velo_token_address and velo_token_address in user_balances:
-            token_info[velo_token_address] = "VELO"
+            # Use AERO for Base chain, VELO for others
+            token_symbol = "AERO" if chain == "base" else "VELO"
+            token_info[velo_token_address] = token_symbol
 
         return user_balances, details, token_info
 
@@ -1382,23 +1385,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             token1_increase * token1_price
         )
 
-        # Add VELO rewards if position is staked
+        # Add VELO/AERO rewards if position is staked
         velo_rewards_usd = Decimal(0)
         if position.get("staked", False) and position.get("dex_type") == "velodrome":
-            # Get VELO token address and check if it's in current_balances
+            # Get VELO/AERO token address and check if it's in current_balances
             velo_token_address = self._get_velo_token_address(chain)
             if velo_token_address and velo_token_address in current_balances:
                 velo_balance = current_balances[velo_token_address]
                 if velo_balance > 0:
-                    # Get VELO price
+                    # Get VELO/AERO price
+                    token_symbol = "AERO" if chain == "base" else "VELO"
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
-                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        velo_coin_id = self.get_coin_id_from_symbol(token_symbol, chain)
                         velo_price = yield from self._fetch_coin_price(velo_coin_id)
                         if velo_price is None:
                             self.context.logger.warning(
-                                "Could not fetch VELO price for yield calculation"
+                                f"Could not fetch {token_symbol} price for yield calculation"
                             )
                             velo_price = Decimal(0)
                         else:
@@ -1406,7 +1410,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                     velo_rewards_usd = velo_balance * velo_price
 
-        # Total yield = base yield + VELO rewards
+        # Total yield = base yield + VELO/AERO rewards
         total_yield_usd = base_yield_usd + velo_rewards_usd
 
         # Enhanced logging
@@ -1428,7 +1432,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             velo_price = (
                 velo_rewards_usd / velo_balance if velo_balance > 0 else Decimal(0)
             )
-            log_message += f" | VELO rewards: {velo_balance:.6f} @ ${velo_price:.2f} = ${velo_rewards_usd:.2f}"
+            token_symbol = "AERO" if chain == "base" else "VELO"
+            log_message += f" | {token_symbol} rewards: {velo_balance:.6f} @ ${velo_price:.2f} = ${velo_rewards_usd:.2f}"
 
         log_message += f" | Total yield: ${total_yield_usd:.2f}"
 
@@ -4738,7 +4743,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return Decimal(0)
 
     def _get_velo_token_address(self, chain: str) -> Optional[str]:
-        """Get the VELO token address for the specified chain from params."""
+        """Get the VELO/AERO token address for the specified chain from params."""
         velo_addresses = self.params.velo_token_contract_addresses
         return velo_addresses.get(chain)
 

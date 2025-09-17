@@ -536,6 +536,122 @@ class LiquidityTraderBaseBehaviour(
         )
         return balances
 
+    def _get_base_balances_from_safe_api(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Get Base balances using SafeApi with pagination"""
+        safe_address = self.params.safe_contract_addresses.get("base")
+        if not safe_address:
+            self.context.logger.error("No safe address set for Base chain")
+            return []
+
+        self.context.logger.info(
+            f"Fetching Base balances from SafeApi for safe: {safe_address}"
+        )
+
+        # Fetch all balances with pagination
+        all_balances = yield from self._fetch_base_safe_balances_with_pagination(
+            safe_address
+        )
+
+        balances = []
+        for balance_data in all_balances:
+            token_address = balance_data.get("tokenAddress")
+            token_info = balance_data.get("token")
+            balance = balance_data.get("balance", "0")
+
+            if token_address is None:
+                # Native ETH
+                balances.append(
+                    {
+                        "asset_symbol": "ETH",
+                        "asset_type": "native",
+                        "address": to_checksum_address(ZERO_ADDRESS),
+                        "balance": int(balance),
+                    }
+                )
+            else:
+                # ERC-20 token
+                if token_info:
+                    if (
+                        token_address
+                        == "0xfAf87e196A29969094bE35DfB0Ab9d0b8518dB84"  # nosec B105
+                    ):
+                        continue
+
+                    balances.append(
+                        {
+                            "asset_symbol": token_info.get("symbol", "UNKNOWN"),
+                            "asset_type": "erc_20",
+                            "address": to_checksum_address(token_address),
+                            "balance": int(balance),
+                        }
+                    )
+
+        self.context.logger.info(
+            f"Retrieved {len(balances)} token balances from Base SafeApi"
+        )
+        return balances
+
+    def _fetch_base_safe_balances_with_pagination(
+        self, safe_address: str
+    ) -> Generator[None, None, List[Dict]]:
+        """Fetch all balances from Base SafeApi with pagination support"""
+        all_balances = []
+        offset = 0
+        limit = 100  # Default page size
+
+        while True:
+            url = f"{self.params.base_safe_api_base_url}/{safe_address}/balances/"
+            params = f"?exclude_spam=true&limit={limit}&offset={offset}"
+            endpoint = url + params
+
+            self.context.logger.info(
+                f"Fetching Base SafeApi page: offset={offset}, limit={limit}"
+            )
+
+            success, response_data = yield from self._request_with_retries(
+                endpoint=endpoint,
+                method="GET",
+                headers={
+                    "Accept": "application/json",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+                rate_limited_callback=lambda: None,  # No specific rate limit callback for SafeApi
+                max_retries=MAX_RETRIES_FOR_API_CALL,
+                retry_wait=2,
+            )
+
+            if not success:
+                self.context.logger.error(
+                    f"Failed to fetch Base SafeApi data: {response_data}"
+                )
+                break
+
+            results = response_data.get("results", [])
+            if not results:
+                self.context.logger.info("No more results from Base SafeApi")
+                break
+
+            all_balances.extend(results)
+            self.context.logger.info(
+                f"Fetched {len(results)} balances from Base SafeApi (total: {len(all_balances)})"
+            )
+
+            # Check if we've reached the end
+            if len(results) < limit:
+                self.context.logger.info("Reached end of Base SafeApi results")
+                break
+
+            offset += limit
+
+        self.context.logger.info(
+            f"Total Base SafeApi balances fetched: {len(all_balances)}"
+        )
+        return all_balances
+
     def _fetch_safe_balances_with_pagination(
         self, safe_address: str
     ) -> Generator[None, None, List[Dict]]:

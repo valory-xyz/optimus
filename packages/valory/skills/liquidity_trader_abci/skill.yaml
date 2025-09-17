@@ -253,6 +253,7 @@ models:
       assets_info_filename: assets.json
       pool_info_filename: current_pool.json
       safe_api_base_url: https://safe-transaction-optimism.safe.global/api/v2/safes
+      base_safe_api_base_url: https://safe-transaction-base.safe.global/api/v2/safes
       safe_api_timeout: 30
       mode_explorer_api_base_url: https://explorer-mode-mainnet-0.t.conduit.xyz
       mode_api_timeout: 30

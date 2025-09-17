@@ -376,6 +376,7 @@ class Params(BaseParams):
             self._ensure("velo_token_contract_addresses", kwargs, str)
         )
         self.safe_api_base_url = self._ensure("safe_api_base_url", kwargs, str)
+        self.base_safe_api_base_url = self._ensure("base_safe_api_base_url", kwargs, str)
         self.safe_api_timeout = self._ensure("safe_api_timeout", kwargs, int)
         self.mode_explorer_api_base_url = self._ensure(
             "mode_explorer_api_base_url", kwargs, str

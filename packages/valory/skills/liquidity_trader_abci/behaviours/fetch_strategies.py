@@ -2073,6 +2073,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if chain == Chain.OPTIMISM.value:
                 balances = yield from self._get_optimism_balances_from_safe_api()
 
+            if chain == Chain.BASE.value:
+                balances = yield from self._get_base_balances_from_safe_api()
+
             if chain == Chain.MODE.value:
                 balances = yield from self._get_mode_balances_from_explorer_api()
 
@@ -2701,6 +2704,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info("Using Optimism-specific transfer fetching")
                 all_transfers = (
                     yield from self._fetch_all_transfers_until_date_optimism(
+                        safe_address, current_date
+                    )
+                )
+            elif chain == Chain.BASE.value:
+                self.context.logger.info("Using Base-specific transfer fetching")
+                all_transfers = (
+                    yield from self._fetch_all_transfers_until_date_base(
                         safe_address, current_date
                     )
                 )
@@ -3721,6 +3731,17 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         safe_address, current_date
                     )
                 ) or {}
+            elif chain == Chain.BASE.value:
+                all_incoming_transfers = (
+                    yield from self._fetch_all_transfers_until_date_base(
+                        safe_address, current_date
+                    )
+                ) or {}
+                all_outgoing_transfers = (
+                    yield from self._fetch_base_outgoing_transfers(
+                        safe_address, current_date
+                    )
+                ) or {}
             elif chain == Chain.MODE.value:
                 # Use new Mode-specific tracking function
                 transfers = self._track_eth_transfers_mode(safe_address, current_date)
@@ -4251,6 +4272,279 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         except Exception as e:
             self.context.logger.error(f"Error tracking Mode ETH transfers: {e}")
+            return {"incoming": {}, "outgoing": {}}
+
+    def _fetch_all_transfers_until_date_base(
+        self, address: str, end_date: str
+    ) -> Generator[None, None, Dict]:
+        """Fetch all Base transfers from the beginning until a specific date, organized by date."""
+        # Load existing unified data from kv_store
+        self.funding_events = self.read_funding_events()
+        if self.funding_events:
+            existing_base_data = self.funding_events.get("base", {})
+        else:
+            existing_base_data = {}
+
+        all_transfers_by_date = defaultdict(list)
+
+        try:
+            self.context.logger.info(
+                f"Fetching all Base transfers until {end_date}..."
+            )
+
+            # Use SafeGlobal API for Base
+            yield from self._fetch_base_transfers_safeglobal(
+                address, end_date, all_transfers_by_date, existing_base_data
+            )
+
+            # Merge with existing data and save
+            for date, transfers in all_transfers_by_date.items():
+                if date not in existing_base_data:  # Only store new dates
+                    existing_base_data[date] = transfers
+
+            # Save updated data
+            self.funding_events["base"] = existing_base_data
+            yield from self._write_kv({"funding_events": json.dumps(self.funding_events)})
+
+            self.context.logger.info(
+                f"Successfully fetched and saved Base transfers until {end_date}"
+            )
+
+            return existing_base_data
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Base transfers: {e}")
+            return existing_base_data
+
+    def _fetch_base_transfers_safeglobal(
+        self,
+        address: str,
+        end_date: str,
+        all_transfers_by_date: dict,
+        existing_data: dict,
+    ) -> Generator[None, None, None]:
+        """Fetch Base transfers using SafeGlobal API."""
+        base_url = "https://safe-transaction-base.safe.global/api/v1"
+
+        try:
+            self.context.logger.info(
+                "Fetching Base transfers using SafeGlobal API..."
+            )
+
+            # Fetch incoming transfers
+            incoming_url = f"{base_url}/safes/{address}/incoming-transfers/"
+            yield from self._fetch_base_transfers_from_url(
+                incoming_url, "incoming", all_transfers_by_date, end_date
+            )
+
+            # Fetch outgoing transfers
+            outgoing_url = f"{base_url}/safes/{address}/outgoing-transfers/"
+            yield from self._fetch_base_transfers_from_url(
+                outgoing_url, "outgoing", all_transfers_by_date, end_date
+            )
+
+        except Exception as e:
+            self.context.logger.error(f"Error fetching Base transfers: {e}")
+
+    def _fetch_base_transfers_from_url(
+        self,
+        url: str,
+        transfer_type: str,
+        all_transfers_by_date: dict,
+        end_date: str,
+    ) -> Generator[None, None, None]:
+        """Fetch Base transfers from a specific URL with pagination."""
+        transfers_url = url
+        processed_count = 0
+        seen_transfer_ids = set()
+
+        while True:
+            self.context.logger.info(
+                f"Fetching Base {transfer_type} transfers from: {transfers_url}"
+            )
+
+            success, response_json = yield from self._request_with_retries(
+                endpoint=transfers_url,
+                headers={"Accept": "application/json"},
+                rate_limited_code=429,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
+            )
+
+            if not success:
+                self.context.logger.error("Failed to fetch Base transfers")
+                break
+
+            transfers = response_json.get("results", [])
+            if not transfers:
+                break
+
+            for transfer in transfers:
+                # Parse timestamp
+                timestamp = transfer.get("executionDate")
+                if not timestamp:
+                    continue
+
+                try:
+                    # Convert timestamp to date for comparison with end_date
+                    tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    tx_date = tx_datetime.strftime("%Y-%m-%d")
+
+                    # Only process transfers until end_date
+                    if tx_date > end_date:
+                        continue
+                except (ValueError, TypeError):
+                    continue
+
+                # Deduplicate by transferId if present, otherwise transactionHash
+                unique_id = transfer.get("transferId") or transfer.get(
+                    "transactionHash", ""
+                )
+                if unique_id in seen_transfer_ids:
+                    continue
+                seen_transfer_ids.add(unique_id)
+
+                # Process the transfer
+                from_address = transfer.get("from", "")
+                transfer_type_actual = transfer.get("type", "")
+
+                # Check transfer type
+                if transfer_type_actual == "ETHER_TRANSFER":
+                    try:
+                        value_wei = int(transfer.get("value", "0") or "0")
+                        amount_eth = value_wei / 10**18
+
+                        if amount_eth <= 0:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+
+                    transfer_data = {
+                        "from_address": from_address,
+                        "to_address": transfer.get("to"),
+                        "amount_eth": amount_eth,
+                        "amount_usd": 0,  # Will be calculated later
+                        "tx_hash": transfer.get("transactionHash"),
+                        "timestamp": timestamp,
+                        "type": transfer_type,
+                        "chain": "base",
+                    }
+
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+
+            # Check for next page and advance the URL
+            cursor = response_json.get("next")
+            if not cursor:
+                break
+            transfers_url = cursor
+
+        self.context.logger.info(
+            f"Processed {processed_count} Base {transfer_type} transfers"
+        )
+
+    def _fetch_base_outgoing_transfers(
+        self, address: str, current_date: str
+    ) -> Generator[None, None, Dict]:
+        """Fetch Base outgoing transfers using SafeGlobal API."""
+        all_transfers = {"incoming": {}, "outgoing": {}}
+
+        if not address:
+            self.context.logger.warning(
+                "No address provided for fetching Base outgoing transfers"
+            )
+            return all_transfers
+
+        try:
+            # Use SafeGlobal API for Base transfers
+            base_url = "https://safe-transaction-base.safe.global/api/v1"
+            transfers_url = f"{base_url}/safes/{address}/transfers/"
+
+            processed_count = 0
+            seen_tx_ids = set()
+            while True:
+                success, response_json = yield from self._request_with_retries(
+                    endpoint=transfers_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
+
+                if not success:
+                    self.context.logger.error(
+                        f"Failed to fetch Base transfers: {response_json}"
+                    )
+                    break
+
+                results = response_json.get("results", [])
+                if not results:
+                    self.context.logger.info("No more Base transfers")
+                    break
+
+                for transfer in results:
+                    # Parse timestamp
+                    timestamp = transfer.get("executionDate")
+                    if not timestamp:
+                        continue
+
+                    try:
+                        # Convert timestamp to date for comparison with current_date
+                        tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                        tx_date = tx_datetime.strftime("%Y-%m-%d")
+
+                        if tx_date > current_date:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+
+                    # Deduplicate by transferId if present, otherwise transactionHash
+                    unique_id = transfer.get("transferId") or transfer.get(
+                        "transactionHash", ""
+                    )
+                    if unique_id in seen_tx_ids:
+                        continue
+                    seen_tx_ids.add(unique_id)
+
+                    if transfer.get("type") == "ETHER_TRANSFER":
+                        try:
+                            value_wei = int(transfer.get("value", "0") or "0")
+                            amount_eth = value_wei / 10**18
+
+                            if amount_eth <= 0:
+                                continue
+                        except (ValueError, TypeError):
+                            continue
+
+                        transfer_data = {
+                            "from_address": transfer.get("from"),
+                            "to_address": transfer.get("to"),
+                            "amount_eth": amount_eth,
+                            "amount_usd": 0,  # Will be calculated later
+                            "tx_hash": transfer.get("transactionHash"),
+                            "timestamp": timestamp,
+                            "type": "outgoing",
+                            "chain": "base",
+                        }
+
+                        if tx_date not in all_transfers["outgoing"]:
+                            all_transfers["outgoing"][tx_date] = []
+                        all_transfers["outgoing"][tx_date].append(transfer_data)
+                        processed_count += 1
+
+                # Advance pagination if available
+                cursor = response_json.get("next")
+                if not cursor:
+                    return all_transfers
+                transfers_url = cursor
+
+            self.context.logger.info(
+                f"Completed Base ETH transfers: {processed_count} transactions processed"
+            )
+            return all_transfers
+
+        except Exception as e:
+            self.context.logger.error(f"Error tracking Base ETH transfers: {e}")
             return {"incoming": {}, "outgoing": {}}
 
     def get_master_safe_address(self) -> Generator[None, None, Optional[str]]:

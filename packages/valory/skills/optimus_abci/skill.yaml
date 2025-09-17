@@ -310,6 +310,7 @@ models:
       slippage_tolerance: 0.005
       balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0x36caC20dd805d128c1a6Dd16eeA845C574b5A17C", "base":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5"}'
       safe_api_base_url: https://safe-transaction-optimism.safe.global/api/v2/safes
+      base_safe_api_base_url: https://safe-transaction-base.safe.global/api/v2/safes
       safe_api_timeout: 30
       mode_explorer_api_base_url: https://explorer-mode-mainnet-0.t.conduit.xyz
       mode_api_timeout: 30

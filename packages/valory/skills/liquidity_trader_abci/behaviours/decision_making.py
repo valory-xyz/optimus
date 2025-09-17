@@ -2608,6 +2608,13 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             )
             return True
 
+        if chain.lower() == "base":
+            self.context.logger.info(
+                "Skipping Tenderly simulation for BASE chain. "
+                "Proceeding without simulation."
+            )
+            return True
+
         safe_address = self.params.safe_contract_addresses.get(chain)
         agent_address = self.context.agent_address
         safe_tx = yield from self.get_contract_api_response(

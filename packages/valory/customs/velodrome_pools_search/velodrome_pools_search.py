@@ -30,27 +30,32 @@ VELODROME = "velodrome"
 # Chain-specific constants
 OPTIMISM_CHAIN_ID = 10
 MODE_CHAIN_ID = 34443
+BASE_CHAIN_ID = 8453
 CHAIN_NAMES = {
     OPTIMISM_CHAIN_ID: "optimism",
     MODE_CHAIN_ID: "mode",
+    BASE_CHAIN_ID: "base",
 }
 
 # Sugar contract addresses
 SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
     OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
+    BASE_CHAIN_ID: "0x51f290CCCD6a54Af00b38edDd59212dE068B8A4b",  # Base Sugar contract address
 }
 
 # RewardsSugar contract addresses
 REWARDS_SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0xD5d3ABAcB8CF075636792658EE0be8B03AF517B8",  # Mode RewardsSugar contract address (placeholder)
     OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address (same as LpSugar for now)
+    BASE_CHAIN_ID: "0x51f290CCCD6a54Af00b38edDd59212dE068B8A4b",  # Base RewardsSugar contract address (same as LpSugar for now)
 }
 
 # RPC endpoints
 RPC_ENDPOINTS = {
     MODE_CHAIN_ID: "https://mainnet.mode.network",
     OPTIMISM_CHAIN_ID: "https://mainnet.optimism.io",
+    BASE_CHAIN_ID: "https://mainnet.base.org",
 }
 
 # Simplified ABIs with only the functions needed

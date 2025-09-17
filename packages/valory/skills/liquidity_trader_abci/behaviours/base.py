@@ -99,7 +99,7 @@ MAX_STEP_COST_RATIO = 0.5
 WaitableConditionType = Generator[None, None, Any]
 HTTP_NOT_FOUND = [400, 404]
 ERC20_DECIMALS = 18
-AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus"}
+AGENT_TYPE = {"mode": "Modius", "optimism": "Optimus", "base": "Basius"}
 METRICS_NAME = "APR"
 METRICS_TYPE = "json"
 PORTFOLIO_UPDATE_INTERVAL = 3600 * 1  # 2hr
@@ -120,6 +120,7 @@ LAST_EPOCH_KEY_PREFIX = "last_processed_epoch_"
 OLAS_ADDRESSES = {
     "mode": "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9",
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
+    "base": "0x54330d28ca3357F294334BDC454a032e7f353416"
 }
 
 # Reward tokens that should be excluded from investment consideration
@@ -129,6 +130,9 @@ REWARD_TOKEN_ADDRESSES = {
     },
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
+    },
+    "base": {
+        "0x54330d28ca3357F294334BDC454a032e7f353416": "OLAS",  # OLAS on Base
     },
 }
 
@@ -211,6 +215,7 @@ class Chain(Enum):
 
     OPTIMISM = "optimism"
     MODE = "mode"
+    BASE = "base"
 
 
 THRESHOLDS = {TradingType.BALANCED.value: 0.3374, TradingType.RISKY.value: 0.2892}
@@ -254,6 +259,12 @@ WHITELISTED_ASSETS = {
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
         "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "USDGLO",
     },
+    "base": {
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": "USDC",
+        "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb": "DAI",
+        "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2": "USDT",
+        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",
+    },
 }
 
 COIN_ID_MAPPING = {
@@ -295,6 +306,11 @@ COIN_ID_MAPPING = {
         "iusdc": "ironclad-usd",
         "velo": "velodrome-finance",
     },
+    "base": {
+        "usdc": "usd-coin",
+        "aero": "aerodrome-finance",
+        "usdt": "bridged-usdt",
+    },
 }
 
 # Reward tokens that should be excluded from investment consideration
@@ -306,6 +322,10 @@ REWARD_TOKEN_ADDRESSES = {
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
         "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "XVELO",  # VELO on Optimism
+    },
+    "base": {
+        "0x54330d28ca3357F294334BDC454a032e7f353416": "OLAS",  # OLAS on Base
+         "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # AERO on Base
     },
 }
 

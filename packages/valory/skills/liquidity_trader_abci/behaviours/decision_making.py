@@ -429,7 +429,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             current_position["enter_tx_hash"] = self.synchronized_data.final_tx_hash
             self.current_positions.append(current_position)
 
-        elif action.get("dex_type") == DexType.VELODROME.value:
+        elif self.is_velodrome_or_aerodrome(action.get("dex_type")):
             is_cl_pool = action.get("is_cl_pool", False)
             if is_cl_pool:
                 # For Velodrome CL pools, we need to handle multiple positions
@@ -591,7 +591,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
                 # For Velodrome CL pools, log all the positions that were exited
                 if (
-                    dex_type == DexType.VELODROME.value
+                    self.is_velodrome_or_aerodrome(dex_type)
                     and is_cl_pool
                     and "positions" in position
                 ):
@@ -1363,8 +1363,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             if max_amounts is None:
                 return None, None, None
 
-        # Handle Velodrome-specific parameters
-        if dex_type == DexType.VELODROME.value:
+        # Handle Velodrome/Aerodrome-specific parameters
+        if self.is_velodrome_or_aerodrome(dex_type):
             if is_cl_pool:
                 # For CL pools, use the specialized method that requires token percentages
                 max_amounts_in = (
@@ -1455,7 +1455,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None, None, None
 
-        if dex_type != DexType.VELODROME.value and any(
+        if not self.is_velodrome_or_aerodrome(dex_type) and any(
             amount <= 0 or amount is None for amount in max_amounts_in
         ):
             self.context.logger.error(
@@ -1475,8 +1475,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "is_cl_pool": is_cl_pool,
         }
 
-        # Add Velodrome-specific parameters if applicable
-        if dex_type == DexType.VELODROME.value:
+        # Add Velodrome/Aerodrome-specific parameters if applicable
+        if self.is_velodrome_or_aerodrome(dex_type):
             tick_spacing = action.get("tick_spacing")
             tick_ranges = action.get("tick_ranges")
             if tick_spacing:
@@ -1655,7 +1655,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         }
 
         # Add specific parameters based on pool type
-        if dex_type == DexType.VELODROME.value:
+        if self.is_velodrome_or_aerodrome(dex_type):
             exit_pool_kwargs["is_stable"] = is_stable
             exit_pool_kwargs["is_cl_pool"] = is_cl_pool
 

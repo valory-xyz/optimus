@@ -155,6 +155,7 @@ class DexType(Enum):
     UNISWAP_V3 = "UniswapV3"
     STURDY = "Sturdy"
     VELODROME = "velodrome"
+    AERODROME = "aerodrome"
 
 
 class Action(Enum):
@@ -2506,6 +2507,10 @@ class LiquidityTraderBaseBehaviour(
 
         self.context.logger.info(f"Completed reward update for {chain}")
 
+    def is_velodrome_or_aerodrome(self, dex_type: str) -> bool:
+        """Check if the DEX type is Velodrome or Aerodrome."""
+        return dex_type in [DexType.VELODROME.value, DexType.AERODROME.value]
+
     def get_accumulated_rewards_for_token(
         self, chain: str, token_address: str
     ) -> Generator[None, None, int]:
@@ -2618,9 +2623,9 @@ class LiquidityTraderBaseBehaviour(
         if tokens:
             exit_pool_action["assets"] = [token.get("token") for token in tokens]
 
-        # Handle Velodrome CL pools with multiple positions
+        # Handle Velodrome/Aerodrome CL pools with multiple positions
         if (
-            dex_type == DexType.VELODROME.value
+            self.is_velodrome_or_aerodrome(dex_type)
             and is_cl_pool
             and "positions" in position
         ):

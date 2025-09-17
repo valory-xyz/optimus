@@ -26,6 +26,7 @@ REQUIRED_FIELDS = (
     "whitelisted_assets",
 )
 VELODROME = "velodrome"
+AERODROME = "aerodrome"
 
 # Chain-specific constants
 OPTIMISM_CHAIN_ID = 10
@@ -1316,8 +1317,10 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
         is_cl_pool = pool_type not in [0, -1]
         
         # Prepare base data including all required fields
+        # Use "aerodrome" for Base chain, "velodrome" for others
+        dex_type = AERODROME if chain_name == "base" else VELODROME
         formatted_pool = {
-            "dex_type": VELODROME,
+            "dex_type": dex_type,
             "pool_address": pool["id"],
             "pool_id": pool["id"],
             "tvl": float(pool.get("totalValueLockedUSD", 0)),

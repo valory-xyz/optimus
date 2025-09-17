@@ -566,6 +566,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             DexType.UNISWAP_V3.value: self._handle_uniswap_position,
             DexType.STURDY.value: self._handle_sturdy_position,
             DexType.VELODROME.value: self._handle_velodrome_position,
+            DexType.AERODROME.value: self._handle_velodrome_position,  # Use same handler for Aerodrome
         }
 
         # Process open positions
@@ -761,11 +762,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if position.get("dex_type") not in [
             DexType.UNISWAP_V3.value,
             DexType.VELODROME.value,
+            DexType.AERODROME.value,
         ]:
             return []
 
-        # For Velodrome positions, we only get tick ranges if it's a CL pool
-        if position.get("dex_type") == DexType.VELODROME.value and not position.get(
+        # For Velodrome/Aerodrome positions, we only get tick ranges if it's a CL pool
+        if self.is_velodrome_or_aerodrome(position.get("dex_type")) and not position.get(
             "is_cl_pool"
         ):
             return []
@@ -777,7 +779,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get current tick from pool
         contract_id = (
             VelodromeCLPoolContract.contract_id
-            if position.get("dex_type") == DexType.VELODROME.value
+            if self.is_velodrome_or_aerodrome(position.get("dex_type"))
             else UniswapV3PoolContract.contract_id
         )
 
@@ -803,7 +805,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
             )
-            if position.get("dex_type") == DexType.VELODROME.value
+            if self.is_velodrome_or_aerodrome(position.get("dex_type"))
             else self.params.uniswap_position_manager_contract_addresses.get(chain)
         )
 
@@ -816,7 +818,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         # Get contract ID for position manager
         contract_id = (
             VelodromeNonFungiblePositionManagerContract.contract_id
-            if position.get("dex_type") == DexType.VELODROME.value
+            if self.is_velodrome_or_aerodrome(position.get("dex_type"))
             else UniswapV3NonfungiblePositionManagerContract.contract_id
         )
 
@@ -914,6 +916,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 DexType.UNISWAP_V3.value: "uniswapV3",
                 DexType.STURDY.value: "sturdy",
                 DexType.VELODROME.value: "velodrome",
+                DexType.AERODROME.value: "aerodrome",
                 DexType.BALANCER.value: "balancerPool",
             }
 
@@ -1134,9 +1137,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _handle_velodrome_position(
         self, position: Dict, chain: str
     ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
-        """Handle Velodrome position processing."""
+        """Handle Velodrome/Aerodrome position processing."""
+        dex_name = "Aerodrome" if chain == "base" else "Velodrome"
         self.context.logger.info(
-            f"Calculating Velodrome position for pool {position.get('pool_address')} with token ID {position.get('token_id')}"
+            f"Calculating {dex_name} position for pool {position.get('pool_address')} with token ID {position.get('token_id')}"
         )
         user_address = self.params.safe_contract_addresses.get(chain)
         pool_address = position.get("pool_address")
@@ -1161,7 +1165,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         f"Added {token_symbol} rewards to position: {velo_rewards}"
                     )
 
-        details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
+        # Use Aerodrome for Base chain, Velodrome for others
+        dex_name = "Aerodrome" if chain == "base" else "Velodrome"
+        details = dex_name + " " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
         token_info = {
             position.get("token0"): position.get("token0_symbol"),
             position.get("token1"): position.get("token1_symbol"),
@@ -1462,7 +1468,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 pool_address, token_id, chain, position
             )
 
-        elif dex_type == DexType.VELODROME.value:
+        elif self.is_velodrome_or_aerodrome(dex_type):
             user_address = self.params.safe_contract_addresses.get(chain)
             pool_address = position.get("pool_address")
             token_id = position.get("token_id")
@@ -1483,7 +1489,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def get_user_share_value_velodrome(
         self, user_address: str, pool_address: str, token_id: int, chain: str, position
     ) -> Generator[None, None, Optional[Dict[str, Decimal]]]:
-        """Calculate the user's share value and token balances in a Velodrome pool."""
+        """Calculate the user's share value and token balances in a Velodrome/Aerodrome pool."""
         token0_address = position.get("token0")
         token1_address = position.get("token1")
         is_cl_pool = position.get("is_cl_pool", False)
@@ -1674,21 +1680,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         # Use DEX-specific calculation methods
-        if dex_type == DexType.VELODROME.value and token_id:
+        if self.is_velodrome_or_aerodrome(dex_type) and token_id:
             # For Velodrome: Use Sugar contract's principal() function for maximum accuracy
             position_manager_address = self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
                 chain
             )
             if position_manager_address:
+                dex_name = "Aerodrome" if chain == "base" else "Velodrome"
                 self.context.logger.info(
-                    "Using Velodrome Sugar contract for position calculation"
+                    f"Using {dex_name} Sugar contract for position calculation"
                 )
                 amount0, amount1 = yield from self.get_velodrome_position_principal(
                     chain, position_manager_address, token_id, sqrt_price_x96
                 )
             else:
+                dex_name = "Aerodrome" if chain == "base" else "Velodrome"
                 self.context.logger.warning(
-                    "No Velodrome position manager found, falling back to Sugar getAmountsForLiquidity"
+                    f"No {dex_name} position manager found, falling back to Sugar getAmountsForLiquidity"
                 )
                 sqrt_a = yield from self.get_velodrome_sqrt_ratio_at_tick(
                     chain, tick_lower
@@ -1702,7 +1710,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         else:
             # For Uniswap and others: Use existing tick math implementation
             self.context.logger.info(
-                "Using custom tick math for non-Velodrome position"
+                "Using custom tick math for non-Velodrome/Aerodrome position"
             )
             sqrtA = get_sqrt_ratio_at_tick(tick_lower)
             sqrtB = get_sqrt_ratio_at_tick(tick_upper)
@@ -1759,7 +1767,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 token1_address=token1_address,
                 position_manager_address=position_manager_address,
                 contract_id=VelodromeNonFungiblePositionManagerContract.contract_id,
-                dex_type=DexType.VELODROME.value,
+                dex_type=position.get("dex_type"),
                 get_position_callable="get_position",
                 position_data_key="data",
                 slot0_contract_id=VelodromeCLPoolContract.contract_id,
@@ -1832,8 +1840,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         user_token0_balance = user_share * token0_balance
         user_token1_balance = user_share * token1_balance
 
+        dex_name = "Aerodrome" if chain == "base" else "Velodrome"
         self.context.logger.info(
-            f"Velodrome Non-CL Pool Balances - "
+            f"{dex_name} Non-CL Pool Balances - "
             f"User share: {user_share}, "
             f"Token0: {user_token0_balance} {position.get('token0_symbol')}, "
             f"Token1: {user_token1_balance} {position.get('token1_symbol')}"
@@ -2355,7 +2364,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             dex_type = position.get("dex_type")
 
-            if dex_type == DexType.VELODROME.value and position.get("is_cl_pool"):
+            if self.is_velodrome_or_aerodrome(dex_type) and position.get("is_cl_pool"):
                 # For Velodrome CL pools, check all sub-positions
                 all_positions_zero = True
                 for pos in position.get("positions", []):
@@ -2369,8 +2378,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "positions"
                 ):  # Only update if there are positions
                     position["status"] = PositionStatus.CLOSED.value
+                    dex_name = "Aerodrome" if position.get("chain") == "base" else "Velodrome"
                     self.context.logger.info(
-                        f"Marked Velodrome CL position as closed due to zero liquidity in all positions: {position}"
+                        f"Marked {dex_name} CL position as closed due to zero liquidity in all positions: {position}"
                     )
             else:
                 # For all other position types
@@ -2414,7 +2424,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self._update_balancer_position(position)
             elif dex_type == DexType.UNISWAP_V3.value:
                 yield from self._update_uniswap_position(position)
-            elif dex_type == DexType.VELODROME.value:
+            elif self.is_velodrome_or_aerodrome(dex_type):
                 yield from self._update_velodrome_position(position)
             elif dex_type == DexType.STURDY.value:
                 yield from self._update_sturdy_position(position)
@@ -2505,7 +2515,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _update_velodrome_position(
         self, position: Dict[str, Any]
     ) -> Generator[None, None, None]:
-        """Update a Velodrome position."""
+        """Update a Velodrome/Aerodrome position."""
         chain = position.get("chain")
         is_cl_pool = position.get("is_cl_pool", False)
 

@@ -73,9 +73,6 @@ from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
-    DECISION_MAKING_TIMEOUT,
-    EVALUATE_STRATEGY_TIMEOUT,
-    FETCH_STRATEGIES_TIMEOUT,
     THRESHOLDS,
     TradingType,
 )
@@ -1054,12 +1051,16 @@ class HttpHandler(BaseHttpHandler):
             self.params.available_strategies,
         )
 
-        self.context.logger.info(f"validated_protocol_names: {validated_protocol_names}")
+        self.context.logger.info(
+            f"validated_protocol_names: {validated_protocol_names}"
+        )
         self.context.logger.info(f"selected_protocol_names: {selected_protocol_names}")
 
         # Enhance reasoning if protocols were filtered out
         if len(validated_protocol_names) != len(selected_protocol_names):
-            filtered_protocols = [p for p in selected_protocol_names if p not in validated_protocol_names]
+            filtered_protocols = [
+                p for p in selected_protocol_names if p not in validated_protocol_names
+            ]
             chain_info = ", ".join(self.params.target_investment_chains)
             reasoning += f"<br><br><strong>Note:</strong> The following protocols were filtered out as they are not available on the selected chains ({chain_info}): {', '.join(filtered_protocols)}. Only protocols compatible with your selected chains are included."
 

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiervqco3qbycosrnyru6ezm43pw42iikux3dowfi4flwzonqs3zna
+agent: valory/optimus:0.1.0:bafybeifdwu4hgz3glqr3eqc6ylyl3c3w4urcvudoxuo67efl7n5kydsyf4
 number_of_agents: 1
 deployment:
   agent:
@@ -123,23 +123,18 @@ public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
-    ethereum:
-      address: ${ETHEREUM_LEDGER_RPC:str:https://virtual.mainnet.rpc.tenderly.co/85a9fd10-356e-4526-b1f6-7148366bf227}
-      chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
-      poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
-      default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
     base:
-      address: ${BASE_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
+      address: ${BASE_LEDGER_RPC:str:https://mainnet.base.org}
       chain_id: ${BASE_LEDGER_CHAIN_ID:int:8453}
       poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
     optimism:
-      address: ${OPTIMISM_LEDGER_RPC:str:https://virtual.arbitrum.rpc.tenderly.co/8973f254-1594-4a82-8e26-25a10a01bf46}
+      address: ${OPTIMISM_LEDGER_RPC:str:https://mainnet.optimism.io/}
       chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:10}
       poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
     mode:
-      address: ${MODE_LEDGER_RPC:str:https://virtual.mode.rpc.tenderly.co/f1d63db5-da55-4383-bbed-54a6edbb0ee2}
+      address: ${MODE_LEDGER_RPC:str:https://mainnet.mode.network/}
       chain_id: ${MODE_LEDGER_CHAIN_ID:int:34443}
       poa_chain: ${MODE_LEDGER_IS_POA_CHAIN:bool:false}
       default_gas_price_strategy: ${MODE_LEDGER_PRICING:str:eip1559}

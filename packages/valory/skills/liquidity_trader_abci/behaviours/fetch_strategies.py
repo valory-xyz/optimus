@@ -767,9 +767,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return []
 
         # For Velodrome/Aerodrome positions, we only get tick ranges if it's a CL pool
-        if self.is_velodrome_or_aerodrome(position.get("dex_type")) and not position.get(
-            "is_cl_pool"
-        ):
+        if self.is_velodrome_or_aerodrome(
+            position.get("dex_type")
+        ) and not position.get("is_cl_pool"):
             return []
 
         pool_address = position.get("pool_address")
@@ -2378,7 +2378,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "positions"
                 ):  # Only update if there are positions
                     position["status"] = PositionStatus.CLOSED.value
-                    dex_name = "Aerodrome" if position.get("chain") == "base" else "Velodrome"
+                    dex_name = (
+                        "Aerodrome" if position.get("chain") == "base" else "Velodrome"
+                    )
                     self.context.logger.info(
                         f"Marked {dex_name} CL position as closed due to zero liquidity in all positions: {position}"
                     )
@@ -2724,10 +2726,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
             elif chain == Chain.BASE.value:
                 self.context.logger.info("Using Base-specific transfer fetching")
-                all_transfers = (
-                    yield from self._fetch_all_transfers_until_date_base(
-                        safe_address, current_date
-                    )
+                all_transfers = yield from self._fetch_all_transfers_until_date_base(
+                    safe_address, current_date
                 )
             else:
                 self.context.logger.warning(f"Unsupported chain: {chain}, skipping")
@@ -4303,9 +4303,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         all_transfers_by_date = defaultdict(list)
 
         try:
-            self.context.logger.info(
-                f"Fetching all Base transfers until {end_date}..."
-            )
+            self.context.logger.info(f"Fetching all Base transfers until {end_date}...")
 
             # Use SafeGlobal API for Base
             yield from self._fetch_base_transfers_safeglobal(
@@ -4319,7 +4317,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
             # Save updated data
             self.funding_events["base"] = existing_base_data
-            yield from self._write_kv({"funding_events": json.dumps(self.funding_events)})
+            yield from self._write_kv(
+                {"funding_events": json.dumps(self.funding_events)}
+            )
 
             self.context.logger.info(
                 f"Successfully fetched and saved Base transfers until {end_date}"
@@ -4342,9 +4342,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         base_url = "https://safe-transaction-base.safe.global/api/v1"
 
         try:
-            self.context.logger.info(
-                "Fetching Base transfers using SafeGlobal API..."
-            )
+            self.context.logger.info("Fetching Base transfers using SafeGlobal API...")
 
             # Fetch incoming transfers
             incoming_url = f"{base_url}/safes/{address}/incoming-transfers/"
@@ -4402,7 +4400,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 try:
                     # Convert timestamp to date for comparison with end_date
-                    tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    tx_datetime = datetime.fromisoformat(
+                        timestamp.replace("Z", "+00:00")
+                    )
                     tx_date = tx_datetime.strftime("%Y-%m-%d")
 
                     # Only process transfers until end_date
@@ -4505,7 +4505,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                     try:
                         # Convert timestamp to date for comparison with current_date
-                        tx_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                        tx_datetime = datetime.fromisoformat(
+                            timestamp.replace("Z", "+00:00")
+                        )
                         tx_date = tx_datetime.strftime("%Y-%m-%d")
 
                         if tx_date > current_date:

@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
   dialogues.py: bafybeifojr2urrwkm6rpm3wbytvcy54ks7x7qashwphyrlkrnaem6jaswy
   fsm_specification.yaml: bafybeigs27k3cmcgnu4w5j72vgp2uqbmt3c4zgsw55epm577bkm3yosulu
-  handlers.py: bafybeiggozxmbnq2g53kt6jklzekybwazzhsibluhc5ngpesjd6txsmozm
+  handlers.py: bafybeid5qf2bnxdyt6rzczqzayknbuzxu6qufn4znmybao4nzmzkzoioom
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agent-agentsfun-logo-Cl82UKSm.png: bafybeia3nla5pruiurpwvzex6bbsgset4k2foerma2iwy5zxmtjidur454
@@ -113,7 +113,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
-- valory/liquidity_trader_abci:0.1.0:bafybeic7diwrsechnfl47jsjc2uctcjzllybbrzzfhgi44omdrygv4w3ty
+- valory/liquidity_trader_abci:0.1.0:bafybeidppyo5pkhwqvpfycvp7joii7ufz3usr7l6clw35ae2orihizkf6q
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 behaviours:
   main:
@@ -303,12 +303,17 @@ models:
       staking_subgraph_endpoints: '{"mode": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/Fe6oYUKbSGP7a16NowseTU82MVG9D2xWbBUCz4MPB4d4",
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE",
         "base": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
-      velodrome_slipstream_helper_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202", "base":"0x0AD09A66af0154a84e86F761313d02d0abB6edd5"}'
-      velodrome_voter_contract_addresses: '{"optimism":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123", "base":"0x16613524e02ad97eDfeF371bC883F2F5d6C480A5"}'
-      velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8", "base":"0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E"}'
-      velo_token_contract_addresses: '{"optimism":"0x9560e827af36c94d2ac33a39bce1fe78631088db","mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81", "base":"0x940181a94A35A4569E4529A3CDfB74e38FD98631"}'
+      velodrome_slipstream_helper_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202",
+        "base":"0x0AD09A66af0154a84e86F761313d02d0abB6edd5"}'
+      velodrome_voter_contract_addresses: '{"optimism":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123",
+        "base":"0x16613524e02ad97eDfeF371bC883F2F5d6C480A5"}'
+      velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8",
+        "base":"0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E"}'
+      velo_token_contract_addresses: '{"optimism":"0x9560e827af36c94d2ac33a39bce1fe78631088db","mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81",
+        "base":"0x940181a94A35A4569E4529A3CDfB74e38FD98631"}'
       slippage_tolerance: 0.005
-      balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0x36caC20dd805d128c1a6Dd16eeA845C574b5A17C", "base":"0x300Ab2038EAc391f26D9F895dc61F8F66a548833"}'
+      balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0x36caC20dd805d128c1a6Dd16eeA845C574b5A17C",
+        "base":"0x300Ab2038EAc391f26D9F895dc61F8F66a548833"}'
       safe_api_base_url: https://safe-transaction-optimism.safe.global/api/v2/safes
       base_safe_api_base_url: https://safe-transaction-base.safe.global/api/v2/safes
       safe_api_timeout: 30

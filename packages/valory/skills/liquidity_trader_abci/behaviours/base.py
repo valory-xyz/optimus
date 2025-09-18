@@ -120,7 +120,7 @@ LAST_EPOCH_KEY_PREFIX = "last_processed_epoch_"
 OLAS_ADDRESSES = {
     "mode": "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9",
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
-    "base": "0x54330d28ca3357F294334BDC454a032e7f353416"
+    "base": "0x54330d28ca3357F294334BDC454a032e7f353416",
 }
 
 # Reward tokens that should be excluded from investment consideration
@@ -326,7 +326,7 @@ REWARD_TOKEN_ADDRESSES = {
     },
     "base": {
         "0x54330d28ca3357F294334BDC454a032e7f353416": "OLAS",  # OLAS on Base
-         "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # AERO on Base
+        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",  # AERO on Base
     },
 }
 
@@ -470,6 +470,9 @@ class LiquidityTraderBaseBehaviour(
             elif chain == Chain.MODE.value:
                 # Use Mode Explorer API for Mode
                 balances = yield from self._get_mode_balances_from_explorer_api()
+            elif chain == Chain.BASE.value:
+                # Use Mode Explorer API for Mode
+                balances = yield from self._get_base_balances_from_safe_api()
 
             if balances:
                 all_balances[chain].extend(balances)
@@ -2730,6 +2733,7 @@ class LiquidityTraderBaseBehaviour(
             usdc_addresses = {
                 "mode": "0xd988097fb8612cc24eeC14542bC03424c656005f",
                 "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                "base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
             }
 
             usdc_address = usdc_addresses.get(chain.lower())

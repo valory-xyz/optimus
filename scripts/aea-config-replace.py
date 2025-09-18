@@ -58,6 +58,11 @@ def main() -> None:
                 "address"
             ] = f"${{str:{os.getenv('MODE_LEDGER_RPC')}}}"
 
+        if ledger_config_index is not None and os.getenv("BASE_LEDGER_RPC"):
+            config[ledger_config_index]["config"]["ledger_apis"]["mode"][
+                "address"
+            ] = f"${{str:{os.getenv('BASE_LEDGER_RPC')}}}"
+
         # Find the optimus_abci skill config (should be at index 7 based on the YAML structure)
         skill_config_index = None
         for i, doc in enumerate(config):

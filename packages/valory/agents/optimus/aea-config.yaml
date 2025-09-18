@@ -50,8 +50,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
-- valory/liquidity_trader_abci:0.1.0:bafybeic7diwrsechnfl47jsjc2uctcjzllybbrzzfhgi44omdrygv4w3ty
-- valory/optimus_abci:0.1.0:bafybeieaz3kusipggwoi4qf7qifnt4ft5vu3dtdvi4dgx5yfeca62ayfkm
+- valory/liquidity_trader_abci:0.1.0:bafybeidppyo5pkhwqvpfycvp7joii7ufz3usr7l6clw35ae2orihizkf6q
+- valory/optimus_abci:0.1.0:bafybeiehgcfbko3b7excst3njog32wipnrh7kax6gtwe3wbb6vi52jetia
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
@@ -121,13 +121,8 @@ public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
-    ethereum:
-      address: ${str:https://virtual.mainnet.rpc.tenderly.co/85a9fd10-356e-4526-b1f6-7148366bf227}
-      chain_id: ${int:1}
-      poa_chain: ${bool:false}
-      default_gas_price_strategy: ${str:eip1559}
     base:
-      address: ${str:https://virtual.base.rpc.tenderly.co/5d9c013b-879b-4f20-a6cc-e95dee0d109f}
+      address: ${str:https://mainnet.base.org}
       chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}

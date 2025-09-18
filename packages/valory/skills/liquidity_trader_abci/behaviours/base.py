@@ -365,6 +365,7 @@ class LiquidityTraderBaseBehaviour(
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
         self.pools[DexType.UNISWAP_V3.value] = UniswapPoolBehaviour
         self.pools[DexType.VELODROME.value] = VelodromePoolBehaviour
+        self.pools[DexType.AERODROME.value] = VelodromePoolBehaviour
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(

@@ -113,7 +113,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
-- valory/liquidity_trader_abci:0.1.0:bafybeigm6tt77jv5qvqnnolemh3zyeh6szx3ynuqu4in7ykwsgio6us7vi
+- valory/liquidity_trader_abci:0.1.0:bafybeiheqzacy4qrze57w5oyvhya3vrlisr222ckimublibzylkvelk6ca
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 behaviours:
   main:
@@ -227,7 +227,7 @@ models:
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
       multisend_address: '0x80f29f3f7e10C80CBcF11A74B1AC631397C5a385'
-      velodrome_router_contract_addresses: '{"optimism":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","mode":"0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45","base":"0x6Cb442acF35158D5eDa88fe602221b67B400Be3E"}'
+      velodrome_router_contract_addresses: '{"optimism":"0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858","mode":"0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45","base":"0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43"}'
       velodrome_non_fungible_position_manager_contract_addresses: '{"optimism":"0x416b433906b1B72FA758e166e239c43d68dC6F29","base":"0x827922686190790b37229fd06084350E74485b72","mode":"0x991d5546C4B442B4c5fdc4c8B8b8d131DEB24702"}'
       tx_timeout: 10.0
       allowed_dexs:

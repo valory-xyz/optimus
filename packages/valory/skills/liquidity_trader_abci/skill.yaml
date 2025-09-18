@@ -9,12 +9,12 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeic6c77h7amnhdximi2tunqofaw675bglv4g4do7q4oof4mqa7xuuu
   behaviours/apr_population.py: bafybeiheljtqvnn3jkaat3235p2qpvtcrg4wudhezk5qb4vats7wnjwwyi
-  behaviours/base.py: bafybeicof7shug4hizhyt2fdokt3fsfjkolabuoa4cuntr4ml3ksnayuce
+  behaviours/base.py: bafybeie67sxbxfr65xleceoc5k7gy4yo4pjjxh4ukgbwpv7rm7l32or3f4
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeichv5e62ssjm7wws4ihr6vb24jzcle5l3a7fa5acvhywaed765hba
+  behaviours/decision_making.py: bafybeicrsepx5ibip5xgu6lhcdbq6b2yiiaaf72avjz2xehtgu6fkmzedu
   behaviours/evaluate_strategy.py: bafybeibgx5imvi6fceatbuw34gbbw3x2tjfc2ijza55dqdqvuldavaptky
-  behaviours/fetch_strategies.py: bafybeifygomig5rthtdf6l7p5nwqwxvrm5y675gqneuzirtqrrbykg5upm
+  behaviours/fetch_strategies.py: bafybeibnajjocpc6blf7enrvc7tez76ycinqblnlwmnxbokqce7auunb7u
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeicktc6a6qyp3gy7s24gtuyjrggjizk5alskjitjupxiatq64rd74a
+  models.py: bafybeih6uji6y33gwxpkxvucroc7otf2647ebyqkbikqhx2pbscfxvyly4
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
@@ -293,7 +293,8 @@ models:
         "optimism": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE",
         "base": "https://gateway.thegraph.com/api/5c035877a4af18d178c96afe55ed41ae/subgraphs/id/2fe1izA4aVvBHVwbPzP1BqxLkoR9ebygWM9iHXwLCnPE"}'
       velodrome_slipstream_helper_contract_addresses: '{"mode":"0xD24a61656AB0d70994Ef5F42fE11AA95c0a1d329","optimism":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202","base":"0xD45624bf2CB9f65ecbdF3067d21992b099b56202"}'
-      velodrome_voter_contract_addresses: '{"optimism":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123","base":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C" }'
+      velodrome_voter_contract_addresses: '{"optimism":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C","mode":"0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123","base":"0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C"
+        }'
       velodrome_rewards_sugar_contract_addresses: '{"optimism":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8","base":"0xb8A82F0334E43C2Eb0AB5d799036965F7bf07Ba8"}'
       velo_token_contract_addresses: '{"optimism":"0x9560e827af36c94d2ac33a39bce1fe78631088db","mode":"0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81","base":"0x940181a94A35A4569E4529A3CDfB74e38FD98631"}'
     class_name: Params

@@ -118,6 +118,7 @@ PROTOCOL_DEFINITIONS = {
 }
 MODIUS_AGENT_PROFILE_PATH = "modius-ui-build"
 OPTIMUS_AGENT_PROFILE_PATH = "optimus-ui-build"
+BASE_AGENT_PROFILE_PATH = "base-ui-build"
 
 OK_CODE = 200
 NOT_FOUND_CODE = 404
@@ -325,11 +326,16 @@ class HttpHandler(BaseHttpHandler):
             chain_strategies = self.context.params.available_strategies.get(chain, [])
             self.available_strategies.extend(chain_strategies)
 
-        self.agent_profile_path = (
-            OPTIMUS_AGENT_PROFILE_PATH
-            if self.context.params.target_investment_chains[0] == "optimism"
-            else MODIUS_AGENT_PROFILE_PATH
-        )
+        if self.context.params.target_investment_chains[0] == "optimism":
+            self.agent_profile_path = OPTIMUS_AGENT_PROFILE_PATH
+        elif self.context.params.target_investment_chains[0] == "mode":
+            self.agent_profile_path = MODIUS_AGENT_PROFILE_PATH
+        elif self.context.params.target_investment_chains[0] == "base":
+            self.agent_profile_path = BASE_AGENT_PROFILE_PATH
+        else:
+            raise ValueError(
+                f"Unsupported target_investment_chain: {self.context.params.target_investment_chains[0]}"
+            )
 
     @property
     def synchronized_data(self) -> SynchronizedData:

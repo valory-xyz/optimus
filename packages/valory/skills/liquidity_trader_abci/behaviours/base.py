@@ -2760,6 +2760,7 @@ class LiquidityTraderBaseBehaviour(
         olas_addresses = {
             "optimism": "0xfc2e6e6bcbd49ccf3a5f029c79984372dcbfe527",
             "mode": "0xcfd1d50ce23c46d3cf6407487b2f8934e96dc8f9",
+            "base": "0x54330d28ca3357F294334BDC454a032e7f353416",
         }
         return olas_addresses.get(chain)
 

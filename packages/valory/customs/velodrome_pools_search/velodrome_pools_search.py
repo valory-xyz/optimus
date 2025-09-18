@@ -42,14 +42,14 @@ CHAIN_NAMES = {
 SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
     OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
-    BASE_CHAIN_ID: "0x51f290CCCD6a54Af00b38edDd59212dE068B8A4b",  # Base Sugar contract address
+    BASE_CHAIN_ID: "0x01cBa9e44aD356bad5e2d616357b69cb406248Ac",  # Base Sugar contract address
 }
 
 # RewardsSugar contract addresses
 REWARDS_SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0xD5d3ABAcB8CF075636792658EE0be8B03AF517B8",  # Mode RewardsSugar contract address (placeholder)
     OPTIMISM_CHAIN_ID: "0x62CCFB2496f49A80B0184AD720379B529E9152fB",  # Optimism RewardsSugar contract address (same as LpSugar for now)
-    BASE_CHAIN_ID: "0x51f290CCCD6a54Af00b38edDd59212dE068B8A4b",  # Base RewardsSugar contract address (same as LpSugar for now)
+    BASE_CHAIN_ID: "0xD4aD2EeeB3314d54212A92f4cBBE684195dEfe3E",  # Base RewardsSugar contract address (same as LpSugar for now)
 }
 
 # RPC endpoints
@@ -955,10 +955,8 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
         
         # Use the LP_SUGAR_ABI constant instead of loading from file
         abi = LP_SUGAR_ABI
-        logger.info(f"Using LP_SUGAR_ABI with {len(abi)} entries")
         
         # Create the contract instance directly
-        logger.info(f"Creating contract instance for address: {lp_sugar_address}")
         contract_instance = w3.eth.contract(address=lp_sugar_address, abi=abi)
         
         # Use direct Web3 calls
@@ -971,10 +969,8 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                 # Call the contract directly
                 logger.info(f"Calling all() function with limit={limit}, offset={offset}")
                 raw_pools = contract_instance.functions.all(limit, offset).call()
-                logger.info(f"Received {len(raw_pools)} pools from contract")
                 
                 if not raw_pools:
-                    logger.info(f"No more pools returned (offset={offset})")
                     break
                 
                 # Format the pools
@@ -1014,7 +1010,6 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                     # Only log if type is not 0 or -1 and tick is not 0
                     if pool['type'] not in [0, -1] and pool['tick'] != 0:
                         chain_name = CHAIN_NAMES.get(chain_id, "unknown").capitalize()
-                        logger.info(f"{chain_name} pool #{len(formatted_pools) + 1}: {pool['id']} type: {pool['type']} tick: {pool['tick']}")
                     if pool['tick'] == 0 and pool['type'] in [0,-1]:
                         pool['is_stable'] = True if pool['type'] == 0 else False
                     else:
@@ -1027,7 +1022,6 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                 
                 # Check if we've reached the end of available pools
                 if len(raw_pools) < limit:
-                    logger.info(f"Reached the end of available pools at offset {offset}")
                     break
                 
                 # Move to next batch

@@ -9,7 +9,7 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeic6c77h7amnhdximi2tunqofaw675bglv4g4do7q4oof4mqa7xuuu
   behaviours/apr_population.py: bafybeiheljtqvnn3jkaat3235p2qpvtcrg4wudhezk5qb4vats7wnjwwyi
-  behaviours/base.py: bafybeieggptjfr3nh5slv3crwkel73bcfgspw6lxvht4remx6sy3eqp4bu
+  behaviours/base.py: bafybeichpptwehxic4bifusvfz3kysjfz2yhvhvxbte5wtznqwwryftjzy
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeicrsepx5ibip5xgu6lhcdbq6b2yiiaaf72avjz2xehtgu6fkmzedu

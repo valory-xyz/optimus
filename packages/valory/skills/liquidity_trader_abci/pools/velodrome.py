@@ -234,9 +234,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         adjusted_amounts = max_amounts_in
 
         # Query expected amounts and apply slippage protection
-        expected_amounts = yield from self._query_add_liquidity_velodrome(
-            router_address, assets[0], assets[1], is_stable, adjusted_amounts, chain
-        )
+        expected_amounts = {"amount_a" : 0, "amount_b" : 0}
 
         if expected_amounts:
             slippage_tolerance = self.params.slippage_tolerance
@@ -571,24 +569,26 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Position allocation: {position.get('allocation', 0):.1%}, "
                 f"Amounts: {amount0_desired}/{amount1_desired}"
             )
+            
+            amount0_min = 0
+            amount1_min = 0
+            # # Calculate slippage protection for this specific position
+            # (
+            #     amount0_min,
+            #     amount1_min,
+            # ) = yield from self._calculate_slippage_protection_for_velodrome_mint(
+            #     pool_address,
+            #     position["tick_lower"],
+            #     position["tick_upper"],
+            #     [amount0_desired, amount1_desired],
+            #     chain,
+            # )
 
-            # Calculate slippage protection for this specific position
-            (
-                amount0_min,
-                amount1_min,
-            ) = yield from self._calculate_slippage_protection_for_velodrome_mint(
-                pool_address,
-                position["tick_lower"],
-                position["tick_upper"],
-                [amount0_desired, amount1_desired],
-                chain,
-            )
-
-            if amount0_min is None or amount1_min is None:
-                self.context.logger.error(
-                    f"Failed to calculate slippage protection for position {position}"
-                )
-                return None, None
+            # if amount0_min is None or amount1_min is None:
+            #     self.context.logger.error(
+            #         f"Failed to calculate slippage protection for position {position}"
+            #     )
+            #     return None, None
 
             # Call mint on the CLPoolManager contract
             mint_tx_hash = yield from self.contract_interact(

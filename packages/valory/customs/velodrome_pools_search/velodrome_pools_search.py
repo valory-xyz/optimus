@@ -42,7 +42,7 @@ CHAIN_NAMES = {
 SUGAR_CONTRACT_ADDRESSES = {
     MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
     OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
-    BASE_CHAIN_ID: "0x01cBa9e44aD356bad5e2d616357b69cb406248Ac",  # Base Sugar contract address
+    BASE_CHAIN_ID: "0x27fc745390d1f4BaF8D184FBd97748340f786634",  # Base Sugar contract address
 }
 
 # RewardsSugar contract addresses
@@ -60,99 +60,7 @@ RPC_ENDPOINTS = {
 }
 
 # Simplified ABIs with only the functions needed
-LP_SUGAR_ABI = [
-    {
-        "inputs": [
-            {"internalType": "uint256", "name": "limit", "type": "uint256"},
-            {"internalType": "uint256", "name": "offset", "type": "uint256"}
-        ],
-        "name": "all",
-        "outputs": [
-            {
-                "components": [
-                    {"internalType": "address", "name": "id", "type": "address"},
-                    {"internalType": "string", "name": "symbol", "type": "string"},
-                    {"internalType": "uint8", "name": "decimals", "type": "uint8"},
-                    {"internalType": "uint256", "name": "liquidity", "type": "uint256"},
-                    {"internalType": "int24", "name": "type", "type": "int24"},
-                    {"internalType": "int24", "name": "tick", "type": "int24"},
-                    {"internalType": "uint160", "name": "sqrt_ratio", "type": "uint160"},
-                    {"internalType": "address", "name": "token0", "type": "address"},
-                    {"internalType": "uint256", "name": "reserve0", "type": "uint256"},
-                    {"internalType": "uint256", "name": "staked0", "type": "uint256"},
-                    {"internalType": "address", "name": "token1", "type": "address"},
-                    {"internalType": "uint256", "name": "reserve1", "type": "uint256"},
-                    {"internalType": "uint256", "name": "staked1", "type": "uint256"},
-                    {"internalType": "address", "name": "gauge", "type": "address"},
-                    {"internalType": "uint256", "name": "gauge_liquidity", "type": "uint256"},
-                    {"internalType": "bool", "name": "gauge_alive", "type": "bool"},
-                    {"internalType": "address", "name": "fee", "type": "address"},
-                    {"internalType": "address", "name": "bribe", "type": "address"},
-                    {"internalType": "address", "name": "factory", "type": "address"},
-                    {"internalType": "uint256", "name": "emissions", "type": "uint256"},
-                    {"internalType": "address", "name": "emissions_token", "type": "address"},
-                    {"internalType": "uint256", "name": "pool_fee", "type": "uint256"},
-                    {"internalType": "uint256", "name": "unstaked_fee", "type": "uint256"},
-                    {"internalType": "uint256", "name": "token0_fees", "type": "uint256"},
-                    {"internalType": "uint256", "name": "token1_fees", "type": "uint256"},
-                    {"internalType": "address", "name": "nfpm", "type": "address"},
-                    {"internalType": "address", "name": "alm", "type": "address"},
-                    {"internalType": "address", "name": "root", "type": "address"}
-                ],
-                "internalType": "struct LpSugar.Pool[]",
-                "name": "",
-                "type": "tuple[]"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "address", "name": "lp", "type": "address"}
-        ],
-        "name": "byAddress",
-        "outputs": [
-            {
-                "components": [
-                    {"internalType": "address", "name": "id", "type": "address"},
-                    {"internalType": "string", "name": "symbol", "type": "string"},
-                    {"internalType": "uint8", "name": "decimals", "type": "uint8"},
-                    {"internalType": "uint256", "name": "liquidity", "type": "uint256"},
-                    {"internalType": "int24", "name": "type", "type": "int24"},
-                    {"internalType": "int24", "name": "tick", "type": "int24"},
-                    {"internalType": "uint160", "name": "sqrt_ratio", "type": "uint160"},
-                    {"internalType": "address", "name": "token0", "type": "address"},
-                    {"internalType": "uint256", "name": "reserve0", "type": "uint256"},
-                    {"internalType": "uint256", "name": "staked0", "type": "uint256"},
-                    {"internalType": "address", "name": "token1", "type": "address"},
-                    {"internalType": "uint256", "name": "reserve1", "type": "uint256"},
-                    {"internalType": "uint256", "name": "staked1", "type": "uint256"},
-                    {"internalType": "address", "name": "gauge", "type": "address"},
-                    {"internalType": "uint256", "name": "gauge_liquidity", "type": "uint256"},
-                    {"internalType": "bool", "name": "gauge_alive", "type": "bool"},
-                    {"internalType": "address", "name": "fee", "type": "address"},
-                    {"internalType": "address", "name": "bribe", "type": "address"},
-                    {"internalType": "address", "name": "factory", "type": "address"},
-                    {"internalType": "uint256", "name": "emissions", "type": "uint256"},
-                    {"internalType": "address", "name": "emissions_token", "type": "address"},
-                    {"internalType": "uint256", "name": "pool_fee", "type": "uint256"},
-                    {"internalType": "uint256", "name": "unstaked_fee", "type": "uint256"},
-                    {"internalType": "uint256", "name": "token0_fees", "type": "uint256"},
-                    {"internalType": "uint256", "name": "token1_fees", "type": "uint256"},
-                    {"internalType": "address", "name": "nfpm", "type": "address"},
-                    {"internalType": "address", "name": "alm", "type": "address"},
-                    {"internalType": "address", "name": "root", "type": "address"}
-                ],
-                "internalType": "struct LpSugar.Pool",
-                "name": "",
-                "type": "tuple"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    }
-]
+LP_SUGAR_ABI = [{"inputs":[{"name":"_limit","type":"uint256"},{"name":"_offset","type":"uint256"}],"name":"forSwaps","outputs":[{"components":[{"name":"lp","type":"address"},{"name":"type","type":"int24"},{"name":"token0","type":"address"},{"name":"token1","type":"address"},{"name":"factory","type":"address"},{"name":"pool_fee","type":"uint256"}],"name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_limit","type":"uint256"},{"name":"_offset","type":"uint256"},{"name":"_account","type":"address"},{"name":"_addresses","type":"address[]"}],"name":"tokens","outputs":[{"components":[{"name":"token_address","type":"address"},{"name":"symbol","type":"string"},{"name":"decimals","type":"uint8"},{"name":"account_balance","type":"uint256"},{"name":"listed","type":"bool"}],"name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_limit","type":"uint256"},{"name":"_offset","type":"uint256"}],"name":"all","outputs":[{"components":[{"name":"lp","type":"address"},{"name":"symbol","type":"string"},{"name":"decimals","type":"uint8"},{"name":"liquidity","type":"uint256"},{"name":"type","type":"int24"},{"name":"tick","type":"int24"},{"name":"sqrt_ratio","type":"uint160"},{"name":"token0","type":"address"},{"name":"reserve0","type":"uint256"},{"name":"staked0","type":"uint256"},{"name":"token1","type":"address"},{"name":"reserve1","type":"uint256"},{"name":"staked1","type":"uint256"},{"name":"gauge","type":"address"},{"name":"gauge_liquidity","type":"uint256"},{"name":"gauge_alive","type":"bool"},{"name":"fee","type":"address"},{"name":"bribe","type":"address"},{"name":"factory","type":"address"},{"name":"emissions","type":"uint256"},{"name":"emissions_token","type":"address"},{"name":"pool_fee","type":"uint256"},{"name":"unstaked_fee","type":"uint256"},{"name":"token0_fees","type":"uint256"},{"name":"token1_fees","type":"uint256"},{"name":"nfpm","type":"address"},{"name":"alm","type":"address"},{"name":"root","type":"address"}],"name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_address","type":"address"}],"name":"byAddress","outputs":[{"components":[{"name":"lp","type":"address"},{"name":"symbol","type":"string"},{"name":"decimals","type":"uint8"},{"name":"liquidity","type":"uint256"},{"name":"type","type":"int24"},{"name":"tick","type":"int24"},{"name":"sqrt_ratio","type":"uint160"},{"name":"token0","type":"address"},{"name":"reserve0","type":"uint256"},{"name":"staked0","type":"uint256"},{"name":"token1","type":"address"},{"name":"reserve1","type":"uint256"},{"name":"staked1","type":"uint256"},{"name":"gauge","type":"address"},{"name":"gauge_liquidity","type":"uint256"},{"name":"gauge_alive","type":"bool"},{"name":"fee","type":"address"},{"name":"bribe","type":"address"},{"name":"factory","type":"address"},{"name":"emissions","type":"uint256"},{"name":"emissions_token","type":"address"},{"name":"pool_fee","type":"uint256"},{"name":"unstaked_fee","type":"uint256"},{"name":"token0_fees","type":"uint256"},{"name":"token1_fees","type":"uint256"},{"name":"nfpm","type":"address"},{"name":"alm","type":"address"},{"name":"root","type":"address"}],"name":"","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_index","type":"uint256"}],"name":"byIndex","outputs":[{"components":[{"name":"lp","type":"address"},{"name":"symbol","type":"string"},{"name":"decimals","type":"uint8"},{"name":"liquidity","type":"uint256"},{"name":"type","type":"int24"},{"name":"tick","type":"int24"},{"name":"sqrt_ratio","type":"uint160"},{"name":"token0","type":"address"},{"name":"reserve0","type":"uint256"},{"name":"staked0","type":"uint256"},{"name":"token1","type":"address"},{"name":"reserve1","type":"uint256"},{"name":"staked1","type":"uint256"},{"name":"gauge","type":"address"},{"name":"gauge_liquidity","type":"uint256"},{"name":"gauge_alive","type":"bool"},{"name":"fee","type":"address"},{"name":"bribe","type":"address"},{"name":"factory","type":"address"},{"name":"emissions","type":"uint256"},{"name":"emissions_token","type":"address"},{"name":"pool_fee","type":"uint256"},{"name":"unstaked_fee","type":"uint256"},{"name":"token0_fees","type":"uint256"},{"name":"token1_fees","type":"uint256"},{"name":"nfpm","type":"address"},{"name":"alm","type":"address"},{"name":"root","type":"address"}],"name":"","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_limit","type":"uint256"},{"name":"_offset","type":"uint256"},{"name":"_account","type":"address"}],"name":"positions","outputs":[{"components":[{"name":"id","type":"uint256"},{"name":"lp","type":"address"},{"name":"liquidity","type":"uint256"},{"name":"staked","type":"uint256"},{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"},{"name":"staked0","type":"uint256"},{"name":"staked1","type":"uint256"},{"name":"unstaked_earned0","type":"uint256"},{"name":"unstaked_earned1","type":"uint256"},{"name":"emissions_earned","type":"uint256"},{"name":"tick_lower","type":"int24"},{"name":"tick_upper","type":"int24"},{"name":"sqrt_ratio_lower","type":"uint160"},{"name":"sqrt_ratio_upper","type":"uint160"},{"name":"alm","type":"address"}],"name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_limit","type":"uint256"},{"name":"_offset","type":"uint256"},{"name":"_account","type":"address"},{"name":"_factory","type":"address"}],"name":"positionsByFactory","outputs":[{"components":[{"name":"id","type":"uint256"},{"name":"lp","type":"address"},{"name":"liquidity","type":"uint256"},{"name":"staked","type":"uint256"},{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"},{"name":"staked0","type":"uint256"},{"name":"staked1","type":"uint256"},{"name":"unstaked_earned0","type":"uint256"},{"name":"unstaked_earned1","type":"uint256"},{"name":"emissions_earned","type":"uint256"},{"name":"tick_lower","type":"int24"},{"name":"tick_upper","type":"int24"},{"name":"sqrt_ratio_lower","type":"uint160"},{"name":"sqrt_ratio_upper","type":"uint160"},{"name":"alm","type":"address"}],"name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_limit","type":"uint256"},{"name":"_offset","type":"uint256"},{"name":"_account","type":"address"}],"name":"positionsUnstakedConcentrated","outputs":[{"components":[{"name":"id","type":"uint256"},{"name":"lp","type":"address"},{"name":"liquidity","type":"uint256"},{"name":"staked","type":"uint256"},{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"},{"name":"staked0","type":"uint256"},{"name":"staked1","type":"uint256"},{"name":"unstaked_earned0","type":"uint256"},{"name":"unstaked_earned1","type":"uint256"},{"name":"emissions_earned","type":"uint256"},{"name":"tick_lower","type":"int24"},{"name":"tick_upper","type":"int24"},{"name":"sqrt_ratio_lower","type":"uint160"},{"name":"sqrt_ratio_upper","type":"uint160"},{"name":"alm","type":"address"}],"name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_wrapper","type":"address"},{"name":"_amount0","type":"uint256"},{"name":"_amount1","type":"uint256"}],"name":"almEstimateAmounts","outputs":[{"name":"","type":"uint256[3]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MAX_TOKENS","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MAX_LPS","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MAX_POSITIONS","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MAX_TOKEN_SYMBOL_LEN","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"cl_helper","outputs":[{"name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"alm_factory","outputs":[{"name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"arg0","type":"uint256"},{"name":"arg1","type":"address"}],"name":"alm_map","outputs":[{"name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"name":"_voter","type":"address"},{"name":"_registry","type":"address"},{"name":"_convertor","type":"address"},{"name":"_slipstream_helper","type":"address"},{"name":"_alm_factory","type":"address"}],"outputs":[],"stateMutability":"nonpayable","type":"constructor"}]
 
 REWARDS_SUGAR_ABI = [
     {
@@ -188,7 +96,7 @@ REWARDS_SUGAR_ABI = [
 
 # Cache storage with timestamps - optimized TTLs
 CACHE = {
-    "pools": {"data": {}, "timestamp": 0, "ttl": 3600},     # 1 hour for pool data
+    "pools": {"data": {}, "timestamp": 0, "ttl": 86400},     # 24 hours for pool data
     "tvl": {"data": {}, "timestamp": 0, "ttl": 300},        # 5 minutes for TVL data
     "connections": {"data": {}, "timestamp": 0, "ttl": 1800}, # 30 minutes for connections
     "metrics": {"data": {}, "timestamp": 0, "ttl": 1800},   # 30 minutes for metrics
@@ -1026,6 +934,7 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                 
                 # Move to next batch
                 offset += limit
+                time.sleep(2)
             except Exception as e:
                 logger.error(f"Error fetching pools batch (offset={offset}): {str(e)}")
                 break
@@ -1124,7 +1033,7 @@ def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_addre
     token0_decimals = token_decimals.get(token0_address.lower(), 18)
     token1_decimals = token_decimals.get(token1_address.lower(), 18)
     
-    logger.info(f"Using decimals - token0: {token0_decimals}, token1: {token1_decimals}")
+    logger.debug(f"Using decimals - token0: {token0_decimals}, token1: {token1_decimals}")
     
     # Adjust reserves based on decimals
     adjusted_reserve0 = reserve0_float / (10 ** token0_decimals)
@@ -1281,9 +1190,9 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
             pool["token_count"] = token_count
             pool["tvl"] = float(pool.get("totalValueLockedUSD", 0))
             qualifying_pools.append(pool)
-            logger.debug(f"Pool {pool_id} qualified - tokens: {[t['id'] for t in input_tokens]}")
+            logger.warning(f"Pool {pool_id} qualified - tokens: {[t['id'] for t in input_tokens]}")
         else:
-            logger.debug(f"Pool {pool_id} excluded - insufficient tokens ({token_count})")
+            logger.warning(f"Pool {pool_id} excluded - insufficient tokens ({token_count})")
     
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools

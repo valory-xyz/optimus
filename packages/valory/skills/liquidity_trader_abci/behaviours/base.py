@@ -1893,8 +1893,8 @@ class LiquidityTraderBaseBehaviour(
             try:
                 response_json = json.loads(response.body)
             except json.decoder.JSONDecodeError as exc:
-                self.context.logger.error(f"Exception during json loading: {exc}")
-                self.context.logger.info(f"Received response: {response}")
+                self.context.logger.debug(f"Exception during json loading: {exc}")
+                self.context.logger.debug(f"Received response: {response}")
                 response_json = {"exception": str(exc)}
 
             # Handle rate limiting as a retryable error
@@ -1905,7 +1905,7 @@ class LiquidityTraderBaseBehaviour(
                 rate_limited_callback()
                 retries += 1
                 if retries >= max_retries:
-                    self.context.logger.error(
+                    self.context.logger.warning(
                         f"Request failed after {retries} rate limit retries."
                     )
                     return False, response_json
@@ -1924,7 +1924,7 @@ class LiquidityTraderBaseBehaviour(
                 )
                 retries += 1
                 if retries >= max_retries:
-                    self.context.logger.error(
+                    self.context.logger.warning(
                         f"Request failed after {retries} retries due to repeated 503 errors."
                     )
                     return False, response_json

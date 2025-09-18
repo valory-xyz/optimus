@@ -3686,6 +3686,85 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error checking address {from_address}: {e}")
             return False
 
+    def _should_include_transfer_base(
+        self, from_address: str
+    ) -> Generator[None, None, bool]:
+        """Determine if a Base transfer should be included based on from address type."""
+        if not from_address:
+            return False
+
+        # Exclude zero address
+        if from_address.lower() in [
+            "0x0000000000000000000000000000000000000000",
+            "0x0",
+            "",
+        ]:
+            return False
+
+        # Check cache first
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}base_{from_address.lower()}"
+        cached_result = yield from self._read_kv((cache_key,))
+
+        if cached_result and cached_result.get(cache_key):
+            try:
+                cached_data = json.loads(cached_result[cache_key])
+                return cached_data.get("is_eoa", False)
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        try:
+            # Use Base RPC to check if address is a contract
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "eth_getCode",
+                "params": [from_address, "latest"],
+                "id": 1,
+            }
+
+            success, result = yield from self._request_with_retries(
+                endpoint="https://mainnet.base.org",
+                method="POST",
+                body=payload,
+                rate_limited_code=429,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
+            )
+
+            if not success:
+                self.context.logger.error("Failed to check contract code")
+                return False
+
+            code = result.get("result", "0x")
+
+            # If code is '0x', it's an EOA
+            if code == "0x":
+                is_eoa = True
+            else:
+                # If it has code, check if it's a GnosisSafe
+                safe_check_url = f"https://safe-transaction-base.safe.global/api/v1/safes/{from_address}/"
+                success, _ = yield from self._request_with_retries(
+                    endpoint=safe_check_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
+                is_eoa = success
+
+            # Cache the result permanently (no TTL)
+            cache_data = {"is_eoa": is_eoa}
+            yield from self._write_kv({cache_key: json.dumps(cache_data)})
+
+            if not is_eoa:
+                self.context.logger.info(
+                    f"Excluding transfer from contract: {from_address}"
+                )
+            return is_eoa
+
+        except Exception as e:
+            self.context.logger.error(f"Error checking address {from_address}: {e}")
+            return False
+
     def _save_transfer_data_optimism(self, data: Dict) -> Generator[None, None, None]:
         """Save Optimism transfer data to kv_store."""
         yield from self._write_kv({"optimism_transfer_data": json.dumps(data)})
@@ -3753,7 +3832,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                 ) or {}
                 all_outgoing_transfers = (
-                    yield from self._fetch_base_outgoing_transfers(
+                    yield from self._fetch_outgoing_transfers_until_date_base(
                         safe_address, current_date
                     )
                 ) or {}
@@ -4328,7 +4407,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return existing_base_data
 
         except Exception as e:
-            self.context.logger.error(f"Error fetching Base transfers: {e}")
+            self.context.logger.debug(f"Error fetching Base transfers: {e}")
             return existing_base_data
 
     def _fetch_base_transfers_safeglobal(
@@ -4357,7 +4436,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
         except Exception as e:
-            self.context.logger.error(f"Error fetching Base transfers: {e}")
+            self.context.logger.debug(f"Error fetching Base transfers: {e}")
 
     def _fetch_base_transfers_from_url(
         self,
@@ -4385,7 +4464,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
 
             if not success:
-                self.context.logger.error("Failed to fetch Base transfers")
+                self.context.logger.debug("Failed to fetch Base transfers")
                 break
 
             transfers = response_json.get("results", [])
@@ -4424,7 +4503,45 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 transfer_type_actual = transfer.get("type", "")
 
                 # Check transfer type
-                if transfer_type_actual == "ETHER_TRANSFER":
+                if transfer_type_actual == "ERC20_TRANSFER":
+                    # Token transfer
+                    token_info = transfer.get("tokenInfo", {})
+                    token_address = transfer.get("tokenAddress", "")
+                    if not token_info:
+                        if token_address:
+                            decimals = yield from self._get_token_decimals(
+                                "base", token_address
+                            )
+                            symbol = yield from self._get_token_symbol(
+                                "base", token_address
+                            )
+                        else:
+                            continue
+                    else:
+                        symbol = token_info.get("symbol", "Unknown")
+                        decimals = int(token_info.get("decimals", 18) or 18)
+
+                    if symbol.lower() != "usdc":
+                        continue
+
+                    value_raw = int(transfer.get("value", "0") or "0")
+                    amount = value_raw / (10**decimals)
+
+                    transfer_data = {
+                        "from_address": from_address,
+                        "amount": amount,
+                        "token_address": token_address,
+                        "symbol": symbol,
+                        "timestamp": timestamp,
+                        "tx_hash": transfer.get("transactionHash", ""),
+                        "type": "token",
+                    }
+
+                    all_transfers_by_date[tx_date].append(transfer_data)
+                    processed_count += 1
+
+                elif transfer_type_actual == "ETHER_TRANSFER":
+                    # ETH transfer
                     try:
                         value_wei = int(transfer.get("value", "0") or "0")
                         amount_eth = value_wei / 10**18
@@ -4458,11 +4575,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             f"Processed {processed_count} Base {transfer_type} transfers"
         )
 
-    def _fetch_base_outgoing_transfers(
-        self, address: str, current_date: str
+    def _fetch_outgoing_transfers_until_date_base(
+        self,
+        address: str,
+        current_date: str,
     ) -> Generator[None, None, Dict]:
-        """Fetch Base outgoing transfers using SafeGlobal API."""
-        all_transfers = {"incoming": {}, "outgoing": {}}
+        """Fetch all outgoing transfers from the safe address on Base until a specific date."""
+        all_transfers = {}
 
         if not address:
             self.context.logger.warning(
@@ -4487,9 +4606,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
                 if not success:
-                    self.context.logger.error(
-                        f"Failed to fetch Base transfers: {response_json}"
-                    )
+                    self.context.logger.debug("Failed to fetch Base transfers")
                     break
 
                 results = response_json.get("results", [])
@@ -4523,7 +4640,58 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         continue
                     seen_tx_ids.add(unique_id)
 
-                    if transfer.get("type") == "ETHER_TRANSFER":
+                    if transfer.get("type") == "ERC20_TRANSFER":
+                        # Token transfer
+                        token_info = transfer.get("tokenInfo", {})
+                        token_address = transfer.get("tokenAddress", "")
+                        if not token_info:
+                            if token_address:
+                                decimals = yield from self._get_token_decimals(
+                                    "base", token_address
+                                )
+                                symbol = yield from self._get_token_symbol(
+                                    "base", token_address
+                                )
+                            else:
+                                continue
+                        else:
+                            symbol = token_info.get("symbol", "Unknown")
+                            decimals = int(token_info.get("decimals", 18) or 18)
+
+                        if symbol.lower() != "usdc":
+                            continue
+
+                        value_raw = int(transfer.get("value", "0") or "0")
+                        amount = value_raw / (10**decimals)
+
+                        transfer_data = {
+                            "from_address": address,
+                            "amount": amount,
+                            "token_address": token_address,
+                            "symbol": symbol,
+                            "timestamp": timestamp,
+                            "tx_hash": transfer.get("transactionHash", ""),
+                            "type": "token",
+                        }
+
+                        if tx_date not in all_transfers:
+                            all_transfers[tx_date] = []
+                        all_transfers[tx_date].append(transfer_data)
+                        processed_count += 1
+
+                    elif transfer.get("type") == "ETHER_TRANSFER":
+                        # Get from address for filtering
+                        from_address = transfer.get("from")
+                        if from_address and from_address.lower() == address.lower():
+                            continue
+
+                        # Filter from address - only include EOAs and GnosisSafe contracts
+                        should_include = yield from self._should_include_transfer_base(
+                            from_address
+                        )
+                        if not should_include:
+                            continue
+
                         try:
                             value_wei = int(transfer.get("value", "0") or "0")
                             amount_eth = value_wei / 10**18
@@ -4534,19 +4702,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             continue
 
                         transfer_data = {
-                            "from_address": transfer.get("from"),
+                            "from_address": address,
                             "to_address": transfer.get("to"),
-                            "amount_eth": amount_eth,
-                            "amount_usd": 0,  # Will be calculated later
-                            "tx_hash": transfer.get("transactionHash"),
+                            "amount": amount_eth,
+                            "token_address": ZERO_ADDRESS,
+                            "symbol": "ETH",
                             "timestamp": timestamp,
-                            "type": "outgoing",
-                            "chain": "base",
+                            "tx_hash": transfer.get("transactionHash", ""),
+                            "type": "eth",
                         }
 
-                        if tx_date not in all_transfers["outgoing"]:
-                            all_transfers["outgoing"][tx_date] = []
-                        all_transfers["outgoing"][tx_date].append(transfer_data)
+                        if tx_date not in all_transfers:
+                            all_transfers[tx_date] = []
+                        all_transfers[tx_date].append(transfer_data)
                         processed_count += 1
 
                 # Advance pagination if available

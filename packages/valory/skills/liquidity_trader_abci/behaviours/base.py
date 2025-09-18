@@ -262,9 +262,7 @@ WHITELISTED_ASSETS = {
     },
     "base": {
         "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": "USDC",
-        "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb": "DAI",
-        "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2": "USDT",
-        "0x940181a94A35A4569E4529A3CDfB74e38FD98631": "AERO",
+        "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189": "oUSDT"
     },
 }
 
@@ -311,6 +309,7 @@ COIN_ID_MAPPING = {
         "usdc": "usd-coin",
         "aero": "aerodrome-finance",
         "usdt": "bridged-usdt",
+        "ousdt": "openusdt"
     },
 }
 

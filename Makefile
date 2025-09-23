@@ -158,6 +158,7 @@ build-agent-runner-mac: poetry-install  agent
 	$(shell poetry run python get_pyinstaller_dependencies.py) \
 	--onefile pyinstaller/optimus_bin.py \
 	--codesign-identity "${SIGN_ID}" \
+	--osx-entitlements-file entitlements.plist \
 	--name agent_runner_bin
 	./dist/agent_runner_bin --version
 

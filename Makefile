@@ -116,6 +116,7 @@ poetry-install:
 
 	PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring poetry install
 	PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring poetry run pip install --upgrade --force-reinstall setuptools==59.5.0  # fix for KeyError: 'setuptools._distutils.compilers'
+	PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring poetry run pip install --upgrade --force-reinstall scipy # test fix for scipy
 
 
 

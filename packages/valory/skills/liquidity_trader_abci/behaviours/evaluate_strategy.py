@@ -2330,114 +2330,114 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         relative_funds_percentage: float,
         target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
-        """Handle the case where we have all required tokens on the destination chain."""
+        """Handle the case where we have all required tokens on the destination chain with optimal allocation."""
         bridge_swap_actions = []
-        if required_tokens:
-            # Get tokens from other chains
-            other_chain_tokens = [
-                token for token in tokens if token.get("chain") != dest_chain
-            ]
 
-            # If we have tokens from other chains and required tokens
-            if other_chain_tokens and required_tokens:
-                # Distribute tokens from other chains evenly among all required tokens
-                for idx, token in enumerate(other_chain_tokens):
-                    # Get the destination token for this source token
-                    dest_token_address, dest_token_symbol = required_tokens[
-                        idx % len(required_tokens)
-                    ]
+        if not required_tokens:
+            return bridge_swap_actions
 
-                    # Calculate percentage based on target ratios for each required token
-                    token_percentage = (
-                        relative_funds_percentage
-                        * target_ratios_by_token.get(
-                            dest_token_address, 1.0 / max(1, len(required_tokens))
-                        )
-                    )
+        # Filter tokens by chain
+        dest_chain_tokens = [token for token in tokens if token.get("chain") == dest_chain]
+        other_chain_tokens = [token for token in tokens if token.get("chain") != dest_chain]
 
-                    # Add bridge action
-                    self._add_bridge_swap_action(
-                        bridge_swap_actions,
-                        token,
-                        dest_chain,
-                        dest_token_address,
-                        dest_token_symbol,
-                        token_percentage,
-                    )
+        # Create mapping of available tokens on destination chain
+        available_tokens_map = {
+            token.get("token"): token for token in dest_chain_tokens
+        }
 
-            # If both required tokens are already on the destination chain, rebalance if off target
-            try:
-                if len(required_tokens) >= 2:
-                    # Map of destination chain tokens by address
-                    dest_tokens_map = {
-                        t.get("token"): t
-                        for t in tokens
-                        if t.get("chain") == dest_chain and t.get("token")
-                    }
-                    token0_addr, token0_sym = required_tokens[0]
-                    token1_addr, token1_sym = required_tokens[1]
-                    tok0 = dest_tokens_map.get(token0_addr)
-                    tok1 = dest_tokens_map.get(token1_addr)
-                    val0 = float(tok0.get("value", 0)) if tok0 else 0.0
-                    val1 = float(tok1.get("value", 0)) if tok1 else 0.0
-                    total_val = val0 + val1
-                    if tok0 and tok1 and total_val > 0:
-                        target0 = float(target_ratios_by_token.get(token0_addr, 0.5))
-                        desired0 = total_val * target0
-                        desired1 = total_val - desired0
-                        surplus0 = max(0.0, val0 - desired0)
-                        surplus1 = max(0.0, val1 - desired1)
-                        deficit0 = max(0.0, desired0 - val0)
-                        deficit1 = max(0.0, desired1 - val1)
-
-                        # Swap from surplus token to the one with deficit, using value-based fraction
-                        # Only create swap actions if the swap value is economically feasible (>= $1 USD)
-                        MIN_SWAP_VALUE_USD = 1.0
-
-                        if surplus0 > 0 and deficit1 > 0 and val0 > 0:
-                            swap_val = min(surplus0, deficit1)
-                            if swap_val >= MIN_SWAP_VALUE_USD:
-                                fraction = min(1.0, swap_val / max(1e-12, val0))
-                                self._add_bridge_swap_action(
-                                    bridge_swap_actions,
-                                    tok0,
-                                    dest_chain,
-                                    token1_addr,
-                                    token1_sym,
-                                    fraction,
-                                )
-                                self.context.logger.info(
-                                    f"Creating swap action: {swap_val:.2f} USD from {token0_sym} to {token1_sym}"
-                                )
-                            else:
-                                self.context.logger.info(
-                                    f"Skipping small swap: {swap_val:.2f} USD from {token0_sym} to {token1_sym} "
-                                    f"(below minimum threshold of ${MIN_SWAP_VALUE_USD})"
-                                )
-                        elif surplus1 > 0 and deficit0 > 0 and val1 > 0:
-                            swap_val = min(surplus1, deficit0)
-                            if swap_val >= MIN_SWAP_VALUE_USD:
-                                fraction = min(1.0, swap_val / max(1e-12, val1))
-                                self._add_bridge_swap_action(
-                                    bridge_swap_actions,
-                                    tok1,
-                                    dest_chain,
-                                    token0_addr,
-                                    token0_sym,
-                                    fraction,
-                                )
-                                self.context.logger.info(
-                                    f"Creating swap action: {swap_val:.2f} USD from {token1_sym} to {token0_sym}"
-                                )
-                            else:
-                                self.context.logger.info(
-                                    f"Skipping small swap: {swap_val:.2f} USD from {token1_sym} to {token0_sym} "
-                                    f"(below minimum threshold of ${MIN_SWAP_VALUE_USD})"
-                                )
-            except Exception as e:
-                self.context.logger.error(
-                    f"Error during on-chain rebalance planning: {e}"
+        # Step 1: Handle tokens from other chains first
+        for token in other_chain_tokens:
+            # Distribute to required tokens based on target ratios
+            dest_token_address, dest_token_symbol = required_tokens[0]  # Use first required token
+            token_percentage = (
+                relative_funds_percentage
+                * target_ratios_by_token.get(
+                    dest_token_address, 1.0 / max(1, len(required_tokens))
                 )
+            )
+            self._add_bridge_swap_action(
+                bridge_swap_actions,
+                token,
+                dest_chain,
+                dest_token_address,
+                dest_token_symbol,
+                token_percentage,
+            )
+
+        # Step 2: Handle optimal allocation for tokens on destination chain
+        try:
+            if dest_chain_tokens:
+                # Calculate total available value on destination chain
+                total_dest_value = sum(float(token.get("value", 0)) for token in dest_chain_tokens)
+
+                if total_dest_value > 0:
+                    # Calculate target values for each required token
+                    target_values = {}
+                    for req_token_addr, req_token_symbol in required_tokens:
+                        target_ratio = target_ratios_by_token.get(req_token_addr, 1.0 / len(required_tokens))
+                        target_values[req_token_addr] = total_dest_value * target_ratio
+
+                    # Identify unnecessary tokens (not in required tokens)
+                    unnecessary_tokens = []
+                    for token in dest_chain_tokens:
+                        token_addr = token.get("token")
+                        if not any(req_addr == token_addr for req_addr, _ in required_tokens):
+                            unnecessary_tokens.append(token)
+
+                    # Step 2a: Convert all unnecessary tokens to required tokens (distributed by target ratios)
+                    if unnecessary_tokens:
+                        for token in unnecessary_tokens:
+                            # Distribute the unnecessary token across all required tokens based on target ratios
+                            for target_token_addr, target_token_symbol in required_tokens:
+                                target_ratio = target_ratios_by_token.get(target_token_addr, 1.0 / len(required_tokens))
+                                self._add_bridge_swap_action(
+                                    bridge_swap_actions,
+                                    token,
+                                    dest_chain,
+                                    target_token_addr,
+                                    target_token_symbol,
+                                    target_ratio,  # Convert based on target ratio
+                                )
+
+                    # Step 2b: Rebalance existing required tokens to achieve target ratios
+                    for token in dest_chain_tokens:
+                        token_addr = token.get("token")
+                        token_value = float(token.get("value", 0))
+
+                        # Skip if this token is not required
+                        if not any(req_addr == token_addr for req_addr, _ in required_tokens):
+                            continue
+
+                        # Find the target value for this token
+                        target_value = target_values.get(token_addr, 0)
+
+                        if token_value > target_value:
+                            # This token has surplus, need to swap excess
+                            surplus = token_value - target_value
+                            if surplus > 1.0:  # Only swap if surplus is > $1
+                                # Find a token that needs more value
+                                for other_req_addr, other_req_symbol in required_tokens:
+                                    if other_req_addr != token_addr:
+                                        other_token = available_tokens_map.get(other_req_addr)
+                                        if other_token:
+                                            other_value = float(other_token.get("value", 0))
+                                            other_target = target_values.get(other_req_addr, 0)
+                                            if other_value < other_target:
+                                                # Swap surplus to this token
+                                                swap_fraction = min(1.0, surplus / token_value)
+                                                self._add_bridge_swap_action(
+                                                    bridge_swap_actions,
+                                                    token,
+                                                    dest_chain,
+                                                    other_req_addr,
+                                                    other_req_symbol,
+                                                    swap_fraction,
+                                                )
+                                                break
+        except Exception as e:
+            self.context.logger.error(
+                f"Error during on-chain rebalance planning: {e}"
+            )
 
         return bridge_swap_actions
 
@@ -2450,85 +2450,135 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         relative_funds_percentage: float,
         target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
-        """Handle the case where we have some but not all required tokens."""
+        """Handle the case where we have some but not all required tokens with optimal allocation."""
         bridge_swap_actions = []
 
-        # First, handle tokens from other chains
-        other_chain_tokens = [
-            token for token in tokens if token.get("chain") != dest_chain
-        ]
-        for idx, token in enumerate(other_chain_tokens):
-            dest_token_address, dest_token_symbol = tokens_we_need[
-                idx % len(tokens_we_need)
-            ]
-            self._add_bridge_swap_action(
-                bridge_swap_actions,
-                token,
-                dest_chain,
-                dest_token_address,
-                dest_token_symbol,
-                relative_funds_percentage
-                * target_ratios_by_token.get(
-                    dest_token_address, 1.0 / max(1, len(required_tokens))
-                ),
-            )
+        # Filter tokens by chain
+        dest_chain_tokens = [token for token in tokens if token.get("chain") == dest_chain]
+        other_chain_tokens = [token for token in tokens if token.get("chain") != dest_chain]
 
-        # Then, handle tokens on the destination chain that need to be swapped
-        dest_chain_tokens = [
-            token for token in tokens if token.get("chain") == dest_chain
-        ]
-        for token in dest_chain_tokens:
-            # Skip if this token is already one of the required tokens
-            if any(token.get("token") == req_token for req_token, _ in required_tokens):
-                continue
+        # Create mapping of available tokens on destination chain
+        available_tokens_map = {
+            token.get("token"): token for token in dest_chain_tokens
+        }
 
-            # Swap to the first missing token
-            dest_token_address, dest_token_symbol = tokens_we_need[0]
-            self._add_bridge_swap_action(
-                bridge_swap_actions,
-                token,
-                dest_chain,
-                dest_token_address,
-                dest_token_symbol,
-                relative_funds_percentage
-                * target_ratios_by_token.get(
-                    dest_token_address, 1.0 / max(1, len(required_tokens))
-                ),
-            )
-
-        # If no actions created yet, use available required tokens to get missing ones
-        if not bridge_swap_actions:
-            available_tokens_on_dest_list = [
-                token
-                for token in dest_chain_tokens
-                if any(
-                    token.get("token") == req_token for req_token, _ in required_tokens
+        # Step 1: Handle tokens from other chains first
+        for token in other_chain_tokens:
+            # Prioritize missing tokens first
+            if tokens_we_need:
+                dest_token_address, dest_token_symbol = tokens_we_need[0]
+                token_percentage = (
+                    relative_funds_percentage
+                    * target_ratios_by_token.get(
+                        dest_token_address, 1.0 / max(1, len(required_tokens))
+                    )
                 )
-            ]
+                self._add_bridge_swap_action(
+                    bridge_swap_actions,
+                    token,
+                    dest_chain,
+                    dest_token_address,
+                    dest_token_symbol,
+                    token_percentage,
+                )
 
-            if available_tokens_on_dest_list and tokens_we_need:
-                source_token = available_tokens_on_dest_list[0]
-                for dest_token_address, dest_token_symbol in tokens_we_need:
-                    # Skip if this is the same token (no need to swap)
-                    if source_token.get("token") == dest_token_address:
+        # Step 2: Handle optimal allocation for tokens on destination chain
+        if dest_chain_tokens:
+            # Calculate total available value on destination chain
+            total_dest_value = sum(float(token.get("value", 0)) for token in dest_chain_tokens)
+
+            if total_dest_value > 0:
+                # Calculate target values for each required token
+                target_values = {}
+                for req_token_addr, req_token_symbol in required_tokens:
+                    target_ratio = target_ratios_by_token.get(req_token_addr, 1.0 / len(required_tokens))
+                    target_values[req_token_addr] = total_dest_value * target_ratio
+
+                # Identify unnecessary tokens (not in required tokens)
+                unnecessary_tokens = []
+                for token in dest_chain_tokens:
+                    token_addr = token.get("token")
+                    if not any(req_addr == token_addr for req_addr, _ in required_tokens):
+                        unnecessary_tokens.append(token)
+
+                # Step 2a: Convert all unnecessary tokens to missing required tokens (distributed by target ratios)
+                if unnecessary_tokens and tokens_we_need:
+                    for token in unnecessary_tokens:
+                        # Distribute the unnecessary token across missing required tokens based on target ratios
+                        for target_token_addr, target_token_symbol in tokens_we_need:
+                            target_ratio = target_ratios_by_token.get(target_token_addr, 1.0 / len(tokens_we_need))
+                            self._add_bridge_swap_action(
+                                bridge_swap_actions,
+                                token,
+                                dest_chain,
+                                target_token_addr,
+                                target_token_symbol,
+                                target_ratio,  # Convert based on target ratio
+                            )
+
+                # Step 2b: Handle case where we have some required tokens but need others
+                # Only convert existing required tokens if we still need more to reach target ratios
+                # This should only happen if unnecessary tokens weren't enough to reach target ratios
+                available_required_tokens = []
+                for token in dest_chain_tokens:
+                    token_addr = token.get("token")
+                    if any(req_addr == token_addr for req_addr, _ in required_tokens):
+                        available_required_tokens.append((token_addr, token))
+
+                # Only convert existing required tokens if we have no unnecessary tokens to convert
+                if available_required_tokens and tokens_we_need and not unnecessary_tokens:
+                    # Use the first available required token to get the first missing one
+                    source_token_addr, source_token = available_required_tokens[0]
+                    target_token_addr, target_token_symbol = tokens_we_need[0]
+
+                    # Skip if source and target are the same token
+                    if source_token_addr != target_token_addr:
+                        target_ratio = target_ratios_by_token.get(target_token_addr, 1.0 / len(required_tokens))
+
+                        self._add_bridge_swap_action(
+                            bridge_swap_actions,
+                            source_token,
+                            dest_chain,
+                            target_token_addr,
+                            target_token_symbol,
+                            relative_funds_percentage * target_ratio,
+                        )
+
+                # Step 2c: Rebalance existing required tokens to achieve target ratios
+                for token in dest_chain_tokens:
+                    token_addr = token.get("token")
+                    token_value = float(token.get("value", 0))
+
+                    # Skip if this token is not required
+                    if not any(req_addr == token_addr for req_addr, _ in required_tokens):
                         continue
 
-                    # Calculate percentage based on target ratios
-                    token_percentage = (
-                        relative_funds_percentage
-                        * target_ratios_by_token.get(
-                            dest_token_address, 1.0 / max(1, len(required_tokens))
-                        )
-                    )
+                    # Find the target value for this token
+                    target_value = target_values.get(token_addr, 0)
 
-                    self._add_bridge_swap_action(
-                        bridge_swap_actions,
-                        source_token,
-                        dest_chain,
-                        dest_token_address,
-                        dest_token_symbol,
-                        token_percentage,
-                    )
+                    if token_value > target_value:
+                        # This token has surplus, need to swap excess
+                        surplus = token_value - target_value
+                        if surplus > 1.0:  # Only swap if surplus is > $1
+                            # Find a token that needs more value
+                            for other_req_addr, other_req_symbol in required_tokens:
+                                if other_req_addr != token_addr:
+                                    other_token = available_tokens_map.get(other_req_addr)
+                                    if other_token:
+                                        other_value = float(other_token.get("value", 0))
+                                        other_target = target_values.get(other_req_addr, 0)
+                                        if other_value < other_target:
+                                            # Swap surplus to this token
+                                            swap_fraction = min(1.0, surplus / token_value)
+                                            self._add_bridge_swap_action(
+                                                bridge_swap_actions,
+                                                token,
+                                                dest_chain,
+                                                other_req_addr,
+                                                other_req_symbol,
+                                                swap_fraction,
+                                            )
+                                            break
 
         return bridge_swap_actions
 
@@ -2540,60 +2590,40 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         relative_funds_percentage: float,
         target_ratios_by_token: Dict[str, float],
     ) -> List[Dict[str, Any]]:
-        """Handle the case where we need all tokens."""
+        """Handle the case where we need all tokens with optimal capital allocation."""
         bridge_swap_actions = []
 
-        # Handle single source token case
-        if len(tokens) == 1:
-            token = tokens[0]
-            for dest_token_address, dest_token_symbol in required_tokens:
-                # Skip if same token on same chain
-                if (
-                    token.get("chain") == dest_chain
-                    and token.get("token") == dest_token_address
-                ):
-                    continue
+        # Filter tokens on destination chain
+        dest_chain_tokens = [token for token in tokens if token.get("chain") == dest_chain]
+        other_chain_tokens = [token for token in tokens if token.get("chain") != dest_chain]
 
-                # Allocate according to target ratios for each destination token
-                step_percentage = (
+        # Create mapping of available tokens on destination chain
+        available_tokens_map = {
+            token.get("token"): token for token in dest_chain_tokens
+        }
+
+        # Identify which required tokens we already have on destination chain
+        available_required_tokens = []
+        missing_required_tokens = []
+
+        for req_token_addr, req_token_symbol in required_tokens:
+            if req_token_addr in available_tokens_map:
+                available_required_tokens.append((req_token_addr, req_token_symbol))
+            else:
+                missing_required_tokens.append((req_token_addr, req_token_symbol))
+
+        # Step 1: Handle tokens from other chains first
+        for token in other_chain_tokens:
+            # Distribute to missing tokens first, then available ones
+            target_tokens = missing_required_tokens if missing_required_tokens else available_required_tokens
+            if target_tokens:
+                dest_token_address, dest_token_symbol = target_tokens[0]  # Use first missing token
+                token_percentage = (
                     relative_funds_percentage
                     * target_ratios_by_token.get(
                         dest_token_address, 1.0 / max(1, len(required_tokens))
                     )
                 )
-
-                self._add_bridge_swap_action(
-                    bridge_swap_actions,
-                    token,
-                    dest_chain,
-                    dest_token_address,
-                    dest_token_symbol,
-                    step_percentage,
-                )
-        else:
-            # Multiple source tokens case (unchanged)
-            tokens.sort(key=lambda x: x["token"])
-            dest_tokens = sorted(required_tokens, key=lambda x: x[0])
-
-            for idx, token in enumerate(tokens):
-                dest_token_address, dest_token_symbol = dest_tokens[
-                    idx % len(dest_tokens)
-                ]
-
-                # Skip if same token on same chain
-                if (
-                    token.get("chain") == dest_chain
-                    and token.get("token") == dest_token_address
-                ):
-                    continue
-
-                token_percentage = (
-                    relative_funds_percentage
-                    * target_ratios_by_token.get(
-                        dest_token_address, 1.0 / max(1, len(dest_tokens))
-                    )
-                )
-
                 self._add_bridge_swap_action(
                     bridge_swap_actions,
                     token,
@@ -2602,6 +2632,40 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     dest_token_symbol,
                     token_percentage,
                 )
+
+        # Step 2: Handle optimal allocation for tokens on destination chain
+        if dest_chain_tokens:
+            # Calculate total available value on destination chain
+            total_dest_value = sum(float(token.get("value", 0)) for token in dest_chain_tokens)
+
+            if total_dest_value > 0:
+                # Calculate target values for each required token
+                target_values = {}
+                for req_token_addr, req_token_symbol in required_tokens:
+                    target_ratio = target_ratios_by_token.get(req_token_addr, 1.0 / len(required_tokens))
+                    target_values[req_token_addr] = total_dest_value * target_ratio
+
+                # Identify unnecessary tokens (not in required tokens)
+                unnecessary_tokens = []
+                for token in dest_chain_tokens:
+                    token_addr = token.get("token")
+                    if not any(req_addr == token_addr for req_addr, _ in required_tokens):
+                        unnecessary_tokens.append(token)
+
+                # Step 2a: Convert all unnecessary tokens to required tokens (distributed by target ratios)
+                if unnecessary_tokens and missing_required_tokens:
+                    for token in unnecessary_tokens:
+                        # Distribute the unnecessary token across missing required tokens based on target ratios
+                        for target_token_addr, target_token_symbol in missing_required_tokens:
+                            target_ratio = target_ratios_by_token.get(target_token_addr, 1.0 / len(missing_required_tokens))
+                            self._add_bridge_swap_action(
+                                bridge_swap_actions,
+                                token,
+                                dest_chain,
+                                target_token_addr,
+                                target_token_symbol,
+                                target_ratio,  # Convert based on target ratio
+                            )
 
         return bridge_swap_actions
 

@@ -4325,7 +4325,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                 response_data = response.json()
                 transactions = response_data.get("items", [])
-                
+
                 if not transactions:
                     break
 
@@ -4339,7 +4339,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
                     try:
                         # Use the same timestamp parsing as _fetch_token_transfers_mode
-                        tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
+                        tx_datetime = self._get_datetime_from_timestamp(
+                            tx.get("timestamp")
+                        )
                         if not tx_datetime:
                             continue
 
@@ -4385,7 +4387,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                             }
 
                             # Since we're filtering for outgoing transfers, safe_address is always the sender
-                            if from_address.get("hash", "").lower() == safe_address_lower:
+                            if (
+                                from_address.get("hash", "").lower()
+                                == safe_address_lower
+                            ):
                                 # Outgoing transfer - safe_address is sender
                                 if tx_date not in all_transfers["outgoing"]:
                                     all_transfers["outgoing"][tx_date] = []

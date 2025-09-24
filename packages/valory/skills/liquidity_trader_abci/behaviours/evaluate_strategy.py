@@ -2393,7 +2393,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         # Swap from surplus token to the one with deficit, using value-based fraction
                         # Only create swap actions if the swap value is economically feasible (>= $1 USD)
                         MIN_SWAP_VALUE_USD = 1.0
-                        
+
                         if surplus0 > 0 and deficit1 > 0 and val0 > 0:
                             swap_val = min(surplus0, deficit1)
                             if swap_val >= MIN_SWAP_VALUE_USD:
@@ -2729,7 +2729,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         token_value = float(token.get("value", 0))
         swap_value = token_value * relative_funds_percentage
         MIN_SWAP_VALUE_USD = 1.0
-        
+
         if swap_value < MIN_SWAP_VALUE_USD:
             self.context.logger.info(
                 f"Skipping bridge/swap action: {swap_value:.2f} USD from {source_token_symbol} "

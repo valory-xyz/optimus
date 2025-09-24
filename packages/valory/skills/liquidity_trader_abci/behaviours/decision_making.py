@@ -3549,7 +3549,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             # Enhanced logging
             self.context.logger.info(f"TiP Calculation ({pool_type_str}):")
-            self.context.logger.info(f"Calculated days: {min_days:.1f}, Final result: {result:.1f} (min of calculated and 8 days)")
+            self.context.logger.info(
+                f"Calculated days: {min_days:.1f}, Final result: {result:.1f} (min of calculated and 8 days)"
+            )
 
             return result
 

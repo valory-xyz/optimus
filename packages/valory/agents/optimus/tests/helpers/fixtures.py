@@ -35,6 +35,17 @@ from packages.valory.agents.optimus.tests.helpers.docker import (
     OptimusNetworkDockerImage,
     MockAPIDockerImage,
 )
+from packages.valory.agents.optimus.tests.helpers.mock_servers import (
+    DEFAULT_GRAPHQL_ADDR,
+    DEFAULT_GRAPHQL_PORT,
+    DEFAULT_LIFI_ADDR,
+    DEFAULT_LIFI_PORT,
+    DEFAULT_TENDERLY_ADDR,
+    DEFAULT_TENDERLY_PORT,
+    MockGraphQLDockerImage,
+    MockLiFiDockerImage,
+    MockTenderlyDockerImage,
+)
 
 
 @pytest.mark.integration
@@ -86,5 +97,80 @@ class UseMockAPIDockerImageBaseTest:  # pylint: disable=too-few-public-methods
             client,
             addr=cls.MOCK_API_ADDRESS,
             port=cls.MOCK_API_PORT,
+        )
+        yield from launch_image(image, timeout=timeout, max_attempts=max_attempts)
+
+
+@pytest.mark.integration
+class UseMockLiFiDockerImageBaseTest:  # pylint: disable=too-few-public-methods
+    """Inherit from this class to use a mock LiFi API server."""
+
+    MOCK_LIFI_ADDRESS = DEFAULT_LIFI_ADDR
+    MOCK_LIFI_PORT = DEFAULT_LIFI_PORT
+
+    @classmethod
+    @pytest.fixture(autouse=True)
+    def _start_mock_lifi(
+        cls,
+        timeout: int = 3,
+        max_attempts: int = 200,
+    ) -> Generator:
+        """Start a Mock LiFi API instance."""
+        client = docker.from_env()
+        logging.info(f"Launching the Mock LiFi API on {cls.MOCK_LIFI_ADDRESS}:{cls.MOCK_LIFI_PORT}")
+        image = MockLiFiDockerImage(
+            client,
+            addr=cls.MOCK_LIFI_ADDRESS,
+            port=cls.MOCK_LIFI_PORT,
+        )
+        yield from launch_image(image, timeout=timeout, max_attempts=max_attempts)
+
+
+@pytest.mark.integration
+class UseMockTenderlyDockerImageBaseTest:  # pylint: disable=too-few-public-methods
+    """Inherit from this class to use a mock Tenderly API server."""
+
+    MOCK_TENDERLY_ADDRESS = DEFAULT_TENDERLY_ADDR
+    MOCK_TENDERLY_PORT = DEFAULT_TENDERLY_PORT
+
+    @classmethod
+    @pytest.fixture(autouse=True)
+    def _start_mock_tenderly(
+        cls,
+        timeout: int = 3,
+        max_attempts: int = 200,
+    ) -> Generator:
+        """Start a Mock Tenderly API instance."""
+        client = docker.from_env()
+        logging.info(f"Launching the Mock Tenderly API on {cls.MOCK_TENDERLY_ADDRESS}:{cls.MOCK_TENDERLY_PORT}")
+        image = MockTenderlyDockerImage(
+            client,
+            addr=cls.MOCK_TENDERLY_ADDRESS,
+            port=cls.MOCK_TENDERLY_PORT,
+        )
+        yield from launch_image(image, timeout=timeout, max_attempts=max_attempts)
+
+
+@pytest.mark.integration
+class UseMockGraphQLDockerImageBaseTest:  # pylint: disable=too-few-public-methods
+    """Inherit from this class to use a mock GraphQL server for subgraphs."""
+
+    MOCK_GRAPHQL_ADDRESS = DEFAULT_GRAPHQL_ADDR
+    MOCK_GRAPHQL_PORT = DEFAULT_GRAPHQL_PORT
+
+    @classmethod
+    @pytest.fixture(autouse=True)
+    def _start_mock_graphql(
+        cls,
+        timeout: int = 3,
+        max_attempts: int = 200,
+    ) -> Generator:
+        """Start a Mock GraphQL instance."""
+        client = docker.from_env()
+        logging.info(f"Launching the Mock GraphQL server on {cls.MOCK_GRAPHQL_ADDRESS}:{cls.MOCK_GRAPHQL_PORT}")
+        image = MockGraphQLDockerImage(
+            client,
+            addr=cls.MOCK_GRAPHQL_ADDRESS,
+            port=cls.MOCK_GRAPHQL_PORT,
         )
         yield from launch_image(image, timeout=timeout, max_attempts=max_attempts)

@@ -48,6 +48,9 @@ from packages.valory.agents.optimus.tests.helpers.docker import (
 from packages.valory.agents.optimus.tests.helpers.fixtures import (  # noqa: F401
     UseHardHatOptimusBaseTest,
     UseMockAPIDockerImageBaseTest,
+    UseMockLiFiDockerImageBaseTest,
+    UseMockTenderlyDockerImageBaseTest,
+    UseMockGraphQLDockerImageBaseTest,
 )
 from packages.valory.skills.registration_abci.rounds import RegistrationStartupRound
 from packages.valory.skills.reset_pause_abci.rounds import ResetAndPauseRound
@@ -64,9 +67,14 @@ STRICT_CHECK_STRINGS = (
 PACKAGES_DIR = Path(__file__).parent.parent.parent.parent.parent
 
 
+# Mock API URLs
 MOCK_COINGECKO_URL = f"{_DEFAULT_JSON_SERVER_ADDR}:{_DEFAULT_JSON_SERVER_PORT}/coingecko"
 MOCK_BALANCER_URL = f"{_DEFAULT_JSON_SERVER_ADDR}:{_DEFAULT_JSON_SERVER_PORT}/balancer"
 MOCK_TENDERLY_URL = f"{_DEFAULT_JSON_SERVER_ADDR}:{_DEFAULT_JSON_SERVER_PORT}/tenderly"
+MOCK_LIFI_URL = f"http://127.0.0.1:5000"
+MOCK_GRAPHQL_URL = f"http://127.0.0.1:4000"
+MOCK_MERKL_URL = f"{_DEFAULT_JSON_SERVER_ADDR}:{_DEFAULT_JSON_SERVER_PORT}/merkl"
+MOCK_SAFE_API_URL = f"{_DEFAULT_JSON_SERVER_ADDR}:{_DEFAULT_JSON_SERVER_PORT}/safe"
 
 
 @pytest.mark.usefixtures("ipfs_daemon")
@@ -84,8 +92,9 @@ class BaseTestEnd2EndOptimusNormalExecution(BaseTestEnd2EndExecution):
     __param_args_prefix = f"{__models_prefix}.params.args"
     __coingecko_args_prefix = f"{__models_prefix}.coingecko.args"
 
-    # Set param overrides
+    # Set param overrides for all external APIs
     extra_configs = [
+        # CoinGecko API endpoints
         {
             "dotted_path": f"{__coingecko_args_prefix}.token_price_endpoint",
             "value": f"{MOCK_COINGECKO_URL}/simple/token_price/{{asset_platform_id}}?contract_addresses={{token_address}}&vs_currencies=usd",
@@ -95,13 +104,63 @@ class BaseTestEnd2EndOptimusNormalExecution(BaseTestEnd2EndExecution):
             "value": f"{MOCK_COINGECKO_URL}/simple/price?ids={{coin_id}}&vs_currencies=usd",
         },
         {
-            "dotted_path": f"{__param_args_prefix}.balancer_graphql_endpoints",
-            "value": '{"optimism":"' + MOCK_BALANCER_URL + '/pools"}',
+            "dotted_path": f"{__coingecko_args_prefix}.historical_price_endpoint",
+            "value": f"{MOCK_COINGECKO_URL}/coins/{{coin_id}}/history?date={{date}}",
+        },
+        # LiFi API endpoints
+        {
+            "dotted_path": f"{__param_args_prefix}.lifi_advance_routes_url",
+            "value": f"{MOCK_LIFI_URL}/v1/advanced/routes",
         },
         {
-            "dotted_path": f"{__param_args_prefix}.tenderly_bundle_simulation_url",
-            "value": f"{MOCK_TENDERLY_URL}/simulation",
+            "dotted_path": f"{__param_args_prefix}.lifi_fetch_step_transaction_url",
+            "value": f"{MOCK_LIFI_URL}/v1/advanced/stepTransaction",
         },
+        {
+            "dotted_path": f"{__param_args_prefix}.lifi_check_status_url",
+            "value": f"{MOCK_LIFI_URL}/v1/status",
+        },
+        {
+            "dotted_path": f"{__param_args_prefix}.lifi_fetch_tools_url",
+            "value": f"{MOCK_LIFI_URL}/v1/tools",
+        },
+        # Tenderly API endpoints
+        {
+            "dotted_path": f"{__param_args_prefix}.tenderly_bundle_simulation_url",
+            "value": f"http://127.0.0.1:6000/api/v1/account/{{tenderly_account_slug}}/project/{{tenderly_project_slug}}/simulate-bundle",
+        },
+        {
+            "dotted_path": f"{__param_args_prefix}.tenderly_access_key",
+            "value": "test_access_key",
+        },
+        {
+            "dotted_path": f"{__param_args_prefix}.tenderly_account_slug",
+            "value": "test_account",
+        },
+        {
+            "dotted_path": f"{__param_args_prefix}.tenderly_project_slug",
+            "value": "test_project",
+        },
+        # Subgraph endpoints
+        {
+            "dotted_path": f"{__param_args_prefix}.balancer_graphql_endpoints",
+            "value": '{"optimism":"' + MOCK_GRAPHQL_URL + '/subgraphs/balancer"}',
+        },
+        # Merkl API endpoints
+        {
+            "dotted_path": f"{__param_args_prefix}.merkl_fetch_campaigns_args",
+            "value": '{"url":"' + MOCK_MERKL_URL + '/campaigns","creator":"","live":"false"}',
+        },
+        {
+            "dotted_path": f"{__param_args_prefix}.merkl_user_rewards_url",
+            "value": f"{MOCK_MERKL_URL}/userRewards",
+        },
+        # Safe API endpoints
+        {
+            "dotted_path": f"{__param_args_prefix}.safe_api_base_url",
+            "value": f"{MOCK_SAFE_API_URL}/api/v2/safes",
+        },
+        # Chain configuration
         {
             "dotted_path": f"{__param_args_prefix}.allowed_chains",
             "value": ["optimism"],
@@ -109,6 +168,15 @@ class BaseTestEnd2EndOptimusNormalExecution(BaseTestEnd2EndExecution):
         {
             "dotted_path": f"{__param_args_prefix}.target_investment_chains",
             "value": ["optimism"],
+        },
+        # Strategy configuration for testing
+        {
+            "dotted_path": f"{__param_args_prefix}.available_strategies",
+            "value": '{"optimism":["balancer_pools_search"]}',
+        },
+        {
+            "dotted_path": f"{__param_args_prefix}.selected_hyper_strategy",
+            "value": "max_apr_selection",
         },
     ]
 

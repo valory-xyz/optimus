@@ -1949,6 +1949,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             "token": "0x123",
             "token_symbol": "USDC",
             "balance": 1000,
+            "value": 1000.0,  # Add value field to meet minimum swap threshold
         }
 
         self.behaviour.current_behaviour._add_bridge_swap_action(
@@ -6745,6 +6746,7 @@ def dynamic_test_method(*args, **kwargs):
             "token": "0x789",
             "token_symbol": "DAI",
             "balance": 1000,
+            "value": 1000.0,  # Add value field to meet minimum swap threshold
         }
         dest_chain = "optimism"
         dest_token_address = "0x123"
@@ -6765,6 +6767,92 @@ def dynamic_test_method(*args, **kwargs):
         assert actions[0]["action"] == Action.FIND_BRIDGE_ROUTE.value
         assert actions[0]["from_chain"] == "optimism"
         assert actions[0]["to_chain"] == "optimism"
+
+    def test_add_bridge_swap_action_minimum_value_threshold(self) -> None:
+        """Test _add_bridge_swap_action with minimum value threshold."""
+        actions = []
+        # Test with value below minimum threshold ($1.0)
+        small_token = {
+            "chain": "optimism",
+            "token": "0x789",
+            "token_symbol": "DAI",
+            "balance": 100,
+            "value": 0.5,  # Below $1.0 threshold
+        }
+
+        self.behaviour.current_behaviour._add_bridge_swap_action(
+            actions,
+            small_token,
+            "optimism",
+            "0x123",
+            "USDC",
+            1.0,  # 100% of 0.5 = 0.5 USD
+        )
+
+        # Should not add action due to small value
+        assert len(actions) == 0
+
+        # Test with value above minimum threshold
+        large_token = {
+            "chain": "optimism",
+            "token": "0x789",
+            "token_symbol": "DAI",
+            "balance": 1000,
+            "value": 5.0,  # Above $1.0 threshold
+        }
+
+        self.behaviour.current_behaviour._add_bridge_swap_action(
+            actions,
+            large_token,
+            "optimism",
+            "0x123",
+            "USDC",
+            0.3,  # 30% of 5.0 = 1.5 USD
+        )
+
+        # Should add action
+        assert len(actions) == 1
+        assert actions[0]["action"] == Action.FIND_BRIDGE_ROUTE.value
+
+    def test_handle_all_tokens_available_minimum_swap_threshold(self) -> None:
+        """Test _handle_all_tokens_available with minimum swap threshold."""
+        # Set up tokens with small imbalance that would create small swaps
+        tokens = [
+            {
+                "token": "0xToken0",
+                "chain": "ethereum",
+                "value": 100.0,  # 100 USD
+            },
+            {
+                "token": "0xToken1",
+                "chain": "ethereum",
+                "value": 100.5,  # 100.5 USD (small surplus)
+            },
+        ]
+
+        required_tokens = [("0xToken0", "TKN0"), ("0xToken1", "TKN1")]
+        dest_chain = "ethereum"
+        relative_funds_percentage = 1.0
+        target_ratios_by_token = {
+            "0xToken0": 0.5,  # Target 50% for token0
+            "0xToken1": 0.5,  # Target 50% for token1
+        }
+
+        # Mock the _add_bridge_swap_action to track calls
+        with patch.object(
+            self.behaviour.current_behaviour, "_add_bridge_swap_action"
+        ) as mock_add_action:
+            result = self.behaviour.current_behaviour._handle_all_tokens_available(
+                tokens,
+                required_tokens,
+                dest_chain,
+                relative_funds_percentage,
+                target_ratios_by_token,
+            )
+
+            # Should not call _add_bridge_swap_action for small swaps (0.25 USD)
+            mock_add_action.assert_not_called()
+            assert isinstance(result, list)
 
     def test_build_enter_pool_action_regular_dex(self) -> None:
         """Test _build_enter_pool_action with regular DEX."""

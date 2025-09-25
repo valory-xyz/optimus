@@ -4296,7 +4296,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         safe_address: str,
         final_timestamp: int,
     ) -> Dict[str, Dict[str, List[Dict]]]:
-        """Fetch and organize ERC20 token transfers for Mode chain using the Mode explorer API."""
+        """Fetch and organize ERC20 token transfers for Mode chain using the Mode explorer API with pagination."""
         try:
             all_transfers = {"outgoing": {}}
 
@@ -4305,91 +4305,118 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             endpoint = f"{base_url}/addresses/{safe_address}/token-transfers"
             params = {"filter": "from"}  # Only fetch outgoing transfers
 
-            response = requests.get(
-                endpoint,
-                params=params,
-                headers={"Accept": "application/json"},
-                timeout=30,
-                verify=False,  # nosec B501
-            )
-
-            if response.status_code != 200:
-                self.context.logger.error(
-                    f"Failed to fetch Mode ERC20 transfers: {response.status_code}"
-                )
-                return all_transfers
-
-            response_data = response.json()
-            transactions = response_data.get("items", [])
+            has_more_pages = True
             processed_count = 0
 
-            for tx in transactions:
-                # Skip if no timestamp or value is 0
-                if (
-                    not tx.get("timestamp")
-                    or int(tx.get("total", {}).get("value", "0")) <= 0
-                ):
-                    continue
+            while has_more_pages:
+                response = requests.get(
+                    endpoint,
+                    params=params,
+                    headers={"Accept": "application/json"},
+                    timeout=30,
+                    verify=False,  # nosec B501
+                )
 
-                try:
-                    # Use the same timestamp parsing as _fetch_token_transfers_mode
-                    tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
-                    if not tx_datetime:
-                        continue
-
-                    tx_date = tx_datetime.strftime("%Y-%m-%d")
-                    current_date = datetime.fromtimestamp(final_timestamp).strftime(
-                        "%Y-%m-%d"
+                if response.status_code != 200:
+                    self.context.logger.error(
+                        f"Failed to fetch Mode ERC20 transfers: {response.status_code}"
                     )
-                    if tx_date > current_date:
+                    return all_transfers
+
+                response_data = response.json()
+                transactions = response_data.get("items", [])
+
+                if not transactions:
+                    break
+
+                for tx in transactions:
+                    # Skip if no timestamp or value is 0
+                    if (
+                        not tx.get("timestamp")
+                        or int(tx.get("total", {}).get("value", "0")) <= 0
+                    ):
                         continue
 
-                    # Get token information (Mode Explorer API format)
-                    token = tx.get("token", {})
-                    token_address = token.get("address", "")
-                    token_symbol = token.get("symbol", "Unknown")
-                    token_decimals = int(token.get("decimals", 18))
+                    try:
+                        # Use the same timestamp parsing as _fetch_token_transfers_mode
+                        tx_datetime = self._get_datetime_from_timestamp(
+                            tx.get("timestamp")
+                        )
+                        if not tx_datetime:
+                            continue
 
-                    # Convert value from raw units to token units
-                    total = tx.get("total", {})
-                    value_raw = int(total.get("value", "0"))
-                    amount = value_raw / (10**token_decimals)
+                        tx_date = tx_datetime.strftime("%Y-%m-%d")
+                        current_date = datetime.fromtimestamp(final_timestamp).strftime(
+                            "%Y-%m-%d"
+                        )
+                        if tx_date > current_date:
+                            continue
 
-                    # Get addresses (Mode Explorer API format)
-                    from_address = tx.get("from", {})
-                    to_address = tx.get("to", {})
-                    safe_address_lower = safe_address.lower()
+                        # Get token information (Mode Explorer API format)
+                        token = tx.get("token", {})
+                        token_address = token.get("address", "")
+                        token_symbol = token.get("symbol", "Unknown")
+                        token_decimals = int(token.get("decimals", 18))
 
-                    should_include = self._should_include_transfer_mode(
-                        to_address, tx, is_eth_transfer=False
-                    )
-                    if not should_include:
+                        # Convert value from raw units to token units
+                        total = tx.get("total", {})
+                        value_raw = int(total.get("value", "0"))
+                        amount = value_raw / (10**token_decimals)
+
+                        # Get addresses (Mode Explorer API format)
+                        from_address = tx.get("from", {})
+                        to_address = tx.get("to", {})
+                        safe_address_lower = safe_address.lower()
+
+                        should_include = self._should_include_transfer_mode(
+                            to_address, tx, is_eth_transfer=False
+                        )
+                        if not should_include:
+                            continue
+
+                        if token_symbol == "USDC":  # nosec B105
+                            transfer_data = {
+                                "from_address": from_address.get("hash", ""),
+                                "to_address": to_address.get("hash", ""),
+                                "amount": amount,
+                                "token_address": token_address,
+                                "symbol": token_symbol,
+                                "timestamp": tx.get("timestamp", ""),
+                                "tx_hash": tx.get("transaction_hash", ""),
+                                "type": "token",
+                            }
+
+                            # Since we're filtering for outgoing transfers, safe_address is always the sender
+                            if (
+                                from_address.get("hash", "").lower()
+                                == safe_address_lower
+                            ):
+                                # Outgoing transfer - safe_address is sender
+                                if tx_date not in all_transfers["outgoing"]:
+                                    all_transfers["outgoing"][tx_date] = []
+                                all_transfers["outgoing"][tx_date].append(transfer_data)
+                                processed_count += 1
+
+                    except (ValueError, TypeError) as e:
+                        self.context.logger.error(f"Error processing transaction: {e}")
                         continue
 
-                    if token_symbol == "USDC":  # nosec B105
-                        transfer_data = {
-                            "from_address": from_address.get("hash", ""),
-                            "to_address": to_address.get("hash", ""),
-                            "amount": amount,
-                            "token_address": token_address,
-                            "symbol": token_symbol,
-                            "timestamp": tx.get("timestamp", ""),
-                            "tx_hash": tx.get("transaction_hash", ""),
-                            "type": "token",
+                next_page_params = response_data.get("next_page_params")
+                if next_page_params:
+                    # Update params for next page
+                    params.update(
+                        {
+                            "block_number": next_page_params.get("block_number"),
+                            "index": next_page_params.get("index"),
                         }
+                    )
+                    has_more_pages = True
+                else:
+                    has_more_pages = False
 
-                        # Since we're filtering for outgoing transfers, safe_address is always the sender
-                        if from_address.get("hash", "").lower() == safe_address_lower:
-                            # Outgoing transfer - safe_address is sender
-                            if tx_date not in all_transfers["outgoing"]:
-                                all_transfers["outgoing"][tx_date] = []
-                            all_transfers["outgoing"][tx_date].append(transfer_data)
-                            processed_count += 1
-
-                except (ValueError, TypeError) as e:
-                    self.context.logger.error(f"Error processing transaction: {e}")
-                    continue
-
+            self.context.logger.info(
+                f"Completed Mode ERC20 transfers tracking: {processed_count} outgoing transfers found"
+            )
             return all_transfers
 
         except Exception as e:

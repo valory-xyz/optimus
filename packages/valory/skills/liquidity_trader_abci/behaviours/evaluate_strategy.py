@@ -2391,28 +2391,49 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         deficit1 = max(0.0, desired1 - val1)
 
                         # Swap from surplus token to the one with deficit, using value-based fraction
+                        # Only create swap actions if the swap value is economically feasible (>= $1 USD)
+                        MIN_SWAP_VALUE_USD = 1.0
+
                         if surplus0 > 0 and deficit1 > 0 and val0 > 0:
                             swap_val = min(surplus0, deficit1)
-                            fraction = min(1.0, swap_val / max(1e-12, val0))
-                            self._add_bridge_swap_action(
-                                bridge_swap_actions,
-                                tok0,
-                                dest_chain,
-                                token1_addr,
-                                token1_sym,
-                                fraction,
-                            )
+                            if swap_val >= MIN_SWAP_VALUE_USD:
+                                fraction = min(1.0, swap_val / max(1e-12, val0))
+                                self._add_bridge_swap_action(
+                                    bridge_swap_actions,
+                                    tok0,
+                                    dest_chain,
+                                    token1_addr,
+                                    token1_sym,
+                                    fraction,
+                                )
+                                self.context.logger.info(
+                                    f"Creating swap action: {swap_val:.2f} USD from {token0_sym} to {token1_sym}"
+                                )
+                            else:
+                                self.context.logger.info(
+                                    f"Skipping small swap: {swap_val:.2f} USD from {token0_sym} to {token1_sym} "
+                                    f"(below minimum threshold of ${MIN_SWAP_VALUE_USD})"
+                                )
                         elif surplus1 > 0 and deficit0 > 0 and val1 > 0:
                             swap_val = min(surplus1, deficit0)
-                            fraction = min(1.0, swap_val / max(1e-12, val1))
-                            self._add_bridge_swap_action(
-                                bridge_swap_actions,
-                                tok1,
-                                dest_chain,
-                                token0_addr,
-                                token0_sym,
-                                fraction,
-                            )
+                            if swap_val >= MIN_SWAP_VALUE_USD:
+                                fraction = min(1.0, swap_val / max(1e-12, val1))
+                                self._add_bridge_swap_action(
+                                    bridge_swap_actions,
+                                    tok1,
+                                    dest_chain,
+                                    token0_addr,
+                                    token0_sym,
+                                    fraction,
+                                )
+                                self.context.logger.info(
+                                    f"Creating swap action: {swap_val:.2f} USD from {token1_sym} to {token0_sym}"
+                                )
+                            else:
+                                self.context.logger.info(
+                                    f"Skipping small swap: {swap_val:.2f} USD from {token1_sym} to {token0_sym} "
+                                    f"(below minimum threshold of ${MIN_SWAP_VALUE_USD})"
+                                )
             except Exception as e:
                 self.context.logger.error(
                     f"Error during on-chain rebalance planning: {e}"
@@ -2702,6 +2723,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             or not source_token_symbol
         ):
             self.context.logger.error(f"Incomplete data in tokens {token}")
+            return
+
+        # Check if the swap amount is economically feasible
+        token_value = float(token.get("value", 0))
+        swap_value = token_value * relative_funds_percentage
+        MIN_SWAP_VALUE_USD = 1.0
+
+        if swap_value < MIN_SWAP_VALUE_USD:
+            self.context.logger.info(
+                f"Skipping bridge/swap action: {swap_value:.2f} USD from {source_token_symbol} "
+                f"(below minimum threshold of ${MIN_SWAP_VALUE_USD})"
+            )
             return
 
         # Only add bridge/swap action if:

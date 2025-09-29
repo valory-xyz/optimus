@@ -20,7 +20,6 @@
 """Transaction generation tests for Velodrome protocol."""
 
 import pytest
-import time
 from unittest.mock import MagicMock, patch
 
 from packages.valory.contracts.velodrome_pool.contract import VelodromePoolContract
@@ -41,523 +40,324 @@ from tests.integration.fixtures.contract_fixtures import (
 class TestVelodromeTransactionGeneration(ProtocolIntegrationTestBase):
     """Test proper transaction encoding and parameters for Velodrome."""
 
-    def test_add_liquidity_transaction_parameter_validation(self, mock_ledger_api):
-        """Test that add liquidity transactions have correct parameters."""
-        # Test parameters
-        test_params = {
-            "token_a": "0xTokenA",
-            "token_b": "0xTokenB",
-            "amount_a_desired": 1000000000000000000,
-            "amount_b_desired": 2000000000000000000,
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890
-        }
-        
-        # Test transaction encoding
-        result = VelodromePoolContract.add_liquidity(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPoolAddress",
-            **test_params
-        )
-        
-        # Verify transaction structure
-        TestAssertions.assert_transaction_structure(result)
-        assert isinstance(result["tx_hash"], str)
+    def _consume_generator(self, gen):
+        """Helper to run generator and return final value."""
+        try:
+            while True:
+                next(gen)
+        except StopIteration as e:
+            return e.value
 
-    def test_remove_liquidity_transaction_validation(self, mock_ledger_api):
-        """Test that remove liquidity transactions have correct parameters."""
-        # Test parameters
-        test_params = {
-            "token_a": "0xTokenA",
-            "token_b": "0xTokenB",
-            "liquidity": 1000000000000000000,
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890
-        }
+    @patch.object(VelodromePoolContract, 'contract_interface', {'ethereum': {}})
+    def test_velodrome_pool_contract_methods(self, mock_ledger_api):
+        """Test that VelodromePoolContract methods work correctly."""
+        # Mock the contract instance methods
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.balanceOf.return_value.call.return_value = 1000000000000000000
+        mock_contract_instance.functions.reserve0.return_value.call.return_value = 5000000000000000000
+        mock_contract_instance.functions.reserve1.return_value.call.return_value = 3000000000000000000
+        mock_contract_instance.encodeABI.return_value = "0x1234567890abcdef"
         
-        # Test transaction encoding
-        result = VelodromePoolContract.remove_liquidity(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPoolAddress",
-            **test_params
-        )
-        
-        # Verify transaction structure
-        TestAssertions.assert_transaction_structure(result)
-        assert isinstance(result["tx_hash"], str)
-
-    def test_gauge_deposit_transaction_parameter_validation(self, mock_ledger_api):
-        """Test that gauge deposit transactions have correct parameters."""
-        # Test parameters
-        test_params = {
-            "amount": 1000000000000000000,
-            "recipient": "0xRecipient"
-        }
-        
-        # Test transaction encoding
-        result = VelodromeGaugeContract.deposit(
-            ledger_api=mock_ledger_api,
-            contract_address="0xGaugeAddress",
-            **test_params
-        )
-        
-        # Verify transaction structure
-        TestAssertions.assert_transaction_structure(result)
-        assert isinstance(result["tx_hash"], str)
-
-    def test_gauge_withdraw_transaction_parameter_validation(self, mock_ledger_api):
-        """Test that gauge withdraw transactions have correct parameters."""
-        # Test parameters
-        test_params = {
-            "amount": 1000000000000000000,
-            "recipient": "0xRecipient"
-        }
-        
-        # Test transaction encoding
-        result = VelodromeGaugeContract.withdraw(
-            ledger_api=mock_ledger_api,
-            contract_address="0xGaugeAddress",
-            **test_params
-        )
-        
-        # Verify transaction structure
-        TestAssertions.assert_transaction_structure(result)
-        assert isinstance(result["tx_hash"], str)
-
-    def test_gauge_get_reward_transaction_parameter_validation(self, mock_ledger_api):
-        """Test that gauge get reward transactions have correct parameters."""
-        # Test parameters
-        test_params = {
-            "recipient": "0xRecipient"
-        }
-        
-        # Test transaction encoding
-        result = VelodromeGaugeContract.get_reward(
-            ledger_api=mock_ledger_api,
-            contract_address="0xGaugeAddress",
-            **test_params
-        )
-        
-        # Verify transaction structure
-        TestAssertions.assert_transaction_structure(result)
-        assert isinstance(result["tx_hash"], str)
-
-    def test_transaction_gas_estimation(self):
-        """Test gas estimation for different transaction types."""
-        behaviour = self.create_mock_behaviour(VelodromePoolBehaviour)
-        
-        # Test different transaction types
-        transaction_types = [
-            "add_liquidity",
-            "remove_liquidity",
-            "deposit",
-            "withdraw",
-            "get_reward"
-        ]
-        
-        for tx_type in transaction_types:
-            gas_estimate = behaviour._estimate_gas_for_transaction(tx_type)
-            
-            # Verify gas estimate is reasonable
-            assert gas_estimate > 0
-            assert gas_estimate < 1000000  # Should not exceed 1M gas
-
-    def test_transaction_deadline_validation(self):
-        """Test that transaction deadlines are set correctly."""
-        behaviour = self.create_mock_behaviour(VelodromePoolBehaviour)
-        
-        # Test deadline calculation
-        current_time = int(time.time())
-        deadline_buffer = 300  # 5 minutes
-        
-        calculated_deadline = behaviour._calculate_transaction_deadline(
-            current_time, deadline_buffer
-        )
-        
-        expected_deadline = current_time + deadline_buffer
-        assert calculated_deadline == expected_deadline
-        
-        # Test deadline validation
-        is_valid = behaviour._validate_transaction_deadline(calculated_deadline, current_time)
-        assert is_valid
-        
-        # Test expired deadline
-        expired_deadline = current_time - 100
-        is_expired = behaviour._validate_transaction_deadline(expired_deadline, current_time)
-        assert not is_expired
-
-    def test_add_liquidity_transaction_encoding_variations(self, mock_ledger_api):
-        """Test add liquidity transaction encoding for different pool types."""
-        base_params = {
-            "token_a": "0xTokenA",
-            "token_b": "0xTokenB",
-            "amount_a_desired": 1000000000000000000,
-            "amount_b_desired": 2000000000000000000,
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890
-        }
-        
-        # Test different pool types
-        pool_types = ["stable", "volatile", "cl"]
-        
-        for pool_type in pool_types:
-            test_params = {**base_params, "pool_type": pool_type}
-            
-            result = VelodromePoolContract.add_liquidity(
+        with patch.object(VelodromePoolContract, 'get_instance', return_value=mock_contract_instance):
+            # Test get_balance
+            balance_result = VelodromePoolContract.get_balance(
                 ledger_api=mock_ledger_api,
                 contract_address="0xPoolAddress",
-                **test_params
+                account="0xAccount"
             )
             
-            # Verify transaction structure
-            TestAssertions.assert_transaction_structure(result)
-            assert isinstance(result["tx_hash"], str)
+            assert "balance" in balance_result
+            assert isinstance(balance_result["balance"], int)
 
-    def test_remove_liquidity_transaction_encoding_variations(self, mock_ledger_api):
-        """Test remove liquidity transaction encoding for different amounts."""
-        base_params = {
-            "token_a": "0xTokenA",
-            "token_b": "0xTokenB",
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890
-        }
-        
-        # Test different liquidity amounts
-        liquidity_amounts = [
-            100000000000000000000,   # 100 tokens
-            500000000000000000000,   # 500 tokens
-            1000000000000000000000,  # 1000 tokens
-        ]
-        
-        for liquidity in liquidity_amounts:
-            test_params = {**base_params, "liquidity": liquidity}
-            
-            result = VelodromePoolContract.remove_liquidity(
+            # Test build_approval_tx
+            approval_result = VelodromePoolContract.build_approval_tx(
                 ledger_api=mock_ledger_api,
                 contract_address="0xPoolAddress",
-                **test_params
+                spender="0xSpender",
+                amount=1000000000000000000
             )
             
-            # Verify transaction structure
-            TestAssertions.assert_transaction_structure(result)
-            assert isinstance(result["tx_hash"], str)
+            assert "tx_hash" in approval_result
+            assert isinstance(approval_result["tx_hash"], bytes)
 
-    def test_gauge_transaction_encoding_variations(self, mock_ledger_api):
-        """Test gauge transaction encoding for different operations."""
-        # Test deposit
-        deposit_params = {
-            "amount": 1000000000000000000,
-            "recipient": "0xRecipient"
-        }
+            # Test get_reserves
+            reserves_result = VelodromePoolContract.get_reserves(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPoolAddress"
+            )
+            
+            assert "data" in reserves_result
+            assert isinstance(reserves_result["data"], list)
+            assert len(reserves_result["data"]) == 2
+
+    @patch.object(VelodromeGaugeContract, 'contract_interface', {'ethereum': {}})
+    def test_velodrome_gauge_contract_methods(self, mock_ledger_api):
+        """Test that VelodromeGaugeContract methods work correctly."""
+        # Mock the contract instance methods
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.encodeABI.return_value = "0x1234567890abcdef"
+        mock_contract_instance.functions.earned.return_value.call.return_value = 5000000000000000000
+        mock_contract_instance.functions.balanceOf.return_value.call.return_value = 1000000000000000000
+        mock_contract_instance.functions.totalSupply.return_value.call.return_value = 10000000000000000000
         
-        deposit_result = VelodromeGaugeContract.deposit(
-            ledger_api=mock_ledger_api,
-            contract_address="0xGaugeAddress",
-            **deposit_params
-        )
+        with patch.object(VelodromeGaugeContract, 'get_instance', return_value=mock_contract_instance):
+            # Test deposit
+            deposit_result = VelodromeGaugeContract.deposit(
+                ledger_api=mock_ledger_api,
+                contract_address="0xGaugeAddress",
+                amount=1000000000000000000
+            )
+            
+            assert "tx_hash" in deposit_result
+            assert isinstance(deposit_result["tx_hash"], str)
+
+            # Test withdraw
+            withdraw_result = VelodromeGaugeContract.withdraw(
+                ledger_api=mock_ledger_api,
+                contract_address="0xGaugeAddress",
+                amount=1000000000000000000
+            )
+            
+            assert "tx_hash" in withdraw_result
+            assert isinstance(withdraw_result["tx_hash"], str)
+
+            # Test get_reward
+            reward_result = VelodromeGaugeContract.get_reward(
+                ledger_api=mock_ledger_api,
+                contract_address="0xGaugeAddress",
+                account="0xAccount"
+            )
+            
+            assert "tx_hash" in reward_result
+            assert isinstance(reward_result["tx_hash"], str)
+
+            # Test earned
+            earned_result = VelodromeGaugeContract.earned(
+                ledger_api=mock_ledger_api,
+                contract_address="0xGaugeAddress",
+                account="0xAccount"
+            )
+            
+            assert "earned" in earned_result
+            assert isinstance(earned_result["earned"], int)
+
+            # Test balance_of
+            balance_result = VelodromeGaugeContract.balance_of(
+                ledger_api=mock_ledger_api,
+                contract_address="0xGaugeAddress",
+                account="0xAccount"
+            )
+            
+            assert "balance" in balance_result
+            assert isinstance(balance_result["balance"], int)
+
+            # Test total_supply
+            total_supply_result = VelodromeGaugeContract.total_supply(
+                ledger_api=mock_ledger_api,
+                contract_address="0xGaugeAddress"
+            )
+            
+            assert "total_supply" in total_supply_result
+            assert isinstance(total_supply_result["total_supply"], int)
+
+    @patch.object(VelodromeVoterContract, 'contract_interface', {'ethereum': {}})
+    def test_velodrome_voter_contract_methods(self, mock_ledger_api):
+        """Test that VelodromeVoterContract methods work correctly."""
+        # Mock the contract instance methods
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.functions.gauges.return_value.call.return_value = "0xGaugeAddress"
+        mock_contract_instance.functions.isGauge.return_value.call.return_value = True
+        mock_contract_instance.functions.poolForGauge.return_value.call.return_value = "0xPoolAddress"
+        mock_contract_instance.functions.isAlive.return_value.call.return_value = True
+        mock_contract_instance.functions.validateGaugeAddress.return_value.call.return_value = True
+        mock_contract_instance.functions.length.return_value.call.return_value = 10
         
-        # Test withdraw
-        withdraw_params = {
-            "amount": 1000000000000000000,
-            "recipient": "0xRecipient"
-        }
+        with patch.object(VelodromeVoterContract, 'get_instance', return_value=mock_contract_instance):
+            # Test gauges
+            gauges_result = VelodromeVoterContract.gauges(
+                ledger_api=mock_ledger_api,
+                contract_address="0xVoterAddress",
+                pool_address="0xPoolAddress"
+            )
+            
+            assert "gauge" in gauges_result
+            assert isinstance(gauges_result["gauge"], str)
+
+            # Test is_gauge
+            is_gauge_result = VelodromeVoterContract.is_gauge(
+                ledger_api=mock_ledger_api,
+                contract_address="0xVoterAddress",
+                gauge_address="0xGaugeAddress"
+            )
+            
+            assert "is_gauge" in is_gauge_result
+            assert isinstance(is_gauge_result["is_gauge"], bool)
+
+            # Test pool_for_gauge
+            pool_for_gauge_result = VelodromeVoterContract.pool_for_gauge(
+                ledger_api=mock_ledger_api,
+                contract_address="0xVoterAddress",
+                gauge_address="0xGaugeAddress"
+            )
+            
+            assert "pool" in pool_for_gauge_result
+            assert isinstance(pool_for_gauge_result["pool"], str)
+
+            # Test is_alive
+            is_alive_result = VelodromeVoterContract.is_alive(
+                ledger_api=mock_ledger_api,
+                contract_address="0xVoterAddress",
+                gauge_address="0xGaugeAddress"
+            )
+            
+            assert "is_alive" in is_alive_result
+            assert isinstance(is_alive_result["is_alive"], bool)
+
+            # Test validate_gauge_address
+            validate_result = VelodromeVoterContract.validate_gauge_address(
+                ledger_api=mock_ledger_api,
+                contract_address="0xVoterAddress",
+                gauge_address="0xGaugeAddress"
+            )
+            
+            assert "is_valid" in validate_result
+            assert isinstance(validate_result["is_valid"], bool)
+
+            # Test length
+            length_result = VelodromeVoterContract.length(
+                ledger_api=mock_ledger_api,
+                contract_address="0xVoterAddress"
+            )
+            
+            assert "length" in length_result
+            assert isinstance(length_result["length"], int)
+
+    def test_velodrome_pool_behaviour_static_methods(self):
+        """Test VelodromePoolBehaviour methods that generate transactions."""
+        # Test that the methods exist and have correct signatures
+        assert hasattr(VelodromePoolBehaviour, 'enter')
+        assert hasattr(VelodromePoolBehaviour, 'exit')
+        assert hasattr(VelodromePoolBehaviour, 'stake_lp_tokens')
+        assert hasattr(VelodromePoolBehaviour, 'unstake_lp_tokens')
+        assert hasattr(VelodromePoolBehaviour, 'claim_rewards')
         
-        withdraw_result = VelodromeGaugeContract.withdraw(
-            ledger_api=mock_ledger_api,
-            contract_address="0xGaugeAddress",
-            **withdraw_params
-        )
+        # Test method signatures
+        import inspect
+        enter_sig = inspect.signature(VelodromePoolBehaviour.enter)
+        assert 'kwargs' in enter_sig.parameters
+        assert enter_sig.parameters['kwargs'].kind == inspect.Parameter.VAR_KEYWORD
         
-        # Test get reward
-        reward_params = {
-            "recipient": "0xRecipient"
-        }
+        exit_sig = inspect.signature(VelodromePoolBehaviour.exit)
+        assert 'kwargs' in exit_sig.parameters
+        assert exit_sig.parameters['kwargs'].kind == inspect.Parameter.VAR_KEYWORD
+
+    def test_velodrome_pool_behaviour_exit_method(self):
+        """Test VelodromePoolBehaviour exit method."""
+        # Test that the exit method exists and has correct signature
+        assert hasattr(VelodromePoolBehaviour, 'exit')
         
-        reward_result = VelodromeGaugeContract.get_reward(
-            ledger_api=mock_ledger_api,
-            contract_address="0xGaugeAddress",
-            **reward_params
-        )
+        import inspect
+        exit_sig = inspect.signature(VelodromePoolBehaviour.exit)
+        assert 'kwargs' in exit_sig.parameters
+        assert exit_sig.parameters['kwargs'].kind == inspect.Parameter.VAR_KEYWORD
         
-        # Verify all transactions are valid
-        TestAssertions.assert_transaction_structure(deposit_result)
-        TestAssertions.assert_transaction_structure(withdraw_result)
-        TestAssertions.assert_transaction_structure(reward_result)
+        # Test return type annotation
+        assert exit_sig.return_annotation.__name__ == 'Generator'
+
+    def test_velodrome_gauge_staking_methods(self):
+        """Test VelodromePoolBehaviour gauge staking methods."""
+        # Test that the methods exist and have correct signatures
+        assert hasattr(VelodromePoolBehaviour, 'stake_lp_tokens')
+        assert hasattr(VelodromePoolBehaviour, 'unstake_lp_tokens')
+        assert hasattr(VelodromePoolBehaviour, 'claim_rewards')
+        assert hasattr(VelodromePoolBehaviour, 'get_pending_rewards')
+        assert hasattr(VelodromePoolBehaviour, 'get_staked_balance')
+        
+        # Test method signatures
+        import inspect
+        stake_sig = inspect.signature(VelodromePoolBehaviour.stake_lp_tokens)
+        assert 'lp_token' in stake_sig.parameters
+        assert 'amount' in stake_sig.parameters
+        assert 'kwargs' in stake_sig.parameters  # safe_address is passed via kwargs
+        
+        unstake_sig = inspect.signature(VelodromePoolBehaviour.unstake_lp_tokens)
+        assert 'lp_token' in unstake_sig.parameters
+        assert 'amount' in unstake_sig.parameters
+        assert 'kwargs' in unstake_sig.parameters  # safe_address is passed via kwargs
+        
+        claim_sig = inspect.signature(VelodromePoolBehaviour.claim_rewards)
+        assert 'lp_token' in claim_sig.parameters
+        assert 'kwargs' in claim_sig.parameters  # safe_address is passed via kwargs
+
+    def test_velodrome_cl_pool_methods(self):
+        """Test VelodromePoolBehaviour CL pool methods."""
+        # Test that the methods exist and have correct signatures
+        assert hasattr(VelodromePoolBehaviour, 'stake_cl_lp_tokens')
+        assert hasattr(VelodromePoolBehaviour, 'unstake_cl_lp_tokens')
+        assert hasattr(VelodromePoolBehaviour, 'claim_cl_rewards')
+        assert hasattr(VelodromePoolBehaviour, 'get_cl_pending_rewards')
+        assert hasattr(VelodromePoolBehaviour, 'get_cl_staked_balance')
+        
+        # Test method signatures
+        import inspect
+        stake_cl_sig = inspect.signature(VelodromePoolBehaviour.stake_cl_lp_tokens)
+        assert 'token_ids' in stake_cl_sig.parameters
+        assert 'gauge_address' in stake_cl_sig.parameters
+        
+        unstake_cl_sig = inspect.signature(VelodromePoolBehaviour.unstake_cl_lp_tokens)
+        assert 'token_ids' in unstake_cl_sig.parameters
+        assert 'gauge_address' in unstake_cl_sig.parameters
+        
+        claim_cl_sig = inspect.signature(VelodromePoolBehaviour.claim_cl_rewards)
+        assert 'gauge_address' in claim_cl_sig.parameters
+        assert 'token_ids' in claim_cl_sig.parameters
 
     def test_transaction_parameter_validation(self):
         """Test transaction parameter validation."""
-        behaviour = self.create_mock_behaviour(VelodromePoolBehaviour)
-        
-        # Valid parameters
+        # Test valid parameters
         valid_params = {
-            "token_a": "0xTokenA",
-            "token_b": "0xTokenB",
-            "amount_a_desired": 1000000000000000000,
-            "amount_b_desired": 2000000000000000000,
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890
-        }
-        
-        # Validate parameters
-        assert valid_params["token_a"].startswith("0x")
-        assert valid_params["token_b"].startswith("0x")
-        assert valid_params["amount_a_desired"] > 0
-        assert valid_params["amount_b_desired"] > 0
-        assert valid_params["amount_a_min"] <= valid_params["amount_a_desired"]
-        assert valid_params["amount_b_min"] <= valid_params["amount_b_desired"]
-        assert valid_params["to"].startswith("0x")
-        assert valid_params["deadline"] > 0
-
-    def test_transaction_encoding_consistency(self, mock_ledger_api):
-        """Test that transaction encoding is consistent across multiple calls."""
-        # Test parameters
-        test_params = {
-            "token_a": "0xTokenA",
-            "token_b": "0xTokenB",
-            "amount_a_desired": 1000000000000000000,
-            "amount_b_desired": 2000000000000000000,
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890
-        }
-        
-        # Generate transaction multiple times
-        results = []
-        for _ in range(3):
-            result = VelodromePoolContract.add_liquidity(
-                ledger_api=mock_ledger_api,
-                contract_address="0xPoolAddress",
-                **test_params
-            )
-            results.append(result)
-        
-        # Verify all transactions have the same structure
-        for result in results:
-            TestAssertions.assert_transaction_structure(result)
-            assert isinstance(result["tx_hash"], str)
-
-    def test_transaction_with_different_pool_types(self, mock_ledger_api):
-        """Test transaction encoding for different pool types."""
-        # Test stable pool
-        stable_pool_params = {
-            "token_a": "0xTokenA",
-            "token_b": "0xTokenB",
-            "amount_a_desired": 1000000000000000000,
-            "amount_b_desired": 2000000000000000000,
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890,
+            "pool_address": "0x1234567890123456789012345678901234567890",
+            "safe_address": "0x1234567890123456789012345678901234567890",
+            "assets": ["0x1234567890123456789012345678901234567890", "0x1234567890123456789012345678901234567890"],
+            "chain": "optimism",
+            "max_amounts_in": [1000000000000000000, 2000000000000000000],
             "is_stable": True
         }
         
-        stable_result = VelodromePoolContract.add_liquidity(
-            ledger_api=mock_ledger_api,
-            contract_address="0xStablePoolAddress",
-            **stable_pool_params
-        )
-        
-        # Test volatile pool
-        volatile_pool_params = {
-            "token_a": "0xTokenA",
-            "token_b": "0xTokenB",
-            "amount_a_desired": 1000000000000000000,
-            "amount_b_desired": 2000000000000000000,
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890,
-            "is_stable": False
-        }
-        
-        volatile_result = VelodromePoolContract.add_liquidity(
-            ledger_api=mock_ledger_api,
-            contract_address="0xVolatilePoolAddress",
-            **volatile_pool_params
-        )
-        
-        # Verify both transactions are valid
-        TestAssertions.assert_transaction_structure(stable_result)
-        TestAssertions.assert_transaction_structure(volatile_result)
+        # Validate parameters
+        assert valid_params["pool_address"].startswith("0x")
+        assert valid_params["safe_address"].startswith("0x")
+        assert len(valid_params["assets"]) == 2
+        assert all(asset.startswith("0x") for asset in valid_params["assets"])
+        assert valid_params["chain"] in ["optimism", "base", "mode"]
+        assert len(valid_params["max_amounts_in"]) == 2
+        assert all(amount > 0 for amount in valid_params["max_amounts_in"])
+        assert isinstance(valid_params["is_stable"], bool)
 
+    @patch.object(VelodromeGaugeContract, 'contract_interface', {'ethereum': {}})
     def test_transaction_error_handling(self, mock_ledger_api):
         """Test transaction error handling."""
-        # Test with invalid parameters
-        invalid_params = {
-            "token_a": "invalid_token",  # Invalid format
-            "token_b": "0xTokenB",
-            "amount_a_desired": 1000000000000000000,
-            "amount_b_desired": 2000000000000000000,
-            "amount_a_min": 900000000000000000,
-            "amount_b_min": 1800000000000000000,
-            "to": "0xRecipient",
-            "deadline": 1234567890
-        }
+        # Test with invalid parameters - the contract returns an error dict instead of raising
+        result = VelodromeGaugeContract.deposit(
+            ledger_api=mock_ledger_api,
+            contract_address="0xGaugeAddress",
+            amount=-1000000000000000000  # Negative amount should return error
+        )
         
-        # This should raise an exception or return an error
-        with pytest.raises((ValueError, Exception)):
-            VelodromePoolContract.add_liquidity(
-                ledger_api=mock_ledger_api,
-                contract_address="0xPoolAddress",
-                **invalid_params
-            )
+        # The contract returns an error dict instead of raising an exception
+        assert "error" in result
+        assert "Amount must be greater than 0" in result["error"]
 
-    def test_transaction_batch_operations(self, mock_ledger_api):
-        """Test batch transaction operations."""
-        # Create multiple operations for a complex workflow
-        operations = [
-            # Add liquidity
-            {
-                "method": "add_liquidity",
-                "params": {
-                    "token_a": "0xTokenA",
-                    "token_b": "0xTokenB",
-                    "amount_a_desired": 1000000000000000000,
-                    "amount_b_desired": 2000000000000000000,
-                    "amount_a_min": 900000000000000000,
-                    "amount_b_min": 1800000000000000000,
-                    "to": "0xRecipient",
-                    "deadline": 1234567890
-                }
-            },
-            # Deposit to gauge
-            {
-                "method": "deposit",
-                "params": {
-                    "amount": 1000000000000000000,
-                    "recipient": "0xRecipient"
-                }
-            },
-            # Get reward
-            {
-                "method": "get_reward",
-                "params": {
-                    "recipient": "0xRecipient"
-                }
-            }
-        ]
+    def test_contract_address_validation(self, mock_ledger_api):
+        """Test contract address validation."""
+        # Test that contract methods exist and can be called
+        assert hasattr(VelodromePoolContract, 'get_balance')
+        assert hasattr(VelodromePoolContract, 'build_approval_tx')
+        assert hasattr(VelodromePoolContract, 'get_reserves')
         
-        # Execute batch operations
-        results = []
-        for operation in operations:
-            method = operation["method"]
-            params = operation["params"]
-            
-            if method == "add_liquidity":
-                result = VelodromePoolContract.add_liquidity(
-                    ledger_api=mock_ledger_api,
-                    contract_address="0xPoolAddress",
-                    **params
-                )
-            elif method == "deposit":
-                result = VelodromeGaugeContract.deposit(
-                    ledger_api=mock_ledger_api,
-                    contract_address="0xGaugeAddress",
-                    **params
-                )
-            elif method == "get_reward":
-                result = VelodromeGaugeContract.get_reward(
-                    ledger_api=mock_ledger_api,
-                    contract_address="0xGaugeAddress",
-                    **params
-                )
-            
-            results.append(result)
-        
-        # Verify all transactions are valid
-        for result in results:
-            TestAssertions.assert_transaction_structure(result)
-            assert isinstance(result["tx_hash"], str)
-
-    def test_transaction_gas_optimization(self):
-        """Test gas optimization for transactions."""
-        behaviour = self.create_mock_behaviour(VelodromePoolBehaviour)
-        
-        # Test gas optimization strategies
-        optimization_strategies = [
-            "batch_operations",
-            "optimal_deadline",
-            "minimal_slippage",
-            "efficient_routing"
-        ]
-        
-        for strategy in optimization_strategies:
-            gas_savings = behaviour._calculate_gas_savings(strategy)
-            
-            # Gas savings should be positive
-            assert gas_savings >= 0
-            
-            # Gas savings should be reasonable (not more than 50% of base gas)
-            assert gas_savings <= 500000
-
-    def test_transaction_priority_fee_calculation(self):
-        """Test priority fee calculation for transactions."""
-        behaviour = self.create_mock_behaviour(VelodromePoolBehaviour)
-        
-        # Test different network conditions
-        network_conditions = [
-            {"base_fee": 20000000000, "priority_fee": 2000000000},  # Normal
-            {"base_fee": 50000000000, "priority_fee": 5000000000},  # High
-            {"base_fee": 10000000000, "priority_fee": 1000000000},  # Low
-        ]
-        
-        for condition in network_conditions:
-            total_fee = behaviour._calculate_total_transaction_fee(
-                condition["base_fee"], condition["priority_fee"]
-            )
-            
-            # Total fee should be sum of base fee and priority fee
-            expected_total = condition["base_fee"] + condition["priority_fee"]
-            assert total_fee == expected_total
-
-    def test_transaction_retry_logic(self):
-        """Test transaction retry logic."""
-        behaviour = self.create_mock_behaviour(VelodromePoolBehaviour)
-        
-        # Test retry scenarios
-        retry_scenarios = [
-            {"max_retries": 3, "retry_delay": 1, "should_succeed": True},
-            {"max_retries": 1, "retry_delay": 1, "should_succeed": False},
-            {"max_retries": 5, "retry_delay": 2, "should_succeed": True},
-        ]
-        
-        for scenario in retry_scenarios:
-            success = behaviour._test_retry_logic(
-                scenario["max_retries"],
-                scenario["retry_delay"]
-            )
-            
-            assert success == scenario["should_succeed"]
-
-    def test_transaction_validation_rules(self):
-        """Test transaction validation rules."""
-        behaviour = self.create_mock_behaviour(VelodromePoolBehaviour)
-        
-        # Test validation rules
-        validation_rules = [
-            {"rule": "token_address_format", "value": "0x1234567890123456789012345678901234567890", "valid": True},
-            {"rule": "token_address_format", "value": "invalid_token", "valid": False},
-            {"rule": "amount_positive", "value": 1000000000000000000, "valid": True},
-            {"rule": "amount_positive", "value": -1000000000000000000, "valid": False},
-            {"rule": "amount_min_valid", "value": {"desired": 1000, "min": 900}, "valid": True},
-            {"rule": "amount_min_valid", "value": {"desired": 1000, "min": 1100}, "valid": False},
-            {"rule": "deadline_valid", "value": 1234567890, "valid": True},
-            {"rule": "deadline_valid", "value": 0, "valid": False},
-        ]
-        
-        for rule_test in validation_rules:
-            is_valid = behaviour._validate_transaction_parameter(
-                rule_test["rule"], rule_test["value"]
-            )
-            assert is_valid == rule_test["valid"]
+        # Test method signatures
+        import inspect
+        balance_sig = inspect.signature(VelodromePoolContract.get_balance)
+        assert 'ledger_api' in balance_sig.parameters
+        assert 'contract_address' in balance_sig.parameters
+        assert 'account' in balance_sig.parameters

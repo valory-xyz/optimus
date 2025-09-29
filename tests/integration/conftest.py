@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Generator
 
 from tests.integration.protocols.base.mock_contracts import MockContractFactory
+from tests.integration.fixtures import pool_data_fixtures
 
 
 @pytest.fixture(scope="session")
@@ -81,7 +82,7 @@ def pytest_configure(config):
         "markers", "e2e: mark test as end-to-end test"
     )
     config.addinivalue_line(
-        "markers", "yield: mark test as yield calculation test"
+        "markers", "yield_calc: mark test as yield calculation test"
     )
     config.addinivalue_line(
         "markers", "transaction: mark test as transaction generation test"
@@ -116,7 +117,7 @@ def pytest_collection_modifyitems(config, items):
         elif "e2e_workflows" in str(item.fspath):
             item.add_marker(pytest.mark.e2e)
         elif "yield_calculations" in str(item.fspath):
-            item.add_marker(pytest.mark.yield)
+            item.add_marker(pytest.mark.yield_calc)
         elif "transaction_generation" in str(item.fspath):
             item.add_marker(pytest.mark.transaction)
         

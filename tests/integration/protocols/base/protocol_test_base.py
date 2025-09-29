@@ -41,6 +41,8 @@ from packages.valory.skills.liquidity_trader_abci.rounds import SynchronizedData
 
 class ProtocolIntegrationTestBase(FSMBehaviourBaseCase):
     """Base class for all protocol integration tests."""
+    
+    path_to_skill = Path(__file__).parent.parent.parent.parent.parent / "packages" / "valory" / "skills" / "liquidity_trader_abci"
 
     def setup_method(self, **kwargs: Any) -> None:
         """Set up the test method with common infrastructure."""
@@ -188,8 +190,12 @@ class ProtocolIntegrationTestBase(FSMBehaviourBaseCase):
         mock_params.merkl_user_rewards_url = "https://api.merkl.xyz/v3/userRewards"
         mock_params.reward_claiming_time_period = 86400
         
-        # Create behaviour instance
-        behaviour = behaviour_class(context=mock_context, params=mock_params)
+        # Create behaviour instance with proper AEA initialization
+        behaviour = behaviour_class(
+            name="TestBehaviour",
+            skill_context=mock_context,
+            params=mock_params
+        )
         
         # Mock common methods
         behaviour.contract_interact = MagicMock()

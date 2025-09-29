@@ -34,6 +34,13 @@ class MockContractFactory:
         mock_ledger_api = MagicMock(spec=EthereumApi)
         mock_ledger_api.api = MagicMock()
         mock_ledger_api.api.to_checksum_address = lambda addr: addr.lower()
+        mock_ledger_api.identifier = "ethereum"
+        
+        # Add get_instance method that returns a mock contract instance
+        def mock_get_instance(contract_address=None):
+            return MockContractFactory.create_contract_instance_mock()
+        
+        mock_ledger_api.get_instance = mock_get_instance
         return mock_ledger_api
 
     @staticmethod

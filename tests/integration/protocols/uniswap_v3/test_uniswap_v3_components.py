@@ -17,20 +17,14 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Unit integration tests for Uniswap V3 protocol components."""
+"""Unit integration tests for Uniswap V3 protocol components using real methods."""
 
 import pytest
 from unittest.mock import MagicMock, patch
 
-from packages.valory.skills.liquidity_trader_abci.behaviours.base import DexType
 from packages.valory.skills.liquidity_trader_abci.pools.uniswap import (
     UniswapPoolBehaviour,
     MintParams,
-)
-from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
-    get_sqrt_ratio_at_tick,
-    get_amounts_for_liquidity,
-    get_liquidity_for_amounts,
 )
 
 from tests.integration.protocols.base.protocol_test_base import ProtocolIntegrationTestBase
@@ -38,396 +32,338 @@ from tests.integration.protocols.base.test_helpers import TestAssertions, TestDa
 
 
 class TestUniswapV3Components(ProtocolIntegrationTestBase):
-    """Test individual Uniswap V3 protocol components in isolation."""
+    """Test individual Uniswap V3 protocol components using real methods."""
 
-    def test_tick_math_calculations(self):
-        """Test tick math calculations in isolation."""
-        # Test tick to sqrt ratio conversion
-        tick = -276320
-        sqrt_ratio = get_sqrt_ratio_at_tick(tick)
-        assert sqrt_ratio > 0
+    def _consume_generator(self, gen):
+        """Helper to run generator and return final value."""
+        try:
+            while True:
+                next(gen)
+        except StopIteration as e:
+            return e.value
+
+    def test_enter_method(self):
+        """Test enter method for creating liquidity positions."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
         
-        # Test liquidity calculations
-        sqrt_ratio_a = get_sqrt_ratio_at_tick(-276320)
-        sqrt_ratio_b = get_sqrt_ratio_at_tick(-276300)
-        liquidity = 1000000000000000000
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return "0x1234567890abcdef"
         
-        amounts = get_amounts_for_liquidity(
-            sqrt_ratio_a, sqrt_ratio_b, liquidity, sqrt_ratio_a
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test enter method with valid parameters
+        enter_generator = behaviour.enter(
+            token0="0x4200000000000000000000000000000000000006",  # WETH
+            token1="0x7F5c764cBc14f9669B88837ca1490cCa17c31607",  # USDC
+            fee=3000,
+            tickLower=-276320,
+            tickUpper=-276300,
+            amount0Desired=1000000000000000000,  # 1 ETH
+            amount1Desired=2000000000,  # 2000 USDC
+            amount0Min=900000000000000000,  # 0.9 ETH
+            amount1Min=1800000000,  # 1800 USDC
+            recipient="0xRecipientAddress",
+            deadline=1234567890,
+            chain="optimism"
         )
         
-        assert amounts[0] >= 0  # amount0
-        assert amounts[1] >= 0  # amount1
+        # Consume the generator
+        result = self._consume_generator(enter_generator)
+        assert result is not None
+        assert isinstance(result, tuple)
+        assert len(result) == 2  # (tx_hash, token_id)
+
+    def test_exit_method(self):
+        """Test exit method for removing liquidity positions."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return "0x1234567890abcdef"
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test exit method with valid parameters
+        exit_generator = behaviour.exit(
+            token_id=12345,
+            safe_address="0xSafeAddress",
+            liquidity=1000000000000000000,
+            pool_address="0xPoolAddress",
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(exit_generator)
+        assert result is not None
+        assert isinstance(result, tuple)
+        assert len(result) == 3  # (tx_hash, success, bool)
+
+    def test_burn_token_method(self):
+        """Test burn_token method for removing NFT positions."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return "0x1234567890abcdef"
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test burn_token method
+        burn_generator = behaviour.burn_token(
+            token_id=12345,
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(burn_generator)
+        assert result is not None
+
+    def test_collect_tokens_method(self):
+        """Test collect_tokens method for collecting fees."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return "0x1234567890abcdef"
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test collect_tokens method
+        collect_generator = behaviour.collect_tokens(
+            token_id=12345,
+            recipient="0xRecipientAddress",
+            amount0_max=1000000000000000000,
+            amount1_max=2000000000,
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(collect_generator)
+        assert result is not None
+
+    def test_decrease_liquidity_method(self):
+        """Test decrease_liquidity method for reducing position size."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return "0x1234567890abcdef"
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test decrease_liquidity method
+        decrease_generator = behaviour.decrease_liquidity(
+            token_id=12345,
+            liquidity=500000000000000000,  # Half the liquidity
+            amount0_min=450000000000000000,
+            amount1_min=900000000,
+            deadline=1234567890,
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(decrease_generator)
+        assert result is not None
+
+    def test_get_liquidity_for_token_method(self):
+        """Test get_liquidity_for_token method for position queries."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions - return position data as list
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            # Return position data as list (liquidity is at index 7)
+            return [0, 0, 0, 0, 0, 0, 0, 1000000000000000000, 0, 0]  # Mock position data
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test get_liquidity_for_token method
+        liquidity_generator = behaviour.get_liquidity_for_token(
+            token_id=12345,
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(liquidity_generator)
+        assert result is not None
+        assert result == 1000000000000000000
+
+    def test_get_tokens_method(self):
+        """Test _get_tokens method for getting pool tokens."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return (["0x4200000000000000000000000000000000000006", "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"], [1000000000000000000, 2000000000])
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test _get_tokens method
+        tokens_generator = behaviour._get_tokens(
+            pool_address="0xPoolAddress",
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(tokens_generator)
+        assert result is not None
+        assert isinstance(result, dict)
+        assert "token0" in result
+        assert "token1" in result
+
+    def test_get_pool_fee_method(self):
+        """Test _get_pool_fee method for getting pool fee."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return 3000  # 0.3% fee
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test _get_pool_fee method
+        fee_generator = behaviour._get_pool_fee(
+            pool_address="0xPoolAddress",
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(fee_generator)
+        assert result is not None
+        assert result == 3000
+
+    def test_get_tick_spacing_method(self):
+        """Test _get_tick_spacing method for getting tick spacing."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return 60  # Tick spacing for 0.3% fee tier
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test _get_tick_spacing method
+        spacing_generator = behaviour._get_tick_spacing(
+            pool_address="0xPoolAddress",
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(spacing_generator)
+        assert result is not None
+        assert result == 60
+
+    def test_calculate_tick_lower_and_upper_method(self):
+        """Test _calculate_tick_lower_and_upper method for tick calculations."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions for _get_tick_spacing
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return 60  # Mock tick spacing
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test tick calculation
+        tick_generator = behaviour._calculate_tick_lower_and_upper(
+            pool_address="0xPoolAddress",
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(tick_generator)
+        assert result is not None
+        assert isinstance(result, tuple)
+        assert len(result) == 2  # (tick_lower, tick_upper)
+        assert result[0] < result[1]  # tick_lower < tick_upper
+
+    def test_calculate_slippage_protection_for_mint_method(self):
+        """Test _calculate_slippage_protection_for_mint method."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions
+        def mock_contract_interact(*args, **kwargs):
+            yield
+            return {"sqrt_price_x96": 79228162514264337593543950336}  # Mock slot0 data
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test slippage protection calculation
+        slippage_generator = behaviour._calculate_slippage_protection_for_mint(
+            pool_address="0xPoolAddress",
+            tick_lower=-276320,
+            tick_upper=-276300,
+            max_amounts_in=[1000000000000000000, 2000000000],
+            chain="optimism"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(slippage_generator)
+        assert result is not None
+        assert isinstance(result, tuple)
+        assert len(result) == 2  # (amount0_min, amount1_min)
+
+    def test_calculate_slippage_protection_for_decrease_method(self):
+        """Test _calculate_slippage_protection_for_decrease method."""
+        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
+        
+        # Mock contract interactions - return position data and slot0 data
+        call_count = 0
+        def mock_contract_interact(*args, **kwargs):
+            nonlocal call_count
+            yield
+            call_count += 1
+            if call_count == 1:  # First call for get_position
+                return [0, 0, 0, 0, 0, 0, 0, 1000000000000000000, 0, 0]  # Mock position data
+            else:  # Second call for slot0
+                return {"sqrt_price_x96": 79228162514264337593543950336}  # Mock slot0 data
+        
+        behaviour.contract_interact = mock_contract_interact
+        
+        # Test slippage protection calculation
+        slippage_generator = behaviour._calculate_slippage_protection_for_decrease(
+            token_id=12345,
+            liquidity=1000000000000000000,
+            chain="optimism",
+            pool_address="0xPoolAddress"
+        )
+        
+        # Consume the generator
+        result = self._consume_generator(slippage_generator)
+        assert result is not None
+        assert isinstance(result, tuple)
+        assert len(result) == 2  # (amount0_min, amount1_min)
 
     def test_mint_params_validation(self):
-        """Test mint parameters validation in isolation."""
+        """Test MintParams validation."""
         # Valid mint parameters
         mint_params = MintParams(
-            token0="0xTokenA",
-            token1="0xTokenB",
+            token0="0x4200000000000000000000000000000000000006",
+            token1="0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
             fee=3000,
             tickLower=-276320,
             tickUpper=-276300,
             amount0Desired=1000000000000000000,
-            amount1Desired=2000000000000000000,
+            amount1Desired=2000000000,
             amount0Min=900000000000000000,
-            amount1Min=1800000000000000000,
-            recipient="0xRecipient",
+            amount1Min=1800000000,
+            recipient="0xRecipientAddress",
             deadline=1234567890
         )
         
-        # Validate parameters
+        # Verify parameters are valid
+        assert mint_params.token0 != mint_params.token1
+        assert mint_params.fee > 0
         assert mint_params.tickLower < mint_params.tickUpper
         assert mint_params.amount0Min <= mint_params.amount0Desired
         assert mint_params.amount1Min <= mint_params.amount1Desired
         assert mint_params.deadline > 0
-
-    def test_position_liquidity_calculation(self):
-        """Test position liquidity calculation without blockchain calls."""
-        # Mock position data
-        position_data = {
-            "token0": "0xTokenA",
-            "token1": "0xTokenB",
-            "fee": 3000,
-            "tickLower": -276320,
-            "tickUpper": -276300,
-            "liquidity": 1000000000000000000,
-            "tokensOwed0": 0,
-            "tokensOwed1": 0
-        }
-        
-        # Mock current pool state
-        current_tick = -276310
-        sqrt_price_x96 = 79228162514264337593543950336  # Mock sqrt price
-        
-        # Calculate expected amounts
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        result = behaviour._calculate_position_amounts(
-            position_data, current_tick, sqrt_price_x96
-        )
-        
-        assert "amount0" in result
-        assert "amount1" in result
-        assert result["amount0"] >= 0
-        assert result["amount1"] >= 0
-
-    def test_tick_range_calculation(self):
-        """Test tick range calculation for optimal capital efficiency."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test data
-        current_tick = -276310
-        tick_spacing = 60
-        price_range_percentage = 0.2  # 20% range
-        
-        # Calculate optimal tick range
-        tick_range = behaviour._calculate_optimal_tick_range(
-            current_tick, tick_spacing, price_range_percentage
-        )
-        
-        # Verify tick range
-        assert tick_range["tick_lower"] < current_tick
-        assert tick_range["tick_upper"] > current_tick
-        assert tick_range["tick_lower"] % tick_spacing == 0
-        assert tick_range["tick_upper"] % tick_spacing == 0
-
-    def test_liquidity_amount_calculation(self):
-        """Test liquidity amount calculation for different price ranges."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test data
-        amount0 = 1000000000000000000  # 1000 tokens
-        amount1 = 2000000000000000000  # 2000 tokens
-        tick_lower = -276320
-        tick_upper = -276300
-        current_tick = -276310
-        
-        # Calculate liquidity
-        liquidity = behaviour._calculate_liquidity_for_amounts(
-            amount0, amount1, tick_lower, tick_upper, current_tick
-        )
-        
-        assert liquidity > 0
-
-    def test_fee_tier_validation(self):
-        """Test fee tier validation logic."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Valid fee tiers
-        valid_fee_tiers = [500, 3000, 10000]
-        for fee in valid_fee_tiers:
-            assert behaviour._validate_fee_tier(fee)
-        
-        # Invalid fee tiers
-        invalid_fee_tiers = [100, 2000, 50000]
-        for fee in invalid_fee_tiers:
-            assert not behaviour._validate_fee_tier(fee)
-
-    def test_tick_spacing_calculation(self):
-        """Test tick spacing calculation for different fee tiers."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test fee tier to tick spacing mapping
-        fee_tier_mappings = [
-            (500, 10),
-            (3000, 60),
-            (10000, 200),
-        ]
-        
-        for fee, expected_spacing in fee_tier_mappings:
-            calculated_spacing = behaviour._get_tick_spacing_for_fee(fee)
-            assert calculated_spacing == expected_spacing
-
-    def test_position_value_calculation(self):
-        """Test position value calculation logic."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test data
-        position_data = {
-            "liquidity": 1000000000000000000,
-            "tickLower": -276320,
-            "tickUpper": -276300,
-            "tokensOwed0": 100000000000000000,  # 0.1 tokens
-            "tokensOwed1": 200000000000000000,  # 0.2 tokens
-        }
-        
-        current_tick = -276310
-        sqrt_price_x96 = 79228162514264337593543950336
-        
-        # Calculate position value
-        position_value = behaviour._calculate_position_value(
-            position_data, current_tick, sqrt_price_x96
-        )
-        
-        assert position_value > 0
-        assert "amount0" in position_value
-        assert "amount1" in position_value
-        assert "total_value_usd" in position_value
-
-    def test_fee_collection_calculation(self):
-        """Test fee collection calculation logic."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test data
-        position_data = {
-            "tokensOwed0": 100000000000000000,  # 0.1 tokens
-            "tokensOwed1": 200000000000000000,  # 0.2 tokens
-        }
-        
-        # Calculate collectable fees
-        collectable_fees = behaviour._calculate_collectable_fees(position_data)
-        
-        assert collectable_fees["amount0"] == position_data["tokensOwed0"]
-        assert collectable_fees["amount1"] == position_data["tokensOwed1"]
-
-    def test_optimal_tick_range_selection(self):
-        """Test optimal tick range selection based on volatility."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test different volatility scenarios
-        volatility_scenarios = [
-            {"volatility": 0.1, "expected_range": 0.1},   # Low volatility - narrow range
-            {"volatility": 0.3, "expected_range": 0.2},   # Medium volatility - medium range
-            {"volatility": 0.5, "expected_range": 0.4},   # High volatility - wide range
-        ]
-        
-        for scenario in volatility_scenarios:
-            optimal_range = behaviour._select_optimal_range_for_volatility(
-                scenario["volatility"]
-            )
-            
-            # Range should be proportional to volatility
-            assert optimal_range > 0
-            assert optimal_range <= 1.0
-
-    def test_liquidity_concentration_calculation(self):
-        """Test liquidity concentration calculation."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test data
-        position_liquidity = 1000000000000000000
-        total_liquidity = 10000000000000000000000
-        
-        # Calculate concentration
-        concentration = behaviour._calculate_liquidity_concentration(
-            position_liquidity, total_liquidity
-        )
-        
-        # Expected: 1000 / 10000000 = 0.0001 (0.01%)
-        expected_concentration = position_liquidity / total_liquidity
-        assert concentration == expected_concentration
-
-    def test_price_impact_calculation(self):
-        """Test price impact calculation for swaps."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test data
-        swap_amount = 1000000000000000000  # 1000 tokens
-        pool_liquidity = 10000000000000000000000  # 10,000 tokens
-        current_price = 1.5
-        
-        # Calculate price impact
-        price_impact = behaviour._calculate_price_impact(
-            swap_amount, pool_liquidity, current_price
-        )
-        
-        assert price_impact >= 0
-        assert price_impact <= 1.0  # Should not exceed 100%
-
-    def test_impermanent_loss_calculation_uniswap_v3(self):
-        """Test impermanent loss calculation for Uniswap V3."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test scenarios
-        test_cases = [
-            {"price_change": 1.0, "expected_il": 0.0},      # No price change
-            {"price_change": 2.0, "expected_il": 5.72},     # 100% price change
-            {"price_change": 0.5, "expected_il": 5.72},     # -50% price change
-            {"price_change": 1.5, "expected_il": 1.25},     # 50% price change
-        ]
-        
-        for case in test_cases:
-            price_ratio = case["price_change"]
-            expected_il = case["expected_il"]
-            
-            calculated_il = behaviour._calculate_uniswap_v3_impermanent_loss(
-                1.0, price_ratio
-            )
-            
-            # Allow 0.1% tolerance
-            assert abs(calculated_il - expected_il) < 0.1
-
-    def test_capital_efficiency_calculation(self):
-        """Test capital efficiency calculation for concentrated liquidity."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test data
-        price_range = 0.2  # 20% range
-        current_price = 1.0
-        
-        # Calculate capital efficiency
-        efficiency = behaviour._calculate_capital_efficiency(
-            current_price, price_range
-        )
-        
-        # For a 20% range, efficiency should be around 5x
-        expected_efficiency = 1 / price_range
-        assert abs(efficiency - expected_efficiency) < 0.1
-
-    def test_fee_growth_calculation(self):
-        """Test fee growth calculation over time."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test data
-        initial_fee_growth = 1000000000000000000
-        current_fee_growth = 1500000000000000000
-        liquidity = 1000000000000000000
-        
-        # Calculate fee growth
-        fee_growth = behaviour._calculate_fee_growth(
-            initial_fee_growth, current_fee_growth, liquidity
-        )
-        
-        # Expected: (1500 - 1000) / 1000 = 0.5 tokens
-        expected_growth = (current_fee_growth - initial_fee_growth) / liquidity
-        assert fee_growth == expected_growth
-
-    def test_position_management_logic(self):
-        """Test position management logic."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test position lifecycle
-        position_data = {
-            "token_id": 12345,
-            "liquidity": 1000000000000000000,
-            "tickLower": -276320,
-            "tickUpper": -276300,
-            "tokensOwed0": 0,
-            "tokensOwed1": 0,
-        }
-        
-        # Test position creation
-        created_position = behaviour._create_position(position_data)
-        assert created_position["token_id"] == position_data["token_id"]
-        
-        # Test position update
-        updated_position = behaviour._update_position(
-            created_position, {"liquidity": 2000000000000000000}
-        )
-        assert updated_position["liquidity"] == 2000000000000000000
-        
-        # Test position removal
-        removed_position = behaviour._remove_position(updated_position)
-        assert removed_position is None
-
-    def test_nft_token_handling(self):
-        """Test NFT token handling for positions."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Test NFT token operations
-        token_id = 12345
-        owner_address = "0xOwnerAddress"
-        
-        # Test token ownership validation
-        is_owner = behaviour._validate_token_ownership(token_id, owner_address)
-        assert isinstance(is_owner, bool)
-        
-        # Test token transfer
-        transfer_result = behaviour._transfer_token(token_id, owner_address, "0xNewOwner")
-        assert transfer_result is not None
-
-    def test_swap_parameter_validation(self):
-        """Test swap parameter validation."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Valid swap parameters
-        valid_params = {
-            "token_in": "0xTokenA",
-            "token_out": "0xTokenB",
-            "amount_in": 1000000000000000000,
-            "amount_out_min": 900000000000000000,
-            "recipient": "0xRecipient",
-            "deadline": 1234567890,
-        }
-        
-        # Validate parameters
-        is_valid = behaviour._validate_swap_params(valid_params)
-        assert is_valid
-        
-        # Invalid parameters - amount_out_min > amount_in
-        invalid_params = valid_params.copy()
-        invalid_params["amount_out_min"] = 2000000000000000000
-        
-        is_valid = behaviour._validate_swap_params(invalid_params)
-        assert not is_valid
-
-    def test_liquidity_provision_parameter_validation(self):
-        """Test liquidity provision parameter validation."""
-        behaviour = self.create_mock_behaviour(UniswapPoolBehaviour)
-        
-        # Valid liquidity provision parameters
-        valid_params = {
-            "token0": "0xTokenA",
-            "token1": "0xTokenB",
-            "fee": 3000,
-            "tickLower": -276320,
-            "tickUpper": -276300,
-            "amount0Desired": 1000000000000000000,
-            "amount1Desired": 2000000000000000000,
-            "amount0Min": 900000000000000000,
-            "amount1Min": 1800000000000000000,
-            "recipient": "0xRecipient",
-            "deadline": 1234567890,
-        }
-        
-        # Validate parameters
-        is_valid = behaviour._validate_liquidity_provision_params(valid_params)
-        assert is_valid
-        
-        # Invalid parameters - tickLower >= tickUpper
-        invalid_params = valid_params.copy()
-        invalid_params["tickLower"] = -276300
-        invalid_params["tickUpper"] = -276320
-        
-        is_valid = behaviour._validate_liquidity_provision_params(invalid_params)
-        assert not is_valid

@@ -37,6 +37,7 @@ from tests.integration.fixtures.contract_fixtures import (
 class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
     """Test Uniswap V3 contract interactions with mocked blockchain."""
 
+    @patch.object(UniswapV3NonfungiblePositionManagerContract, 'contract_interface', {'ethereum': {}})
     def test_position_manager_mint_transaction_encoding(self, mock_ledger_api):
         """Test proper encoding of mint transaction."""
         # Test parameters
@@ -52,27 +53,34 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
         recipient = "0xRecipient"
         deadline = 1234567890
         
+        # Mock contract instance with proper 66-character hash
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.encodeABI.return_value = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        mock_ledger_api.get_instance.return_value = mock_contract_instance
+        
         # Test transaction encoding
-        result = UniswapV3NonfungiblePositionManagerContract.mint(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPositionManagerAddress",
-            token0=token0,
-            token1=token1,
-            fee=fee,
-            tick_lower=tick_lower,
-            tick_upper=tick_upper,
-            amount0_desired=amount0_desired,
-            amount1_desired=amount1_desired,
-            amount0_min=amount0_min,
-            amount1_min=amount1_min,
-            recipient=recipient,
-            deadline=deadline
-        )
+        with patch.object(UniswapV3NonfungiblePositionManagerContract, 'get_instance', return_value=mock_contract_instance):
+            result = UniswapV3NonfungiblePositionManagerContract.mint(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPositionManagerAddress",
+                token0=token0,
+                token1=token1,
+                fee=fee,
+                tick_lower=tick_lower,
+                tick_upper=tick_upper,
+                amount0_desired=amount0_desired,
+                amount1_desired=amount1_desired,
+                amount0_min=amount0_min,
+                amount1_min=amount1_min,
+                recipient=recipient,
+                deadline=deadline
+            )
         
         # Verify transaction hash is generated
         TestAssertions.assert_transaction_structure(result)
         assert isinstance(result["tx_hash"], str)
 
+    @patch.object(UniswapV3NonfungiblePositionManagerContract, 'contract_interface', {'ethereum': {}})
     def test_position_manager_decrease_liquidity_transaction_encoding(self, mock_ledger_api):
         """Test proper encoding of decrease liquidity transaction."""
         # Test parameters
@@ -82,21 +90,28 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
         amount1_min = 1800000000000000000
         deadline = 1234567890
         
+        # Mock contract instance with proper 66-character hash
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.encodeABI.return_value = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        mock_ledger_api.get_instance.return_value = mock_contract_instance
+        
         # Test transaction encoding
-        result = UniswapV3NonfungiblePositionManagerContract.decrease_liquidity(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPositionManagerAddress",
-            token_id=token_id,
-            liquidity=liquidity,
-            amount0_min=amount0_min,
-            amount1_min=amount1_min,
-            deadline=deadline
-        )
+        with patch.object(UniswapV3NonfungiblePositionManagerContract, 'get_instance', return_value=mock_contract_instance):
+            result = UniswapV3NonfungiblePositionManagerContract.decrease_liquidity(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPositionManagerAddress",
+                token_id=token_id,
+                liquidity=liquidity,
+                amount0_min=amount0_min,
+                amount1_min=amount1_min,
+                deadline=deadline
+            )
         
         # Verify transaction hash is generated
         TestAssertions.assert_transaction_structure(result)
         assert isinstance(result["tx_hash"], str)
 
+    @patch.object(UniswapV3NonfungiblePositionManagerContract, 'contract_interface', {'ethereum': {}})
     def test_position_manager_collect_transaction_encoding(self, mock_ledger_api):
         """Test proper encoding of collect transaction."""
         # Test parameters
@@ -105,30 +120,38 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
         amount1_max = 2000000000000000000
         recipient = "0xRecipient"
         
+        # Mock contract instance with proper 66-character hash
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.encodeABI.return_value = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        mock_ledger_api.get_instance.return_value = mock_contract_instance
+        
         # Test transaction encoding
-        result = UniswapV3NonfungiblePositionManagerContract.collect(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPositionManagerAddress",
-            token_id=token_id,
-            amount0_max=amount0_max,
-            amount1_max=amount1_max,
-            recipient=recipient
-        )
+        with patch.object(UniswapV3NonfungiblePositionManagerContract, 'get_instance', return_value=mock_contract_instance):
+            result = UniswapV3NonfungiblePositionManagerContract.collect_tokens(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPositionManagerAddress",
+                token_id=token_id,
+                recipient=recipient,
+                amount0_max=amount0_max,
+                amount1_max=amount1_max
+            )
         
         # Verify transaction hash is generated
         TestAssertions.assert_transaction_structure(result)
         assert isinstance(result["tx_hash"], str)
 
+    @patch.object(UniswapV3PoolContract, 'contract_interface', {'ethereum': {}})
     def test_pool_slot0_query_with_mocked_response(self, mock_ledger_api, uniswap_v3_pool_contract):
         """Test pool slot0 query with mocked blockchain response."""
         # Mock the contract instance
         mock_ledger_api.get_instance.return_value = uniswap_v3_pool_contract
         
         # Test slot0 query
-        result = UniswapV3PoolContract.slot0(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPoolAddress"
-        )
+        with patch.object(UniswapV3PoolContract, 'get_instance', return_value=uniswap_v3_pool_contract):
+            result = UniswapV3PoolContract.slot0(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPoolAddress"
+            )
         
         # Verify response structure
         assert "slot0" in result
@@ -137,105 +160,121 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
         assert slot0_data["tick"] == -276310
         assert slot0_data["unlocked"] == True
 
+    @patch.object(UniswapV3PoolContract, 'contract_interface', {'ethereum': {}})
     def test_pool_tokens_query(self, mock_ledger_api, uniswap_v3_pool_contract):
         """Test pool tokens query with mocked response."""
         # Mock the contract instance
         mock_ledger_api.get_instance.return_value = uniswap_v3_pool_contract
         
         # Test pool tokens query
-        result = UniswapV3PoolContract.get_pool_tokens(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPoolAddress"
-        )
+        with patch.object(UniswapV3PoolContract, 'get_instance', return_value=uniswap_v3_pool_contract):
+            result = UniswapV3PoolContract.get_pool_tokens(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPoolAddress"
+            )
         
         # Verify response structure
         assert "tokens" in result
         assert result["tokens"] == ["0xTokenA", "0xTokenB"]
 
+    @patch.object(UniswapV3PoolContract, 'contract_interface', {'ethereum': {}})
     def test_pool_fee_query(self, mock_ledger_api, uniswap_v3_pool_contract):
         """Test pool fee query with mocked response."""
         # Mock the contract instance
         mock_ledger_api.get_instance.return_value = uniswap_v3_pool_contract
         
         # Test pool fee query
-        result = UniswapV3PoolContract.get_pool_fee(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPoolAddress"
-        )
+        with patch.object(UniswapV3PoolContract, 'get_instance', return_value=uniswap_v3_pool_contract):
+            result = UniswapV3PoolContract.get_pool_fee(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPoolAddress"
+            )
         
         # Verify response structure
         assert "data" in result
         assert result["data"] == 3000
 
+    @patch.object(UniswapV3PoolContract, 'contract_interface', {'ethereum': {}})
     def test_pool_tick_spacing_query(self, mock_ledger_api, uniswap_v3_pool_contract):
         """Test pool tick spacing query with mocked response."""
         # Mock the contract instance
         mock_ledger_api.get_instance.return_value = uniswap_v3_pool_contract
         
         # Test tick spacing query
-        result = UniswapV3PoolContract.get_tick_spacing(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPoolAddress"
-        )
+        with patch.object(UniswapV3PoolContract, 'get_instance', return_value=uniswap_v3_pool_contract):
+            result = UniswapV3PoolContract.get_tick_spacing(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPoolAddress"
+            )
         
         # Verify response structure
         assert "data" in result
         assert result["data"] == 60
 
+    @patch.object(UniswapV3NonfungiblePositionManagerContract, 'contract_interface', {'ethereum': {}})
     def test_position_query_with_mocked_response(self, mock_ledger_api, uniswap_v3_position_manager_contract):
         """Test position query with mocked blockchain response."""
-        # Mock the contract instance
-        mock_ledger_api.get_instance.return_value = uniswap_v3_position_manager_contract
+        # Mock the contract instance with proper position data (12 elements)
+        mock_contract_instance = MagicMock()
+        # Mock the positions() call to return a tuple with 12 elements
+        mock_contract_instance.functions.positions.return_value.call.return_value = (
+            1,  # nonce
+            "0xOperator",  # operator
+            "0xTokenA",  # token0
+            "0xTokenB",  # token1
+            3000,  # fee
+            -276320,  # tickLower
+            -276300,  # tickUpper
+            1000000000000000000,  # liquidity
+            0,  # feeGrowthInside0LastX128
+            0,  # feeGrowthInside1LastX128
+            100000000000000000,  # tokensOwed0
+            200000000000000000,  # tokensOwed1
+        )
+        mock_ledger_api.get_instance.return_value = mock_contract_instance
         
         # Test position query
-        result = UniswapV3NonfungiblePositionManagerContract.positions(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPositionManagerAddress",
-            token_id=12345
-        )
+        with patch.object(UniswapV3NonfungiblePositionManagerContract, 'get_instance', return_value=mock_contract_instance):
+            result = UniswapV3NonfungiblePositionManagerContract.get_position(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPositionManagerAddress",
+                token_id=12345
+            )
         
         # Verify response structure
-        assert "liquidity" in result
-        assert "token0" in result
-        assert "token1" in result
-        assert "fee" in result
-        assert "tickLower" in result
-        assert "tickUpper" in result
-        assert "tokensOwed0" in result
-        assert "tokensOwed1" in result
+        assert "data" in result
+        position_data = result["data"]
+        assert "liquidity" in position_data
+        assert "token0" in position_data
+        assert "token1" in position_data
+        assert "fee" in position_data
+        assert "tickLower" in position_data
+        assert "tickUpper" in position_data
+        assert "tokensOwed0" in position_data
+        assert "tokensOwed1" in position_data
 
-    def test_balance_of_query(self, mock_ledger_api, uniswap_v3_position_manager_contract):
-        """Test balance of query with mocked response."""
-        # Mock the contract instance
-        mock_ledger_api.get_instance.return_value = uniswap_v3_position_manager_contract
+    @patch.object(UniswapV3NonfungiblePositionManagerContract, 'contract_interface', {'ethereum': {}})
+    def test_position_manager_burn_token_transaction_encoding(self, mock_ledger_api):
+        """Test proper encoding of burn token transaction."""
+        # Test parameters
+        token_id = 12345
         
-        # Test balance of query
-        result = UniswapV3NonfungiblePositionManagerContract.balance_of(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPositionManagerAddress",
-            account="0xAccountAddress"
-        )
+        # Mock contract instance with proper 66-character hash
+        mock_contract_instance = MagicMock()
+        mock_contract_instance.encodeABI.return_value = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        mock_ledger_api.get_instance.return_value = mock_contract_instance
         
-        # Verify response structure
-        assert "balance" in result
-        assert result["balance"] == 1
-
-    def test_token_of_owner_by_index_query(self, mock_ledger_api, uniswap_v3_position_manager_contract):
-        """Test token of owner by index query with mocked response."""
-        # Mock the contract instance
-        mock_ledger_api.get_instance.return_value = uniswap_v3_position_manager_contract
+        # Test transaction encoding
+        with patch.object(UniswapV3NonfungiblePositionManagerContract, 'get_instance', return_value=mock_contract_instance):
+            result = UniswapV3NonfungiblePositionManagerContract.burn_token(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPositionManagerAddress",
+                token_id=token_id
+            )
         
-        # Test token of owner by index query
-        result = UniswapV3NonfungiblePositionManagerContract.token_of_owner_by_index(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPositionManagerAddress",
-            owner="0xOwnerAddress",
-            index=0
-        )
-        
-        # Verify response structure
-        assert "tokenId" in result
-        assert result["tokenId"] == 12345
+        # Verify transaction hash is generated
+        TestAssertions.assert_transaction_structure(result)
+        assert isinstance(result["tx_hash"], str)
 
     def test_contract_parameter_validation(self):
         """Test contract parameter validation."""
@@ -265,7 +304,6 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
             "mint": 300000,
             "decrease_liquidity": 200000,
             "collect": 150000,
-            "increase_liquidity": 250000,
             "burn": 100000,
         }
         
@@ -299,6 +337,7 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
         is_expired = expired_deadline <= current_time
         assert is_expired
 
+    @patch.object(UniswapV3PoolContract, 'contract_interface', {'ethereum': {}})
     def test_contract_error_handling(self, mock_ledger_api):
         """Test contract error handling."""
         # Mock contract instance that raises an exception
@@ -307,22 +346,25 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
         mock_ledger_api.get_instance.return_value = mock_contract_instance
         
         # Test error handling
-        with pytest.raises(Exception, match="Contract call failed"):
-            UniswapV3PoolContract.slot0(
-                ledger_api=mock_ledger_api,
-                contract_address="0xPoolAddress"
-            )
+        with patch.object(UniswapV3PoolContract, 'get_instance', return_value=mock_contract_instance):
+            with pytest.raises(Exception, match="Contract call failed"):
+                UniswapV3PoolContract.slot0(
+                    ledger_api=mock_ledger_api,
+                    contract_address="0xPoolAddress"
+                )
 
+    @patch.object(UniswapV3PoolContract, 'contract_interface', {'ethereum': {}})
     def test_contract_response_parsing(self, mock_ledger_api, uniswap_v3_pool_contract):
         """Test contract response parsing."""
         # Mock the contract instance
         mock_ledger_api.get_instance.return_value = uniswap_v3_pool_contract
         
         # Test response parsing for slot0
-        result = UniswapV3PoolContract.slot0(
-            ledger_api=mock_ledger_api,
-            contract_address="0xPoolAddress"
-        )
+        with patch.object(UniswapV3PoolContract, 'get_instance', return_value=uniswap_v3_pool_contract):
+            result = UniswapV3PoolContract.slot0(
+                ledger_api=mock_ledger_api,
+                contract_address="0xPoolAddress"
+            )
         
         # Verify response is properly parsed
         assert isinstance(result, dict)
@@ -364,6 +406,7 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
             )
             assert not is_valid
 
+    @patch.object(UniswapV3NonfungiblePositionManagerContract, 'contract_interface', {'ethereum': {}})
     def test_contract_method_encoding(self, mock_ledger_api):
         """Test contract method encoding."""
         # Test different method encodings
@@ -371,10 +414,7 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
             "mint",
             "decreaseLiquidity",
             "collect",
-            "increaseLiquidity",
             "burn",
-            "slot0",
-            "positions",
         ]
         
         for method in methods_to_test:
@@ -384,7 +424,8 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
             mock_ledger_api.get_instance.return_value = mock_contract_instance
             
             # Test encoding (this would be done internally by the contract methods)
-            encoded_data = mock_contract_instance.encodeABI(method, args=())
+            with patch.object(UniswapV3NonfungiblePositionManagerContract, 'get_instance', return_value=mock_contract_instance):
+                encoded_data = mock_contract_instance.encodeABI(method, args=())
             
             # Verify encoding
             assert encoded_data.startswith("0x")
@@ -413,14 +454,15 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
         
         assert result == "success"
 
+    @patch.object(UniswapV3PoolContract, 'contract_interface', {'ethereum': {}})
     def test_contract_batch_operations(self, mock_ledger_api, uniswap_v3_pool_contract):
         """Test batch contract operations."""
         # Mock batch operations
         operations = [
             {"method": "slot0", "args": ()},
-            {"method": "token0", "args": ()},
-            {"method": "token1", "args": ()},
-            {"method": "fee", "args": ()},
+            {"method": "get_pool_tokens", "args": ()},
+            {"method": "get_pool_fee", "args": ()},
+            {"method": "get_tick_spacing", "args": ()},
         ]
         
         # Mock contract instance
@@ -428,30 +470,37 @@ class TestUniswapV3ContractIntegration(ProtocolIntegrationTestBase):
         
         # Execute batch operations
         results = []
-        for operation in operations:
-            method = operation["method"]
-            args = operation["args"]
-            
-            if method == "slot0":
-                result = UniswapV3PoolContract.slot0(
-                    ledger_api=mock_ledger_api,
-                    contract_address="0xPoolAddress"
-                )
-            elif method == "token0":
-                result = UniswapV3PoolContract.get_pool_tokens(
-                    ledger_api=mock_ledger_api,
-                    contract_address="0xPoolAddress"
-                )
-            elif method == "fee":
-                result = UniswapV3PoolContract.get_pool_fee(
-                    ledger_api=mock_ledger_api,
-                    contract_address="0xPoolAddress"
-                )
-            
-            results.append(result)
+        with patch.object(UniswapV3PoolContract, 'get_instance', return_value=uniswap_v3_pool_contract):
+            for operation in operations:
+                method = operation["method"]
+                args = operation["args"]
+                
+                if method == "slot0":
+                    result = UniswapV3PoolContract.slot0(
+                        ledger_api=mock_ledger_api,
+                        contract_address="0xPoolAddress"
+                    )
+                elif method == "get_pool_tokens":
+                    result = UniswapV3PoolContract.get_pool_tokens(
+                        ledger_api=mock_ledger_api,
+                        contract_address="0xPoolAddress"
+                    )
+                elif method == "get_pool_fee":
+                    result = UniswapV3PoolContract.get_pool_fee(
+                        ledger_api=mock_ledger_api,
+                        contract_address="0xPoolAddress"
+                    )
+                elif method == "get_tick_spacing":
+                    result = UniswapV3PoolContract.get_tick_spacing(
+                        ledger_api=mock_ledger_api,
+                        contract_address="0xPoolAddress"
+                    )
+                
+                results.append(result)
         
         # Verify results
         assert len(results) == 4
         assert "slot0" in results[0]
         assert "tokens" in results[1]
+        assert "data" in results[2]
         assert "data" in results[3]

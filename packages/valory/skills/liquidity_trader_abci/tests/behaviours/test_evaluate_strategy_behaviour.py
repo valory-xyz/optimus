@@ -11094,7 +11094,9 @@ def dynamic_test_method(*args, **kwargs):
             target_ratios_by_token = {"0xToken0": 0.4, "0xToken1": 0.6}
 
             # Call the function - this scenario has some tokens available, so use _handle_some_tokens_available
-            tokens_we_need = [("0xToken1", "TKN1")]  # Only need Token1 since Token0 is available
+            tokens_we_need = [
+                ("0xToken1", "TKN1")
+            ]  # Only need Token1 since Token0 is available
             result = self.behaviour.current_behaviour._handle_some_tokens_available(
                 tokens,
                 required_tokens,
@@ -11171,7 +11173,7 @@ def dynamic_test_method(*args, **kwargs):
             # Should create one action: Convert unnecessary token (0xToken2) to missing required token (0xToken1)
             # The existing required token (0xToken0) is kept as-is since we have enough from unnecessary token conversion
             assert len(result) == 1
-            
+
             # Action: Convert unnecessary token 0xToken2 to 0xToken1
             action = result[0]
             assert action["action"] == "bridge_swap"

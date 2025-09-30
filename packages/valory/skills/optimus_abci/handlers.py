@@ -571,7 +571,7 @@ class HttpHandler(BaseHttpHandler):
             )
             headers = f"{header_content_type}{http_msg.headers}"
         else:
-            body_bytes = json.dumps(data).encode("utf-8")
+            body_bytes = json.dumps(data, ensure_ascii=True).encode("utf-8")
             headers = f"{self.json_content_header}{http_msg.headers}"
 
         http_response = http_dialogue.reply(
@@ -632,7 +632,7 @@ class HttpHandler(BaseHttpHandler):
         portfolio_data["selected_protocols"] = selected_protocol_names
         portfolio_data["trading_type"] = trading_type
 
-        portfolio_data_json = json.dumps(portfolio_data)
+        portfolio_data_json = json.dumps(portfolio_data, ensure_ascii=True)
         self.context.logger.info(f"Portfolio Response - {portfolio_data}")
         # Send the portfolio data as a response
         self._send_ok_response(http_msg, http_dialogue, portfolio_data_json)
@@ -649,6 +649,7 @@ class HttpHandler(BaseHttpHandler):
         seconds_since_last_transition = None
         is_tm_unhealthy = None
         is_transitioning_fast = None
+        is_healthy = None
         current_round = None
         rounds = None
 
@@ -670,6 +671,8 @@ class HttpHandler(BaseHttpHandler):
                 < 2 * self.context.params.reset_pause_duration
             )
 
+            is_healthy = is_transitioning_fast
+
         if round_sequence._abci_app:
             current_round = round_sequence._abci_app.current_round.round_id
             rounds = [
@@ -685,6 +688,7 @@ class HttpHandler(BaseHttpHandler):
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,
             "is_tm_healthy": not is_tm_unhealthy,
+            "is_healthy": is_healthy,
             "period": self.synchronized_data.period_count,
             "reset_pause_duration": self.context.params.reset_pause_duration,
             "rounds": rounds,
@@ -815,7 +819,7 @@ class HttpHandler(BaseHttpHandler):
             request_srr_message, srr_dialogue = srr_dialogues.create(
                 counterparty=str(GENAI_CONNECTION_PUBLIC_ID),
                 performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps(payload_data),
+                payload=json.dumps(payload_data, ensure_ascii=True),
             )
             # Prepare callback args
             callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}
@@ -1047,6 +1051,19 @@ class HttpHandler(BaseHttpHandler):
             self.params.available_strategies,
         )
 
+        self.context.logger.info(
+            f"validated_protocol_names: {validated_protocol_names}"
+        )
+        self.context.logger.info(f"selected_protocol_names: {selected_protocol_names}")
+
+        # Enhance reasoning if protocols were filtered out
+        if len(validated_protocol_names) != len(selected_protocol_names):
+            filtered_protocols = [
+                p for p in selected_protocol_names if p not in validated_protocol_names
+            ]
+            chain_info = ", ".join(self.params.target_investment_chains)
+            reasoning += f"<br><br><strong>Note:</strong> The following protocols were filtered out as they are not available on the selected chains ({chain_info}): {', '.join(filtered_protocols)}. Only protocols compatible with your selected chains are included."
+
         # Convert validated protocol names to strategies for storage
         selected_protocols = [
             PROTOCOL_TO_STRATEGY.get(protocol, protocol)
@@ -1054,7 +1071,7 @@ class HttpHandler(BaseHttpHandler):
         ]
 
         response_data = {
-            "selected_protocols": selected_protocol_names,
+            "selected_protocols": validated_protocol_names,
             "trading_type": trading_type,
             "max_loss_percentage": max_loss_percentage,
             "composite_score": round(composite_score, 4),
@@ -1068,7 +1085,7 @@ class HttpHandler(BaseHttpHandler):
         self.context.logger.info(f"trading_type: {trading_type}")
 
         storage_data = {
-            "selected_protocols": json.dumps(selected_protocols),
+            "selected_protocols": json.dumps(selected_protocols, ensure_ascii=True),
             "trading_type": trading_type,
             "composite_score": str(composite_score),
             "max_loss_percentage": str(max_loss_percentage),

@@ -28,6 +28,7 @@ from abc import ABC
 from collections import defaultdict
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
 
 from aea.configurations.data_types import PublicId
@@ -122,6 +123,10 @@ OLAS_ADDRESSES = {
     "optimism": "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527",
 }
 
+# Airdrop reward tracking constants
+AIRDROP_REWARDS_KEY_PREFIX = "airdrop_rewards_"
+AIRDROP_TOTAL_KEY = "total_airdrop_rewards"
+
 # Reward tokens that should be excluded from investment consideration
 REWARD_TOKEN_ADDRESSES = {
     "mode": {
@@ -131,6 +136,17 @@ REWARD_TOKEN_ADDRESSES = {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
     },
 }
+
+# Round timeout constants for health check
+# These timeouts define how long specific rounds can run before being considered unhealthy
+# Used to prevent false restarts when the agent is performing legitimate long-running operations
+EVALUATE_STRATEGY_TIMEOUT = (
+    300  # 5 minutes - time for executing all strategies in parallel
+)
+FETCH_STRATEGIES_TIMEOUT = (
+    300  # 5 minutes - time for downloading strategy files from IPFS
+)
+DECISION_MAKING_TIMEOUT = 180  # 3 minutes - time for executing on-chain transactions
 
 
 class DexType(Enum):
@@ -223,7 +239,7 @@ WHITELISTED_ASSETS = {
         "0xe7903B1F75C534Dd8159b313d92cDCfbC62cB3Cd": "wrsETH",
         "0x8b2EeA0999876AAB1E7955fe01A5D261b570452C": "wMLT",
         "0x66eEd5FF1701E6ed8470DC391F05e27B1d0657eb": "BMX",
-        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "XVELO",
+        "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "VELO",
         "0xd988097fb8612cc24eec14542bc03424c656005f": "USDC",
         "0xf0f161fda2712db8b566946122a5af183995e2ed": "USDT",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
@@ -261,7 +277,7 @@ COIN_ID_MAPPING = {
         "wrseth": "wrapped-rseth",
         "wmlt": "bmx-wrapped-mode-liquidity-token",
         "bmx": "bmx",
-        "xvelo": "velodrome-finance",  # xVELO can be bridged back 1:1 for native VELO on OP
+        "velo": "velodrome-finance",  # VELO can be bridged back 1:1 for native VELO on OP
         "iusdc": "ironclad-usd",
     },
     "optimism": {
@@ -291,6 +307,7 @@ REWARD_TOKEN_ADDRESSES = {
     "mode": {
         "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
         "0x7f9AdFbd38b669F03d1d11000Bc76b9AaEA28A81": "VELO",  # VELO on Mode
+        "0xd988097fb8612cc24eeC14542bC03424c656005f": "USDC",  # USDC on Mode (for airdrop exclusion)
     },
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
@@ -308,24 +325,28 @@ class LiquidityTraderBaseBehaviour(
         """Initialize `LiquidityTraderBaseBehaviour`."""
         super().__init__(**kwargs)
         self.current_positions: List[Dict[str, Any]] = []
+        # Convert store_path to Path object for file operations
+        store_path = Path(self.params.store_path)
+
         self.current_positions_filepath: str = (
-            self.params.store_path / self.params.pool_info_filename
+            store_path / self.params.pool_info_filename
         )
         self.portfolio_data: Dict[str, Any] = {}
         self.portfolio_data_filepath: str = (
-            self.params.store_path / self.params.portfolio_info_filename
+            store_path / self.params.portfolio_info_filename
         )
+        self.assets: Dict[str, Any] = {}
         self.whitelisted_assets: Dict[str, Any] = {}
         self.whitelisted_assets_filepath: str = (
-            self.params.store_path / self.params.whitelisted_assets_filename
+            store_path / self.params.whitelisted_assets_filename
         )
         self.funding_events: Dict[str, Any] = {}
         self.funding_events_filepath: str = (
-            self.params.store_path / self.params.funding_events_filename
+            store_path / self.params.funding_events_filename
         )
         self.agent_performance: Dict[str, Any] = {}
         self.agent_performance_filepath: str = (
-            self.params.store_path / self.params.agent_performance_filename
+            store_path / self.params.agent_performance_filename
         )
         self.pools: Dict[str, Any] = {}
         self.pools[DexType.BALANCER.value] = BalancerPoolBehaviour
@@ -334,7 +355,7 @@ class LiquidityTraderBaseBehaviour(
         self.service_staking_state = StakingState.UNSTAKED
         self._inflight_strategy_req: Optional[str] = None
         self.gas_cost_tracker = GasCostTracker(
-            file_path=self.params.store_path / self.params.gas_cost_info_filename
+            file_path=store_path / self.params.gas_cost_info_filename
         )
         self.initial_investment_values_per_pool = {}
         self._current_entry_costs = 0.0
@@ -616,6 +637,14 @@ class LiquidityTraderBaseBehaviour(
             token_info = token_data.get("token", {})
             token_address = token_info.get("address")
             token_symbol = token_info.get("symbol", "UNKNOWN")
+
+            # Rename XVELO to VELO for Mode chain
+            if token_symbol == "XVELO":  # nosec B105
+                token_symbol = "VELO"  # nosec B105
+                self.context.logger.info(
+                    f"Renamed XVELO to VELO for Mode chain token at {token_address}"
+                )
+
             balance_value = token_data.get("value", "0")
 
             if not token_address or not balance_value or balance_value == "0":
@@ -977,7 +1006,6 @@ class LiquidityTraderBaseBehaviour(
         self.agent_performance = {
             "timestamp": None,
             "metrics": [],
-            "last_activity": None,
             "agent_behavior": None,
         }
 
@@ -989,323 +1017,6 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.error(
                 f"Failed to update agent performance timestamp: {str(e)}"
             )
-
-    def update_portfolio_after_action(self) -> Generator[None, None, None]:
-        """Update portfolio data after actions like pool exit, swap, or transfer."""
-        try:
-            self.context.logger.info("Updating portfolio data after action...")
-
-            # Read existing portfolio data to preserve structure
-            self.read_portfolio_data()
-
-            if not hasattr(self, "portfolio_data") or not self.portfolio_data:
-                self.context.logger.warning(
-                    "No existing portfolio data found to update"
-                )
-                return
-
-            # Get current positions to calculate value_in_pools dynamically
-            positions = yield from self.get_positions()
-
-            # Calculate value_in_pools from current positions
-            value_in_pools = yield from self._calculate_pools_value(positions)
-
-            # Fetch fresh balances from blockchain APIs
-            balances = yield from self._fetch_fresh_balances()
-
-            # Calculate USD values for all tokens
-            balance_map, total_safe_value = yield from self._calculate_token_usd_values(
-                balances
-            )
-
-            # Update portfolio breakdown with fresh data
-            (
-                updated_breakdown,
-                total_portfolio_value,
-            ) = yield from self._update_portfolio_breakdown(balance_map)
-
-            # Calculate asset ratios
-            yield from self._calculate_portfolio_ratios(
-                updated_breakdown, total_portfolio_value
-            )
-
-            # Update main portfolio data
-            yield from self._update_portfolio_data(
-                updated_breakdown,
-                total_portfolio_value,
-                total_safe_value,
-                value_in_pools,
-            )
-
-            # Synchronize position data with portfolio data for consistency
-            yield from self._sync_positions_with_portfolio(balance_map)
-
-            self.context.logger.info(
-                f"Portfolio data updated with fresh blockchain data. Total value: ${total_portfolio_value + value_in_pools:.2f} (Safe: ${total_safe_value:.2f}, Pools: ${value_in_pools:.2f})"
-            )
-
-        except Exception as e:
-            self.context.logger.error(f"Error updating portfolio data: {e}")
-
-    def _calculate_pools_value(
-        self, positions: List[Dict[str, Any]]
-    ) -> Generator[None, None, float]:
-        """Calculate total value in pools from current positions."""
-        value_in_pools = 0.0
-        for position in positions:
-            if position.get("status") == PositionStatus.OPEN.value:
-                position_value = position.get("value_usd", 0)
-                if isinstance(position_value, str):
-                    position_value = float(position_value) if position_value else 0.0
-                value_in_pools += position_value
-        return value_in_pools
-
-    def _fetch_fresh_balances(self) -> Generator[None, None, List[Dict[str, Any]]]:
-        """Fetch fresh balances from blockchain APIs."""
-        chain = self.context.params.target_investment_chains[0]
-        if chain == "optimism":
-            balances = yield from self._get_optimism_balances_from_safe_api()
-        elif chain == "mode":
-            balances = yield from self._get_mode_balances_from_explorer_api()
-        else:
-            self.context.logger.error(f"Unsupported chain: {chain}")
-            return []
-        return balances
-
-    def _calculate_token_usd_values(
-        self, balances: List[Dict[str, Any]]
-    ) -> Generator[None, None, Tuple[Dict[str, Dict[str, Any]], float]]:
-        """Calculate USD values for all tokens in balances."""
-        balance_map = {}
-        total_safe_value = 0
-        chain = self.context.params.target_investment_chains[0]
-
-        for balance in balances:
-            # Handle different balance formats
-            if "tokenAddress" in balance:
-                # Format from SafeApi (has balanceUsd)
-                token_address = balance.get("tokenAddress")
-                balance_amount = balance.get("balance", "0")
-                balance_usd = float(balance.get("balanceUsd", 0))
-                token_symbol = balance.get("tokenSymbol", "")
-            else:
-                # Format from _get_optimism_balances_from_safe_api (no balanceUsd)
-                token_address = balance.get("address")
-                balance_amount = balance.get("balance", 0)
-                token_symbol = balance.get("asset_symbol", "")
-
-                # Calculate USD value for this token
-                balance_usd = yield from self._calculate_single_token_usd_value(
-                    token_address, balance_amount, chain
-                )
-
-            if token_address:
-                balance_map[token_address.lower()] = {
-                    "balance": balance_amount,
-                    "balance_usd": balance_usd,
-                    "symbol": token_symbol,
-                }
-                total_safe_value += balance_usd
-
-        return balance_map, total_safe_value
-
-    def _calculate_single_token_usd_value(
-        self, token_address: str, balance_amount: Any, chain: str
-    ) -> Generator[None, None, float]:
-        """Calculate USD value for a single token."""
-        if not token_address or balance_amount <= 0:
-            return 0.0
-
-        try:
-            if token_address.lower() == ZERO_ADDRESS.lower():
-                # ETH
-                token_price = yield from self._fetch_zero_address_price()
-            else:
-                # ERC20 token
-                token_price = yield from self._fetch_token_price(token_address, chain)
-
-            if token_price:
-                # Convert balance to human-readable format
-                token_decimals = yield from self._get_token_decimals(
-                    chain, token_address
-                )
-                if token_decimals is not None:
-                    adjusted_balance = float(balance_amount) / (10**token_decimals)
-                    return adjusted_balance * token_price
-                else:
-                    return 0.0
-            else:
-                return 0.0
-        except Exception as e:
-            self.context.logger.error(
-                f"Error calculating USD value for {token_address}: {e}"
-            )
-            return 0.0
-
-    def _update_portfolio_breakdown(
-        self, balance_map: Dict[str, Dict[str, Any]]
-    ) -> Generator[None, None, Tuple[List[Dict[str, Any]], float]]:
-        """Update portfolio breakdown with fresh balance data."""
-        # Get existing portfolio breakdown to preserve structure
-        portfolio_breakdown = self.portfolio_data.get("portfolio_breakdown", [])
-        existing_assets = {
-            asset.get("address", "").lower(): asset for asset in portfolio_breakdown
-        }
-
-        # Update existing assets and add new ones
-        updated_breakdown = []
-        total_portfolio_value = 0
-
-        # Process existing assets
-        for asset in portfolio_breakdown:
-            asset_address = asset.get("address", "").lower()
-            asset_symbol = asset.get("asset", "")
-
-            # Get fresh balance data for this asset
-            if asset_address in balance_map:
-                fresh_data = balance_map[asset_address]
-                updated_asset = {
-                    "asset": asset_symbol,
-                    "address": asset.get("address"),  # Preserve original address format
-                    "balance": float(fresh_data["balance"]),
-                    "price": asset.get("price", 0),  # Preserve existing price
-                    "value_usd": fresh_data["balance_usd"],
-                    "ratio": 0,  # Will be calculated below
-                }
-                total_portfolio_value += fresh_data["balance_usd"]
-            else:
-                # Asset not found in current balances, set balance to 0
-                updated_asset = {
-                    "asset": asset_symbol,
-                    "address": asset.get("address"),
-                    "balance": 0.0,
-                    "price": asset.get("price", 0),
-                    "value_usd": 0.0,
-                    "ratio": 0.0,
-                }
-
-            updated_breakdown.append(updated_asset)
-
-        # Add new assets that weren't in the original portfolio
-        for token_address, balance_data in balance_map.items():
-            if token_address not in existing_assets:
-                # This is a new asset (e.g., from a swap)
-                new_asset = {
-                    "asset": balance_data["symbol"],
-                    "address": token_address,  # Use the address from balance_map
-                    "balance": float(balance_data["balance"]),
-                    "price": 0,  # Will need to be fetched if needed
-                    "value_usd": balance_data["balance_usd"],
-                    "ratio": 0,  # Will be calculated below
-                }
-                updated_breakdown.append(new_asset)
-                total_portfolio_value += balance_data["balance_usd"]
-                self.context.logger.info(
-                    f"Added new asset to portfolio: {balance_data['symbol']} (${balance_data['balance_usd']:.2f})"
-                )
-
-        return updated_breakdown, total_portfolio_value
-
-    def _calculate_portfolio_ratios(
-        self, updated_breakdown: List[Dict[str, Any]], total_portfolio_value: float
-    ) -> Generator[None, None, None]:
-        """Calculate ratios for all assets in portfolio breakdown."""
-        if total_portfolio_value > 0:
-            for asset in updated_breakdown:
-                asset["ratio"] = (asset["value_usd"] / total_portfolio_value) * 100
-
-    def _update_portfolio_data(
-        self,
-        updated_breakdown: List[Dict[str, Any]],
-        total_portfolio_value: float,
-        total_safe_value: float,
-        value_in_pools: float,
-    ) -> Generator[None, None, None]:
-        """Update main portfolio data with calculated values."""
-        # Update portfolio data while preserving all existing fields
-        self.portfolio_data.update(
-            {
-                "portfolio_value": float(
-                    total_portfolio_value + value_in_pools
-                ),  # Total = safe + pools
-                "value_in_safe": float(total_safe_value),
-                "value_in_pools": float(
-                    value_in_pools
-                ),  # Calculated dynamically from positions
-                "portfolio_breakdown": updated_breakdown,
-                "last_updated": int(self._get_current_timestamp()),
-            }
-        )
-
-        # Preserve all other existing fields (initial_investment, volume, roi, agent_hash, allocations, address)
-        # These fields remain unchanged
-
-        # Store updated portfolio data
-        self.store_portfolio_data()
-
-    def _sync_positions_with_portfolio(
-        self, balance_map: Dict[str, Dict[str, Any]]
-    ) -> Generator[None, None, None]:
-        """Synchronize position data with portfolio data for consistency."""
-        try:
-            # Get current positions from synchronized data
-            current_positions = self.synchronized_data.positions
-
-            if not current_positions:
-                self.context.logger.info("No positions to synchronize")
-                return
-
-            # Update asset balances in positions to match portfolio data
-            updated_positions = []
-            for position in current_positions:
-                updated_assets = []
-                for asset in position.get("assets", []):
-                    asset_address = asset.get("address", "").lower()
-
-                    # Update balance from fresh portfolio data
-                    if asset_address in balance_map:
-                        fresh_data = balance_map[asset_address]
-                        updated_asset = {
-                            **asset,  # Preserve all existing fields
-                            "balance": fresh_data[
-                                "balance"
-                            ],  # Update with fresh balance
-                        }
-                        self.context.logger.debug(
-                            f"Updated position asset {asset.get('asset_symbol')} balance: {asset.get('balance')} -> {fresh_data['balance']}"
-                        )
-                    else:
-                        # Asset not found in fresh data, set balance to 0
-                        updated_asset = {
-                            **asset,  # Preserve all existing fields
-                            "balance": 0,  # Set to 0 if not found
-                        }
-                        self.context.logger.debug(
-                            f"Asset {asset.get('asset_symbol')} not found in fresh data, setting balance to 0"
-                        )
-
-                    updated_assets.append(updated_asset)
-
-                # Update position with new assets
-                updated_position = {
-                    **position,  # Preserve all existing fields
-                    "assets": updated_assets,
-                }
-                updated_positions.append(updated_position)
-
-            # Update current positions in base behaviour
-            self.current_positions = updated_positions
-            self.store_current_positions()
-
-            self.context.logger.info(
-                f"Synchronized {len(updated_positions)} positions with fresh portfolio data"
-            )
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error synchronizing positions with portfolio: {e}"
-            )
-            # Don't fail the entire portfolio update if position sync fails
 
     def _get_native_balance(
         self, chain: str, account: str
@@ -1556,8 +1267,15 @@ class LiquidityTraderBaseBehaviour(
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
+        self.context.logger.info(
+            f"Fetching current price for token {token_address} on {chain} chain"
+        )
+
         cached_price = yield from self._get_cached_price(token_address, date_str)
         if cached_price is not None:
+            self.context.logger.info(
+                f"Using cached price for token {token_address}: ${cached_price}"
+            )
             return cached_price
 
         headers = {
@@ -1570,6 +1288,10 @@ class LiquidityTraderBaseBehaviour(
         if not platform_id:
             self.context.logger.error(f"Missing platform id for chain {chain}")
             return None
+
+        self.context.logger.info(
+            f"Fetching price from CoinGecko API for token {token_address} on platform {platform_id}"
+        )
 
         success, response_json = yield from self._request_with_retries(
             endpoint=self.coingecko.token_price_endpoint.format(
@@ -1586,8 +1308,19 @@ class LiquidityTraderBaseBehaviour(
             price = token_data.get("usd", 0)
             # Cache the price
             if price:
+                self.context.logger.info(
+                    f"Successfully fetched price for token {token_address}: ${price}"
+                )
                 yield from self._cache_price(token_address, price, date_str)
+            else:
+                self.context.logger.warning(
+                    f"No price data returned for token {token_address}"
+                )
             return price
+        else:
+            self.context.logger.error(
+                f"Failed to fetch price for token {token_address} from CoinGecko"
+            )
 
         return None
 
@@ -1627,10 +1360,10 @@ class LiquidityTraderBaseBehaviour(
             return None
 
     def _cache_price(
-        self, token_address: str, price: float, date: str
+        self, coin_id: str, price: float, date: str
     ) -> Generator[None, None, None]:
         """Cache price for a token."""
-        cache_key = self._get_price_cache_key(token_address, date)
+        cache_key = self._get_price_cache_key(coin_id, date)
 
         # First read existing cache
         result = yield from self._read_kv((cache_key,))
@@ -1641,7 +1374,7 @@ class LiquidityTraderBaseBehaviour(
                 price_data = json.loads(result[cache_key])
             except json.JSONDecodeError:
                 self.context.logger.error(
-                    f"Invalid cache data for token {token_address}, resetting cache"
+                    f"Invalid cache data for token {coin_id}, resetting cache"
                 )
 
         if date:
@@ -1651,7 +1384,9 @@ class LiquidityTraderBaseBehaviour(
             # For current price, store with timestamp
             price_data["current"] = (price, self._get_current_timestamp())
 
-        yield from self._write_kv({cache_key: json.dumps(price_data)})
+        yield from self._write_kv(
+            {cache_key: json.dumps(price_data, ensure_ascii=True)}
+        )
 
     def _calculate_rate_limit_wait_time(self) -> int:
         """Calculate the wait time for rate limiting based on the rate limiter state."""
@@ -1691,7 +1426,7 @@ class LiquidityTraderBaseBehaviour(
         """Request wrapped around a retry mechanism, now also retries on HTTP 503 (Service Unavailable) with exponential backoff."""
 
         self.context.logger.info(f"HTTP {method} call: {endpoint}")
-        content = json.dumps(body).encode(UTF8) if body else None
+        content = json.dumps(body, ensure_ascii=True).encode(UTF8) if body else None
 
         # Add delay before CoinGecko API calls to respect rate limits (20 calls/minute = 3 seconds between calls)
         if "coingecko.com" in endpoint:
@@ -1790,7 +1525,9 @@ class LiquidityTraderBaseBehaviour(
             srr_message, srr_dialogue = srr_dialogues.create(
                 counterparty=str(MIRRORDB_CONNECTION_PUBLIC_ID),
                 performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps({"method": method, "kwargs": kwargs}),
+                payload=json.dumps(
+                    {"method": method, "kwargs": kwargs}, ensure_ascii=True
+                ),
             )
             srr_message = cast(SrrMessage, srr_message)
             srr_dialogue = cast(SrrDialogue, srr_dialogue)
@@ -1874,11 +1611,21 @@ class LiquidityTraderBaseBehaviour(
 
     def _fetch_zero_address_price(self) -> Generator[None, None, Optional[float]]:
         """Fetch the price for the zero address (Ethereum)."""
+        price = yield from self._fetch_coin_price("ethereum")
+        return price
+
+    def _fetch_coin_price(self, coin_id: str) -> Generator[None, None, Optional[float]]:
+        """Fetch the price for any coin using CoinGecko coin price endpoint."""
         timestamp = int(self._get_current_timestamp())
         date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
 
-        cached_price = yield from self._get_cached_price(ZERO_ADDRESS, date_str)
+        self.context.logger.info(f"Fetching current price for coin {coin_id}")
+
+        cached_price = yield from self._get_cached_price(coin_id, date_str)
         if cached_price is not None:
+            self.context.logger.info(
+                f"Using cached price for {coin_id}: ${cached_price}"
+            )
             return cached_price
 
         headers = {
@@ -1887,8 +1634,12 @@ class LiquidityTraderBaseBehaviour(
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
+        self.context.logger.info(
+            f"Fetching {coin_id} price from CoinGecko coin price endpoint"
+        )
+
         success, response_json = yield from self._request_with_retries(
-            endpoint=self.coingecko.coin_price_endpoint.format(coin_id="ethereum"),
+            endpoint=self.coingecko.coin_price_endpoint.format(coin_id=coin_id),
             headers=headers,
             rate_limited_code=self.coingecko.rate_limited_code,
             rate_limited_callback=self.coingecko.rate_limited_status_callback,
@@ -1899,8 +1650,15 @@ class LiquidityTraderBaseBehaviour(
             token_data = next(iter(response_json.values()), {})
             price = token_data.get("usd", 0)
             if price:
-                yield from self._cache_price(ZERO_ADDRESS, price, date_str)
+                self.context.logger.info(
+                    f"Successfully fetched {coin_id} price: ${price}"
+                )
+                yield from self._cache_price(coin_id, price, date_str)
+            else:
+                self.context.logger.warning(f"No price data returned for {coin_id}")
             return price
+        else:
+            self.context.logger.error(f"Failed to fetch {coin_id} price from CoinGecko")
         return None
 
     def _get_current_timestamp(self) -> int:
@@ -2029,9 +1787,16 @@ class LiquidityTraderBaseBehaviour(
     def _fetch_historical_token_price(
         self, coingecko_id, date_str
     ) -> Generator[None, None, Optional[float]]:
+        self.context.logger.info(
+            f"Fetching historical price for token {coingecko_id} on date {date_str}"
+        )
+
         # First check the cache
         cached_price = yield from self._get_cached_price(coingecko_id, date_str)
         if cached_price is not None:
+            self.context.logger.info(
+                f"Using cached historical price for {coingecko_id} on {date_str}: ${cached_price}"
+            )
             return cached_price
 
         endpoint = self.coingecko.historical_price_endpoint.format(
@@ -2042,6 +1807,10 @@ class LiquidityTraderBaseBehaviour(
         headers = {"Accept": "application/json"}
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
+
+        self.context.logger.info(
+            f"Fetching historical price from CoinGecko API for {coingecko_id} on {date_str}"
+        )
 
         success, response_json = yield from self._request_with_retries(
             endpoint=endpoint,
@@ -2056,17 +1825,20 @@ class LiquidityTraderBaseBehaviour(
                 response_json.get("market_data", {}).get("current_price", {}).get("usd")
             )
             if price:
+                self.context.logger.info(
+                    f"Successfully fetched historical price for {coingecko_id} on {date_str}: ${price}"
+                )
                 # Cache the historical price
                 yield from self._cache_price(coingecko_id, price, date_str)
                 return price
             else:
-                self.context.logger.error(
-                    f"No price in response for token {coingecko_id}"
+                self.context.logger.warning(
+                    f"No price data in response for token {coingecko_id} on {date_str}"
                 )
                 return None
         else:
             self.context.logger.error(
-                f"Failed to fetch historical price for {coingecko_id}"
+                f"Failed to fetch historical price for {coingecko_id} on {date_str} from CoinGecko"
             )
             return None
 
@@ -2157,10 +1929,7 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, bool]:
         """Check if rewards should be updated from subgraph (period == 0 or 24-hour interval)"""
         # Update immediately if period == 0
-        if (
-            self.synchronized_data.period_count
-            and self.synchronized_data.period_count == 0
-        ):
+        if self.synchronized_data.period_count == 0:
             self.context.logger.info(
                 f"Reward update for {chain}: period == 0, forcing immediate update"
             )
@@ -2219,7 +1988,7 @@ class LiquidityTraderBaseBehaviour(
         response = yield from self.get_http_response(
             method="POST",
             url=endpoint,
-            content=json.dumps(query).encode("utf-8"),
+            content=json.dumps(query, ensure_ascii=True).encode("utf-8"),
             headers={"Content-Type": "application/json"},
         )
 
@@ -2340,12 +2109,16 @@ class LiquidityTraderBaseBehaviour(
 
             # Store back to KV store
             yield from self._write_kv(
-                {"entry_costs_dict": json.dumps(entry_costs_dict)}
+                {"entry_costs_dict": json.dumps(entry_costs_dict, ensure_ascii=True)}
             )
 
             self.context.logger.info(f"Stored entry costs: {key} = ${costs:.6f}")
         except Exception as e:
             self.context.logger.error(f"Error storing entry costs: {e}")
+
+    def _get_entry_costs_key(self, chain: str, position_id: str) -> str:
+        """Generate unique key for entry costs storage"""
+        return f"entry_costs_{chain}_{position_id}"
 
     def _get_all_entry_costs(self) -> Generator[None, None, Dict[str, float]]:
         """Get all entry costs from KV store"""
@@ -2722,6 +2495,537 @@ class LiquidityTraderBaseBehaviour(
                 f"Error building unstake LP tokens action: {str(e)}"
             )
             return None
+
+    def get_agent_type_by_name(
+        self, type_name
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_type_by_name",
+            endpoint=f"api/agent-types/name/{type_name}",
+        )
+        return response
+
+    def create_agent_type(self, type_name, description) -> Generator[None, None, Dict]:
+        """Create a new agent type."""
+        # Prepare agent type data
+        agent_type_data = {"type_name": type_name, "description": description}
+
+        endpoint = "api/agent-types/"
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_type",
+            endpoint=endpoint,
+            data=agent_type_data,
+        )
+
+        return response
+
+    def get_attr_def_by_name(self, attr_name) -> Generator[None, None, Optional[Dict]]:
+        """Get agent type by name."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_attr_def_by_name",
+            endpoint=f"api/attributes/name/{attr_name}",
+        )
+        return response
+
+    def create_attribute_definition(
+        self, type_id, attr_name, data_type, is_required, default_value, agent_id
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute definition for a specific agent type."""
+        # Prepare attribute definition data
+        attr_def_data = {
+            "type_id": type_id,
+            "attr_name": attr_name,
+            "data_type": data_type,
+            "is_required": is_required,
+            "default_value": default_value,
+        }
+
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agent-types/{type_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
+
+        # Prepare authentication data
+        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_attribute_definition",
+            endpoint=endpoint,
+            data={"attr_def": attr_def_data, "auth": auth_data},
+        )
+
+        return response
+
+    def get_agent_registry_by_address(
+        self, eth_address
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get agent registry by Ethereum address."""
+        response = yield from self._call_mirrordb(
+            method="read_",
+            method_name="get_agent_registry_by_address",
+            endpoint=f"api/agent-registry/address/{eth_address}",
+        )
+        return response
+
+    def create_agent_registry(
+        self, agent_name, type_id, eth_address
+    ) -> Generator[None, None, Dict]:
+        """Create a new agent registry."""
+        # Prepare agent registry data
+        agent_registry_data = {
+            "agent_name": agent_name,
+            "type_id": type_id,
+            "eth_address": eth_address,
+        }
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_registry",
+            endpoint="api/agent-registry/",
+            data=agent_registry_data,
+        )
+
+        return response
+
+    def create_agent_attribute(
+        self,
+        agent_id,
+        attr_def_id,
+        json_value=None,
+    ) -> Generator[None, None, Dict]:
+        """Create a new attribute value for a specific agent."""
+        # Prepare the agent attribute data with all values set to None initially
+        agent_attr_data = {
+            "agent_id": agent_id,
+            "attr_def_id": attr_def_id,
+            "string_value": None,
+            "integer_value": None,
+            "float_value": None,
+            "boolean_value": None,
+            "date_value": None,
+            "json_value": json_value,
+        }
+
+        # Generate timestamp and prepare signature
+        timestamp = int(self.round_sequence.last_round_transition_timestamp.timestamp())
+        endpoint = f"api/agents/{agent_id}/attributes/"
+        message = f"timestamp:{timestamp},endpoint:{endpoint}"
+        signature = yield from self.sign_message(message)
+        if not signature:
+            return None
+
+        # Prepare authentication data
+        auth_data = {"agent_id": agent_id, "signature": signature, "message": message}
+
+        # Call API
+        response = yield from self._call_mirrordb(
+            method="create_",
+            method_name="create_agent_attribute",
+            endpoint=endpoint,
+            data={"agent_attr": agent_attr_data, "auth": auth_data},
+        )
+
+        return response
+
+    def _get_or_create_agent_type(
+        self, eth_address: str
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Get or create agent type."""
+        data = yield from self._read_kv(keys=("agent_type",))
+        if not data or not data.get("agent_type"):
+            type_name = AGENT_TYPE.get(self.params.target_investment_chains[0])
+            agent_type = yield from self.get_agent_type_by_name(type_name)
+            if not agent_type:
+                agent_type = yield from self.create_agent_type(
+                    type_name,
+                    "An agent for DeFi liquidity management and APR tracking",
+                )
+                if not agent_type:
+                    raise Exception("Failed to create agent type.")
+                yield from self._write_kv({"agent_type": json.dumps(agent_type)})
+            return agent_type
+
+        return json.loads(data["agent_type"])
+
+    def _get_or_create_attr_def(
+        self, type_id: str, agent_id: str
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Get or create APR attribute definition."""
+        data = yield from self._read_kv(keys=("attr_def",))
+        if not data or not data.get("attr_def"):
+            attr_def = yield from self.get_attr_def_by_name(METRICS_NAME)
+            if not attr_def:
+                attr_def = yield from self.create_attribute_definition(
+                    type_id,
+                    METRICS_NAME,
+                    METRICS_TYPE,
+                    True,
+                    "{}",
+                    agent_id,
+                )
+                if not attr_def:
+                    raise Exception("Failed to create attribute definition.")
+                yield from self._write_kv({"attr_def": json.dumps(attr_def)})
+            return attr_def
+
+        return json.loads(data["attr_def"])
+
+    def _get_or_create_agent_registry(
+        self,
+    ) -> Generator[Optional[Dict[str, Any]], None, None]:
+        """Get or create agent registry entry (copied from APRPopulationBehaviour)."""
+        try:
+            data = yield from self._read_kv(keys=("agent_registry",))
+            if not data or not data.get("agent_registry"):
+                # Get or create agent type first
+                eth_address = self.context.agent_address
+                agent_type = yield from self._get_or_create_agent_type(eth_address)
+                if not agent_type:
+                    self.context.logger.error("Failed to get or create agent type")
+                    return None
+
+                type_id = agent_type["type_id"]
+
+                agent_registry = yield from self.get_agent_registry_by_address(
+                    eth_address
+                )
+                if not agent_registry:
+                    agent_name = self.generate_name(eth_address)
+                    self.context.logger.info(
+                        f"Creating agent registry with name: {agent_name}"
+                    )
+                    agent_registry = yield from self.create_agent_registry(
+                        agent_name, type_id, eth_address
+                    )
+                    if not agent_registry:
+                        self.context.logger.error("Failed to create agent registry")
+                        return None
+                    yield from self._write_kv(
+                        {"agent_registry": json.dumps(agent_registry)}
+                    )
+                return agent_registry
+
+            return json.loads(data["agent_registry"])
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in _get_or_create_agent_registry: {str(e)}"
+            )
+            return None
+
+    def generate_phonetic_syllable(self, seed):
+        """Generates phonetic syllable"""
+        phonetic_syllables = [
+            "ba",
+            "bi",
+            "bu",
+            "ka",
+            "ke",
+            "ki",
+            "ko",
+            "ku",
+            "da",
+            "de",
+            "di",
+            "do",
+            "du",
+            "fa",
+            "fe",
+            "fi",
+            "fo",
+            "fu",
+            "ga",
+            "ge",
+            "gi",
+            "go",
+            "gu",
+            "ha",
+            "he",
+            "hi",
+            "ho",
+            "hu",
+            "ja",
+            "je",
+            "ji",
+            "jo",
+            "ju",
+            "ka",
+            "ke",
+            "ki",
+            "ko",
+            "ku",
+            "la",
+            "le",
+            "li",
+            "lo",
+            "lu",
+            "ma",
+            "me",
+            "mi",
+            "mo",
+            "mu",
+            "na",
+            "ne",
+            "ni",
+            "no",
+            "nu",
+            "pa",
+            "pe",
+            "pi",
+            "po",
+            "pu",
+            "ra",
+            "re",
+            "ri",
+            "ro",
+            "ru",
+            "sa",
+            "se",
+            "si",
+            "so",
+            "su",
+            "ta",
+            "te",
+            "ti",
+            "to",
+            "tu",
+            "va",
+            "ve",
+            "vi",
+            "vo",
+            "vu",
+            "wa",
+            "we",
+            "wi",
+            "wo",
+            "wu",
+            "ya",
+            "ye",
+            "yi",
+            "yo",
+            "yu",
+            "za",
+            "ze",
+            "zi",
+            "zo",
+            "zu",
+            "bal",
+            "ben",
+            "bir",
+            "bom",
+            "bun",
+            "cam",
+            "cen",
+            "cil",
+            "cor",
+            "cus",
+            "dan",
+            "del",
+            "dim",
+            "dor",
+            "dun",
+            "fam",
+            "fen",
+            "fil",
+            "fon",
+            "fur",
+            "gar",
+            "gen",
+            "gil",
+            "gon",
+            "gus",
+            "han",
+            "hel",
+            "him",
+            "hon",
+            "hus",
+            "jan",
+            "jel",
+            "jim",
+            "jon",
+            "jus",
+            "kan",
+            "kel",
+            "kim",
+            "kon",
+            "kus",
+            "lan",
+            "lel",
+            "lim",
+            "lon",
+            "lus",
+            "mar",
+            "mel",
+            "min",
+            "mon",
+            "mus",
+            "nar",
+            "nel",
+            "nim",
+            "nor",
+            "nus",
+            "par",
+            "pel",
+            "pim",
+            "pon",
+            "pus",
+            "rar",
+            "rel",
+            "rim",
+            "ron",
+            "rus",
+            "sar",
+            "sel",
+            "sim",
+            "son",
+            "sus",
+            "tar",
+            "tel",
+            "tim",
+            "ton",
+            "tus",
+            "var",
+            "vel",
+            "vim",
+            "von",
+            "vus",
+            "war",
+            "wel",
+            "wim",
+            "won",
+            "wus",
+            "yar",
+            "yel",
+            "yim",
+            "yon",
+            "yus",
+            "zar",
+            "zel",
+            "zim",
+            "zon",
+            "zus",
+            "zez",
+            "zzt",
+            "bzt",
+            "vzt",
+            "kzt",
+            "mek",
+            "tek",
+            "nek",
+            "lek",
+            "tron",
+            "dron",
+            "kron",
+            "pron",
+            "bot",
+            "rot",
+            "not",
+            "lot",
+            "zap",
+            "blip",
+            "bleep",
+            "beep",
+            "wire",
+            "byte",
+            "bit",
+            "chip",
+        ]
+        return phonetic_syllables[seed % len(phonetic_syllables)]
+
+    def generate_phonetic_name(self, address, start_index, syllables):
+        """Generates phonetic name"""
+        return "".join(
+            self.generate_phonetic_syllable(
+                int(address[start_index + i * 8 : start_index + (i + 1) * 8], 16)
+            )
+            for i in range(syllables)
+        ).lower()
+
+    def generate_name(self, address):
+        """Generates name from address"""
+        first_name = self.generate_phonetic_name(address, 2, 2)
+        last_name_prefix = self.generate_phonetic_name(address, 18, 2)
+        last_name_number = int(address[-4:], 16) % 100
+        return f"{first_name}-{last_name_prefix}{str(last_name_number).zfill(2)}"
+
+    def sign_message(self, message) -> Generator[None, None, Optional[str]]:
+        """Sign a message."""
+        message_bytes = message.encode("utf-8")
+        signature = yield from self.get_signature(message_bytes)
+        if signature:
+            signature_hex = signature[2:]
+            return signature_hex
+        return None
+
+    def _update_airdrop_rewards(
+        self, new_amount: int, chain: str, tx_hash: str = None
+    ) -> Generator[None, None, None]:
+        """Update total airdrop rewards in KV store with deduplication."""
+        try:
+            # If tx_hash is provided, check for deduplication
+            if tx_hash:
+                processed_key = f"airdrop_processed_{chain}_{tx_hash}"
+                result = yield from self._read_kv((processed_key,))
+
+                if result and result.get(processed_key):
+                    self.context.logger.info(
+                        f"Airdrop transaction {tx_hash} already processed for {chain}, skipping"
+                    )
+                    return
+
+                # Mark transaction as processed
+                yield from self._write_kv({processed_key: "true"})
+
+            total_key = f"{AIRDROP_TOTAL_KEY}_{chain}"
+            current_total = yield from self._get_total_airdrop_rewards(chain)
+            new_total = current_total + new_amount
+            yield from self._write_kv({total_key: str(new_total)})
+            self.context.logger.info(
+                f"Updated airdrop rewards for {chain}: +{new_amount}, total: {new_total}"
+            )
+        except Exception as e:
+            self.context.logger.error(f"Error updating airdrop rewards: {e}")
+
+    def _get_total_airdrop_rewards(self, chain: str) -> Generator[None, None, int]:
+        """Get total accumulated airdrop rewards for a chain."""
+        try:
+            total_key = f"{AIRDROP_TOTAL_KEY}_{chain}"
+            result = yield from self._read_kv((total_key,))
+            if result and result.get(total_key):
+                return int(result[total_key])
+            return 0
+        except (ValueError, TypeError):
+            self.context.logger.warning(
+                f"Invalid airdrop total for {chain}, returning 0"
+            )
+            return 0
+
+    def _is_airdrop_transfer(self, transfer: Dict, airdrop_contract: str) -> bool:
+        """Check if a transfer is from the airdrop contract."""
+        if not airdrop_contract:
+            return False
+
+        from_address = transfer.get("from_address", "")
+        token_address = transfer.get("token_address", "")
+        symbol = transfer.get("symbol", "")
+
+        # Check if transfer is from airdrop contract and is OLAS token
+        return (
+            from_address.lower() == airdrop_contract.lower()
+            and symbol.upper() == "OLAS"
+            and token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
+        )
 
 
 def execute_strategy(

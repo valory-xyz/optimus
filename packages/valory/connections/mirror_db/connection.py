@@ -243,7 +243,7 @@ class GenericMirrorDBConnection(Connection):
             dialogue.reply(  # type: ignore
                 performative=SrrMessage.Performative.RESPONSE,
                 target_message=srr_message,
-                payload=json.dumps({"error": error}),
+                payload=json.dumps({"error": error}, ensure_ascii=True),
                 error=True,
             ),
         )
@@ -308,7 +308,12 @@ class GenericMirrorDBConnection(Connection):
         # Add endpoint validation when applicable
         if method_name in {"create_", "read_", "update_", "delete_"}:
             endpoint = payload.get("kwargs", {}).get("endpoint")
-            print(f"endpoint,payload : {endpoint,payload}")
+            # Safe print that handles Unicode characters
+            try:
+                print(f"endpoint,payload : {endpoint,payload}")
+            except UnicodeEncodeError:
+                safe_payload = str(payload).encode('ascii', 'replace').decode('ascii')
+                print(f"endpoint,payload : {endpoint},{safe_payload}")
 
         try:
             response = await method(**payload.get("kwargs", {}))
@@ -317,7 +322,7 @@ class GenericMirrorDBConnection(Connection):
                 dialogue.reply(  # type: ignore
                     performative=SrrMessage.Performative.RESPONSE,
                     target_message=srr_message,
-                    payload=json.dumps({"response": response}),
+                    payload=json.dumps({"response": response}, ensure_ascii=True),
                     error=False,
                 ),
             )

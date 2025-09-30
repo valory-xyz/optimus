@@ -60,7 +60,9 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
             # Ensure positions is always serialized
             positions = payload.get("updates", {}).get("positions", None)
             if positions and not isinstance(positions, str):
-                payload["updates"]["positions"] = json.dumps(positions, sort_keys=True)
+                payload["updates"]["positions"] = json.dumps(
+                    positions, sort_keys=True, ensure_ascii=True
+                )
 
             new_action = payload.get("updates", {}).get("new_action", {})
             updated_actions = self.synchronized_data.actions
@@ -71,7 +73,7 @@ class DecisionMakingRound(CollectSameUntilThresholdRound):
                     index = self.synchronized_data.last_executed_action_index + 1
                 updated_actions.insert(index, new_action)
 
-            serialized_actions = json.dumps(updated_actions)
+            serialized_actions = json.dumps(updated_actions, ensure_ascii=True)
             synchronized_data = synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **payload.get("updates", {}),

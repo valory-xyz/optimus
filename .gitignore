@@ -1,6 +1,7 @@
 .mypy_cache
 .DS_Store
 .pytest_cache
+.hypothesis
 coverage.xml
 .tox
 .coverage

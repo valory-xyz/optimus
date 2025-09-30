@@ -22,7 +22,7 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
 )
 
 
-PACKAGE_DIR = Path(__file__).parent.parent
+PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
 class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):

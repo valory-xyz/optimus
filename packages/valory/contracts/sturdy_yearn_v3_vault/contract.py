@@ -66,6 +66,32 @@ class YearnV3VaultContract(Contract):
         return {"tx_hash": bytes.fromhex(data[2:])}
 
     @classmethod
+    def redeem(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        shares: int,
+        receiver: str,
+        owner: str,
+    ) -> JSONLike:
+        """Prepare a redeem transaction."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI("redeem", args=(shares, receiver, owner))
+        return {"tx_hash": bytes.fromhex(data[2:])}
+
+    @classmethod
+    def max_redeem(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        owner: str,
+    ) -> JSONLike:
+        """Get the maximum amount of shares that can be redeemed by the owner."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        max_redeem_amount = contract_instance.functions.maxRedeem(owner).call()
+        return {"amount": max_redeem_amount}
+
+    @classmethod
     def max_withdraw(
         cls,
         ledger_api: EthereumApi,

@@ -125,6 +125,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     "Checking and updating zero liquidity positions"
                 )
                 self.check_and_update_zero_liquidity_positions()
+
             self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             sender = self.context.agent_address
@@ -167,7 +168,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             ):
                 self.context.logger.info("Updating KV store with validated protocols")
                 yield from self._write_kv(
-                    {"selected_protocols": json.dumps(serialized_protocols)}
+                    {
+                        "selected_protocols": json.dumps(
+                            serialized_protocols, ensure_ascii=True
+                        )
+                    }
                 )
 
             if not trading_type:
@@ -178,6 +183,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             self.shared_state.trading_type = trading_type
             self.shared_state.selected_protocols = selected_protocols
+
+            # Initialize assets from initial_assets if empty
+            if not self.assets:
+                self.assets = self.params.initial_assets
 
             # Filter whitelisted assets based on price changes
             if not self.whitelisted_assets:
@@ -233,6 +242,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         "trading_type": trading_type,
                     },
                     sort_keys=True,
+                    ensure_ascii=True,
                 ),
             )
             self.context.logger.info(f"Created payload with content: {payload.content}")
@@ -502,6 +512,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         current_positions = self.current_positions
         last_positions = last_portfolio_data.get("allocations", [])
 
+        # If there's no last portfolio data or no allocations key, consider positions as changed
+        if not last_portfolio_data or "allocations" not in last_portfolio_data:
+            self.context.logger.info(
+                "Portfolio update needed: No last portfolio data or allocations key available"
+            )
+            return True
+
         # Early return if the number of positions changed
         if len(current_positions) != len(last_positions):
             self.context.logger.info(
@@ -624,6 +641,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             portfolio_breakdown
         )
         staking_rewards_value = yield from self.calculate_stakig_rewards_value()
+        airdrop_rewards_value = yield from self.calculate_airdrop_rewards_value()
+        withdrawals_value = yield from self.calculate_withdrawals_value()
 
         # Calculate final portfolio metrics
         yield from self._update_portfolio_metrics(
@@ -662,6 +681,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             total_user_share_value_usd,
             total_safe_value_usd,
             staking_rewards_value,
+            airdrop_rewards_value,
+            withdrawals_value,
             initial_investment,
             volume,
             allocations,
@@ -934,6 +955,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         total_pools_value: Decimal,
         total_safe_value: Decimal,
         staking_rewards_value: Decimal,
+        airdrop_rewards_value: Decimal,
+        withdrawals_value: Decimal,
         initial_investment: float,
         volume: float,
         allocations: List[Dict],
@@ -956,19 +979,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             partial_roi = None
             if initial_investment is not None and initial_investment > 0:
                 try:
+                    # Total ROI includes staking rewards + airdrop rewards
                     total_roi_decimal = (
-                        float(total_portfolio_value + staking_rewards_value)
+                        float(
+                            total_portfolio_value
+                            + staking_rewards_value
+                            + withdrawals_value
+                        )
                         / float(initial_investment)
                     ) - 1
                     total_roi = round(total_roi_decimal * 100, 2)
 
+                    # Partial ROI includes airdrop rewards (trading + airdrop)
                     partial_roi_decimal = (
-                        float(total_portfolio_value) / float(initial_investment)
+                        float(total_portfolio_value + withdrawals_value)
+                        / float(initial_investment)
                     ) - 1
                     partial_roi = round(partial_roi_decimal * 100, 2)
 
                     self.context.logger.info(
-                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% (Portfolio: ${float(total_portfolio_value):.2f}, Initial: ${float(initial_investment):.2f})"
+                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% "
+                        f"(Portfolio: ${float(total_portfolio_value):.2f}, Airdrop: ${float(airdrop_rewards_value):.2f}, Withdrawals: ${float(withdrawals_value):.2f}, "
+                        f"Staking: ${float(staking_rewards_value):.2f}, Initial: ${float(initial_investment):.2f})"
                     )
                 except (ValueError, ZeroDivisionError, TypeError) as e:
                     self.context.logger.error(f"Error calculating ROI: {str(e)}")
@@ -1048,9 +1080,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "portfolio_value": float(total_portfolio_value),
                 "value_in_pools": float(total_pools_value),
                 "value_in_safe": float(total_safe_value),
+                "value_in_withdrawals": float(withdrawals_value),
                 "initial_investment": float(initial_investment)
                 if initial_investment is not None
                 else None,
+                "airdropped_rewards": float(airdrop_rewards_value),
                 "volume": float(volume) if volume is not None else None,
                 "total_roi": total_roi,
                 "partial_roi": partial_roi,
@@ -1389,9 +1423,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if token_prices and velo_token_address in token_prices:
                         velo_price = token_prices[velo_token_address]
                     else:
-                        velo_price = yield from self._fetch_token_price(
-                            velo_token_address, chain
-                        )
+                        velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                        velo_price = yield from self._fetch_coin_price(velo_coin_id)
                         if velo_price is None:
                             self.context.logger.warning(
                                 "Could not fetch VELO price for yield calculation"
@@ -2114,9 +2147,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if adjusted_balance <= 0:
                     continue
 
+                velo_token_address = self._get_velo_token_address(chain)
                 # Get token price
                 if token_address == ZERO_ADDRESS:
                     token_price = yield from self._fetch_zero_address_price()
+                elif token_address.lower() == velo_token_address:
+                    velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
+                    token_price = yield from self._fetch_coin_price(velo_coin_id)
                 else:
                     token_price = yield from self._fetch_token_price(
                         token_address, chain
@@ -2148,6 +2185,39 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Total safe value: ${total_safe_value}")
         return total_safe_value
+
+    def calculate_airdrop_rewards_value(self) -> Generator[None, None, Decimal]:
+        """Calculate airdrop rewards equivalent in USD (MODE chain only)"""
+        chain = self.params.target_investment_chains[0]
+        if chain != "mode":
+            return Decimal(0)
+
+        airdrop_rewards_wei = yield from self._get_total_airdrop_rewards(chain)
+        if airdrop_rewards_wei > 0:
+            # Convert from wei to USDC (6 decimals for USDC)
+            airdrop_usdc_balance = Decimal(str(airdrop_rewards_wei)) / Decimal(10**6)
+
+            # Fetch actual USDC price
+            usdc_address = self._get_usdc_address(chain)
+            usdc_price = yield from self._fetch_token_price(usdc_address, chain)
+
+            if usdc_price is not None:
+                usdc_price_decimal = Decimal(str(usdc_price))
+                airdrop_value_usd = airdrop_usdc_balance * usdc_price_decimal
+
+                self.context.logger.info(
+                    f"USDC airdrop rewards - USDC: {airdrop_usdc_balance} @ ${usdc_price} = ${airdrop_value_usd}"
+                )
+            else:
+                # Fallback to $1 if price fetch fails
+                airdrop_value_usd = airdrop_usdc_balance
+                self.context.logger.warning(
+                    f"Could not fetch USDC price, using $1 fallback - USDC: {airdrop_usdc_balance} (${airdrop_value_usd})"
+                )
+
+            return airdrop_value_usd
+
+        return Decimal(0)
 
     def calculate_stakig_rewards_value(self) -> Generator[None, None, Decimal]:
         """Calculates staking rewards equivalent in USD"""
@@ -2183,6 +2253,119 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     return Decimal(0)
 
         return Decimal(0)
+
+    def calculate_withdrawals_value(self) -> Generator[None, None, Decimal]:
+        """Calculate the value of withdrawals."""
+        chain = self.params.target_investment_chains[0]
+
+        if chain == "mode":
+            all_erc20_transfers_mode = self._track_erc20_transfers_mode(
+                self.params.safe_contract_addresses.get(chain),
+                datetime.now().timestamp(),
+            )
+            if all_erc20_transfers_mode is None:
+                self.context.logger.warning(
+                    "Failed to fetch ERC20 transfers, returning zero withdrawal value"
+                )
+                return Decimal(0)
+            outgoing_erc20_transfers_mode = all_erc20_transfers_mode["outgoing"]
+            self.context.logger.info(
+                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_mode}"
+            )
+            withdrawal_value = (
+                yield from self._track_and_calculate_withdrawal_value_mode(
+                    outgoing_erc20_transfers_mode,
+                )
+            )
+            self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
+            return withdrawal_value
+        else:
+            return Decimal(0)
+
+    def _track_and_calculate_withdrawal_value_mode(
+        self,
+        outgoing_erc20_transfers: Dict,
+    ) -> Generator[None, None, Decimal]:
+        """Track USDC transfers from safe address and handle withdrawal logic."""
+        try:
+            if not outgoing_erc20_transfers:
+                self.context.logger.warning(
+                    "No outgoing transfers found for Mode chain"
+                )
+                return Decimal(0)
+
+            # Track USDC transfers
+            usdc_transfers = []
+            withdrawal_transfers = []
+            withdrawal_value = Decimal(0)
+
+            # Sort transfers by timestamp
+            sorted_outgoing_transfers = []
+            for _, transfers in outgoing_erc20_transfers.items():
+                for transfer in transfers:
+                    if isinstance(transfer, dict) and "timestamp" in transfer:
+                        sorted_outgoing_transfers.append(transfer)
+
+            sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
+
+            for transfer in sorted_outgoing_transfers:
+                if transfer.get("symbol") == "USDC":
+                    usdc_transfers.append(transfer)
+                    withdrawal_transfers.append(transfer)
+            self.context.logger.info(f"USDC transfers: {usdc_transfers}")
+            self.context.logger.info(f"Withdrawal transfers: {withdrawal_transfers}")
+            withdrawal_value = yield from self._calculate_total_withdrawal_value(
+                withdrawal_transfers
+            )
+            return withdrawal_value
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating total withdrawal value: {str(e)}"
+            )
+            return Decimal(0)
+
+    def _calculate_total_withdrawal_value(
+        self,
+        withdrawal_transfers: List[Dict],
+    ) -> Generator[None, None, Decimal]:
+        """Calculate the total withdrawal value."""
+        withdrawal_value = Decimal(0)
+
+        for _, transfer in enumerate(withdrawal_transfers):
+            # Parse ISO timestamp format
+            timestamp_str = transfer.get("timestamp", "")
+            if timestamp_str:
+                try:
+                    # Parse ISO format timestamp
+                    transfer_datetime = datetime.fromisoformat(
+                        timestamp_str.replace("Z", "+00:00")
+                    )
+                    transfer_date = transfer_datetime.strftime("%d-%m-%Y")
+                except (ValueError, TypeError) as e:
+                    self.context.logger.error(
+                        f"Error parsing timestamp {timestamp_str}: {e}"
+                    )
+                    continue
+            else:
+                self.context.logger.warning("No timestamp found in transfer")
+                continue
+            # Get USDC coin ID for Mode chain
+            usdc_coin_id = self.get_coin_id_from_symbol("USDC", "mode")
+            if not usdc_coin_id:
+                self.context.logger.warning("No coin ID found for USDC on Mode chain")
+                continue
+
+            usdc_price = yield from self._fetch_historical_token_price(
+                usdc_coin_id, transfer_date
+            )
+            if usdc_price:
+                withdrawal_amount = Decimal(str(transfer.get("amount", 0)))
+                usdc_price_decimal = Decimal(str(usdc_price))
+                withdrawal_value += withdrawal_amount * usdc_price_decimal
+            else:
+                self.context.logger.warning(f"No USDC price found for {transfer_date}")
+
+        return withdrawal_value
 
     def _get_aggregator_name(
         self, aggregator_address: str, chain: str
@@ -2634,63 +2817,86 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Default to not fetching full history
             fetch_till_date = False
 
-            # Check when we last calculated initial value
-            last_calculated_timestamp = yield from self._read_kv(
-                keys=("last_initial_value_calculated_timestamp",)
-            )
-
-            if (
-                last_calculated_timestamp
-                and (
-                    timestamp := last_calculated_timestamp.get(
-                        "last_initial_value_calculated_timestamp"
-                    )
+            # Check if airdrop detection is enabled and if we need a full historical scan
+            if chain == "mode" and self.params.airdrop_started:
+                airdrop_scan_completed = yield from self._read_kv(
+                    ("airdrop_full_scan_completed",)
                 )
-                and timestamp is not None
-            ):
-                self.context.logger.info(
-                    f"Found last calculation timestamp: {timestamp}"
-                )
-                try:
-                    last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
-                        "%Y-%m-%d"
-                    )
-                    self.context.logger.info(f"Last calculation date: {last_date}")
-                except (ValueError, TypeError):
-                    self.context.logger.warning(
-                        "Invalid timestamp format, defaulting to 1970-01-01"
-                    )
-                    last_date = "1970-01-01"
 
-                # If last calculation was today, return cached value
-                if last_date == current_date:
+                if not airdrop_scan_completed or not airdrop_scan_completed.get(
+                    "airdrop_full_scan_completed"
+                ):
+                    # First time airdrop is enabled - do full historical scan
                     self.context.logger.info(
-                        "Last calculation was today, using cached value"
+                        "Airdrop detection enabled for first time - performing full historical scan"
                     )
-                    investment = yield self._load_chain_total_investment(chain)
-                    if investment:
-                        return investment
-                    else:
-                        fetch_till_date = True
-
-                # Otherwise need to calculate new value but not full history
-                self.context.logger.info(
-                    "Last calculation was not today, calculating new value without full history"
-                )
-                fetch_till_date = False
-
-            # No previous calculation, need to fetch full history
+                    fetch_till_date = True
+                    # Mark scan as completed after this run
+                    yield from self._write_kv({"airdrop_full_scan_completed": "true"})
+                else:
+                    self.context.logger.info(
+                        "Airdrop detection enabled - using incremental scan (full scan already completed)"
+                    )
+                    fetch_till_date = False
             else:
-                self.context.logger.info(
-                    "No previous calculation found, fetching full transfer history"
+                # Normal logic when airdrop is not started
+                # Check when we last calculated initial value
+                last_calculated_timestamp = yield from self._read_kv(
+                    keys=("last_initial_value_calculated_timestamp",)
                 )
-                fetch_till_date = True
+
+                if (
+                    last_calculated_timestamp
+                    and (
+                        timestamp := last_calculated_timestamp.get(
+                            "last_initial_value_calculated_timestamp"
+                        )
+                    )
+                    and timestamp is not None
+                ):
+                    self.context.logger.info(
+                        f"Found last calculation timestamp: {timestamp}"
+                    )
+                    try:
+                        last_date = datetime.utcfromtimestamp(int(timestamp)).strftime(
+                            "%Y-%m-%d"
+                        )
+                        self.context.logger.info(f"Last calculation date: {last_date}")
+                    except (ValueError, TypeError):
+                        self.context.logger.warning(
+                            "Invalid timestamp format, defaulting to 1970-01-01"
+                        )
+                        last_date = "1970-01-01"
+
+                    # If last calculation was today, return cached value
+                    if last_date == current_date:
+                        self.context.logger.info(
+                            "Last calculation was today, using cached value"
+                        )
+                        investment = yield from self._load_chain_total_investment(chain)
+                        if investment:
+                            return investment
+                        else:
+                            fetch_till_date = True
+
+                    # Otherwise need to calculate new value but not full history
+                    self.context.logger.info(
+                        "Last calculation was not today, calculating new value without full history"
+                    )
+                    fetch_till_date = False
+
+                # No previous calculation, need to fetch full history
+                else:
+                    self.context.logger.info(
+                        "No previous calculation found, fetching full transfer history"
+                    )
+                    fetch_till_date = True
 
             # Fetch all transfers until current date based on chain
             self.context.logger.info(f"Fetching transfers for chain: {chain}")
             if chain == Chain.MODE.value:
                 self.context.logger.info("Using Mode-specific transfer fetching")
-                all_transfers = self._fetch_all_transfers_until_date_mode(
+                all_transfers = yield from self._fetch_all_transfers_until_date_mode(
                     safe_address, current_date, fetch_till_date
                 )
             elif chain == Chain.OPTIMISM.value:
@@ -2774,6 +2980,23 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     if amount <= 0:
                         continue
 
+                    # Check if this is an airdropped USDC transfer and exclude it from initial investment
+                    if (
+                        chain == "mode"
+                        and token_symbol.upper() == "USDC"
+                        and self.params.airdrop_started
+                        and self.params.airdrop_contract_address
+                    ):
+                        from_address = transfer.get("from_address", "")
+                        if (
+                            from_address.lower()
+                            == self.params.airdrop_contract_address.lower()
+                        ):
+                            self.context.logger.info(
+                                f"Excluding airdropped USDC transfer from initial investment: {amount} USDC from {from_address}"
+                            )
+                            continue
+
                     # Get historical price for the transfer date
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
 
@@ -2813,7 +3036,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _fetch_all_transfers_until_date_mode(
         self, address: str, end_date: str, fetch_till_date: bool
-    ) -> Dict:
+    ) -> Generator[None, None, Dict]:
         """Fetch all Mode transfers from the beginning until a specific date, organized by date."""
         # Load existing unified data from kv_store
         self.funding_events = self.read_funding_events()
@@ -2858,7 +3081,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             # Fetch token transfers
             self.context.logger.info("Fetching Mode token transfers...")
 
-            success = self._fetch_token_transfers_mode(
+            success = yield from self._fetch_token_transfers_mode(
                 address, end_datetime, all_transfers_by_date, fetch_till_date
             )
             if not success:
@@ -3020,69 +3243,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(f"Completed token transfers: {processed_count} found")
 
-    def _fetch_eth_transfers(
-        self,
-        address: str,
-        end_datetime: datetime,
-        all_transfers_by_date: dict,
-        existing_data: dict,
-    ) -> Generator[None, None, None]:
-        """Fetch ETH transfers from Mode blockchain explorer."""
-        base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
-        processed_count = 0
-
-        endpoint = f"{base_url}/addresses/{address}/transactions"
-        success, response_json = yield from self._request_with_retries(
-            endpoint=endpoint,
-            headers={"Accept": "application/json"},
-            rate_limited_code=429,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
-        )
-
-        if not success:
-            self.context.logger.error("Failed to fetch ETH transfers")
-            return None
-
-        eth_transactions = response_json.get("items", [])
-        if not eth_transactions:
-            return None
-
-        for tx in eth_transactions:
-            tx_datetime = self._get_datetime_from_timestamp(tx.get("timestamp"))
-            tx_date = tx_datetime.strftime("%Y-%m-%d") if tx_datetime else None
-
-            # Stop if we've gone past our end date
-            if tx_datetime and tx_datetime > end_datetime:
-                continue
-
-            # Skip if date already exists in stored data
-            if tx_date and tx_date in existing_data:
-                continue
-
-            if tx_date and tx_date <= end_datetime.strftime("%Y-%m-%d"):
-                from_address = tx.get("from", {})
-                if self._should_include_transfer(
-                    from_address, tx, is_eth_transfer=True
-                ):
-                    value_wei = int(tx.get("value", "0"))
-                    amount_eth = value_wei / 10**18
-
-                    transfer_data = {
-                        "from_address": from_address.get("hash", ""),
-                        "amount": amount_eth,
-                        "token_address": "",
-                        "symbol": "ETH",
-                        "timestamp": tx.get("timestamp", ""),
-                        "tx_hash": tx.get("hash", ""),
-                        "type": "eth",
-                    }
-
-                    all_transfers_by_date[tx_date].append(transfer_data)
-                    processed_count += 1
-
-        self.context.logger.info(f"Completed ETH transfers: {processed_count} found")
-
     def _is_gnosis_safe(self, address_info: dict) -> bool:
         """Check if an address is a Gnosis Safe."""
         if not address_info or not address_info.get("is_contract"):
@@ -3138,16 +3298,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         target_date: str,
         all_transfers_by_date: dict,
         fetch_all_till_date: bool = False,
-    ) -> bool:
-        """
-        Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date.
-
-        :param address: The wallet address to fetch token transfers for.
-        :param target_date: The specific date to fetch transfers for (format: "YYYY-MM-DD").
-        :param all_transfers_by_date: Dictionary to store the fetched transfers organized by date.
-        :param fetch_all_till_date: If True, fetch all transfers up to target_date. If False, fetch only target_date transfers.
-        :return: None
-        """
+    ) -> Generator[None, None, bool]:
+        """Fetch token transfers from Mode blockchain explorer for a specific date or all transfers till that date."""
         base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
         processed_count = 0
         endpoint = f"{base_url}/addresses/{address}/token-transfers"
@@ -3204,6 +3356,21 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 from_address = tx.get("from", {})
                 if from_address.get("hash", address).lower() == address.lower():
                     continue
+
+                # Check for airdrop transfers first
+                if self._is_airdrop_transfer(tx):
+                    total = tx.get("total", {})
+                    value_raw = int(total.get("value", "0"))
+                    tx_hash = tx.get("transaction_hash", "")
+                    yield from self._update_airdrop_rewards(value_raw, "mode", tx_hash)
+
+                    token = tx.get("token", {})
+                    decimals = int(token.get("decimals", 18))
+                    amount = value_raw / (10**decimals)
+                    self.context.logger.info(
+                        f"Detected USDC airdrop transfer: {amount} USDC from {from_address.get('hash', '')} "
+                        f"tx_hash: {tx_hash}"
+                    )
 
                 if self._should_include_transfer_mode(
                     from_address, tx, is_eth_transfer=False
@@ -3902,131 +4069,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return reversion_value
 
-    def _fetch_outgoing_transfers_until_date_mode(
-        self,
-        address: str,
-        current_date: str,
-    ) -> Dict:
-        """Fetch all outgoing transfers from the safe address on Mode until a specific date."""
-        all_transfers = {}
-
-        if not address:
-            self.context.logger.warning(
-                "No address provided for fetching Mode outgoing transfers"
-            )
-            return all_transfers
-
-        try:
-            # Use Mode blockchain explorer API
-            base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
-            endpoint = f"{base_url}/addresses/{address}/transactions"
-
-            has_more_pages = True
-            params = {
-                "filter": "from",  # Only fetch outgoing transfers
-                "limit": 100,  # Maximum items per page
-            }
-            processed_count = 0
-
-            while has_more_pages:
-                response = requests.get(
-                    endpoint,
-                    params=params,
-                    headers={"Accept": "application/json"},
-                    timeout=30,
-                    verify=False,  # nosec B501
-                )
-
-                if not response.status_code == 200:
-                    self.context.logger.error(
-                        f"Failed to fetch Mode outgoing transfers: {response.status_code}"
-                    )
-                    break
-
-                response_data = response.json()
-                transactions = response_data.get("items", [])
-                if not transactions:
-                    break
-
-                for tx in transactions:
-                    # Skip if no timestamp
-                    if not tx.get("timestamp"):
-                        continue
-
-                    # Handle ISO format timestamp
-                    try:
-                        tx_datetime = datetime.fromisoformat(
-                            tx.get("timestamp").replace("Z", "+00:00")
-                        )
-                        tx_date = tx_datetime.strftime("%Y-%m-%d")
-                    except (ValueError, TypeError):
-                        self.context.logger.warning(
-                            f"Invalid timestamp format: {tx.get('timestamp')}"
-                        )
-                        continue
-
-                    if tx_date > current_date:
-                        continue
-
-                    # Process ETH transfers
-                    if tx.get("value"):
-                        try:
-                            value_wei = int(tx.get("value", "0"))
-                            amount_eth = value_wei / 10**18
-
-                            if amount_eth <= 0:
-                                continue
-
-                            # Get to address
-                            to_address = tx.get("to", {}).get("hash", "")
-                            if not to_address or to_address.lower() == address.lower():
-                                continue
-
-                            transfer_data = {
-                                "from_address": address,
-                                "to_address": to_address,
-                                "amount": amount_eth,
-                                "token_address": ZERO_ADDRESS,
-                                "symbol": "ETH",
-                                "timestamp": tx.get("timestamp", ""),
-                                "tx_hash": tx.get("hash", ""),
-                                "type": "eth",
-                            }
-
-                            if tx_date not in all_transfers:
-                                all_transfers[tx_date] = []
-                            all_transfers[tx_date].append(transfer_data)
-                            processed_count += 1
-                        except (ValueError, TypeError) as e:
-                            self.context.logger.warning(
-                                f"Error processing transaction: {e}"
-                            )
-                            continue
-
-                    # Handle pagination
-                    next_page_params = response_data.get("next_page_params")
-                    if next_page_params:
-                        params.update(
-                            {
-                                "block_number": next_page_params.get("block_number"),
-                                "index": next_page_params.get("index"),
-                            }
-                        )
-                        has_more_pages = True
-                    else:
-                        has_more_pages = False
-
-                self.context.logger.info(
-                    f"Completed Mode outgoing transfers: {processed_count} found"
-                )
-                return all_transfers
-
-            return all_transfers
-
-        except Exception as e:
-            self.context.logger.error(f"Error fetching Mode outgoing transfers: {e}")
-            return {}
-
     def _fetch_outgoing_transfers_until_date_optimism(
         self,
         address: str,
@@ -4248,6 +4290,138 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error tracking Mode ETH transfers: {e}")
             return {"incoming": {}, "outgoing": {}}
+
+    def _track_erc20_transfers_mode(
+        self,
+        safe_address: str,
+        final_timestamp: int,
+    ) -> Dict[str, Dict[str, List[Dict]]]:
+        """Fetch and organize ERC20 token transfers for Mode chain using the Mode explorer API with pagination."""
+        try:
+            all_transfers = {"outgoing": {}}
+
+            # Use Mode Explorer API (same as _fetch_token_transfers_mode)
+            base_url = "https://explorer-mode-mainnet-0.t.conduit.xyz/api/v2"
+            endpoint = f"{base_url}/addresses/{safe_address}/token-transfers"
+            params = {"filter": "from"}  # Only fetch outgoing transfers
+
+            has_more_pages = True
+            processed_count = 0
+
+            while has_more_pages:
+                response = requests.get(
+                    endpoint,
+                    params=params,
+                    headers={"Accept": "application/json"},
+                    timeout=30,
+                    verify=False,  # nosec B501
+                )
+
+                if response.status_code != 200:
+                    self.context.logger.error(
+                        f"Failed to fetch Mode ERC20 transfers: {response.status_code}"
+                    )
+                    return all_transfers
+
+                response_data = response.json()
+                transactions = response_data.get("items", [])
+
+                if not transactions:
+                    break
+
+                for tx in transactions:
+                    # Skip if no timestamp or value is 0
+                    if (
+                        not tx.get("timestamp")
+                        or int(tx.get("total", {}).get("value", "0")) <= 0
+                    ):
+                        continue
+
+                    try:
+                        # Use the same timestamp parsing as _fetch_token_transfers_mode
+                        tx_datetime = self._get_datetime_from_timestamp(
+                            tx.get("timestamp")
+                        )
+                        if not tx_datetime:
+                            continue
+
+                        tx_date = tx_datetime.strftime("%Y-%m-%d")
+                        current_date = datetime.fromtimestamp(final_timestamp).strftime(
+                            "%Y-%m-%d"
+                        )
+                        if tx_date > current_date:
+                            continue
+
+                        # Get token information (Mode Explorer API format)
+                        token = tx.get("token", {})
+                        token_address = token.get("address", "")
+                        token_symbol = token.get("symbol", "Unknown")
+                        token_decimals = int(token.get("decimals", 18))
+
+                        # Convert value from raw units to token units
+                        total = tx.get("total", {})
+                        value_raw = int(total.get("value", "0"))
+                        amount = value_raw / (10**token_decimals)
+
+                        # Get addresses (Mode Explorer API format)
+                        from_address = tx.get("from", {})
+                        to_address = tx.get("to", {})
+                        safe_address_lower = safe_address.lower()
+
+                        should_include = self._should_include_transfer_mode(
+                            to_address, tx, is_eth_transfer=False
+                        )
+                        if not should_include:
+                            continue
+
+                        if token_symbol == "USDC":  # nosec B105
+                            transfer_data = {
+                                "from_address": from_address.get("hash", ""),
+                                "to_address": to_address.get("hash", ""),
+                                "amount": amount,
+                                "token_address": token_address,
+                                "symbol": token_symbol,
+                                "timestamp": tx.get("timestamp", ""),
+                                "tx_hash": tx.get("transaction_hash", ""),
+                                "type": "token",
+                            }
+
+                            # Since we're filtering for outgoing transfers, safe_address is always the sender
+                            if (
+                                from_address.get("hash", "").lower()
+                                == safe_address_lower
+                            ):
+                                # Outgoing transfer - safe_address is sender
+                                if tx_date not in all_transfers["outgoing"]:
+                                    all_transfers["outgoing"][tx_date] = []
+                                all_transfers["outgoing"][tx_date].append(transfer_data)
+                                processed_count += 1
+
+                    except (ValueError, TypeError) as e:
+                        self.context.logger.error(f"Error processing transaction: {e}")
+                        continue
+
+                next_page_params = response_data.get("next_page_params")
+                if next_page_params:
+                    # Update params for next page
+                    params.update(
+                        {
+                            "block_number": next_page_params.get("block_number"),
+                            "index": next_page_params.get("index"),
+                        }
+                    )
+                    has_more_pages = True
+                else:
+                    has_more_pages = False
+
+            self.context.logger.info(
+                f"Completed Mode ERC20 transfers tracking: {processed_count} outgoing transfers found"
+            )
+            return all_transfers
+
+        except Exception as e:
+            self.context.logger.error(f"Error tracking Mode ERC20 transfers: {e}")
+            return {"outgoing": {}}
 
     def get_master_safe_address(self) -> Generator[None, None, Optional[str]]:
         """Get the master safe address by checking service staking state."""
@@ -4546,6 +4720,24 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error validating Velodrome v2 pool address: {str(e)}"
             )
             return False
+
+    def _is_airdrop_transfer(self, tx: Dict) -> bool:
+        """Check if a transfer is an airdrop transfer."""
+        if not self.params.airdrop_started or not self.params.airdrop_contract_address:
+            return False
+
+        from_address = tx.get("from", {})
+        token = tx.get("token", {})
+        symbol = token.get("symbol", "Unknown")
+
+        # Check for USDC airdrop transfers on MODE chain
+        usdc_address = self._get_usdc_address("mode")
+        return (
+            symbol.upper() == "USDC"
+            and token.get("address", "").lower() == usdc_address.lower()
+            and from_address.get("hash", "").lower()
+            == self.params.airdrop_contract_address.lower()
+        )
 
     def _update_agent_performance_metrics(self):
         """Update agent performance metrics with portfolio balance and ROI."""

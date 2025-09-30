@@ -111,109 +111,92 @@ tm:
 
 v := $(shell pip -V | grep virtualenvs)
 
+.PHONY: poetry-install
+poetry-install: 
+
+	PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring poetry install
+	PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring poetry run pip install --upgrade --force-reinstall setuptools==59.5.0  # fix for KeyError: 'setuptools._distutils.compilers'
+
+
+
+./agent:  poetry-install ./hash_id
+	@if [ ! -d "agent" ]; then \
+		poetry run autonomy -s fetch --remote `cat ./hash_id` --alias agent; \
+	fi \
+
 
 .PHONY: build-agent-runner
-build-agent-runner:
-	poetry lock
-	poetry install
-	poetry run pip install -U pyinstaller
-	poetry run pip install --upgrade setuptools==59.8.0
+build-agent-runner: poetry-install agent
 	poetry run pyinstaller \
 	--collect-data eth_account \
 	--collect-all aea \
 	--collect-all autonomy \
-	--collect-all operate \
-	--collect-all google.generativeai \
 	--collect-all aea_ledger_ethereum \
 	--collect-all aea_ledger_cosmos \
 	--collect-all aea_ledger_ethereum_flashbots \
 	--hidden-import aea_ledger_ethereum \
 	--hidden-import aea_ledger_cosmos \
 	--hidden-import aea_ledger_ethereum_flashbots \
-	--hidden-import grpc \
-	--hidden-import openapi_core \
-	--collect-all google.protobuf \
-	--collect-all openapi_core \
-	--collect-all openapi_spec_validator \
-	--collect-all asn1crypto \
-	--hidden-import py_ecc \
-	--hidden-import pytz \
-	--collect-all requests \
-	--collect-all pycoingecko \
-	--collect-all numpy \
-	--collect-all pandas \
-	--collect-all pyfolio \
-	--collect-all peewee \
-	--collect-all google-generativeai \
-	--collect-all google.generativeai \
-	--collect-all scipy \
-	--hidden-import requests \
-	--hidden-import pycoingecko \
-	--hidden-import numpy \
-	--hidden-import pandas \
-	--hidden-import pyfolio \
-	--hidden-import peewee \
-	--hidden-import google-generativeai \
-	--hidden-import google.generativeai \
-	--hidden-import scipy \
-	--hidden-import distutils.dir_util \
-	--hidden-import distutils \
-	--collect-all distutils \
+	$(shell poetry run python get_pyinstaller_dependencies.py) \
 	--onefile pyinstaller/optimus_bin.py \
 	--name agent_runner_bin
-	sleep 1
 	./dist/agent_runner_bin --version
-
+	
 
 .PHONY: build-agent-runner-mac
-build-agent-runner-mac:
-	poetry lock
-	poetry install
-	poetry run pip install -U pyinstaller
-	poetry run pip install --upgrade setuptools==59.8.0
+build-agent-runner-mac: poetry-install  agent
 	poetry run pyinstaller \
 	--collect-data eth_account \
 	--collect-all aea \
 	--collect-all autonomy \
-	--collect-all operate \
-	--collect-all google.generativeai \
 	--collect-all aea_ledger_ethereum \
 	--collect-all aea_ledger_cosmos \
 	--collect-all aea_ledger_ethereum_flashbots \
 	--hidden-import aea_ledger_ethereum \
 	--hidden-import aea_ledger_cosmos \
 	--hidden-import aea_ledger_ethereum_flashbots \
-	--hidden-import grpc \
-	--hidden-import openapi_core \
-	--collect-all google.protobuf \
-	--collect-all openapi_core \
-	--collect-all openapi_spec_validator \
-	--collect-all asn1crypto \
-	--hidden-import py_ecc \
-	--hidden-import pytz \
-	--collect-all requests \
-	--collect-all pycoingecko \
-	--collect-all numpy \
-	--collect-all pandas \
-	--collect-all pyfolio \
-	--collect-all peewee \
-	--collect-all google-generativeai \
-	--collect-all google.generativeai \
-	--collect-all scipy \
-	--hidden-import requests \
-	--hidden-import pycoingecko \
-	--hidden-import numpy \
-	--hidden-import pandas \
-	--hidden-import pyfolio \
-	--hidden-import peewee \
-	--hidden-import google-generativeai \
-	--hidden-import google.generativeai \
-	--hidden-import scipy \
-	--hidden-import distutils.dir_util \
-	--hidden-import distutils \
-	--collect-all distutils \
+	$(shell poetry run python get_pyinstaller_dependencies.py) \
 	--onefile pyinstaller/optimus_bin.py \
 	--codesign-identity "${SIGN_ID}" \
 	--name agent_runner_bin
-	sleep 1
 	./dist/agent_runner_bin --version
+
+
+./hash_id: ./packages/packages.json
+	cat ./packages/packages.json | jq -r '.dev | to_entries[] | select(.key | startswith("agent/")) | .value' > ./hash_id
+
+./agent_id: ./packages/packages.json
+	cat ./packages/packages.json | jq -r '.dev | to_entries[] | select(.key | startswith("agent/")) | .key | sub("^agent/"; "")' > ./agent_id
+
+./agent.zip: ./agent
+	zip -r ./agent.zip ./agent
+
+./agent.tar.gz: ./agent
+	tar czf ./agent.tar.gz ./agent
+
+./agent/ethereum_private_key.txt: ./agent
+	poetry run bash -c "cd ./agent; autonomy  -s generate-key ethereum; autonomy  -s add-key ethereum ethereum_private_key.txt; autonomy -s issue-certificates;"
+
+
+# Configuration
+TIMEOUT := 20
+COMMAND := cd ./agent && SKILL_TRADER_ABCI_MODELS_PARAMS_ARGS_STORE_PATH=/tmp ../dist/agent_runner_bin -s run
+SEARCH_STRING := Starting AEA
+
+
+# Determine OS and set appropriate options
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    # macOS specific settings
+    MKTEMP = mktemp -t tmp
+else ifeq ($(OS),Windows_NT)
+    # Windows specific settings
+    MKTEMP = echo $$(cygpath -m "$$(mktemp -t tmp.XXXXXX)")
+else
+    # Linux and other Unix-like systems
+    MKTEMP = mktemp
+endif
+
+.PHONY: check-agent-runner
+check-agent-runner:
+	python check_agent_runner.py

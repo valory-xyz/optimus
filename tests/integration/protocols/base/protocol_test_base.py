@@ -23,7 +23,7 @@ import json
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, mock_open
 
 import pytest
 from aea_ledger_ethereum import EthereumApi
@@ -163,47 +163,74 @@ class ProtocolIntegrationTestBase(FSMBehaviourBaseCase):
 
     def create_mock_behaviour(self, behaviour_class: type) -> Any:
         """Create a mock behaviour instance for testing."""
-        # Create mock context and params
-        mock_context = MagicMock()
-        mock_params = MagicMock()
-        
-        # Set up common parameters
-        mock_params.safe_contract_addresses = {
-            "optimism": self.test_addresses["safe"],
-            "base": self.test_addresses["safe"],
-            "mode": self.test_addresses["safe"],
-        }
-        mock_params.velodrome_voter_contract_addresses = {
-            "optimism": "0xVoterAddress",
-        }
-        mock_params.investment_cap_threshold = 950
-        mock_params.initial_investment_amount = 1000
-        mock_params.target_investment_chains = ["optimism"]
-        mock_params.available_protocols = ["VELODROME"]
-        mock_params.chain_to_chain_id_mapping = {"optimism": 10}
-        mock_params.strategies_kwargs = {}
-        mock_params.selected_hyper_strategy = "max_apr_selection"
-        mock_params.max_pools = 5
-        mock_params.apr_threshold = 5.0
-        mock_params.min_investment_amount = 10.0
-        mock_params.sleep_time = 1
-        mock_params.merkl_user_rewards_url = "https://api.merkl.xyz/v3/userRewards"
-        mock_params.reward_claiming_time_period = 86400
-        
-        # Create behaviour instance with proper AEA initialization
-        behaviour = behaviour_class(
-            name="TestBehaviour",
-            skill_context=mock_context,
-            params=mock_params
-        )
-        
-        # Mock common methods
-        behaviour.contract_interact = MagicMock()
-        behaviour.get_http_response = MagicMock()
-        behaviour._read_kv = MagicMock()
-        behaviour._write_kv = MagicMock()
-        
-        return behaviour
+        # Mock file operations to avoid file system issues
+        with patch("builtins.open", mock_open(read_data="[]")):
+            with patch("json.load", return_value=[]):
+                with patch("json.dump"):
+                      # Create mock context and params
+                      mock_context = MagicMock()
+                      mock_params = MagicMock()
+                      
+                      # Set up common parameters with default addresses
+                      mock_params.safe_contract_addresses = {
+                          "optimism": "0xSafeAddress123456789012345678901234567890123456",
+                          "base": "0xSafeAddress123456789012345678901234567890123456", 
+                          "mode": "0xSafeAddress123456789012345678901234567890123456",
+                      }
+                      mock_params.velodrome_voter_contract_addresses = {
+                          "optimism": "0xVoterAddress",
+                      }
+                      mock_params.investment_cap_threshold = 950
+                      mock_params.initial_investment_amount = 1000
+                      
+                      # Set up synchronized data with proper values
+                      mock_context.shared_state = MagicMock()
+                      mock_context.shared_state.synchronized_data = MagicMock()
+                      mock_context.shared_state.synchronized_data.period_count = 1
+                      mock_context.shared_state.synchronized_data.service_staking_state = 0  # STAKED
+                      mock_context.shared_state.synchronized_data.safe_tx_hash = "0x1234567890abcdef"
+                      mock_context.shared_state.synchronized_data.min_num_of_safe_tx_required = 3
+                      
+                      # Set up file paths to use temp directory
+                      mock_params.store_path = self.temp_path
+                      mock_params.pool_info_filename = "pool_info.json"
+                      mock_params.assets_info_filename = "assets.json"
+                      mock_params.agent_performance_filename = "agent_performance.json"
+                      mock_params.target_investment_chains = ["optimism"]
+                      mock_params.available_protocols = ["VELODROME"]
+                      mock_params.chain_to_chain_id_mapping = {"optimism": 10}
+                      mock_params.strategies_kwargs = {}
+                      mock_params.selected_hyper_strategy = "max_apr_selection"
+                      mock_params.max_pools = 5
+                      mock_params.apr_threshold = 5.0
+                      mock_params.min_investment_amount = 10.0
+                      mock_params.sleep_time = 1
+                      mock_params.merkl_user_rewards_url = "https://api.merkl.xyz/v3/userRewards"
+                      mock_params.reward_claiming_time_period = 86400
+                      mock_params.staking_chain = "optimism"
+                      mock_params.safe_contract_addresses = {
+                          "optimism": "0xSafeAddress123456789012345678901234567890123456",
+                          "base": "0xSafeAddress123456789012345678901234567890123456", 
+                          "mode": "0xSafeAddress123456789012345678901234567890123456",
+                      }
+                    
+                      # Create behaviour instance with proper AEA initialization
+                      behaviour = behaviour_class(
+                          name="TestBehaviour",
+                          skill_context=mock_context,
+                          params=mock_params
+                      )
+                      
+                      # Mock common methods
+                      behaviour.contract_interact = MagicMock()
+                      behaviour.get_http_response = MagicMock()
+                      behaviour._read_kv = MagicMock()
+                      behaviour._write_kv = MagicMock()
+                      
+                      # Mock transaction hash generation
+                      behaviour._generate_tx_hash = MagicMock(return_value="0x1234567890abcdef")
+                      
+                      return behaviour
 
     def mock_contract_interact_generator(
         self, responses: List[Any]

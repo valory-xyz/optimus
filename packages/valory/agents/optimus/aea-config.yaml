@@ -6,6 +6,7 @@ description: An optimism liquidity trader agent.
 aea_version: '>=1.19.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
+  tests/helpers/data/json_server/data.json: bafybeihd6lzcpi5zltukwbborofgycp6g6x4qae3mn7m5u5skduayoau7y
 fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeidutel5jdlqyt2tygyvfxrqwgljpxq23bu3eyfndbcwm2t4y7jbee
@@ -308,7 +309,7 @@ models:
       available_strategies: ${str:{"mode":["balancer_pools_search","asset_lending","velodrome_pools_search"],"optimism":["balancer_pools_search","uniswap_pools_search","velodrome_pools_search"]}}
       default_acceptance_time: ${int:5}
       genai_api_key: ${str:""}
-      genai_model: ${str:"gemini-2.0-flash-exp"}
+      genai_model: ${str:gemini-2.0-flash-exp}
       slippage_tolerance: ${float:0.01}
       airdrop_started: ${bool:false}
       airdrop_contract_address: ${str:""}

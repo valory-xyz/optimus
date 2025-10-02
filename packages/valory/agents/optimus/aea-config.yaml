@@ -6,6 +6,7 @@ description: An optimism liquidity trader agent.
 aea_version: '>=1.19.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
+  tests/helpers/data/json_server/data.json: bafybeihd6lzcpi5zltukwbborofgycp6g6x4qae3mn7m5u5skduayoau7y
 fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeidutel5jdlqyt2tygyvfxrqwgljpxq23bu3eyfndbcwm2t4y7jbee
@@ -50,8 +51,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
-- valory/liquidity_trader_abci:0.1.0:bafybeih7vq7zk7x4o6aayj677nfpvc4iq2l7fnnerv4ua2nfgjuebyeqda
-- valory/optimus_abci:0.1.0:bafybeiawtctt5vgcsup6xnrz6s6ztl6qkomztilcudavesmsf4zq3dvkyq
+- valory/liquidity_trader_abci:0.1.0:bafybeia47nxh3jyyblhqzucnjuvltytgmmx3wv2fnfnkmzpe4olorsdwdm
+- valory/optimus_abci:0.1.0:bafybeiaqzoqkazad2bx7wznzyz55jv5mpb6nrup2ls2suh6epyrkqvykfa
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
@@ -309,6 +310,6 @@ models:
       default_acceptance_time: ${int:5}
       genai_api_key: ${str:""}
       genai_model: ${str:"gemini-2.0-flash-exp"}
-      slippage_tolerance: ${float:0.005}
+      slippage_tolerance: ${float:0.01}
       airdrop_started: ${bool:false}
       airdrop_contract_address: ${str:""}

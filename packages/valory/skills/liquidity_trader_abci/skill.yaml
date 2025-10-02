@@ -236,7 +236,7 @@ models:
       lifi_fetch_step_transaction_url: https://li.quest/v1/advanced/stepTransaction
       lifi_check_status_url: https://li.quest/v1/status
       slippage_for_swap: 0.08
-      slippage_tolerance: 0.005
+      slippage_tolerance: 0.01
       balancer_vault_contract_addresses: '{"optimism":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","base":"0xBA12222222228d8Ba445958a75a0704d566BF2C8","mode":"0xBA12222222228d8Ba445958a75a0704d566BF2C8"}'
       balancer_queries_contract_addresses: '{"optimism":"0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5","mode":"0x36caC20dd805d128c1a6Dd16eeA845C574b5A17C"}'
       uniswap_position_manager_contract_addresses: '{"optimism":"0xC36442b4a4522E871399CD717aBDD847Ab11FE88","base":"0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"}'

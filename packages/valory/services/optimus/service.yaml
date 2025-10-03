@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeia2a3hfhlzctcb7jypy7bsgqtuh54xx4abmdaqq76mohzvvxdsfje
+agent: valory/optimus:0.1.0:bafybeictwg5y24alspi2k7bav7qvuzqklcpfsjsq47zggposfpoz6yecvy
 number_of_agents: 1
 deployment:
   agent:
@@ -111,6 +111,7 @@ models:
       genai_api_key: ${GENAI_API_KEY:str:""}
       airdrop_started: ${AIRDROP_STARTED:bool:false}
       airdrop_contract_address: ${AIRDROP_CONTRACT_ADDRESS:str:""}
+      slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:0.01}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

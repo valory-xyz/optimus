@@ -48,6 +48,12 @@ tox -e py3.10-linux
 
 # Run only staking tests with tox
 tox -e py3.10-linux -- tests/integration/protocols/staking/
+
+# Run protocol-specific tests with dedicated tox environments
+tox -e test-protocol-staking      # Staking compliance tests
+tox -e test-protocol-balancer     # Balancer protocol tests  
+tox -e test-protocol-uniswap      # Uniswap V3 protocol tests
+tox -e test-protocol-velodrome    # Velodrome protocol tests
 ```
 
 ### Method 3: Using the integration test runner
@@ -180,15 +186,6 @@ tests/integration/protocols/staking/test_staking_integration.py::TestStakingInte
 $ pytest tests/integration/protocols/staking/ --cov=packages.valory.skills.liquidity_trader_abci --cov-report=html
 
 ========================= test session starts =========================
-...
-Name                                                      Stmts   Miss  Cover   Missing
------------------------------------------------------------------------------------------
-packages/valory/skills/liquidity_trader_abci/behaviours/check_staking_kpi_met.py   148     0   100%
-packages/valory/skills/liquidity_trader_abci/behaviours/call_checkpoint.py         156     0   100%
-packages/valory/skills/liquidity_trader_abci/states/base.py                        234     0   100%
------------------------------------------------------------------------------------------
-TOTAL                                                                              538     0   100%
-```
 
 ## 🐛 Debugging Tests
 

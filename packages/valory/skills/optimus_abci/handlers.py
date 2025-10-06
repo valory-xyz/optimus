@@ -72,6 +72,8 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
+from packages.valory.skills.funds_manager.behaviours import GET_FUNDS_STATUS_METHOD_NAME
+from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
     TradingType,
@@ -277,6 +279,7 @@ class HttpHandler(BaseHttpHandler):
         features_url_regex = (
             rf"{hostname_regex}\/features"  # New regex for /features endpoint
         )
+        funds_status_regex = rf"{hostname_regex}\/funds-status"
         # Withdrawal endpoints
         withdrawal_amount_regex = rf"{hostname_regex}\/withdrawal\/amount"
         withdrawal_initiate_regex = rf"{hostname_regex}\/withdrawal\/initiate"
@@ -294,6 +297,7 @@ class HttpHandler(BaseHttpHandler):
                 (health_url_regex, self._handle_get_health),
                 (portfolio_url_regex, self._handle_get_portfolio),
                 (features_url_regex, self._handle_get_features),  # Add new route
+                (funds_status_regex, self._handle_get_funds_status),
                 (withdrawal_amount_regex, self._handle_get_withdrawal_amount),
                 (withdrawal_status_regex, self._handle_get_withdrawal_status),
                 (
@@ -348,6 +352,11 @@ class HttpHandler(BaseHttpHandler):
         """Shortcut to access the parameters."""
         return cast(Params, self.context.params)
 
+    @property
+    def funds_status(self) -> FundRequirements:
+        """Get the fund status."""
+        return self.context.shared_state[GET_FUNDS_STATUS_METHOD_NAME]()
+
     def _handle_get_features(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -371,6 +380,19 @@ class HttpHandler(BaseHttpHandler):
         data = {"isChatEnabled": is_chat_enabled}
 
         self._send_ok_response(http_msg, http_dialogue, data)
+
+    def _handle_get_funds_status(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a fund status request.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        self._send_ok_response(
+            http_msg, http_dialogue, self.funds_status.get_response_body()
+        )
 
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

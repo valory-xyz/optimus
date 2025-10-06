@@ -567,127 +567,49 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def calculate_user_share_values(self) -> Generator[None, None, None]:
         """Calculate the value of shares for the user using Optimus subgraph data."""
-        
+
         # Get chain
         chain = self.params.target_investment_chains[0]
-        
+
         # Fetch portfolio data from subgraph
         portfolio_data = yield from self._fetch_portfolio_from_subgraph(chain)
-        
+
         if not portfolio_data:
             self.context.logger.error(
                 "Subgraph unavailable - cannot calculate portfolio without subgraph data"
             )
             return
-        
+
         # Subgraph data available - use it as base
         self.context.logger.info("Using portfolio data from Optimus subgraph")
-        
+
         # Add local calculations for staking and airdrop rewards
         staking_rewards_value = yield from self.calculate_stakig_rewards_value()
         airdrop_rewards_value = yield from self.calculate_airdrop_rewards_value()
-        
+
         # Update portfolio data with local reward calculations
         portfolio_data["airdropped_rewards"] = float(airdrop_rewards_value)
-        
+
         # Recalculate ROI including staking rewards
         initial_investment = portfolio_data.get("initial_investment", 0)
         if initial_investment and initial_investment > 0:
             portfolio_value = portfolio_data.get("portfolio_value", 0)
             withdrawals = portfolio_data.get("value_in_withdrawals", 0)
-            
+
             # Total ROI includes staking rewards
             total_roi_decimal = (
                 (portfolio_value + float(staking_rewards_value) + withdrawals)
                 / initial_investment
             ) - 1
             portfolio_data["total_roi"] = round(total_roi_decimal * 100, 2)
-            
+
             # Partial ROI is just trading (portfolio + withdrawals)
             partial_roi_decimal = (
                 (portfolio_value + withdrawals) / initial_investment
             ) - 1
             portfolio_data["partial_roi"] = round(partial_roi_decimal * 100, 2)
-        
+
         self.portfolio_data = portfolio_data
-
-    def _update_portfolio_metrics(
-        self,
-        total_user_share_value_usd: Decimal,
-        individual_shares: List[Tuple],
-        portfolio_breakdown: List[Dict],
-        allocations: List[Dict],
-    ) -> Generator[None, None, None]:
-        """Update portfolio metrics including ratios for both breakdown and allocations."""
-        # First update portfolio breakdown ratios
-        self._update_portfolio_breakdown_ratios(
-            portfolio_breakdown, total_user_share_value_usd
-        )
-
-        # Then calculate allocation ratios if total value is positive
-        if total_user_share_value_usd > 0:
-            yield from self._update_allocation_ratios(
-                individual_shares, total_user_share_value_usd, allocations
-            )
-
-    def _update_portfolio_breakdown_ratios(
-        self, portfolio_breakdown: List[Dict], total_value: Decimal
-    ) -> None:
-        """Calculate ratios for portfolio breakdown entries."""
-        # Handle empty portfolio breakdown
-        if not portfolio_breakdown:
-            return
-
-        # Calculate total ratio first, safely handling zero or negative total_value
-        if total_value > 0:
-            total_ratio = sum(
-                Decimal(str(entry["value_usd"])) / total_value
-                for entry in portfolio_breakdown
-            )
-        else:
-            total_ratio = Decimal(0)
-
-        # Update each entry with its ratio
-        # Filter out entries with negligible USD value (less than $0.01)
-        try:
-            filtered_breakdown = []
-            for entry in portfolio_breakdown:
-                try:
-                    # Handle potential missing or invalid value_usd
-                    value_usd = entry.get("value_usd")
-                    if value_usd is None:
-                        continue
-
-                    # Convert value_usd to Decimal safely
-                    value_usd_decimal = Decimal(str(value_usd))
-
-                    # Only keep entries >= 0.01
-                    if value_usd_decimal >= Decimal("0.01"):
-                        filtered_breakdown.append(entry)
-                except Exception as e:
-                    self.context.logger.warning(
-                        f"Error processing portfolio entry: {e}"
-                    )
-                    continue
-
-            portfolio_breakdown[:] = filtered_breakdown
-        except Exception as e:
-            self.context.logger.error(f"Error filtering portfolio breakdown: {e}")
-            # Keep original list in case of error
-            pass
-
-        for entry in portfolio_breakdown:
-            if total_value > 0 and total_ratio > 0:
-                entry["ratio"] = round(
-                    Decimal(str(entry["value_usd"])) / total_value / total_ratio, 6
-                )
-            else:
-                entry["ratio"] = 0.0
-
-            # Convert values to float for JSON serialization
-            entry["value_usd"] = float(entry["value_usd"])
-            entry["balance"] = float(entry["balance"])
-            entry["price"] = float(entry["price"])
 
     def _get_tick_ranges(
         self, position: Dict, chain: str
@@ -795,396 +717,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
         return tick_ranges
-
-    def _update_allocation_ratios(
-        self,
-        individual_shares: List[Tuple],
-        total_value: Decimal,
-        allocations: List[Dict],
-    ) -> Generator[None, None, None]:
-        """Calculate and update allocation ratios."""
-        if total_value <= 0:
-            return
-
-        # Calculate total ratio for allocations
-        total_ratio = sum(
-            float(user_share / total_value) * 100
-            for user_share, *_ in individual_shares
-        )
-
-        # Process each share and create allocation entry
-        for (
-            user_share,
-            dex_type,
-            chain,
-            pool_id,
-            assets,
-            apr,
-            details,
-            user_address,
-            _,
-        ) in individual_shares:
-            ratio = (
-                round(float(user_share / total_value) * 100 * 100 / total_ratio, 2)
-                if total_ratio > 0
-                else 0.0
-            )
-
-            # Get tick ranges for concentrated liquidity positions
-            position = next(
-                (
-                    p
-                    for p in self.current_positions
-                    if (p.get("pool_address") == pool_id or p.get("pool_id") == pool_id)
-                ),
-                None,
-            )
-
-            tick_ranges = []
-            if position:
-                tick_ranges = yield from self._get_tick_ranges(position, chain)
-
-            # UI supports only camel case names, but our strategies have different name for dex
-            dex_type_mapping = {
-                DexType.UNISWAP_V3.value: "uniswapV3",
-                DexType.STURDY.value: "sturdy",
-                DexType.VELODROME.value: "velodrome",
-                DexType.BALANCER.value: "balancerPool",
-            }
-
-            allocation = {
-                "chain": chain,
-                "type": dex_type_mapping.get(dex_type, dex_type),
-                "id": pool_id,
-                "assets": assets,
-                "apr": round(float(apr), 2),
-                "details": details,
-                "ratio": float(ratio),
-                "address": user_address,
-            }
-
-            # Only add tick_ranges if they exist
-            if tick_ranges:
-                allocation["tick_ranges"] = tick_ranges
-
-            allocations.append(allocation)
-
-    def _create_portfolio_data(
-        self,
-        total_pools_value: Decimal,
-        total_safe_value: Decimal,
-        staking_rewards_value: Decimal,
-        airdrop_rewards_value: Decimal,
-        withdrawals_value: Decimal,
-        initial_investment: float,
-        volume: float,
-        allocations: List[Dict],
-        portfolio_breakdown: List[Dict],
-    ) -> Dict:
-        """Create the final portfolio data structure."""
-
-        # Get agent_hash from environment
-        try:
-            # Get agent_hash from environment
-            agent_config = os.environ.get("AEA_AGENT", "")
-            agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
-
-            # Calculate total portfolio value
-            total_portfolio_value = total_pools_value + total_safe_value
-
-            # Calculate ROI using the provided formula: (final_value / initial_value) - 1
-            # Convert to percentage by multiplying by 100
-            total_roi = None
-            partial_roi = None
-            if initial_investment is not None and initial_investment > 0:
-                try:
-                    # Total ROI includes staking rewards + airdrop rewards
-                    total_roi_decimal = (
-                        float(
-                            total_portfolio_value
-                            + staking_rewards_value
-                            + withdrawals_value
-                        )
-                        / float(initial_investment)
-                    ) - 1
-                    total_roi = round(total_roi_decimal * 100, 2)
-
-                    # Partial ROI includes airdrop rewards (trading + airdrop)
-                    partial_roi_decimal = (
-                        float(total_portfolio_value + withdrawals_value)
-                        / float(initial_investment)
-                    ) - 1
-                    partial_roi = round(partial_roi_decimal * 100, 2)
-
-                    self.context.logger.info(
-                        f"Total ROI calculated: {total_roi:.2f}% Partial ROI Calculated: {partial_roi:.2f}% "
-                        f"(Portfolio: ${float(total_portfolio_value):.2f}, Airdrop: ${float(airdrop_rewards_value):.2f}, Withdrawals: ${float(withdrawals_value):.2f}, "
-                        f"Staking: ${float(staking_rewards_value):.2f}, Initial: ${float(initial_investment):.2f})"
-                    )
-                except (ValueError, ZeroDivisionError, TypeError) as e:
-                    self.context.logger.error(f"Error calculating ROI: {str(e)}")
-                    total_roi = None
-                    partial_roi = None
-            else:
-                self.context.logger.info(
-                    f"ROI not calculated - initial_investment: {initial_investment}"
-                )
-
-            allocation_assets = set()
-            for allocation in allocations:
-                try:
-                    for asset in allocation["assets"]:
-                        allocation_assets.add(asset.lower())
-                except (KeyError, TypeError) as e:
-                    self.context.logger.error(
-                        f"Error processing allocation assets: {str(e)}"
-                    )
-                    continue
-
-            # Then filter portfolio_breakdown to only include assets from allocations
-            filtered_portfolio_breakdown = []
-
-            # Always show all portfolio breakdown entries to display complete portfolio
-            for entry in portfolio_breakdown:
-                try:
-                    chain = self.params.target_investment_chains[0]
-                    if (
-                        entry.get("address").lower()
-                        == OLAS_ADDRESSES.get(chain).lower()
-                    ):
-                        continue
-
-                    filtered_portfolio_breakdown.append(
-                        {
-                            "asset": entry["asset"],
-                            "address": entry["address"],
-                            "balance": float(entry["balance"]),
-                            "price": float(entry["price"]),
-                            "value_usd": float(entry["value_usd"]),
-                            "ratio": float(entry["ratio"]),
-                        }
-                    )
-                except (KeyError, ValueError, TypeError) as e:
-                    self.context.logger.error(
-                        f"Error processing portfolio breakdown entry: {str(e)}"
-                    )
-                    continue
-
-            # Process allocations with error handling
-            processed_allocations = []
-            for allocation in allocations:
-                try:
-                    processed_allocation = {
-                        "chain": allocation["chain"],
-                        "type": allocation["type"],
-                        "id": allocation["id"],
-                        "assets": allocation["assets"],
-                        "apr": float(allocation["apr"]),
-                        "details": allocation["details"],
-                        "ratio": float(allocation["ratio"]),
-                        "address": allocation["address"],
-                    }
-                    if "tick_ranges" in allocation:
-                        processed_allocation["tick_ranges"] = allocation["tick_ranges"]
-                    processed_allocations.append(processed_allocation)
-                except (KeyError, ValueError, TypeError) as e:
-                    self.context.logger.error(f"Error processing allocation: {str(e)}")
-                    continue
-
-            # Create and return the final portfolio data structure
-            safe_address = self.params.safe_contract_addresses.get(
-                self.params.target_investment_chains[0]
-            )
-            return {
-                "portfolio_value": float(total_portfolio_value),
-                "value_in_pools": float(total_pools_value),
-                "value_in_safe": float(total_safe_value),
-                "value_in_withdrawals": float(withdrawals_value),
-                "initial_investment": float(initial_investment)
-                if initial_investment is not None
-                else None,
-                "airdropped_rewards": float(airdrop_rewards_value),
-                "volume": float(volume) if volume is not None else None,
-                "total_roi": total_roi,
-                "partial_roi": partial_roi,
-                "agent_hash": agent_hash,
-                "allocations": processed_allocations,
-                "portfolio_breakdown": filtered_portfolio_breakdown,
-                "address": safe_address,
-                "last_updated": int(self._get_current_timestamp()),
-            }
-        except Exception as e:
-            self.context.logger.error(f"Error creating portfolio data: {str(e)}")
-            return {}
-
-    def _handle_balancer_position(
-        self, position: Dict, chain: str
-    ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
-        """Handle Balancer position processing."""
-        self.context.logger.info(
-            f"Calculating Balancer position for pool {position.get('pool_id')}"
-        )
-        user_address = self.params.safe_contract_addresses.get(chain)
-        pool_address = position.get("pool_address")
-        pool_id = position.get("pool_id")
-
-        user_balances = yield from self.get_user_share_value_balancer(
-            user_address, pool_id, pool_address, chain
-        )
-        details = yield from self._get_balancer_pool_name(pool_address, chain)
-        token_info = {
-            position.get("token0"): position.get("token0_symbol"),
-            position.get("token1"): position.get("token1_symbol"),
-        }
-
-        return user_balances, details, token_info
-
-    def _handle_uniswap_position(
-        self, position: Dict, chain: str
-    ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
-        """Handle Uniswap V3 position processing."""
-        pool_address = position.get("pool_address")
-        token_id = position.get("token_id")
-        self.context.logger.info(
-            f"Calculating Uniswap V3 position for pool {pool_address} with token ID {token_id}"
-        )
-
-        user_balances = yield from self.get_user_share_value_uniswap(
-            pool_address, token_id, chain, position
-        )
-        details = f"Uniswap V3 Pool - {position.get('token0_symbol')}/{position.get('token1_symbol')}"
-        token_info = {
-            position.get("token0"): position.get("token0_symbol"),
-            position.get("token1"): position.get("token1_symbol"),
-        }
-
-        return user_balances, details, token_info
-
-    def _handle_sturdy_position(
-        self, position: Dict, chain: str
-    ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
-        """Handle Sturdy position processing."""
-        self.context.logger.info(
-            f"Calculating Sturdy position for aggregator {position.get('pool_address')}"
-        )
-        user_address = self.params.safe_contract_addresses.get(chain)
-        aggregator_address = position.get("pool_address")
-        asset_address = position.get("token0")
-
-        user_balances = yield from self.get_user_share_value_sturdy(
-            user_address, aggregator_address, asset_address, chain
-        )
-        details = yield from self._get_aggregator_name(aggregator_address, chain)
-        token_info = {position.get("token0"): position.get("token0_symbol")}
-
-        return user_balances, details, token_info
-
-    def _handle_velodrome_position(
-        self, position: Dict, chain: str
-    ) -> Generator[Tuple[Dict, str, Dict[str, str]], None, None]:
-        """Handle Velodrome position processing."""
-        self.context.logger.info(
-            f"Calculating Velodrome position for pool {position.get('pool_address')} with token ID {position.get('token_id')}"
-        )
-        user_address = self.params.safe_contract_addresses.get(chain)
-        pool_address = position.get("pool_address")
-        token_id = position.get("token_id")
-
-        user_balances = yield from self.get_user_share_value_velodrome(
-            user_address, pool_address, token_id, chain, position
-        )
-
-        # Add VELO rewards to user balances if position is staked
-        if position.get("staked", False):
-            velo_rewards = yield from self._get_velodrome_pending_rewards(
-                position, chain, user_address
-            )
-            if velo_rewards > 0:
-                # Get VELO token address for the chain
-                velo_token_address = self._get_velo_token_address(chain)
-                if velo_token_address:
-                    user_balances[velo_token_address] = velo_rewards // 10**18
-                    self.context.logger.info(
-                        f"Added VELO rewards to position: {velo_rewards}"
-                    )
-
-        details = "Velodrome " + ("CL Pool" if position.get("is_cl_pool") else "Pool")
-        token_info = {
-            position.get("token0"): position.get("token0_symbol"),
-            position.get("token1"): position.get("token1_symbol"),
-        }
-
-        # Add VELO to token_info if rewards exist
-        velo_token_address = self._get_velo_token_address(chain)
-        if velo_token_address and velo_token_address in user_balances:
-            token_info[velo_token_address] = "VELO"
-
-        return user_balances, details, token_info
-
-    def _calculate_position_value(
-        self,
-        position: Dict,
-        chain: str,
-        user_balances: Dict,
-        token_info: Dict[str, str],
-        portfolio_breakdown: List,
-    ) -> Generator[Decimal, None, None]:
-        """Calculate total value of a position and update portfolio breakdown."""
-        user_share = Decimal(0)
-        token_prices = {}
-
-        for token_address, token_symbol in token_info.items():
-            asset_balance = user_balances.get(token_address)
-            if asset_balance is None:
-                self.context.logger.error(f"Could not find balance for {token_symbol}")
-                continue
-
-            asset_price = yield from self._fetch_token_price(token_address, chain)
-            if asset_price is None:
-                self.context.logger.error(f"Could not fetch price for {token_symbol}")
-                continue
-
-            asset_price = Decimal(str(asset_price))
-            asset_value_usd = asset_balance * asset_price
-            user_share += asset_value_usd
-
-            # Store price for yield calculation
-            token_prices[token_address] = asset_price
-
-            # Update portfolio breakdown
-            existing_asset = next(
-                (
-                    entry
-                    for entry in portfolio_breakdown
-                    if entry["address"] == token_address
-                ),
-                None,
-            )
-
-            if existing_asset:
-                existing_asset.update(
-                    {
-                        "balance": float(asset_balance),
-                        "value_usd": float(asset_value_usd),
-                    }
-                )
-            else:
-                portfolio_breakdown.append(
-                    {
-                        "asset": token_symbol,
-                        "address": token_address,
-                        "balance": float(asset_balance),
-                        "price": float(asset_price),
-                        "value_usd": float(asset_value_usd),
-                    }
-                )
-
-        # Update position with current value and corrected yield calculation
-        self._update_position_with_current_value(
-            position, user_share, chain, user_balances, token_info, token_prices
-        )
-
-        return user_share
 
     def _update_position_with_current_value(
         self,
@@ -1963,148 +1495,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         return {asset_address: user_asset_balance}
 
-    def _add_to_portfolio_breakdown(
-        self,
-        portfolio_breakdown: List[Dict],
-        token_address: str,
-        token_symbol: str,
-        adjusted_balance: Decimal,
-        token_price: Decimal,
-        token_value_usd: Decimal,
-    ) -> None:
-        """Helper method to add or update portfolio breakdown entries."""
-        existing_asset = next(
-            (
-                entry
-                for entry in portfolio_breakdown
-                if entry["address"].lower() == token_address.lower()
-            ),
-            None,
-        )
-
-        if existing_asset:
-            # Update existing entry by adding balance
-            existing_asset["balance"] = float(
-                Decimal(str(existing_asset["balance"])) + adjusted_balance
-            )
-            existing_asset["value_usd"] = float(
-                Decimal(str(existing_asset["value_usd"])) + token_value_usd
-            )
-        else:
-            # Add new entry
-            portfolio_breakdown.append(
-                {
-                    "asset": token_symbol,
-                    "address": token_address,
-                    "balance": float(adjusted_balance),
-                    "price": float(token_price),
-                    "value_usd": float(token_value_usd),
-                }
-            )
-
-    def _calculate_safe_balances_value(
-        self, portfolio_breakdown: List[Dict]
-    ) -> Generator[Decimal, None, None]:
-        """Calculate the USD value of funds in the safe across all chains."""
-        total_safe_value = Decimal(0)
-
-        for chain in self.params.target_investment_chains:
-            safe_address = self.params.safe_contract_addresses.get(chain)
-            if not safe_address:
-                self.context.logger.warning(f"No safe address found for chain {chain}")
-                continue
-
-            self.context.logger.info(f"Calculating safe balances for chain {chain}")
-            balances = []
-
-            # Get current balances dynamically instead of using static assets
-            if chain == Chain.OPTIMISM.value:
-                balances = yield from self._get_optimism_balances_from_safe_api()
-
-            if chain == Chain.MODE.value:
-                balances = yield from self._get_mode_balances_from_explorer_api()
-
-            if not balances:
-                self.context.logger.warning(f"No balances found for chain {chain}")
-                continue
-
-            for balance in balances:
-                token_address = balance["address"]
-                token_symbol = balance["asset_symbol"]
-                token_balance = balance["balance"]
-
-                self.context.logger.info(
-                    f"Token balance for {token_symbol} is {token_balance}."
-                )
-
-                if token_balance == 0:
-                    continue
-
-                # Skip OLAS tokens - we'll handle them separately using accumulated rewards
-                olas_address = OLAS_ADDRESSES.get(chain)
-                if olas_address and token_address.lower() == olas_address.lower():
-                    self.context.logger.info(
-                        "Skipping OLAS token from balances - will use accumulated rewards instead"
-                    )
-                    continue
-
-                # Get token decimals and adjust balance
-                if token_address == ZERO_ADDRESS:
-                    # ETH has 18 decimals
-                    adjusted_balance = Decimal(str(token_balance)) / Decimal(10**18)
-                else:
-                    # Get token decimals for ERC20 tokens
-                    token_decimals = yield from self._get_token_decimals(
-                        chain, token_address
-                    )
-                    if token_decimals is None:
-                        continue
-                    adjusted_balance = Decimal(str(token_balance)) / Decimal(
-                        10**token_decimals
-                    )
-
-                if adjusted_balance <= 0:
-                    continue
-
-                velo_token_address = self._get_velo_token_address(chain)
-                # Get token price
-                if token_address == ZERO_ADDRESS:
-                    token_price = yield from self._fetch_zero_address_price()
-                elif token_address.lower() == velo_token_address:
-                    velo_coin_id = self.get_coin_id_from_symbol("VELO", chain)
-                    token_price = yield from self._fetch_coin_price(velo_coin_id)
-                else:
-                    token_price = yield from self._fetch_token_price(
-                        token_address, chain
-                    )
-
-                if token_price is None:
-                    self.context.logger.warning(
-                        f"Could not fetch price for {token_symbol}"
-                    )
-                    continue
-
-                token_price = Decimal(str(token_price))
-                token_value_usd = adjusted_balance * token_price
-                total_safe_value += token_value_usd
-
-                self.context.logger.info(
-                    f"Safe balance - {token_symbol}: {adjusted_balance} (${token_value_usd})"
-                )
-
-                # Add to portfolio breakdown using helper method
-                self._add_to_portfolio_breakdown(
-                    portfolio_breakdown,
-                    token_address,
-                    token_symbol,
-                    adjusted_balance,
-                    token_price,
-                    token_value_usd,
-                )
-
-        self.context.logger.info(f"Total safe value: ${total_safe_value}")
-        return total_safe_value
-
     def calculate_airdrop_rewards_value(self) -> Generator[None, None, Decimal]:
         """Calculate airdrop rewards equivalent in USD (MODE chain only)"""
         chain = self.params.target_investment_chains[0]
@@ -2285,153 +1675,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.warning(f"No USDC price found for {transfer_date}")
 
         return withdrawal_value
-
-    def _get_aggregator_name(
-        self, aggregator_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Get the name of the Sturdy Aggregator."""
-        aggreator_name = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=aggregator_address,
-            contract_public_id=YearnV3VaultContract.contract_id,
-            contract_callable="name",
-            data_key="name",
-            chain_id=chain,
-        )
-        return aggreator_name
-
-    def _calculate_total_volume(self) -> Generator[None, None, Optional[float]]:
-        """Calculate the total volume (total initial investment including closed positions)."""
-        total_volume = 0.0
-
-        # Load cached investment values from KV store
-        cached_values = yield from self._read_kv(keys=("initial_investment_values",))
-        if cached_values and cached_values.get("initial_investment_values"):
-            try:
-                raw_cache = json.loads(cached_values.get("initial_investment_values"))
-                # Ensure all values are floats (not strings)
-                self.initial_investment_values_per_pool = {
-                    k: float(v) for k, v in raw_cache.items()
-                }
-                self.context.logger.info(
-                    f"Loaded {len(self.initial_investment_values_per_pool)} cached position values from KV store"
-                )
-            except (json.JSONDecodeError, ValueError, TypeError) as e:
-                self.context.logger.warning(
-                    f"Failed to parse cached investment values from KV store: {e}"
-                )
-
-        # Process all positions (both open and closed)
-        for position in self.current_positions:
-            # Create a unique key for this position
-            pool_id = position.get("pool_address", position.get("pool_id"))
-            tx_hash = position.get("tx_hash")
-            position_key = f"{pool_id}_{tx_hash}"
-
-            # Check if we already calculated the value for this position
-            if position_key in self.initial_investment_values_per_pool:
-                position_value = self.initial_investment_values_per_pool[position_key]
-                self.context.logger.info(
-                    f"Using cached position value: {position_value} for {position_key}"
-                )
-                total_volume += position_value
-                continue
-
-            # Get token addresses and amounts
-            token0 = position.get("token0")
-            token1 = position.get("token1")
-            amount0 = position.get("amount0")
-            amount1 = position.get("amount1")
-            timestamp = position.get("timestamp") or position.get("enter_timestamp")
-            chain = position.get("chain")
-
-            if None in (token0, amount0, timestamp, chain):
-                self.context.logger.error(
-                    "Missing token0, amount0, timestamp, or chain in position data."
-                )
-                continue
-
-            # Get token decimals
-            token0_decimals = yield from self._get_token_decimals(chain, token0)
-            if not token0_decimals:
-                continue
-
-            # Calculate adjusted amount for token0
-            initial_amount0 = Decimal(str(amount0)) / Decimal(10**token0_decimals)
-
-            # Calculate adjusted amount for token1 if it exists
-            initial_amount1 = None
-            if token1 is not None and amount1 is not None:
-                token1_decimals = yield from self._get_token_decimals(chain, token1)
-                if not token1_decimals:
-                    continue
-                initial_amount1 = Decimal(str(amount1)) / Decimal(10**token1_decimals)
-
-            date_str = datetime.utcfromtimestamp(timestamp).strftime("%d-%m-%Y")
-
-            tokens = [[position.get("token0_symbol"), token0]]
-            if token1 is not None:
-                tokens.append([position.get("token1_symbol"), token1])
-
-            historical_prices = yield from self._fetch_historical_token_prices(
-                tokens, date_str, chain
-            )
-
-            if not historical_prices:
-                self.context.logger.error("Failed to fetch historical token prices.")
-                continue
-
-            # Calculate value for token0
-            initial_price0 = historical_prices.get(token0)
-            if initial_price0 is None:
-                self.context.logger.error("Historical price not found for token0.")
-                continue
-
-            position_value = float(initial_amount0 * Decimal(str(initial_price0)))
-
-            # Add value for token1 if it exists
-            if token1 is not None and initial_amount1 is not None:
-                initial_price1 = historical_prices.get(token1)
-                if initial_price1 is None:
-                    self.context.logger.error("Historical price not found for token1.")
-                    continue
-                position_value += float(initial_amount1 * Decimal(str(initial_price1)))
-
-            # Cache the calculated value
-            self.initial_investment_values_per_pool[position_key] = position_value
-
-            # Save the updated cache to KV store
-            yield from self._write_kv(
-                {
-                    "initial_investment_values": json.dumps(
-                        self.initial_investment_values_per_pool
-                    )
-                }
-            )
-
-            total_volume += position_value
-            self.context.logger.info(
-                f"Position value for volume calculation: {position_value}"
-            )
-
-        self.context.logger.info(
-            f"Total volume (including closed positions): {total_volume}"
-        )
-        return total_volume if total_volume > 0 else None
-
-    def _get_balancer_pool_name(
-        self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[str]]:
-        """Get the name of the Balancer Pool."""
-        pool_name = yield from self.contract_interact(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-            contract_address=pool_address,
-            contract_public_id=WeightedPoolContract.contract_id,
-            contract_callable="get_name",
-            data_key="name",
-            chain_id=chain,
-        )
-        return pool_name
 
     def check_and_update_zero_liquidity_positions(self) -> None:
         """Check for positions with zero liquidity and mark them as closed, and reopen closed positions that now have liquidity."""
@@ -4715,26 +3958,26 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """
         Fetch complete portfolio data from the Optimus subgraph.
-        
+
         Returns portfolio data structure matching the current portfolio_data format,
         or None if subgraph is unavailable or returns no data.
         """
         try:
             # Get subgraph endpoint for the chain
             subgraph_endpoint = self.params.optimus_subgraph_endpoints.get(chain)
-            
+
             if not subgraph_endpoint:
                 self.context.logger.warning(
                     f"No Optimus subgraph endpoint configured for chain {chain}"
                 )
                 return None
-            
+
             # Get service safe address for this chain
             safe_address = self.params.safe_contract_addresses.get(chain)
             if not safe_address:
                 self.context.logger.error(f"No safe address found for chain {chain}")
                 return None
-            
+
             # GraphQL query to fetch portfolio data
             query = """
             query GetPortfolio($serviceId: Bytes!) {
@@ -4785,9 +4028,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 }
             }
             """
-            
+
             variables = {"serviceId": safe_address.lower()}
-            
+
             # Make GraphQL request
             success, response = yield from self._request_with_retries(
                 endpoint=subgraph_endpoint,
@@ -4800,29 +4043,29 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 ),
                 retry_wait=self.params.sleep_time,
             )
-            
+
             if not success or not response:
                 self.context.logger.error(
                     f"Failed to fetch portfolio from subgraph for {chain}"
                 )
                 return None
-            
+
             data = response.get("data", {})
             service = data.get("service")
             portfolio = data.get("agentPortfolio")
             funding_balance = data.get("fundingBalance")
-            
+
             if not service or not portfolio:
                 self.context.logger.warning(
                     f"No portfolio data found in subgraph for {safe_address}"
                 )
                 return None
-            
+
             # Get withdrawal value from funding balance
             withdrawals_value = 0.0
             if funding_balance:
                 withdrawals_value = float(funding_balance.get("totalOutUsd", 0))
-            
+
             # Build allocations from positions
             allocations = []
             for position in service.get("positions", []):
@@ -4832,23 +4075,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     if allocation:
                         allocations.append(allocation)
-            
+
             # Build portfolio breakdown from token balances
             portfolio_breakdown = []
             for balance in service.get("balances", []):
-                portfolio_breakdown.append({
-                    "asset": balance.get("symbol"),
-                    "address": balance.get("token"),
-                    "balance": float(balance.get("balance", 0)),
-                    "price": float(balance.get("balanceUSD", 0)) / float(balance.get("balance", 1)) if float(balance.get("balance", 0)) > 0 else 0.0,
-                    "value_usd": float(balance.get("balanceUSD", 0)),
-                    "ratio": 0.0,  # Will be calculated later
-                })
-            
+                portfolio_breakdown.append(
+                    {
+                        "asset": balance.get("symbol"),
+                        "address": balance.get("token"),
+                        "balance": float(balance.get("balance", 0)),
+                        "price": float(balance.get("balanceUSD", 0))
+                        / float(balance.get("balance", 1))
+                        if float(balance.get("balance", 0)) > 0
+                        else 0.0,
+                        "value_usd": float(balance.get("balanceUSD", 0)),
+                        "ratio": 0.0,  # Will be calculated later
+                    }
+                )
+
             # Get agent hash
             agent_config = os.environ.get("AEA_AGENT", "")
             agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
-            
+
             # Build final portfolio data structure
             portfolio_data = {
                 "portfolio_value": float(portfolio.get("finalValue", 0)),
@@ -4866,13 +4114,13 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "address": safe_address,
                 "last_updated": int(portfolio.get("lastUpdated", 0)),
             }
-            
+
             self.context.logger.info(
                 f"Successfully fetched portfolio from subgraph for {chain}"
             )
-            
+
             return portfolio_data
-            
+
         except Exception as e:
             self.context.logger.error(
                 f"Error fetching portfolio from subgraph: {str(e)}"
@@ -4884,22 +4132,22 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """
         Build an allocation object from a subgraph position.
-        
+
         Args:
             position: Position data from subgraph
             chain: Chain name
             safe_address: Safe address for this service
-            
+
         Returns:
             Allocation dict matching the current format, or None if invalid
         """
         try:
             protocol = position.get("protocol", "")
             pool_address = position.get("pool", "")
-            
+
             if not protocol or not pool_address:
                 return None
-            
+
             # Map protocol names to dex types
             protocol_to_dex = {
                 "velodrome-cl": "velodrome",
@@ -4908,19 +4156,19 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "balancer": "balancerPool",
                 "sturdy": "sturdy",
             }
-            
+
             dex_type = protocol_to_dex.get(protocol)
             if not dex_type:
                 self.context.logger.warning(f"Unknown protocol: {protocol}")
                 return None
-            
+
             # Get token symbols
             assets = []
             if position.get("token0Symbol"):
                 assets.append(position.get("token0Symbol"))
             if position.get("token1Symbol"):
                 assets.append(position.get("token1Symbol"))
-            
+
             # Build allocation object
             allocation = {
                 "chain": chain,
@@ -4932,22 +4180,28 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "ratio": 0.0,  # Will be calculated later
                 "address": safe_address,
             }
-            
+
             # Add tick ranges for concentrated liquidity positions
             if protocol in ["velodrome-cl", "uniswap-v3"]:
-                if position.get("tokenId") and position.get("tickLower") is not None and position.get("tickUpper") is not None:
+                if (
+                    position.get("tokenId")
+                    and position.get("tickLower") is not None
+                    and position.get("tickUpper") is not None
+                ):
                     # Note: We don't have current tick from subgraph, would need additional query
                     # For now, just add the static position info
-                    allocation["tick_ranges"] = [{
-                        "token_id": int(position.get("tokenId", 0)),
-                        "tick_lower": int(position.get("tickLower", 0)),
-                        "tick_upper": int(position.get("tickUpper", 0)),
-                        "current_tick": 0,  # Placeholder - needs pool query
-                        "in_range": False,  # Placeholder - needs pool query
-                    }]
-            
+                    allocation["tick_ranges"] = [
+                        {
+                            "token_id": int(position.get("tokenId", 0)),
+                            "tick_lower": int(position.get("tickLower", 0)),
+                            "tick_upper": int(position.get("tickUpper", 0)),
+                            "current_tick": 0,  # Placeholder - needs pool query
+                            "in_range": False,  # Placeholder - needs pool query
+                        }
+                    ]
+
             return allocation
-            
+
         except Exception as e:
             self.context.logger.error(
                 f"Error building allocation from position: {str(e)}"

@@ -566,131 +566,50 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         return False
 
     def calculate_user_share_values(self) -> Generator[None, None, None]:
-        """Calculate the value of shares for the user based on open pools."""
-        total_user_share_value_usd = Decimal(0)
-        allocations = []
-        individual_shares = []
-        portfolio_breakdown = []
-
-        # Map DEX types to their handler functions
-        dex_handlers = {
-            DexType.BALANCER.value: self._handle_balancer_position,
-            DexType.UNISWAP_V3.value: self._handle_uniswap_position,
-            DexType.STURDY.value: self._handle_sturdy_position,
-            DexType.VELODROME.value: self._handle_velodrome_position,
-        }
-
-        # Process open positions
-        for position in (
-            p
-            for p in self.current_positions
-            if p.get("status") == PositionStatus.OPEN.value
-        ):
-            try:
-                dex_type = position.get("dex_type")
-                chain = position.get("chain")
-
-                if not dex_type or not chain:
-                    self.context.logger.error("Missing dex_type or chain")
-                    continue
-
-                handler = dex_handlers.get(dex_type)
-                if not handler:
-                    self.context.logger.error(f"Unsupported DEX type: {dex_type}")
-                    continue
-
-                # Get position details and balances using the appropriate handler
-                result = yield from handler(position, chain)
-                if not result:
-                    continue
-
-                user_balances, details, token_info = result
-                user_share = yield from self._calculate_position_value(
-                    position, chain, user_balances, token_info, portfolio_breakdown
-                )
-
-                if user_share > 0:
-                    total_user_share_value_usd += user_share
-                    pool_address = (
-                        position.get("pool_id")
-                        if dex_type == DexType.BALANCER.value
-                        else position.get("pool_address")
-                    )
-
-                    individual_shares.append(
-                        (
-                            user_share,
-                            dex_type,
-                            chain,
-                            pool_address,
-                            list(token_info.values()),  # token symbols
-                            position.get("apr", 0.0),
-                            details,
-                            self.params.safe_contract_addresses.get(chain),
-                            user_balances,
-                        )
-                    )
-
-            except Exception as e:
-                self.context.logger.error(f"Error processing position: {str(e)}")
-                continue
-
-        self.store_current_positions()
-        # Calculate safe balances value
-        total_safe_value_usd = yield from self._calculate_safe_balances_value(
-            portfolio_breakdown
-        )
+        """Calculate the value of shares for the user using Optimus subgraph data."""
+        
+        # Get chain
+        chain = self.params.target_investment_chains[0]
+        
+        # Fetch portfolio data from subgraph
+        portfolio_data = yield from self._fetch_portfolio_from_subgraph(chain)
+        
+        if not portfolio_data:
+            self.context.logger.error(
+                "Subgraph unavailable - cannot calculate portfolio without subgraph data"
+            )
+            return
+        
+        # Subgraph data available - use it as base
+        self.context.logger.info("Using portfolio data from Optimus subgraph")
+        
+        # Add local calculations for staking and airdrop rewards
         staking_rewards_value = yield from self.calculate_stakig_rewards_value()
         airdrop_rewards_value = yield from self.calculate_airdrop_rewards_value()
-        withdrawals_value = yield from self.calculate_withdrawals_value()
-
-        # Calculate final portfolio metrics
-        yield from self._update_portfolio_metrics(
-            total_user_share_value_usd,
-            individual_shares,
-            portfolio_breakdown,
-            allocations,
-        )
-
-        # Calculate initial investment value
-        initial_investment = (
-            yield from self.calculate_initial_investment_value_from_funding_events()
-        )
-
-        # If initial value calculations return None, use _load_chain_total_investment as fallback
-        if initial_investment is None:
-            chain = self.params.target_investment_chains[0]
-            total_investment = yield from self._load_chain_total_investment(chain)
-            self.context.logger.info(
-                f"Loaded {chain} investment from KV store: ${total_investment}"
-            )
-
-            if total_investment > 0:
-                initial_investment = total_investment
-                self.context.logger.info(
-                    f"Using total investment from KV store: ${initial_investment}"
-                )
-            else:
-                self.context.logger.warning(
-                    "No investment data found in KV store either"
-                )
-        # Calculate total volume (total initial investment including closed positions)
-        volume = yield from self._calculate_total_volume()
-
-        portfolio_data = self._create_portfolio_data(
-            total_user_share_value_usd,
-            total_safe_value_usd,
-            staking_rewards_value,
-            airdrop_rewards_value,
-            withdrawals_value,
-            initial_investment,
-            volume,
-            allocations,
-            portfolio_breakdown,
-        )
-
-        if portfolio_data:
-            self.portfolio_data = portfolio_data
+        
+        # Update portfolio data with local reward calculations
+        portfolio_data["airdropped_rewards"] = float(airdrop_rewards_value)
+        
+        # Recalculate ROI including staking rewards
+        initial_investment = portfolio_data.get("initial_investment", 0)
+        if initial_investment and initial_investment > 0:
+            portfolio_value = portfolio_data.get("portfolio_value", 0)
+            withdrawals = portfolio_data.get("value_in_withdrawals", 0)
+            
+            # Total ROI includes staking rewards
+            total_roi_decimal = (
+                (portfolio_value + float(staking_rewards_value) + withdrawals)
+                / initial_investment
+            ) - 1
+            portfolio_data["total_roi"] = round(total_roi_decimal * 100, 2)
+            
+            # Partial ROI is just trading (portfolio + withdrawals)
+            partial_roi_decimal = (
+                (portfolio_value + withdrawals) / initial_investment
+            ) - 1
+            portfolio_data["partial_roi"] = round(partial_roi_decimal * 100, 2)
+        
+        self.portfolio_data = portfolio_data
 
     def _update_portfolio_metrics(
         self,
@@ -4861,6 +4780,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     totalClosedPositions
                     lastUpdated
                 }
+                fundingBalance(id: $serviceId) {
+                    totalOutUsd
+                }
             }
             """
             
@@ -4888,12 +4810,18 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             data = response.get("data", {})
             service = data.get("service")
             portfolio = data.get("agentPortfolio")
+            funding_balance = data.get("fundingBalance")
             
             if not service or not portfolio:
                 self.context.logger.warning(
                     f"No portfolio data found in subgraph for {safe_address}"
                 )
                 return None
+            
+            # Get withdrawal value from funding balance
+            withdrawals_value = 0.0
+            if funding_balance:
+                withdrawals_value = float(funding_balance.get("totalOutUsd", 0))
             
             # Build allocations from positions
             allocations = []
@@ -4926,9 +4854,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "portfolio_value": float(portfolio.get("finalValue", 0)),
                 "value_in_pools": float(portfolio.get("positionsValue", 0)),
                 "value_in_safe": float(portfolio.get("uninvestedValue", 0)),
-                "value_in_withdrawals": 0.0,  # Not tracked in subgraph yet
+                "value_in_withdrawals": withdrawals_value,
                 "initial_investment": float(portfolio.get("initialValue", 0)),
-                "airdropped_rewards": 0.0,  # Not tracked in subgraph yet
+                "airdropped_rewards": 0.0,  # Will be added from local calculation
                 "volume": None,  # Not tracked in subgraph yet
                 "total_roi": float(portfolio.get("roi", 0)),
                 "partial_roi": float(portfolio.get("projectedRoi", 0)),

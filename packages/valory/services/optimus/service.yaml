@@ -112,6 +112,7 @@ models:
       airdrop_started: ${AIRDROP_STARTED:bool:false}
       airdrop_contract_address: ${AIRDROP_CONTRACT_ADDRESS:str:""}
       slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:0.01}
+      genai_model: ${GENAI_MDOEL:str:gemini-2.5-flash}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

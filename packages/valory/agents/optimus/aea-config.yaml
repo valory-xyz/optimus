@@ -308,7 +308,7 @@ models:
       available_strategies: ${str:{"mode":["balancer_pools_search","asset_lending","velodrome_pools_search"],"optimism":["balancer_pools_search","uniswap_pools_search","velodrome_pools_search"]}}
       default_acceptance_time: ${int:5}
       genai_api_key: ${str:""}
-      genai_model: ${str:gemini-2.0-flash-exp}
+      genai_model: ${str:gemini-2.5-flash}
       slippage_tolerance: ${float:0.01}
       airdrop_started: ${bool:false}
       airdrop_contract_address: ${str:""}

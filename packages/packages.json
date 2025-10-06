@@ -27,9 +27,9 @@
         "contract/valory/balancer_queries/0.1.0": "bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu",
         "connection/valory/mirror_db/0.1.0": "bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeia47nxh3jyyblhqzucnjuvltytgmmx3wv2fnfnkmzpe4olorsdwdm",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiaqzoqkazad2bx7wznzyz55jv5mpb6nrup2ls2suh6epyrkqvykfa",
-        "agent/valory/optimus/0.1.0": "bafybeictwg5y24alspi2k7bav7qvuzqklcpfsjsq47zggposfpoz6yecvy",
-        "service/valory/optimus/0.1.0": "bafybeidhr2w4reoqvbkfa2vyzrme3l6gfoeyng4borgh3prveji2tjsyi4"
+        "skill/valory/optimus_abci/0.1.0": "bafybeigk7winmpjaf56niyc7c5mibglujqtjlpcjg547cwqemaxfobd5pq",
+        "agent/valory/optimus/0.1.0": "bafybeibag7ypeza7wr5fxvwm3nhevf53hzkpb334qlvvbk6wfsqb7pmpvi",
+        "service/valory/optimus/0.1.0": "bafybeigtkqmzacffotr5rmjve6xaavonvdongoqayp5d3nb5wyjt4j2nea"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -46,7 +46,7 @@
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeiegj5zx4wrahc6gpunxvxgjkzdg4nvdojbqkk5xggv2mt56oecpoa",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
         "contract/valory/gnosis_safe/0.1.0": "bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um",
-        "connection/dvilela/genai/0.1.0": "bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty",
+        "connection/dvilela/genai/0.1.0": "bafybeigjsmpmlt5tfdrtnfvqblpexyngl7qryusy6ytkebim5flswivbgu",
         "connection/valory/abci/0.1.0": "bafybeidutel5jdlqyt2tygyvfxrqwgljpxq23bu3eyfndbcwm2t4y7jbee",
         "connection/valory/http_client/0.23.0": "bafybeid5ffvg76ejjoese7brj5ji3lx66cu7p2ixfwflpo6rgofkypfd7y",
         "connection/valory/ipfs/0.1.0": "bafybeiamz23olgtow4wqf7zpsfnfzf7pxiognrxl2mhn5kvqutlwhgukxa",

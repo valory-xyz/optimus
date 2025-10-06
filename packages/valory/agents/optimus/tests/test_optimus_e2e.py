@@ -189,3 +189,300 @@ class TestEnd2EndOptimusSingleAgent(
 ):
     """Test Optimus agent - Complete E2E Flow."""
     pass
+
+
+# 1. Investment Cap Reached - agent has reached $950+ investment threshold
+INVESTMENT_CAP_PATH: Tuple[RoundChecks, ...] = (
+    RoundChecks(FetchStrategiesRound.auto_round_id(), n_periods=1),
+    RoundChecks(GetPositionsRound.auto_round_id(), n_periods=1),
+    RoundChecks(APRPopulationRound.auto_round_id(), n_periods=1),
+    RoundChecks(EvaluateStrategyRound.auto_round_id(), n_periods=1),
+    # No PostTxSettlementRound as investment is capped
+)
+
+INVESTMENT_CAP_CHECK_STRINGS = (
+    "Starting AEA",
+    "Reading values from kv store",
+    "Opportunities found using balancer_pools_search strategy",
+    "Investment threshold reached, limiting actions",
+    "No actions to prepare",
+)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("nb_nodes", (1,))
+class TestEnd2EndOptimusInvestmentCap(
+    BaseTestEnd2EndOptimusExecution,
+    UseOptimismHardhatTest,
+    UseMockAPIServerTest,
+):
+    """Test Optimus agent when investment cap is reached."""
+    
+    strict_check_strings = INVESTMENT_CAP_CHECK_STRINGS
+    happy_path = INVESTMENT_CAP_PATH
+    wait_to_finish = 240
+    
+    extra_configs = [
+        # Storage path - use /tmp/ like working trader-tests
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.store_path",
+            "value": "/tmp/",
+        },
+        # KV store path - configure KV store to use /tmp/
+        {
+            "dotted_path": "vendor.dvilela.connections.kv_store.config.store_path",
+            "value": "/tmp/",
+        },
+        # Connect to Hardhat
+        {
+            "dotted_path": "vendor.valory.connections.ledger.config.ledger_apis.optimism.address",
+            "value": HARDHAT_RPC,
+        },
+        # Safe address - use the exact path from aea-config.yaml
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.safe_contract_addresses",
+            "value": '{"optimism": "' + TEST_SAFE_ADDRESS + '"}',
+        },
+        # Mock Balancer subgraph
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.balancer_graphql_endpoints",
+            "value": '{"optimism": "http://127.0.0.1:3000/balancer/graphql"}',
+        },
+        # Balancer vault address
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.balancer_vault_contract_addresses",
+            "value": '{"optimism": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"}',
+        },
+        # MultiSend address
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.multisend_contract_addresses",
+            "value": '{"optimism": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"}',
+        },
+        # Configure for optimism chain and add staking subgraph mock
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.staking_chain",
+            "value": "optimism",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.staking_subgraph_endpoints",
+            "value": '{"optimism": "http://127.0.0.1:3000/subgraphs/staking"}',
+        },
+        # Add Safe API base URL for mock
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.safe_api_base_url",
+            "value": "http://127.0.0.1:3000/safe-transaction-optimism.safe.global/api",
+        },
+        # Add CoinGecko API endpoints for mock
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.token_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.coin_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/simple/price?ids={coin_id}&vs_currencies=usd",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.historical_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/coins/{coin_id}/history?date={date}",
+        }
+    ]
+
+
+# 2. TiP Blocking Exit - positions blocked by Time in Position requirements
+TIP_BLOCKING_PATH: Tuple[RoundChecks, ...] = (
+    RoundChecks(FetchStrategiesRound.auto_round_id(), n_periods=1),
+    RoundChecks(GetPositionsRound.auto_round_id(), n_periods=1),
+    RoundChecks(APRPopulationRound.auto_round_id(), n_periods=1),
+    RoundChecks(EvaluateStrategyRound.auto_round_id(), n_periods=1),
+)
+
+TIP_BLOCKING_CHECK_STRINGS = (
+    "Starting AEA",
+    "Reading values from kv store",
+    "All positions blocked by TiP conditions",
+    "TiP blocking exit",
+    "No actions to prepare",
+)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("nb_nodes", (1,))
+class TestEnd2EndOptimusTiPBlocking(
+    BaseTestEnd2EndOptimusExecution,
+    UseOptimismHardhatTest,
+    UseMockAPIServerTest,
+):
+    """Test Optimus agent when positions are blocked by TiP requirements."""
+    
+    strict_check_strings = TIP_BLOCKING_CHECK_STRINGS
+    happy_path = TIP_BLOCKING_PATH
+    wait_to_finish = 240
+    
+    extra_configs = [
+        # Storage path - use /tmp/ like working trader-tests
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.store_path",
+            "value": "/tmp/",
+        },
+        # KV store path - configure KV store to use /tmp/
+        {
+            "dotted_path": "vendor.dvilela.connections.kv_store.config.store_path",
+            "value": "/tmp/",
+        },
+        # Connect to Hardhat
+        {
+            "dotted_path": "vendor.valory.connections.ledger.config.ledger_apis.optimism.address",
+            "value": HARDHAT_RPC,
+        },
+        # Safe address - use the exact path from aea-config.yaml
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.safe_contract_addresses",
+            "value": '{"optimism": "' + TEST_SAFE_ADDRESS + '"}',
+        },
+        # Mock Balancer subgraph
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.balancer_graphql_endpoints",
+            "value": '{"optimism": "http://127.0.0.1:3000/balancer/graphql"}',
+        },
+        # Balancer vault address
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.balancer_vault_contract_addresses",
+            "value": '{"optimism": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"}',
+        },
+        # MultiSend address
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.multisend_contract_addresses",
+            "value": '{"optimism": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"}',
+        },
+        # Configure for optimism chain and add staking subgraph mock
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.staking_chain",
+            "value": "optimism",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.staking_subgraph_endpoints",
+            "value": '{"optimism": "http://127.0.0.1:3000/subgraphs/staking"}',
+        },
+        # Add Safe API base URL for mock
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.safe_api_base_url",
+            "value": "http://127.0.0.1:3000/safe-transaction-optimism.safe.global/api",
+        },
+        # Add CoinGecko API endpoints for mock
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.token_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.coin_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/simple/price?ids={coin_id}&vs_currencies=usd",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.historical_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/coins/{coin_id}/history?date={date}",
+        }
+    ]
+
+
+# 3. Withdrawal Mode - agent is in withdrawal mode and exits all positions
+WITHDRAWAL_MODE_PATH: Tuple[RoundChecks, ...] = (
+    RoundChecks(FetchStrategiesRound.auto_round_id(), n_periods=1),
+    RoundChecks(GetPositionsRound.auto_round_id(), n_periods=1),
+    RoundChecks(APRPopulationRound.auto_round_id(), n_periods=1),
+    RoundChecks(EvaluateStrategyRound.auto_round_id(), n_periods=1),
+)
+
+WITHDRAWAL_MODE_CHECK_STRINGS = (
+    "Starting AEA",
+    "Reading values from kv store",
+    "Investing paused due to withdrawal request",
+)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("nb_nodes", (1,))
+class TestEnd2EndOptimusWithdrawalMode(
+    BaseTestEnd2EndOptimusExecution,
+    UseOptimismHardhatTest,
+    UseMockAPIServerTest,
+):
+    """Test Optimus agent when in withdrawal mode."""
+    
+    strict_check_strings = WITHDRAWAL_MODE_CHECK_STRINGS
+    happy_path = WITHDRAWAL_MODE_PATH
+    wait_to_finish = 240
+    
+    extra_configs = [
+        # Storage path - use /tmp/ like working trader-tests
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.store_path",
+            "value": "/tmp/",
+        },
+        # KV store path - configure KV store to use /tmp/
+        {
+            "dotted_path": "vendor.dvilela.connections.kv_store.config.store_path",
+            "value": "/tmp/",
+        },
+        # Connect to Hardhat
+        {
+            "dotted_path": "vendor.valory.connections.ledger.config.ledger_apis.optimism.address",
+            "value": HARDHAT_RPC,
+        },
+        # Safe address - use the exact path from aea-config.yaml
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.safe_contract_addresses",
+            "value": '{"optimism": "' + TEST_SAFE_ADDRESS + '"}',
+        },
+        # Mock Balancer subgraph
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.balancer_graphql_endpoints",
+            "value": '{"optimism": "http://127.0.0.1:3000/balancer/graphql"}',
+        },
+        # Balancer vault address
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.balancer_vault_contract_addresses",
+            "value": '{"optimism": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"}',
+        },
+        # MultiSend address
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.multisend_contract_addresses",
+            "value": '{"optimism": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"}',
+        },
+        # Configure for optimism chain and add staking subgraph mock
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.staking_chain",
+            "value": "optimism",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.params.args.staking_subgraph_endpoints",
+            "value": '{"optimism": "http://127.0.0.1:3000/subgraphs/staking"}',
+        },
+        # Add Safe API base URL for mock
+        {
+            "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.safe_api_base_url",
+            "value": "http://127.0.0.1:3000/safe-transaction-optimism.safe.global/api",
+        },
+        # Add CoinGecko API endpoints for mock
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.token_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.coin_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/simple/price?ids={coin_id}&vs_currencies=usd",
+        },
+        {
+            "dotted_path": "vendor.valory.skills.optimus_abci.models.coingecko.args.historical_price_endpoint",
+            "value": "http://127.0.0.1:3000/coingecko/coins/{coin_id}/history?date={date}",
+        },
+        # Enable withdrawal mode by setting investing_paused flag
+        {
+            "dotted_path": "vendor.dvilela.connections.kv_store.config.initial_data.investing_paused",
+            "value": "true",
+        },
+        # Set withdrawal status to INITIATED
+        {
+            "dotted_path": "vendor.dvilela.connections.kv_store.config.initial_data.withdrawal_status",
+            "value": "INITIATED",
+        }
+    ]

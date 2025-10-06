@@ -6,6 +6,24 @@ description: An optimism liquidity trader agent.
 aea_version: '>=1.19.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
+  tests/__init__.py: bafybeibsr5jrbyng6otgh5dubmbr4a3dj7grqgo5pmzul4zqh3vgohpsjm
+  tests/helpers/__init__.py: bafybeibhqii6opklo2hzsxa3ezml6dmo2dkzxkrb6q52ar7kqbxgyrk6me
+  tests/helpers/constants.py: bafybeif5ejlhn47uiizrryr6dixkobo6n53k6ijijmakkpdqcv2hw5bzgy
+  tests/helpers/contracts/Dockerfile: bafybeieecktzxpqm4gx7j4f665jpoqu44o6s5u6rjei3ri3ev2yxp2nrta
+  tests/helpers/contracts/__init__.py: bafybeibtdumklrh3ni6uv7babnhu3aszofz2rglp7l6ufzhfynwjhtgpn4
+  tests/helpers/contracts/deploy_contracts.js: bafybeih3liogwozfudzjul7pcy3qmywkcbgkonabqesqodtedf3jol37ui
+  tests/helpers/contracts/hardhat.config.js: bafybeicorpcstjezshhq3zgygkt2m3cfct2otmiqgg24ydtzxeyf6e7bue
+  tests/helpers/contracts/mocks/BalancerVaultMock.sol: bafybeicuzw4lo6fx4xpf2f5bkexlkgjotkjvodt4e4dkandtiladpmejdq
+  tests/helpers/contracts/mocks/MockBPT.sol: bafybeichalp6lkruk4vl3cu6bhfdafxarloqhwsfyhk555w6fdc3rred44
+  tests/helpers/contracts/mocks/MockERC20.sol: bafybeig7ahmh4ghlyynp2eiyvghcx2hz6w2ufjmciylxnhfi3c25vhngbq
+  tests/helpers/contracts/package.json: bafybeifdcac5qls6gdmrwguutqp35zaevr4qukxzqwonn2bpoqmughflti
+  tests/helpers/data/__init__.py: bafybeiho533krta5zrgaqwpsovumxhtcxtmucjdc5cj44wefe7jheel7ey
+  tests/helpers/data/balancer_subgraph.json: bafybeid6jyjlcrntwb227doo2t37vph27kb3r6tumiafn3rawozab6jed4
+  tests/helpers/data/coingecko_prices.json: bafybeichgih7eqpjxslu465flf374iiqomelt7hlckxhbxxs64didi3faq
+  tests/helpers/data/json_server/data.json: bafybeidi3szn2fmc67tebc5widin4g43ycg2ei7wqaourfzurq5zeg5cdu
+  tests/helpers/docker.py: bafybeih5ykaaq5fu2slvtpqwowaks7dxk5hzoh2eeli7kzpsj76gjkubxm
+  tests/helpers/fixtures.py: bafybeib457oe7d2i6zzip4wmaex4l22ssixyrihc64e4p3vnkf53z3bzdi
+  tests/test_optimus_e2e.py: bafybeifqn5flhqeydlnuhauegtrzbdltpeunj5cpaircqurhldeelmgrfy
 fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeidutel5jdlqyt2tygyvfxrqwgljpxq23bu3eyfndbcwm2t4y7jbee

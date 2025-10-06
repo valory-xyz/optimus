@@ -7607,8 +7607,8 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             apr, principal, entry_cost, is_cl_pool, percent_in_bounds
         )
 
-        # Expected: 15 / ((0.20 * 0.8 / 365) * 1000) = ~34.2 days
-        assert result > 30 and result < 40
+        # Expected: 15 / ((0.20 * 0.8 / 365) * 1000) * 9 = ~307.8 days
+        assert result > 307 and result < 308
 
     def test_calculate_min_hold_days_zero_values(self) -> None:
         """Test _calculate_min_hold_days with zero values."""

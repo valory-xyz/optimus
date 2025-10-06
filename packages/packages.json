@@ -28,8 +28,8 @@
         "connection/valory/mirror_db/0.1.0": "bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeies4cjvgdduqnasfatb2r3xmdhazxpvyxcfzhakct3bttkpqk4nh4",
         "skill/valory/optimus_abci/0.1.0": "bafybeie7tb2fczanjwr3camsqyug42u2mshwjud7xoixhx3gofbyzgshqi",
-        "agent/valory/optimus/0.1.0": "bafybeiblsyevekqufwuptvluuswsidrmd6haur74fyts2s7tzhotr6valy",
-        "service/valory/optimus/0.1.0": "bafybeih4mnnyybqs32koa4ebu6xavw5slmbwdtjjeagffc73zfiauuxsha"
+        "agent/valory/optimus/0.1.0": "bafybeifim6d2n4p2au2zpdes23ybtyuz6l346o6c4qy24hpvt7sylbe6hq",
+        "service/valory/optimus/0.1.0": "bafybeicloivhm4ikpb6uai5zpzv7umtdl7gfdc7dv6b2ebgwb6as5nekpu"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",

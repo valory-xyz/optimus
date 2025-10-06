@@ -3027,6 +3027,337 @@ class LiquidityTraderBaseBehaviour(
             and token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
         )
 
+    # ========== Optimus Subgraph Query Methods ==========
+
+    def _build_service_query(
+        self, service_safe: str, include_positions: bool = False, include_balances: bool = False
+    ) -> str:
+        """Build GraphQL query to fetch service data from Optimus subgraph."""
+        service_fields = """
+            id
+            serviceId
+            operatorSafe
+            serviceSafe
+            isActive
+            positionIds
+        """
+        
+        positions_fragment = ""
+        if include_positions:
+            positions_fragment = """
+            positions(where: {isActive: true}) {
+                id
+                protocol
+                pool
+                isActive
+                usdCurrent
+                token0
+                token0Symbol
+                amount0
+                amount0USD
+                token1
+                token1Symbol
+                amount1
+                amount1USD
+                liquidity
+                tokenId
+                tickLower
+                tickUpper
+                entryTxHash
+                entryTimestamp
+                entryAmountUSD
+            }
+            """
+        
+        balances_fragment = ""
+        if include_balances:
+            balances_fragment = """
+            balances {
+                id
+                token
+                symbol
+                decimals
+                balance
+                balanceUSD
+                lastUpdated
+            }
+            """
+        
+        query = f"""
+        {{
+            service(id: "{service_safe.lower()}") {{
+                {service_fields}
+                {positions_fragment}
+                {balances_fragment}
+            }}
+        }}
+        """
+        return query
+
+    def _build_agent_portfolio_query(self, service_safe: str) -> str:
+        """Build GraphQL query to fetch agent portfolio data from Optimus subgraph."""
+        query = f"""
+        {{
+            agentPortfolio(id: "{service_safe.lower()}") {{
+                id
+                finalValue
+                initialValue
+                positionsValue
+                uninvestedValue
+                projectedRoi
+                roi
+                apr
+                projectedAPR
+                totalPositions
+                totalClosedPositions
+                lastUpdated
+            }}
+        }}
+        """
+        return query
+
+    def _build_positions_query(
+        self,
+        agent_address: str,
+        is_active: Optional[bool] = None,
+        protocol: Optional[str] = None,
+    ) -> str:
+        """Build GraphQL query to fetch protocol positions from Optimus subgraph."""
+        where_clauses = [f'agent: "{agent_address.lower()}"']
+        
+        if is_active is not None:
+            where_clauses.append(f'isActive: {str(is_active).lower()}')
+        
+        if protocol:
+            where_clauses.append(f'protocol: "{protocol}"')
+        
+        where_string = ", ".join(where_clauses)
+        
+        query = f"""
+        {{
+            protocolPositions(
+                where: {{{where_string}}}
+                first: 100
+                orderBy: entryTimestamp
+                orderDirection: desc
+            ) {{
+                id
+                agent
+                protocol
+                pool
+                isActive
+                usdCurrent
+                token0
+                token0Symbol
+                amount0
+                amount0USD
+                token1
+                token1Symbol
+                amount1
+                amount1USD
+                liquidity
+                tokenId
+                tickLower
+                tickUpper
+                entryTxHash
+                entryTimestamp
+                entryAmountUSD
+                exitTxHash
+                exitTimestamp
+                exitAmountUSD
+            }}
+        }}
+        """
+        return query
+
+    def _build_token_balances_query(self, service_safe: str) -> str:
+        """Build GraphQL query to fetch token balances from Optimus subgraph."""
+        query = f"""
+        {{
+            tokenBalances(
+                where: {{service: "{service_safe.lower()}"}}
+                orderBy: balanceUSD
+                orderDirection: desc
+            ) {{
+                id
+                token
+                symbol
+                decimals
+                balance
+                balanceUSD
+                lastUpdated
+            }}
+        }}
+        """
+        return query
+
+    def execute_subgraph_query(
+        self,
+        chain: str,
+        query: str,
+        max_retries: int = 3,
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """
+        Execute GraphQL query against Optimus subgraph with retry logic.
+        
+        Args:
+            chain: The chain to query (e.g., "optimism", "mode")
+            query: The GraphQL query string
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            Query result data or None if failed
+        """
+        # Get the subgraph endpoint for the chain
+        endpoint = self.params.optimus_subgraph_endpoints.get(chain)
+        
+        if not endpoint:
+            self.context.logger.error(
+                f"No Optimus subgraph endpoint configured for chain: {chain}"
+            )
+            return None
+        
+        if not endpoint.strip():
+            self.context.logger.warning(
+                f"Empty Optimus subgraph endpoint for chain: {chain}, skipping query"
+            )
+            return None
+        
+        # Prepare the request payload
+        payload = {"query": query}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        # Execute with retries
+        for attempt in range(max_retries):
+            try:
+                self.context.logger.info(
+                    f"Executing subgraph query (attempt {attempt + 1}/{max_retries})"
+                )
+                
+                # Use the behaviour's HTTP request mechanism
+                success, response = yield from self._request_with_retries(
+                    endpoint=endpoint,
+                    method="POST",
+                    headers=headers,
+                    body=payload,
+                    rate_limited_code=429,
+                    rate_limited_callback=lambda: self.context.logger.warning(
+                        "Subgraph rate limited, retrying..."
+                    ),
+                    retry_wait=5,
+                )
+                
+                if not success:
+                    self.context.logger.warning(
+                        f"Subgraph query failed on attempt {attempt + 1}"
+                    )
+                    if attempt < max_retries - 1:
+                        yield from self.sleep(5)
+                    continue
+                
+                # Check for GraphQL errors
+                if "errors" in response:
+                    error_msg = response["errors"][0].get("message", "Unknown error")
+                    self.context.logger.error(f"GraphQL error: {error_msg}")
+                    if attempt < max_retries - 1:
+                        yield from self.sleep(5)
+                    continue
+                
+                # Return the data
+                if "data" in response:
+                    self.context.logger.info("Subgraph query successful")
+                    return response["data"]
+                else:
+                    self.context.logger.warning(
+                        f"Unexpected response format: {response}"
+                    )
+                    if attempt < max_retries - 1:
+                        yield from self.sleep(5)
+                    continue
+                    
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error executing subgraph query: {str(e)}"
+                )
+                if attempt < max_retries - 1:
+                    yield from self.sleep(5)
+                continue
+        
+        # All retries exhausted
+        self.context.logger.error(
+            f"Subgraph query failed after {max_retries} attempts"
+        )
+        return None
+
+    def get_service_data_from_subgraph(
+        self,
+        chain: str,
+        service_safe: str,
+        include_positions: bool = False,
+        include_balances: bool = False,
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Fetch service data from Optimus subgraph."""
+        query = self._build_service_query(
+            service_safe, include_positions, include_balances
+        )
+        
+        result = yield from self.execute_subgraph_query(chain, query)
+        
+        if result and "service" in result:
+            return result["service"]
+        
+        return None
+
+    def get_agent_portfolio_from_subgraph(
+        self,
+        chain: str,
+        service_safe: str,
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Fetch agent portfolio data from Optimus subgraph."""
+        query = self._build_agent_portfolio_query(service_safe)
+        
+        result = yield from self.execute_subgraph_query(chain, query)
+        
+        if result and "agentPortfolio" in result:
+            return result["agentPortfolio"]
+        
+        return None
+
+    def get_protocol_positions_from_subgraph(
+        self,
+        chain: str,
+        agent_address: str,
+        is_active: Optional[bool] = None,
+        protocol: Optional[str] = None,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Fetch protocol positions from Optimus subgraph."""
+        query = self._build_positions_query(agent_address, is_active, protocol)
+        
+        result = yield from self.execute_subgraph_query(chain, query)
+        
+        if result and "protocolPositions" in result:
+            return result["protocolPositions"]
+        
+        return []
+
+    def get_token_balances_from_subgraph(
+        self,
+        chain: str,
+        service_safe: str,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Fetch token balances from Optimus subgraph."""
+        query = self._build_token_balances_query(service_safe)
+        
+        result = yield from self.execute_subgraph_query(chain, query)
+        
+        if result and "tokenBalances" in result:
+            return result["tokenBalances"]
+        
+        return []
+
 
 def execute_strategy(
     strategy: str, strategies_executables: Dict[str, Tuple[str, str]], **kwargs: Any

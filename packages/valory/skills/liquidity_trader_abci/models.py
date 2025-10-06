@@ -364,6 +364,9 @@ class Params(BaseParams):
         self.staking_subgraph_endpoints = json.loads(
             self._ensure("staking_subgraph_endpoints", kwargs, str)
         )
+        self.optimus_subgraph_endpoints = json.loads(
+            self._ensure("optimus_subgraph_endpoints", kwargs, str)
+        )
         self.velodrome_slipstream_helper_contract_addresses = json.loads(
             self._ensure("velodrome_slipstream_helper_contract_addresses", kwargs, str)
         )

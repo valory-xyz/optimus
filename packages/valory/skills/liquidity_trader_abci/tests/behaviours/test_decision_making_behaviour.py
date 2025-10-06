@@ -7592,8 +7592,8 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             apr, principal, entry_cost, is_cl_pool, percent_in_bounds
         )
 
-        # Expected: 10 / ((0.15/365) * 1000) = ~24.3 days
-        assert result > 20 and result < 30
+        # Expected: 10 / ((0.15/365) * 1000) * 9 = ~24.3 days
+        assert result > 219 and result < 220
 
     def test_calculate_min_hold_days_cl_pool(self) -> None:
         """Test _calculate_min_hold_days with concentrated liquidity pool."""

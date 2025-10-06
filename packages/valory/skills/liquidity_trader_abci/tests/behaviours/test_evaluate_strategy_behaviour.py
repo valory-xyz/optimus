@@ -10929,7 +10929,7 @@ def dynamic_test_method(*args, **kwargs):
             assert action["from_token"] == "0xUnwantedToken"
             assert action["to_token"] == "0xToken0"  # First token in tokens_we_need
             assert action["to_chain"] == "ethereum"
-            # Fraction should be relative_funds_percentage * target_ratio = 1.0 * 0.6 = 0.6
+            # Fraction should be target ratio for Token0 (0.6)
             assert abs(action["fraction"] - 0.6) < 0.001
 
     def test_handle_some_tokens_available_fallback_logic(self) -> None:
@@ -11093,10 +11093,14 @@ def dynamic_test_method(*args, **kwargs):
             relative_funds_percentage = 1.0
             target_ratios_by_token = {"0xToken0": 0.4, "0xToken1": 0.6}
 
-            # Call the function
-            result = self.behaviour.current_behaviour._handle_all_tokens_needed(
+            # Call the function - this scenario has some tokens available, so use _handle_some_tokens_available
+            tokens_we_need = [
+                ("0xToken1", "TKN1")
+            ]  # Only need Token1 since Token0 is available
+            result = self.behaviour.current_behaviour._handle_some_tokens_available(
                 tokens,
                 required_tokens,
+                tokens_we_need,
                 dest_chain,
                 relative_funds_percentage,
                 target_ratios_by_token,
@@ -11166,15 +11170,18 @@ def dynamic_test_method(*args, **kwargs):
                 target_ratios_by_token,
             )
 
-            # Should create only one action (first token skipped due to same token/chain)
+            # Should create one action: Convert unnecessary token (0xToken2) to missing required token (0xToken1)
+            # The existing required token (0xToken0) is kept as-is since we have enough from unnecessary token conversion
             assert len(result) == 1
+
+            # Action: Convert unnecessary token 0xToken2 to 0xToken1
             action = result[0]
             assert action["action"] == "bridge_swap"
-            assert action["from_token"] == "0xToken2"  # Second source token
-            assert action["to_token"] == "0xToken1"  # Second dest token (round-robin)
+            assert action["from_token"] == "0xToken2"
+            assert action["to_token"] == "0xToken1"
             assert action["to_chain"] == "ethereum"
-            # Fraction should be relative_funds_percentage * target_ratio = 0.8 * 0.7 = 0.56
-            assert abs(action["fraction"] - 0.56) < 0.001
+            # Fraction should be target ratio for Token1 (0.7)
+            assert abs(action["fraction"] - 0.7) < 0.001
 
     def test_handle_all_tokens_needed_all_tokens_skipped(self) -> None:
         """Test _handle_all_tokens_needed when all tokens are skipped due to same token/chain matches."""

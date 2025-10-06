@@ -3544,6 +3544,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             # TiP formula: entry_cost / ((effective_apr/365) * principal)
             min_days = entry_cost / ((effective_apr / 365) * principal)
+            min_days = min_days * 9
 
             result = max(8.0, min_days)  # At least 8 days
 

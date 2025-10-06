@@ -252,7 +252,6 @@ WHITELISTED_ASSETS = {
         "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
         "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "DOLA",
         "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "LUSD",
-        "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",
         "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "BOLD",
         "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "FRAX",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",

@@ -4790,3 +4790,238 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(
                 f"Error updating agent performance metrics: {str(e)}"
             )
+
+    def _fetch_portfolio_from_subgraph(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """
+        Fetch complete portfolio data from the Optimus subgraph.
+        
+        Returns portfolio data structure matching the current portfolio_data format,
+        or None if subgraph is unavailable or returns no data.
+        """
+        try:
+            # Get subgraph endpoint for the chain
+            subgraph_endpoint = self.params.optimus_subgraph_endpoints.get(chain)
+            
+            if not subgraph_endpoint:
+                self.context.logger.warning(
+                    f"No Optimus subgraph endpoint configured for chain {chain}"
+                )
+                return None
+            
+            # Get service safe address for this chain
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address found for chain {chain}")
+                return None
+            
+            # GraphQL query to fetch portfolio data
+            query = """
+            query GetPortfolio($serviceId: Bytes!) {
+                service(id: $serviceId) {
+                    id
+                    balances {
+                        token
+                        symbol
+                        decimals
+                        balance
+                        balanceUSD
+                    }
+                    positions {
+                        id
+                        protocol
+                        pool
+                        isActive
+                        usdCurrent
+                        token0
+                        token0Symbol
+                        token1
+                        token1Symbol
+                        amount0
+                        amount1
+                        liquidity
+                        tokenId
+                        tickLower
+                        tickUpper
+                        tickSpacing
+                        fee
+                    }
+                }
+                agentPortfolio(id: $serviceId) {
+                    finalValue
+                    initialValue
+                    positionsValue
+                    uninvestedValue
+                    projectedRoi
+                    roi
+                    apr
+                    projectedAPR
+                    totalPositions
+                    totalClosedPositions
+                    lastUpdated
+                }
+            }
+            """
+            
+            variables = {"serviceId": safe_address.lower()}
+            
+            # Make GraphQL request
+            success, response = yield from self._request_with_retries(
+                endpoint=subgraph_endpoint,
+                method="POST",
+                body={"query": query, "variables": variables},
+                headers={"Content-Type": "application/json"},
+                rate_limited_code=429,
+                rate_limited_callback=lambda: self.context.logger.warning(
+                    "Subgraph rate limited"
+                ),
+                retry_wait=self.params.sleep_time,
+            )
+            
+            if not success or not response:
+                self.context.logger.error(
+                    f"Failed to fetch portfolio from subgraph for {chain}"
+                )
+                return None
+            
+            data = response.get("data", {})
+            service = data.get("service")
+            portfolio = data.get("agentPortfolio")
+            
+            if not service or not portfolio:
+                self.context.logger.warning(
+                    f"No portfolio data found in subgraph for {safe_address}"
+                )
+                return None
+            
+            # Build allocations from positions
+            allocations = []
+            for position in service.get("positions", []):
+                if position.get("isActive"):
+                    allocation = yield from self._build_allocation_from_position(
+                        position, chain, safe_address
+                    )
+                    if allocation:
+                        allocations.append(allocation)
+            
+            # Build portfolio breakdown from token balances
+            portfolio_breakdown = []
+            for balance in service.get("balances", []):
+                portfolio_breakdown.append({
+                    "asset": balance.get("symbol"),
+                    "address": balance.get("token"),
+                    "balance": float(balance.get("balance", 0)),
+                    "price": float(balance.get("balanceUSD", 0)) / float(balance.get("balance", 1)) if float(balance.get("balance", 0)) > 0 else 0.0,
+                    "value_usd": float(balance.get("balanceUSD", 0)),
+                    "ratio": 0.0,  # Will be calculated later
+                })
+            
+            # Get agent hash
+            agent_config = os.environ.get("AEA_AGENT", "")
+            agent_hash = agent_config.split(":")[-1] if agent_config else "Not found"
+            
+            # Build final portfolio data structure
+            portfolio_data = {
+                "portfolio_value": float(portfolio.get("finalValue", 0)),
+                "value_in_pools": float(portfolio.get("positionsValue", 0)),
+                "value_in_safe": float(portfolio.get("uninvestedValue", 0)),
+                "value_in_withdrawals": 0.0,  # Not tracked in subgraph yet
+                "initial_investment": float(portfolio.get("initialValue", 0)),
+                "airdropped_rewards": 0.0,  # Not tracked in subgraph yet
+                "volume": None,  # Not tracked in subgraph yet
+                "total_roi": float(portfolio.get("roi", 0)),
+                "partial_roi": float(portfolio.get("projectedRoi", 0)),
+                "agent_hash": agent_hash,
+                "allocations": allocations,
+                "portfolio_breakdown": portfolio_breakdown,
+                "address": safe_address,
+                "last_updated": int(portfolio.get("lastUpdated", 0)),
+            }
+            
+            self.context.logger.info(
+                f"Successfully fetched portfolio from subgraph for {chain}"
+            )
+            
+            return portfolio_data
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error fetching portfolio from subgraph: {str(e)}"
+            )
+            return None
+
+    def _build_allocation_from_position(
+        self, position: Dict[str, Any], chain: str, safe_address: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """
+        Build an allocation object from a subgraph position.
+        
+        Args:
+            position: Position data from subgraph
+            chain: Chain name
+            safe_address: Safe address for this service
+            
+        Returns:
+            Allocation dict matching the current format, or None if invalid
+        """
+        try:
+            protocol = position.get("protocol", "")
+            pool_address = position.get("pool", "")
+            
+            if not protocol or not pool_address:
+                return None
+            
+            # Map protocol names to dex types
+            protocol_to_dex = {
+                "velodrome-cl": "velodrome",
+                "velodrome-v2": "velodrome",
+                "uniswap-v3": "uniswapV3",
+                "balancer": "balancerPool",
+                "sturdy": "sturdy",
+            }
+            
+            dex_type = protocol_to_dex.get(protocol)
+            if not dex_type:
+                self.context.logger.warning(f"Unknown protocol: {protocol}")
+                return None
+            
+            # Get token symbols
+            assets = []
+            if position.get("token0Symbol"):
+                assets.append(position.get("token0Symbol"))
+            if position.get("token1Symbol"):
+                assets.append(position.get("token1Symbol"))
+            
+            # Build allocation object
+            allocation = {
+                "chain": chain,
+                "type": dex_type,
+                "id": pool_address,
+                "assets": assets,
+                "apr": 0.0,  # APR not tracked in subgraph yet
+                "details": f"{protocol} Pool",
+                "ratio": 0.0,  # Will be calculated later
+                "address": safe_address,
+            }
+            
+            # Add tick ranges for concentrated liquidity positions
+            if protocol in ["velodrome-cl", "uniswap-v3"]:
+                if position.get("tokenId") and position.get("tickLower") is not None and position.get("tickUpper") is not None:
+                    # Note: We don't have current tick from subgraph, would need additional query
+                    # For now, just add the static position info
+                    allocation["tick_ranges"] = [{
+                        "token_id": int(position.get("tokenId", 0)),
+                        "tick_lower": int(position.get("tickLower", 0)),
+                        "tick_upper": int(position.get("tickUpper", 0)),
+                        "current_tick": 0,  # Placeholder - needs pool query
+                        "in_range": False,  # Placeholder - needs pool query
+                    }]
+            
+            return allocation
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error building allocation from position: {str(e)}"
+            )
+            return None

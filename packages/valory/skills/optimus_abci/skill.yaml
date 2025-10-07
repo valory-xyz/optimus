@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
   dialogues.py: bafybeifojr2urrwkm6rpm3wbytvcy54ks7x7qashwphyrlkrnaem6jaswy
   fsm_specification.yaml: bafybeigs27k3cmcgnu4w5j72vgp2uqbmt3c4zgsw55epm577bkm3yosulu
-  handlers.py: bafybeid5qf2bnxdyt6rzczqzayknbuzxu6qufn4znmybao4nzmzkzoioom
+  handlers.py: bafybeicy5ubqfx42el5idyvjsgh6tjkekmr7yg22yr4yl4sdaklfx3hq6y
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agent-agentsfun-logo-Cl82UKSm.png: bafybeia3nla5pruiurpwvzex6bbsgset4k2foerma2iwy5zxmtjidur454
@@ -115,7 +115,7 @@ skills:
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
 - valory/liquidity_trader_abci:0.1.0:bafybeiaaydlkjzrc2aq26iy2wstmynyj447mzzwfbjiwa6y6hu7ttfrtpq
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
-- valory/funds_manager:0.1.0:bafybeifmwsl7r5e6w7njg3ibab2dyxbykgbv4ytyjxrheyeyx3dzhlkb3e
+- valory/funds_manager:0.1.0:bafybeibmp2fhlsfqvxm7u3sgpjyeirhdrvbp6zjspxjbyucfpdrnyq5qai
 behaviours:
   main:
     args: {}

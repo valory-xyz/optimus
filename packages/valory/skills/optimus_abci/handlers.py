@@ -77,6 +77,7 @@ from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
     TradingType,
+    ZERO_ADDRESS
 )
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
@@ -125,6 +126,7 @@ OK_CODE = 200
 NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
+ESTIMATED_GAS_PER_TX = 5000000000000  # 0.000005 ETH in wei
 
 
 def load_fsm_spec() -> Dict:
@@ -401,21 +403,40 @@ class HttpHandler(BaseHttpHandler):
             response = standard_deficit
         else:
             # Withdrawal mode: check if there's any deficit
-            if not self._has_deficit(standard_deficit):
-                # No deficit, return empty
-                response = {}
-            else:
+            if self._has_deficit(standard_deficit):
                 # There is a deficit - check if actions are prepared
                 withdrawal_actions = self._get_withdrawal_actions()
-                
                 if not withdrawal_actions or len(withdrawal_actions) == 0:
                     # No actions prepared yet, don't request funding
                     response = {}
                 else:
                     # Actions exist - calculate minimal deficit needed
-                    response = self._calculate_withdrawal_funding_deficit(
-                        withdrawal_actions
-                    )
+                    # Read current balance for zero-address from funds manager response
+                    try:
+                        chain = self.context.params.target_investment_chains[0]
+                        funds_status = self.funds_status.get_response_body() or {}
+                        agent_map = funds_status.get(chain, {}).get(self.context.agent_address, {})
+                        zero_addr_entry = agent_map.get(ZERO_ADDRESS, {})
+                        balance_value = zero_addr_entry.get("balance", 0)
+                        current_balance = int(balance_value) if balance_value is not None else 0
+                        # Determine remaining actions based on executed tx hashes
+                        withdrawal_data = self._read_withdrawal_data() or {}
+                        tx_hashes_serialized = withdrawal_data.get("withdrawal_transaction_hashes", "[]")
+                        executed_hashes = json.loads(tx_hashes_serialized) if tx_hashes_serialized else []
+                        executed_count = len(executed_hashes)
+                    except Exception:
+                        executed_count = 0
+
+                    remaining_actions = withdrawal_actions[executed_count:] if executed_count > 0 else withdrawal_actions
+
+                    if not remaining_actions:
+                        # All actions executed; nothing to fund
+                        response = {}
+                    else:
+                        response = self._calculate_withdrawal_funding_deficit(
+                            remaining_actions,
+                            current_balance,
+                        )
         
         self._send_ok_response(http_msg, http_dialogue, response)
 
@@ -429,12 +450,11 @@ class HttpHandler(BaseHttpHandler):
 
     def _has_deficit(self, deficit: Dict) -> bool:
         """Check if there's any funding deficit."""
-        for chain_data in deficit.values():
-            agent_deficit = chain_data.get("agent", {})
-            for address_deficit in agent_deficit.values():
-                if address_deficit.get("topup", 0) > 0:
-                    return True
-        return False
+        chain = self.context.params.target_investment_chains[0]
+        chain_data = deficit.get(chain, {})
+        agent_deficit = chain_data.get(self.context.agent_address, {})
+        zero_addr_deficit = agent_deficit.get(ZERO_ADDRESS, {})
+        return zero_addr_deficit.get("deficit", 0) > 0
 
     def _get_withdrawal_actions(self) -> List[Dict]:
         """Get prepared withdrawal actions from synchronized data."""
@@ -447,10 +467,10 @@ class HttpHandler(BaseHttpHandler):
             return []
 
     def _calculate_withdrawal_funding_deficit(
-        self, withdrawal_actions: List[Dict]
+        self, withdrawal_actions: List[Dict], current_balance: int
     ) -> Dict:
         """
-        Calculate funding deficit for withdrawal actions.
+        Calculate funding deficit for remaining withdrawal actions.
         
         Estimates gas needed based on action count, checks agent balance,
         and returns deficit if agent doesn't have enough.
@@ -461,17 +481,10 @@ class HttpHandler(BaseHttpHandler):
         num_actions = len(withdrawal_actions)
         chain = self.context.params.target_investment_chains[0]
         
-        # Estimate gas: 0.0003 ETH per action + 20% buffer
-        gas_per_action = 300000000000000  # 0.0003 ETH in wei
+        # Estimate gas: gas per action * number of actions + 20% buffer
+        gas_per_action = ESTIMATED_GAS_PER_TX
         total_gas_needed = int(gas_per_action * num_actions * 1.2)
-        
-        # Get current agent balance
-        current_balance = self._get_agent_eoa_balance(chain)
-        
-        if current_balance is None:
-            self.context.logger.error("Failed to get agent balance")
-            return {}
-        
+             
         # Calculate deficit
         deficit = total_gas_needed - current_balance
         
@@ -489,7 +502,7 @@ class HttpHandler(BaseHttpHandler):
         
         # Get agent address
         agent_address = self.context.agent_address
-        native_token = "0x0000000000000000000000000000000000000000"
+        native_token = ZERO_ADDRESS
         
         # Return in funds_manager response format: flattened with stringified values
         return {

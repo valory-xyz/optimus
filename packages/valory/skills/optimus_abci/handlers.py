@@ -77,7 +77,7 @@ from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
     TradingType,
-    ZERO_ADDRESS
+    ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
@@ -394,10 +394,10 @@ class HttpHandler(BaseHttpHandler):
         """
         # Get standard deficit from funds_manager
         standard_deficit = self.funds_status.get_response_body()
-        
+
         # Check if in withdrawal mode
         in_withdrawal = self._is_in_withdrawal_mode()
-        
+
         if not in_withdrawal:
             # Normal mode: return standard deficit
             response = standard_deficit
@@ -415,19 +415,33 @@ class HttpHandler(BaseHttpHandler):
                     try:
                         chain = self.context.params.target_investment_chains[0]
                         funds_status = self.funds_status.get_response_body() or {}
-                        agent_map = funds_status.get(chain, {}).get(self.context.agent_address, {})
+                        agent_map = funds_status.get(chain, {}).get(
+                            self.context.agent_address, {}
+                        )
                         zero_addr_entry = agent_map.get(ZERO_ADDRESS, {})
                         balance_value = zero_addr_entry.get("balance", 0)
-                        current_balance = int(balance_value) if balance_value is not None else 0
+                        current_balance = (
+                            int(balance_value) if balance_value is not None else 0
+                        )
                         # Determine remaining actions based on executed tx hashes
                         withdrawal_data = self._read_withdrawal_data() or {}
-                        tx_hashes_serialized = withdrawal_data.get("withdrawal_transaction_hashes", "[]")
-                        executed_hashes = json.loads(tx_hashes_serialized) if tx_hashes_serialized else []
+                        tx_hashes_serialized = withdrawal_data.get(
+                            "withdrawal_transaction_hashes", "[]"
+                        )
+                        executed_hashes = (
+                            json.loads(tx_hashes_serialized)
+                            if tx_hashes_serialized
+                            else []
+                        )
                         executed_count = len(executed_hashes)
                     except Exception:
                         executed_count = 0
 
-                    remaining_actions = withdrawal_actions[executed_count:] if executed_count > 0 else withdrawal_actions
+                    remaining_actions = (
+                        withdrawal_actions[executed_count:]
+                        if executed_count > 0
+                        else withdrawal_actions
+                    )
 
                     if not remaining_actions:
                         # All actions executed; nothing to fund
@@ -437,14 +451,14 @@ class HttpHandler(BaseHttpHandler):
                             remaining_actions,
                             current_balance,
                         )
-        
+
         self._send_ok_response(http_msg, http_dialogue, response)
 
     def _is_in_withdrawal_mode(self) -> bool:
         """Check if agent is in withdrawal mode."""
         withdrawal_data = self._read_withdrawal_data()
         return (
-            withdrawal_data 
+            withdrawal_data
             and withdrawal_data.get("investing_paused", "").lower() == "true"
         )
 
@@ -471,71 +485,50 @@ class HttpHandler(BaseHttpHandler):
     ) -> Dict:
         """
         Calculate funding deficit for remaining withdrawal actions.
-        
+
         Estimates gas needed based on action count, checks agent balance,
         and returns deficit if agent doesn't have enough.
-        
+
         Returns response in the same format as funds_manager.get_response_body():
         flattened structure with stringified deficit values.
         """
         num_actions = len(withdrawal_actions)
         chain = self.context.params.target_investment_chains[0]
-        
+
         # Estimate gas: gas per action * number of actions + 20% buffer
         gas_per_action = ESTIMATED_GAS_PER_TX
         total_gas_needed = int(gas_per_action * num_actions * 1.2)
-             
+
         # Calculate deficit
         deficit = total_gas_needed - current_balance
-        
+
         if deficit <= 0:
             self.context.logger.info(
                 f"Agent has sufficient balance ({current_balance} wei) for "
                 f"{num_actions} withdrawal actions (need {total_gas_needed} wei)"
             )
             return {}
-        
+
         self.context.logger.info(
             f"Withdrawal funding needed: {deficit} wei for {num_actions} actions "
             f"(current: {current_balance}, needed: {total_gas_needed})"
         )
-        
+
         # Get agent address
         agent_address = self.context.agent_address
         native_token = ZERO_ADDRESS
-        
+
         # Return in funds_manager response format: flattened with stringified values
         return {
             chain: {
                 agent_address: {
                     native_token: {
                         "balance": str(current_balance),
-                        "deficit": str(deficit)
+                        "deficit": str(deficit),
                     }
                 }
             }
         }
-
-    def _get_agent_eoa_balance(self, chain: str) -> Optional[int]:
-        """
-        Get agent EOA balance using ledger API.
-        """
-        try:
-            # Get agent address
-            agent_address = self.context.agent_address
-            
-            # Query balance via ledger API
-            ledger_api = self.context.ledger_apis.apis.get(chain)
-            if not ledger_api:
-                self.context.logger.error(f"No ledger API for chain {chain}")
-                return None
-            
-            balance = ledger_api.get_balance(agent_address)
-            return int(balance) if balance else None
-            
-        except Exception as e:
-            self.context.logger.error(f"Error getting agent balance: {e}")
-            return None
 
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

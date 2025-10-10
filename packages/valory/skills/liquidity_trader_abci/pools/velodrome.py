@@ -452,9 +452,14 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # Note: The 50/50 ratio adjustment code has been removed as token percentages
-        # are now handled in get_enter_pool_tx_hash
-        # Calculate tick ranges based on pool's tick spacing
+        # Get current market conditions for validation
+        price_data = yield from self._get_current_pool_price(pool_address, chain)
+        if price_data is None:
+            self.context.logger.error(f"Failed to get current price for pool {pool_address}")
+            return None, None
+        
+        current_price, sqrt_price_x96 = price_data
+
         # Calculate tick ranges if not provided
 
         if not tick_ranges:
@@ -475,6 +480,150 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 f"Failed to calculate tick ranges for pool {pool_address}"
             )
             return None, None
+
+        # Retrieve previous current_price from KV store for comparison and slippage check
+        kv_data = yield from self._read_kv(keys=("selected_velodrome_pool_current_price",))
+        previous_current_price = kv_data.get("selected_velodrome_pool_current_price") if kv_data else None
+        
+        if previous_current_price:
+            try:
+                previous_current_price = float(previous_current_price)
+                
+                # Calculate band width from the narrowest band in tick_ranges
+                if tick_ranges and tick_ranges[0]:
+                    # Find the narrowest band (smallest tick difference)
+                    min_tick_width = float('inf')
+                    for position in tick_ranges[0]:
+                        tick_width = position["tick_upper"] - position["tick_lower"]
+                        if tick_width < min_tick_width:
+                            min_tick_width = tick_width
+                    
+                    # Convert tick width to price width using the formula: price = 1.0001^tick
+                    # For small tick differences, we can approximate: price_width ≈ tick_width * 0.0001
+                    band_width = min_tick_width * 0.0001
+                    
+                    # Calculate price change as percentage of band width
+                    price_change_percentage = (abs(current_price - previous_current_price) / band_width) * 100
+                    
+                    self.context.logger.info(
+                        f"Price comparison for pool {pool_address}: "
+                        f"Previous price: {previous_current_price}, Current price: {current_price}, "
+                        f"Narrowest band width: {band_width:.6f} (tick width: {min_tick_width}), "
+                        f"Price change: {price_change_percentage:.2f}% of band width"
+                    )
+                    
+                    # Check if price change exceeds slippage tolerance - continuous loop until acceptable
+                    slippage_tolerance = getattr(self.params, 'slippage_tolerance', 0.01)  # Default 1%
+                    slippage_tolerance_percentage = slippage_tolerance * 100
+                    
+                    max_retries = 10  # Maximum number of retries to prevent infinite loop
+                    retry_count = 0
+                    
+                    while price_change_percentage > slippage_tolerance_percentage and retry_count < max_retries:
+                        retry_count += 1
+                        self.context.logger.warning(
+                            f"Price change {price_change_percentage:.2f}% exceeds slippage tolerance {slippage_tolerance_percentage:.2f}%. "
+                            f"Attempt {retry_count}/{max_retries}: Waiting 30 seconds and recalculating current price..."
+                        )
+                        
+                        # Wait 30 seconds
+                        import time
+                        time.sleep(30)
+                        
+                        # Recalculate current price
+                        price_data = yield from self._get_current_pool_price(pool_address, chain)
+                        if price_data is None:
+                            self.context.logger.error(f"Failed to get current price after wait for pool {pool_address}")
+                            return None, None
+                        
+                        current_price, sqrt_price_x96 = price_data
+                        
+                        # Recalculate price change with new current price
+                        price_change_percentage = (abs(current_price - previous_current_price) / band_width) * 100
+                        
+                        self.context.logger.info(
+                            f"After 30s wait (attempt {retry_count}) - Price comparison for pool {pool_address}: "
+                            f"Previous price: {previous_current_price}, Current price: {current_price}, "
+                            f"Price change: {price_change_percentage:.2f}% of band width"
+                        )
+                    
+                    # Check final result
+                    if price_change_percentage > slippage_tolerance_percentage:
+                        self.context.logger.error(
+                            f"Price change {price_change_percentage:.2f}% still exceeds slippage tolerance {slippage_tolerance_percentage:.2f}% "
+                            f"after {max_retries} attempts. Aborting pool entry."
+                        )
+                        return None, None
+                    else:
+                        self.context.logger.info(
+                            f"Price change {price_change_percentage:.2f}% is within slippage tolerance {slippage_tolerance_percentage:.2f}%. "
+                            f"Proceeding with pool entry."
+                        )
+                else:
+                    # Fallback to simple percentage if no tick_ranges available
+                    price_change_percentage = ((current_price - previous_current_price) / previous_current_price) * 100
+                    self.context.logger.info(
+                        f"Price comparison for pool {pool_address}: "
+                        f"Previous price: {previous_current_price}, Current price: {current_price}, "
+                        f"Price change: {price_change_percentage:.2f}% (simple percentage - no tick_ranges available)"
+                    )
+                    
+                    # Check slippage tolerance with simple percentage - continuous loop until acceptable
+                    slippage_tolerance = getattr(self.params, 'slippage_tolerance', 0.01)  # Default 1%
+                    slippage_tolerance_percentage = slippage_tolerance * 100
+                    
+                    max_retries = 10  # Maximum number of retries to prevent infinite loop
+                    retry_count = 0
+                    
+                    while price_change_percentage > slippage_tolerance_percentage and retry_count < max_retries:
+                        retry_count += 1
+                        self.context.logger.warning(
+                            f"Price change {price_change_percentage:.2f}% exceeds slippage tolerance {slippage_tolerance_percentage:.2f}%. "
+                            f"Attempt {retry_count}/{max_retries}: Waiting 30 seconds and recalculating current price..."
+                        )
+                        
+                        # Wait 30 seconds
+                        import time
+                        time.sleep(30)
+                        
+                        # Recalculate current price
+                        price_data = yield from self._get_current_pool_price(pool_address, chain)
+                        if price_data is None:
+                            self.context.logger.error(f"Failed to get current price after wait for pool {pool_address}")
+                            return None, None
+                        
+                        current_price, sqrt_price_x96 = price_data
+                        
+                        # Recalculate price change with new current price
+                        price_change_percentage = ((current_price - previous_current_price) / previous_current_price) * 100
+                        
+                        self.context.logger.info(
+                            f"After 30s wait (attempt {retry_count}) - Price comparison for pool {pool_address}: "
+                            f"Previous price: {previous_current_price}, Current price: {current_price}, "
+                            f"Price change: {price_change_percentage:.2f}% (simple percentage)"
+                        )
+                    
+                    # Check final result
+                    if price_change_percentage > slippage_tolerance_percentage:
+                        self.context.logger.error(
+                            f"Price change {price_change_percentage:.2f}% still exceeds slippage tolerance {slippage_tolerance_percentage:.2f}% "
+                            f"after {max_retries} attempts. Aborting pool entry."
+                        )
+                        return None, None
+                    else:
+                        self.context.logger.info(
+                            f"Price change {price_change_percentage:.2f}% is within slippage tolerance {slippage_tolerance_percentage:.2f}%. "
+                            f"Proceeding with pool entry."
+                        )
+            except (ValueError, TypeError) as e:
+                self.context.logger.warning(
+                    f"Could not parse previous current_price from KV store: {previous_current_price}, error: {e}"
+                )
+        else:
+            self.context.logger.info(
+                f"No previous current_price found in KV store for pool {pool_address}. Current price: {current_price}. "
+                f"Proceeding with pool entry (no slippage check possible)."
+            )
 
         # Get tick spacing if not provided
         if not tick_spacing:
@@ -501,38 +650,74 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
         deadline = int(last_update_time) + (20 * 60)
-
+        
         self.context.logger.info(
             f"Using max amounts: {max_amounts_in[0]} token0, {max_amounts_in[1]} token1"
         )
-
-        # Calculate the amount to allocate to each position
+        
+        # Calculate the amount to allocate to each position using proper liquidity curve math
         # Track total allocated to ensure we don't exceed max_amounts_in
         total_allocated_0 = 0
         total_allocated_1 = 0
+        
+        # Import required tick math functions
+        from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
+            get_sqrt_ratio_at_tick,
+            get_liquidity_for_amounts,
+            get_amounts_for_liquidity,
+        )
 
-        # First pass: calculate desired amounts
+        # First pass: calculate desired amounts using liquidity curve math
         for position in tick_ranges[0]:
             allocation = position.get("allocation", 0)
             if allocation <= 0:
                 position["amount0_desired"] = 0
                 position["amount1_desired"] = 0
                 continue
-
-            # Calculate amounts based on allocation directly
-            # We allocate the same percentage of each token based on the band allocation
-            amount0_desired = int(max_amounts_in[0] * allocation)
-            amount1_desired = int(max_amounts_in[1] * allocation)
-
+            
+            # Calculate the sqrt ratios for this position's range
+            sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(position["tick_lower"])
+            sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(position["tick_upper"])
+            
+            # Allocate proportional amounts from the available balances
+            # This gives each position its share of the total available tokens
+            allocated_amount0 = int(max_amounts_in[0] * allocation)
+            allocated_amount1 = int(max_amounts_in[1] * allocation)
+            
+            # Calculate liquidity based on what this position can actually use
+            # given its tick range and the current price
+            estimated_liquidity = get_liquidity_for_amounts(
+                sqrt_price_x96,
+                sqrt_ratio_a_x96,
+                sqrt_ratio_b_x96,
+                allocated_amount0,
+                allocated_amount1,
+            )
+            
+            # Calculate the actual amounts needed for this liquidity and range
+            # This will give us the proper ratio of token0/token1 for this specific position
+            amount0_desired, amount1_desired = get_amounts_for_liquidity(
+                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, estimated_liquidity
+            )
+            
             self.context.logger.info(
-                f"amount0_desired,amount1_desired :{amount0_desired,amount1_desired}"
+                f"Position [{position['tick_lower']}, {position['tick_upper']}] with allocation {allocation:.2%}: "
+                f"allocated={allocated_amount0}/{allocated_amount1}, "
+                f"liquidity={estimated_liquidity}, "
+                f"actual needed={amount0_desired}/{amount1_desired}"
             )
 
-            # Store in position for second pass
+            # For CL pools, always ensure non-zero amounts to avoid liquidity calculation failures
+            # The contract will determine the actual amounts based on the liquidity curve
+            if amount0_desired == 0:
+                amount0_desired = 1  # Use minimum amount to avoid 0
+            if amount1_desired == 0:
+                amount1_desired = 1  # Use minimum amount to avoid 0
+                
             position["amount0_desired"] = amount0_desired
             position["amount1_desired"] = amount1_desired
 
-            # Track totals
+            # Track totals using calculated amounts
             total_allocated_0 += amount0_desired
             total_allocated_1 += amount1_desired
 
@@ -545,19 +730,45 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             scale_factor_0 = max_amounts_in[0] / max(1, total_allocated_0)
             scale_factor_1 = max_amounts_in[1] / max(1, total_allocated_1)
             scale_factor = min(scale_factor_0, scale_factor_1)
-
+            
             self.context.logger.info(
                 f"Scaling down allocations by factor {scale_factor:.4f}"
             )
 
-            # Apply scaling
+            # Apply scaling and recalculate with proper liquidity math
             for position in tick_ranges[0]:
-                position["amount0_desired"] = int(
-                    position["amount0_desired"] * scale_factor
+                allocation = position.get("allocation", 0)
+                if allocation <= 0:
+                    continue
+                
+                # Scale down the allocated amounts
+                scaled_allocated_amount0 = int(max_amounts_in[0] * allocation * scale_factor)
+                scaled_allocated_amount1 = int(max_amounts_in[1] * allocation * scale_factor)
+                
+                # Recalculate with scaled amounts using liquidity curve math
+                sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(position["tick_lower"])
+                sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(position["tick_upper"])
+                
+                estimated_liquidity = get_liquidity_for_amounts(
+                    sqrt_price_x96,
+                    sqrt_ratio_a_x96,
+                    sqrt_ratio_b_x96,
+                    scaled_allocated_amount0,
+                    scaled_allocated_amount1,
                 )
-                position["amount1_desired"] = int(
-                    position["amount1_desired"] * scale_factor
+                
+                amount0_desired, amount1_desired = get_amounts_for_liquidity(
+                    sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, estimated_liquidity
                 )
+                
+                # For CL pools, always ensure non-zero amounts to avoid liquidity calculation failures
+                if amount0_desired == 0:
+                    amount0_desired = 1
+                if amount1_desired == 0:
+                    amount1_desired = 1
+                
+                position["amount0_desired"] = amount0_desired
+                position["amount1_desired"] = amount1_desired
 
         # Process each position and collect individual transaction hashes
         tx_hashes = []
@@ -944,12 +1155,14 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
         # 3. Get current price
-        current_price = yield from self._get_current_pool_price(pool_address, chain)
-        if current_price is None:
+        price_data = yield from self._get_current_pool_price(pool_address, chain)
+        if price_data is None:
             self.context.logger.error(
                 f"Failed to get current price for pool {pool_address}"
             )
             return None
+        
+        current_price, sqrt_price_x96 = price_data
 
         try:
             # 4. Get historical price data for both tokens and calculate price ratio history
@@ -1863,8 +2076,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
     def _get_current_pool_price(
         self, pool_address: str, chain: str
-    ) -> Generator[None, None, Optional[float]]:
-        """Get the current price from a Velodrome concentrated liquidity pool."""
+    ) -> Generator[None, None, Optional[tuple]]:
+        """Get the current price and sqrt_price_x96 from a Velodrome concentrated liquidity pool."""
         try:
             # Get the sqrt_price_x96 from the pool
             sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
@@ -1875,7 +2088,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # The formula is: price = (sqrt_price_x96 / 2^96)^2
             price = (sqrt_price_x96 / (2**96)) ** 2
             self.context.logger.info(f"Current pool price: {price}")
-            return price
+            return (price, sqrt_price_x96)
         except Exception as e:
             self.context.logger.error(f"Error getting current pool price: {str(e)}")
             return None
@@ -3191,10 +3404,15 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         pool_address: str,
         tick_lower: int,
         tick_upper: int,
-        max_amounts_in: list,
+        desired_amounts: list,
         chain: str,
     ) -> Generator[None, None, Tuple[int, int]]:
-        """Calculate slippage protection for Velodrome mint operations using TickMath utilities."""
+        """Calculate slippage protection for Velodrome mint operations using TickMath utilities.
+        
+        Args:
+            desired_amounts: [amount0_desired, amount1_desired] - the actual amounts calculated
+                           using proper liquidity curve math for this specific position
+        """
         try:
             sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
             if sqrt_price_x96 is None:
@@ -3207,9 +3425,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
             sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
 
-            # Use get_liquidity_for_amounts to calculate liquidity directly from desired amounts
-            amount0_desired = max_amounts_in[0]
-            amount1_desired = max_amounts_in[1]
+            # Use the properly calculated desired amounts (from liquidity curve math)
+            amount0_desired = desired_amounts[0]
+            amount1_desired = desired_amounts[1]
 
             estimated_liquidity = get_liquidity_for_amounts(
                 sqrt_price_x96,
@@ -3229,15 +3447,14 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             amount0_min = int(expected_amount0 * (1 - slippage_tolerance))
             amount1_min = int(expected_amount1 * (1 - slippage_tolerance))
 
-            # Ensure minimum amounts never exceed maximum amounts
-            amount0_min = min(amount0_min, max_amounts_in[0])
-            amount1_min = min(amount1_min, max_amounts_in[1])
+            # Ensure minimum amounts never exceed desired amounts
+            amount0_min = min(amount0_min, amount0_desired)
+            amount1_min = min(amount1_min, amount1_desired)
 
             self.context.logger.info(
                 f"Velodrome slippage protection - Desired: {amount0_desired}/{amount1_desired}, "
                 f"Expected: {expected_amount0}/{expected_amount1}, "
-                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}, "
-                f"Max amounts: {max_amounts_in[0]}/{max_amounts_in[1]}"
+                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}"
             )
 
             return amount0_min, amount1_min

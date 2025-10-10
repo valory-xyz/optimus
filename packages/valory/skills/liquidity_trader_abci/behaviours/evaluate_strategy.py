@@ -184,7 +184,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return False
 
     def validate_and_prepare_velodrome_inputs(
-        self, tick_bands, current_price, tick_spacing=1
+        self, tick_bands, current_price, tick_spacing=1, sqrt_price_x96=None
     ):
         """Validates inputs and prepares data for Velodrome CL position analysis."""
 
@@ -259,6 +259,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "current_price": current_price,
             "current_tick": current_tick,
             "tick_spacing": tick_spacing,
+            "sqrt_price_x96": sqrt_price_x96,
             "warnings": warnings,
         }
 
@@ -271,6 +272,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         validated_bands = validated_data["validated_bands"]
         current_price = validated_data["current_price"]
         current_tick = validated_data["current_tick"]
+        sqrt_price_x96 = validated_data.get("sqrt_price_x96")
         warnings = validated_data["warnings"].copy()
 
         # Process each band to calculate token ratios
@@ -300,18 +302,47 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 token1_ratio = 1.0
                 status = "ABOVE_RANGE"
             else:
-                # Price in range - calculate using interpolation formula
+                # Price in range - calculate using proper liquidity curve math
                 try:
-                    token1_ratio = min(
-                        max(
-                            (current_price - lower_bound_price)
-                            / (upper_bound_price - lower_bound_price),
-                            0,
-                        ),
-                        1,
+                    # Import tick math functions for proper calculation
+                    from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
+                        get_sqrt_ratio_at_tick,
+                        get_amounts_for_liquidity,
                     )
-                    token0_ratio = 1.0 - token1_ratio
+                    
+                    # Use the actual sqrt_price_x96 from the pool if available, otherwise calculate from price
+                    # This avoids precision issues and boundary condition problems
+                    if sqrt_price_x96 is not None:
+                        # Use the actual sqrt_price_x96 from the pool
+                        pass  # sqrt_price_x96 is already set
+                    else:
+                        # Fallback: calculate from current_price (less precise)
+                        import math
+                        sqrt_price_x96 = int(math.sqrt(current_price) * (2**96))
+                    
+                    # Get sqrt ratios for the tick range
+                    sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
+                    sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
+                    
+                    # Calculate amounts for a unit of liquidity to determine ratios
+                    # Use a large constant liquidity value for ratio calculation
+                    unit_liquidity = 1000000000000  # 1 trillion
+                    amount0, amount1 = get_amounts_for_liquidity(
+                        sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
+                    )
+                    
+                    # Calculate token ratios from amounts
+                    total_amount = amount0 + amount1
+                    if total_amount > 0:
+                        token0_ratio = amount0 / total_amount
+                        token1_ratio = amount1 / total_amount
+                    else:
+                        # Fallback to 50/50 if calculation fails
+                        token0_ratio = 0.5
+                        token1_ratio = 0.5
+                    
                     status = "IN_RANGE"
+                    
                 except Exception as e:
                     warnings.append(
                         f"Error calculating ratios for band [{tick_lower}, {tick_upper}]: {str(e)}"
@@ -381,12 +412,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         }
 
     def calculate_velodrome_cl_token_requirements(
-        self, tick_bands, current_price, tick_spacing=1
+        self, tick_bands, current_price, tick_spacing=1, sqrt_price_x96=None
     ):
         """Determines token requirements for Velodrome CL positions based on current price."""
         # Step 1: Validate and prepare inputs
         validated_data = self.validate_and_prepare_velodrome_inputs(
-            tick_bands, current_price, tick_spacing
+            tick_bands, current_price, tick_spacing, sqrt_price_x96
         )
 
         if not validated_data:
@@ -453,18 +484,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     self.context.logger.info(f"percent_in_bounds : {percent_in_bounds}")
 
-                    current_price = yield from pool._get_current_pool_price(
+                    price_data = yield from pool._get_current_pool_price(
                         self, pool_address, chain
                     )
-                    if current_price is None:
+                    if price_data is None:
                         self.context.logger.error(
                             f"Failed to get current price for pool {pool_address}"
                         )
                         continue
 
+                    current_price, sqrt_price_x96 = price_data
+
+                    # Store current_price in KV store for later comparison in enter_pool flow
+                    yield from self._write_kv({
+                        "selected_velodrome_pool_current_price": str(current_price)
+                    })
+                    self.context.logger.info(
+                        f"Stored current_price {current_price} for pool {pool_address} in KV store"
+                    )
+
                     # Calculate token requirements
                     requirements = self.calculate_velodrome_cl_token_requirements(
-                        tick_bands, current_price, tick_spacing
+                        tick_bands, current_price, tick_spacing, sqrt_price_x96
                     )
                     if not requirements:
                         self.context.logger.error(
@@ -550,8 +591,22 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         max_amount0 = token0_balance
                         max_amount1 = token1_balance
 
-                        # Check if either ratio is zero to avoid division by zero
-                        if (
+                        # Check if either ratio is zero - for CL pools, use 100% of the other token
+                        if requirements["overall_token0_ratio"] >= 0.99:
+                            # Use 100% token0, 0% token1
+                            max_amount0 = token0_balance
+                            max_amount1 = 0
+                            self.context.logger.info(
+                                f"Using 100% token0: {max_amount0} {token0_symbol}"
+                            )
+                        elif requirements["overall_token1_ratio"] >= 0.99:
+                            # Use 100% token1, 0% token0
+                            max_amount0 = 0
+                            max_amount1 = token1_balance
+                            self.context.logger.info(
+                                f"Using 100% token1: {max_amount1} {token1_symbol}"
+                            )
+                        elif (
                             requirements["overall_token0_ratio"] <= 0
                             or requirements["overall_token1_ratio"] <= 0
                         ):
@@ -2559,30 +2614,26 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     if any(req_addr == token_addr for req_addr, _ in required_tokens):
                         available_required_tokens.append((token_addr, token))
 
-                # Only convert existing required tokens if we have no unnecessary tokens to convert
-                if (
-                    available_required_tokens
-                    and tokens_we_need
-                    and not unnecessary_tokens
-                ):
-                    # Use the first available required token to get the first missing one
-                    source_token_addr, source_token = available_required_tokens[0]
-                    target_token_addr, target_token_symbol = tokens_we_need[0]
-
-                    # Skip if source and target are the same token
-                    if source_token_addr != target_token_addr:
-                        target_ratio = target_ratios_by_token.get(
-                            target_token_addr, 1.0 / len(required_tokens)
-                        )
-
-                        self._add_bridge_swap_action(
-                            bridge_swap_actions,
-                            source_token,
-                            dest_chain,
-                            target_token_addr,
-                            target_token_symbol,
-                            relative_funds_percentage * target_ratio,
-                        )
+                # Convert existing required tokens if we need to reach target ratios
+                # This handles cases where we have required tokens but need to convert them to other required tokens
+                if available_required_tokens and tokens_we_need:
+                    for source_token_addr, source_token in available_required_tokens:
+                        # Check if we need to convert this token based on target ratios
+                        source_ratio = target_ratios_by_token.get(source_token_addr, 0)
+                        if source_ratio < 0.01:  # If this token should be < 1% of allocation
+                            # Convert this token to the missing required token
+                            target_token_addr, target_token_symbol = tokens_we_need[0]
+                            
+                            # Skip if source and target are the same token
+                            if source_token_addr != target_token_addr:
+                                self._add_bridge_swap_action(
+                                    bridge_swap_actions,
+                                    source_token,
+                                    dest_chain,
+                                    target_token_addr,
+                                    target_token_symbol,
+                                    relative_funds_percentage,
+                                )
 
                 # Step 2c: Rebalance existing required tokens to achieve target ratios
                 for token in dest_chain_tokens:

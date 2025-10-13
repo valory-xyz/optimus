@@ -347,10 +347,12 @@ jobs:
           tar -xf tendermint.tar.gz
           sudo mv tendermint /usr/local/bin/tendermint
 
-          # pull node image needed for the integration tests
+          # pull Docker images needed for the integration tests
           docker pull node:16.7.0
+          docker pull valory/hardhat-optimism:latest
+          docker pull mockserver/mockserver:latest
 
-      - name: e2e tests
+      - name: Optimus E2E tests
         run: |
           tox -e py${{ matrix.python-version }}-linux -- -m 'e2e'
 

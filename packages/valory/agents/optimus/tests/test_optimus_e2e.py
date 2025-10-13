@@ -118,7 +118,7 @@ class BaseTestEnd2EndOptimusExecution(BaseTestEnd2EndExecution):
         # Add Safe API base URL for mock
         {
             "dotted_path": f"vendor.valory.skills.optimus_abci.models.params.args.safe_api_base_url",
-            "value": "http://127.0.0.1:3000/safe-transaction-optimism.safe.global/api",
+            "value": "http://127.0.0.1:3000/safe-transaction-optimism.safe.global/api/v1/safes",
         },
         # Add CoinGecko API endpoints for mock
         {

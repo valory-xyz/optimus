@@ -2,6 +2,7 @@
 
 import logging
 import time
+from pathlib import Path
 from typing import List
 
 import docker
@@ -14,6 +15,13 @@ from packages.valory.agents.optimus.tests.helpers.constants import (
     HARDHAT_PORT,
     HARDHAT_ADDRESS,
     USDC_ADDRESS,
+)
+
+# JSON Server constants
+DEFAULT_JSON_SERVER_ADDR = "http://127.0.0.1"
+DEFAULT_JSON_SERVER_PORT = 3000
+DEFAULT_JSON_DATA_DIR = (
+    Path(__file__).parent / "data" / "json_server" / "data.json"
 )
 
 
@@ -91,47 +99,56 @@ class OptimismHardhatImage(DockerImage):
 
 
 class MockAPIServerImage(DockerImage):
-    """Mock API server for Balancer subgraph and CoinGecko."""
+    """JSON server for mocking APIs (Balancer, CoinGecko, Safe API, etc.)."""
     
-    def __init__(self, client: docker.DockerClient):
+    def __init__(
+        self,
+        client: docker.DockerClient,
+        addr: str = DEFAULT_JSON_SERVER_ADDR,
+        port: int = DEFAULT_JSON_SERVER_PORT,
+        json_data: Path = DEFAULT_JSON_DATA_DIR,
+    ):
+        """Initialize the JSON server image."""
         super().__init__(client)
-        from pathlib import Path
-        self.data_file = Path(__file__).parent / "data" / "balancer_subgraph.json"
+        self.addr = addr
+        self.port = port
+        self.json_data = json_data
     
     def create_many(self, nb_containers: int) -> List[Container]:
         raise NotImplementedError()
     
     @property
     def image(self) -> str:
-        return "mockserver/mockserver:latest"
+        return "ajoelpod/mock-json-server:latest"
     
     def create(self) -> Container:
-        ports = {"1080/tcp": ("0.0.0.0", 3000)}
-        
+        """Create the JSON server container."""
+        data = "/usr/src/app/data.json"
         volumes = {
-            str(self.data_file): {
-                "bind": "/config/mockserver.json",
-                "mode": "ro"
-            }
+            str(self.json_data): {
+                "bind": data,
+                "mode": "rw",
+            },
         }
-        
+        ports = {"8000/tcp": ("0.0.0.0", self.port)}
         container = self._client.containers.run(
             self.image,
             detach=True,
             ports=ports,
             volumes=volumes,
-            environment={
-                "MOCKSERVER_INITIALIZATION_JSON_PATH": "/config/mockserver.json"
-            }
+            extra_hosts={"host.docker.internal": "host-gateway"},
         )
         return container
     
     def wait(self, max_attempts: int = 30, sleep_rate: float = 1.0) -> bool:
+        """Wait until the JSON server is running."""
         for i in range(max_attempts):
             try:
-                response = requests.get("http://127.0.0.1:3000/health")
-                if response.status_code == 200:
-                    return True
-            except:
+                response = requests.get(f"{self.addr}:{self.port}")
+                enforce(response.status_code == 200, "JSON server not ready")
+                logging.info("JSON server ready")
+                return True
+            except Exception as e:
+                logging.info(f"Attempt {i+1}/{max_attempts} failed: {e}")
                 time.sleep(sleep_rate)
         return False

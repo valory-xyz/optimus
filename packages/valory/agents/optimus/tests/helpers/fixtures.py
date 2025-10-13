@@ -10,6 +10,8 @@ from aea_test_autonomy.docker.base import launch_image
 from packages.valory.agents.optimus.tests.helpers.docker import (
     OptimismHardhatImage,
     MockAPIServerImage,
+    DEFAULT_JSON_SERVER_ADDR,
+    DEFAULT_JSON_SERVER_PORT,
 )
 from packages.valory.agents.optimus.tests.helpers.constants import (
     HARDHAT_ADDRESS,
@@ -54,7 +56,10 @@ class UseOptimismHardhatTest:
 
 @pytest.mark.integration
 class UseMockAPIServerTest:
-    """Fixture to start mock API server."""
+    """Fixture to start mock API server using JSON server."""
+    
+    MOCK_API_ADDRESS = DEFAULT_JSON_SERVER_ADDR
+    MOCK_API_PORT = DEFAULT_JSON_SERVER_PORT
     
     @classmethod
     @pytest.fixture(autouse=True)
@@ -63,7 +68,14 @@ class UseMockAPIServerTest:
         timeout: int = 5,
         max_attempts: int = 30,
     ) -> Generator:
-        """Start mock API server using existing JSON server."""
-        logging.info("Mock API Server ready (using existing JSON server)")
-        yield
-        logging.info("Mock API Server stopped")
+        """Start mock API server using JSON server."""
+        client = docker.from_env()
+        logging.info(f"Launching JSON server on port {cls.MOCK_API_PORT}")
+        
+        image = MockAPIServerImage(
+            client,
+            addr=cls.MOCK_API_ADDRESS,
+            port=cls.MOCK_API_PORT,
+        )
+        
+        yield from launch_image(image, timeout=timeout, max_attempts=max_attempts)

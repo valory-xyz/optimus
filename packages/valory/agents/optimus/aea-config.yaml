@@ -320,6 +320,6 @@ models:
       default_acceptance_time: ${int:5}
       genai_api_key: ${str:""}
       genai_model: ${str:gemini-2.5-flash}
-      slippage_tolerance: ${float:0.001}
+      slippage_tolerance: ${float:1}
       airdrop_started: ${bool:false}
       airdrop_contract_address: ${str:""}

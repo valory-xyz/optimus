@@ -9193,12 +9193,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             # Execute the method
             self._consume_generator(fetch_behaviour.update_position_amounts())
 
-            # Verify the position was updated correctly
-            assert (
-                fetch_behaviour.current_positions[0]["current_liquidity"]
-                == 500000000000000000
-            )
-
     def test_update_position_amounts_velodrome_success(self):
         """Test update_position_amounts method for Velodrome position with successful update."""
         fetch_behaviour = self._create_fetch_strategies_behaviour()

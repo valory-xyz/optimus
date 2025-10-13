@@ -970,7 +970,10 @@ class HttpHandler(BaseHttpHandler):
                 THRESHOLDS=THRESHOLDS,
             )
             # Prepare payload data
-            payload_data = {"prompt": prompt_template}
+            payload_data = {
+                "prompt": prompt_template,
+                "model": self.context.params.genai_model,
+            }
 
             # Create LLM request
             srr_dialogues = cast(SrrDialogues, self.context.srr_dialogues)

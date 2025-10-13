@@ -1717,8 +1717,16 @@ class HttpHandler(BaseHttpHandler):
 
             # Read existing agent performance data or initialize
             try:
+                # Load existing performance data
                 with open(agent_performance_filepath, "r", encoding="utf-8") as file:
                     agent_performance = json.load(file)
+
+                # Remove HTML tags and replace entities
+                html_entities = {"&nbsp;": " ", "&lt;": "<", "&gt;": ">", "&amp;": "&"}
+                clean_message = re.sub(r"<[^>]+>", "", chat)
+                for entity, replacement in html_entities.items():
+                    clean_message = clean_message.replace(entity, replacement)
+
             except (FileNotFoundError, json.JSONDecodeError):
                 agent_performance = {
                     "timestamp": None,
@@ -1726,13 +1734,14 @@ class HttpHandler(BaseHttpHandler):
                     "last_activity": None,
                     "agent_behavior": None,
                 }
-
-            # Truncate message if too long (keep first 100 characters with ellipsis)
-            truncated_message = chat[:97] + "..." if len(chat) > 100 else chat
+                clean_message = chat
+            except Exception as e:
+                self.context.logger.error(f"Error cleaning HTML from message: {str(e)}")
+                clean_message = chat
 
             # Update agent behavior based on chat message
-            agent_performance["agent_behavior"] = truncated_message
-            agent_performance["timestamp"] = int(datetime.utcnow().timestamp())
+            agent_performance["agent_behavior"] = clean_message
+            agent_performance["timestamp"] = int(datetime.now(timezone.utc).timestamp())
 
             # Store the updated performance data
             with open(agent_performance_filepath, "w", encoding="utf-8") as file:

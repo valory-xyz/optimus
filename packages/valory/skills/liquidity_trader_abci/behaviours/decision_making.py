@@ -3546,7 +3546,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             min_days = entry_cost / ((effective_apr / 365) * principal)
             min_days = min_days * 9
 
-            result = max(8.0, min_days)  # At least 8 days
+            result = max(8.0, min_days)  # At max 8 days
 
             # Enhanced logging
             self.context.logger.info(f"TiP Calculation ({pool_type_str}):")

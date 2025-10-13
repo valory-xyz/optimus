@@ -129,21 +129,6 @@ Handles all post-transaction processing and state updates to ensure the system a
 - Parses blockchain event logs to extract precise information about transaction outcomes
 - Records exact token amounts received, liquidity tokens minted, and any additional rewards or fees
 
-## Finite State Machine Operation
-
-The system operates as a complex finite state machine with multiple states and transition events that ensure deterministic behavior and proper coordination between multiple agents. Key characteristics:
-
-- Each state represents a specific operational phase with defined entry and exit conditions
-- State transitions are triggered by specific events indicating completion, failure, or other conditions
-- All agents must reach consensus on state transitions before the system can proceed
-- Follows deterministic transition rules: current state + specific event = next state
-- Trading states handle strategy discovery, evaluation, and execution
-- Transaction management states manage blockchain interactions and settlements
-- System management states handle registration, error recovery, and maintenance operations
-- Successful operations trigger DONE events that advance to the next logical state
-- Error conditions trigger specific error events that route to appropriate recovery states
-- Timeout conditions ensure the system doesn't get stuck in any state indefinitely
-
 ## Architecture
 
 The Optimus service is an [agent service](https://docs.autonolas.network/open-autonomy/get_started/what_is_an_agent_service/) (or autonomous service) based on the [Open Autonomy framework](https://docs.autonolas.network/open-autonomy/).

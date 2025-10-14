@@ -68,7 +68,7 @@ from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
 )
-from packages.valory.skills.liquidity_trader_abci.pools.utils import (
+from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_amounts_for_liquidity,
     get_sqrt_ratio_at_tick,
 )

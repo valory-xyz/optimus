@@ -306,34 +306,36 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate token ratios using Uniswap V3 math (not linear interpolation)
             try:
-                # Convert current price to sqrt_price_x96 format
-                sqrt_price_x96 = int(math.sqrt(current_price) * (2**96))
-                
-                # Get sqrt ratios at tick bounds
-                sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
-                sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
-                
-                # Use a unit of liquidity to determine ratios
-                unit_liquidity = 1000000000000  # 1 trillion
-                
-                # Calculate amounts for this liquidity
-                amount0, amount1 = get_amounts_for_liquidity(
-                    sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
-                )
-                
-                # Determine status and calculate ratios
-                if current_price <= lower_bound_price:
+                # Determine status based on current tick (more accurate than price)
+                # Uniswap V3 logic: position is active when tickLower <= currentTick < tickUpper
+                if current_tick < tick_lower:
                     # Price below range - need 100% token0
                     token0_ratio = 1.0
                     token1_ratio = 0.0
                     status = "BELOW_RANGE"
-                elif current_price >= upper_bound_price:
+                elif current_tick > tick_upper:
                     # Price above range - need 100% token1
                     token0_ratio = 0.0
                     token1_ratio = 1.0
                     status = "ABOVE_RANGE"
                 else:
-                    # Price in range - calculate from actual amounts
+                    # Price in range (tickLower <= currentTick <= tickUpper) - calculate using Uniswap V3 math
+                    # Convert current price to sqrt_price_x96 format
+                    sqrt_price_x96 = int(math.sqrt(current_price) * (2**96))
+                    
+                    # Get sqrt ratios at tick bounds
+                    sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
+                    sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
+                    
+                    # Use a unit of liquidity to determine ratios
+                    unit_liquidity = 10**18  # 1 quintillion for better precision
+                    
+                    # Calculate amounts for this liquidity
+                    amount0, amount1 = get_amounts_for_liquidity(
+                        sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
+                    )
+                    
+                    # Calculate from actual amounts
                     total_amount = amount0 + amount1
                     if total_amount > 0:
                         # Round to 5 decimal places for precision
@@ -3732,10 +3734,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         yield from self._write_kv({kv_key: json.dumps(cache_data, ensure_ascii=True)})
 
+        token0_ratio_str = f"{overall_token0_ratio:.5f}" if overall_token0_ratio is not None else "N/A"
+        token1_ratio_str = f"{overall_token1_ratio:.5f}" if overall_token1_ratio is not None else "N/A"
+        
         self.context.logger.info(
             f"Cached CL pool data for {pool_address} on chain {chain} "
             f"(tick_spacing={tick_spacing}, bands={len(tick_bands)}, price={current_price}, "
-            f"current_tick={current_tick}, token0_ratio={overall_token0_ratio:.5f if overall_token0_ratio else 'N/A'}, "
-            f"token1_ratio={overall_token1_ratio:.5f if overall_token1_ratio else 'N/A'}, "
+            f"current_tick={current_tick}, token0_ratio={token0_ratio_str}, "
+            f"token1_ratio={token1_ratio_str}, "
             f"enter_action_cached={enter_pool_action is not None})"
         )

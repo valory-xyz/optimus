@@ -358,6 +358,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     chain=chain,
                     max_amounts_in=max_amounts_in,
                     is_stable=is_stable,
+                    price_at_selection=kwargs.get("price_at_selection", 0),
                     pool_fee=kwargs.get("pool_fee"),
                     tick_ranges=tick_ranges,
                     tick_spacing=tick_spacing,

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeidyybugserweicmbrypyhd4dumvzrfs6jeqwgw2gnr4wn3cdbliue
+agent: valory/optimus:0.1.0:bafybeihwlwlb67koixt5oy5xt52lv4nckfi4pugvv6iux44rwffsaoelue
 number_of_agents: 1
 deployment:
   agent:
@@ -111,7 +111,7 @@ models:
       genai_api_key: ${GENAI_API_KEY:str:""}
       airdrop_started: ${AIRDROP_STARTED:bool:false}
       airdrop_contract_address: ${AIRDROP_CONTRACT_ADDRESS:str:""}
-      slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:0.001}
+      slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:1.0}
       genai_model: ${GENAI_MDOEL:str:gemini-2.5-flash}
       slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.005}
   coingecko:

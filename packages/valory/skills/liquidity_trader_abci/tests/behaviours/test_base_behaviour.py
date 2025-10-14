@@ -8714,9 +8714,9 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "agent_behavior": None,
         }
 
-        # Mock datetime.utcnow()
+        # Mock datetime.now(timezone.utc)
         mock_datetime = MagicMock()
-        mock_datetime.utcnow.return_value.timestamp.return_value = 1234567890
+        mock_datetime.now.return_value.timestamp.return_value = 1234567890
 
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.datetime",
@@ -8737,9 +8737,9 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "agent_behavior": None,
         }
 
-        # Mock datetime.utcnow() to raise exception
+        # Mock datetime.now() to raise exception
         mock_datetime = MagicMock()
-        mock_datetime.utcnow.side_effect = Exception("Datetime error")
+        mock_datetime.now.side_effect = Exception("Datetime error")
 
         with patch(
             "packages.valory.skills.liquidity_trader_abci.behaviours.base.datetime",

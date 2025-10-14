@@ -26,10 +26,10 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm",
         "contract/valory/balancer_queries/0.1.0": "bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu",
         "connection/valory/mirror_db/0.1.0": "bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeig3zql2x35tt6mpbw5nif6gzzcxgbue4erjq3v4rhzleu52ykx2le",
-        "skill/valory/optimus_abci/0.1.0": "bafybeiabwzib2x724tlajvad3dajalecltnbsbhnqvu2r2sghflntww7xq",
-        "agent/valory/optimus/0.1.0": "bafybeidyybugserweicmbrypyhd4dumvzrfs6jeqwgw2gnr4wn3cdbliue",
-        "service/valory/optimus/0.1.0": "bafybeict3zgltetye44oq6zpvo5mjdkjszbnf6vne3q4z7z2yehwlw7zge"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeidfehjohhylpwz522yimuapzfw4v2si2ntmg4qs6ykpr6o7jaayty",
+        "skill/valory/optimus_abci/0.1.0": "bafybeifje4xbktwr4cwr42srqtnhbsums3vgohxfa27zitotinrpiholsy",
+        "agent/valory/optimus/0.1.0": "bafybeif5c33kchwodk6by7irfvvbr55lkle2ahw6b2rgdqgu7djh6avrvi",
+        "service/valory/optimus/0.1.0": "bafybeihg26ye4uk6pwlxdmejj4otdbp67vasoyp6xyvhklviw247mie2le"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",

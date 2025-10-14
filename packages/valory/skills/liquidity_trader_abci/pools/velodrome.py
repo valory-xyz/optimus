@@ -26,6 +26,7 @@ import time
 from abc import ABC
 from collections import defaultdict
 from decimal import Decimal
+from enum import Enum
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -65,11 +66,26 @@ PRICE_VOLATILITY_THRESHOLD = 0.02  # 2% threshold for stablecoin detection
 DEFAULT_DAYS = 30
 API_CACHE_SIZE = 128
 
+# Price monitoring constants
+SLIPPAGE_TOLERANCE = 0.01  # 1% slippage tolerance
+WAITING_PERIOD = 5  # 5 seconds waiting period
+MAX_WAIT_TIME = 600  # 10 minutes maximum wait time
+PRICE_CHECK_INTERVAL = 5  # Check price every 5 seconds
+PRICE_RETRY_ATTEMPTS = 3  # Number of retry attempts for price fetching
+PRICE_RETRY_DELAY = 2  # Delay between price fetch retries in seconds
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 MIN_TICK = -887272
 MAX_TICK = 887272
 INT_MAX = sys.maxsize
+
+
+class AllocationStatus(Enum):
+    """Allocation status tracking for price monitoring."""
+    READY = "ready"
+    WAITING = "waiting"
+    TIMEOUT = "timeout"
+    FAILED = "failed"
 
 
 class VelodromePoolBehaviour(PoolBehaviour, ABC):
@@ -78,6 +94,212 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the Velodrome pool behaviour."""
         super().__init__(**kwargs)
+
+    def _check_price_movement(
+        self, 
+        pool_address: str, 
+        chain: str, 
+        price_at_selection: float, 
+        tick_ranges: List[Dict]
+    ) -> Generator[None, None, Optional[bool]]:
+        """Check if price has moved beyond tolerance using the specified formula.
+        
+        Args:
+            pool_address: The pool contract address
+            chain: The blockchain network
+            price_at_selection: The price at the time of pool selection
+            tick_ranges: List of tick range dictionaries with tick_lower, tick_upper, allocation
+            
+        Returns:
+            bool or None - True if moved beyond tolerance, False if within tolerance, None if failed
+        """
+        try:
+            # Get current price using existing function
+            current_price = yield from self._get_current_pool_price(pool_address, chain)
+            
+            if current_price is None:
+                self.context.logger.error("[PRICE_MONITORING] Could not get current price for movement check - stopping")
+                return None
+            
+            # Find the narrowest tick band (smallest range) for tick_range calculation
+            narrowest_range = None
+            min_range_size = float('inf')
+            
+            for position in tick_ranges[0] if tick_ranges else []:
+                tick_lower = position.get("tick_lower")
+                tick_upper = position.get("tick_upper")
+                
+                if tick_lower is not None and tick_upper is not None:
+                    range_size = tick_upper - tick_lower
+                    if range_size < min_range_size:
+                        min_range_size = range_size
+                        narrowest_range = position
+            
+            if narrowest_range is None:
+                self.context.logger.warning("[PRICE_MONITORING] No valid tick ranges found for price movement check")
+                return False
+            
+            # Get tick range for the formula
+            tick_range = narrowest_range["tick_upper"] - narrowest_range["tick_lower"]
+            
+            # Use the specified formula: [current_price-prev_price/tick_range]*100
+            if tick_range > 0:
+                price_change_pct = ((current_price - price_at_selection) / tick_range) * 100
+            else:
+                # Return None for zero tick spacing positions as they are not allowed
+                self.context.logger.error("[PRICE_MONITORING] Zero tick spacing position detected - not allowed")
+                return None
+            
+            # Use slippage tolerance from params (1% = 1.0 in percentage terms)
+            slippage_tolerance_pct = self.params.slippage_tolerance * 100
+            
+            # Check if price has moved beyond tolerance
+            price_moved = abs(price_change_pct) > slippage_tolerance_pct
+            
+            self.context.logger.info(
+                f"[PRICE_MONITORING] Price movement check - "
+                f"Price at selection: {price_at_selection:.8f}, "
+                f"Current: {current_price:.8f}, "
+                f"Tick range: {tick_range}, "
+                f"Change: {price_change_pct:.4f}%, "
+                f"Tolerance: {slippage_tolerance_pct:.4f}%, "
+                f"Moved beyond tolerance: {price_moved}"
+            )
+            
+            if price_moved:
+                self.context.logger.info(
+                    f"[PRICE_MONITORING] Price has moved {price_change_pct:.4f}%, "
+                    f"exceeding {slippage_tolerance_pct:.4f}% tolerance"
+                )
+            
+            return price_moved
+            
+        except Exception as e:
+            self.context.logger.error(f"[PRICE_MONITORING] Error checking price movement: {str(e)}")
+            return None
+
+    def _wait_for_favorable_price(
+        self, 
+        pool_address: str, 
+        chain: str, 
+        price_at_selection: float,
+        tick_ranges: List[Dict], 
+        max_wait_time: int = MAX_WAIT_TIME
+    ) -> Generator[None, None, AllocationStatus]:
+        """Wait for favorable price conditions before allocation.
+        
+        Args:
+            pool_address: The pool contract address
+            chain: The blockchain network
+            price_at_selection: The price at the time of pool selection
+            tick_ranges: List of tick range dictionaries
+            max_wait_time: Maximum time to wait in seconds (default: 10 minutes)
+            
+        Returns:
+            allocation_status
+        """
+        try:
+            self.context.logger.info(
+                f"[PRICE_MONITORING] Starting price monitoring with max wait time: {max_wait_time} seconds"
+            )
+            
+            self.context.logger.info(f"[PRICE_MONITORING] Price at selection: {price_at_selection}")
+            
+            # Start waiting period
+            start_time = time.time()
+            current_price = price_at_selection
+            
+            # Initial waiting period (5 seconds as specified in requirements)
+            self.context.logger.info(f"[PRICE_MONITORING] Entering initial waiting period of {WAITING_PERIOD} seconds...")
+            yield from self.sleep(WAITING_PERIOD)
+            
+            while True:
+                elapsed_time = time.time() - start_time
+                
+                # Check if we've exceeded max wait time
+                if elapsed_time >= max_wait_time:
+                    self.context.logger.info(
+                        f"[PRICE_MONITORING] Maximum wait time ({max_wait_time} seconds) exceeded. "
+                        f"Proceeding with allocation despite price conditions."
+                    )
+                    return AllocationStatus.TIMEOUT
+                
+                # Check current price movement
+                price_moved = yield from self._check_price_movement(
+                    pool_address, chain, price_at_selection, tick_ranges
+                )
+                
+                # Handle None return from price movement check (indicates failure)
+                if price_moved is None:
+                    self.context.logger.error("[PRICE_MONITORING] Price movement check failed during waiting period")
+                    return AllocationStatus.FAILED
+                
+                # If price has stabilized (not moved beyond tolerance), we can proceed
+                if not price_moved:
+                    # Get current price for return value
+                    current_price = yield from self._get_current_pool_price(pool_address, chain)
+                    if current_price is None:
+                        current_price = price_at_selection  # Fallback
+                    
+                    self.context.logger.info(
+                        f"[PRICE_MONITORING] Price has stabilized within tolerance. "
+                        f"Proceeding with allocation after {elapsed_time:.1f} seconds."
+                    )
+                    return AllocationStatus.READY
+                
+                # Price is still volatile, continue waiting
+                remaining_time = max_wait_time - elapsed_time
+                slippage_tolerance_pct = self.params.slippage_tolerance * 100
+                self.context.logger.info(
+                    f"[PRICE_MONITORING] Price still volatile (moved beyond {slippage_tolerance_pct:.1f}% tolerance). "
+                    f"Continuing to wait... ({remaining_time:.1f}s remaining)"
+                )
+                
+                # Wait for the next price check interval
+                yield from self.sleep(PRICE_CHECK_INTERVAL)
+            
+        except Exception as e:
+            self.context.logger.error(f"[PRICE_MONITORING] Error during waiting period: {str(e)}")
+            return AllocationStatus.FAILED
+
+    def _calculate_simple_slippage_protection(
+        self, 
+        desired_amounts: List[int], 
+        slippage_tolerance: float
+    ) -> Tuple[int, int]:
+        """Calculate simple amount-based slippage protection.
+        
+        Args:
+            desired_amounts: List of [amount0_desired, amount1_desired]
+            slippage_tolerance: Slippage tolerance as decimal (e.g., 0.01 for 1%)
+            
+        Returns:
+            Tuple of (amount0_min, amount1_min)
+        """
+        try:
+            amount0_desired, amount1_desired = desired_amounts
+            
+            # Simple calculation: slippage * desired_amount
+            amount0_slippage = int(slippage_tolerance * amount0_desired)
+            amount1_slippage = int(slippage_tolerance * amount1_desired)
+            
+            # Minimum amounts = desired - slippage
+            amount0_min = max(0, amount0_desired - amount0_slippage)
+            amount1_min = max(0, amount1_desired - amount1_slippage)
+            
+            self.context.logger.info(
+                f"Simple slippage protection - Desired: {amount0_desired}/{amount1_desired}, "
+                f"Slippage amounts: {amount0_slippage}/{amount1_slippage}, "
+                f"Min amounts: {amount0_min}/{amount1_min} "
+                f"(tolerance: {slippage_tolerance:.1%})"
+            )
+            
+            return amount0_min, amount1_min
+            
+        except Exception as e:
+            self.context.logger.error(f"Error calculating simple slippage protection: {str(e)}")
+            # Return conservative minimums in case of error
+            return 0, 0
 
     def enter(
         self, **kwargs: Any
@@ -435,11 +657,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         chain: str,
         max_amounts_in: list,
         is_stable: bool,
+        price_at_selection: int,
         pool_fee: Optional[int] = None,
         tick_ranges: Optional[List[Dict]] = None,
         tick_spacing: Optional[int] = None,
     ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
-        """Add liquidity to a Velodrome Concentrated Liquidity pool."""
+        """Add liquidity to a Velodrome Concentrated Liquidity pool with price monitoring."""
         # Get NonFungiblePositionManager contract address
         position_manager_address = (
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
@@ -452,11 +675,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # Note: The 50/50 ratio adjustment code has been removed as token percentages
-        # are now handled in get_enter_pool_tx_hash
-        # Calculate tick ranges based on pool's tick spacing
         # Calculate tick ranges if not provided
-
         if not tick_ranges:
             self.context.logger.info(
                 "No tick ranges provided, calculating from pool data"
@@ -487,6 +706,49 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     f"Could not get tick spacing for pool {pool_address}"
                 )
                 return None, None
+
+        # STEP 1: Check if current price has moved beyond tolerance
+        self.context.logger.info("=== STARTING PRICE MONITORING FOR CL POOL ENTRY ===")
+        price_moved = yield from self._check_price_movement(
+            pool_address, chain, price_at_selection, tick_ranges
+        )
+        
+        # Handle None return from price movement check (indicates failure)
+        if price_moved is None:
+            self.context.logger.error("Price movement check failed. Aborting CL pool entry.")
+            return None, None
+        
+        # STEP 3: If price has moved beyond tolerance, enter waiting period
+        if price_moved:
+            slippage_tolerance_pct = self.params.slippage_tolerance * 100
+            self.context.logger.info(
+                f"Price has moved beyond {slippage_tolerance_pct:.1f}% tolerance. "
+                f"Entering waiting period..."
+            )
+            
+            allocation_status = yield from self._wait_for_favorable_price(
+                pool_address, chain, price_at_selection, tick_ranges, MAX_WAIT_TIME
+            )
+            
+            if allocation_status == AllocationStatus.FAILED:
+                self.context.logger.error("Price monitoring failed. Aborting CL pool entry.")
+                return None, None
+            elif allocation_status == AllocationStatus.TIMEOUT:
+                self.context.logger.warning(
+                    f"Price monitoring timed out after {MAX_WAIT_TIME} seconds. "
+                )
+                return None, None
+            elif allocation_status == AllocationStatus.READY:
+                self.context.logger.info("Price conditions are favorable. Proceeding with allocation.")
+            
+        else:
+            slippage_tolerance_pct = self.params.slippage_tolerance * 100
+            self.context.logger.info(
+                f"Price is within {slippage_tolerance_pct:.1f}% tolerance. "
+                f"Proceeding directly with allocation."
+            )
+
+        self.context.logger.info("=== PRICE MONITORING COMPLETE, PROCEEDING WITH ALLOCATION ===")
 
         # Get or calculate sqrt_price_x96
         sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
@@ -3194,50 +3456,24 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         max_amounts_in: list,
         chain: str,
     ) -> Generator[None, None, Tuple[int, int]]:
-        """Calculate slippage protection for Velodrome mint operations using TickMath utilities."""
+        """Calculate slippage protection for Velodrome mint operations using simple amount-based calculation.
+        
+        This method now uses the new simple slippage calculation approach
+        """
         try:
-            sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
-            if sqrt_price_x96 is None:
-                self.context.logger.error(
-                    f"Failed to get sqrt_price_x96 for pool {pool_address}"
-                )
-                return None, None
-
-            # Compute tick-bound √prices
-            sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
-            sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
-
-            # Use get_liquidity_for_amounts to calculate liquidity directly from desired amounts
-            amount0_desired = max_amounts_in[0]
-            amount1_desired = max_amounts_in[1]
-
-            estimated_liquidity = get_liquidity_for_amounts(
-                sqrt_price_x96,
-                sqrt_ratio_a_x96,
-                sqrt_ratio_b_x96,
-                amount0_desired,
-                amount1_desired,
-            )
-
-            # Calculate expected amounts from the calculated liquidity
-            expected_amount0, expected_amount1 = get_amounts_for_liquidity(
-                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, estimated_liquidity
-            )
-
-            # Apply slippage tolerance
+            
+            # Get slippage tolerance from configuration
             slippage_tolerance = self.params.slippage_tolerance
-            amount0_min = int(expected_amount0 * (1 - slippage_tolerance))
-            amount1_min = int(expected_amount1 * (1 - slippage_tolerance))
-
-            # Ensure minimum amounts never exceed maximum amounts
-            amount0_min = min(amount0_min, max_amounts_in[0])
-            amount1_min = min(amount1_min, max_amounts_in[1])
-
+            
+            # Use the new simple slippage protection method
+            amount0_min, amount1_min = self._calculate_simple_slippage_protection(
+                max_amounts_in, slippage_tolerance
+            )
+            
             self.context.logger.info(
-                f"Velodrome slippage protection - Desired: {amount0_desired}/{amount1_desired}, "
-                f"Expected: {expected_amount0}/{expected_amount1}, "
-                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}, "
-                f"Max amounts: {max_amounts_in[0]}/{max_amounts_in[1]}"
+                f"Velodrome mint slippage protection (simple method) - "
+                f"Desired: {max_amounts_in[0]}/{max_amounts_in[1]}, "
+                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}"
             )
 
             return amount0_min, amount1_min

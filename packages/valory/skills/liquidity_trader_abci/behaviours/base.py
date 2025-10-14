@@ -26,7 +26,7 @@ import time
 import types
 from abc import ABC
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
@@ -1011,7 +1011,9 @@ class LiquidityTraderBaseBehaviour(
     def update_agent_performance_timestamp(self) -> None:
         """Update the timestamp in agent performance data."""
         try:
-            self.agent_performance["timestamp"] = int(datetime.utcnow().timestamp())
+            self.agent_performance["timestamp"] = int(
+                datetime.now(timezone.utc).timestamp()
+            )
         except Exception as e:
             self.context.logger.error(
                 f"Failed to update agent performance timestamp: {str(e)}"

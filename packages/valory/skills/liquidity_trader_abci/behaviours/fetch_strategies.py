@@ -4778,10 +4778,6 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 },
             ]
 
-            self.agent_performance["timestamp"] = int(
-                datetime.now(timezone.utc).timestamp()
-            )
-
             # Update timestamp and store
             self.update_agent_performance_timestamp()
             self.store_agent_performance()

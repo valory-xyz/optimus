@@ -1135,6 +1135,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Add percent_in_bounds to each position
             for position in positions:
                 position["percent_in_bounds"] = percent_in_bounds
+                # Also store EMA and std_dev metadata for caching
+                position["ema"] = ema.tolist() if hasattr(ema, 'tolist') else list(ema)
+                position["std_dev"] = std_dev.tolist() if hasattr(std_dev, 'tolist') else list(std_dev)
+                position["current_ema"] = float(current_ema)
+                position["current_std_dev"] = float(current_std_dev)
+                position["band_multipliers"] = band_multipliers.tolist() if hasattr(band_multipliers, 'tolist') else list(band_multipliers)
 
             return positions
 

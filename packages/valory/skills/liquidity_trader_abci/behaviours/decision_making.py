@@ -562,6 +562,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(
             f"Enter pool was successful! Updated current positions for pool {current_position['pool_address']}"
         )
+        
+        # Invalidate CL pool cache if this was a Velodrome CL pool
+        if (
+            action.get("dex_type") == "velodrome"
+            and action.get("is_cl_pool")
+        ):
+            chain = action.get("chain")
+            if chain:
+                yield from self._invalidate_cl_pool_cache(chain)
+                self.context.logger.info(
+                    f"Invalidated Velodrome CL pool cache for chain {chain} after successful entry"
+                )
 
     def _post_execute_exit_pool(
         self, actions, last_executed_action_index

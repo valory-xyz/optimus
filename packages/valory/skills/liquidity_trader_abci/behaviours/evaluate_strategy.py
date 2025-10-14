@@ -21,6 +21,7 @@
 
 import asyncio
 import json
+import math
 import os
 import traceback
 from concurrent.futures import Future
@@ -66,6 +67,10 @@ from packages.valory.skills.liquidity_trader_abci.io_.loader import (
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
+)
+from packages.valory.skills.liquidity_trader_abci.pools.utils import (
+    get_amounts_for_liquidity,
+    get_sqrt_ratio_at_tick,
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import Event
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
@@ -130,17 +135,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.send_actions()
                 return
 
-            # Fetch trading opportunities
-            yield from self.fetch_all_trading_opportunities()
+            # Check if we have a cached Velodrome CL pool opportunity to reuse
+            cached_opportunity_result = yield from self._check_and_use_cached_cl_opportunity()
+            
+            if cached_opportunity_result:
+                # We have a valid cached opportunity, use it directly
+                self.context.logger.info(
+                    "Using cached Velodrome CL pool opportunity, skipping opportunity fetching and strategy evaluation"
+                )
+                actions = cached_opportunity_result
+            else:
+                # No valid cache, proceed with normal flow
+                # Fetch trading opportunities
+                yield from self.fetch_all_trading_opportunities()
 
-            # Update metrics for open positions
-            self.update_position_metrics()
+                # Update metrics for open positions
+                self.update_position_metrics()
 
-            # Execute strategy and prepare actions
-            actions = yield from self.prepare_strategy_actions()
+                # Execute strategy and prepare actions
+                actions = yield from self.prepare_strategy_actions()
 
-            # Push opportunity data to MirrorDB
-            yield from self._push_opportunity_metrics_to_mirrordb()
+                # Push opportunity data to MirrorDB
+                yield from self._push_opportunity_metrics_to_mirrordb()
 
             # Send final actions
             yield from self.send_actions(actions)
@@ -288,38 +304,62 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             lower_bound_price = 1.0001**tick_lower
             upper_bound_price = 1.0001**tick_upper
 
-            # Calculate token ratios based on current price position
-            if current_price <= lower_bound_price:
-                # Price below range - need 100% token0
-                token0_ratio = 1.0
-                token1_ratio = 0.0
-                status = "BELOW_RANGE"
-            elif current_price >= upper_bound_price:
-                # Price above range - need 100% token1
-                token0_ratio = 0.0
-                token1_ratio = 1.0
-                status = "ABOVE_RANGE"
-            else:
-                # Price in range - calculate using interpolation formula
-                try:
-                    token1_ratio = min(
-                        max(
-                            (current_price - lower_bound_price)
-                            / (upper_bound_price - lower_bound_price),
-                            0,
-                        ),
-                        1,
-                    )
-                    token0_ratio = 1.0 - token1_ratio
+            # Calculate token ratios using Uniswap V3 math (not linear interpolation)
+            try:
+                # Convert current price to sqrt_price_x96 format
+                sqrt_price_x96 = int(math.sqrt(current_price) * (2**96))
+                
+                # Get sqrt ratios at tick bounds
+                sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
+                sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
+                
+                # Use a unit of liquidity to determine ratios
+                unit_liquidity = 1000000000000  # 1 trillion
+                
+                # Calculate amounts for this liquidity
+                amount0, amount1 = get_amounts_for_liquidity(
+                    sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
+                )
+                
+                # Determine status and calculate ratios
+                if current_price <= lower_bound_price:
+                    # Price below range - need 100% token0
+                    token0_ratio = 1.0
+                    token1_ratio = 0.0
+                    status = "BELOW_RANGE"
+                elif current_price >= upper_bound_price:
+                    # Price above range - need 100% token1
+                    token0_ratio = 0.0
+                    token1_ratio = 1.0
+                    status = "ABOVE_RANGE"
+                else:
+                    # Price in range - calculate from actual amounts
+                    total_amount = amount0 + amount1
+                    if total_amount > 0:
+                        # Round to 5 decimal places for precision
+                        token0_ratio = round(amount0 / total_amount, 5)
+                        token1_ratio = round(amount1 / total_amount, 5)
+                    else:
+                        # Fallback if calculation fails
+                        token0_ratio = 0.5
+                        token1_ratio = 0.5
                     status = "IN_RANGE"
-                except Exception as e:
-                    warnings.append(
-                        f"Error calculating ratios for band [{tick_lower}, {tick_upper}]: {str(e)}"
-                    )
-                    # Default to 50/50 in case of calculation error
+                    
+            except Exception as e:
+                warnings.append(
+                    f"Error calculating ratios for band [{tick_lower}, {tick_upper}]: {str(e)}"
+                )
+                # Fallback: use price-based estimation
+                if current_price <= lower_bound_price:
+                    token0_ratio = 1.0
+                    token1_ratio = 0.0
+                elif current_price >= upper_bound_price:
+                    token0_ratio = 0.0
+                    token1_ratio = 1.0
+                else:
                     token0_ratio = 0.5
                     token1_ratio = 0.5
-                    status = "ERROR"
+                status = "ERROR"
 
             # Track the weighted token ratios
             total_weighted_token0 += token0_ratio * allocation
@@ -337,12 +377,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
             )
 
-        # Calculate overall ratios
+        # Calculate overall ratios with 5 decimal precision
         overall_token0_ratio = (
-            total_weighted_token0 / total_allocation if total_allocation > 0 else 0
+            round(total_weighted_token0 / total_allocation, 5) if total_allocation > 0 else 0
         )
         overall_token1_ratio = (
-            total_weighted_token1 / total_allocation if total_allocation > 0 else 0
+            round(total_weighted_token1 / total_allocation, 5) if total_allocation > 0 else 0
         )
 
         # Generate recommendations
@@ -367,7 +407,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(
             f"Position analysis complete - Current tick: {current_tick}, "
-            f"Token0 ratio: {overall_token0_ratio:.4f}, Token1 ratio: {overall_token1_ratio:.4f}"
+            f"Token0 ratio: {overall_token0_ratio:.5f}, Token1 ratio: {overall_token1_ratio:.5f}"
         )
 
         return {
@@ -406,69 +446,167 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "is_cl_pool"
             ):
                 try:
-                    # Get the necessary parameters
-                    self.context.logger.info(
-                        f"Analyzing Velodrome CL pool: {opportunity.get('pool_address')}"
-                    )
-
                     chain = opportunity["chain"]
-                    self.context.logger.info(f"chain: {chain}")
                     pool_address = opportunity["pool_address"]
-                    kwargs = {
-                        "chain": chain,
-                        "pool_address": pool_address,
-                        "is_stable": opportunity["is_stable"],
-                    }
-
-                    pool = self.pools.get(opportunity["dex_type"])
-
-                    # Get tick spacing for the pool
-                    tick_spacing = yield from pool._get_tick_spacing_velodrome(
-                        self, pool_address, chain
+                    
+                    self.context.logger.info(
+                        f"Analyzing Velodrome CL pool: {pool_address} on chain {chain}"
                     )
-                    if not tick_spacing:
-                        self.context.logger.error(
-                            f"Failed to get tick spacing for pool {pool_address}"
+
+                    cached_data = yield from self._get_cached_cl_pool_data(chain)
+                    should_use_cache = False
+                    
+                    if cached_data and cached_data.get("pool_address") == pool_address:
+                        # We have cached data for this exact pool
+                        should_use_cache = yield from self._should_use_cached_cl_data(cached_data)
+                        
+                        if should_use_cache:
+                            self.context.logger.info(
+                                f"Using cached data for Velodrome CL pool {pool_address} on {chain}"
+                            )
+                            
+                            # Update round tracking
+                            yield from self._update_cl_pool_round_tracking(chain, cached_data)
+                            
+                            # Populate variables with cached data
+                            tick_spacing = cached_data["tick_spacing"]
+                            tick_bands = cached_data["tick_bands"]
+                            current_price = cached_data["current_price"]
+                            percent_in_bounds = cached_data["percent_in_bounds"]
+                            
+                            self.context.logger.info(
+                                f"Loaded from cache: tick_spacing={tick_spacing}, "
+                                f"bands={len(tick_bands)}, price={current_price}"
+                            )
+                        else:
+                            self.context.logger.info(
+                                f"Cache expired for Velodrome CL pool {pool_address}, recalculating..."
+                            )
+                    else:
+                        if cached_data:
+                            self.context.logger.info(
+                                f"Different pool in cache (cached: {cached_data.get('pool_address')}, "
+                                f"current: {pool_address}), calculating fresh data"
+                            )
+                        else:
+                            self.context.logger.info(
+                                f"No cache found for chain {chain}, calculating fresh data"
+                            )
+
+                    if not should_use_cache:
+                        kwargs = {
+                            "chain": chain,
+                            "pool_address": pool_address,
+                            "is_stable": opportunity["is_stable"],
+                        }
+
+                        pool = self.pools.get(opportunity["dex_type"])
+
+                        # Get tick spacing for the pool
+                        tick_spacing = yield from pool._get_tick_spacing_velodrome(
+                            self, pool_address, chain
                         )
-                        continue
+                        if not tick_spacing:
+                            self.context.logger.error(
+                                f"Failed to get tick spacing for pool {pool_address}"
+                            )
+                            continue
 
-                    # Calculate tick bands and get current price
-                    tick_bands = (
-                        yield from pool._calculate_tick_lower_and_upper_velodrome(
-                            self, **kwargs
+                        # Calculate tick bands and get current price (EXPENSIVE OPERATION)
+                        tick_bands = (
+                            yield from pool._calculate_tick_lower_and_upper_velodrome(
+                                self, **kwargs
+                            )
                         )
-                    )
-                    self.context.logger.info(f"tick_bands : {tick_bands}")
-                    if not tick_bands:
-                        self.context.logger.error(
-                            f"Failed to calculate tick bands for pool {pool_address}"
+                        self.context.logger.info(f"tick_bands : {tick_bands}")
+                        if not tick_bands:
+                            self.context.logger.error(
+                                f"Failed to calculate tick bands for pool {pool_address}"
+                            )
+                            continue
+
+                        # Extract percent_in_bounds from the first position (all positions have the same value)
+                        percent_in_bounds = (
+                            tick_bands[0].get("percent_in_bounds", 0.0)
+                            if tick_bands
+                            else 0.0
                         )
-                        continue
+                        self.context.logger.info(f"percent_in_bounds : {percent_in_bounds}")
 
-                    # Extract percent_in_bounds from the first position (all positions have the same value)
-                    percent_in_bounds = (
-                        tick_bands[0].get("percent_in_bounds", 0.0)
-                        if tick_bands
-                        else 0.0
-                    )
-                    self.context.logger.info(f"percent_in_bounds : {percent_in_bounds}")
-
-                    current_price = yield from pool._get_current_pool_price(
-                        self, pool_address, chain
-                    )
-                    if current_price is None:
-                        self.context.logger.error(
-                            f"Failed to get current price for pool {pool_address}"
+                        current_price = yield from pool._get_current_pool_price(
+                            self, pool_address, chain
                         )
-                        continue
+                        if current_price is None:
+                            self.context.logger.error(
+                                f"Failed to get current price for pool {pool_address}"
+                            )
+                            continue
+                        
+                        # Extract EMA and std_dev from the first position (all positions have the same values)
+                        ema = tick_bands[0].get("ema") if tick_bands else None
+                        std_dev = tick_bands[0].get("std_dev") if tick_bands else None
+                        current_ema = tick_bands[0].get("current_ema") if tick_bands else None
+                        current_std_dev = tick_bands[0].get("current_std_dev") if tick_bands else None
+                        band_multipliers = tick_bands[0].get("band_multipliers") if tick_bands else None
+                        
+                        # Calculate token requirements to get ratios and current_tick
+                        requirements = self.calculate_velodrome_cl_token_requirements(
+                            tick_bands, current_price, tick_spacing
+                        )
+                        if not requirements:
+                            self.context.logger.error(
+                                "Failed to calculate token requirements for caching"
+                            )
+                            continue
+                        
+                        token0 = opportunity.get("token0")
+                        token1 = opportunity.get("token1")
+                        token0_symbol = opportunity.get("token0_symbol")
+                        token1_symbol = opportunity.get("token1_symbol")
+                        
+                        cache_kwargs = {
+                            "chain": chain,
+                            "pool_address": pool_address,
+                            "tick_spacing": tick_spacing,
+                            "tick_bands": tick_bands,
+                            "current_price": current_price,
+                            "current_tick": requirements.get("current_tick"),
+                            "percent_in_bounds": percent_in_bounds,
+                            "token0": token0,
+                            "token1": token1,
+                            "token0_symbol": token0_symbol,
+                            "token1_symbol": token1_symbol,
+                            "overall_token0_ratio": requirements.get("overall_token0_ratio"),
+                            "overall_token1_ratio": requirements.get("overall_token1_ratio"),
+                            "token_requirements": requirements,
+                        }
+                        
+                        # Add optional metadata if available
+                        if ema is not None:
+                            cache_kwargs["ema"] = ema
+                        if std_dev is not None:
+                            cache_kwargs["std_dev"] = std_dev
+                        if current_ema is not None:
+                            cache_kwargs["current_ema"] = current_ema
+                        if current_std_dev is not None:
+                            cache_kwargs["current_std_dev"] = current_std_dev
+                        if band_multipliers is not None:
+                            cache_kwargs["band_multipliers"] = band_multipliers
+                        
+                        yield from self._cache_cl_pool_data(**cache_kwargs)
+                    else:
+                        # Using cached data - retrieve token requirements from cache
+                        requirements = cached_data.get("token_requirements")
+                        if not requirements:
+                            # Fallback: recalculate if not in cache
+                            requirements = self.calculate_velodrome_cl_token_requirements(
+                                tick_bands, current_price, tick_spacing
+                            )
 
-                    # Calculate token requirements
-                    requirements = self.calculate_velodrome_cl_token_requirements(
-                        tick_bands, current_price, tick_spacing
-                    )
+                    # Continue with requirements processing
                     if not requirements:
                         self.context.logger.error(
-                            "Failed to calculate token requirements"
+                            "Failed to get token requirements"
                         )
                         continue
 
@@ -1980,7 +2118,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return actions
         tokens.extend(available_tokens)
 
-        # ==================== POSITION EXIT WITH STAKING ====================
         if self.position_to_exit:
             # Step 1: Claim staking rewards before exit (if position has staking)
             if self._has_staking_metadata(self.position_to_exit):
@@ -2005,7 +2142,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
             actions.append(exit_pool_action)
 
-        # ==================== POSITION ENTRY WITH STAKING ====================
         # Build actions based on selected opportunities
         for opportunity in self.selected_opportunities:
             bridge_swap_actions = self._build_bridge_swap_actions(opportunity, tokens)
@@ -2019,6 +2155,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             if not enter_pool_action:
                 self.context.logger.error("Error building enter pool action")
                 return None
+
+            # Cache the enter pool action if this is a Velodrome CL pool
+            if (
+                opportunity.get("dex_type") == "velodrome"
+                and opportunity.get("is_cl_pool")
+            ):
+                yield from self._cache_enter_pool_action_for_cl_pool(
+                    opportunity, enter_pool_action
+                )
 
             # Initialize entry costs for new position when actions are formed
             yield from self._initialize_entry_costs_for_new_position(enter_pool_action)
@@ -3072,7 +3217,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error initializing position entry costs: {e}")
 
-    # ==================== STAKING HELPER METHODS ====================
 
     def _build_stake_lp_tokens_action(
         self, opportunity: Dict[str, Any]
@@ -3251,3 +3395,347 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
 
         return bool(voter_address)
+
+
+    def _cache_enter_pool_action_for_cl_pool(
+        self, opportunity: Dict[str, Any], enter_pool_action: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Cache the enter pool action for a Velodrome CL pool."""
+        try:
+            chain = opportunity.get("chain")
+            if not chain:
+                return
+            
+            # Read existing cache
+            cached_data = yield from self._get_cached_cl_pool_data(chain)
+            
+            if not cached_data:
+                self.context.logger.warning(
+                    f"No existing cache found for chain {chain}, cannot cache enter pool action"
+                )
+                return
+            
+            # Update the cache with the enter pool action
+            cached_data["enter_pool_action"] = enter_pool_action
+            
+            # Write back to KV store
+            kv_key = f"velodrome_cl_pool_{chain}"
+            yield from self._write_kv({kv_key: json.dumps(cached_data, ensure_ascii=True)})
+            
+            self.context.logger.info(
+                f"Cached enter pool action for CL pool {cached_data.get('pool_address')} on {chain}"
+            )
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error caching enter pool action: {str(e)}"
+            )
+
+    def _check_and_use_cached_cl_opportunity(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Check if we have a valid cached CL pool opportunity and reconstruct actions if so."""
+        try:
+            # Check all target chains for cached opportunities
+            for chain in self.params.target_investment_chains:
+                cached_data = yield from self._get_cached_cl_pool_data(chain)
+                
+                if not cached_data:
+                    continue
+                
+                # Validate cache
+                should_use_cache = yield from self._should_use_cached_cl_data(cached_data)
+                
+                if not should_use_cache:
+                    self.context.logger.info(
+                        f"Cached CL pool data for chain {chain} has expired"
+                    )
+                    continue
+                
+                # We have valid cached data, update round tracking
+                yield from self._update_cl_pool_round_tracking(chain, cached_data)
+                
+                # Reconstruct actions from cached data
+                actions = yield from self._reconstruct_actions_from_cached_cl_pool(
+                    cached_data, chain
+                )
+                
+                if actions:
+                    self.context.logger.info(
+                        f"Successfully reconstructed actions from cached CL pool on {chain}"
+                    )
+                    return actions
+            
+            # No valid cached opportunities found
+            return None
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error checking cached CL opportunity: {str(e)}"
+            )
+            return None
+
+    def _reconstruct_actions_from_cached_cl_pool(
+        self, cached_data: Dict[str, Any], chain: str
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Reconstruct actions from cached CL pool data.
+        
+        NOTE: We do NOT recalculate swap actions because:
+        - Swaps from previous round already executed successfully
+        - We already have the right tokens on the target chain
+        - We just need to retry the enter pool action with current balances
+        """
+        try:
+            actions = []
+            
+            # Get the cached enter pool action
+            cached_enter_action = cached_data.get("enter_pool_action")
+            if not cached_enter_action:
+                self.context.logger.warning(
+                    "No cached enter pool action found, cannot reconstruct"
+                )
+                return None
+            
+            # Get current token balances
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address for chain {chain}")
+                return None
+            
+            token0 = cached_data.get("token0")
+            token1 = cached_data.get("token1")
+            
+            # Update the cached enter pool action with current balances
+            updated_enter_action = cached_enter_action.copy()
+            
+            # Recalculate max_amounts_in based on current token balances
+            # (tokens should already be on the right chain from previous swaps)
+            token0_balance = (
+                yield from self._get_token_balance(chain, safe_address, token0) or 0
+            )
+            token1_balance = (
+                yield from self._get_token_balance(chain, safe_address, token1) or 0
+            )
+            
+            self.context.logger.info(
+                f"Current balances for cached pool: {token0_balance} {cached_data.get('token0_symbol')}, "
+                f"{token1_balance} {cached_data.get('token1_symbol')}"
+            )
+            
+            # Apply the same ratio logic as before
+            overall_token0_ratio = cached_data.get("overall_token0_ratio", 0.5)
+            overall_token1_ratio = cached_data.get("overall_token1_ratio", 0.5)
+            
+            # Calculate max_amounts_in based on ratios and current balances
+            if overall_token0_ratio > 0.99:
+                updated_enter_action["max_amounts_in"] = [token0_balance, 0]
+            elif overall_token1_ratio > 0.99:
+                updated_enter_action["max_amounts_in"] = [0, token1_balance]
+            else:
+                # Calculate balanced amounts
+                max_amount0 = int(token0_balance * overall_token0_ratio)
+                max_amount1 = int(token1_balance * overall_token1_ratio)
+                updated_enter_action["max_amounts_in"] = [max_amount0, max_amount1]
+            
+            self.context.logger.info(
+                f"Updated max_amounts_in: {updated_enter_action['max_amounts_in']}"
+            )
+            
+            actions.append(updated_enter_action)
+            
+            # Initialize entry costs for the position
+            yield from self._initialize_entry_costs_for_new_position(updated_enter_action)
+            
+            # Add staking action if applicable
+            temp_opportunity = {
+                "chain": chain,
+                "pool_address": cached_data.get("pool_address"),
+                "token0": token0,
+                "token1": token1,
+                "dex_type": "velodrome",
+                "is_cl_pool": True,
+            }
+            
+            if self._should_add_staking_actions(temp_opportunity):
+                stake_action = self._build_stake_lp_tokens_action(temp_opportunity)
+                if stake_action:
+                    actions.append(stake_action)
+            
+            return actions if actions else None
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error reconstructing actions from cache: {str(e)}"
+            )
+            return None
+
+    def _get_cached_cl_pool_data(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Retrieve cached CL pool data from KV store."""
+        kv_key = f"velodrome_cl_pool_{chain}"
+
+        db_data = yield from self._read_kv(keys=(kv_key,))
+
+        if db_data and db_data.get(kv_key):
+            try:
+                cached_data = json.loads(db_data[kv_key])
+                
+                # Check if cache was invalidated
+                if cached_data.get("invalidated"):
+                    self.context.logger.info(
+                        f"Cache for chain {chain} was invalidated, treating as no cache"
+                    )
+                    return None
+                
+                self.context.logger.info(
+                    f"Retrieved cached CL pool data for chain {chain}: pool={cached_data.get('pool_address')}"
+                )
+                return cached_data
+            except (json.JSONDecodeError, TypeError) as e:
+                self.context.logger.error(f"Error parsing cached CL pool data: {e}")
+                return None
+
+        return None
+
+    def _should_use_cached_cl_data(
+        self, cached_data: Dict[str, Any]
+    ) -> Generator[None, None, bool]:
+        """Check if cached CL pool data is still valid."""
+        current_timestamp = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
+
+        pool_finalization_timestamp = cached_data.get("pool_finalization_timestamp", 0)
+        round_count = cached_data.get("round_count", 0)
+
+        # Check time condition: more than 1 day (86400 seconds) has passed
+        time_elapsed = current_timestamp - pool_finalization_timestamp
+        time_expired = time_elapsed > 86400  # 1 day in seconds
+
+        # Check round count condition: 5 rounds have passed
+        rounds_expired = round_count >= 5
+
+        if time_expired:
+            self.context.logger.info(
+                f"Cache expired by time: {time_elapsed / 3600:.2f} hours elapsed (> 24 hours)"
+            )
+            return False
+
+        if rounds_expired:
+            self.context.logger.info(
+                f"Cache expired by round count: {round_count} rounds (>= 5)"
+            )
+            return False
+
+        self.context.logger.info(
+            f"Cache valid: round {round_count}/5, {time_elapsed / 3600:.2f} hours elapsed"
+        )
+        return True
+
+    def _update_cl_pool_round_tracking(
+        self, chain: str, cached_data: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        """Update round tracking for cached CL pool."""
+        current_timestamp = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
+
+        last_round_timestamp = cached_data.get("last_round_timestamp", 0)
+        round_count = cached_data.get("round_count", 0)
+
+        # Increment round count if current timestamp > last_round_timestamp
+        if current_timestamp > last_round_timestamp:
+            round_count += 1
+            cached_data["round_count"] = round_count
+            cached_data["last_round_timestamp"] = current_timestamp
+
+            self.context.logger.info(
+                f"Updated CL pool tracking: round_count={round_count}, timestamp={current_timestamp}"
+            )
+
+            # Save updated data back to KV store
+            kv_key = f"velodrome_cl_pool_{chain}"
+            yield from self._write_kv({kv_key: json.dumps(cached_data, ensure_ascii=True)})
+
+    def _cache_cl_pool_data(
+        self,
+        chain: str,
+        pool_address: str,
+        tick_spacing: int,
+        tick_bands: List[Dict[str, Any]],
+        current_price: float,
+        percent_in_bounds: float,
+        current_tick: Optional[int] = None,
+        ema: Optional[List[float]] = None,
+        std_dev: Optional[List[float]] = None,
+        current_ema: Optional[float] = None,
+        current_std_dev: Optional[float] = None,
+        band_multipliers: Optional[List[float]] = None,
+        token0: Optional[str] = None,
+        token1: Optional[str] = None,
+        token0_symbol: Optional[str] = None,
+        token1_symbol: Optional[str] = None,
+        overall_token0_ratio: Optional[float] = None,
+        overall_token1_ratio: Optional[float] = None,
+        token_requirements: Optional[Dict[str, Any]] = None,
+        enter_pool_action: Optional[Dict[str, Any]] = None,
+    ) -> Generator[None, None, None]:
+        """Cache CL pool calculation results to KV store."""
+        current_timestamp = cast(
+            SharedState, self.context.state
+        ).round_sequence.last_round_transition_timestamp.timestamp()
+
+        cache_data = {
+            "pool_address": pool_address,
+            "chain": chain,
+            "tick_spacing": tick_spacing,
+            "tick_bands": tick_bands,
+            "current_price": current_price,
+            "percent_in_bounds": percent_in_bounds,
+            "pool_finalization_timestamp": current_timestamp,
+            "last_round_timestamp": current_timestamp,
+            "round_count": 1,  # First round
+        }
+
+        # Add optional data if provided
+        if current_tick is not None:
+            cache_data["current_tick"] = current_tick
+        if ema is not None:
+            cache_data["ema"] = ema
+        if std_dev is not None:
+            cache_data["std_dev"] = std_dev
+        if current_ema is not None:
+            cache_data["current_ema"] = current_ema
+        if current_std_dev is not None:
+            cache_data["current_std_dev"] = current_std_dev
+        if band_multipliers is not None:
+            cache_data["band_multipliers"] = band_multipliers
+        if token0 is not None:
+            cache_data["token0"] = token0
+        if token1 is not None:
+            cache_data["token1"] = token1
+        if token0_symbol is not None:
+            cache_data["token0_symbol"] = token0_symbol
+        if token1_symbol is not None:
+            cache_data["token1_symbol"] = token1_symbol
+        if overall_token0_ratio is not None:
+            cache_data["overall_token0_ratio"] = overall_token0_ratio
+        if overall_token1_ratio is not None:
+            cache_data["overall_token1_ratio"] = overall_token1_ratio
+        if token_requirements is not None:
+            cache_data["token_requirements"] = token_requirements
+        if enter_pool_action is not None:
+            cache_data["enter_pool_action"] = enter_pool_action
+
+        kv_key = f"velodrome_cl_pool_{chain}"
+
+        yield from self._write_kv({kv_key: json.dumps(cache_data, ensure_ascii=True)})
+
+        self.context.logger.info(
+            f"Cached CL pool data for {pool_address} on chain {chain} "
+            f"(tick_spacing={tick_spacing}, bands={len(tick_bands)}, price={current_price}, "
+            f"current_tick={current_tick}, token0_ratio={overall_token0_ratio:.5f if overall_token0_ratio else 'N/A'}, "
+            f"token1_ratio={overall_token1_ratio:.5f if overall_token1_ratio else 'N/A'}, "
+            f"enter_action_cached={enter_pool_action is not None})"
+        )

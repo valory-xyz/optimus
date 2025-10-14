@@ -1729,6 +1729,8 @@ class HttpHandler(BaseHttpHandler):
                 clean_message = re.sub(r"<[^>]+>", "", chat)
                 for entity, replacement in html_entities.items():
                     clean_message = clean_message.replace(entity, replacement)
+                if clean_message.startswith("LLM Error:"):
+                    return
 
             except (FileNotFoundError, json.JSONDecodeError):
                 agent_performance = {

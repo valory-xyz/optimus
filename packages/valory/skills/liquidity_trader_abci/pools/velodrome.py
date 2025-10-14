@@ -67,12 +67,9 @@ DEFAULT_DAYS = 30
 API_CACHE_SIZE = 128
 
 # Price monitoring constants
-SLIPPAGE_TOLERANCE = 0.01  # 1% slippage tolerance
 WAITING_PERIOD = 5  # 5 seconds waiting period
 MAX_WAIT_TIME = 600  # 10 minutes maximum wait time
 PRICE_CHECK_INTERVAL = 5  # Check price every 5 seconds
-PRICE_RETRY_ATTEMPTS = 3  # Number of retry attempts for price fetching
-PRICE_RETRY_DELAY = 2  # Delay between price fetch retries in seconds
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 MIN_TICK = -887272

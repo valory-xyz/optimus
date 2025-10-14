@@ -1958,10 +1958,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Calculate ratio prices (token0/token1)
             ratio_prices = []
             for i in range(min_length):
-                if token1_prices[i] > 0:
-                    ratio_prices.append(token0_prices[i] / token1_prices[i])
-                else:
-                    ratio_prices.append(token0_prices[i])  # Avoid division by zero
+                if token0_prices[i] and token0_prices[i] > 0:
+                    ratio_prices.append(token1_prices[i] / token0_prices[i])
+                # Skip invalid data points
 
             # Get current price (latest)
             current_price = ratio_prices[-1] if ratio_prices else 1.0

@@ -420,9 +420,12 @@ class HttpHandler(BaseHttpHandler):
                         )
                         zero_addr_entry = agent_map.get(ZERO_ADDRESS, {})
                         balance_value = zero_addr_entry.get("balance", 0)
-                        current_balance = (
-                            int(balance_value) if balance_value is not None else 0
-                        )
+                        try:
+                            current_balance = (
+                                int(balance_value) if balance_value is not None else 0
+                            )
+                        except (ValueError, TypeError):
+                            current_balance = 0
                         # Determine remaining actions based on executed tx hashes
                         withdrawal_data = self._read_withdrawal_data() or {}
                         tx_hashes_serialized = withdrawal_data.get(
@@ -468,7 +471,11 @@ class HttpHandler(BaseHttpHandler):
         chain_data = deficit.get(chain, {})
         agent_deficit = chain_data.get(self.context.agent_address, {})
         zero_addr_deficit = agent_deficit.get(ZERO_ADDRESS, {})
-        return zero_addr_deficit.get("deficit", 0) > 0
+        deficit_value = zero_addr_deficit.get("deficit", 0)
+        try:
+            return float(deficit_value) > 0
+        except (ValueError, TypeError):
+            return False
 
     def _get_withdrawal_actions(self) -> List[Dict]:
         """Get prepared withdrawal actions from synchronized data."""

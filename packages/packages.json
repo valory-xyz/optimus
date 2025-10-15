@@ -26,10 +26,10 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm",
         "contract/valory/balancer_queries/0.1.0": "bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu",
         "connection/valory/mirror_db/0.1.0": "bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiaaydlkjzrc2aq26iy2wstmynyj447mzzwfbjiwa6y6hu7ttfrtpq",
-        "skill/valory/optimus_abci/0.1.0": "bafybeibv47b75phaxaeyiqcx5luq6frftnmqyqk6nkeiwfxparpiercivi",
-        "agent/valory/optimus/0.1.0": "bafybeiasqj75tbrsttambjg2x5ejh7karxrzblm2mxoygt4mz254svqqoy",
-        "service/valory/optimus/0.1.0": "bafybeifdgaxak7hn6bgx5wdwmonq7lu6bjv4w4x7jt5isywcdgqraaqupi"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeic33fftyl3rkzmnqgdo66alqu3xsmmjipzwlaymucv4xc2yaf6gbm",
+        "skill/valory/optimus_abci/0.1.0": "bafybeiei6gbasykpno4cfwf5kwh6lg3l5vclkydmiymrut5nsn56vsim3y",
+        "agent/valory/optimus/0.1.0": "bafybeig7jblaommw7imtz2x4b7xpensxstl4wlnk3xybrm3tvsj545tunq",
+        "service/valory/optimus/0.1.0": "bafybeihtlgxpsldprruilia6ccutx3uhzvpciyziqoniqftxwjlrwk5eve"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -46,7 +46,7 @@
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeiegj5zx4wrahc6gpunxvxgjkzdg4nvdojbqkk5xggv2mt56oecpoa",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
         "contract/valory/gnosis_safe/0.1.0": "bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um",
-        "connection/dvilela/genai/0.1.0": "bafybeihp6t4y7mynitwj3afwet2lr5ittrqmk4hop7ycmgyyx3nqkc5sty",
+        "connection/dvilela/genai/0.1.0": "bafybeigjsmpmlt5tfdrtnfvqblpexyngl7qryusy6ytkebim5flswivbgu",
         "connection/valory/abci/0.1.0": "bafybeidutel5jdlqyt2tygyvfxrqwgljpxq23bu3eyfndbcwm2t4y7jbee",
         "connection/valory/http_client/0.23.0": "bafybeid5ffvg76ejjoese7brj5ji3lx66cu7p2ixfwflpo6rgofkypfd7y",
         "connection/valory/ipfs/0.1.0": "bafybeiamz23olgtow4wqf7zpsfnfzf7pxiognrxl2mhn5kvqutlwhgukxa",

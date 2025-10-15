@@ -332,9 +332,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         sqrt_price_x96 = int(math.sqrt(current_price) * (2**96))
                         self.context.logger.warning(f"Using converted sqrt_price_x96 from current_price: {sqrt_price_x96}")
                     
-                    # Get sqrt ratios at tick bounds
-                    sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
-                    sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
+                    # Get sqrt ratios at tick bounds using Velodrome Slipstream Helper contract
+                    sqrt_ratio_a_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(chain, tick_lower)
+                    sqrt_ratio_b_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(chain, tick_upper)
 
                     self.context.logger.info(f"sqrt_ratio_a_x96: {sqrt_ratio_a_x96}, sqrt_ratio_b_x96: {sqrt_ratio_b_x96}")
                     self.context.logger.info(f"sqrt_price_x96: {sqrt_price_x96}")
@@ -349,41 +349,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     unit_liquidity = 10**30
                     
                     # Calculate amounts for this liquidity using Velodrome Slipstream Helper contract
-                    if chain and hasattr(self, 'params') and hasattr(self.params, 'velodrome_slipstream_helper_contract_addresses'):
-                        # Use contract method for more accurate calculations
-                        helper_address = self.params.velodrome_slipstream_helper_contract_addresses.get(chain)
-                        if helper_address:
-                            try:
-                                # Get ledger API
-                                ledger_api = self.context.ledger_apis.get_api(chain)
-                                if ledger_api:
-                                    # Call contract method
-                                    result = VelodromeSlipstreamHelperContract.get_amounts_for_liquidity(
-                                        ledger_api, helper_address, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
-                                    )
-                                    amounts = result.get("amounts", [])
-                                    if len(amounts) >= 2:
-                                        amount0, amount1 = amounts[0], amounts[1]
-                                    else:
-                                        raise ValueError("Invalid amounts returned from contract")
-                                else:
-                                    raise ValueError("No ledger API available")
-                            except Exception as e:
-                                self.context.logger.warning(f"Failed to use contract method, falling back to tick math: {e}")
-                                # Fallback to tick math utility
-                                amount0, amount1 = get_amounts_for_liquidity(
-                                    sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
-                                )
-                        else:
-                            # No contract address available, use tick math utility
-                            amount0, amount1 = get_amounts_for_liquidity(
-                                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
-                            )
-                    else:
-                        # No chain info or params available, use tick math utility
-                        amount0, amount1 = get_amounts_for_liquidity(
-                            sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
-                        )
+                    amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
+                        chain, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
+                    )
                     
                     # Calculate from actual amounts
                     total_amount = amount0 + amount1

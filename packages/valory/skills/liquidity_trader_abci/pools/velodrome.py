@@ -358,7 +358,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     chain=chain,
                     max_amounts_in=max_amounts_in,
                     is_stable=is_stable,
-                    price_at_selection=kwargs.get("price_at_selection", 0),
                     pool_fee=kwargs.get("pool_fee"),
                     tick_ranges=tick_ranges,
                     tick_spacing=tick_spacing,
@@ -647,6 +646,32 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
+    def _get_cached_current_price(self, chain: str) -> Generator[None, None, float]:
+        """Get the cached current price from KV store for the given chain."""
+        try:
+            kv_key = f"velodrome_cl_pool_{chain}"
+            db_data = yield from self._read_kv(keys=(kv_key,))
+
+            if db_data and db_data.get(kv_key):
+                try:
+                    cached_data = json.loads(db_data[kv_key])
+                    if not cached_data.get("invalidated"):
+                        current_price = cached_data.get("current_price", 0)
+                        self.context.logger.info(f"Retrieved cached current_price: {current_price}")
+                        return current_price
+                    else:
+                        self.context.logger.warning("Cache was invalidated, using 0 as price_at_selection")
+                        return 0
+                except (json.JSONDecodeError, TypeError) as e:
+                    self.context.logger.error(f"Error parsing cached data: {e}")
+                    return 0
+            else:
+                self.context.logger.warning("No cached data found, using 0 as price_at_selection")
+                return 0
+        except Exception as e:
+            self.context.logger.error(f"Error reading cached current price: {e}")
+            return 0
+
     def _enter_cl_pool(
         self,
         pool_address: str,
@@ -655,7 +680,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         chain: str,
         max_amounts_in: list,
         is_stable: bool,
-        price_at_selection: int,
         pool_fee: Optional[int] = None,
         tick_ranges: Optional[List[Dict]] = None,
         tick_spacing: Optional[int] = None,
@@ -704,6 +728,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     f"Could not get tick spacing for pool {pool_address}"
                 )
                 return None, None
+        
+        price_at_selection = yield from self._get_cached_current_price(chain)
 
         # STEP 1: Check if current price has moved beyond tolerance
         self.context.logger.info("=== STARTING PRICE MONITORING FOR CL POOL ENTRY ===")

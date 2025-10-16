@@ -113,7 +113,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         try:
             # Get current price using existing function
             current_price = yield from self._get_current_pool_price(pool_address, chain)
-            sqrt_price_x96 = yield from self._get_sqrt_price_x96(self, chain, pool_address)
+            sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
 
             print("TempLog..., sqrt_price_x96: ", sqrt_price_x96)
             
@@ -810,10 +810,18 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 position["amount1_desired"] = 0
                 continue
 
-            # Calculate amounts based on allocation directly
-            # We allocate the same percentage of each token based on the band allocation
-            amount0_desired = int(max_amounts_in[0] * allocation)
-            amount1_desired = int(max_amounts_in[1] * allocation)
+            # Calculate amounts based on allocation and individual band token ratios
+            # Each band has its own token0_ratio and token1_ratio calculated from Uniswap V3 math
+            # These ratios represent the proportion of the total investment amount for each token
+            token0_ratio = position.get("token0_ratio", 0.5)
+            token1_ratio = position.get("token1_ratio", 0.5)
+            
+            # Calculate total investment amount for this band
+            total_band_investment = int((max_amounts_in[0] + max_amounts_in[1]) * allocation)
+            
+            # Apply individual band ratios to the total investment amount
+            amount0_desired = int(total_band_investment * token0_ratio)
+            amount1_desired = int(total_band_investment * token1_ratio)
 
             self.context.logger.info(
                 f"amount0_desired,amount1_desired :{amount0_desired,amount1_desired}"

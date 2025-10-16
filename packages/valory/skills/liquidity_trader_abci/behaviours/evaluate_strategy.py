@@ -68,13 +68,6 @@ from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.payloads import (
     EvaluateStrategyPayload,
 )
-from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
-    get_amounts_for_liquidity,
-    get_sqrt_ratio_at_tick,
-)
-from packages.valory.contracts.velodrome_slipstream_helper.contract import (
-    VelodromeSlipstreamHelperContract,
-)
 from packages.valory.skills.liquidity_trader_abci.states.base import Event
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
@@ -89,6 +82,40 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     position_to_exit = None
     trading_opportunities = []
     positions_eligible_for_exit = []
+
+    def _calculate_aggregate_token_ratios(self, position_requirements: List[Dict[str, Any]]) -> Tuple[float, float]:
+        """
+        Calculate aggregate token ratios from individual band requirements.
+        
+        Args:
+            position_requirements: List of position requirements with allocation, token0_ratio, token1_ratio
+            
+        Returns:
+            Tuple of (aggregate_token0_ratio, aggregate_token1_ratio)
+        """
+        if not position_requirements:
+            return 0.5, 0.5
+            
+        # Calculate aggregate ratios from individual band requirements
+        total_token0_weight = sum(
+            band.get("allocation", 0) * band.get("token0_ratio", 0.5) 
+            for band in position_requirements
+        )
+        total_token1_weight = sum(
+            band.get("allocation", 0) * band.get("token1_ratio", 0.5) 
+            for band in position_requirements
+        )
+        
+        # Normalize to get aggregate ratios
+        total_weight = total_token0_weight + total_token1_weight
+        if total_weight > 0:
+            aggregate_token0_ratio = total_token0_weight / total_weight
+            aggregate_token1_ratio = total_token1_weight / total_weight
+        else:
+            aggregate_token0_ratio = 0.5
+            aggregate_token1_ratio = 0.5
+            
+        return aggregate_token0_ratio, aggregate_token1_ratio
 
     def async_act(self) -> Generator:
         """Execute the behaviour's async action."""
@@ -397,15 +424,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
             )
 
-        # Calculate overall ratios with 5 decimal precision
-        overall_token0_ratio = (
-            round(total_weighted_token0 / total_allocation, 5) if total_allocation > 0 else 0
-        )
-        overall_token1_ratio = (
-            round(total_weighted_token1 / total_allocation, 5) if total_allocation > 0 else 0
-        )
-
-        # Generate recommendations
+        # Generate recommendations based on individual band requirements
         all_same_status = all(
             pos["status"] == position_requirements[0]["status"]
             for pos in position_requirements
@@ -417,9 +436,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             elif position_requirements[0]["status"] == "ABOVE_RANGE":
                 recommendation = "Provide 0% token0, 100% token1 for all positions"
             else:
-                recommendation = f"Provide {overall_token0_ratio*100:.2f}% token0, {overall_token1_ratio*100:.2f}% token1 for all positions"
+                # Calculate aggregate ratios for recommendation
+                agg_token0_ratio, agg_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+                recommendation = f"Provide {agg_token0_ratio*100:.2f}% token0, {agg_token1_ratio*100:.2f}% token1 for all positions"
         else:
-            recommendation = f"Mixed position requirements. Overall: {overall_token0_ratio*100:.2f}% token0, {overall_token1_ratio*100:.2f}% token1"
+            recommendation = f"Mixed position requirements across {len(position_requirements)} bands"
 
         # Log any warnings
         for warning in warnings:
@@ -427,15 +448,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(
             f"Position analysis complete - Current tick: {current_tick}, "
-            f"Token0 ratio: {overall_token0_ratio:.5f}, Token1 ratio: {overall_token1_ratio:.5f}"
+            f"Bands: {len(position_requirements)}"
         )
 
         return {
             "position_requirements": position_requirements,
             "current_price": current_price,
             "current_tick": current_tick,
-            "overall_token0_ratio": overall_token0_ratio,
-            "overall_token1_ratio": overall_token1_ratio,
             "recommendation": recommendation,
             "warnings": warnings,
         }
@@ -481,7 +500,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     cached_data = yield from self._get_cached_cl_pool_data(chain)
                     should_use_cache = False
                     
-                    if cached_data and cached_data.get("pool_address") == pool_address:
+                    if cached_data and cached_data.get("pool_address") == pool_address and should_use_cache:
                         # We have cached data for this exact pool
                         should_use_cache = self._should_use_cached_cl_data(cached_data)
                         
@@ -608,8 +627,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             "token1": token1,
                             "token0_symbol": token0_symbol,
                             "token1_symbol": token1_symbol,
-                            "overall_token0_ratio": requirements.get("overall_token0_ratio"),
-                            "overall_token1_ratio": requirements.get("overall_token1_ratio"),
                             "token_requirements": requirements,
                         }
                         
@@ -652,9 +669,19 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         f"{requirements['recommendation']}"
                     )
 
-                    # Extract token ratios as percentages
-                    token0_ratio = float(requirements["overall_token0_ratio"])
-                    token1_ratio = float(requirements["overall_token1_ratio"])
+                    # Calculate aggregate token ratios from individual band requirements
+                    position_requirements = requirements.get("position_requirements", [])
+                    token0_ratio, token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+
+                    # Merge individual band ratios into tick_bands for use in _enter_cl_pool
+                    for i, band in enumerate(tick_bands):
+                        if i < len(position_requirements):
+                            band["token0_ratio"] = position_requirements[i]["token0_ratio"]
+                            band["token1_ratio"] = position_requirements[i]["token1_ratio"]
+                        else:
+                            # Fallback if position_requirements is shorter than tick_bands
+                            band["token0_ratio"] = 0.5
+                            band["token1_ratio"] = 0.5
 
                     # Add percentage values to the opportunity
                     opportunity["token0_percentage"] = token0_ratio * 100
@@ -667,7 +694,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Store these requirements
                     opportunity["token_requirements"] = requirements
-                    # IMPORTANT: Add tick_spacing and tick_bands to the opportunity
+                    # IMPORTANT: Add tick_spacing and tick_bands (now with individual ratios) to the opportunity
                     opportunity["tick_spacing"] = tick_spacing
                     opportunity["tick_ranges"] = tick_bands
                     # IMPORTANT: Store percent_in_bounds for TiP calculations
@@ -703,54 +730,50 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     token1_balance = int(token1_balance * relative_funds_percentage)
 
                     # Update max_amounts_in based on the requirements and actual balances
-                    # Using the weighted ratios from all the bands
-                    if requirements["overall_token0_ratio"] >= max_ration:
+                    # Calculate aggregate ratios from individual band requirements
+                    position_requirements = requirements.get("position_requirements", [])
+                    aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+                    
+                    if aggregate_token0_ratio >= max_ration:
                         # Only need token0
                         opportunity["max_amounts_in"] = [token0_balance, 0]
                         self.context.logger.info(
                             f"Using only token0: {token0_balance} {token0_symbol}"
                         )
-                    elif requirements["overall_token1_ratio"] >= max_ration:
+                    elif aggregate_token1_ratio >= max_ration:
                         # Only need token1
                         opportunity["max_amounts_in"] = [0, token1_balance]
                         self.context.logger.info(
                             f"Using only token1: {token1_balance} {token1_symbol}"
                         )
                     else:
-                        # Need both tokens in specific ratio
-                        # Find which token is limiting based on the required ratio
-                        max_amount0 = token0_balance
-                        max_amount1 = token1_balance
-
-                        # Calculate what amount of token1 we would need given our token0
-                        required_token1 = int(
-                            max_amount0
-                            * requirements["overall_token1_ratio"]
-                            / requirements["overall_token0_ratio"]
-                        )
-
-                        # If required token1 is more than we have, scale both tokens down
-                        if required_token1 > max_amount1 and required_token1 > 0:
-                            scale_factor = max_amount1 / required_token1
-                            max_amount0 = int(max_amount0 * scale_factor)
-                            max_amount1 = required_token1
-                        elif required_token1 < max_amount1:
-                            # If we have excess token1, calculate how much token0 we need
-                            # to maintain the ratio
-                            required_token0 = int(
-                                max_amount1
-                                * requirements["overall_token0_ratio"]
-                                / requirements["overall_token1_ratio"]
-                            )
-
-                            # We have excess token1 but need to scale based on available token0
-                            scale_factor = max_amount0 / required_token0
-                            max_amount1 = int(max_amount1 * scale_factor)
+                        # Calculate total investment amount (sum of both tokens)
+                        total_investment = token0_balance + token1_balance
+                        
+                        # Calculate what the ideal ratio would require
+                        ideal_token0_for_all_tokens = int(total_investment * aggregate_token0_ratio)
+                        ideal_token1_for_all_tokens = int(total_investment * aggregate_token1_ratio)
+                        
+                        # Check which token is limiting
+                        if ideal_token0_for_all_tokens > token0_balance:
+                            # Token0 is limiting - scale down to match available token0
+                            scale_factor = token0_balance / ideal_token0_for_all_tokens
+                            max_amount0 = token0_balance
+                            max_amount1 = int(ideal_token1_for_all_tokens * scale_factor)
+                        elif ideal_token1_for_all_tokens > token1_balance:
+                            # Token1 is limiting - scale down to match available token1
+                            scale_factor = token1_balance / ideal_token1_for_all_tokens
+                            max_amount0 = int(ideal_token0_for_all_tokens * scale_factor)
+                            max_amount1 = token1_balance
+                        else:
+                            # We have enough of both tokens for the ideal ratio
+                            max_amount0 = ideal_token0_for_all_tokens
+                            max_amount1 = ideal_token1_for_all_tokens
 
                         opportunity["max_amounts_in"] = [max_amount0, max_amount1]
                         self.context.logger.info(
-                            f"Using both tokens: {max_amount0} {token0_symbol} ({requirements['overall_token0_ratio']*100:.2f}%), "
-                            f"{max_amount1} {token1_symbol} ({requirements['overall_token1_ratio']*100:.2f}%)"
+                            f"Using both tokens: {max_amount0} {token0_symbol} ({aggregate_token0_ratio*100:.2f}%), "
+                            f"{max_amount1} {token1_symbol} ({aggregate_token1_ratio*100:.2f}%)"
                         )
 
                     # Store results for this pool
@@ -1910,37 +1933,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         ):
             token_requirements = enter_pool_action.get("token_requirements", {})
 
-            # Extract token ratios, handling potential NumPy types
-            try:
-                overall_token0_ratio = float(
-                    token_requirements.get("overall_token0_ratio", 0.5)
-                )
-                overall_token1_ratio = float(
-                    token_requirements.get("overall_token1_ratio", 0.5)
-                )
-            except (TypeError, ValueError):
+            # Calculate aggregate token ratios from individual band requirements
+            position_requirements = token_requirements.get("position_requirements", [])
+            if position_requirements:
+                aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+            else:
                 # Fall back to checking recommendation text
                 recommendation = token_requirements.get("recommendation", "")
                 if "100% token0" in recommendation:
-                    overall_token0_ratio = 1.0
-                    overall_token1_ratio = 0.0
+                    aggregate_token0_ratio = 1.0
+                    aggregate_token1_ratio = 0.0
                 elif "100% token1" in recommendation:
-                    overall_token0_ratio = 0.0
-                    overall_token1_ratio = 1.0
+                    aggregate_token0_ratio = 0.0
+                    aggregate_token1_ratio = 1.0
                 else:
-                    overall_token0_ratio = 0.5
-                    overall_token1_ratio = 0.5
+                    aggregate_token0_ratio = 0.5
+                    aggregate_token1_ratio = 0.5
 
             self.context.logger.info(
-                f"Velodrome position requirements: token0_ratio={overall_token0_ratio}, token1_ratio={overall_token1_ratio}"
+                f"Velodrome position requirements: token0_ratio={aggregate_token0_ratio}, token1_ratio={aggregate_token1_ratio}"
             )
 
             # Check if all funds should go to one token (using 0.99 threshold to handle floating point)
-            if (overall_token0_ratio >= 0.99 and overall_token1_ratio <= 0.01) or (
-                overall_token0_ratio <= 0.01 and overall_token1_ratio >= 0.99
+            if (aggregate_token0_ratio >= 0.99 and aggregate_token1_ratio <= 0.01) or (
+                aggregate_token0_ratio <= 0.01 and aggregate_token1_ratio >= 0.99
             ):
                 # Determine which token gets 100%
-                is_token0_full = overall_token0_ratio >= 0.99
+                is_token0_full = aggregate_token0_ratio >= 0.99
                 target_token = (
                     enter_pool_action.get("token0")
                     if is_token0_full
@@ -2929,39 +2948,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("No required tokens identified")
             return None
 
-        # Determine target ratios per required token (prefer ratios in token_requirements; fallback to percentages)
+        # Calculate aggregate ratios directly from individual band requirements
         token_requirements = opportunity.get("token_requirements", {}) or {}
-        try:
-            overall_token0_ratio = float(
-                token_requirements.get("overall_token0_ratio")
-                if token_requirements.get("overall_token0_ratio") is not None
-                else opportunity.get("token0_percentage", 0) / 100.0
-            )
-        except Exception:
-            overall_token0_ratio = opportunity.get("token0_percentage", 0) / 100.0
-        try:
-            overall_token1_ratio = float(
-                token_requirements.get("overall_token1_ratio")
-                if token_requirements.get("overall_token1_ratio") is not None
-                else opportunity.get("token1_percentage", 0) / 100.0
-            )
-        except Exception:
-            overall_token1_ratio = opportunity.get("token1_percentage", 0) / 100.0
-
-        # Default to 50/50 if not a CL pool or token requirements are missing
+        position_requirements = token_requirements.get("position_requirements", [])
+        
+        # Default to 50/50 if not a CL pool or no position requirements
         is_cl_pool = bool(opportunity.get("is_cl_pool", False))
-        if (not is_cl_pool) or (not token_requirements):
-            overall_token0_ratio = 0.5
-            overall_token1_ratio = 0.5
-
-        # Fallback to 50/50 if both ratios end up as zero
-        if overall_token0_ratio == 0 and overall_token1_ratio == 0:
-            overall_token0_ratio = 0.5
-            overall_token1_ratio = 0.5
+        if (not is_cl_pool) or (not position_requirements):
+            aggregate_token0_ratio = 0.5
+            aggregate_token1_ratio = 0.5
+        else:
+            aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
 
         target_ratios_by_token = {
-            opportunity.get("token0"): overall_token0_ratio,
-            opportunity.get("token1"): overall_token1_ratio,
+            opportunity.get("token0"): aggregate_token0_ratio,
+            opportunity.get("token1"): aggregate_token1_ratio,
         }
 
         # Group tokens by chain and identify what we have/need
@@ -3551,19 +3552,39 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 f"{token1_balance} {cached_data.get('token1_symbol')}"
             )
             
-            # Apply the same ratio logic as before
-            overall_token0_ratio = cached_data.get("overall_token0_ratio", 0.5)
-            overall_token1_ratio = cached_data.get("overall_token1_ratio", 0.5)
+            # Calculate aggregate ratios from individual band requirements
+            position_requirements = cached_data.get("position_requirements", [])
+            aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
             
-            # Calculate max_amounts_in based on ratios and current balances
-            if overall_token0_ratio > 0.99:
+            # Calculate max_amounts_in based on aggregate ratios and current balances
+            if aggregate_token0_ratio > 0.99:
                 updated_enter_action["max_amounts_in"] = [token0_balance, 0]
-            elif overall_token1_ratio > 0.99:
+            elif aggregate_token1_ratio > 0.99:
                 updated_enter_action["max_amounts_in"] = [0, token1_balance]
             else:
-                # Calculate balanced amounts
-                max_amount0 = int(token0_balance * overall_token0_ratio)
-                max_amount1 = int(token1_balance * overall_token1_ratio)
+                # Calculate total investment amount (sum of both tokens)
+                total_investment = token0_balance + token1_balance
+                
+                # Calculate what the ideal ratio would require
+                ideal_token0_for_all_tokens = int(total_investment * aggregate_token0_ratio)
+                ideal_token1_for_all_tokens = int(total_investment * aggregate_token1_ratio)
+                
+                # Check which token is limiting
+                if ideal_token0_for_all_tokens > token0_balance:
+                    # Token0 is limiting - scale down to match available token0
+                    scale_factor = token0_balance / ideal_token0_for_all_tokens
+                    max_amount0 = token0_balance
+                    max_amount1 = int(ideal_token1_for_all_tokens * scale_factor)
+                elif ideal_token1_for_all_tokens > token1_balance:
+                    # Token1 is limiting - scale down to match available token1
+                    scale_factor = token1_balance / ideal_token1_for_all_tokens
+                    max_amount0 = int(ideal_token0_for_all_tokens * scale_factor)
+                    max_amount1 = token1_balance
+                else:
+                    # We have enough of both tokens for the ideal ratio
+                    max_amount0 = ideal_token0_for_all_tokens
+                    max_amount1 = ideal_token1_for_all_tokens
+                
                 updated_enter_action["max_amounts_in"] = [max_amount0, max_amount1]
             
             self.context.logger.info(
@@ -3695,8 +3716,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         token1: Optional[str] = None,
         token0_symbol: Optional[str] = None,
         token1_symbol: Optional[str] = None,
-        overall_token0_ratio: Optional[float] = None,
-        overall_token1_ratio: Optional[float] = None,
         token_requirements: Optional[Dict[str, Any]] = None,
         enter_pool_action: Optional[Dict[str, Any]] = None,
     ) -> Generator[None, None, None]:
@@ -3738,10 +3757,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             cache_data["token0_symbol"] = token0_symbol
         if token1_symbol is not None:
             cache_data["token1_symbol"] = token1_symbol
-        if overall_token0_ratio is not None:
-            cache_data["overall_token0_ratio"] = overall_token0_ratio
-        if overall_token1_ratio is not None:
-            cache_data["overall_token1_ratio"] = overall_token1_ratio
         if token_requirements is not None:
             cache_data["token_requirements"] = token_requirements
         if enter_pool_action is not None:
@@ -3751,13 +3766,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         yield from self._write_kv({kv_key: json.dumps(cache_data, ensure_ascii=True)})
 
-        token0_ratio_str = f"{overall_token0_ratio:.5f}" if overall_token0_ratio is not None else "N/A"
-        token1_ratio_str = f"{overall_token1_ratio:.5f}" if overall_token1_ratio is not None else "N/A"
-        
         self.context.logger.info(
             f"Cached CL pool data for {pool_address} on chain {chain} "
             f"(tick_spacing={tick_spacing}, bands={len(tick_bands)}, price={current_price}, "
-            f"current_tick={current_tick}, token0_ratio={token0_ratio_str}, "
-            f"token1_ratio={token1_ratio_str}, "
+            f"current_tick={current_tick}, "
             f"enter_action_cached={enter_pool_action is not None})"
         )

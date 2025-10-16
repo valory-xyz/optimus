@@ -824,12 +824,12 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             
             # Calculate total investment amount for this band using pool price
             # This fixes the decimal precision issue when tokens have different decimals
-            total_band_investment = yield from self._calculate_band_investment_with_pool_price(
+            total_band_investment = self._calculate_band_investment_with_pool_price(
                 max_amounts_in, allocation, sqrt_price_x96, assets, chain, token_decimals
             )
             
             # Apply individual band ratios using pool price for accurate token distribution
-            amount0_desired, amount1_desired = yield from self._calculate_individual_token_amounts(
+            amount0_desired, amount1_desired = self._calculate_individual_token_amounts(
                 total_band_investment, token0_ratio, token1_ratio, sqrt_price_x96, token_decimals
             )
 
@@ -2390,7 +2390,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def _calculate_band_investment_with_pool_price(
         self, max_amounts_in: List[int], allocation: float, sqrt_price_x96: int, 
         assets: List[str], chain: str, token_decimals: List[int]
-    ) -> Generator[None, None, int]:
+    ) -> int:
         """
         Calculate band investment using pool's native price to fix decimal precision issues.
         
@@ -2459,7 +2459,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def _calculate_individual_token_amounts(
         self, total_band_investment: int, token0_ratio: float, token1_ratio: float,
         sqrt_price_x96: int, token_decimals: List[int]
-    ) -> Generator[None, None, Tuple[int, int]]:
+    ) -> Tuple[int, int]:
         """
         Calculate individual token amounts using pool price for accurate distribution.
         

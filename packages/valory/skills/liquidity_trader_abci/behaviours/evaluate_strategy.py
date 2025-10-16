@@ -150,7 +150,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # else:
             # No valid cache, proceed with normal flow
             # Fetch trading opportunities
-            yield from self.fetch_all_trading_opportunities()
+            # yield from self.fetch_all_trading_opportunities()
 
             # Update metrics for open positions
             self.update_position_metrics()
@@ -158,8 +158,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Execute strategy and prepare actions
             actions = yield from self.prepare_strategy_actions()
 
-            # Push opportunity data to MirrorDB
-            yield from self._push_opportunity_metrics_to_mirrordb()
+            # # Push opportunity data to MirrorDB
+            # yield from self._push_opportunity_metrics_to_mirrordb()
 
             # Send final actions
             yield from self.send_actions(actions)
@@ -281,7 +281,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "warnings": warnings,
         }
 
-    def calculate_velodrome_token_ratios(self, validated_data, chain=None):
+    def calculate_velodrome_token_ratios(self, validated_data, chain=None) -> Generator[None, None, Dict[str, Any]]:
         """Calculates token ratios and requirements for Velodrome CL positions."""
 
         if not validated_data:
@@ -442,7 +442,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def calculate_velodrome_cl_token_requirements(
         self, tick_bands, current_price, tick_spacing=1, sqrt_price_x96=None, chain=None
-    ):
+    ) -> Generator[None, None, Dict[str, Any]]:
         """Determines token requirements for Velodrome CL positions based on current price."""
         # Step 1: Validate and prepare inputs
         validated_data = self.validate_and_prepare_velodrome_inputs(
@@ -457,7 +457,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             validated_data["sqrt_price_x96"] = sqrt_price_x96
 
         # Step 2: Calculate token ratios and generate recommendations
-        return self.calculate_velodrome_token_ratios(validated_data, chain)
+        velodrome_token_ratios = yield from self.calculate_velodrome_token_ratios(validated_data, chain)
+        return velodrome_token_ratios
 
     def get_velodrome_position_requirements(
         self,
@@ -482,7 +483,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     
                     if cached_data and cached_data.get("pool_address") == pool_address:
                         # We have cached data for this exact pool
-                        should_use_cache = yield from self._should_use_cached_cl_data(cached_data)
+                        should_use_cache = self._should_use_cached_cl_data(cached_data)
                         
                         if should_use_cache:
                             self.context.logger.info(
@@ -581,7 +582,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         band_multipliers = tick_bands[0].get("band_multipliers") if tick_bands else None
                         
                         # Calculate token requirements to get ratios and current_tick
-                        requirements = self.calculate_velodrome_cl_token_requirements(
+                        requirements = yield from self.calculate_velodrome_cl_token_requirements(
                             tick_bands, current_price, tick_spacing, sqrt_price_x96, chain
                         )
                         if not requirements:
@@ -632,7 +633,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             # Fallback: recalculate if not in cache
                             # Get sqrt_price_x96 for accurate calculations
                             sqrt_price_x96 = yield from pool._get_sqrt_price_x96(self, chain, pool_address)
-                            requirements = self.calculate_velodrome_cl_token_requirements(
+                            requirements = yield from self.calculate_velodrome_cl_token_requirements(
                                 tick_bands, current_price, tick_spacing, sqrt_price_x96, chain
                             )
 
@@ -985,11 +986,12 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""
-        if not self.trading_opportunities:
-            self.context.logger.info("No trading opportunities found")
-            return []
+        # if not self.trading_opportunities:
+        #     self.context.logger.info("No trading opportunities found")
+        #     return []
 
-        yield from self.execute_hyper_strategy()
+        # yield from self.execute_hyper_strategy()
+        self.selected_opportunities = [{'dex_type': 'velodrome', 'pool_address': '0x4DA46c6AFe7322b66EFEfda1f702605Cbe08E0Bd', 'pool_id': '0x4DA46c6AFe7322b66EFEfda1f702605Cbe08E0Bd', 'tvl': 226689.00018300003, 'is_lp': True, 'token_count': 2, 'volume': 0.0, 'chain': 'optimism', 'apr': 48.55372181655435, 'is_cl_pool': True, 'is_stable': None, 'token0': '0x01bFF41798a0BcF287b996046Ca68b395DbC1071', 'token0_symbol': 'USDT0', 'token1': '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58', 'token1_symbol': 'USDT', 'sharpe_ratio': 1.4560693467536052, 'depth_score': 1119.562454351919, 'max_position_size': 10000000.0, 'il_risk_score': -2.9373326028866967e-10, 'strategy_source': 'velodrome_pools_search', 'composite_score': 0.6080465428314956, 'apr_weighted_score': 29.522922692158037, 'funds_percentage': 100.0, 'relative_funds_percentage': 1.0}]
         actions = (
             yield from self.get_order_of_transactions()
             if self.selected_opportunities is not None
@@ -3028,8 +3030,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         token_value = float(token.get("value", 0))
         swap_value = token_value * relative_funds_percentage
 
-        # Log the swap value for debugging, but don't skip small swaps
-        # Small swaps are needed for precise token ratios in CL pools
+        # Skip swaps that are too small to be meaningful (less than $0.5)
+        MIN_SWAP_VALUE_USD = 0.5
+        if swap_value < MIN_SWAP_VALUE_USD:
+            self.context.logger.info(
+                f"Skipping tiny swap: {swap_value:.8f} USD from {source_token_symbol} "
+                f"(below minimum threshold of ${MIN_SWAP_VALUE_USD})"
+            )
+            return
+
+        # Log the swap value for debugging
         self.context.logger.info(
             f"Processing bridge/swap action: {swap_value:.4f} USD from {source_token_symbol}"
         )
@@ -3463,7 +3473,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     continue
                 
                 # Validate cache
-                should_use_cache = yield from self._should_use_cached_cl_data(cached_data)
+                should_use_cache = self._should_use_cached_cl_data(cached_data)
                 
                 if not should_use_cache:
                     self.context.logger.info(
@@ -3619,21 +3629,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def _should_use_cached_cl_data(
         self, cached_data: Dict[str, Any]
-    ) -> Generator[None, None, bool]:
+    ) -> bool:
         """Check if cached CL pool data is still valid."""
         current_timestamp = cast(
             SharedState, self.context.state
         ).round_sequence.last_round_transition_timestamp.timestamp()
 
         pool_finalization_timestamp = cached_data.get("pool_finalization_timestamp", 0)
-        round_count = cached_data.get("round_count", 0)
 
         # Check time condition: more than 1 day (86400 seconds) has passed
         time_elapsed = current_timestamp - pool_finalization_timestamp
         time_expired = time_elapsed > 86400  # 1 day in seconds
-
-        # Check round count condition: 5 rounds have passed
-        rounds_expired = round_count >= 5
 
         if time_expired:
             self.context.logger.info(
@@ -3641,14 +3647,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return False
 
-        if rounds_expired:
-            self.context.logger.info(
-                f"Cache expired by round count: {round_count} rounds (>= 5)"
-            )
-            return False
-
         self.context.logger.info(
-            f"Cache valid: round {round_count}/5, {time_elapsed / 3600:.2f} hours elapsed"
+            f"Cache valid: {time_elapsed / 3600:.2f} hours elapsed"
         )
         return True
 

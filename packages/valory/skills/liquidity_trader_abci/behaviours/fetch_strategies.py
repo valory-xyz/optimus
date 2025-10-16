@@ -113,34 +113,34 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     f"Current Positions - {self.current_positions}"
                 )
 
-            # Update the amounts of all open positions
-            if self.synchronized_data.period_count == 0:
-                # Validate Velodrome v2 pool addresses before updating position amounts
-                self.context.logger.info("Validating Velodrome v2 pool addresses")
-                yield from self._validate_velodrome_v2_pool_addresses()
+            # # Update the amounts of all open positions
+            # if self.synchronized_data.period_count == 0:
+            #     # Validate Velodrome v2 pool addresses before updating position amounts
+            #     self.context.logger.info("Validating Velodrome v2 pool addresses")
+            #     yield from self._validate_velodrome_v2_pool_addresses()
 
-                self.context.logger.info("Updating position amounts for period 0")
-                yield from self.update_position_amounts()
-                self.context.logger.info(
-                    "Checking and updating zero liquidity positions"
-                )
-                self.check_and_update_zero_liquidity_positions()
+            #     self.context.logger.info("Updating position amounts for period 0")
+            #     yield from self.update_position_amounts()
+            #     self.context.logger.info(
+            #         "Checking and updating zero liquidity positions"
+            #     )
+            #     self.check_and_update_zero_liquidity_positions()
 
-            self.context.logger.info(f"Current Positions: {self.current_positions}")
+            # self.context.logger.info(f"Current Positions: {self.current_positions}")
 
             sender = self.context.agent_address
 
             chain = self.params.target_investment_chains[0]
             safe_address = self.params.safe_contract_addresses.get(chain)
 
-            # update locally stored eth balance in-case it's incorrect
-            eth_balance = yield from self._get_native_balance(chain, safe_address)
-            self.context.logger.info(f"Current ETH balance: {eth_balance}")
+            # # update locally stored eth balance in-case it's incorrect
+            # eth_balance = yield from self._get_native_balance(chain, safe_address)
+            # self.context.logger.info(f"Current ETH balance: {eth_balance}")
 
-            if self.synchronized_data.period_count == 0:
-                yield from self._check_and_create_eth_revert_transactions(
-                    chain, safe_address, sender
-                )
+            # if self.synchronized_data.period_count == 0:
+            #     yield from self._check_and_create_eth_revert_transactions(
+            #         chain, safe_address, sender
+            #     )
 
             db_data = yield from self._read_kv(
                 keys=("selected_protocols", "trading_type")
@@ -178,61 +178,61 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if not trading_type:
                 trading_type = TradingType.BALANCED.value
 
-            self.context.logger.info(
-                f"Reading values from kv store... Selected protocols: {serialized_protocols}, Trading type: {trading_type}"
-            )
-            self.shared_state.trading_type = trading_type
-            self.shared_state.selected_protocols = selected_protocols
+            # self.context.logger.info(
+            #     f"Reading values from kv store... Selected protocols: {serialized_protocols}, Trading type: {trading_type}"
+            # )
+            # self.shared_state.trading_type = trading_type
+            # self.shared_state.selected_protocols = selected_protocols
 
-            # Initialize assets from initial_assets if empty
-            if not self.assets:
-                self.assets = self.params.initial_assets
+            # # Initialize assets from initial_assets if empty
+            # if not self.assets:
+            #     self.assets = self.params.initial_assets
 
-            # Filter whitelisted assets based on price changes
-            if not self.whitelisted_assets:
-                self.whitelisted_assets = WHITELISTED_ASSETS
-                self.store_whitelisted_assets()
-            else:
-                self.read_whitelisted_assets()
+            # # Filter whitelisted assets based on price changes
+            # if not self.whitelisted_assets:
+            #     self.whitelisted_assets = WHITELISTED_ASSETS
+            #     self.store_whitelisted_assets()
+            # else:
+            #     self.read_whitelisted_assets()
 
-            # Check if one day has passed since last whitelist update
-            db_data = yield from self._read_kv(keys=("last_whitelisted_updated",))
-            last_updated = db_data.get("last_whitelisted_updated", "0")
-            if not last_updated:
-                last_updated = 0
+            # # Check if one day has passed since last whitelist update
+            # db_data = yield from self._read_kv(keys=("last_whitelisted_updated",))
+            # last_updated = db_data.get("last_whitelisted_updated", "0")
+            # if not last_updated:
+            #     last_updated = 0
 
-            current_time = int(self._get_current_timestamp())
-            one_day_in_seconds = 24 * 60 * 60
+            # current_time = int(self._get_current_timestamp())
+            # one_day_in_seconds = 24 * 60 * 60
 
-            try:
-                last_updated_int = int(last_updated)
-            except (ValueError, TypeError):
-                self.context.logger.warning(
-                    "Invalid last updated timestamp, defaulting to 0"
-                )
-                last_updated_int = 0
+            # try:
+            #     last_updated_int = int(last_updated)
+            # except (ValueError, TypeError):
+            #     self.context.logger.warning(
+            #         "Invalid last updated timestamp, defaulting to 0"
+            #     )
+            #     last_updated_int = 0
 
-            time_since_update = int(current_time) - last_updated_int
-            self.context.logger.info(
-                f"Time since last update: {time_since_update} seconds"
-            )
+            # time_since_update = int(current_time) - last_updated_int
+            # self.context.logger.info(
+            #     f"Time since last update: {time_since_update} seconds"
+            # )
 
-            if not (time_since_update >= one_day_in_seconds):
-                self.context.logger.info("Tracking whitelisted assets")
-                yield from self._track_whitelisted_assets()
-                # Store current timestamp as last updated
-                self.context.logger.info("Updating last whitelist update timestamp")
-                yield from self._write_kv({"last_whitelisted_updated": current_time})
+            # if not (time_since_update >= one_day_in_seconds):
+            #     self.context.logger.info("Tracking whitelisted assets")
+            #     yield from self._track_whitelisted_assets()
+            #     # Store current timestamp as last updated
+            #     self.context.logger.info("Updating last whitelist update timestamp")
+            #     yield from self._write_kv({"last_whitelisted_updated": current_time})
 
-            # Check if we need to recalculate the portfolio
-            self.context.logger.info("Recalculating user share values")
-            yield from self.calculate_user_share_values()
-            # Store the updated portfolio data
-            self.context.logger.info("Storing updated portfolio data")
-            self.store_portfolio_data()
+            # # Check if we need to recalculate the portfolio
+            # self.context.logger.info("Recalculating user share values")
+            # yield from self.calculate_user_share_values()
+            # # Store the updated portfolio data
+            # self.context.logger.info("Storing updated portfolio data")
+            # self.store_portfolio_data()
 
-            # Update agent performance metrics
-            self._update_agent_performance_metrics()
+            # # Update agent performance metrics
+            # self._update_agent_performance_metrics()
 
             payload = FetchStrategiesPayload(
                 sender=sender,

@@ -113,6 +113,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         try:
             # Get current price using existing function
             current_price = yield from self._get_current_pool_price(pool_address, chain)
+            sqrt_price_x96 = yield from self._get_sqrt_price_x96(self, chain, pool_address)
+
+            print("TempLog..., sqrt_price_x96: ", sqrt_price_x96)
             
             if current_price is None:
                 self.context.logger.error("[PRICE_MONITORING] Could not get current price for movement check - stopping")
@@ -141,7 +144,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             
             # Use the specified formula: [current_price-prev_price/tick_range]*100
             if tick_range > 0:
-                price_change_pct = ((current_price - price_at_selection) / tick_range) * 100
+                price_change_pct = (abs(current_price - price_at_selection) / (tick_range / 10000)) * 100
             else:
                 # Return None for zero tick spacing positions as they are not allowed
                 self.context.logger.error("[PRICE_MONITORING] Zero tick spacing position detected - not allowed")
@@ -730,6 +733,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 return None, None
         
         price_at_selection = yield from self._get_cached_current_price(chain)
+        self.context.logger.info(f"price_at_selection: {price_at_selection}")
 
         # STEP 1: Check if current price has moved beyond tolerance
         self.context.logger.info("=== STARTING PRICE MONITORING FOR CL POOL ENTRY ===")
@@ -797,6 +801,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         total_allocated_0 = 0
         total_allocated_1 = 0
 
+
         # First pass: calculate desired amounts
         for position in tick_ranges[0]:
             allocation = position.get("allocation", 0)
@@ -862,7 +867,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             (
                 amount0_min,
                 amount1_min,
-            ) = yield from self._calculate_slippage_protection_for_velodrome_mint(
+            ) = self._calculate_slippage_protection_for_velodrome_mint(
                 pool_address,
                 position["tick_lower"],
                 position["tick_upper"],
@@ -3484,7 +3489,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         tick_upper: int,
         max_amounts_in: list,
         chain: str,
-    ) -> Generator[None, None, Tuple[int, int]]:
+    ) -> Tuple[int, int]:
         """Calculate slippage protection for Velodrome mint operations using simple amount-based calculation.
         
         This method now uses the new simple slippage calculation approach

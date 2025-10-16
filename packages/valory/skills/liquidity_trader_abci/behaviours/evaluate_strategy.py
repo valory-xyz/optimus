@@ -165,28 +165,28 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 yield from self.send_actions()
                 return
 
-            # # Check if we have a cached Velodrome CL pool opportunity to reuse
-            # cached_opportunity_result = yield from self._check_and_use_cached_cl_opportunity()
+            # Check if we have a cached Velodrome CL pool opportunity to reuse
+            cached_opportunity_result = yield from self._check_and_use_cached_cl_opportunity()
             
-            # if cached_opportunity_result:
-            #     # We have a valid cached opportunity, use it directly
-            #     self.context.logger.info(
-            #         "Using cached Velodrome CL pool opportunity, skipping opportunity fetching and strategy evaluation"
-            #     )
-            #     actions = cached_opportunity_result
-            # else:
-            # No valid cache, proceed with normal flow
-            # Fetch trading opportunities
-            # yield from self.fetch_all_trading_opportunities()
+            if cached_opportunity_result:
+                # We have a valid cached opportunity, use it directly
+                self.context.logger.info(
+                    "Using cached Velodrome CL pool opportunity, skipping opportunity fetching and strategy evaluation"
+                )
+                actions = cached_opportunity_result
+            else:
+                # No valid cache, proceed with normal flow
+                # Fetch trading opportunities
+                yield from self.fetch_all_trading_opportunities()
 
-            # Update metrics for open positions
-            self.update_position_metrics()
+                # Update metrics for open positions
+                self.update_position_metrics()
 
-            # Execute strategy and prepare actions
-            actions = yield from self.prepare_strategy_actions()
+                # Execute strategy and prepare actions
+                actions = yield from self.prepare_strategy_actions()
 
-            # # Push opportunity data to MirrorDB
-            # yield from self._push_opportunity_metrics_to_mirrordb()
+                # Push opportunity data to MirrorDB
+                yield from self._push_opportunity_metrics_to_mirrordb()
 
             # Send final actions
             yield from self.send_actions(actions)
@@ -497,162 +497,116 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         f"Analyzing Velodrome CL pool: {pool_address} on chain {chain}"
                     )
 
-                    cached_data = yield from self._get_cached_cl_pool_data(chain)
-                    should_use_cache = False
+                    # Always calculate fresh data - cache check is handled at higher level
+                    self.context.logger.info(
+                        f"Calculating fresh data for Velodrome CL pool {pool_address} on {chain}"
+                    )
                     
-                    if cached_data and cached_data.get("pool_address") == pool_address and should_use_cache:
-                        # We have cached data for this exact pool
-                        should_use_cache = self._should_use_cached_cl_data(cached_data)
-                        
-                        if should_use_cache:
-                            self.context.logger.info(
-                                f"Using cached data for Velodrome CL pool {pool_address} on {chain}"
-                            )
-                            
-                            # Update round tracking
-                            yield from self._update_cl_pool_round_tracking(chain, cached_data)
-                            
-                            # Populate variables with cached data
-                            tick_spacing = cached_data["tick_spacing"]
-                            tick_bands = cached_data["tick_bands"]
-                            current_price = cached_data["current_price"]
-                            percent_in_bounds = cached_data["percent_in_bounds"]
-                            
-                            self.context.logger.info(
-                                f"Loaded from cache: tick_spacing={tick_spacing}, "
-                                f"bands={len(tick_bands)}, price={current_price}"
-                            )
-                        else:
-                            self.context.logger.info(
-                                f"Cache expired for Velodrome CL pool {pool_address}, recalculating..."
-                            )
-                    else:
-                        if cached_data:
-                            self.context.logger.info(
-                                f"Different pool in cache (cached: {cached_data.get('pool_address')}, "
-                                f"current: {pool_address}), calculating fresh data"
-                            )
-                        else:
-                            self.context.logger.info(
-                                f"No cache found for chain {chain}, calculating fresh data"
-                            )
+                    kwargs = {
+                        "chain": chain,
+                        "pool_address": pool_address,
+                        "is_stable": opportunity["is_stable"],
+                    }
 
-                    if not should_use_cache:
-                        kwargs = {
-                            "chain": chain,
-                            "pool_address": pool_address,
-                            "is_stable": opportunity["is_stable"],
-                        }
+                    pool = self.pools.get(opportunity["dex_type"])
 
-                        pool = self.pools.get(opportunity["dex_type"])
-
-                        # Get tick spacing for the pool
-                        tick_spacing = yield from pool._get_tick_spacing_velodrome(
-                            self, pool_address, chain
+                    # Get tick spacing for the pool
+                    tick_spacing = yield from pool._get_tick_spacing_velodrome(
+                        self, pool_address, chain
+                    )
+                    if not tick_spacing:
+                        self.context.logger.error(
+                            f"Failed to get tick spacing for pool {pool_address}"
                         )
-                        if not tick_spacing:
-                            self.context.logger.error(
-                                f"Failed to get tick spacing for pool {pool_address}"
-                            )
-                            continue
+                        continue
 
-                        # Calculate tick bands and get current price (EXPENSIVE OPERATION)
-                        tick_bands = (
-                            yield from pool._calculate_tick_lower_and_upper_velodrome(
-                                self, **kwargs
-                            )
+                    # Calculate tick bands and get current price (EXPENSIVE OPERATION)
+                    tick_bands = (
+                        yield from pool._calculate_tick_lower_and_upper_velodrome(
+                            self, **kwargs
                         )
-                        self.context.logger.info(f"tick_bands : {tick_bands}")
-                        if not tick_bands:
-                            self.context.logger.error(
-                                f"Failed to calculate tick bands for pool {pool_address}"
-                            )
-                            continue
+                    )
+                    self.context.logger.info(f"tick_bands : {tick_bands}")
+                    if not tick_bands:
+                        self.context.logger.error(
+                            f"Failed to calculate tick bands for pool {pool_address}"
+                        )
+                        continue
 
-                        # Extract percent_in_bounds from the first position (all positions have the same value)
-                        percent_in_bounds = (
-                            tick_bands[0].get("percent_in_bounds", 0.0)
-                            if tick_bands
-                            else 0.0
-                        )
-                        self.context.logger.info(f"percent_in_bounds : {percent_in_bounds}")
+                    # Extract percent_in_bounds from the first position (all positions have the same value)
+                    percent_in_bounds = (
+                        tick_bands[0].get("percent_in_bounds", 0.0)
+                        if tick_bands
+                        else 0.0
+                    )
+                    self.context.logger.info(f"percent_in_bounds : {percent_in_bounds}")
 
-                        current_price = yield from pool._get_current_pool_price(
-                            self, pool_address, chain
+                    current_price = yield from pool._get_current_pool_price(
+                        self, pool_address, chain
+                    )
+                    if current_price is None:
+                        self.context.logger.error(
+                            f"Failed to get current price for pool {pool_address}"
                         )
-                        if current_price is None:
-                            self.context.logger.error(
-                                f"Failed to get current price for pool {pool_address}"
-                            )
-                            continue
-                        
-                        # Get sqrt_price_x96 for accurate Uniswap V3 math calculations
-                        sqrt_price_x96 = yield from pool._get_sqrt_price_x96(self, chain, pool_address)
-                        if sqrt_price_x96 is None:
-                            self.context.logger.warning(
-                                f"Failed to get sqrt_price_x96 for pool {pool_address}, will use converted value"
-                            )
-                        
-                        # Extract EMA and std_dev from the first position (all positions have the same values)
-                        ema = tick_bands[0].get("ema") if tick_bands else None
-                        std_dev = tick_bands[0].get("std_dev") if tick_bands else None
-                        current_ema = tick_bands[0].get("current_ema") if tick_bands else None
-                        current_std_dev = tick_bands[0].get("current_std_dev") if tick_bands else None
-                        band_multipliers = tick_bands[0].get("band_multipliers") if tick_bands else None
-                        
-                        # Calculate token requirements to get ratios and current_tick
-                        requirements = yield from self.calculate_velodrome_cl_token_requirements(
-                            tick_bands, current_price, tick_spacing, sqrt_price_x96, chain
+                        continue
+                    
+                    # Get sqrt_price_x96 for accurate Uniswap V3 math calculations
+                    sqrt_price_x96 = yield from pool._get_sqrt_price_x96(self, chain, pool_address)
+                    if sqrt_price_x96 is None:
+                        self.context.logger.warning(
+                            f"Failed to get sqrt_price_x96 for pool {pool_address}, will use converted value"
                         )
-                        if not requirements:
-                            self.context.logger.error(
-                                "Failed to calculate token requirements for caching"
-                            )
-                            continue
-                        
-                        token0 = opportunity.get("token0")
-                        token1 = opportunity.get("token1")
-                        token0_symbol = opportunity.get("token0_symbol")
-                        token1_symbol = opportunity.get("token1_symbol")
-                        
-                        cache_kwargs = {
-                            "chain": chain,
-                            "pool_address": pool_address,
-                            "tick_spacing": tick_spacing,
-                            "tick_bands": tick_bands,
-                            "current_price": current_price,
-                            "current_tick": requirements.get("current_tick"),
-                            "percent_in_bounds": percent_in_bounds,
-                            "token0": token0,
-                            "token1": token1,
-                            "token0_symbol": token0_symbol,
-                            "token1_symbol": token1_symbol,
-                            "token_requirements": requirements,
-                        }
-                        
-                        # Add optional metadata if available
-                        if ema is not None:
-                            cache_kwargs["ema"] = ema
-                        if std_dev is not None:
-                            cache_kwargs["std_dev"] = std_dev
-                        if current_ema is not None:
-                            cache_kwargs["current_ema"] = current_ema
-                        if current_std_dev is not None:
-                            cache_kwargs["current_std_dev"] = current_std_dev
-                        if band_multipliers is not None:
-                            cache_kwargs["band_multipliers"] = band_multipliers
-                        
-                        yield from self._cache_cl_pool_data(**cache_kwargs)
-                    else:
-                        # Using cached data - retrieve token requirements from cache
-                        requirements = cached_data.get("token_requirements")
-                        if not requirements:
-                            # Fallback: recalculate if not in cache
-                            # Get sqrt_price_x96 for accurate calculations
-                            sqrt_price_x96 = yield from pool._get_sqrt_price_x96(self, chain, pool_address)
-                            requirements = yield from self.calculate_velodrome_cl_token_requirements(
-                                tick_bands, current_price, tick_spacing, sqrt_price_x96, chain
-                            )
+                    
+                    # Extract EMA and std_dev from the first position (all positions have the same values)
+                    ema = tick_bands[0].get("ema") if tick_bands else None
+                    std_dev = tick_bands[0].get("std_dev") if tick_bands else None
+                    current_ema = tick_bands[0].get("current_ema") if tick_bands else None
+                    current_std_dev = tick_bands[0].get("current_std_dev") if tick_bands else None
+                    band_multipliers = tick_bands[0].get("band_multipliers") if tick_bands else None
+                    
+                    # Calculate token requirements to get ratios and current_tick
+                    requirements = yield from self.calculate_velodrome_cl_token_requirements(
+                        tick_bands, current_price, tick_spacing, sqrt_price_x96, chain
+                    )
+                    if not requirements:
+                        self.context.logger.error(
+                            "Failed to calculate token requirements for caching"
+                        )
+                        continue
+                    
+                    token0 = opportunity.get("token0")
+                    token1 = opportunity.get("token1")
+                    token0_symbol = opportunity.get("token0_symbol")
+                    token1_symbol = opportunity.get("token1_symbol")
+                    
+                    cache_kwargs = {
+                        "chain": chain,
+                        "pool_address": pool_address,
+                        "tick_spacing": tick_spacing,
+                        "tick_bands": tick_bands,
+                        "current_price": current_price,
+                        "current_tick": requirements.get("current_tick"),
+                        "percent_in_bounds": percent_in_bounds,
+                        "token0": token0,
+                        "token1": token1,
+                        "token0_symbol": token0_symbol,
+                        "token1_symbol": token1_symbol,
+                        "token_requirements": requirements,
+                    }
+                    
+                    # Add optional metadata if available
+                    if ema is not None:
+                        cache_kwargs["ema"] = ema
+                    if std_dev is not None:
+                        cache_kwargs["std_dev"] = std_dev
+                    if current_ema is not None:
+                        cache_kwargs["current_ema"] = current_ema
+                    if current_std_dev is not None:
+                        cache_kwargs["current_std_dev"] = current_std_dev
+                    if band_multipliers is not None:
+                        cache_kwargs["band_multipliers"] = band_multipliers
+                    
+                    yield from self._cache_cl_pool_data(**cache_kwargs)
 
                     # Continue with requirements processing
                     if not requirements:
@@ -1009,12 +963,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
     def prepare_strategy_actions(self) -> Generator[None, None, Optional[List[Any]]]:
         """Execute strategy and prepare actions."""
-        # if not self.trading_opportunities:
-        #     self.context.logger.info("No trading opportunities found")
-        #     return []
+        if not self.trading_opportunities:
+            self.context.logger.info("No trading opportunities found")
+            return []
 
-        # yield from self.execute_hyper_strategy()
-        self.selected_opportunities = [{'dex_type': 'velodrome', 'pool_address': '0x4DA46c6AFe7322b66EFEfda1f702605Cbe08E0Bd', 'pool_id': '0x4DA46c6AFe7322b66EFEfda1f702605Cbe08E0Bd', 'tvl': 226689.00018300003, 'is_lp': True, 'token_count': 2, 'volume': 0.0, 'chain': 'optimism', 'apr': 48.55372181655435, 'is_cl_pool': True, 'is_stable': None, 'token0': '0x01bFF41798a0BcF287b996046Ca68b395DbC1071', 'token0_symbol': 'USDT0', 'token1': '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58', 'token1_symbol': 'USDT', 'sharpe_ratio': 1.4560693467536052, 'depth_score': 1119.562454351919, 'max_position_size': 10000000.0, 'il_risk_score': -2.9373326028866967e-10, 'strategy_source': 'velodrome_pools_search', 'composite_score': 0.6080465428314956, 'apr_weighted_score': 29.522922692158037, 'funds_percentage': 100.0, 'relative_funds_percentage': 1.0}]
+        yield from self.execute_hyper_strategy()
         actions = (
             yield from self.get_order_of_transactions()
             if self.selected_opportunities is not None

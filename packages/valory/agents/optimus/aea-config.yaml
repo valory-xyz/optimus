@@ -50,8 +50,8 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
-- valory/liquidity_trader_abci:0.1.0:bafybeibuhfv4awobved34r6fizevbkhysxuqvbii566vschxlpvl2ah4au
-- valory/optimus_abci:0.1.0:bafybeienzoqzgchkqd3jf3g7mih4qv7krt2cspwfowccl5ep7pwjhpmlby
+- valory/liquidity_trader_abci:0.1.0:bafybeibcccynya6j7vb43lhcng6xit6xjprzdbnvgrunobqjtzwpzvrvze
+- valory/optimus_abci:0.1.0:bafybeiakp3sjuj6pyzxvjkwq6jokejduq2qpxnum7iiuncbkkqgqvu7kfi
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
@@ -294,8 +294,8 @@ models:
       whitelisted_assets_filename: ${str:whitelisted_assets.json}
       funding_events_filename: ${str:funding_events.json}
       min_investment_amount: ${int:1}
-      max_fee_percentage: ${float:1}
-      max_gas_percentage: ${float:10000}
+      max_fee_percentage: ${float:0.02}
+      max_gas_percentage: ${float:0.25}
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["mode"]}
       staking_chain: ${str:optimism}

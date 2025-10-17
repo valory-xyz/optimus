@@ -21,9 +21,9 @@
 
 import asyncio
 import json
+import math
 import os
 import traceback
-import math
 from concurrent.futures import Future
 from typing import (
     Any,
@@ -72,7 +72,10 @@ from packages.valory.skills.liquidity_trader_abci.states.base import Event
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
 )
+
+
 MIN_SWAP_VALUE_USD = 0.5
+
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that finds the opportunity and builds actions."""
@@ -132,7 +135,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return
 
             # Check if we have a cached Velodrome CL pool opportunity to reuse
-            cached_opportunity_result = yield from self._check_and_use_cached_cl_opportunity()
+            cached_opportunity_result = (
+                yield from self._check_and_use_cached_cl_opportunity()
+            )
 
             if cached_opportunity_result:
                 # We have a valid cached opportunity, use it directly
@@ -274,7 +279,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "warnings": warnings,
         }
 
-    def calculate_velodrome_token_ratios(self, validated_data, chain=None) -> Generator[None, None, Dict[str, Any]]:
+    def calculate_velodrome_token_ratios(
+        self, validated_data, chain=None
+    ) -> Generator[None, None, Dict[str, Any]]:
         """Calculates token ratios and requirements for Velodrome CL positions."""
 
         if not validated_data:
@@ -297,15 +304,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             allocation = band["allocation"]
 
             # Get sqrt ratios at tick bounds using Velodrome Slipstream Helper contract
-            sqrt_ratio_a_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(chain, tick_lower)
-            sqrt_ratio_b_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(chain, tick_upper)
+            sqrt_ratio_a_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                chain, tick_lower
+            )
+            sqrt_ratio_b_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                chain, tick_upper
+            )
 
-            if "sqrt_price_x96" in validated_data and validated_data["sqrt_price_x96"] is not None:
+            if (
+                "sqrt_price_x96" in validated_data
+                and validated_data["sqrt_price_x96"] is not None
+            ):
                 sqrt_price_x96 = validated_data["sqrt_price_x96"]
             else:
                 # Fallback: convert current price to sqrt_price_x96 format (less accurate)
                 sqrt_price_x96 = int(math.sqrt(current_price) * (2**96))
-                self.context.logger.warning(f"Using converted sqrt_price_x96 from current_price: {sqrt_price_x96}")
+                self.context.logger.warning(
+                    f"Using converted sqrt_price_x96 from current_price: {sqrt_price_x96}"
+                )
 
             # Calculate token ratios using Uniswap V3 math
             try:
@@ -324,8 +340,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     # Use a unit of liquidity to determine ratios
                     unit_liquidity = 10**30
                     # Calculate amounts for this liquidity using Velodrome Slipstream Helper contract
-                    amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
-                        chain, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
+                    (
+                        amount0,
+                        amount1,
+                    ) = yield from self.get_velodrome_amounts_for_liquidity(
+                        chain,
+                        sqrt_price_x96,
+                        sqrt_ratio_a_x96,
+                        sqrt_ratio_b_x96,
+                        unit_liquidity,
                     )
                     # Calculate from actual amounts
                     total_amount = amount0 + amount1
@@ -384,10 +407,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 recommendation = "Provide 0% token0, 100% token1 for all positions"
             else:
                 # Calculate aggregate ratios for recommendation
-                agg_token0_ratio, agg_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+                (
+                    agg_token0_ratio,
+                    agg_token1_ratio,
+                ) = self._calculate_aggregate_token_ratios(position_requirements)
                 recommendation = f"Provide {agg_token0_ratio*100:.2f}% token0, {agg_token1_ratio*100:.2f}% token1 for all positions"
         else:
-            recommendation = f"Mixed position requirements across {len(position_requirements)} bands"
+            recommendation = (
+                f"Mixed position requirements across {len(position_requirements)} bands"
+            )
 
         # Log any warnings
         for warning in warnings:
@@ -423,7 +451,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             validated_data["sqrt_price_x96"] = sqrt_price_x96
 
         # Step 2: Calculate token ratios and generate recommendations
-        velodrome_token_ratios = yield from self.calculate_velodrome_token_ratios(validated_data, chain)
+        velodrome_token_ratios = yield from self.calculate_velodrome_token_ratios(
+            validated_data, chain
+        )
         return velodrome_token_ratios
 
     def get_velodrome_position_requirements(
@@ -493,7 +523,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Get sqrt_price_x96 for accurate Uniswap V3 math calculations
-                    sqrt_price_x96 = yield from pool._get_sqrt_price_x96(self, chain, pool_address)
+                    sqrt_price_x96 = yield from pool._get_sqrt_price_x96(
+                        self, chain, pool_address
+                    )
                     if sqrt_price_x96 is None:
                         self.context.logger.warning(
                             f"Failed to get sqrt_price_x96 for pool {pool_address}, will use converted value"
@@ -502,13 +534,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     # Extract EMA and std_dev from the first position (all positions have the same values)
                     ema = tick_bands[0].get("ema") if tick_bands else None
                     std_dev = tick_bands[0].get("std_dev") if tick_bands else None
-                    current_ema = tick_bands[0].get("current_ema") if tick_bands else None
-                    current_std_dev = tick_bands[0].get("current_std_dev") if tick_bands else None
-                    band_multipliers = tick_bands[0].get("band_multipliers") if tick_bands else None
+                    current_ema = (
+                        tick_bands[0].get("current_ema") if tick_bands else None
+                    )
+                    current_std_dev = (
+                        tick_bands[0].get("current_std_dev") if tick_bands else None
+                    )
+                    band_multipliers = (
+                        tick_bands[0].get("band_multipliers") if tick_bands else None
+                    )
 
                     # Calculate token requirements to get ratios and current_tick
-                    requirements = yield from self.calculate_velodrome_cl_token_requirements(
-                        tick_bands, current_price, tick_spacing, sqrt_price_x96, chain
+                    requirements = (
+                        yield from self.calculate_velodrome_cl_token_requirements(
+                            tick_bands,
+                            current_price,
+                            tick_spacing,
+                            sqrt_price_x96,
+                            chain,
+                        )
                     )
 
                     if not requirements:
@@ -557,14 +601,22 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     )
 
                     # Calculate aggregate token ratios from individual band requirements
-                    position_requirements = requirements.get("position_requirements", [])
-                    token0_ratio, token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+                    position_requirements = requirements.get(
+                        "position_requirements", []
+                    )
+                    token0_ratio, token1_ratio = self._calculate_aggregate_token_ratios(
+                        position_requirements
+                    )
 
                     # Merge individual band ratios into tick_bands for use in _enter_cl_pool
                     for i, band in enumerate(tick_bands):
                         if i < len(position_requirements):
-                            band["token0_ratio"] = position_requirements[i]["token0_ratio"]
-                            band["token1_ratio"] = position_requirements[i]["token1_ratio"]
+                            band["token0_ratio"] = position_requirements[i][
+                                "token0_ratio"
+                            ]
+                            band["token1_ratio"] = position_requirements[i][
+                                "token1_ratio"
+                            ]
                         else:
                             # Fallback if position_requirements is shorter than tick_bands
                             band["token0_ratio"] = 0.5
@@ -618,8 +670,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     # Update max_amounts_in based on the requirements and actual balances
                     # Calculate aggregate ratios from individual band requirements
-                    position_requirements = requirements.get("position_requirements", [])
-                    aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+                    position_requirements = requirements.get(
+                        "position_requirements", []
+                    )
+                    (
+                        aggregate_token0_ratio,
+                        aggregate_token1_ratio,
+                    ) = self._calculate_aggregate_token_ratios(position_requirements)
 
                     if aggregate_token0_ratio >= max_ration:
                         # Only need token0
@@ -640,7 +697,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             aggregate_token0_ratio=aggregate_token0_ratio,
                             aggregate_token1_ratio=aggregate_token1_ratio,
                             token0_symbol=token0_symbol,
-                            token1_symbol=token1_symbol
+                            token1_symbol=token1_symbol,
                         )
 
                         opportunity["max_amounts_in"] = max_amounts_in
@@ -1805,7 +1862,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Calculate aggregate token ratios from individual band requirements
             position_requirements = token_requirements.get("position_requirements", [])
             if position_requirements:
-                aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+                (
+                    aggregate_token0_ratio,
+                    aggregate_token1_ratio,
+                ) = self._calculate_aggregate_token_ratios(position_requirements)
             else:
                 # Fall back to checking recommendation text
                 recommendation = token_requirements.get("recommendation", "")
@@ -2070,9 +2130,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return None
 
             # Cache the enter pool action if this is a Velodrome CL pool
-            if (
-                opportunity.get("dex_type") == "velodrome"
-                and opportunity.get("is_cl_pool")
+            if opportunity.get("dex_type") == "velodrome" and opportunity.get(
+                "is_cl_pool"
             ):
                 yield from self._cache_enter_pool_action_for_cl_pool(
                     opportunity, enter_pool_action
@@ -2495,9 +2554,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                                         other_req_addr
                                     )
                                     if other_token:
-                                        other_value = float(
-                                            other_token.get("value", 0)
-                                        )
+                                        other_value = float(other_token.get("value", 0))
                                         other_target = target_values.get(
                                             other_req_addr, 0
                                         )
@@ -2662,19 +2719,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         # Find a token that needs more value
                         for other_req_addr, other_req_symbol in required_tokens:
                             if other_req_addr != token_addr:
-                                other_token = available_tokens_map.get(
-                                    other_req_addr
-                                )
+                                other_token = available_tokens_map.get(other_req_addr)
                                 if other_token:
                                     other_value = float(other_token.get("value", 0))
-                                    other_target = target_values.get(
-                                        other_req_addr, 0
-                                    )
+                                    other_target = target_values.get(other_req_addr, 0)
                                     if other_value < other_target:
                                         # Swap surplus to this token
-                                        swap_fraction = min(
-                                            1.0, surplus / token_value
-                                        )
+                                        swap_fraction = min(1.0, surplus / token_value)
                                         self._add_bridge_swap_action(
                                             bridge_swap_actions,
                                             token,
@@ -2828,7 +2879,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             aggregate_token0_ratio = 0.5
             aggregate_token1_ratio = 0.5
         else:
-            aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+            (
+                aggregate_token0_ratio,
+                aggregate_token1_ratio,
+            ) = self._calculate_aggregate_token_ratios(position_requirements)
 
         target_ratios_by_token = {
             opportunity.get("token0"): aggregate_token0_ratio,
@@ -3290,26 +3344,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return bool(voter_address)
 
-    def _calculate_aggregate_token_ratios(self, position_requirements: List[Dict[str, Any]]) -> Tuple[float, float]:
-        """
-        Calculate aggregate token ratios from individual band requirements.
-        
-        Args:
-            position_requirements: List of position requirements with allocation, token0_ratio, token1_ratio
-            
-        Returns:
-            Tuple of (aggregate_token0_ratio, aggregate_token1_ratio)
+    def _calculate_aggregate_token_ratios(
+        self, position_requirements: List[Dict[str, Any]]
+    ) -> Tuple[float, float]:
+        """Calculate aggregate token ratios from individual band requirements.
+
+        :param position_requirements: List of position requirements with allocation, token0_ratio, token1_ratio
+        :return: Tuple of (aggregate_token0_ratio, aggregate_token1_ratio)
         """
         if not position_requirements:
             return 0.5, 0.5
 
         # Calculate aggregate ratios from individual band requirements
         total_token0_weight = sum(
-            band.get("allocation", 0) * band.get("token0_ratio", 0.5) 
+            band.get("allocation", 0) * band.get("token0_ratio", 0.5)
             for band in position_requirements
         )
         total_token1_weight = sum(
-            band.get("allocation", 0) * band.get("token1_ratio", 0.5) 
+            band.get("allocation", 0) * band.get("token1_ratio", 0.5)
             for band in position_requirements
         )
 
@@ -3325,27 +3377,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         return aggregate_token0_ratio, aggregate_token1_ratio
 
     def _calculate_max_amounts_in(
-    self, 
-    token0_balance: int, 
-    token1_balance: int, 
-    aggregate_token0_ratio: float, 
-    aggregate_token1_ratio: float,
-    token0_symbol: str = "token0",
-    token1_symbol: str = "token1"
+        self,
+        token0_balance: int,
+        token1_balance: int,
+        aggregate_token0_ratio: float,
+        aggregate_token1_ratio: float,
+        token0_symbol: str = "token0",
+        token1_symbol: str = "token1",
     ) -> Tuple[List[int], str]:
-        """
-        Calculate max amounts in for pool entry based on available balances and target ratios.
-        
-        Args:
-            token0_balance: Available balance of token0
-            token1_balance: Available balance of token1
-            aggregate_token0_ratio: Target ratio for token0 (0.0 to 1.0)
-            aggregate_token1_ratio: Target ratio for token1 (0.0 to 1.0)
-            token0_symbol: Symbol for token0 (for logging)
-            token1_symbol: Symbol for token1 (for logging)
-            
-        Returns:
-            Tuple of (max_amounts_in, log_message)
+        """Calculate max amounts in for pool entry based on available balances and target ratios.
+
+        :param token0_balance: Available balance of token0
+        :param token1_balance: Available balance of token1
+        :param aggregate_token0_ratio: Target ratio for token0 (0.0 to 1.0)
+        :param aggregate_token1_ratio: Target ratio for token1 (0.0 to 1.0)
+        :param token0_symbol: Symbol for token0 (default: "token0")
+        :param token1_symbol: Symbol for token1 (default: "token1")
+        :return: Tuple of (max_amounts_in, limiting_token_symbol)
         """
         # Calculate total investment amount (sum of both tokens)
         total_investment = token0_balance + token1_balance
@@ -3375,10 +3423,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             f"Using both tokens: {max_amount0} {token0_symbol} ({aggregate_token0_ratio*100:.2f}%), "
             f"{max_amount1} {token1_symbol} ({aggregate_token1_ratio*100:.2f}%)"
         )
-        
+
         return max_amounts_in, log_message
 
-    
     def _cache_enter_pool_action_for_cl_pool(
         self, opportunity: Dict[str, Any], enter_pool_action: Dict[str, Any]
     ) -> Generator[None, None, None]:
@@ -3402,33 +3449,32 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Write back to KV store
             kv_key = f"velodrome_cl_pool_{chain}"
-            yield from self._write_kv({kv_key: json.dumps(cached_data, ensure_ascii=True)})
+            yield from self._write_kv(
+                {kv_key: json.dumps(cached_data, ensure_ascii=True)}
+            )
 
             self.context.logger.info(
                 f"Cached enter pool action for CL pool {cached_data.get('pool_address')} on {chain}"
             )
 
         except Exception as e:
-            self.context.logger.error(
-                f"Error caching enter pool action: {str(e)}"
-            )
+            self.context.logger.error(f"Error caching enter pool action: {str(e)}")
 
     def _has_open_positions(self) -> bool:
         """Check if there are any open positions in current_pool.json"""
         try:
             if not self.current_positions:
                 return False
-                
+
             # Check if any position has status "open"
             for position in self.current_positions:
                 if position.get("status") == "open":
                     return True
-                    
+
             return False
         except Exception as e:
             self.context.logger.error(f"Error checking open positions: {str(e)}")
             return False  # Default to False to allow cache usage
-
 
     def _check_and_use_cached_cl_opportunity(
         self,
@@ -3477,20 +3523,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         except Exception as e:
-            self.context.logger.error(
-                f"Error checking cached CL opportunity: {str(e)}"
-            )
+            self.context.logger.error(f"Error checking cached CL opportunity: {str(e)}")
             return None
 
     def _reconstruct_actions_from_cached_cl_pool(
         self, cached_data: Dict[str, Any], chain: str
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
         """Reconstruct actions from cached CL pool data.
-        
+
         NOTE: We do NOT recalculate swap actions because:
         - Swaps from previous round already executed successfully
         - We already have the right tokens on the target chain
         - We just need to retry the enter pool action with current balances
+
+        :param cached_data: Cached pool data containing opportunity information
+        :param chain: Chain identifier for the pool
+        :yield: None: Generator yield for async operations
+        :return: Optional list of reconstructed actions or None if reconstruction fails
         """
         try:
             actions = []
@@ -3531,7 +3580,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Calculate aggregate ratios from individual band requirements
             position_requirements = cached_data.get("position_requirements", [])
-            aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+            (
+                aggregate_token0_ratio,
+                aggregate_token1_ratio,
+            ) = self._calculate_aggregate_token_ratios(position_requirements)
 
             # Calculate max_amounts_in based on aggregate ratios and current balances
             if aggregate_token0_ratio > 0.99:
@@ -3545,7 +3597,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     aggregate_token0_ratio=aggregate_token0_ratio,
                     aggregate_token1_ratio=aggregate_token1_ratio,
                     token0_symbol=cached_data.get("token0_symbol", "token0"),
-                    token1_symbol=cached_data.get("token1_symbol", "token1")
+                    token1_symbol=cached_data.get("token1_symbol", "token1"),
                 )
 
                 updated_enter_action["max_amounts_in"] = max_amounts_in
@@ -3558,7 +3610,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             actions.append(updated_enter_action)
 
             # Initialize entry costs for the position
-            yield from self._initialize_entry_costs_for_new_position(updated_enter_action)
+            yield from self._initialize_entry_costs_for_new_position(
+                updated_enter_action
+            )
 
             # Add staking action if applicable
             temp_opportunity = {
@@ -3612,9 +3666,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         return None
 
-    def _should_use_cached_cl_data(
-        self, cached_data: Dict[str, Any]
-    ) -> bool:
+    def _should_use_cached_cl_data(self, cached_data: Dict[str, Any]) -> bool:
         """Check if cached CL pool data is still valid."""
         current_timestamp = cast(
             SharedState, self.context.state
@@ -3660,7 +3712,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Save updated data back to KV store
             kv_key = f"velodrome_cl_pool_{chain}"
-            yield from self._write_kv({kv_key: json.dumps(cached_data, ensure_ascii=True)})
+            yield from self._write_kv(
+                {kv_key: json.dumps(cached_data, ensure_ascii=True)}
+            )
 
     def _cache_cl_pool_data(
         self,

@@ -1593,23 +1593,22 @@ class LiquidityTraderBaseBehaviour(
         Called when enter pool succeeds so we don't keep retrying the same pool.
 
         :param chain: the chain to invalidate the cache for
-        :return: None
+        :yield: None: Generator yield for async operations
         """
         try:
             kv_key = f"velodrome_cl_pool_{chain}"
 
             # Delete the cache by writing an invalidation marker
-            yield from self._write_kv({kv_key: json.dumps({"invalidated": True}, ensure_ascii=True)})
+            yield from self._write_kv(
+                {kv_key: json.dumps({"invalidated": True}, ensure_ascii=True)}
+            )
 
             self.context.logger.info(
                 f"Invalidated CL pool cache for chain {chain} after successful pool entry"
             )
 
         except Exception as e:
-            self.context.logger.error(
-                f"Error invalidating CL pool cache: {str(e)}"
-            )
-
+            self.context.logger.error(f"Error invalidating CL pool cache: {str(e)}")
 
     def _fetch_token_prices(
         self, token_balances: List[Dict[str, Any]]

@@ -23,6 +23,7 @@ import asyncio
 import json
 import os
 import traceback
+import math
 from concurrent.futures import Future
 from typing import (
     Any,
@@ -262,7 +263,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "warnings": warnings,
         }
 
-    def calculate_velodrome_token_ratios(self, validated_data):
+    def calculate_velodrome_token_ratios(self, validated_data, chain=None) -> Generator[None, None, Dict[str, Any]]:
         """Calculates token ratios and requirements for Velodrome CL positions."""
 
         if not validated_data:
@@ -284,42 +285,64 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             tick_upper = band["tick_upper"]
             allocation = band["allocation"]
 
-            # Convert ticks to prices
-            lower_bound_price = 1.0001**tick_lower
-            upper_bound_price = 1.0001**tick_upper
+            # Get sqrt ratios at tick bounds using Velodrome Slipstream Helper contract
+            sqrt_ratio_a_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(chain, tick_lower)
+            sqrt_ratio_b_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(chain, tick_upper)
 
-            # Calculate token ratios based on current price position
-            if current_price <= lower_bound_price:
-                # Price below range - need 100% token0
-                token0_ratio = 1.0
-                token1_ratio = 0.0
-                status = "BELOW_RANGE"
-            elif current_price >= upper_bound_price:
-                # Price above range - need 100% token1
-                token0_ratio = 0.0
-                token1_ratio = 1.0
-                status = "ABOVE_RANGE"
+            if "sqrt_price_x96" in validated_data and validated_data["sqrt_price_x96"] is not None:
+                sqrt_price_x96 = validated_data["sqrt_price_x96"]
             else:
-                # Price in range - calculate using interpolation formula
-                try:
-                    token1_ratio = min(
-                        max(
-                            (current_price - lower_bound_price)
-                            / (upper_bound_price - lower_bound_price),
-                            0,
-                        ),
-                        1,
+                # Fallback: convert current price to sqrt_price_x96 format (less accurate)
+                sqrt_price_x96 = int(math.sqrt(current_price) * (2**96))
+                self.context.logger.warning(f"Using converted sqrt_price_x96 from current_price: {sqrt_price_x96}")
+
+            # Calculate token ratios using Uniswap V3 math
+            try:
+                if sqrt_price_x96 < sqrt_ratio_a_x96:
+                    # Price below range - need 100% token0
+                    token0_ratio = 1.0
+                    token1_ratio = 0.0
+                    status = "BELOW_RANGE"
+                elif sqrt_price_x96 > sqrt_ratio_b_x96:
+                    # Price above range - need 100% token1
+                    token0_ratio = 0.0
+                    token1_ratio = 1.0
+                    status = "ABOVE_RANGE"
+                else:
+                    # Price in range
+                    # Use a unit of liquidity to determine ratios
+                    unit_liquidity = 10**30
+                    # Calculate amounts for this liquidity using Velodrome Slipstream Helper contract
+                    amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
+                        chain, sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, unit_liquidity
                     )
-                    token0_ratio = 1.0 - token1_ratio
+                    # Calculate from actual amounts
+                    total_amount = amount0 + amount1
+                    if total_amount > 0:
+                        # Round to 5 decimal places for precision
+                        token0_ratio = round(amount0 / total_amount, 5)
+                        token1_ratio = round(amount1 / total_amount, 5)
+                    else:
+                        # Fallback if calculation fails
+                        token0_ratio = 0.5
+                        token1_ratio = 0.5
                     status = "IN_RANGE"
-                except Exception as e:
-                    warnings.append(
-                        f"Error calculating ratios for band [{tick_lower}, {tick_upper}]: {str(e)}"
-                    )
-                    # Default to 50/50 in case of calculation error
+
+            except Exception as e:
+                warnings.append(
+                    f"Error calculating ratios for band [{tick_lower}, {tick_upper}]: {str(e)}"
+                )
+                # Fallback: use price-based estimation
+                if sqrt_price_x96 < sqrt_ratio_a_x96:
+                    token0_ratio = 1.0
+                    token1_ratio = 0.0
+                elif sqrt_price_x96 > sqrt_ratio_b_x96:
+                    token0_ratio = 0.0
+                    token1_ratio = 1.0
+                else:
                     token0_ratio = 0.5
                     token1_ratio = 0.5
-                    status = "ERROR"
+                status = "ERROR"
 
             # Track the weighted token ratios
             total_weighted_token0 += token0_ratio * allocation

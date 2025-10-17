@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiexn2uyxaesi64qtqc67hqcj7t2e3cwxeqfc2uyzoncdqyplymmrm
+agent: valory/optimus:0.1.0:bafybeiflc4cocsd4tqsijzmdkapmhxp76mlbqnmxzlm7veerkhto5eb2c4
 number_of_agents: 1
 deployment:
   agent:
@@ -189,6 +189,17 @@ public_id: dvilela/kv_store:0.1.0
 type: connection
 config:
   store_path: ${STORE_PATH:str:null}
+---
+public_id: valory/funds_manager:0.1.0
+type: skill
+models:
+  params:
+    args:
+      fund_requirements: ${FUND_REQUIREMENTS:dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":35000000000000,"threshold":17500000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0}}}}}
+      rpc_urls:
+        optimism: ${OPTIMISM_LEDGER_RPC:str:https://mainnet.optimism.io}
+      setup:
+        safe_contract_address: ${SAFE_CONTRACT_ADDRESS:str:0x0000000000000000000000000000000000000000}
 ---
 public_id: valory/mirror_db:0.1.0
 type: connection

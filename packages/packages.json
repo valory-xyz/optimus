@@ -27,9 +27,9 @@
         "contract/valory/balancer_queries/0.1.0": "bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu",
         "connection/valory/mirror_db/0.1.0": "bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy",
         "skill/valory/liquidity_trader_abci/0.1.0": "bafybeic33fftyl3rkzmnqgdo66alqu3xsmmjipzwlaymucv4xc2yaf6gbm",
-        "skill/valory/optimus_abci/0.1.0": "bafybeieystj3w4ngevaeny6fkcj4yx2xsk5ue2qkb3e3owvltftw5mja5i",
-        "agent/valory/optimus/0.1.0": "bafybeiexn2uyxaesi64qtqc67hqcj7t2e3cwxeqfc2uyzoncdqyplymmrm",
-        "service/valory/optimus/0.1.0": "bafybeig5kexwm523r3bxpk4z2lm3fkqi2drhb3jrn2g7rvoslrdn5pab5m"
+        "skill/valory/optimus_abci/0.1.0": "bafybeieisu2fxynznixwahb76gim3suqcddpuh6zd3dhe5727c4hhtmr2q",
+        "agent/valory/optimus/0.1.0": "bafybeiflc4cocsd4tqsijzmdkapmhxp76mlbqnmxzlm7veerkhto5eb2c4",
+        "service/valory/optimus/0.1.0": "bafybeidvtzcaz4vxh7vpyybznwngohjxykwqbk4zaeuosdbrjsppvx627e"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -54,6 +54,7 @@
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q",
         "connection/valory/http_server/0.22.0": "bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy",
         "connection/dvilela/kv_store/0.1.0": "bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu",
+        "skill/valory/funds_manager/0.1.0": "bafybeibmp2fhlsfqvxm7u3sgpjyeirhdrvbp6zjspxjbyucfpdrnyq5qai",
         "skill/valory/abstract_abci/0.1.0": "bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i",
         "skill/valory/reset_pause_abci/0.1.0": "bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du",
         "skill/valory/registration_abci/0.1.0": "bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm",

@@ -72,9 +72,12 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
+from packages.valory.skills.funds_manager.behaviours import GET_FUNDS_STATUS_METHOD_NAME
+from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
     TradingType,
+    ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
@@ -123,6 +126,7 @@ OK_CODE = 200
 NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
+ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
 
 
 def load_fsm_spec() -> Dict:
@@ -277,6 +281,7 @@ class HttpHandler(BaseHttpHandler):
         features_url_regex = (
             rf"{hostname_regex}\/features"  # New regex for /features endpoint
         )
+        funds_status_regex = rf"{hostname_regex}\/funds-status"
         # Withdrawal endpoints
         withdrawal_amount_regex = rf"{hostname_regex}\/withdrawal\/amount"
         withdrawal_initiate_regex = rf"{hostname_regex}\/withdrawal\/initiate"
@@ -294,6 +299,7 @@ class HttpHandler(BaseHttpHandler):
                 (health_url_regex, self._handle_get_health),
                 (portfolio_url_regex, self._handle_get_portfolio),
                 (features_url_regex, self._handle_get_features),  # Add new route
+                (funds_status_regex, self._handle_get_funds_status),
                 (withdrawal_amount_regex, self._handle_get_withdrawal_amount),
                 (withdrawal_status_regex, self._handle_get_withdrawal_status),
                 (
@@ -348,6 +354,11 @@ class HttpHandler(BaseHttpHandler):
         """Shortcut to access the parameters."""
         return cast(Params, self.context.params)
 
+    @property
+    def funds_status(self) -> FundRequirements:
+        """Get the fund status."""
+        return self.context.shared_state[GET_FUNDS_STATUS_METHOD_NAME]()
+
     def _handle_get_features(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -371,6 +382,204 @@ class HttpHandler(BaseHttpHandler):
         data = {"isChatEnabled": is_chat_enabled}
 
         self._send_ok_response(http_msg, http_dialogue, data)
+
+    def _handle_get_funds_status(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a fund status request with withdrawal mode support.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        # Get standard deficit from funds_manager
+        standard_deficit = self.funds_status.get_response_body()
+        self.context.logger.info(
+            f"Standard deficit for agent from funds manager: {standard_deficit}"
+        )
+
+        # Check if in withdrawal mode
+        in_withdrawal = self._is_in_withdrawal_mode()
+
+        if not in_withdrawal:
+            # Normal mode: return standard deficit
+            self.context.logger.info(
+                "Funds status: Normal mode - returning standard deficit"
+            )
+            response = standard_deficit
+        else:
+            # Withdrawal mode: check if there's any deficit
+            self.context.logger.info("Funds status: Withdrawal mode detected")
+            has_deficit = self._has_deficit(standard_deficit)
+            self.context.logger.info(f"Funds status: Has deficit = {has_deficit}")
+
+            if has_deficit:
+                # There is a deficit - check if actions are prepared
+                withdrawal_actions = self._get_withdrawal_actions()
+                self.context.logger.info(
+                    f"Funds status: Found {len(withdrawal_actions)} withdrawal actions"
+                )
+
+                if not withdrawal_actions or len(withdrawal_actions) == 0:
+                    # No actions prepared yet, don't request funding
+                    self.context.logger.info(
+                        "Funds status: No withdrawal actions prepared - returning empty response"
+                    )
+                    response = {}
+                else:
+                    # Actions exist - calculate minimal deficit needed
+                    # Read current balance for zero-address from funds manager response
+                    try:
+                        chain = self.context.params.target_investment_chains[0]
+                        funds_status = self.funds_status.get_response_body() or {}
+                        agent_map = funds_status.get(chain, {}).get(
+                            self.context.agent_address, {}
+                        )
+                        zero_addr_entry = agent_map.get(ZERO_ADDRESS, {})
+                        balance_value = zero_addr_entry.get("balance", 0)
+                        self.context.logger.info(
+                            f"Funds status: Current balance value = {balance_value}"
+                        )
+
+                        try:
+                            current_balance = (
+                                int(balance_value) if balance_value is not None else 0
+                            )
+                        except (ValueError, TypeError):
+                            current_balance = 0
+
+                        self.context.logger.info(
+                            f"Funds status: Parsed current balance = {current_balance}"
+                        )
+
+                        # Determine remaining actions based on executed tx hashes
+                        withdrawal_data = self._read_withdrawal_data() or {}
+                        tx_hashes_serialized = withdrawal_data.get(
+                            "withdrawal_transaction_hashes", "[]"
+                        )
+                        executed_hashes = (
+                            json.loads(tx_hashes_serialized)
+                            if tx_hashes_serialized
+                            else []
+                        )
+                        executed_count = len(executed_hashes)
+                        self.context.logger.info(
+                            f"Funds status: Executed transactions count = {executed_count}"
+                        )
+                    except Exception as e:
+                        self.context.logger.error(
+                            f"Funds status: Error reading withdrawal data: {e}"
+                        )
+                        executed_count = 0
+
+                    remaining_actions = (
+                        withdrawal_actions[executed_count:]
+                        if executed_count > 0
+                        else withdrawal_actions
+                    )
+
+                    if not remaining_actions:
+                        # All actions executed; nothing to fund
+                        self.context.logger.info(
+                            "Funds status: All actions executed - returning empty response"
+                        )
+                        response = {}
+                    else:
+                        response = self._calculate_withdrawal_funding_deficit(
+                            remaining_actions,
+                            current_balance,
+                        )
+                        self.context.logger.info(
+                            f"Funds status: Calculated deficit response = {response}"
+                        )
+            else:
+                # Withdrawal mode but no deficit - return empty response
+                self.context.logger.info(
+                    "Funds status: Withdrawal mode but no deficit - returning empty response"
+                )
+                response = {}
+
+        self._send_ok_response(http_msg, http_dialogue, response)
+
+    def _is_in_withdrawal_mode(self) -> bool:
+        """Check if agent is in withdrawal mode."""
+        withdrawal_data = self._read_withdrawal_data()
+        return (
+            withdrawal_data
+            and withdrawal_data.get("investing_paused", "").lower() == "true"
+        )
+
+    def _has_deficit(self, deficit: Dict) -> bool:
+        """Check if there's any funding deficit."""
+        chain = self.context.params.target_investment_chains[0]
+        chain_data = deficit.get(chain, {})
+        agent_deficit = chain_data.get(self.context.agent_address, {})
+        zero_addr_deficit = agent_deficit.get(ZERO_ADDRESS, {})
+        deficit_value = zero_addr_deficit.get("deficit", 0)
+        try:
+            return float(deficit_value) > 0
+        except (ValueError, TypeError):
+            return False
+
+    def _get_withdrawal_actions(self) -> List[Dict]:
+        """Get prepared withdrawal actions from synchronized data."""
+        try:
+            actions_str = self.synchronized_data.db.get("withdrawal_actions", "[]")
+            actions = json.loads(actions_str) if actions_str else []
+            return actions
+        except Exception as e:
+            self.context.logger.error(f"Error reading withdrawal actions: {e}")
+            return []
+
+    def _calculate_withdrawal_funding_deficit(
+        self, withdrawal_actions: List[Dict], current_balance: int
+    ) -> Dict:
+        """
+        Calculate funding deficit for remaining withdrawal actions.
+
+        Estimates gas needed based on action count, checks agent balance,
+        and returns deficit if agent doesn't have enough.
+
+        Returns response in the same format as funds_manager.get_response_body():
+        flattened structure with stringified deficit values.
+        """
+        num_actions = len(withdrawal_actions)
+        chain = self.context.params.target_investment_chains[0]
+
+        # Estimate gas: gas per action * number of actions + 20% buffer
+        gas_per_action = ESTIMATED_GAS_PER_TX
+        total_gas_needed = int(gas_per_action * num_actions * 1.2)
+
+        # Calculate deficit
+        deficit = total_gas_needed - current_balance
+
+        if deficit <= 0:
+            self.context.logger.info(
+                f"Agent has sufficient balance ({current_balance} wei) for "
+                f"{num_actions} withdrawal actions (need {total_gas_needed} wei)"
+            )
+            return {}
+
+        self.context.logger.info(
+            f"Withdrawal funding needed: {deficit} wei for {num_actions} actions "
+            f"(current: {current_balance}, needed: {total_gas_needed})"
+        )
+
+        # Get agent address
+        agent_address = self.context.agent_address
+        native_token = ZERO_ADDRESS
+
+        # Return in funds_manager response format: flattened with stringified values
+        return {
+            chain: {
+                agent_address: {
+                    native_token: {
+                        "balance": str(current_balance),
+                        "deficit": str(deficit),
+                    }
+                }
+            }
+        }
 
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

@@ -27,6 +27,7 @@ packages/valory/contracts/service_registry
 packages/valory/services/*
 packages/valory/protocols/*
 packages/valory/skills/*
+packages/valory/skills/funds_manager/
 
 !packages/valory/agents/optimus
 !packages/valory/connections/mirror_db

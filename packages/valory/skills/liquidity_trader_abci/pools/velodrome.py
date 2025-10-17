@@ -26,6 +26,7 @@ import time
 from abc import ABC
 from collections import defaultdict
 from decimal import Decimal
+from enum import Enum
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -53,11 +54,6 @@ from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterCon
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
-from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
-    get_amounts_for_liquidity,
-    get_liquidity_for_amounts,
-    get_sqrt_ratio_at_tick,
-)
 
 
 # Constants for price history functions
@@ -65,11 +61,25 @@ PRICE_VOLATILITY_THRESHOLD = 0.02  # 2% threshold for stablecoin detection
 DEFAULT_DAYS = 30
 API_CACHE_SIZE = 128
 
+# Price monitoring constants
+WAITING_PERIOD = 5  # 5 seconds waiting period
+MAX_WAIT_TIME = 600  # 10 minutes maximum wait time
+PRICE_CHECK_INTERVAL = 5  # Check price every 5 seconds
+TICK_TO_PERCENTAGE_FACTOR = 10000
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 MIN_TICK = -887272
 MAX_TICK = 887272
 INT_MAX = sys.maxsize
+
+
+class AllocationStatus(Enum):
+    """Allocation status tracking for price monitoring."""
+
+    READY = "ready"
+    WAITING = "waiting"
+    TIMEOUT = "timeout"
+    FAILED = "failed"
 
 
 class VelodromePoolBehaviour(PoolBehaviour, ABC):

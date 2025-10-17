@@ -72,7 +72,7 @@ from packages.valory.skills.liquidity_trader_abci.states.base import Event
 from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy import (
     EvaluateStrategyRound,
 )
-
+MIN_SWAP_VALUE_USD = 0.5
 
 class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     """Behaviour that finds the opportunity and builds actions."""
@@ -2488,34 +2488,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         if token_value > target_value:
                             # This token has surplus, need to swap excess
                             surplus = token_value - target_value
-                            if surplus > 1.0:  # Only swap if surplus is > $1
-                                # Find a token that needs more value
-                                for other_req_addr, other_req_symbol in required_tokens:
-                                    if other_req_addr != token_addr:
-                                        other_token = available_tokens_map.get(
-                                            other_req_addr
+                            # Find a token that needs more value
+                            for other_req_addr, other_req_symbol in required_tokens:
+                                if other_req_addr != token_addr:
+                                    other_token = available_tokens_map.get(
+                                        other_req_addr
+                                    )
+                                    if other_token:
+                                        other_value = float(
+                                            other_token.get("value", 0)
                                         )
-                                        if other_token:
-                                            other_value = float(
-                                                other_token.get("value", 0)
+                                        other_target = target_values.get(
+                                            other_req_addr, 0
+                                        )
+                                        if other_value < other_target:
+                                            # Swap surplus to this token
+                                            swap_fraction = min(
+                                                1.0, surplus / token_value
                                             )
-                                            other_target = target_values.get(
-                                                other_req_addr, 0
+                                            self._add_bridge_swap_action(
+                                                bridge_swap_actions,
+                                                other_token,
+                                                dest_chain,
+                                                other_req_addr,
+                                                other_req_symbol,
+                                                swap_fraction,
                                             )
-                                            if other_value < other_target:
-                                                # Swap surplus to this token
-                                                swap_fraction = min(
-                                                    1.0, surplus / token_value
-                                                )
-                                                self._add_bridge_swap_action(
-                                                    bridge_swap_actions,
-                                                    token,
-                                                    dest_chain,
-                                                    other_req_addr,
-                                                    other_req_symbol,
-                                                    swap_fraction,
-                                                )
-                                                break
+                                            break
         except Exception as e:
             self.context.logger.error(f"Error during on-chain rebalance planning: {e}")
 
@@ -2659,32 +2658,32 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     if token_value > target_value:
                         # This token has surplus, need to swap excess
                         surplus = token_value - target_value
-                        if surplus > 1.0:  # Only swap if surplus is > $1
-                            # Find a token that needs more value
-                            for other_req_addr, other_req_symbol in required_tokens:
-                                if other_req_addr != token_addr:
-                                    other_token = available_tokens_map.get(
-                                        other_req_addr
+                        # Process all surplus amounts for precise CL pool ratios
+                        # Find a token that needs more value
+                        for other_req_addr, other_req_symbol in required_tokens:
+                            if other_req_addr != token_addr:
+                                other_token = available_tokens_map.get(
+                                    other_req_addr
+                                )
+                                if other_token:
+                                    other_value = float(other_token.get("value", 0))
+                                    other_target = target_values.get(
+                                        other_req_addr, 0
                                     )
-                                    if other_token:
-                                        other_value = float(other_token.get("value", 0))
-                                        other_target = target_values.get(
-                                            other_req_addr, 0
+                                    if other_value < other_target:
+                                        # Swap surplus to this token
+                                        swap_fraction = min(
+                                            1.0, surplus / token_value
                                         )
-                                        if other_value < other_target:
-                                            # Swap surplus to this token
-                                            swap_fraction = min(
-                                                1.0, surplus / token_value
-                                            )
-                                            self._add_bridge_swap_action(
-                                                bridge_swap_actions,
-                                                token,
-                                                dest_chain,
-                                                other_req_addr,
-                                                other_req_symbol,
-                                                swap_fraction,
-                                            )
-                                            break
+                                        self._add_bridge_swap_action(
+                                            bridge_swap_actions,
+                                            token,
+                                            dest_chain,
+                                            other_req_addr,
+                                            other_req_symbol,
+                                            swap_fraction,
+                                        )
+                                        break
 
         return bridge_swap_actions
 
@@ -2819,39 +2818,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error("No required tokens identified")
             return None
 
-        # Determine target ratios per required token (prefer ratios in token_requirements; fallback to percentages)
+        # Calculate aggregate ratios directly from individual band requirements
         token_requirements = opportunity.get("token_requirements", {}) or {}
-        try:
-            overall_token0_ratio = float(
-                token_requirements.get("overall_token0_ratio")
-                if token_requirements.get("overall_token0_ratio") is not None
-                else opportunity.get("token0_percentage", 0) / 100.0
-            )
-        except Exception:
-            overall_token0_ratio = opportunity.get("token0_percentage", 0) / 100.0
-        try:
-            overall_token1_ratio = float(
-                token_requirements.get("overall_token1_ratio")
-                if token_requirements.get("overall_token1_ratio") is not None
-                else opportunity.get("token1_percentage", 0) / 100.0
-            )
-        except Exception:
-            overall_token1_ratio = opportunity.get("token1_percentage", 0) / 100.0
+        position_requirements = token_requirements.get("position_requirements", [])
 
-        # Default to 50/50 if not a CL pool or token requirements are missing
+        # Default to 50/50 if not a CL pool or position requirements are missing
         is_cl_pool = bool(opportunity.get("is_cl_pool", False))
-        if (not is_cl_pool) or (not token_requirements):
-            overall_token0_ratio = 0.5
-            overall_token1_ratio = 0.5
-
-        # Fallback to 50/50 if both ratios end up as zero
-        if overall_token0_ratio == 0 and overall_token1_ratio == 0:
-            overall_token0_ratio = 0.5
-            overall_token1_ratio = 0.5
+        if (not is_cl_pool) or (not position_requirements):
+            aggregate_token0_ratio = 0.5
+            aggregate_token1_ratio = 0.5
+        else:
+            aggregate_token0_ratio, aggregate_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
 
         target_ratios_by_token = {
-            opportunity.get("token0"): overall_token0_ratio,
-            opportunity.get("token1"): overall_token1_ratio,
+            opportunity.get("token0"): aggregate_token0_ratio,
+            opportunity.get("token1"): aggregate_token1_ratio,
         }
 
         # Group tokens by chain and identify what we have/need
@@ -2919,11 +2900,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         # Check if the swap amount is economically feasible
         token_value = float(token.get("value", 0))
         swap_value = token_value * relative_funds_percentage
-        MIN_SWAP_VALUE_USD = 1.0
 
         if swap_value < MIN_SWAP_VALUE_USD:
             self.context.logger.info(
-                f"Skipping bridge/swap action: {swap_value:.2f} USD from {source_token_symbol} "
+                f"Skipping bridge/swap action: {swap_value:.8f} USD from {source_token_symbol} "
                 f"(below minimum threshold of ${MIN_SWAP_VALUE_USD})"
             )
             return
@@ -3448,7 +3428,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         except Exception as e:
             self.context.logger.error(f"Error checking open positions: {str(e)}")
             return False  # Default to False to allow cache usage
-            
+
 
     def _check_and_use_cached_cl_opportunity(
         self,
@@ -3559,30 +3539,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             elif aggregate_token1_ratio > 0.99:
                 updated_enter_action["max_amounts_in"] = [0, token1_balance]
             else:
-                # Calculate total investment amount (sum of both tokens)
-                total_investment = token0_balance + token1_balance
+                max_amounts_in, log_message = self._calculate_max_amounts_in(
+                    token0_balance=token0_balance,
+                    token1_balance=token1_balance,
+                    aggregate_token0_ratio=aggregate_token0_ratio,
+                    aggregate_token1_ratio=aggregate_token1_ratio,
+                    token0_symbol=cached_data.get("token0_symbol", "token0"),
+                    token1_symbol=cached_data.get("token1_symbol", "token1")
+                )
 
-                # Calculate what the ideal ratio would require
-                ideal_token0_for_all_tokens = int(total_investment * aggregate_token0_ratio)
-                ideal_token1_for_all_tokens = int(total_investment * aggregate_token1_ratio)
-
-                # Check which token is limiting
-                if ideal_token0_for_all_tokens > token0_balance:
-                    # Token0 is limiting - scale down to match available token0
-                    scale_factor = token0_balance / ideal_token0_for_all_tokens
-                    max_amount0 = token0_balance
-                    max_amount1 = int(ideal_token1_for_all_tokens * scale_factor)
-                elif ideal_token1_for_all_tokens > token1_balance:
-                    # Token1 is limiting - scale down to match available token1
-                    scale_factor = token1_balance / ideal_token1_for_all_tokens
-                    max_amount0 = int(ideal_token0_for_all_tokens * scale_factor)
-                    max_amount1 = token1_balance
-                else:
-                    # We have enough of both tokens for the ideal ratio
-                    max_amount0 = ideal_token0_for_all_tokens
-                    max_amount1 = ideal_token1_for_all_tokens
-
-                updated_enter_action["max_amounts_in"] = [max_amount0, max_amount1]
+                updated_enter_action["max_amounts_in"] = max_amounts_in
+                self.context.logger.info(log_message)
 
             self.context.logger.info(
                 f"Updated max_amounts_in: {updated_enter_action['max_amounts_in']}"

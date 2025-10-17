@@ -619,6 +619,36 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
+    def _get_cached_price_at_selection(
+        self, chain: str
+    ) -> Generator[None, None, float]:
+        """Get the cached price from KV store at the time of opportunity selection."""
+        try:
+            kv_key = f"velodrome_cl_pool_{chain}"
+            db_data = yield from self._read_kv(keys=(kv_key,))
+
+            if db_data and db_data.get(kv_key):
+                try:
+                    cached_data = json.loads(db_data[kv_key])
+                    if not cached_data.get("invalidated"):
+                        current_price = cached_data.get("current_price", 0)
+                        self.context.logger.info(
+                            f"Retrieved cached current_price: {current_price}"
+                        )
+                        return current_price
+                    else:
+                        self.context.logger.warning("Cache was invalidated")
+                        return None
+                except (json.JSONDecodeError, TypeError) as e:
+                    self.context.logger.error(f"Error parsing cached data: {e}")
+                    return None
+            else:
+                self.context.logger.warning("No cached data found")
+                return None
+        except Exception as e:
+            self.context.logger.error(f"Error reading cached current price: {e}")
+            return None
+
     def _enter_cl_pool(
         self,
         pool_address: str,
@@ -631,7 +661,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         tick_ranges: Optional[List[Dict]] = None,
         tick_spacing: Optional[int] = None,
     ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
-        """Add liquidity to a Velodrome Concentrated Liquidity pool."""
+        """Add liquidity to a Velodrome Concentrated Liquidity pool with price monitoring."""
         # Get NonFungiblePositionManager contract address
         position_manager_address = (
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
@@ -644,11 +674,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # Note: The 50/50 ratio adjustment code has been removed as token percentages
-        # are now handled in get_enter_pool_tx_hash
-        # Calculate tick ranges based on pool's tick spacing
         # Calculate tick ranges if not provided
-
         if not tick_ranges:
             self.context.logger.info(
                 "No tick ranges provided, calculating from pool data"
@@ -679,6 +705,56 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     f"Could not get tick spacing for pool {pool_address}"
                 )
                 return None, None
+
+        price_at_selection = yield from self._get_cached_price_at_selection(chain)
+        if price_at_selection is None:
+            return None, None
+
+        self.context.logger.info(f"price_at_selection: {price_at_selection}")
+
+        # Check if current price has moved beyond tolerance
+        price_moved = yield from self._check_price_movement(
+            pool_address, chain, price_at_selection, tick_ranges
+        )
+
+        if price_moved is None:
+            self.context.logger.error(
+                "Price movement check failed. Aborting CL pool entry."
+            )
+            return None, None
+
+        if price_moved:
+            slippage_tolerance_pct = self.params.slippage_tolerance * 100
+            self.context.logger.info(
+                f"Price has moved beyond {slippage_tolerance_pct:.1f}% tolerance. "
+                f"Entering waiting period..."
+            )
+
+            allocation_status = yield from self._wait_for_favorable_price(
+                pool_address, chain, price_at_selection, tick_ranges, MAX_WAIT_TIME
+            )
+
+            if allocation_status == AllocationStatus.FAILED:
+                self.context.logger.error(
+                    "Price monitoring failed. Aborting CL pool entry."
+                )
+                return None, None
+            elif allocation_status == AllocationStatus.TIMEOUT:
+                self.context.logger.warning(
+                    f"Price monitoring timed out after {MAX_WAIT_TIME} seconds. "
+                )
+                return None, None
+            elif allocation_status == AllocationStatus.READY:
+                self.context.logger.info(
+                    "Price conditions are favorable. Proceeding with allocation."
+                )
+
+        else:
+            slippage_tolerance_pct = self.params.slippage_tolerance * 100
+            self.context.logger.info(
+                f"Price is within {slippage_tolerance_pct:.1f}% tolerance. "
+                f"Proceeding directly with allocation."
+            )
 
         # Get or calculate sqrt_price_x96
         sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
@@ -897,7 +973,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 amount0_min,
                 amount1_min,
             ) = yield from self._calculate_slippage_protection_for_velodrome_decrease(
-                position_token_id, position_liquidity, chain, pool_address
+                position_token_id, chain, pool_address
             )
 
             if amount0_min is None or amount1_min is None:

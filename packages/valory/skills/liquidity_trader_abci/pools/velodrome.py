@@ -573,15 +573,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
 
             # Calculate slippage protection for this specific position
-            (
-                amount0_min,
-                amount1_min,
-            ) = yield from self._calculate_slippage_protection_for_velodrome_mint(
-                pool_address,
-                position["tick_lower"],
-                position["tick_upper"],
-                [amount0_desired, amount1_desired],
-                chain,
+            slippage_tolerance = self.params.slippage_tolerance
+            amount0_min, amount1_min = self._calculate_slippage_protection(
+                max_amounts_in, slippage_tolerance
             )
 
             if amount0_min is None or amount1_min is None:
@@ -3185,68 +3179,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         return factory
 
-    def _calculate_slippage_protection_for_velodrome_mint(
-        self,
-        pool_address: str,
-        tick_lower: int,
-        tick_upper: int,
-        max_amounts_in: list,
-        chain: str,
-    ) -> Generator[None, None, Tuple[int, int]]:
-        """Calculate slippage protection for Velodrome mint operations using TickMath utilities."""
-        try:
-            sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
-            if sqrt_price_x96 is None:
-                self.context.logger.error(
-                    f"Failed to get sqrt_price_x96 for pool {pool_address}"
-                )
-                return None, None
-
-            # Compute tick-bound √prices
-            sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
-            sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
-
-            # Use get_liquidity_for_amounts to calculate liquidity directly from desired amounts
-            amount0_desired = max_amounts_in[0]
-            amount1_desired = max_amounts_in[1]
-
-            estimated_liquidity = get_liquidity_for_amounts(
-                sqrt_price_x96,
-                sqrt_ratio_a_x96,
-                sqrt_ratio_b_x96,
-                amount0_desired,
-                amount1_desired,
-            )
-
-            # Calculate expected amounts from the calculated liquidity
-            expected_amount0, expected_amount1 = get_amounts_for_liquidity(
-                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, estimated_liquidity
-            )
-
-            # Apply slippage tolerance
-            slippage_tolerance = self.params.slippage_tolerance
-            amount0_min = int(expected_amount0 * (1 - slippage_tolerance))
-            amount1_min = int(expected_amount1 * (1 - slippage_tolerance))
-
-            # Ensure minimum amounts never exceed maximum amounts
-            amount0_min = min(amount0_min, max_amounts_in[0])
-            amount1_min = min(amount1_min, max_amounts_in[1])
-
-            self.context.logger.info(
-                f"Velodrome slippage protection - Desired: {amount0_desired}/{amount1_desired}, "
-                f"Expected: {expected_amount0}/{expected_amount1}, "
-                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}, "
-                f"Max amounts: {max_amounts_in[0]}/{max_amounts_in[1]}"
-            )
-
-            return amount0_min, amount1_min
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error calculating Velodrome slippage protection when minting: {str(e)}"
-            )
-            return None, None
-
     def _query_add_liquidity_velodrome(
         self,
         router_address: str,
@@ -3383,9 +3315,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
     def _calculate_slippage_protection_for_velodrome_decrease(
-        self, token_id: int, liquidity: int, chain: str, pool_address: str
+        self, token_id: int, chain: str, pool_address: str
     ) -> Generator[None, None, Tuple[int, int]]:
-        """Calculate slippage protection for Velodrome decrease liquidity operations using actual Velodrome V3 logic."""
+        """Calculate slippage protection for Velodrome decrease liquidity operations"""
         try:
             # Check if we're in withdrawal mode
             withdrawal_status = yield from self._read_kv(keys=("withdrawal_status",))
@@ -3403,7 +3335,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"No position_manager contract address found for chain {chain}"
                 )
-                return 0, 0
+                return None, None
 
             position = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -3419,7 +3351,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get position data for token {token_id}"
                 )
-                return 0, 0
+                return None, None
 
             # For withdrawal flows, disable slippage protection entirely
             if is_withdrawal:
@@ -3445,24 +3377,26 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get slot0 data for pool {pool_address}"
                 )
-                return 0, 0
+                return None, None
 
             current_tick = slot0_data.get("tick", 0)
             current_sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
 
-            # Calculate amounts using actual Velodrome V3 logic
+            # Calculate amounts using get_amounts_for_liquidity
             amount0, amount1 = yield from self._calculate_velodrome_decrease_amounts(
                 position, current_tick, current_sqrt_price_x96, chain
             )
 
-            # Apply slippage tolerance
+            # Apply slippage tolerance using the simple slippage protection method
             slippage_tolerance = self.params.slippage_tolerance
-            slippage_percent = slippage_tolerance * 100  # Convert to percentage
-            amount0_min = max(0, int(amount0 * (100 - slippage_percent) / 100))
-            amount1_min = max(0, int(amount1 * (100 - slippage_percent) / 100))
+            amount0_min, amount1_min = self._calculate_slippage_protection(
+                [amount0, amount1], slippage_tolerance
+            )
+            if amount0_min is None or amount1_min is None:
+                return None, None
 
             self.context.logger.info(
-                f"Velodrome slippage protection using V3 logic - Current tick: {current_tick}, "
+                f"Velodrome slippage protection - Current tick: {current_tick}, "
                 f"Position range: [{tick_lower}, {tick_upper}], "
                 f"Expected amounts: {amount0}/{amount1}, "
                 f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}"
@@ -3483,98 +3417,42 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         current_sqrt_price_x96: int,
         chain: str,
     ) -> Generator[None, None, Tuple[int, int]]:
-        """Calculate decrease liquidity amounts using the ACTUAL Velodrome V3 logic."""
+        """Calculate decrease liquidity amounts using get_amounts_for_liquidity from Velodrome Slipstream Helper."""
         try:
             tick_lower = position_data["tickLower"]
             tick_upper = position_data["tickUpper"]
             liquidity = position_data["liquidity"]
 
-            # Negative liquidity delta for decreasing
-            liquidity_delta = -liquidity
-
-            amount0 = 0
-            amount1 = 0
-
-            # Get slipstream helper address
-            helper_address = (
-                self.params.velodrome_slipstream_helper_contract_addresses.get(chain)
+            sqrt_ratio_a_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                chain, tick_lower
             )
-            if not helper_address:
+            if not sqrt_ratio_a_x96:
                 self.context.logger.error(
-                    f"No Velodrome slipstream helper address for chain {chain}"
+                    f"Failed to get sqrt_ratio for tick_lower {tick_lower}"
                 )
-                return 0, 0
+                return None, None
 
-            # Apply the exact same logic as Velodrome's _modifyPosition
-            if current_tick < tick_lower:
-                # Case 1: Only token0
-                sqrt_ratio_lower = get_sqrt_ratio_at_tick(tick_lower)
-                sqrt_ratio_upper = get_sqrt_ratio_at_tick(tick_upper)
-
-                amount0_delta_result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=helper_address,
-                    contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
-                    contract_callable="get_amount0_delta",
-                    data_key="amount0_delta",
-                    sqrt_ratio_a_x96=sqrt_ratio_lower,
-                    sqrt_ratio_b_x96=sqrt_ratio_upper,
-                    liquidity_delta=liquidity_delta,
-                    chain_id=chain,
+            sqrt_ratio_b_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                chain, tick_upper
+            )
+            if not sqrt_ratio_b_x96:
+                self.context.logger.error(
+                    f"Failed to get sqrt_ratio for tick_upper {tick_upper}"
                 )
-                amount0 = abs(amount0_delta_result) if amount0_delta_result else 0
+                return None, None
 
-            elif current_tick < tick_upper:
-                # Case 2: Both tokens (in range)
-                sqrt_ratio_upper = get_sqrt_ratio_at_tick(tick_upper)
-                sqrt_ratio_lower = get_sqrt_ratio_at_tick(tick_lower)
-
-                amount0_delta_result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=helper_address,
-                    contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
-                    contract_callable="get_amount0_delta",
-                    data_key="amount0_delta",
-                    sqrt_ratio_a_x96=current_sqrt_price_x96,
-                    sqrt_ratio_b_x96=sqrt_ratio_upper,
-                    liquidity_delta=liquidity_delta,
-                    chain_id=chain,
-                )
-                amount0 = abs(amount0_delta_result) if amount0_delta_result else 0
-
-                amount1_delta_result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=helper_address,
-                    contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
-                    contract_callable="get_amount1_delta",
-                    data_key="amount1_delta",
-                    sqrt_ratio_a_x96=sqrt_ratio_lower,
-                    sqrt_ratio_b_x96=current_sqrt_price_x96,
-                    liquidity_delta=liquidity_delta,
-                    chain_id=chain,
-                )
-                amount1 = abs(amount1_delta_result) if amount1_delta_result else 0
-
-            else:
-                # Case 3: Only token1 (price above range)
-                sqrt_ratio_lower = get_sqrt_ratio_at_tick(tick_lower)
-                sqrt_ratio_upper = get_sqrt_ratio_at_tick(tick_upper)
-
-                amount1_delta_result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=helper_address,
-                    contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
-                    contract_callable="get_amount1_delta",
-                    data_key="amount1_delta",
-                    sqrt_ratio_a_x96=sqrt_ratio_lower,
-                    sqrt_ratio_b_x96=sqrt_ratio_upper,
-                    liquidity_delta=liquidity_delta,
-                    chain_id=chain,
-                )
-                amount1 = abs(amount1_delta_result) if amount1_delta_result else 0
+            # Use get_amounts_for_liquidity to calculate the amounts
+            amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
+                chain=chain,
+                sqrt_price_x96=current_sqrt_price_x96,
+                sqrt_ratio_a_x96=sqrt_ratio_a_x96,
+                sqrt_ratio_b_x96=sqrt_ratio_b_x96,
+                liquidity=liquidity,
+            )
 
             self.context.logger.info(
-                f"Velodrome V3 logic - Current tick: {current_tick}, Range: [{tick_lower}, {tick_upper}], "
+                f"Velodrome amounts using get_amounts_for_liquidity - Current tick: {current_tick}, "
+                f"Range: [{tick_lower}, {tick_upper}], Liquidity: {liquidity}, "
                 f"Calculated amounts: {amount0}/{amount1}"
             )
 
@@ -3584,7 +3462,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error in Velodrome decrease amounts calculation: {str(e)}"
             )
-            return 0, 0
+            return None, None
 
     def get_velodrome_amounts_for_liquidity(
         self,

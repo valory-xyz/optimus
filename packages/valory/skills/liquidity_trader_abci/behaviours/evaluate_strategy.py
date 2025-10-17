@@ -360,15 +360,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 }
             )
 
-        # Calculate overall ratios
-        overall_token0_ratio = (
-            total_weighted_token0 / total_allocation if total_allocation > 0 else 0
-        )
-        overall_token1_ratio = (
-            total_weighted_token1 / total_allocation if total_allocation > 0 else 0
-        )
-
-        # Generate recommendations
+        # Generate recommendations based on individual band requirements
         all_same_status = all(
             pos["status"] == position_requirements[0]["status"]
             for pos in position_requirements
@@ -380,9 +372,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             elif position_requirements[0]["status"] == "ABOVE_RANGE":
                 recommendation = "Provide 0% token0, 100% token1 for all positions"
             else:
-                recommendation = f"Provide {overall_token0_ratio*100:.2f}% token0, {overall_token1_ratio*100:.2f}% token1 for all positions"
+                # Calculate aggregate ratios for recommendation
+                agg_token0_ratio, agg_token1_ratio = self._calculate_aggregate_token_ratios(position_requirements)
+                recommendation = f"Provide {agg_token0_ratio*100:.2f}% token0, {agg_token1_ratio*100:.2f}% token1 for all positions"
         else:
-            recommendation = f"Mixed position requirements. Overall: {overall_token0_ratio*100:.2f}% token0, {overall_token1_ratio*100:.2f}% token1"
+            recommendation = f"Mixed position requirements across {len(position_requirements)} bands"
 
         # Log any warnings
         for warning in warnings:
@@ -390,15 +384,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
         self.context.logger.info(
             f"Position analysis complete - Current tick: {current_tick}, "
-            f"Token0 ratio: {overall_token0_ratio:.4f}, Token1 ratio: {overall_token1_ratio:.4f}"
+            f"Bands: {len(position_requirements)}"
         )
 
         return {
             "position_requirements": position_requirements,
             "current_price": current_price,
             "current_tick": current_tick,
-            "overall_token0_ratio": overall_token0_ratio,
-            "overall_token1_ratio": overall_token1_ratio,
             "recommendation": recommendation,
             "warnings": warnings,
         }
@@ -3274,3 +3266,37 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         voter_address = self.params.velodrome_voter_contract_addresses.get(chain, "")
 
         return bool(voter_address)
+
+    def _calculate_aggregate_token_ratios(self, position_requirements: List[Dict[str, Any]]) -> Tuple[float, float]:
+        """
+        Calculate aggregate token ratios from individual band requirements.
+        
+        Args:
+            position_requirements: List of position requirements with allocation, token0_ratio, token1_ratio
+            
+        Returns:
+            Tuple of (aggregate_token0_ratio, aggregate_token1_ratio)
+        """
+        if not position_requirements:
+            return 0.5, 0.5
+
+        # Calculate aggregate ratios from individual band requirements
+        total_token0_weight = sum(
+            band.get("allocation", 0) * band.get("token0_ratio", 0.5) 
+            for band in position_requirements
+        )
+        total_token1_weight = sum(
+            band.get("allocation", 0) * band.get("token1_ratio", 0.5) 
+            for band in position_requirements
+        )
+
+        # Normalize to get aggregate ratios
+        total_weight = total_token0_weight + total_token1_weight
+        if total_weight > 0:
+            aggregate_token0_ratio = total_token0_weight / total_weight
+            aggregate_token1_ratio = total_token1_weight / total_weight
+        else:
+            aggregate_token0_ratio = 0.5
+            aggregate_token1_ratio = 0.5
+
+        return aggregate_token0_ratio, aggregate_token1_ratio

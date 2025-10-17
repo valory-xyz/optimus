@@ -474,6 +474,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Added Velodrome CL pool with {len(positions)} positions to pool {current_position['pool_address']}"
                     )
+                    # Invalidate CL pool cache if this was a Velodrome CL pool
+                    chain = action.get("chain")
+                    yield from self._invalidate_cl_pool_cache(chain)
+                    self.context.logger.info(
+                        f"Invalidated Velodrome CL pool cache for chain {chain} after successful entry"
+                    )
                 else:
                     # Fallback to single position handling
                     (

@@ -394,20 +394,37 @@ class HttpHandler(BaseHttpHandler):
         """
         # Get standard deficit from funds_manager
         standard_deficit = self.funds_status.get_response_body()
+        self.context.logger.info(
+            f"Standard deficit for agent from funds manager: {standard_deficit}"
+        )
 
         # Check if in withdrawal mode
         in_withdrawal = self._is_in_withdrawal_mode()
 
         if not in_withdrawal:
             # Normal mode: return standard deficit
+            self.context.logger.info(
+                "Funds status: Normal mode - returning standard deficit"
+            )
             response = standard_deficit
         else:
             # Withdrawal mode: check if there's any deficit
-            if self._has_deficit(standard_deficit):
+            self.context.logger.info("Funds status: Withdrawal mode detected")
+            has_deficit = self._has_deficit(standard_deficit)
+            self.context.logger.info(f"Funds status: Has deficit = {has_deficit}")
+
+            if has_deficit:
                 # There is a deficit - check if actions are prepared
                 withdrawal_actions = self._get_withdrawal_actions()
+                self.context.logger.info(
+                    f"Funds status: Found {len(withdrawal_actions)} withdrawal actions"
+                )
+
                 if not withdrawal_actions or len(withdrawal_actions) == 0:
                     # No actions prepared yet, don't request funding
+                    self.context.logger.info(
+                        "Funds status: No withdrawal actions prepared - returning empty response"
+                    )
                     response = {}
                 else:
                     # Actions exist - calculate minimal deficit needed
@@ -420,12 +437,21 @@ class HttpHandler(BaseHttpHandler):
                         )
                         zero_addr_entry = agent_map.get(ZERO_ADDRESS, {})
                         balance_value = zero_addr_entry.get("balance", 0)
+                        self.context.logger.info(
+                            f"Funds status: Current balance value = {balance_value}"
+                        )
+
                         try:
                             current_balance = (
                                 int(balance_value) if balance_value is not None else 0
                             )
                         except (ValueError, TypeError):
                             current_balance = 0
+
+                        self.context.logger.info(
+                            f"Funds status: Parsed current balance = {current_balance}"
+                        )
+
                         # Determine remaining actions based on executed tx hashes
                         withdrawal_data = self._read_withdrawal_data() or {}
                         tx_hashes_serialized = withdrawal_data.get(
@@ -437,7 +463,13 @@ class HttpHandler(BaseHttpHandler):
                             else []
                         )
                         executed_count = len(executed_hashes)
-                    except Exception:
+                        self.context.logger.info(
+                            f"Funds status: Executed transactions count = {executed_count}"
+                        )
+                    except Exception as e:
+                        self.context.logger.error(
+                            f"Funds status: Error reading withdrawal data: {e}"
+                        )
                         executed_count = 0
 
                     remaining_actions = (
@@ -448,12 +480,24 @@ class HttpHandler(BaseHttpHandler):
 
                     if not remaining_actions:
                         # All actions executed; nothing to fund
+                        self.context.logger.info(
+                            "Funds status: All actions executed - returning empty response"
+                        )
                         response = {}
                     else:
                         response = self._calculate_withdrawal_funding_deficit(
                             remaining_actions,
                             current_balance,
                         )
+                        self.context.logger.info(
+                            f"Funds status: Calculated deficit response = {response}"
+                        )
+            else:
+                # Withdrawal mode but no deficit - return empty response
+                self.context.logger.info(
+                    "Funds status: Withdrawal mode but no deficit - returning empty response"
+                )
+                response = {}
 
         self._send_ok_response(http_msg, http_dialogue, response)
 

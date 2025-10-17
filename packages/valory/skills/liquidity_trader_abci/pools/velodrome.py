@@ -787,10 +787,31 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 position["amount1_desired"] = 0
                 continue
 
-            # Calculate amounts based on allocation directly
-            # We allocate the same percentage of each token based on the band allocation
-            amount0_desired = int(max_amounts_in[0] * allocation)
-            amount1_desired = int(max_amounts_in[1] * allocation)
+            # Calculate amounts based on allocation and individual band token ratios
+            token0_ratio = position.get("token0_ratio", 0.5)
+            token1_ratio = position.get("token1_ratio", 0.5)
+
+            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+            token_decimals = [token0_decimals, token1_decimals]
+
+            # Calculate total investment amount for this band using pool price
+            total_band_investment = self._calculate_band_investment_with_pool_price(
+                max_amounts_in, allocation, sqrt_price_x96, token_decimals
+            )
+            if total_band_investment is None:
+                return None, None
+
+            # Apply individual band ratios using pool price
+            amount0_desired, amount1_desired = self._calculate_individual_token_amounts(
+                total_band_investment,
+                token0_ratio,
+                token1_ratio,
+                sqrt_price_x96,
+                token_decimals,
+            )
+            if amount0_desired is None or amount1_desired is None:
+                return None, None
 
             self.context.logger.info(
                 f"amount0_desired,amount1_desired :{amount0_desired,amount1_desired}"
@@ -1397,6 +1418,18 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Add percent_in_bounds to each position
             for position in positions:
                 position["percent_in_bounds"] = percent_in_bounds
+                # Also store EMA and std_dev metadata for caching
+                position["ema"] = ema.tolist() if hasattr(ema, "tolist") else list(ema)
+                position["std_dev"] = (
+                    std_dev.tolist() if hasattr(std_dev, "tolist") else list(std_dev)
+                )
+                position["current_ema"] = float(current_ema)
+                position["current_std_dev"] = float(current_std_dev)
+                position["band_multipliers"] = (
+                    band_multipliers.tolist()
+                    if hasattr(band_multipliers, "tolist")
+                    else list(band_multipliers)
+                )
 
             return positions
 
@@ -2333,6 +2366,99 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         except Exception as e:
             self.context.logger.error(f"Error getting token decimals: {str(e)}")
             return None
+
+    def _calculate_band_investment_with_pool_price(
+        self,
+        max_amounts_in: List[int],
+        allocation: float,
+        sqrt_price_x96: int,
+        token_decimals: List[int],
+    ) -> int:
+        """Calculate band investment using pool's native price"""
+        try:
+            if sqrt_price_x96 is None or sqrt_price_x96 == 0:
+                self.context.logger.warning("Pool price unavailable")
+                return None
+
+            token0_decimals, token1_decimals = token_decimals
+
+            # Get pool's price ratio (price of token1 in terms of token0)
+            price_ratio = (sqrt_price_x96 / (2**96)) ** 2
+
+            amount0 = max_amounts_in[0] / (10**token0_decimals)
+            amount1 = max_amounts_in[1] / (10**token1_decimals)
+
+            # Convert token1 to token0 equivalent using pool's price ratio
+            amount1_in_token0_terms = amount1 * price_ratio
+            total_token0_equivalent = amount0 + amount1_in_token0_terms
+            allocated_token0_equivalent = total_token0_equivalent * allocation
+            total_band_investment = int(
+                allocated_token0_equivalent * (10**token0_decimals)
+            )
+
+            self.context.logger.info(
+                f"Pool price calculation: {amount0} token0 + {amount1} token1 "
+                f"* {price_ratio} = {amount1_in_token0_terms} token0 equivalent, "
+                f"total: {total_token0_equivalent}, allocated: {allocated_token0_equivalent}"
+            )
+
+            return total_band_investment
+
+        except Exception as e:
+            self.context.logger.error(f"Error in pool price calculation: {str(e)}")
+            return None
+
+    def _calculate_individual_token_amounts(
+        self,
+        total_band_investment: int,
+        token0_ratio: float,
+        token1_ratio: float,
+        sqrt_price_x96: int,
+        token_decimals: List[int],
+    ) -> Tuple[int, int]:
+        """Calculate individual token amounts using pool price for accurate distribution."""
+        try:
+            if sqrt_price_x96 is None or sqrt_price_x96 == 0:
+                self.context.logger.warning(
+                    "Pool price unavailable for individual token calculation"
+                )
+                return None, None
+
+            token0_decimals, token1_decimals = token_decimals
+
+            # Get pool's price ratio (price of token1 in terms of token0)
+            price_ratio = (sqrt_price_x96 / (2**96)) ** 2
+
+            # Convert total investment to amount (token0 equivalent)
+            total_token0_equivalent = total_band_investment / (10**token0_decimals)
+
+            # Calculate token0 amount directly (in token0 units)
+            token0_amount = total_token0_equivalent * token0_ratio
+
+            # Calculate token1 amount using pool price conversion
+            # First get token1 equivalent in token0 terms, then convert to token1 units
+            token1_equivalent_in_token0 = total_token0_equivalent * token1_ratio
+            token1_amount = (
+                token1_equivalent_in_token0 / price_ratio
+            )  # Convert to token1 units
+
+            # Convert back to raw units
+            amount0_desired = int(token0_amount * (10**token0_decimals))
+            amount1_desired = int(token1_amount * (10**token1_decimals))
+
+            self.context.logger.info(
+                f"Individual token calculation: total={total_token0_equivalent:.6f} token0 equivalent, "
+                f"token0_ratio={token0_ratio:.3f} -> {token0_amount:.6f} token0, "
+                f"token1_ratio={token1_ratio:.3f} -> {token1_amount:.6f} token1 (price_ratio={price_ratio:.6f})"
+            )
+
+            return amount0_desired, amount1_desired
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in individual token calculation: {str(e)}"
+            )
+            return None, None
 
     def _calculate_stable_pool_amounts(
         self,

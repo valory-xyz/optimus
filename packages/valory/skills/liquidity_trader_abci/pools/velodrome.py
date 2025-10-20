@@ -26,6 +26,7 @@ import time
 from abc import ABC
 from collections import defaultdict
 from decimal import Decimal
+from enum import Enum
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -53,11 +54,6 @@ from packages.valory.contracts.velodrome_voter.contract import VelodromeVoterCon
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
-from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
-    get_amounts_for_liquidity,
-    get_liquidity_for_amounts,
-    get_sqrt_ratio_at_tick,
-)
 
 
 # Constants for price history functions
@@ -65,11 +61,25 @@ PRICE_VOLATILITY_THRESHOLD = 0.02  # 2% threshold for stablecoin detection
 DEFAULT_DAYS = 30
 API_CACHE_SIZE = 128
 
+# Price monitoring constants
+WAITING_PERIOD = 5  # 5 seconds waiting period
+MAX_WAIT_TIME = 600  # 10 minutes maximum wait time
+PRICE_CHECK_INTERVAL = 5  # Check price every 5 seconds
+TICK_TO_PERCENTAGE_FACTOR = 10000
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 MIN_TICK = -887272
 MAX_TICK = 887272
 INT_MAX = sys.maxsize
+
+
+class AllocationStatus(Enum):
+    """Allocation status tracking for price monitoring."""
+
+    READY = "ready"
+    WAITING = "waiting"
+    TIMEOUT = "timeout"
+    FAILED = "failed"
 
 
 class VelodromePoolBehaviour(PoolBehaviour, ABC):
@@ -78,6 +88,188 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the Velodrome pool behaviour."""
         super().__init__(**kwargs)
+
+    def _check_price_movement(
+        self,
+        pool_address: str,
+        chain: str,
+        price_at_selection: float,
+        tick_ranges: List[Dict],
+    ) -> Generator[None, None, Optional[bool]]:
+        """Check if price has moved beyond tolerance"""
+        try:
+            current_price = yield from self._get_current_pool_price(pool_address, chain)
+
+            if current_price is None:
+                self.context.logger.error(
+                    "[PRICE_MONITORING] Could not get current price for movement check - stopping"
+                )
+                return None
+
+            # Find the narrowest tick band (smallest range) for tick_range calculation
+            narrowest_range = None
+            min_range_size = float("inf")
+
+            for position in tick_ranges[0] if tick_ranges else []:
+                tick_lower = position.get("tick_lower")
+                tick_upper = position.get("tick_upper")
+
+                if tick_lower is not None and tick_upper is not None:
+                    range_size = tick_upper - tick_lower
+                    if range_size < min_range_size:
+                        min_range_size = range_size
+                        narrowest_range = position
+
+            if narrowest_range is None:
+                self.context.logger.warning(
+                    "[PRICE_MONITORING] No valid tick ranges found for price movement check"
+                )
+                return False
+
+            tick_range = narrowest_range["tick_upper"] - narrowest_range["tick_lower"]
+
+            # Using the formula: [(current_price-prev_price)/(tick_range/normalization_factor)]*100
+            if tick_range > 0:
+                price_change_pct = (
+                    abs(current_price - price_at_selection)
+                    / (tick_range / TICK_TO_PERCENTAGE_FACTOR)
+                ) * 100
+            else:
+                self.context.logger.error(
+                    "[PRICE_MONITORING] Zero tick spacing position detected - not allowed"
+                )
+                return None
+
+            slippage_tolerance_pct = self.params.slippage_tolerance * 100
+
+            # Check if price has moved beyond tolerance
+            price_moved = abs(price_change_pct) > slippage_tolerance_pct
+
+            self.context.logger.info(
+                f"[PRICE_MONITORING] Price movement check - "
+                f"Price at selection: {price_at_selection:.8f}, "
+                f"Current: {current_price:.8f}, "
+                f"Tick range: {tick_range}, "
+                f"Change: {price_change_pct:.4f}%, "
+                f"Tolerance: {slippage_tolerance_pct:.4f}%, "
+                f"Moved beyond tolerance: {price_moved}"
+            )
+
+            if price_moved:
+                self.context.logger.info(
+                    f"[PRICE_MONITORING] Price has moved {price_change_pct:.4f}%, "
+                    f"exceeding {slippage_tolerance_pct:.4f}% tolerance"
+                )
+
+            return price_moved
+
+        except Exception as e:
+            self.context.logger.error(
+                f"[PRICE_MONITORING] Error checking price movement: {str(e)}"
+            )
+            return None
+
+    def _wait_for_favorable_price(
+        self,
+        pool_address: str,
+        chain: str,
+        price_at_selection: float,
+        tick_ranges: List[Dict],
+        max_wait_time: int = MAX_WAIT_TIME,
+    ) -> Generator[None, None, AllocationStatus]:
+        """Wait for favorable price conditions before allocation."""
+        try:
+            self.context.logger.info(
+                f"[PRICE_MONITORING] Starting price monitoring with max wait time: {max_wait_time} seconds"
+            )
+
+            self.context.logger.info(
+                f"[PRICE_MONITORING] Price at selection: {price_at_selection}"
+            )
+
+            # Start waiting period
+            start_time = time.time()
+
+            self.context.logger.info(
+                f"[PRICE_MONITORING] Entering initial waiting period of {WAITING_PERIOD} seconds..."
+            )
+            yield from self.sleep(WAITING_PERIOD)
+
+            while True:
+                elapsed_time = time.time() - start_time
+
+                # Check if we've exceeded max wait time
+                if elapsed_time >= max_wait_time:
+                    self.context.logger.info(
+                        f"[PRICE_MONITORING] Maximum wait time ({max_wait_time} seconds) exceeded."
+                    )
+                    return AllocationStatus.TIMEOUT
+
+                # Check current price movement
+                price_moved = yield from self._check_price_movement(
+                    pool_address, chain, price_at_selection, tick_ranges
+                )
+
+                if price_moved is None:
+                    self.context.logger.error(
+                        "[PRICE_MONITORING] Price movement check failed during waiting period"
+                    )
+                    return AllocationStatus.FAILED
+
+                # If price has stabilized (not moved beyond tolerance), we can proceed
+                if not price_moved:
+                    self.context.logger.info(
+                        f"[PRICE_MONITORING] Price has stabilized within tolerance. "
+                        f"Proceeding with allocation after {elapsed_time:.1f} seconds."
+                    )
+                    return AllocationStatus.READY
+
+                # Price is still volatile, continue waiting
+                remaining_time = max_wait_time - elapsed_time
+                slippage_tolerance_pct = self.params.slippage_tolerance * 100
+                self.context.logger.info(
+                    f"[PRICE_MONITORING] Price still volatile (moved beyond {slippage_tolerance_pct:.1f}% tolerance). "
+                    f"Continuing to wait... ({remaining_time:.1f}s remaining)"
+                )
+
+                # Wait for the next price check interval
+                yield from self.sleep(PRICE_CHECK_INTERVAL)
+
+        except Exception as e:
+            self.context.logger.error(
+                f"[PRICE_MONITORING] Error during waiting period: {str(e)}"
+            )
+            return AllocationStatus.FAILED
+
+    def _calculate_slippage_protection(
+        self, desired_amounts: List[int], slippage_tolerance: float
+    ) -> Tuple[int, int]:
+        """Calculate amount-based slippage protection."""
+        try:
+            amount0_desired, amount1_desired = desired_amounts
+
+            # slippage * desired_amount
+            amount0_slippage = int(slippage_tolerance * amount0_desired)
+            amount1_slippage = int(slippage_tolerance * amount1_desired)
+
+            # Minimum amounts = desired - slippage
+            amount0_min = max(0, amount0_desired - amount0_slippage)
+            amount1_min = max(0, amount1_desired - amount1_slippage)
+
+            self.context.logger.info(
+                f"Slippage protection - Desired: {amount0_desired}/{amount1_desired}, "
+                f"Slippage amounts: {amount0_slippage}/{amount1_slippage}, "
+                f"Min amounts: {amount0_min}/{amount1_min} "
+                f"(tolerance: {slippage_tolerance:.1%})"
+            )
+
+            return amount0_min, amount1_min
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating slippage protection: {str(e)}"
+            )
+            return None, None
 
     def enter(
         self, **kwargs: Any
@@ -427,6 +619,36 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         self.context.logger.info(f"multisend_tx_hash = {multisend_tx_hash}")
         return bytes.fromhex(multisend_tx_hash[2:]), multisend_address, True
 
+    def _get_cached_price_at_selection(
+        self, chain: str
+    ) -> Generator[None, None, float]:
+        """Get the cached price from KV store at the time of opportunity selection."""
+        try:
+            kv_key = f"velodrome_cl_pool_{chain}"
+            db_data = yield from self._read_kv(keys=(kv_key,))
+
+            if db_data and db_data.get(kv_key):
+                try:
+                    cached_data = json.loads(db_data[kv_key])
+                    if not cached_data.get("invalidated"):
+                        current_price = cached_data.get("current_price", 0)
+                        self.context.logger.info(
+                            f"Retrieved cached current_price: {current_price}"
+                        )
+                        return current_price
+                    else:
+                        self.context.logger.warning("Cache was invalidated")
+                        return None
+                except (json.JSONDecodeError, TypeError) as e:
+                    self.context.logger.error(f"Error parsing cached data: {e}")
+                    return None
+            else:
+                self.context.logger.warning("No cached data found")
+                return None
+        except Exception as e:
+            self.context.logger.error(f"Error reading cached current price: {e}")
+            return None
+
     def _enter_cl_pool(
         self,
         pool_address: str,
@@ -439,7 +661,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         tick_ranges: Optional[List[Dict]] = None,
         tick_spacing: Optional[int] = None,
     ) -> Generator[None, None, Optional[Tuple[Union[str, List[str]], str]]]:
-        """Add liquidity to a Velodrome Concentrated Liquidity pool."""
+        """Add liquidity to a Velodrome Concentrated Liquidity pool with price monitoring."""
         # Get NonFungiblePositionManager contract address
         position_manager_address = (
             self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
@@ -452,11 +674,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
             return None, None
 
-        # Note: The 50/50 ratio adjustment code has been removed as token percentages
-        # are now handled in get_enter_pool_tx_hash
-        # Calculate tick ranges based on pool's tick spacing
         # Calculate tick ranges if not provided
-
         if not tick_ranges:
             self.context.logger.info(
                 "No tick ranges provided, calculating from pool data"
@@ -487,6 +705,56 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     f"Could not get tick spacing for pool {pool_address}"
                 )
                 return None, None
+
+        price_at_selection = yield from self._get_cached_price_at_selection(chain)
+        if price_at_selection is None:
+            return None, None
+
+        self.context.logger.info(f"price_at_selection: {price_at_selection}")
+
+        # Check if current price has moved beyond tolerance
+        price_moved = yield from self._check_price_movement(
+            pool_address, chain, price_at_selection, tick_ranges
+        )
+
+        if price_moved is None:
+            self.context.logger.error(
+                "Price movement check failed. Aborting CL pool entry."
+            )
+            return None, None
+
+        if price_moved:
+            slippage_tolerance_pct = self.params.slippage_tolerance * 100
+            self.context.logger.info(
+                f"Price has moved beyond {slippage_tolerance_pct:.1f}% tolerance. "
+                f"Entering waiting period..."
+            )
+
+            allocation_status = yield from self._wait_for_favorable_price(
+                pool_address, chain, price_at_selection, tick_ranges, MAX_WAIT_TIME
+            )
+
+            if allocation_status == AllocationStatus.FAILED:
+                self.context.logger.error(
+                    "Price monitoring failed. Aborting CL pool entry."
+                )
+                return None, None
+            elif allocation_status == AllocationStatus.TIMEOUT:
+                self.context.logger.warning(
+                    f"Price monitoring timed out after {MAX_WAIT_TIME} seconds. "
+                )
+                return None, None
+            elif allocation_status == AllocationStatus.READY:
+                self.context.logger.info(
+                    "Price conditions are favorable. Proceeding with allocation."
+                )
+
+        else:
+            slippage_tolerance_pct = self.params.slippage_tolerance * 100
+            self.context.logger.info(
+                f"Price is within {slippage_tolerance_pct:.1f}% tolerance. "
+                f"Proceeding directly with allocation."
+            )
 
         # Get or calculate sqrt_price_x96
         sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
@@ -519,10 +787,31 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 position["amount1_desired"] = 0
                 continue
 
-            # Calculate amounts based on allocation directly
-            # We allocate the same percentage of each token based on the band allocation
-            amount0_desired = int(max_amounts_in[0] * allocation)
-            amount1_desired = int(max_amounts_in[1] * allocation)
+            # Calculate amounts based on allocation and individual band token ratios
+            token0_ratio = position.get("token0_ratio", 0.5)
+            token1_ratio = position.get("token1_ratio", 0.5)
+
+            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+            token_decimals = [token0_decimals, token1_decimals]
+
+            # Calculate total investment amount for this band using pool price
+            total_band_investment = self._calculate_band_investment_with_pool_price(
+                max_amounts_in, allocation, sqrt_price_x96, token_decimals
+            )
+            if total_band_investment is None:
+                return None, None
+
+            # Apply individual band ratios using pool price
+            amount0_desired, amount1_desired = self._calculate_individual_token_amounts(
+                total_band_investment,
+                token0_ratio,
+                token1_ratio,
+                sqrt_price_x96,
+                token_decimals,
+            )
+            if amount0_desired is None or amount1_desired is None:
+                return None, None
 
             self.context.logger.info(
                 f"amount0_desired,amount1_desired :{amount0_desired,amount1_desired}"
@@ -573,15 +862,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             )
 
             # Calculate slippage protection for this specific position
-            (
-                amount0_min,
-                amount1_min,
-            ) = yield from self._calculate_slippage_protection_for_velodrome_mint(
-                pool_address,
-                position["tick_lower"],
-                position["tick_upper"],
-                [amount0_desired, amount1_desired],
-                chain,
+            slippage_tolerance = self.params.slippage_tolerance
+            amount0_min, amount1_min = self._calculate_slippage_protection(
+                max_amounts_in, slippage_tolerance
             )
 
             if amount0_min is None or amount1_min is None:
@@ -711,7 +994,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 amount0_min,
                 amount1_min,
             ) = yield from self._calculate_slippage_protection_for_velodrome_decrease(
-                position_token_id, position_liquidity, chain, pool_address
+                position_token_id, chain, pool_address
             )
 
             if amount0_min is None or amount1_min is None:
@@ -1135,6 +1418,18 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             # Add percent_in_bounds to each position
             for position in positions:
                 position["percent_in_bounds"] = percent_in_bounds
+                # Also store EMA and std_dev metadata for caching
+                position["ema"] = ema.tolist() if hasattr(ema, "tolist") else list(ema)
+                position["std_dev"] = (
+                    std_dev.tolist() if hasattr(std_dev, "tolist") else list(std_dev)
+                )
+                position["current_ema"] = float(current_ema)
+                position["current_std_dev"] = float(current_std_dev)
+                position["band_multipliers"] = (
+                    band_multipliers.tolist()
+                    if hasattr(band_multipliers, "tolist")
+                    else list(band_multipliers)
+                )
 
             return positions
 
@@ -2071,6 +2366,99 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         except Exception as e:
             self.context.logger.error(f"Error getting token decimals: {str(e)}")
             return None
+
+    def _calculate_band_investment_with_pool_price(
+        self,
+        max_amounts_in: List[int],
+        allocation: float,
+        sqrt_price_x96: int,
+        token_decimals: List[int],
+    ) -> int:
+        """Calculate band investment using pool's native price"""
+        try:
+            if sqrt_price_x96 is None or sqrt_price_x96 == 0:
+                self.context.logger.warning("Pool price unavailable")
+                return None
+
+            token0_decimals, token1_decimals = token_decimals
+
+            # Get pool's price ratio (price of token1 in terms of token0)
+            price_ratio = (sqrt_price_x96 / (2**96)) ** 2
+
+            amount0 = max_amounts_in[0] / (10**token0_decimals)
+            amount1 = max_amounts_in[1] / (10**token1_decimals)
+
+            # Convert token1 to token0 equivalent using pool's price ratio
+            amount1_in_token0_terms = amount1 * price_ratio
+            total_token0_equivalent = amount0 + amount1_in_token0_terms
+            allocated_token0_equivalent = total_token0_equivalent * allocation
+            total_band_investment = int(
+                allocated_token0_equivalent * (10**token0_decimals)
+            )
+
+            self.context.logger.info(
+                f"Pool price calculation: {amount0} token0 + {amount1} token1 "
+                f"* {price_ratio} = {amount1_in_token0_terms} token0 equivalent, "
+                f"total: {total_token0_equivalent}, allocated: {allocated_token0_equivalent}"
+            )
+
+            return total_band_investment
+
+        except Exception as e:
+            self.context.logger.error(f"Error in pool price calculation: {str(e)}")
+            return None
+
+    def _calculate_individual_token_amounts(
+        self,
+        total_band_investment: int,
+        token0_ratio: float,
+        token1_ratio: float,
+        sqrt_price_x96: int,
+        token_decimals: List[int],
+    ) -> Tuple[int, int]:
+        """Calculate individual token amounts using pool price for accurate distribution."""
+        try:
+            if sqrt_price_x96 is None or sqrt_price_x96 == 0:
+                self.context.logger.warning(
+                    "Pool price unavailable for individual token calculation"
+                )
+                return None, None
+
+            token0_decimals, token1_decimals = token_decimals
+
+            # Get pool's price ratio (price of token1 in terms of token0)
+            price_ratio = (sqrt_price_x96 / (2**96)) ** 2
+
+            # Convert total investment to amount (token0 equivalent)
+            total_token0_equivalent = total_band_investment / (10**token0_decimals)
+
+            # Calculate token0 amount directly (in token0 units)
+            token0_amount = total_token0_equivalent * token0_ratio
+
+            # Calculate token1 amount using pool price conversion
+            # First get token1 equivalent in token0 terms, then convert to token1 units
+            token1_equivalent_in_token0 = total_token0_equivalent * token1_ratio
+            token1_amount = (
+                token1_equivalent_in_token0 / price_ratio
+            )  # Convert to token1 units
+
+            # Convert back to raw units
+            amount0_desired = int(token0_amount * (10**token0_decimals))
+            amount1_desired = int(token1_amount * (10**token1_decimals))
+
+            self.context.logger.info(
+                f"Individual token calculation: total={total_token0_equivalent:.6f} token0 equivalent, "
+                f"token0_ratio={token0_ratio:.3f} -> {token0_amount:.6f} token0, "
+                f"token1_ratio={token1_ratio:.3f} -> {token1_amount:.6f} token1 (price_ratio={price_ratio:.6f})"
+            )
+
+            return amount0_desired, amount1_desired
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in individual token calculation: {str(e)}"
+            )
+            return None, None
 
     def _calculate_stable_pool_amounts(
         self,
@@ -3185,68 +3573,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         )
         return factory
 
-    def _calculate_slippage_protection_for_velodrome_mint(
-        self,
-        pool_address: str,
-        tick_lower: int,
-        tick_upper: int,
-        max_amounts_in: list,
-        chain: str,
-    ) -> Generator[None, None, Tuple[int, int]]:
-        """Calculate slippage protection for Velodrome mint operations using TickMath utilities."""
-        try:
-            sqrt_price_x96 = yield from self._get_sqrt_price_x96(chain, pool_address)
-            if sqrt_price_x96 is None:
-                self.context.logger.error(
-                    f"Failed to get sqrt_price_x96 for pool {pool_address}"
-                )
-                return None, None
-
-            # Compute tick-bound √prices
-            sqrt_ratio_a_x96 = get_sqrt_ratio_at_tick(tick_lower)
-            sqrt_ratio_b_x96 = get_sqrt_ratio_at_tick(tick_upper)
-
-            # Use get_liquidity_for_amounts to calculate liquidity directly from desired amounts
-            amount0_desired = max_amounts_in[0]
-            amount1_desired = max_amounts_in[1]
-
-            estimated_liquidity = get_liquidity_for_amounts(
-                sqrt_price_x96,
-                sqrt_ratio_a_x96,
-                sqrt_ratio_b_x96,
-                amount0_desired,
-                amount1_desired,
-            )
-
-            # Calculate expected amounts from the calculated liquidity
-            expected_amount0, expected_amount1 = get_amounts_for_liquidity(
-                sqrt_price_x96, sqrt_ratio_a_x96, sqrt_ratio_b_x96, estimated_liquidity
-            )
-
-            # Apply slippage tolerance
-            slippage_tolerance = self.params.slippage_tolerance
-            amount0_min = int(expected_amount0 * (1 - slippage_tolerance))
-            amount1_min = int(expected_amount1 * (1 - slippage_tolerance))
-
-            # Ensure minimum amounts never exceed maximum amounts
-            amount0_min = min(amount0_min, max_amounts_in[0])
-            amount1_min = min(amount1_min, max_amounts_in[1])
-
-            self.context.logger.info(
-                f"Velodrome slippage protection - Desired: {amount0_desired}/{amount1_desired}, "
-                f"Expected: {expected_amount0}/{expected_amount1}, "
-                f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}, "
-                f"Max amounts: {max_amounts_in[0]}/{max_amounts_in[1]}"
-            )
-
-            return amount0_min, amount1_min
-
-        except Exception as e:
-            self.context.logger.error(
-                f"Error calculating Velodrome slippage protection when minting: {str(e)}"
-            )
-            return None, None
-
     def _query_add_liquidity_velodrome(
         self,
         router_address: str,
@@ -3383,9 +3709,9 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             return None
 
     def _calculate_slippage_protection_for_velodrome_decrease(
-        self, token_id: int, liquidity: int, chain: str, pool_address: str
+        self, token_id: int, chain: str, pool_address: str
     ) -> Generator[None, None, Tuple[int, int]]:
-        """Calculate slippage protection for Velodrome decrease liquidity operations using actual Velodrome V3 logic."""
+        """Calculate slippage protection for Velodrome decrease liquidity operations"""
         try:
             # Check if we're in withdrawal mode
             withdrawal_status = yield from self._read_kv(keys=("withdrawal_status",))
@@ -3403,7 +3729,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"No position_manager contract address found for chain {chain}"
                 )
-                return 0, 0
+                return None, None
 
             position = yield from self.contract_interact(
                 performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
@@ -3419,7 +3745,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get position data for token {token_id}"
                 )
-                return 0, 0
+                return None, None
 
             # For withdrawal flows, disable slippage protection entirely
             if is_withdrawal:
@@ -3445,24 +3771,26 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 self.context.logger.error(
                     f"Failed to get slot0 data for pool {pool_address}"
                 )
-                return 0, 0
+                return None, None
 
             current_tick = slot0_data.get("tick", 0)
             current_sqrt_price_x96 = slot0_data.get("sqrt_price_x96")
 
-            # Calculate amounts using actual Velodrome V3 logic
+            # Calculate amounts using get_amounts_for_liquidity
             amount0, amount1 = yield from self._calculate_velodrome_decrease_amounts(
                 position, current_tick, current_sqrt_price_x96, chain
             )
 
-            # Apply slippage tolerance
+            # Apply slippage tolerance using the simple slippage protection method
             slippage_tolerance = self.params.slippage_tolerance
-            slippage_percent = slippage_tolerance * 100  # Convert to percentage
-            amount0_min = max(0, int(amount0 * (100 - slippage_percent) / 100))
-            amount1_min = max(0, int(amount1 * (100 - slippage_percent) / 100))
+            amount0_min, amount1_min = self._calculate_slippage_protection(
+                [amount0, amount1], slippage_tolerance
+            )
+            if amount0_min is None or amount1_min is None:
+                return None, None
 
             self.context.logger.info(
-                f"Velodrome slippage protection using V3 logic - Current tick: {current_tick}, "
+                f"Velodrome slippage protection - Current tick: {current_tick}, "
                 f"Position range: [{tick_lower}, {tick_upper}], "
                 f"Expected amounts: {amount0}/{amount1}, "
                 f"Min with {slippage_tolerance:.1%} slippage: {amount0_min}/{amount1_min}"
@@ -3483,98 +3811,42 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         current_sqrt_price_x96: int,
         chain: str,
     ) -> Generator[None, None, Tuple[int, int]]:
-        """Calculate decrease liquidity amounts using the ACTUAL Velodrome V3 logic."""
+        """Calculate decrease liquidity amounts using get_amounts_for_liquidity from Velodrome Slipstream Helper."""
         try:
             tick_lower = position_data["tickLower"]
             tick_upper = position_data["tickUpper"]
             liquidity = position_data["liquidity"]
 
-            # Negative liquidity delta for decreasing
-            liquidity_delta = -liquidity
-
-            amount0 = 0
-            amount1 = 0
-
-            # Get slipstream helper address
-            helper_address = (
-                self.params.velodrome_slipstream_helper_contract_addresses.get(chain)
+            sqrt_ratio_a_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                chain, tick_lower
             )
-            if not helper_address:
+            if not sqrt_ratio_a_x96:
                 self.context.logger.error(
-                    f"No Velodrome slipstream helper address for chain {chain}"
+                    f"Failed to get sqrt_ratio for tick_lower {tick_lower}"
                 )
-                return 0, 0
+                return None, None
 
-            # Apply the exact same logic as Velodrome's _modifyPosition
-            if current_tick < tick_lower:
-                # Case 1: Only token0
-                sqrt_ratio_lower = get_sqrt_ratio_at_tick(tick_lower)
-                sqrt_ratio_upper = get_sqrt_ratio_at_tick(tick_upper)
-
-                amount0_delta_result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=helper_address,
-                    contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
-                    contract_callable="get_amount0_delta",
-                    data_key="amount0_delta",
-                    sqrt_ratio_a_x96=sqrt_ratio_lower,
-                    sqrt_ratio_b_x96=sqrt_ratio_upper,
-                    liquidity_delta=liquidity_delta,
-                    chain_id=chain,
+            sqrt_ratio_b_x96 = yield from self.get_velodrome_sqrt_ratio_at_tick(
+                chain, tick_upper
+            )
+            if not sqrt_ratio_b_x96:
+                self.context.logger.error(
+                    f"Failed to get sqrt_ratio for tick_upper {tick_upper}"
                 )
-                amount0 = abs(amount0_delta_result) if amount0_delta_result else 0
+                return None, None
 
-            elif current_tick < tick_upper:
-                # Case 2: Both tokens (in range)
-                sqrt_ratio_upper = get_sqrt_ratio_at_tick(tick_upper)
-                sqrt_ratio_lower = get_sqrt_ratio_at_tick(tick_lower)
-
-                amount0_delta_result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=helper_address,
-                    contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
-                    contract_callable="get_amount0_delta",
-                    data_key="amount0_delta",
-                    sqrt_ratio_a_x96=current_sqrt_price_x96,
-                    sqrt_ratio_b_x96=sqrt_ratio_upper,
-                    liquidity_delta=liquidity_delta,
-                    chain_id=chain,
-                )
-                amount0 = abs(amount0_delta_result) if amount0_delta_result else 0
-
-                amount1_delta_result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=helper_address,
-                    contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
-                    contract_callable="get_amount1_delta",
-                    data_key="amount1_delta",
-                    sqrt_ratio_a_x96=sqrt_ratio_lower,
-                    sqrt_ratio_b_x96=current_sqrt_price_x96,
-                    liquidity_delta=liquidity_delta,
-                    chain_id=chain,
-                )
-                amount1 = abs(amount1_delta_result) if amount1_delta_result else 0
-
-            else:
-                # Case 3: Only token1 (price above range)
-                sqrt_ratio_lower = get_sqrt_ratio_at_tick(tick_lower)
-                sqrt_ratio_upper = get_sqrt_ratio_at_tick(tick_upper)
-
-                amount1_delta_result = yield from self.contract_interact(
-                    performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
-                    contract_address=helper_address,
-                    contract_public_id=VelodromeSlipstreamHelperContract.contract_id,
-                    contract_callable="get_amount1_delta",
-                    data_key="amount1_delta",
-                    sqrt_ratio_a_x96=sqrt_ratio_lower,
-                    sqrt_ratio_b_x96=sqrt_ratio_upper,
-                    liquidity_delta=liquidity_delta,
-                    chain_id=chain,
-                )
-                amount1 = abs(amount1_delta_result) if amount1_delta_result else 0
+            # Use get_amounts_for_liquidity to calculate the amounts
+            amount0, amount1 = yield from self.get_velodrome_amounts_for_liquidity(
+                chain=chain,
+                sqrt_price_x96=current_sqrt_price_x96,
+                sqrt_ratio_a_x96=sqrt_ratio_a_x96,
+                sqrt_ratio_b_x96=sqrt_ratio_b_x96,
+                liquidity=liquidity,
+            )
 
             self.context.logger.info(
-                f"Velodrome V3 logic - Current tick: {current_tick}, Range: [{tick_lower}, {tick_upper}], "
+                f"Velodrome amounts using get_amounts_for_liquidity - Current tick: {current_tick}, "
+                f"Range: [{tick_lower}, {tick_upper}], Liquidity: {liquidity}, "
                 f"Calculated amounts: {amount0}/{amount1}"
             )
 
@@ -3584,7 +3856,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             self.context.logger.error(
                 f"Error in Velodrome decrease amounts calculation: {str(e)}"
             )
-            return 0, 0
+            return None, None
 
     def get_velodrome_amounts_for_liquidity(
         self,

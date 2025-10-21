@@ -270,12 +270,12 @@ class Params(BaseParams):
         self.merkl_user_rewards_url = self._ensure(
             "merkl_user_rewards_url", kwargs, str
         )
-        self.tenderly_bundle_simulation_url = self._ensure(
-            "tenderly_bundle_simulation_url", kwargs, str
+        self.tenderly_bundle_simulation_url = kwargs.get(
+            "tenderly_bundle_simulation_url", ""
         )
-        self.tenderly_access_key = self._ensure("tenderly_access_key", kwargs, str)
-        self.tenderly_account_slug = self._ensure("tenderly_account_slug", kwargs, str)
-        self.tenderly_project_slug = self._ensure("tenderly_project_slug", kwargs, str)
+        self.tenderly_access_key = kwargs.get("tenderly_access_key", "")
+        self.tenderly_account_slug = kwargs.get("tenderly_account_slug", "")
+        self.tenderly_project_slug = kwargs.get("tenderly_project_slug", "")
         self.chain_to_chain_id_mapping = json.loads(
             self._ensure("chain_to_chain_id_mapping", kwargs, str)
         )

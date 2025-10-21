@@ -12,7 +12,7 @@ fingerprint:
   behaviours/base.py: bafybeifisqhm2jykq62uyzy52gpz7nqaezv5a6ybeqpl7nobtqfrpnyyey
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeiepuwt3253ycgjszshxldu5bul2ctp2h43tcuafh3wjnpbm64jrbq
+  behaviours/decision_making.py: bafybeieph7zq3klvu5unbz3zjic7f6kboye5gxfkugc56cmoosxfcrxrjy
   behaviours/evaluate_strategy.py: bafybeifjmlfftaqjs22mermbq2ncul5rt7lxnutmayau6ghtuywganvijy
   behaviours/fetch_strategies.py: bafybeihlylj7uz4ne77bc5pe6fqa6epydifowvpppdxthi755lrttf6o4i
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeidplv54urpxj43skgdis5kql2qe2oftjqembanrr3lo7fbjnyf62q
+  models.py: bafybeigtlnwyx4efdosaycjeroywf2zbzubhewdtqz7xqeninisjd2b3me
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
   pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
@@ -51,13 +51,13 @@ fingerprint:
   tests/behaviours/test_base_behaviour.py: bafybeigk3hvkib4dvuz6dm26rlcglpdzkx67g44lfxgo3wgkqxjoefe4tq
   tests/behaviours/test_call_checkpoint_behaviour.py: bafybeidviaumisg3yqxpcwaope6nmabzm35pg22fldynkcr6yugyrdwxiq
   tests/behaviours/test_check_staking_kpi_met_behaviour.py: bafybeihlvoxmvm3piag3hajfw4p443fsrdsho5hou4cq7e7pnzgxxevt7i
-  tests/behaviours/test_decision_making_behaviour.py: bafybeieijycsbgprz34ep2sawuotathjvuppsahiqc24jfbjorce5cggbu
+  tests/behaviours/test_decision_making_behaviour.py: bafybeiffemfxcyyqumimbmqfk22vmskfrini7wyztamgjlpjrktvgjcxgi
   tests/behaviours/test_evaluate_strategy_behaviour.py: bafybeidu2nqaqfpveumvfjf7wzbgivfs6gnu2a7ikekmuuzclerzzvhxtq
   tests/behaviours/test_fetch_strategies_behaviour.py: bafybeibjf52jzajyt2wg3pviqf2nbcdssyg7cwllbvf22dxlyjyv7i4xjq
   tests/behaviours/test_get_positions_behaviour.py: bafybeihwy4ic3knqyg2qlhx7lexg7n4pz2p7e33exya3adtykoubitjyki
   tests/behaviours/test_post_tx_settlement_behaviour.py: bafybeiawkomkj2xgxbquouevgeztcop545dtl6rfbjyzcr276rve3snp3e
   tests/behaviours/test_withdraw_funds_behaviour.py: bafybeifdyzco67ijzzujvvo7aq5qh4fvx6qimongw4zrexr7ivpyfm4jka
-  tests/test_behaviours.py: bafybeiemndq2pkzp6brtaekzlizylhbr3ftzo37g6ymv4mml4j3mrise24
+  tests/test_behaviours.py: bafybeihkeozzzjfvsok7qszxwmpopzbvvaybr4wkc4y3uzgg64al74n3bq
   tests/test_diaglogues.py: bafybeiakdpgudafp2o6xif5tf2d2blgrie6aakies2vyqra4bko6jgcbge
   tests/test_handlers.py: bafybeia7ap24tcmhz4ivpnvu2dhhium4nzq6ealogibtc7wxpfivlranju
   tests/test_models.py: bafybeic75ux6ulgpnf4ndrctgsw7jlbc7zs3ltxtue4o4eoij7fqvfqmfe
@@ -249,9 +249,9 @@ models:
       lifi_fetch_tools_url: https://li.quest/v1/tools
       merkl_user_rewards_url: https://api.merkl.xyz/v3/userRewards
       tenderly_bundle_simulation_url: https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle
-      tenderly_access_key: access_key
-      tenderly_account_slug: account_slug
-      tenderly_project_slug: project_slug
+      tenderly_access_key: ''
+      tenderly_account_slug: ''
+      tenderly_project_slug: ''
       chain_to_chain_id_mapping: '{"optimism":10,"base":8453,"ethereum":1,"mode":34443}'
       staking_token_contract_address: '0x63C2c53c09dE534Dd3bc0b7771bf976070936bAC'
       staking_activity_checker_contract_address: '0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68'

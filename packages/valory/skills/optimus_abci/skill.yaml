@@ -113,7 +113,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
-- valory/liquidity_trader_abci:0.1.0:bafybeic33fftyl3rkzmnqgdo66alqu3xsmmjipzwlaymucv4xc2yaf6gbm
+- valory/liquidity_trader_abci:0.1.0:bafybeifasa34kb7xvpsvkfkiw53t3ujz4isxvawkkzzepvlc3ab32nhxmy
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 - valory/funds_manager:0.1.0:bafybeibmp2fhlsfqvxm7u3sgpjyeirhdrvbp6zjspxjbyucfpdrnyq5qai
 behaviours:
@@ -259,9 +259,9 @@ models:
       lifi_fetch_tools_url: https://li.quest/v1/tools
       merkl_user_rewards_url: https://api.merkl.xyz/v3/userRewards
       tenderly_bundle_simulation_url: https://api.tenderly.co/api/v1/account/{tenderly_account_slug}/project/{tenderly_project_slug}/simulate-bundle
-      tenderly_access_key: access_key
-      tenderly_account_slug: account_slug
-      tenderly_project_slug: project_slug
+      tenderly_access_key: ''
+      tenderly_account_slug: ''
+      tenderly_project_slug: ''
       chain_to_chain_id_mapping: '{"optimism":10,"base":8453,"ethereum":1,"mode":34443}'
       staking_token_contract_address: '0x63C2c53c09dE534Dd3bc0b7771bf976070936bAC'
       staking_activity_checker_contract_address: '0x7Fd1F4b764fA41d19fe3f63C85d12bf64d2bbf68'

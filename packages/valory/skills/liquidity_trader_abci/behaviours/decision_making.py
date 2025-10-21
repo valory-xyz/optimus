@@ -474,6 +474,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     self.context.logger.info(
                         f"Added Velodrome CL pool with {len(positions)} positions to pool {current_position['pool_address']}"
                     )
+                    # Invalidate CL pool cache if this was a Velodrome CL pool
+                    chain = action.get("chain")
+                    yield from self._invalidate_cl_pool_cache(chain)
+                    self.context.logger.info(
+                        f"Invalidated Velodrome CL pool cache for chain {chain} after successful entry"
+                    )
                 else:
                     # Fallback to single position handling
                     (
@@ -1465,12 +1471,31 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         # Add Velodrome-specific parameters if applicable
         if dex_type == DexType.VELODROME.value:
+            # Log action fields before extraction
+            self.context.logger.info(
+                f"Action fields in get_enter_pool_tx_hash: {list(action.keys())}"
+            )
+            self.context.logger.info(
+                f"Action tick_spacing: {action.get('tick_spacing')}"
+            )
+            self.context.logger.info(f"Action tick_ranges: {action.get('tick_ranges')}")
+            self.context.logger.info(f"Action is_stable: {action.get('is_stable')}")
+            self.context.logger.info(f"Action pool_type: {action.get('pool_type')}")
+            self.context.logger.info(f"Action is_cl_pool: {action.get('is_cl_pool')}")
+
             tick_spacing = action.get("tick_spacing")
             tick_ranges = action.get("tick_ranges")
             if tick_spacing:
                 kwargs["tick_spacing"] = tick_spacing
+                self.context.logger.info(
+                    f"Added tick_spacing to kwargs: {tick_spacing}"
+                )
             if tick_ranges:
                 kwargs["tick_ranges"] = tick_ranges
+                self.context.logger.info(f"Added tick_ranges to kwargs: {tick_ranges}")
+
+            # Log final kwargs before passing to pool.enter
+            self.context.logger.info(f"Final kwargs for pool.enter: {kwargs}")
         # Add pool_fee for non-Velodrome pools
         elif action.get("pool_fee") is not None:
             kwargs["pool_fee"] = action.get("pool_fee")
@@ -2046,27 +2071,14 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         if not multisend_tx_hash:
             return None
 
-        multisend_tx_data = bytes.fromhex(multisend_tx_hash[2:])
         from_chain = tx_info.get("from_chain")
         multisend_address = self.params.multisend_contract_addresses[
             tx_info.get("from_chain")
         ]
 
-        is_ok = yield from self._simulate_transaction(
-            to_address=multisend_address,
-            data=multisend_tx_data,
-            token=tx_info.get("source_token"),
-            amount=tx_info.get("amount"),
-            chain=tx_info.get("from_chain"),
-        )
-        if not is_ok:
-            self.context.logger.info(
-                f"Simulation failed for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
-            )
-            return None
-
+        # Transaction simulation is deprecated (Tenderly removed)
         self.context.logger.info(
-            f"Simulation successful for bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
+            f"Proceeding with bridge/swap tx: {tx_info.get('source_token_symbol')}({tx_info.get('from_chain')}) --> {tx_info.get('target_token_symbol')}({tx_info.get('to_chain')}). Tool used: {tx_info.get('tool')}"
         )
 
         payload_string = yield from self._build_safe_tx(
@@ -2578,105 +2590,6 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             return None
 
         return routes
-
-    def _simulate_transaction(
-        self,
-        to_address: str,
-        data: bytes,
-        token: str,
-        amount: int,
-        chain: str,
-        **kwargs: Any,
-    ) -> Generator[None, None, bool]:
-        # Skip Tenderly simulation for MODE chain (deprecated on Tenderly)
-        if chain.lower() == "mode":
-            self.context.logger.info(
-                "Skipping Tenderly simulation for MODE chain (deprecated on Tenderly). "
-                "Proceeding without simulation."
-            )
-            return True
-
-        safe_address = self.params.safe_contract_addresses.get(chain)
-        agent_address = self.context.agent_address
-        safe_tx = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
-            contract_address=safe_address,
-            contract_id=str(GnosisSafeContract.contract_id),
-            contract_callable="get_raw_safe_transaction",
-            sender_address=agent_address,
-            owners=(agent_address,),
-            to_address=to_address,
-            value=ETHER_VALUE,
-            data=data,
-            safe_tx_gas=SAFE_TX_GAS,
-            signatures_by_owner={agent_address: self._get_signature(agent_address)},
-            operation=SafeOperation.DELEGATE_CALL.value,
-            chain_id=chain,
-        )
-
-        tx_data = safe_tx.raw_transaction.body["data"]
-
-        url_template = self.params.tenderly_bundle_simulation_url
-        values = {
-            "tenderly_account_slug": self.params.tenderly_account_slug,
-            "tenderly_project_slug": self.params.tenderly_project_slug,
-        }
-        api_url = url_template.format(**values)
-
-        body = {
-            "simulations": [
-                {
-                    "network_id": self.params.chain_to_chain_id_mapping.get(chain),
-                    "from": self.context.agent_address,
-                    "to": safe_address,
-                    "simulation_type": "quick",
-                    "input": tx_data,
-                }
-            ]
-        }
-
-        response = yield from self.get_http_response(
-            "POST",
-            api_url,
-            json.dumps(body, ensure_ascii=True).encode(),
-            headers={
-                "Content-Type": "application/json",
-                "X-Access-Key": self.params.tenderly_access_key,
-            },
-        )
-
-        if response.status_code not in HTTP_OK:
-            # Handle 404 errors (project not found) by continuing execution
-            if response.status_code in [403, 404]:
-                self.context.logger.warning(
-                    f"Tenderly simulation failed with url {api_url}. "
-                    f"Error Message: {response.body}. Continuing execution without simulation."
-                )
-                return True
-
-            self.context.logger.error(
-                f"Could not retrieve data from url {api_url}. Status code {response.status_code}. Error Message {response.body}"
-            )
-            return False
-
-        try:
-            data = json.loads(response.body)
-            if data:
-                simulation_results = data.get("simulation_results", [])
-                status = False
-                if simulation_results:
-                    for simulation_result in simulation_results:
-                        simulation = simulation_result.get("simulation", {})
-                        if isinstance(simulation, Dict):
-                            status = simulation.get("status", False)
-                return status
-
-        except (ValueError, TypeError) as e:
-            self.context.logger.error(
-                f"Could not parse response from api, "
-                f"the following error was encountered {type(e).__name__}: {e}"
-            )
-            return False
 
     def get_claim_rewards_tx_hash(
         self, action

@@ -109,20 +109,21 @@ def main() -> None:
                     "safe_contract_addresses"
                 ] = f"${{str:{os.getenv('SAFE_CONTRACT_ADDRESSES')}}}"
 
-            if os.getenv("TENDERLY_ACCESS_KEY"):
-                config[skill_config_index]["models"]["params"]["args"][
-                    "tenderly_access_key"
-                ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
+            # Tenderly credentials are deprecated and no longer used
+            # if os.getenv("TENDERLY_ACCESS_KEY"):
+            #     config[skill_config_index]["models"]["params"]["args"][
+            #         "tenderly_access_key"
+            #     ] = f"${{str:{os.getenv('TENDERLY_ACCESS_KEY')}}}"
 
-            if os.getenv("TENDERLY_ACCOUNT_SLUG"):
-                config[skill_config_index]["models"]["params"]["args"][
-                    "tenderly_account_slug"
-                ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
+            # if os.getenv("TENDERLY_ACCOUNT_SLUG"):
+            #     config[skill_config_index]["models"]["params"]["args"][
+            #         "tenderly_account_slug"
+            #     ] = f"${{str:{os.getenv('TENDERLY_ACCOUNT_SLUG')}}}"
 
-            if os.getenv("TENDERLY_PROJECT_SLUG"):
-                config[skill_config_index]["models"]["params"]["args"][
-                    "tenderly_project_slug"
-                ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
+            # if os.getenv("TENDERLY_PROJECT_SLUG"):
+            #     config[skill_config_index]["models"]["params"]["args"][
+            #         "tenderly_project_slug"
+            #     ] = f"${{str:{os.getenv('TENDERLY_PROJECT_SLUG')}}}"
 
             if os.getenv("COINGECKO_API_KEY"):
                 config[skill_config_index]["models"]["coingecko"]["args"][

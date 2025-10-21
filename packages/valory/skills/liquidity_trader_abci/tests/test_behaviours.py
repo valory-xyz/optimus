@@ -1573,35 +1573,6 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             # Verify result
             assert result is None, "Failed multisend tx build should return None"
 
-    def test_simulate_transaction_fails(self):
-        """Test when simulate_transaction fails."""
-        serialized_actions = json.dumps([{"action": Action.BRIDGE_SWAP.value}])
-
-        synchronized_data = SynchronizedData(
-            AbciAppDB(setup_data={"actions": [serialized_actions]})
-        )
-
-        self.fast_forward_to_behaviour(
-            self.behaviour,
-            DecisionMakingBehaviour.auto_behaviour_id(),
-            synchronized_data=synchronized_data,
-        )
-
-        with mock.patch.object(
-            self.behaviour.current_behaviour,
-            "_simulate_transaction",
-            return_value=False,  # Simulate failure
-        ):
-            generator = self.behaviour.current_behaviour.prepare_bridge_swap_action(
-                [], {}, 0, 0
-            )
-
-            try:
-                next(generator)
-            except StopIteration as e:
-                result = e.value
-                assert result is None, "Failed simulation should return None."
-
     def test_get_next_event_with_varied_actions(self):
         """Test get_next_event with different actions."""
         # Define varied actions with required fields

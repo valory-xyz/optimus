@@ -95,7 +95,6 @@ from packages.valory.skills.optimus_abci.dialogues import (
 from packages.valory.skills.optimus_abci.models import Params, SharedState
 from packages.valory.skills.optimus_abci.prompts import (
     STRATEGY_PROMPT,
-    TradingType,
     build_strategy_config_schema,
 )
 

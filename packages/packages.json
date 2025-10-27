@@ -26,10 +26,10 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm",
         "contract/valory/balancer_queries/0.1.0": "bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu",
         "connection/valory/mirror_db/0.1.0": "bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeifnwtfzkiz6phj5dw5gbdvrmm3vnobelvhwbidbv2vkme2uxuglsq",
-        "skill/valory/optimus_abci/0.1.0": "bafybeidjibnpsulgq5k7c26lar4bdsjdwuwosrj3ae3pb6wor7fxosyrrm",
-        "agent/valory/optimus/0.1.0": "bafybeia2mbk2y2kxcwqzzgh5epldphpgx6oga5dewolmcj53s74lnmqcxu",
-        "service/valory/optimus/0.1.0": "bafybeibcqbzcadyhpnbzkacbrnwbrwnf5rzax2kqjyolk7bk5yvihythgi"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeiaiqj2atho22ssyvoessjmf26jhrnadpi27u5hnj2z7a66jya4s6i",
+        "skill/valory/optimus_abci/0.1.0": "bafybeici2zk7bg6t4depnrhpfp6hj5oorxdp7msn6wcn4gn6ziqqeswzee",
+        "agent/valory/optimus/0.1.0": "bafybeih5x3lrqbgc6brvoqfgxfnvqsnl6e43qqpgmjd76s76cev2di7zf4",
+        "service/valory/optimus/0.1.0": "bafybeibftql2ijppfidsmp6vrkgtepuihhicrur5aulfubg2uyrw4y5bue"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -59,6 +59,7 @@
         "skill/valory/registration_abci/0.1.0": "bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm",
         "skill/valory/abstract_round_abci/0.1.0": "bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu",
         "skill/valory/termination_abci/0.1.0": "bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi",
-        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve"
+        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve",
+        "skill/valory/funds_manager/0.1.0": "bafybeibmp2fhlsfqvxm7u3sgpjyeirhdrvbp6zjspxjbyucfpdrnyq5qai"
     }
 }

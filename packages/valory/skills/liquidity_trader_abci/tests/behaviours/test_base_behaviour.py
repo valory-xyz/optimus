@@ -5402,7 +5402,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     "optimism": "optimistic-ethereum",
                     "mode": "mode",
                 }
-                mock_coingecko.return_value.token_price_endpoint = "https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd"
+                mock_coingecko.return_value.token_price_endpoint = "/v1/coingecko/{chain}/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd"
                 mock_coingecko.return_value.rate_limited_code = 429
                 mock_coingecko.return_value.rate_limited_status_callback = MagicMock()
 
@@ -5850,7 +5850,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 type(base_behaviour), "coingecko", new_callable=PropertyMock
             ) as mock_coingecko:
                 mock_coingecko.return_value.api_key = "test_key"
-                mock_coingecko.return_value.coin_price_endpoint = "https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+                mock_coingecko.return_value.coin_price_endpoint = "/v1/coingecko/{chain}/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
                 mock_coingecko.return_value.rate_limited_code = 429
                 mock_coingecko.return_value.rate_limited_status_callback = MagicMock()
 
@@ -5935,7 +5935,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 type(base_behaviour), "coingecko", new_callable=PropertyMock
             ) as mock_coingecko:
                 mock_coingecko.return_value.api_key = "test_key"
-                mock_coingecko.return_value.coin_price_endpoint = "https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+                mock_coingecko.return_value.coin_price_endpoint = "/v1/coingecko/{chain}/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
                 mock_coingecko.return_value.rate_limited_code = 429
                 mock_coingecko.return_value.rate_limited_status_callback = MagicMock()
 

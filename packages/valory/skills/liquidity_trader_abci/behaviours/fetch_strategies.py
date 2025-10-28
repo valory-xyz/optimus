@@ -458,12 +458,10 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         if self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
-        success, response_json = yield from self._request_with_retries(
+        success, response_json = self.coingecko.request(
             endpoint=endpoint,
             headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            x402_signer=self.eoa_account,
         )
 
         if success:

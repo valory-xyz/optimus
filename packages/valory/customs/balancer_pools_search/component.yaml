@@ -8,10 +8,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeievwo2yoa6vekod333ttto66vpc27lm6wepspnhwyrqxtjx7djzw4
-  balancer_pools_search.py: bafybeicos2aja4pbwoa6u5xg55sodgm3ajjqke5fdnpj44ewevmgh5alwy
+  balancer_pools_search.py: bafybeidt6couaxh2lhj3qvmleujnklgbigvfftlsik4vyvq4vqhvdsg7du
 fingerprint_ignore_patterns: []
 entry_point: balancer_pools_search.py
 callable: run
+connections:
+- valory/x402:0.1.0:bafybeib3ihv7rg5elfh7qbx2mq62vd2qhh4dq4lat3nq5dhby3yirhtqoa
 dependencies:
   requests:
     version: <2.31.2,>=2.28.1

@@ -9,12 +9,12 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeic6c77h7amnhdximi2tunqofaw675bglv4g4do7q4oof4mqa7xuuu
   behaviours/apr_population.py: bafybeig7n6d3iwv4g6d24ve6mdwqn4uwxdyufccttszi3ofxpxderqra7q
-  behaviours/base.py: bafybeidofcp6zgwnvuowsqf6rfajxjz5hecq2g3blupzpkl7jhhn533rjq
+  behaviours/base.py: bafybeidd4h2irpsjdkd5quvgjtqvbqfvzi26tkgmyzot35pi6zlxlaz5xa
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeib7s3zxuwchf3h2def7ht5axgthau5xc4bgywoukslzxcbaeqz6ra
-  behaviours/evaluate_strategy.py: bafybeigrd5ytppqgbxgabg3iwnvcb4kfrtwbd5dknsqhkg4gabs6jfybje
-  behaviours/fetch_strategies.py: bafybeihlylj7uz4ne77bc5pe6fqa6epydifowvpppdxthi755lrttf6o4i
+  behaviours/evaluate_strategy.py: bafybeihwllbkgqlteicdboqsjzg7ozkmjbiccbp3nys2goxigf2ukjjiye
+  behaviours/fetch_strategies.py: bafybeiepub2mw3zwbv6o6zr2uzixh3o3mftj6j5ixu4eh7hfan23lrfumy
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -24,13 +24,13 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeidplv54urpxj43skgdis5kql2qe2oftjqembanrr3lo7fbjnyf62q
+  models.py: bafybeictj6y6g5ocpemqpdfjizkgauijtieb67qsg6jewudhkdzf6vxluu
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
-  pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
+  pool_behaviour.py: bafybeie565nm76bwlrcmev6stfqg7n3guji2j44x2mhy22vy7wqcpxheky
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeiaayilrkgelfjkwzi5t5b7mwryexadu42cwoipxusjcomv5l2gfoy
   pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
-  pools/velodrome.py: bafybeicnzgpadirqsxvl66s5uo52bvcsyttysvx4kea6emspggn6dgtcym
+  pools/velodrome.py: bafybeihhu73m5ttsqygcrbnt2fr47vlxgy65jcqupatbl4zc4anfv2s34m
   rounds.py: bafybeihsstee7burcnrc75bjisbswxrc5h6lvi3e2l6ciiiy4nqepw2zfy
   rounds_info.py: bafybeihtj6mf74ccw6k2vokv7vkf4nwbp7j7cfm7j6cvuqop7gomavxucu
   states/__init__.py: bafybeigzgpxgx6g4ioalm7fdalcckk5lmw6z4k4sb5d4a4cdespv2umogi
@@ -48,7 +48,7 @@ fingerprint:
   tests/__init__.py: bafybeigc5xc4rgyv7nqhbynj5ehje75wvb63hn4on44inku3ik5w7isvee
   tests/behaviours/__init__.py: bafybeibbxteipacbrldd4f425mj644fmgpxtsfhed4kxzcacuwn34wucmq
   tests/behaviours/test_apr_population_behaviour.py: bafybeidzq5sh2azynmbhaobcq4vv6oodrvdizkopgcadjpjmaxa4f2og6i
-  tests/behaviours/test_base_behaviour.py: bafybeigk3hvkib4dvuz6dm26rlcglpdzkx67g44lfxgo3wgkqxjoefe4tq
+  tests/behaviours/test_base_behaviour.py: bafybeie3yhy2thcbt4z6ws2gjohpecz6lrh4wgntx7ugnitrklkci3qthq
   tests/behaviours/test_call_checkpoint_behaviour.py: bafybeidviaumisg3yqxpcwaope6nmabzm35pg22fldynkcr6yugyrdwxiq
   tests/behaviours/test_check_staking_kpi_met_behaviour.py: bafybeihlvoxmvm3piag3hajfw4p443fsrdsho5hou4cq7e7pnzgxxevt7i
   tests/behaviours/test_decision_making_behaviour.py: bafybeieijycsbgprz34ep2sawuotathjvuppsahiqc24jfbjorce5cggbu
@@ -70,6 +70,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/mirror_db:0.1.0:bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy
+- valory/x402:0.1.0:bafybeib3ihv7rg5elfh7qbx2mq62vd2qhh4dq4lat3nq5dhby3yirhtqoa
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um
@@ -308,9 +309,9 @@ models:
     class_name: Params
   coingecko:
     args:
-      token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
-      coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
-      historical_price_endpoint: https://api.coingecko.com/api/v3/coins/{coin_id}/history?date={date}
+      token_price_endpoint: https://x402.olas.autonolas.tech/v1/coingecko/{chain}/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
+      coin_price_endpoint: https://x402.olas.autonolas.tech/v1/coingecko/{chain}/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
+      historical_price_endpoint: https://x402.olas.autonolas.tech/v1/coingecko/{chain}/api/v3/coins/{coin_id}/history?date={date}
       api_key: CG-mf5xZnGELpSXeSqmHDLY2nNU
       requests_per_minute: 30
       credits: 10000
@@ -341,5 +342,7 @@ dependencies:
     version: <=6.0.1,>=3.10
   numpy:
     version: ==2.2.5
+  eth_account:
+    version: <0.9.0,>=0.8.0
 is_abstract: true
 customs: []

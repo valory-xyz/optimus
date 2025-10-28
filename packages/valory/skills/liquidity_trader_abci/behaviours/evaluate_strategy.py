@@ -1160,6 +1160,9 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
                     "coin_id_mapping": COIN_ID_MAPPING,
+                    "x402_signer": self.eoa_account
+                    if self.coingecko.use_x402
+                    else None,
                 }
             )
             strategy_kwargs_list.append((next_strategy, kwargs))
@@ -1618,6 +1621,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "current_positions": self.positions_eligible_for_exit,
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
+                "x402_signer": self.eoa_account if self.coingecko.use_x402 else None,
+                "x402_proxy": self.coingecko.coingecko_x402_server_base_url
+                if self.coingecko.use_x402
+                else None,
             }
         )
 

@@ -1,5 +1,7 @@
 import warnings
 
+from packages.valory.connections.x402.clients.requests import x402_requests
+
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import json
@@ -32,6 +34,8 @@ REQUIRED_FIELDS = (
     "current_positions",
     "coingecko_api_key",
     "whitelisted_assets",
+    "x402_signer",
+    "x402_proxy",
 )
 FEE_RATE_DIVISOR = 1000000
 DAYS_IN_YEAR = 365
@@ -435,13 +439,19 @@ def is_pro_api_key(coingecko_api_key: str) -> bool:
 
 
 def calculate_il_risk_score(
-    token_0, token_1, coingecko_api_key: str, time_period: int = 90
+    token_0, token_1, coingecko_api_key: str, x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None, time_period: int = 90
 ) -> float:
     is_pro = is_pro_api_key(coingecko_api_key)
     if is_pro:
         cg = CoinGeckoAPI(api_key=coingecko_api_key)
     else:
         cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+
+    if x402_signer is not None and x402_proxy is not None:
+        logger.info("Using x402 signer for CoinGecko API requests")
+        cg.session = x402_requests(account=x402_signer)
+        cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
+
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
     try:
@@ -564,7 +574,7 @@ def format_pool_data(pool) -> Dict[str, Any]:
 
 
 def get_opportunities_for_uniswap(
-    chains, graphql_endpoints, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, **kwargs
+    chains, graphql_endpoints, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, x402_signer=None, x402_proxy=None, **kwargs
 ) -> List[Dict[str, Any]]:
     logger.info(f"Getting Uniswap opportunities for chains: {chains}")
     logger.info(f"Current positions to exclude: {current_positions}")
@@ -612,7 +622,7 @@ def get_opportunities_for_uniswap(
         if token_0_id and token_1_id:
             logger.info(f"Calculating IL risk score for {token_0_symbol}/{token_1_symbol}")
             pool["il_risk_score"] = calculate_il_risk_score(
-                token_0_id, token_1_id, coingecko_api_key
+                token_0_id, token_1_id, coingecko_api_key, x402_signer, x402_proxy
             )
         else:
             logger.warning(f"Could not find CoinGecko IDs for {token_0_symbol}/{token_1_symbol}")
@@ -642,6 +652,8 @@ def calculate_metrics(
     coingecko_api_key: str,
     graphql_endpoints,
     coin_id_mapping,
+    x402_signer,
+    x402_proxy,
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
     token_0_id = get_coin_id_from_symbol(
@@ -651,7 +663,7 @@ def calculate_metrics(
         coin_id_mapping, position["token1_symbol"], position["chain"]
     )
     il_risk_score = (
-        calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key)
+        calculate_il_risk_score(token_0_id, token_1_id, coingecko_api_key, x402_signer, x402_proxy)
         if token_0_id and token_1_id
         else None
     )

@@ -113,7 +113,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
-- valory/liquidity_trader_abci:0.1.0:bafybeifnwtfzkiz6phj5dw5gbdvrmm3vnobelvhwbidbv2vkme2uxuglsq
+- valory/liquidity_trader_abci:0.1.0:bafybeid2le7oyc5wjok5czkpfeqyucxxlpgodutjblg5vf5fotgljwwatm
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 behaviours:
   main:
@@ -318,9 +318,9 @@ models:
     class_name: Params
   coingecko:
     args:
-      token_price_endpoint: https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
-      coin_price_endpoint: https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
-      historical_price_endpoint: https://api.coingecko.com/api/v3/coins/{coin_id}/history?date={date}
+      token_price_endpoint: https://x402.olas.autonolas.tech/v1/coingecko/{chain}/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd
+      coin_price_endpoint: https://x402.olas.autonolas.tech/v1/coingecko/{chain}/api/v3/simple/price?ids={coin_id}&vs_currencies=usd
+      historical_price_endpoint: https://x402.olas.autonolas.tech/v1/coingecko/{chain}/api/v3/coins/{coin_id}/history?date={date}
       api_key: null
       requests_per_minute: 30
       credits: 10000
@@ -359,5 +359,7 @@ models:
 dependencies:
   PyYAML:
     version: '>=3.10,<=6.0.1'
+  pydantic:
+    version: ==2.11.7
 is_abstract: false
 customs: []

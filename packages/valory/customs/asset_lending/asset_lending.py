@@ -1,5 +1,9 @@
 import warnings
 
+from eth_account import Account
+
+from packages.valory.connections.x402.clients.requests import x402_requests
+
 warnings.filterwarnings("ignore")
 
 import json
@@ -23,7 +27,7 @@ logger = logging.getLogger(__name__)
 _logger = setup_logger(__name__)
 
 # Constants
-REQUIRED_FIELDS = ("chains", "lending_asset", "current_positions", "coingecko_api_key")
+REQUIRED_FIELDS = ("chains", "lending_asset", "current_positions", "coingecko_api_key", "x402_signer", "x402_proxy")
 STURDY = "Sturdy"
 TVL_WEIGHT = 0.3
 APR_WEIGHT = 0.7
@@ -77,17 +81,25 @@ def throttled_request(url, min_interval=0.1):
     
     return requests.get(url)
 
-def get_coin_list():
+def get_coin_list(coingecko_api_key, x402_signer=None, x402_proxy=None):
     global _coin_list_cache
     logger.info("Fetching coin list from CoinGecko")
     
     with _coin_list_lock:
         if _coin_list_cache is None:
-            url = "https://api.coingecko.com/api/v3/coins/list"
+            is_pro = is_pro_api_key(coingecko_api_key)
+            if is_pro:
+                cg = CoinGeckoAPI(api_key=coingecko_api_key)
+            else:
+                cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+
+            if x402_signer is not None and x402_proxy is not None:
+                logger.info("Using x402 signer for CoinGecko API requests")
+                cg.session = x402_requests(account=x402_signer)
+                cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
+
             try:
-                response = throttled_request(url, 0.2)
-                response.raise_for_status()
-                _coin_list_cache = response.json()
+                _coin_list_cache = cg.get_coins_list()
                 logger.info(f"Successfully fetched {len(_coin_list_cache)} coins from CoinGecko")
             except requests.RequestException as e:
                 logger.error(f"Failed to fetch coin list: {e}")
@@ -96,7 +108,7 @@ def get_coin_list():
         return _coin_list_cache
 
 
-def fetch_token_id(symbol):
+def fetch_token_id(symbol, coingecko_api_key, x402_signer=None, x402_proxy=None):
     logger.info(f"Fetching token ID for symbol: {symbol}")
     symbol = symbol.lower()
     # First check known mappings
@@ -104,7 +116,7 @@ def fetch_token_id(symbol):
         logger.info(f"Found token ID in known mappings: {symbol} -> {coingecko_name_to_id[symbol]}")
         return coingecko_name_to_id[symbol]
 
-    coin_list = get_coin_list()
+    coin_list = get_coin_list(coingecko_api_key, x402_signer, x402_proxy)
     for coin in coin_list:
         if coin["symbol"].lower() == symbol:
             logger.info(f"Found token ID in coin list: {symbol} -> {coin['id']}")
@@ -405,6 +417,8 @@ def calculate_il_risk_score_for_lending(
     asset_token_1: str,
     asset_token_2: str,
     coingecko_api_key: str,
+    x402_signer: Optional[Account] = None,
+    x402_proxy: Optional[str] = None,
     time_period: int = 90,
 ) -> float:
     logger.info(f"Calculating IL risk score for tokens: {asset_token_1}, {asset_token_2}")
@@ -422,6 +436,12 @@ def calculate_il_risk_score_for_lending(
         cg = CoinGeckoAPI(api_key=coingecko_api_key)
     else:
         cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+
+    if x402_signer is not None and x402_proxy is not None:
+        logger.info("Using x402 signer for CoinGecko API requests")
+        cg.session = x402_requests(account=x402_signer)
+        cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
+
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
 
@@ -471,7 +491,7 @@ def calculate_il_risk_score_for_lending(
     return float(il_risk_score)
 
 
-def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
+def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key, x402_signer, x402_proxy):
     logger.info(f"Calculating IL risk score for silos with token0: {token0_symbol}")
     logger.info(f"Number of silos: {len(silos)}")
     
@@ -482,7 +502,7 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
         symbol = symbol.lower()
         if symbol in token_id_cache:
             return token_id_cache[symbol]
-        token_id = coingecko_name_to_id.get(symbol) or fetch_token_id(symbol)
+        token_id = coingecko_name_to_id.get(symbol) or fetch_token_id(symbol, coingecko_api_key, x402_signer, x402_proxy)
         token_id_cache[symbol] = token_id
         return token_id
 
@@ -498,7 +518,7 @@ def calculate_il_risk_score_for_silos(token0_symbol, silos, coingecko_api_key):
 
         if token_1_id:
             il_risk_score = calculate_il_risk_score_for_lending(
-                token_0_id, token_1_id, coingecko_api_key
+                token_0_id, token_1_id, coingecko_api_key, x402_signer, x402_proxy
             )
             if not il_risk_score:
                 logger.warning(f"Could not calculate IL risk score for silo: {token_1_symbol}")
@@ -574,7 +594,7 @@ def format_aggregator(aggregator) -> Dict[str, Any]:
 
 
 def get_best_opportunities(
-    chains, lending_asset, current_positions, coingecko_api_key, **kwargs
+    chains, lending_asset, current_positions, coingecko_api_key, x402_signer, x402_proxy, **kwargs
 ) -> List[Dict[str, Any]]:
     logger.info(f"Getting best opportunities for chains: {chains}, lending_asset: {lending_asset}")
     
@@ -603,7 +623,7 @@ def get_best_opportunities(
         
         silos = aggregator.get("whitelistedSilos", [])
         aggregator["il_risk_score"] = calculate_il_risk_score_for_silos(
-            aggregator["asset"]["symbol"], silos, coingecko_api_key
+            aggregator["asset"]["symbol"], silos, coingecko_api_key, x402_signer, x402_proxy
         )
         aggregator["sharpe_ratio"] = get_sharpe_ratio_for_address(
             historical_data, aggregator["address"]
@@ -622,7 +642,7 @@ def get_best_opportunities(
 
 
 def calculate_metrics(
-    position: Dict[str, Any], coingecko_api_key: str, **kwargs
+    position: Dict[str, Any], coingecko_api_key: str, x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None, **kwargs
 ) -> Optional[Dict[str, Any]]:
     logger.info(f"Calculating metrics for position: {position.get('pool_address')}")
     
@@ -630,6 +650,8 @@ def calculate_metrics(
         position.get("token0_symbol"),
         position.get("whitelistedSilos", []),
         coingecko_api_key,
+        x402_signer,
+        x402_proxy,
     )
     historical_data = fetch_historical_data()
     if historical_data is None:
@@ -711,10 +733,12 @@ def run(*_args, **kwargs) -> Any:
         lending_asset = kwargs.pop("lending_asset", "0x4200000000000000000000000000000000000006")
         current_positions = kwargs.pop("current_positions", [])
         coingecko_api_key = kwargs.pop("coingecko_api_key", "")
+        x402_signer = kwargs.pop("x402_signer", None)
+        x402_proxy = kwargs.pop("x402_proxy", None)
         
         # Call get_best_opportunities with positional arguments and remaining kwargs
         result = get_best_opportunities(
-            chains, lending_asset, current_positions, coingecko_api_key, **kwargs
+            chains, lending_asset, current_positions, coingecko_api_key, x402_signer, x402_proxy, **kwargs
         )
         
         if isinstance(result, dict) and "error" in result:

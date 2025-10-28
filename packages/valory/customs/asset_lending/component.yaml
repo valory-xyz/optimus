@@ -8,10 +8,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiguqxojq5hkgi55jqdl5p3rvz62jwxxw6ygorkym7ol3ps5qhh7rq
-  asset_lending.py: bafybeigstmaxupaa7fmqmvyjpnqxoanqeuh4utpxopejxaau4tgiylsqie
+  asset_lending.py: bafybeic62zbfdlmyl6pcsq6c23dge66l7yioi7gib5nlfa5xbdxlkhlc2y
 fingerprint_ignore_patterns: []
 entry_point: asset_lending.py
 callable: run
+connections:
+- valory/x402:0.1.0:bafybeib3ihv7rg5elfh7qbx2mq62vd2qhh4dq4lat3nq5dhby3yirhtqoa
 dependencies:
   requests:
     version: <2.31.2,>=2.28.1
@@ -25,3 +27,5 @@ dependencies:
     version: '>=2.2.3'
   web3:
     version: <7.0.0,>=6.0.0
+  eth_account:
+    version: <0.9.0,>=0.8.0

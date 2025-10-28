@@ -1,4 +1,6 @@
 import warnings
+
+from packages.valory.connections.x402.clients.requests import x402_requests
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import time
@@ -24,6 +26,8 @@ REQUIRED_FIELDS = (
     "current_positions",
     "coingecko_api_key",
     "whitelisted_assets",
+    "x402_signer",
+    "x402_proxy",
 )
 VELODROME = "velodrome"
 
@@ -396,7 +400,7 @@ def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     return il
 
 
-def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None) -> float:
+def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None, x402_signer=None, x402_proxy=None) -> float:
     """Calculate IL risk score for multiple tokens."""
     
     # Set up CoinGecko client
@@ -405,7 +409,12 @@ def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, t
         cg = CoinGeckoAPI(api_key=coingecko_api_key)
     else:
         cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
-    
+
+    if x402_signer is not None and x402_proxy is not None:
+        logger.info("Using x402 signer for CoinGecko API requests")
+        cg.session = x402_requests(account=x402_signer)
+        cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
+
     # Create a debug data structure
     debug_data = {
         "token_ids": token_ids,
@@ -1288,7 +1297,7 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools
 
-def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None) -> List[Dict[str, Any]]:
+def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
@@ -1336,7 +1345,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             formatted_pool["token1_symbol"] = tokens[1]["symbol"]
         
         # Calculate advanced metrics if we have the necessary data
-        if coingecko_api_key and len(tokens) >= 2:
+        if coingecko_api_key or (x402_signer and x402_proxy) and len(tokens) >= 2:
             # Calculate Sharpe ratio
             try:
                 sharpe_ratio = get_velodrome_pool_sharpe_ratio(
@@ -1392,7 +1401,9 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
                         valid_token_ids, 
                         coingecko_api_key,
                         pool_id=pool["id"],
-                        chain=chain_name
+                        chain=chain_name,
+                        x402_signer=x402_signer,
+                        x402_proxy=x402_proxy
                     )
                     formatted_pool["il_risk_score"] = il_risk_score
                     logger.info(f"Pool {pool['id']}: IL risk score calculated: {il_risk_score}")
@@ -1566,7 +1577,7 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
+def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None, **kwargs):
     """
     Get and format pool opportunities with optimized caching and performance.
     
@@ -1579,6 +1590,8 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         top_n: Number of top pools by APR to return (default: 10)
         whitelisted_assets: List of whitelisted assets
         coin_id_mapping: Coin ID mapping
+        x402_signer: Optional signer for X402
+        x402_proxy: Optional proxy for X402
         **kwargs: Additional arguments
     
     Returns:
@@ -1637,7 +1650,9 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         filtered_pools,
         chain_id,
         coingecko_api_key,
-        coin_id_mapping
+        coin_id_mapping,
+        x402_signer=x402_signer,
+        x402_proxy=x402_proxy,
     )
     
     # Check if we have any formatted pools before proceeding
@@ -1669,6 +1684,8 @@ def calculate_metrics(
     position: Dict[str, Any],
     coingecko_api_key: str,
     coin_id_mapping: List[Any],
+    x402_signer: Optional[Any] = None,
+    x402_proxy: Optional[Any] = None,
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
     """
@@ -1724,7 +1741,9 @@ def calculate_metrics(
                 valid_token_ids, 
                 coingecko_api_key,
                 pool_id=pool_id,
-                chain=chain
+                chain=chain,
+                x402_signer=x402_signer,
+                x402_proxy=x402_proxy
             )
             
         # Calculate Sharpe ratio
@@ -1804,7 +1823,9 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         metrics = calculate_metrics(
             position=kwargs["position"],
             coingecko_api_key=kwargs["coingecko_api_key"],
-            coin_id_mapping=kwargs["coin_id_mapping"]
+            coin_id_mapping=kwargs["coin_id_mapping"],
+            x402_signer=kwargs.get("x402_signer"),
+            x402_proxy=kwargs.get("x402_proxy"),
         )
         
         if metrics is None:
@@ -1870,7 +1891,9 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             rpc_url,
             kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
             whitelisted_assets=kwargs.get("whitelisted_assets"),
-            coin_id_mapping=kwargs.get("coin_id_mapping")
+            coin_id_mapping=kwargs.get("coin_id_mapping"),
+            x402_signer=kwargs.get("x402_signer"),
+            x402_proxy=kwargs.get("x402_proxy")
         )
         
         # Process results

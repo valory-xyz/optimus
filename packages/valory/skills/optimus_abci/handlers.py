@@ -90,7 +90,10 @@ from packages.valory.skills.optimus_abci.dialogues import (
     SrrDialogues,
 )
 from packages.valory.skills.optimus_abci.models import Params, SharedState
-from packages.valory.skills.optimus_abci.prompts import PROMPT
+from packages.valory.skills.optimus_abci.prompts import (
+    STRATEGY_PROMPT,
+    build_strategy_config_schema,
+)
 
 
 ABCIHandler = BaseABCIRoundHandler
@@ -123,6 +126,7 @@ OK_CODE = 200
 NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
+ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
 
 
 def load_fsm_spec() -> Dict:
@@ -358,17 +362,7 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the HTTP dialogue
         """
         # Check if GENAI_API_KEY is set
-        api_key = self.context.params.genai_api_key
-
-        is_chat_enabled = (
-            api_key is not None
-            and isinstance(api_key, str)
-            and api_key.strip() != ""
-            and api_key != "${str:}"
-            and api_key != '""'
-        )
-
-        data = {"isChatEnabled": is_chat_enabled}
+        data = {"isChatEnabled": True}
 
         self._send_ok_response(http_msg, http_dialogue, data)
 
@@ -779,21 +773,7 @@ class HttpHandler(BaseHttpHandler):
                 else self.context.state.selected_protocols or self.available_strategies
             )
 
-            available_trading_types = [
-                trading_type.value for trading_type in TradingType
-            ]
-            last_selected_threshold = THRESHOLDS.get(previous_trading_type)
-
-            # Convert strategy names to protocol names for LLM
-            available_protocols = [
-                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
-                for strategy in self.available_strategies
-            ]
-
-            available_protocols_definitons = {
-                protocol: PROTOCOL_DEFINITIONS.get(protocol, "")
-                for protocol in available_protocols
-            }
+            last_selected_threshold = THRESHOLDS.get(previous_trading_type, 10)
 
             # Convert previous selected protocols to their protocol names
             previous_protocols_for_llm = [
@@ -801,20 +781,19 @@ class HttpHandler(BaseHttpHandler):
                 for strategy in previous_selected_protocols
             ]
 
-            # Format the prompt
-            prompt_template = PROMPT.format(
-                USER_PROMPT=user_prompt,
-                PREVIOUS_TRADING_TYPE=previous_trading_type,
-                TRADING_TYPES=available_trading_types,
-                AVAILABLE_PROTOCOLS=available_protocols_definitons,
-                LAST_THRESHOLD=last_selected_threshold,
-                PREVIOUS_SELECTED_PROTOCOLS=previous_protocols_for_llm,
-                THRESHOLDS=THRESHOLDS,
+            # Format the optimized prompt
+            prompt_template = STRATEGY_PROMPT.format(
+                user_prompt=user_prompt,
+                previous_protocols=previous_protocols_for_llm,
+                previous_type=previous_trading_type,
+                previous_threshold=last_selected_threshold,
             )
-            # Prepare payload data
+
+            # Prepare payload data with schema
             payload_data = {
                 "prompt": prompt_template,
                 "model": self.context.params.genai_model,
+                "schema": build_strategy_config_schema(),
             }
 
             # Create LLM request
@@ -834,7 +813,7 @@ class HttpHandler(BaseHttpHandler):
             )
 
         except (json.JSONDecodeError, ValueError) as e:
-            self.context.logger.info(f"Error processing prompt: {str(e)}")
+            self.context.logger.error(f"Error processing prompt: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
 
     def _parse_llm_response(
@@ -1031,16 +1010,58 @@ class HttpHandler(BaseHttpHandler):
         :param dialogue: the Dialogue
         :param http_msg: the original HttpMessage
         :param http_dialogue: the original HttpDialogue
+        :param llm_request_start_time: the time when LLM request was initiated
         """
-        (
-            selected_protocol_names,
-            trading_type,
-            max_loss_percentage,
-            reasoning,
-            previous_trading_type,
-        ) = self._parse_llm_response(llm_response_message)
 
-        # Convert percentage to VaR (negative decimal)
+        try:
+            # Parse the outer payload
+            genai_response: dict = json.loads(llm_response_message.payload)
+            self.context.logger.info(f"Response from GenAI: {genai_response}")
+
+            # Check for errors
+            if "error" in genai_response:
+                error_msg = genai_response["error"]
+                self.context.logger.error(f"GenAI error: {error_msg}")
+                self._send_error_response(http_msg, http_dialogue, {"error": error_msg})
+                return
+
+            # Extract the response field (it's a JSON string)
+            llm_response = genai_response.get("response", "{}")
+
+            # Parse the JSON string into a dict
+            strategy_data = json.loads(llm_response)
+
+            # Extract fields from the parsed JSON
+            selected_protocol_names = strategy_data.get("selected_protocols", [])
+            trading_type = strategy_data.get("trading_type", "balanced")
+            max_loss_percentage = float(strategy_data.get("max_loss_percentage", 10))
+            reasoning = strategy_data.get("reasoning", "")
+
+            # Get previous trading type from state
+            previous_trading_type = self.context.state.trading_type or "balanced"
+
+            self.context.logger.info(
+                f"Parsed response - Protocols: {selected_protocol_names}, "
+                f"Type: {trading_type}, Loss %: {max_loss_percentage}"
+            )
+
+        except json.JSONDecodeError as e:
+            self.context.logger.error(f"JSON decode error: {e}", exc_info=True)
+            self._send_error_response(
+                http_msg,
+                http_dialogue,
+                {"error": f"Failed to parse LLM response: {str(e)}"},
+            )
+            return
+        except Exception as e:
+            self.context.logger.error(f"Error parsing LLM response: {e}", exc_info=True)
+            self._send_error_response(
+                http_msg,
+                http_dialogue,
+                {"error": f"Failed to process LLM response: {str(e)}"},
+            )
+            return
+
         var_value = -max_loss_percentage / 100.0
         # Calculate composite score using the formula
         composite_score = self.calculate_composite_score_from_var(var_value)

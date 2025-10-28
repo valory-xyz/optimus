@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeia2mbk2y2kxcwqzzgh5epldphpgx6oga5dewolmcj53s74lnmqcxu
+agent: valory/optimus:0.1.0:bafybeifycfldxgtzqhykcrv6gia4kspbiqhxoaxrplaiqqpsuscapgnu7m
 number_of_agents: 1
 deployment:
   agent:
@@ -176,6 +176,9 @@ public_id: dvilela/genai:0.1.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlco
 type: connection
 config:
   genai_api_key: ${GENAI_API_KEY:str:""}
+  use_x402: ${USE_X402:bool:true}
+  genai_x402_server_base_url: ${GENAI_X402_SERVER_BASE_URL:str:http://localhost:8000/v1/gemini/optimism/v1beta}
+  network_selector: ${NETWORK_SELECTOR:str:optimism}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

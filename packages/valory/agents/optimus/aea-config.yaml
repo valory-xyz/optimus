@@ -14,9 +14,10 @@ connections:
 - valory/ipfs:0.1.0:bafybeiamz23olgtow4wqf7zpsfnfzf7pxiognrxl2mhn5kvqutlwhgukxa
 - valory/ledger:0.19.0:bafybeibdsjmy4w2eyilbqc7yzutopl65qpeyspxwz7mjvirr52twhjlf5y
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
-- dvilela/genai:0.1.0:bafybeigjsmpmlt5tfdrtnfvqblpexyngl7qryusy6ytkebim5flswivbgu
+- dvilela/genai:0.1.0:bafybeidshaucprqemxiesvxgwuv5bpll2vxfn7axjmvk2ulo4g4ptuxyki
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
 - valory/mirror_db:0.1.0:bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy
+- valory/x402:0.1.0:bafybeib3ihv7rg5elfh7qbx2mq62vd2qhh4dq4lat3nq5dhby3yirhtqoa
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeiegj5zx4wrahc6gpunxvxgjkzdg4nvdojbqkk5xggv2mt56oecpoa
@@ -51,7 +52,7 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
 - valory/liquidity_trader_abci:0.1.0:bafybeifnwtfzkiz6phj5dw5gbdvrmm3vnobelvhwbidbv2vkme2uxuglsq
-- valory/optimus_abci:0.1.0:bafybeidjibnpsulgq5k7c26lar4bdsjdwuwosrj3ae3pb6wor7fxosyrrm
+- valory/optimus_abci:0.1.0:bafybeigqwqjecgpip2yympwj4vgepzc527hkbqdtnwkm6kjjiwlby2mb3i
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
@@ -169,6 +170,9 @@ public_id: dvilela/genai:0.1.0
 type: connection
 config:
   genai_api_key: ${str:""}
+  use_x402: ${bool:true}
+  genai_x402_server_base_url: ${str:http://localhost:8000/v1/gemini/optimism/v1beta}
+  network_selector: ${str:optimism}
 ---
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection

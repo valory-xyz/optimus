@@ -422,7 +422,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         try:
             # For zero address (ETH), use a different approach
             if token_address == ZERO_ADDRESS:
-                return (yield from self._fetch_historical_eth_price(date_str))
+                return self._fetch_historical_eth_price(date_str)
 
             # Get CoinGecko ID for the token
             coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
@@ -447,7 +447,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _fetch_historical_eth_price(
         self, date_str: str
-    ) -> Generator[None, None, Optional[float]]:
+    ) -> Optional[float]:
         """Fetch historical ETH price for a specific date."""
         endpoint = self.coingecko.historical_price_endpoint.format(
             coin_id="ethereum",
@@ -455,15 +455,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
         )
 
         headers = {"Accept": "application/json"}
-        if self.coingecko.api_key:
+        if not self.params.use_x402 and self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
-        success, response_json = yield from self._request_with_retries(
+        x402_signer = self.eoa_account if self.params.use_x402 else None
+        success, response_json = self.coingecko.request(
             endpoint=endpoint,
             headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            x402_signer=x402_signer,
         )
 
         if success:
@@ -2962,7 +2961,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 if reversion_date
                 else datetime.now().strftime("%d-%m-%Y")
             )
-            eth_price = yield from self._fetch_historical_eth_price(date_str)
+            eth_price = self._fetch_historical_eth_price(date_str)
             if eth_price:
                 reversion_value = reversion_amount * eth_price
                 total_reversion += reversion_value
@@ -3001,7 +3000,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     date_str = datetime.strptime(date, "%Y-%m-%d").strftime("%d-%m-%Y")
 
                     if token_symbol == "ETH":  # nosec B105
-                        price = yield from self._fetch_historical_eth_price(date_str)
+                        price = self._fetch_historical_eth_price(date_str)
                     else:
                         coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
                         if coingecko_id:
@@ -4060,9 +4059,9 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
         for index, transfer in enumerate(reversion_transfers):
             if index == 0:
-                eth_price = yield from self._fetch_historical_eth_price(reversion_date)
+                eth_price = self._fetch_historical_eth_price(reversion_date)
             else:
-                eth_price = yield from self._fetch_historical_eth_price(current_date)
+                eth_price = self._fetch_historical_eth_price(current_date)
             if eth_price:
                 reversion_amount = transfer.get("amount", 0)
                 reversion_value += reversion_amount * eth_price

@@ -373,7 +373,7 @@ class HttpHandler(BaseHttpHandler):
         """
         # Check if using X402 or if GENAI_API_KEY is set
         use_x402 = getattr(self.context.params, "use_x402", False)
-        
+
         if use_x402:
             # If using X402, chat is enabled without API key check
             is_chat_enabled = True
@@ -387,7 +387,7 @@ class HttpHandler(BaseHttpHandler):
                 and api_key != "${str:}"
                 and api_key != '""'
             )
-        
+
         data = {"isChatEnabled": is_chat_enabled}
 
         self._send_ok_response(http_msg, http_dialogue, data)
@@ -1017,8 +1017,8 @@ class HttpHandler(BaseHttpHandler):
             payload_data = {
                 "prompt": prompt_template,
                 "schema": build_strategy_config_schema(),
-                "temperature": 0.01,  
-                "max_tokens": 120, 
+                "temperature": 0.01,
+                "max_tokens": 120,
             }
 
             # Create LLM request
@@ -1247,7 +1247,7 @@ class HttpHandler(BaseHttpHandler):
             if "error" in genai_response:
                 error_msg = genai_response["error"]
                 self.context.logger.error(f"GenAI error: {error_msg}")
-                self._send_error_response(http_msg, http_dialogue, {"error": error_msg})
+                self._send_ok_response(http_msg, http_dialogue, {"error": error_msg})
                 return
 
             # Extract the response field (it's a JSON string)
@@ -1272,7 +1272,7 @@ class HttpHandler(BaseHttpHandler):
 
         except json.JSONDecodeError as e:
             self.context.logger.error(f"JSON decode error: {e}", exc_info=True)
-            self._send_error_response(
+            self._send_ok_response(
                 http_msg,
                 http_dialogue,
                 {"error": f"Failed to parse LLM response: {str(e)}"},
@@ -1280,7 +1280,7 @@ class HttpHandler(BaseHttpHandler):
             return
         except Exception as e:
             self.context.logger.error(f"Error parsing LLM response: {e}", exc_info=True)
-            self._send_error_response(
+            self._send_ok_response(
                 http_msg,
                 http_dialogue,
                 {"error": f"Failed to process LLM response: {str(e)}"},

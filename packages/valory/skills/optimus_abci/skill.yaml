@@ -361,5 +361,7 @@ models:
 dependencies:
   PyYAML:
     version: '>=3.10,<=6.0.1'
+  pydantic:
+    version: ==2.11.9
 is_abstract: false
 customs: []

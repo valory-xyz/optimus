@@ -3103,7 +3103,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         multi_send_txs = []
 
         # Add approval transaction if needed
-        if not is_approved or not is_approved.get("is_approved", False):
+        if not is_approved:
             self.context.logger.info(
                 f"Setting approval for all NFTs to gauge {gauge_address}"
             )

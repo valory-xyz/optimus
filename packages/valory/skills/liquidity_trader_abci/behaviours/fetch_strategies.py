@@ -445,9 +445,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-    def _fetch_historical_eth_price(
-        self, date_str: str
-    ) -> Optional[float]:
+    def _fetch_historical_eth_price(self, date_str: str) -> Optional[float]:
         """Fetch historical ETH price for a specific date."""
         endpoint = self.coingecko.historical_price_endpoint.format(
             coin_id="ethereum",

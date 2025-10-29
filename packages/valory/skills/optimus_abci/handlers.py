@@ -1007,11 +1007,12 @@ class HttpHandler(BaseHttpHandler):
                 previous_threshold=last_selected_threshold,
             )
 
-            # Prepare payload data with schema
+            # Prepare payload data with schema and speed optimizations
             payload_data = {
                 "prompt": prompt_template,
-                "model": self.context.params.genai_model,
                 "schema": build_strategy_config_schema(),
+                "temperature": 0.01,  
+                "max_tokens": 120, 
             }
 
             # Create LLM request
@@ -1019,7 +1020,7 @@ class HttpHandler(BaseHttpHandler):
             request_srr_message, srr_dialogue = srr_dialogues.create(
                 counterparty=str(GENAI_CONNECTION_PUBLIC_ID),
                 performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps(payload_data, ensure_ascii=True),
+                payload=json.dumps(payload_data),
             )
             # Prepare callback args
             callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}

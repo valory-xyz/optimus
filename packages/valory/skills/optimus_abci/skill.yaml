@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeih3laiba2txmxtw43zhtbuppc3gzthbb7osejvf5ngf5ioyn22akm
   dialogues.py: bafybeifojr2urrwkm6rpm3wbytvcy54ks7x7qashwphyrlkrnaem6jaswy
   fsm_specification.yaml: bafybeigs27k3cmcgnu4w5j72vgp2uqbmt3c4zgsw55epm577bkm3yosulu
-  handlers.py: bafybeihiqaxmcfw7ppu5ognrrvlshebyv7uuo3ju3aj7bhjll5bxugnco4
+  handlers.py: bafybeiegj3rhzuiyeuluz2zzf3tcg56jdqaob7qv5iqabs55vpqkd6l7yy
   models.py: bafybeieeq64gdcpri2lcj3yvrvsp6edgg52vx53shqd3wxskekhhn2s5xy
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agent-agentsfun-logo-Cl82UKSm.png: bafybeia3nla5pruiurpwvzex6bbsgset4k2foerma2iwy5zxmtjidur454
@@ -97,7 +97,7 @@ fingerprint:
   optimus-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
   optimus-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  prompts.py: bafybeifjdttxzozejwc25ywgadytrgz763dlsefgb2og5jwj76nw4gnwnu
+  prompts.py: bafybeibscslacoihimls7kqo7sd3p47u7pss7qm6xkl7ddgsikzacop7gy
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -200,7 +200,7 @@ models:
       reset_pause_duration: 10
       on_chain_service_id: null
       request_retry_delay: 1.0
-      request_timeout: 10.0
+      request_timeout: 30.0
       reset_tendermint_after: 2
       retry_attempts: 400
       retry_timeout: 3

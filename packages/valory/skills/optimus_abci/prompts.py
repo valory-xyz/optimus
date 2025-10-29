@@ -1,51 +1,66 @@
-"""Module for handling prompts in the Optimus ABCI skill."""
+"""This package contains LLM prompts for Optimus ABCI."""
 
-PROMPT = """Analyze the user prompt to determine protocols and risk tolerance.
+import enum
+import pickle  # nosec
+import typing
+from dataclasses import dataclass
 
-- User prompt: {USER_PROMPT}
-- Previous trading type: {PREVIOUS_TRADING_TYPE}
-- Available trading types: {TRADING_TYPES}
-- Available protocols: {AVAILABLE_PROTOCOLS}
-- Last threshold: {LAST_THRESHOLD}
-- Previous protocols: {PREVIOUS_SELECTED_PROTOCOLS}
-- Threshold values: {THRESHOLDS}
 
-IMPORTANT: You must use ONLY these exact protocol names (case-sensitive):
-- "balancerPool" (for Balancer protocol)
-- "uniswapV3" (for Uniswap V3 protocol)
-- "velodrome" (for Velodrome protocol)
-- "sturdy" (for Sturdy lending protocol)
+class ProtocolName(enum.Enum):
+    """Available protocol names."""
 
-DO NOT use abbreviations like "uni", "velo", etc. Use the exact names above.
+    BALANCER_POOL = "balancerPool"
+    UNISWAP_V3 = "uniswapV3"
+    VELODROME = "velodrome"
+    STURDY = "sturdy"
 
-CRITICAL INSTRUCTIONS FOR PROTOCOL SELECTION:
-1. If the user explicitly specifies to use some protocol:
-   - Use just that protocol
-2. If the user says "remove [protocol]" or "remove [protocol] from pool":
-   - Remove ONLY the specified protocol from the previous protocols
-   - Keep all other previous protocols unchanged
-   - If the protocol to remove is not in the previous protocols, keep previous protocols unchanged
-3. If the user says "add [protocol]" or "add [protocol] to pool":
-   - Add the specified protocol to the previous protocols
-   - Keep all other previous protocols unchanged
-4. If the user specifies a complete new list of protocols:
-   - Use the exact protocols they specify
-5. If the user doesn't specify protocols:
-   - Keep the previous protocols unchanged
 
-Analyze risk sentiment in the user's language and estimate their maximum acceptable loss percentage:
-- Conservative language ("safe", "minimize risk"): 1-5%
-- Moderate language ("balanced", "stable"): 6-10%
-- Growth-focused ("higher returns", "some risk"): 11-15%
-- Aggressive ("maximize", "high returns"): 16-25%
-- Very aggressive ("maximum returns", "big risks"): 26-30%
-Default to 10% if unclear.
+class TradingType(enum.Enum):
+    """Trading type."""
 
-Return JSON with these keys:
-- 'selected_protocols': Array of valid protocol names (ONLY use: "balancerPool", "uniswapV3", "velodrome", "sturdy")
-- 'trading_type': String ('risky' or 'balanced')
-- 'max_loss_percentage': Number between 1-30 representing risk tolerance
-- 'reasoning': HTML explanation of selections, inferred risk level, and effects
+    RISKY = "risky"
+    BALANCED = "balanced"
 
-Only return valid JSON. No code snippets or markdown.
-"""
+
+@dataclass(frozen=True)
+class StrategyConfig:
+    """Strategy configuration response."""
+
+    selected_protocols: typing.List[str]
+    trading_type: TradingType
+    max_loss_percentage: float
+    reasoning: str
+
+
+def build_strategy_config_schema() -> dict:
+    """Build a schema for the StrategyConfig."""
+    return {"class": pickle.dumps(StrategyConfig).hex(), "is_list": False}
+
+
+# Optimized prompt - essential info only, structured for speed
+STRATEGY_PROMPT = """Parse trading instruction for protocols and risk tolerance.
+
+User: "{user_prompt}"
+Current: protocols={previous_protocols}, type={previous_type}, threshold={previous_threshold}%
+
+Valid protocols: balancerPool, uniswapV3, velodrome, sturdy
+
+Protocol selection rules:
+- "use X" → select only X
+- "remove X" → remove X from current
+- "add X" → add X to current
+- explicit list → use exact list
+- no mention → keep current
+
+Risk tolerance (1-30%, default 10):
+- safe/conservative: 1-5%
+- moderate/balanced: 6-10%
+- growth/higher returns: 11-15%
+- aggressive/maximize: 16-25%
+- very aggressive/maximum: 26-30%
+
+REQUIRED OUTPUT: You must provide ALL four fields:
+1. selected_protocols (array of protocol names)
+2. trading_type (balanced or risky)
+3. max_loss_percentage (number 1-30)
+4. reasoning (explanation string)"""

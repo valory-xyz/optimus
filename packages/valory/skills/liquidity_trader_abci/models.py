@@ -223,6 +223,27 @@ class Coingecko(Model, TypeCheckMixin):
         self.rate_limiter._remaining_limit = 0
         self.rate_limiter._last_request_time = time()
 
+    def request(
+        self,
+        endpoint: str,
+        headers: Dict[str, str],
+        x402_signer: Optional[Account],
+    ) -> Tuple[bool, Dict]:
+        """Make a request to the Coingecko Proxied API if x402."""
+        try:
+            if self.use_x402:
+                session = x402_requests(account=x402_signer)
+                url = self.coingecko_x402_server_base_url + endpoint
+            else:
+                session = requests.Session()
+                url = self.coingecko_server_base_url + endpoint
+
+            response = session.get(url, headers=headers)
+            return True, response.json()
+        except Exception as exc:
+            self.context.logger.error(f"Exception during request to {url}: {exc}")
+            return False, {"exception": str(exc)}
+
 
 class Params(BaseParams):
     """Parameters"""

@@ -59,11 +59,7 @@ from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
 from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.models import Requests
-from packages.valory.skills.liquidity_trader_abci.models import (
-    Coingecko,
-    Params,
-    SharedState,
-)
+from packages.valory.skills.liquidity_trader_abci.models import Params, SharedState
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
     BalancerPoolBehaviour,
 )
@@ -378,11 +374,6 @@ class LiquidityTraderBaseBehaviour(
     def shared_state(self) -> SharedState:
         """Get the parameters."""
         return cast(SharedState, self.context.state)
-
-    @property
-    def coingecko(self) -> Coingecko:
-        """Return the Coingecko."""
-        return cast(Coingecko, self.context.coingecko)
 
     def default_error(
         self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage
@@ -1282,7 +1273,8 @@ class LiquidityTraderBaseBehaviour(
         headers = {
             "Accept": "application/json",
         }
-        if self.coingecko.api_key:
+
+        if not self.params.use_x402 and self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
         platform_id = self.coingecko.chain_to_platform_id_mapping.get(chain)
@@ -1293,15 +1285,16 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(
             f"Fetching price from CoinGecko API for token {token_address} on platform {platform_id}"
         )
+        endpoint = self.coingecko.token_price_endpoint.format(
+            token_address=token_address, asset_platform_id=platform_id
+        )
 
-        success, response_json = yield from self._request_with_retries(
-            endpoint=self.coingecko.token_price_endpoint.format(
-                token_address=token_address, asset_platform_id=platform_id
-            ),
+        x402_signer = self.eoa_account if self.params.use_x402 else None
+
+        success, response_json = self.coingecko.request(
+            endpoint=endpoint,
             headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            x402_signer=x402_signer,
         )
 
         if success:
@@ -1655,19 +1648,22 @@ class LiquidityTraderBaseBehaviour(
         headers = {
             "Accept": "application/json",
         }
-        if self.coingecko.api_key:
+
+        if not self.params.use_x402 and self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
         self.context.logger.info(
             f"Fetching {coin_id} price from CoinGecko coin price endpoint"
         )
 
-        success, response_json = yield from self._request_with_retries(
-            endpoint=self.coingecko.coin_price_endpoint.format(coin_id=coin_id),
+        endpoint = self.coingecko.coin_price_endpoint.format(coin_id=coin_id)
+
+        x402_signer = self.eoa_account if self.params.use_x402 else None
+
+        success, response_json = self.coingecko.request(
+            endpoint=endpoint,
             headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            x402_signer=x402_signer,
         )
 
         if success:
@@ -1829,19 +1825,20 @@ class LiquidityTraderBaseBehaviour(
         )
 
         headers = {"Accept": "application/json"}
-        if self.coingecko.api_key:
+
+        if not self.params.use_x402 and self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
         self.context.logger.info(
             f"Fetching historical price from CoinGecko API for {coingecko_id} on {date_str}"
         )
 
-        success, response_json = yield from self._request_with_retries(
+        x402_signer = self.eoa_account if self.params.use_x402 else None
+
+        success, response_json = self.coingecko.request(
             endpoint=endpoint,
             headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            x402_signer=x402_signer,
         )
 
         if success:

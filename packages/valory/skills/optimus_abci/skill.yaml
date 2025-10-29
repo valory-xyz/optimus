@@ -317,6 +317,10 @@ models:
       airdrop_started: false
       airdrop_contract_address: ''
       use_x402: true
+      x402_payment_requirements: '{"threshold":0.2,"top_up":0.25}'
+      optimism_ledger_rpc: https://mainnet.optimism.io
+      lifi_quote_to_amount_url: https://li.quest/v1/quote/toAmount
+      default_gas_limit: 500000
     class_name: Params
   coingecko:
     args:

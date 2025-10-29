@@ -989,7 +989,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             "max_pools": self.params.max_pools,
             "composite_score_threshold": composite_score,
         }
-        self.context.logger.info(f"kwargs: {kwargs}")
         self.context.logger.info(f"Evaluating hyper strategy: {hyper_strategy}")
         result = self.execute_strategy(**kwargs)
         self.selected_opportunities = result.get("optimal_strategies")
@@ -1022,9 +1021,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 for token_key in token_keys:
                     selected_opportunity[token_key] = to_checksum_address(
                         selected_opportunity[token_key]
-                    )
-                    self.context.logger.info(
-                        f"selected_opportunity[token_key] : {selected_opportunity[token_key]}"
                     )
 
             # Track final selected opportunities
@@ -1160,10 +1156,15 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
                     "coin_id_mapping": COIN_ID_MAPPING,
+                    "x402_signer": self.eoa_account
+                    if self.coingecko.use_x402
+                    else None,
+                    "x402_proxy": self.coingecko.coingecko_x402_server_base_url
+                    if self.coingecko.use_x402
+                    else None,
                 }
             )
             strategy_kwargs_list.append((next_strategy, kwargs))
-            self.context.logger.info(f"Strategy kwargs for {next_strategy}: {kwargs}")
 
         strategies_executables = self.shared_state.strategies_executables
 
@@ -1604,7 +1605,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get and update metrics for the current pool ."""
 
         kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
-
         kwargs.update(
             {
                 "strategy": strategy,
@@ -1618,6 +1618,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "current_positions": self.positions_eligible_for_exit,
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
+                "x402_signer": self.eoa_account if self.coingecko.use_x402 else None,
+                "x402_proxy": self.coingecko.coingecko_x402_server_base_url
+                if self.coingecko.use_x402
+                else None,
             }
         )
 

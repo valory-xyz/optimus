@@ -187,6 +187,7 @@ config:
   port: ${HTTP_SERVER_PORT:int:8716}
   ssl_cert: ${SSL_CERT_PATH:str:}
   ssl_key: ${SSL_KEY_PATH:str:}
+  timeout: ${TIMEOUT:int:30}
 ---
 public_id: dvilela/kv_store:0.1.0
 type: connection

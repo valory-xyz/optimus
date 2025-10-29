@@ -190,6 +190,7 @@ config:
   host: ${str:0.0.0.0}
   port: ${int:8716}
   target_skill_id: valory/optimus_abci:0.1.0
+  timeout: ${int:30}
 ---
 public_id: valory/optimus_abci:0.1.0
 type: skill

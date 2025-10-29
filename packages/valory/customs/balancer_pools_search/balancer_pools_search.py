@@ -36,7 +36,6 @@ REQUIRED_FIELDS = (
     "chains",
     "graphql_endpoint",
     "current_positions",
-    "coingecko_api_key",
     "whitelisted_assets",
     "coin_id_mapping",
     "x402_signer",
@@ -375,19 +374,8 @@ def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     
     return il
 
-def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None, time_period: int = 90) -> float:
+def calculate_il_risk_score_multi(token_ids, x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None, time_period: int = 90) -> float:
     """Calculate IL risk score for multiple tokens."""
-    is_pro = is_pro_api_key(coingecko_api_key)
-    if is_pro:
-        cg = CoinGeckoAPI(api_key=coingecko_api_key)
-    else:
-        cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
-
-    if x402_signer is not None and x402_proxy is not None:
-        logger.info(f"[COINGECKO] Configuring X402 proxy: {x402_proxy}")
-        cg.session = x402_requests(account=x402_signer)
-        cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
-
     to_timestamp = int(datetime.now().timestamp())
     from_timestamp = int((datetime.now() - timedelta(days=time_period)).timestamp())
     
@@ -403,6 +391,14 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, x402_signer
             try:
                 logger.info(f"[COINGECKO] API Call - Fetching price data for token: {token_id}")
                 logger.info(f"[COINGECKO] Request params - from: {from_timestamp}, to: {to_timestamp}, vs_currency: usd")
+                
+                if x402_signer is not None and x402_proxy is not None:
+                    logger.info(f"[COINGECKO] Configuring X402 proxy: {x402_proxy}")
+                    cg = CoinGeckoAPI()
+                    cg.session = x402_requests(account=x402_signer)
+                    cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
+                else:
+                    return None
                 
                 prices = cg.get_coin_market_chart_range_by_id(
                     id=token_id,
@@ -801,7 +797,7 @@ def normalize_token_symbol(symbol: str) -> str:
             return symbol[len(prefix):]
     return symbol
 
-def get_pool_token_prices(token_symbols: List[str], coingecko_api: CoinGeckoAPI) -> Dict[str, float]:
+def get_pool_token_prices(token_symbols: List[str], x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None) -> Dict[str, float]:
     """Enhanced token price fetching with support for synthetic tokens."""
     prices = {}
     
@@ -833,6 +829,13 @@ def get_pool_token_prices(token_symbols: List[str], coingecko_api: CoinGeckoAPI)
                         
                     time.sleep(2)  # Rate limiting
                     try:
+                        if x402_signer is not None and x402_proxy is not None:
+                            coingecko_api = CoinGeckoAPI()
+                            coingecko_api.session = x402_requests(account=x402_signer)
+                            coingecko_api.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
+                        else:
+                            return None
+                        
                         response = coingecko_api.get_price(
                             ids=token_id,
                             vs_currencies='usd',
@@ -1059,16 +1062,8 @@ def filter_valid_investment_pools(formatted_pools: List[Dict[str, Any]]) -> List
     
     return valid_pools
 
-def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str, x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None) -> List[Dict[str, Any]]:
+def format_pool_data(pools: List[Dict[str, Any]], x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None) -> List[Dict[str, Any]]:
     """Enhanced pool data formatter with improved investment calculations for multi-token pools."""
-    # Initialize CoinGecko API
-    if x402_signer is not None and x402_proxy is not None:
-        cg = CoinGeckoAPI()
-        cg.session = x402_requests(account=x402_signer)
-        cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
-    else:
-        cg = CoinGeckoAPI(api_key=coingecko_api_key) if is_pro_api_key(coingecko_api_key) else CoinGeckoAPI(demo_api_key=coingecko_api_key)
-
     # Determine if we're dealing with a single pool
     is_single_pool = len(pools) == 1
     
@@ -1085,7 +1080,7 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str, x402_s
             all_token_symbols.append(token["symbol"])
     
     time.sleep(5)  # Rate limiting
-    all_prices = get_pool_token_prices(list(set(all_token_symbols)), cg)
+    all_prices = get_pool_token_prices(list(set(all_token_symbols)), x402_signer, x402_proxy)
     
     for i, pool in enumerate(sorted_pools):
         # Get TVL from dynamicData
@@ -1151,7 +1146,7 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str, x402_s
         
     return formatted_pools
 
-def get_opportunities_for_balancer(chains, graphql_endpoint, current_positions, coingecko_api_key, whitelisted_assets, coin_id_mapping, x402_signer, x402_proxy, **kwargs):
+def get_opportunities_for_balancer(chains, graphql_endpoint, current_positions, whitelisted_assets, coin_id_mapping, x402_signer, x402_proxy, **kwargs):
     """Get and format pool opportunities with investment calculations."""
     logger.info(f"Starting opportunity search for chains: {chains}")
     logger.info(f"Current positions to exclude: {len(current_positions)}")
@@ -1202,7 +1197,7 @@ def get_opportunities_for_balancer(chains, graphql_endpoint, current_positions, 
         valid_token_ids = [tid for tid in token_ids if tid]
         if len(valid_token_ids) >= 2:
             pool["il_risk_score"] = calculate_il_risk_score_multi(
-                valid_token_ids, coingecko_api_key, x402_signer, x402_proxy
+                valid_token_ids, x402_signer, x402_proxy
             )
             logger.info(f"IL risk score calculated: {pool['il_risk_score']}")
         else:
@@ -1211,7 +1206,7 @@ def get_opportunities_for_balancer(chains, graphql_endpoint, current_positions, 
 
     # Format pools with investment calculations
     logger.info("Formatting pool data with investment calculations")
-    formatted_pools = format_pool_data(filtered_pools, coingecko_api_key, x402_signer, x402_proxy)
+    formatted_pools = format_pool_data(filtered_pools, x402_signer, x402_proxy)
     
     # Filter pools to only include those with valid investments in both token0 and token1
     logger.info("Filtering pools for valid investments")
@@ -1221,7 +1216,7 @@ def get_opportunities_for_balancer(chains, graphql_endpoint, current_positions, 
     return valid_investment_pools
 
 def calculate_metrics(
-    position: Dict[str, Any], coingecko_api_key: str, coin_id_mapping: dict, x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None, **kwargs
+    position: Dict[str, Any], coin_id_mapping: dict, x402_signer: Optional[str] = None, x402_proxy: Optional[str] = None, **kwargs
 ) -> Optional[Dict[str, Any]]:
     # Dynamic handling of tokens
     token_ids = []
@@ -1254,7 +1249,7 @@ def calculate_metrics(
     valid_token_ids = [tid for tid in token_ids if tid]
     il_risk_score = None
     if len(valid_token_ids) >= 2:
-        il_risk_score = calculate_il_risk_score_multi(valid_token_ids, coingecko_api_key, x402_signer, x402_proxy)
+        il_risk_score = calculate_il_risk_score_multi(valid_token_ids, x402_signer, x402_proxy)
     
     sharpe_ratio = get_balancer_pool_sharpe_ratio(
         position["pool_id"], position["chain"].upper()

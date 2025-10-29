@@ -1152,7 +1152,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         if self.positions_eligible_for_exit
                         else []
                     ),
-                    "coingecko_api_key": self.coingecko.api_key,
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
                     "coin_id_mapping": COIN_ID_MAPPING,
@@ -1610,7 +1609,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "strategy": strategy,
                 "get_metrics": True,
                 "position": position,
-                "coingecko_api_key": self.coingecko.api_key,
                 "chains": self.params.target_investment_chains,
                 "apr_threshold": self.params.apr_threshold,
                 "protocols": self.params.available_protocols,

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeiduapke6qebdljtkcr4hk2rclhcuetgb2zygckkdoywnb4pjyo3qm
+agent: valory/optimus:0.1.0:bafybeigxwqoo4vrq2mzytqctat5pgd7fesg3gunrqvdtgw4fqicfp4q3se
 number_of_agents: 1
 deployment:
   agent:
@@ -114,6 +114,7 @@ models:
       slippage_tolerance: ${SLIPPAGE_TOLERANCE:float:1.0}
       genai_model: ${GENAI_MDOEL:str:gemini-2.5-flash}
       slippage_for_swap: ${SLIPPAGE_FOR_SWAP:float:0.005}
+      use_x402: ${USE_X402:bool:true}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
@@ -176,6 +177,8 @@ public_id: dvilela/genai:0.1.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlco
 type: connection
 config:
   genai_api_key: ${GENAI_API_KEY:str:""}
+  use_x402: ${USE_X402:bool:true}
+  genai_x402_server_base_url: ${GENAI_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/gemini/gnosis/v1beta}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

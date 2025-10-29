@@ -386,6 +386,7 @@ class Params(BaseParams):
         self.airdrop_contract_address = self._ensure(
             "airdrop_contract_address", kwargs, str
         )
+        self.use_x402 = self._ensure("use_x402",kwargs,bool)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

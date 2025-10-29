@@ -117,13 +117,20 @@ models:
       use_x402: ${USE_X402:bool:true}
   coingecko:
     args:
-      token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
-      coin_price_endpoint: ${COINGECKO_COIN_PRICE_ENDPOINT:str:https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
+      token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:/v1/coingecko/{chain}/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}
+      coin_price_endpoint: ${COINGECKO_COIN_PRICE_ENDPOINT:str:/v1/coingecko/{chain}/api/v3/simple/price?ids={coin_id}&vs_currencies=usd}
       api_key: ${COINGECKO_API_KEY:str:CG-mf5xZnGELpSXeSqmHDLY2nNU}
       requests_per_minute: ${COINGECKO_REQUESTS_PER_MINUTE:int:30}
       credits: ${COINGECKO_CREDITS:int:10000}
       rate_limited_code: ${COINGECKO_RATE_LIMITED_CODE:int:429}
+      historical_price_endpoint: ${HISTORICAL_PRICE_ENDPOINT:str:/api/v3/coins/{coin_id}/history?date={date}}
+      historical_market_data_endpoint: ${HISTORICAL_MARKET_DATA_ENDPOINT:str:/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}}
+      coin_from_address_endpoint: ${COIN_FROM_ADDRESS_ENDPOINT:str:/api/v3/coins/{platform}/contract/{address}}
       chain_to_platform_id_mapping: ${COINGECKO_CHAIN_TO_PLATFORM_ID_MAPPING:str:{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum","mode":"mode"}}
+      use_x402: ${USE_X402:bool:true}
+      coingecko_server_base_url: ${COINGECKO_SERVER_BASE_URL:str:https://api.coingecko.com}
+      coingecko_x402_server_base_url: ${COINGECKO_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/coingecko/{chain}}
+      network_selector: ${GENAI_NETWORK_SELECTOR:str:optimism}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

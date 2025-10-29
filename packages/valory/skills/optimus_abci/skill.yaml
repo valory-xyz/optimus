@@ -328,6 +328,12 @@ models:
       credits: 10000
       rate_limited_code: 429
       chain_to_platform_id_mapping: '{"optimism":"optimistic-ethereum","base":"base","ethereum":"ethereum","mode":"mode"}'
+      historical_market_data_endpoint: /api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}
+      coin_from_address_endpoint: /api/v3/coins/{platform}/contract/{address}
+      use_x402: true
+      coingecko_server_base_url: https://api.coingecko.com
+      coingecko_x402_server_base_url: https://x402.olas.autonolas.tech/v1/coingecko/{chain}
+      network_selector: optimism
     class_name: Coingecko
   randomness_api:
     args:

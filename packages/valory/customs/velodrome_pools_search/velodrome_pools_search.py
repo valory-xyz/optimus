@@ -1,4 +1,6 @@
 import warnings
+
+from packages.valory.connections.x402.clients.requests import x402_requests
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import time
@@ -24,6 +26,8 @@ REQUIRED_FIELDS = (
     "current_positions",
     "coingecko_api_key",
     "whitelisted_assets",
+    "x402_signer",
+    "x402_proxy",
 )
 VELODROME = "velodrome"
 
@@ -267,7 +271,6 @@ def log_cache_metrics():
         misses = CACHE_METRICS["misses"].get(cache_type, 0)
         total = hits + misses
         hit_rate = (hits / total * 100) if total > 0 else 0
-        logger.info(f"Cache metrics for {cache_type}: {hits} hits, {misses} misses, {hit_rate:.2f}% hit rate")
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     """Check if any required fields are missing from kwargs."""
@@ -276,7 +279,6 @@ def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
 @lru_cache(maxsize=8)
 def get_web3_connection(rpc_url):
     """Get or create a Web3 connection with caching."""
-    logger.info(f"Creating new Web3 connection to {rpc_url}")
     return Web3(Web3.HTTPProvider(rpc_url))
 
 @lru_cache(None)
@@ -396,16 +398,11 @@ def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     return il
 
 
-def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None) -> float:
+def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None, x402_signer=None, x402_proxy=None) -> float:
     """Calculate IL risk score for multiple tokens."""
     
-    # Set up CoinGecko client
-    is_pro = is_pro_api_key(coingecko_api_key)
-    if is_pro:
-        cg = CoinGeckoAPI(api_key=coingecko_api_key)
-    else:
-        cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
-    
+
+
     # Create a debug data structure
     debug_data = {
         "token_ids": token_ids,
@@ -436,20 +433,31 @@ def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, t
         prices_data = []
         for token_id in valid_token_ids:
             try:
-                logger.info(f"Fetching price data for token {token_id}")
+                if x402_signer is not None and x402_proxy is not None:
+                    cg = CoinGeckoAPI()
+                    cg.session = x402_requests(account=x402_signer)
+                    cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
+                else:
+                    is_pro = is_pro_api_key(coingecko_api_key)
+                    if is_pro:
+                        cg = CoinGeckoAPI(api_key=coingecko_api_key)
+                    else:
+                        cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+                
+                # Use CoinGecko library to make the request
                 prices = cg.get_coin_market_chart_range_by_id(
                     id=token_id,
                     vs_currency="usd",
                     from_timestamp=from_timestamp,
                     to_timestamp=to_timestamp,
                 )
+                
                 prices_list = [x[1] for x in prices["prices"]]
                 prices_data.append(prices_list)
-                logger.info(f"Received {len(prices_list)} price points for token {token_id}")
                 time.sleep(1)  # Rate limiting
             except Exception as e:
                 error_msg = f"Error fetching price data for {token_id}: {str(e)}"
-                logger.error(error_msg)
+                logger.error(f"[COINGECKO] API Error - {error_msg}")
                 debug_data["errors"].append(error_msg)
                 return None
         
@@ -569,17 +577,11 @@ def get_epochs_by_address(pool_id, chain, limit=30, offset=0):
         # Get epochs data
         try:
             # Convert pool_id to checksum address
-            pool_address = w3.to_checksum_address(pool_id)
-            logger.info(f"Calling epochsByAddress for pool {pool_id} (checksum: {pool_address})")
-            
+            pool_address = w3.to_checksum_address(pool_id)            
             # Try to get the function directly to check if it exists
             try:
                 # Check if the function exists
-                fn = contract_instance.functions.epochsByAddress
-                logger.info(f"Function epochsByAddress exists: {fn is not None}")
-                
-                # Log the parameters
-                logger.info(f"Parameters: limit={limit}, offset={offset}, pool={pool_address}")
+                fn = contract_instance.functions.epochsByAddress                
                 
                 # Call epochsByAddress function with proper types
                 epochs_data = contract_instance.functions.epochsByAddress(limit, offset, pool_address).call()
@@ -657,9 +659,7 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         total_liquidities = []
         volumes = []
         total_supplies = []  # This would need to be fetched separately via multicall
-        
-        logger.info(f"Processing {len(epochs_data)} epochs for pool {pool_id}")
-        
+                
                 # No debug data is saved to files
         
         for epoch in epochs_data:
@@ -682,9 +682,7 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         w3 = get_web3_connection(rpc_url)
         
         # Use the LP_SUGAR_ABI constant
-        abi = LP_SUGAR_ABI
-        logger.info(f"Using LP_SUGAR_ABI with {len(abi)} entries")
-        
+        abi = LP_SUGAR_ABI        
         contract_instance = w3.eth.contract(address=sugar_address, abi=abi)
         pool_data = contract_instance.functions.byAddress(pool_id).call()
         pool_fee_rate = float(pool_data[21]) / 1e6  # Pool fee rate
@@ -704,16 +702,13 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         fee_returns_series = pd.Series(fee_returns, index=timestamps)
         
         # Calculate price returns
-        price_rets = share_price_series.pct_change().dropna()
-        logger.info(f"Pool {pool_id}: {len(share_price_series)} share prices, {len(price_rets)} price returns after pct_change")
-        
+        price_rets = share_price_series.pct_change().dropna()        
         # Combine price returns and fee returns
         try:
             # Check if indices match
             price_rets_indices = set(price_rets.index)
             fee_returns_indices = set(fee_returns_series.index)
             common_indices = price_rets_indices.intersection(fee_returns_indices)
-            logger.info(f"Pool {pool_id}: {len(common_indices)} common indices between price returns and fee returns")
             
             # Use only common indices
             if common_indices:
@@ -725,7 +720,6 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
                 # If no common indices, just use price returns
                 total_rets = price_rets
                 
-            logger.info(f"Pool {pool_id}: {len(total_rets)} total returns after combining price and fee returns")
         except Exception as e:
             logger.error(f"Error combining price and fee returns for pool {pool_id}: {str(e)}")
             total_rets = price_rets  # Fallback to just price returns
@@ -761,12 +755,10 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
                     lower_bound = np.percentile(total_rets, 1)
                     upper_bound = np.percentile(total_rets, 99)
                     total_rets = total_rets.clip(lower=lower_bound, upper=upper_bound)
-                    logger.info(f"Pool {pool_id}: Applied winsorization to limit extreme values")
                 
                 # Check for zero standard deviation
                 returns_std = total_rets.std()
                 returns_mean = total_rets.mean()
-                logger.info(f"Pool {pool_id}: Returns stats - Mean: {returns_mean}, Std: {returns_std}")
                 
                 # No processed data is saved to files
                 
@@ -904,7 +896,6 @@ def get_velodrome_pools(chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledge
         # Use provided RPC or default from RPC_ENDPOINTS
         rpc_url = ledger_api or RPC_ENDPOINTS[chain_id]
         
-        logger.info(f"Using Sugar contract approach for chain ID {chain_id}")
         return get_velodrome_pools_via_sugar(sugar_address, rpc_url=rpc_url, chain_id=chain_id)
     else:
         error_msg = f"Unsupported chain ID: {chain_id}"
@@ -927,7 +918,6 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
     cached_pools = get_cached_data("pools", cache_key)
     
     if cached_pools is not None:
-        logger.info(f"Using cached pool data for {chain_id} (count: {len(cached_pools)})")
         return cached_pools
     
     # Use the default RPC URL if none is provided
@@ -935,7 +925,6 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
         rpc_url = RPC_ENDPOINTS[MODE_CHAIN_ID]
     
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
-    logger.info(f"Fetching Velodrome pools via Sugar contract at {lp_sugar_address} on {chain_name} chain")
     
     try:
         # Initialize Web3 with the correct provider using cached connection
@@ -949,10 +938,8 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
         
         # Use the LP_SUGAR_ABI constant instead of loading from file
         abi = LP_SUGAR_ABI
-        logger.info(f"Using LP_SUGAR_ABI with {len(abi)} entries")
         
         # Create the contract instance directly
-        logger.info(f"Creating contract instance for address: {lp_sugar_address}")
         contract_instance = w3.eth.contract(address=lp_sugar_address, abi=abi)
         
         # Use direct Web3 calls
@@ -963,12 +950,9 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
         while True:
             try:
                 # Call the contract directly
-                logger.info(f"Calling all() function with limit={limit}, offset={offset}")
                 raw_pools = contract_instance.functions.all(limit, offset).call()
-                logger.info(f"Received {len(raw_pools)} pools from contract")
                 
                 if not raw_pools:
-                    logger.info(f"No more pools returned (offset={offset})")
                     break
                 
                 # Format the pools
@@ -1008,7 +992,6 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                     # Only log if type is not 0 or -1 and tick is not 0
                     if pool['type'] not in [0, -1] and pool['tick'] != 0:
                         chain_name = CHAIN_NAMES.get(chain_id, "unknown").capitalize()
-                        logger.info(f"{chain_name} pool #{len(formatted_pools) + 1}: {pool['id']} type: {pool['type']} tick: {pool['tick']}")
                     if pool['tick'] == 0 and pool['type'] in [0,-1]:
                         pool['is_stable'] = True if pool['type'] == 0 else False
                     else:
@@ -1017,11 +1000,9 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                 
                 # Add the formatted pools to our collection
                 all_pools.extend(formatted_pools)
-                logger.info(f"Formatted {len(formatted_pools)} pools")
                 
                 # Check if we've reached the end of available pools
                 if len(raw_pools) < limit:
-                    logger.info(f"Reached the end of available pools at offset {offset}")
                     break
                 
                 # Move to next batch
@@ -1123,8 +1104,7 @@ def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_addre
     # Get token decimals (default to 18 if not available in the mapping)
     token0_decimals = token_decimals.get(token0_address.lower(), 18)
     token1_decimals = token_decimals.get(token1_address.lower(), 18)
-    
-    logger.info(f"Using decimals - token0: {token0_decimals}, token1: {token1_decimals}")
+
     
     # Adjust reserves based on decimals
     adjusted_reserve0 = reserve0_float / (10 ** token0_decimals)
@@ -1232,7 +1212,6 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
     qualifying_pools = []
     
     logger.info(f"Starting pool filtering with {len(pools)} total pools")
-    logger.info(f"Current positions to exclude: {current_positions}")
     
     for pool in pools:
         pool_id = pool.get("id")
@@ -1288,7 +1267,7 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools
 
-def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None) -> List[Dict[str, Any]]:
+def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
@@ -1336,7 +1315,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             formatted_pool["token1_symbol"] = tokens[1]["symbol"]
         
         # Calculate advanced metrics if we have the necessary data
-        if coingecko_api_key and len(tokens) >= 2:
+        if coingecko_api_key or (x402_signer and x402_proxy) and len(tokens) >= 2:
             # Calculate Sharpe ratio
             try:
                 sharpe_ratio = get_velodrome_pool_sharpe_ratio(
@@ -1363,14 +1342,10 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             try:
                 # Get token IDs for CoinGecko API
                 token_ids = []
-                logger.info(f"Pool {pool['id']}: Checking CoinGecko mapping for tokens")
-                logger.info(f"Pool {pool['id']}: coin_id_mapping type: {type(coin_id_mapping)}")
-                logger.info(f"Pool {pool['id']}: coin_id_mapping content: {coin_id_mapping}")
                 
                 for i, token in enumerate(tokens):
                     token_symbol = token["symbol"] or ""
                     token_address = token["id"]
-                    logger.info(f"Pool {pool['id']}: Token{i} - Address: {token_address}, Symbol: '{token_symbol}', Chain: {chain_name}")
                     
                     token_id = get_coin_id_from_symbol(
                         coin_id_mapping,
@@ -1378,21 +1353,20 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
                         chain_name
                     )
                     token_ids.append(token_id)
-                    logger.info(f"Pool {pool['id']}: Token{i} ({token_symbol}) mapped to CoinGecko ID: {token_id}")
                 
                 # Only calculate IL risk if we have at least 2 valid token IDs
                 valid_token_ids = [tid for tid in token_ids if tid]
-                logger.info(f"Pool {pool['id']}: Valid token IDs: {valid_token_ids} (out of {len(token_ids)} total)")
                 
                 if len(valid_token_ids) >= 2:
-                    logger.info(f"Pool {pool['id']}: Calculating IL risk score with {len(valid_token_ids)} valid token IDs")
                     
                     # Call IL risk score calculation with pool_id and chain
                     il_risk_score = calculate_velodrome_il_risk_score_multi(
                         valid_token_ids, 
                         coingecko_api_key,
                         pool_id=pool["id"],
-                        chain=chain_name
+                        chain=chain_name,
+                        x402_signer=x402_signer,
+                        x402_proxy=x402_proxy
                     )
                     formatted_pool["il_risk_score"] = il_risk_score
                     logger.info(f"Pool {pool['id']}: IL risk score calculated: {il_risk_score}")
@@ -1566,7 +1540,7 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, **kwargs):
+def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None, **kwargs):
     """
     Get and format pool opportunities with optimized caching and performance.
     
@@ -1579,23 +1553,19 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         top_n: Number of top pools by APR to return (default: 10)
         whitelisted_assets: List of whitelisted assets
         coin_id_mapping: Coin ID mapping
+        x402_signer: Optional signer for X402
+        x402_proxy: Optional proxy for X402
         **kwargs: Additional arguments
     
     Returns:
         List of formatted pool opportunities
     """
-    start_time = time.time()
-    logger.info(f"Starting opportunity discovery for chain ID {chain_id}")
-    
-    # DEBUG: Log coin_id_mapping parameter
-    logger.info(f"VELODROME DEBUG: get_opportunities_for_velodrome - coin_id_mapping type: {type(coin_id_mapping)}")
-    logger.info(f"VELODROME DEBUG: get_opportunities_for_velodrome - coin_id_mapping value: {coin_id_mapping}")
+    start_time = time.time()    
     
     # Check cache for formatted pools first
     cache_key = f"formatted_pools:{chain_id}:{top_n}:{hash(str(sorted(current_positions)))}"
     cached_result = get_cached_data("formatted_pools", cache_key)
     if cached_result is not None:
-        logger.info(f"Using cached formatted pools for chain {chain_id}")
         return cached_result
     
     # Get pools based on chain
@@ -1629,15 +1599,15 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         if not filtered_pools:
                 logger.error("No filtered pools available for composite filtering")
                 return {"error": "No filtered pools available"}
-        
-        logger.info(f"Applied composite pre-filter (APR weight: {apr_weight}, TVL weight: {tvl_weight})")
-    
+            
     # Format pools with basic data (without advanced metrics)
     formatted_pools = format_velodrome_pool_data(
         filtered_pools,
         chain_id,
         coingecko_api_key,
-        coin_id_mapping
+        coin_id_mapping,
+        x402_signer=x402_signer,
+        x402_proxy=x402_proxy,
     )
     
     # Check if we have any formatted pools before proceeding
@@ -1652,10 +1622,6 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         logger.warning("No pools remaining after APR filtering")
         return {"error": "No suitable pools found"}
     
-    # Skip expensive metrics calculation for now to improve performance
-    # Only calculate basic metrics that are already included in format_pool_data
-    logger.info(f"Skipping advanced metrics calculation for performance optimization")
-    
     # Cache the result
     set_cached_data("formatted_pools", top_pools, cache_key)
     
@@ -1669,6 +1635,8 @@ def calculate_metrics(
     position: Dict[str, Any],
     coingecko_api_key: str,
     coin_id_mapping: List[Any],
+    x402_signer: Optional[Any] = None,
+    x402_proxy: Optional[Any] = None,
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
     """
@@ -1724,7 +1692,9 @@ def calculate_metrics(
                 valid_token_ids, 
                 coingecko_api_key,
                 pool_id=pool_id,
-                chain=chain
+                chain=chain,
+                x402_signer=x402_signer,
+                x402_proxy=x402_proxy
             )
             
         # Calculate Sharpe ratio
@@ -1804,7 +1774,9 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         metrics = calculate_metrics(
             position=kwargs["position"],
             coingecko_api_key=kwargs["coingecko_api_key"],
-            coin_id_mapping=kwargs["coin_id_mapping"]
+            coin_id_mapping=kwargs["coin_id_mapping"],
+            x402_signer=kwargs.get("x402_signer"),
+            x402_proxy=kwargs.get("x402_proxy"),
         )
         
         if metrics is None:
@@ -1870,7 +1842,9 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             rpc_url,
             kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
             whitelisted_assets=kwargs.get("whitelisted_assets"),
-            coin_id_mapping=kwargs.get("coin_id_mapping")
+            coin_id_mapping=kwargs.get("coin_id_mapping"),
+            x402_signer=kwargs.get("x402_signer"),
+            x402_proxy=kwargs.get("x402_proxy")
         )
         
         # Process results

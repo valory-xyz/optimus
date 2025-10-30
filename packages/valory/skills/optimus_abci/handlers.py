@@ -569,7 +569,7 @@ class HttpHandler(BaseHttpHandler):
             )
             top_up = self.context.params.x402_payment_requirements.get("top_up", 0)
 
-            if usdc_balance >= 100000000:
+            if usdc_balance >= self.context.params.x402_payment_requirements.get('threshold',0):
                 self.context.logger.info(
                     f"USDC balance sufficient: {usdc_balance} USDC (threshold: {threshold})"
                 )
@@ -579,7 +579,7 @@ class HttpHandler(BaseHttpHandler):
                 f"USDC balance ({usdc_balance}) < {threshold}, swapping ETH to {top_up} USDC..."
             )
 
-            top_up_usdc_amount = str(int(10000))
+            top_up_usdc_amount = str(self.context.params.x402_payment_requirements.get('topup',0))
             quote = self._get_lifi_quote_sync(
                 eoa_address, chain, usdc_address, top_up_usdc_amount
             )

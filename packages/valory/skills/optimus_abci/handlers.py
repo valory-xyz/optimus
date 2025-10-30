@@ -1323,7 +1323,7 @@ class HttpHandler(BaseHttpHandler):
                 self._handle_bad_request(
                     http_msg,
                     http_dialogue,
-                    error_msg="System initializing. Please wait for sometime.",
+                    error_msg="System initializing. Please wait for some time.",
                 )
                 return
 

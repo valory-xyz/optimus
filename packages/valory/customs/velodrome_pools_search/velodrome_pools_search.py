@@ -25,8 +25,6 @@ REQUIRED_FIELDS = (
     "chains",
     "current_positions",
     "whitelisted_assets",
-    "x402_signer",
-    "x402_proxy",
 )
 VELODROME = "velodrome"
 
@@ -397,7 +395,7 @@ def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     return il
 
 
-def calculate_velodrome_il_risk_score_multi(token_ids, time_period: int = 90, pool_id=None, chain=None, x402_signer=None, x402_proxy=None) -> float:
+def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None, x402_signer=None, x402_proxy=None) -> float:
     """Calculate IL risk score for multiple tokens."""
 
     # Create a debug data structure
@@ -430,21 +428,26 @@ def calculate_velodrome_il_risk_score_multi(token_ids, time_period: int = 90, po
         prices_data = []
         for token_id in valid_token_ids:
             try:
+                cg = CoinGeckoAPI()
                 if x402_signer is not None and x402_proxy is not None:
-                    cg = CoinGeckoAPI()
+                    logger.info("Using x402 signer for CoinGecko API requests")
                     cg.session = x402_requests(account=x402_signer)
-                    cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
+                    cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
                 else:
-                    return None
-                
-                # Use CoinGecko library to make the request
+                    if not coingecko_api_key:
+                        return None
+                    is_pro = is_pro_api_key(coingecko_api_key)
+                    if is_pro:
+                        cg = CoinGeckoAPI(api_key=coingecko_api_key)
+                    else:
+                        cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+
                 prices = cg.get_coin_market_chart_range_by_id(
                     id=token_id,
                     vs_currency="usd",
                     from_timestamp=from_timestamp,
                     to_timestamp=to_timestamp,
                 )
-                
                 prices_list = [x[1] for x in prices["prices"]]
                 prices_data.append(prices_list)
                 time.sleep(1)  # Rate limiting
@@ -1260,7 +1263,7 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools
 
-def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coin_id_mapping=None, x402_signer=None, x402_proxy=None) -> List[Dict[str, Any]]:
+def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
@@ -1308,7 +1311,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             formatted_pool["token1_symbol"] = tokens[1]["symbol"]
         
         # Calculate advanced metrics if we have the necessary data
-        if (x402_signer and x402_proxy) and len(tokens) >= 2:
+        if coingecko_api_key or (x402_signer and x402_proxy) and len(tokens) >= 2:
             # Calculate Sharpe ratio
             try:
                 sharpe_ratio = get_velodrome_pool_sharpe_ratio(
@@ -1355,6 +1358,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
                     # Call IL risk score calculation with pool_id and chain
                     il_risk_score = calculate_velodrome_il_risk_score_multi(
                         valid_token_ids, 
+                        coingecko_api_key,
                         pool_id=pool["id"],
                         chain=chain_name,
                         x402_signer=x402_signer,
@@ -1532,12 +1536,13 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities_for_velodrome(current_positions, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None, **kwargs):
+def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None, **kwargs):
     """
     Get and format pool opportunities with optimized caching and performance.
     
     Args:
         current_positions: List of current position IDs to exclude
+        coingecko_api_key: API key for CoinGecko
         chain_id: Chain ID to determine which method to use
         lp_sugar_address: Address of the LpSugar contract
         ledger_api: Ethereum API instance or RPC URL
@@ -1595,6 +1600,7 @@ def get_opportunities_for_velodrome(current_positions, chain_id=OPTIMISM_CHAIN_I
     formatted_pools = format_velodrome_pool_data(
         filtered_pools,
         chain_id,
+        coingecko_api_key,
         coin_id_mapping,
         x402_signer=x402_signer,
         x402_proxy=x402_proxy,
@@ -1623,6 +1629,7 @@ def get_opportunities_for_velodrome(current_positions, chain_id=OPTIMISM_CHAIN_I
 
 def calculate_metrics(
     position: Dict[str, Any],
+    coingecko_api_key: str,
     coin_id_mapping: List[Any],
     x402_signer: Optional[Any] = None,
     x402_proxy: Optional[Any] = None,
@@ -1633,6 +1640,7 @@ def calculate_metrics(
     
     Args:
         position: Dictionary containing position details (pool_address, chain, token0, token1, etc.)
+        coingecko_api_key: API key for CoinGecko
         **kwargs: Additional arguments
         
     Returns:
@@ -1678,6 +1686,7 @@ def calculate_metrics(
         if len(valid_token_ids) >= 2:
             il_risk_score = calculate_velodrome_il_risk_score_multi(
                 valid_token_ids, 
+                coingecko_api_key,
                 pool_id=pool_id,
                 chain=chain,
                 x402_signer=x402_signer,
@@ -1713,6 +1722,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         **kwargs: Arbitrary keyword arguments
             chains: List of chains to analyze (e.g., ["optimism", "mode"])
             current_positions: List of current position IDs to exclude
+            coingecko_api_key: API key for CoinGecko
             lp_sugar_address: Address of the LpSugar contract (if not provided, uses SUGAR_CONTRACT_ADDRESSES)
             rpc_url: RPC URL for the Mode chain (optional, uses default if not provided)
             top_n: Number of top pools by APR to return (default: 10)
@@ -1759,6 +1769,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         # Calculate metrics for the position
         metrics = calculate_metrics(
             position=kwargs["position"],
+            coingecko_api_key=kwargs["coingecko_api_key"],
             coin_id_mapping=kwargs["coin_id_mapping"],
             x402_signer=kwargs.get("x402_signer"),
             x402_proxy=kwargs.get("x402_proxy"),
@@ -1821,6 +1832,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         # Get opportunities for the chain using Sugar contract
         result = get_opportunities_for_velodrome(
             kwargs.get("current_positions", []),
+            kwargs["coingecko_api_key"],
             chain_id,
             sugar_address,
             rpc_url,

@@ -1011,8 +1011,8 @@ class HttpHandler(BaseHttpHandler):
             payload_data = {
                 "prompt": prompt_template,
                 "schema": build_strategy_config_schema(),
-                "temperature": 0.01,  
-                "max_tokens": 120, 
+                "temperature": 0.01,
+                "max_tokens": 120,
             }
 
             # Create LLM request

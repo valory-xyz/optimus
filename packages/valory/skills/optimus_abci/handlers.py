@@ -25,6 +25,7 @@ import re
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -275,9 +276,9 @@ class HttpHandler(BaseHttpHandler):
                 self.shared_state.sufficient_funds_for_x402_payments = (
                     self.context.params.use_x402
                 )
-            threading.Thread(
-                target=self._ensure_sufficient_funds_for_x402_payments, daemon=True
-            ).start()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self._ensure_sufficient_funds_for_x402_payments)
+                executor.shutdown(wait=False)
 
         service_endpoint_base = urlparse(
             self.context.params.service_endpoint_base
@@ -636,9 +637,9 @@ class HttpHandler(BaseHttpHandler):
         """
         # ensure sufficient funds for x402 payments
         if self.context.params.use_x402:
-            threading.Thread(
-                target=self._ensure_sufficient_funds_for_x402_payments, daemon=True
-            ).start()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self._ensure_sufficient_funds_for_x402_payments)
+                executor.shutdown(wait=False)
 
         # Get standard deficit from funds_manager
         standard_deficit = self.funds_status.get_response_body()
@@ -1593,9 +1594,9 @@ class HttpHandler(BaseHttpHandler):
         }
 
         # Offload KV store update to a separate thread
-        threading.Thread(
-            target=self._delayed_write_kv_extended, args=(storage_data,)
-        ).start()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self._delayed_write_kv_extended, storage_data)
+            executor.shutdown(wait=False)
 
     def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
         """Fallback to previous strategy in case of parsing errors."""
@@ -1837,9 +1838,9 @@ class HttpHandler(BaseHttpHandler):
             }
 
             # Store withdrawal data in KV store
-            threading.Thread(
-                target=self._write_withdrawal_data, args=(withdrawal_data,)
-            ).start()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self._write_withdrawal_data, withdrawal_data)
+                executor.shutdown(wait=False)
 
             # Prepare response
             response = {

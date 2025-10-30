@@ -9,12 +9,12 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeic6c77h7amnhdximi2tunqofaw675bglv4g4do7q4oof4mqa7xuuu
   behaviours/apr_population.py: bafybeig7n6d3iwv4g6d24ve6mdwqn4uwxdyufccttszi3ofxpxderqra7q
-  behaviours/base.py: bafybeidofcp6zgwnvuowsqf6rfajxjz5hecq2g3blupzpkl7jhhn533rjq
+  behaviours/base.py: bafybeiecthno4gedcpbxj2mnxymbtoaxl625zczanm3cwrdoswbkgpmhpa
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeieph7zq3klvu5unbz3zjic7f6kboye5gxfkugc56cmoosxfcrxrjy
-  behaviours/evaluate_strategy.py: bafybeigrd5ytppqgbxgabg3iwnvcb4kfrtwbd5dknsqhkg4gabs6jfybje
-  behaviours/fetch_strategies.py: bafybeihlylj7uz4ne77bc5pe6fqa6epydifowvpppdxthi755lrttf6o4i
+  behaviours/evaluate_strategy.py: bafybeic2p3lp7vgrmya3puf3zkcijf6s6e76zxlqjvxvx6374x5d26sqfq
+  behaviours/fetch_strategies.py: bafybeihfw4uans35pgjvpjbkgbfgh44kuq27pjti4otn5aznee5hribgn4
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -24,13 +24,13 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeigtlnwyx4efdosaycjeroywf2zbzubhewdtqz7xqeninisjd2b3me
+  models.py: bafybeibainxljbl7n53g4rwlpm7htrj3e2bubpr6bgh7avxecjz4wrkcwq
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
-  pool_behaviour.py: bafybeiaheuesscgqzwjbpyrezgwpdbdfurlmfwbc462qv6rblwwxlx5dpm
+  pool_behaviour.py: bafybeigsl7xlfabwlixrjba7e25w567jvinnlv76e4haprv5vx63mqqavm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeiaayilrkgelfjkwzi5t5b7mwryexadu42cwoipxusjcomv5l2gfoy
   pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
-  pools/velodrome.py: bafybeiebtcknv2eeezd35gworh3ekzwyzlc23q7efos6ke5cuskdg7v2w4
+  pools/velodrome.py: bafybeidsj4326ldihg2abuq2bhlb6qx3wt4h5flzgzdg62d3jdfnqbf6we
   rounds.py: bafybeihsstee7burcnrc75bjisbswxrc5h6lvi3e2l6ciiiy4nqepw2zfy
   rounds_info.py: bafybeihtj6mf74ccw6k2vokv7vkf4nwbp7j7cfm7j6cvuqop7gomavxucu
   states/__init__.py: bafybeigzgpxgx6g4ioalm7fdalcckk5lmw6z4k4sb5d4a4cdespv2umogi
@@ -71,6 +71,7 @@ fingerprint_ignore_patterns: []
 connections:
 - valory/mirror_db:0.1.0:bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy
 - dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
+- valory/x402:0.1.0:bafybeif7fjrjtsqdyzxfn3cx4ffcmsnzaz3yhcnylmgbxp5baiy4qgwqwm
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um
 - valory/balancer_weighted_pool:0.1.0:bafybeif62wmflaurowogrirtfakxod3ddyjsyubu6f2tpiai4wukpsxtke
@@ -337,6 +338,8 @@ dependencies:
   requests:
     version: <2.31.2,>=2.28.1
   eth_utils: {}
+  eth_account:
+    version: <1.0.0,>=0.8.0
   pyyaml:
     version: <=6.0.1,>=3.10
   numpy:

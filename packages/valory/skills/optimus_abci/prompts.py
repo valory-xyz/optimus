@@ -3,7 +3,8 @@
 import enum
 import pickle  # nosec
 import typing
-from dataclasses import dataclass
+
+from pydantic import BaseModel
 
 
 class ProtocolName(enum.Enum):
@@ -22,8 +23,7 @@ class TradingType(enum.Enum):
     BALANCED = "balanced"
 
 
-@dataclass(frozen=True)
-class StrategyConfig:
+class StrategyConfig(BaseModel):
     """Strategy configuration response."""
 
     selected_protocols: typing.List[str]

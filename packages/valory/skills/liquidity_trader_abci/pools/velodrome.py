@@ -1925,7 +1925,8 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             headers = {
                 "Accept": "application/json",
             }
-            if api_key:
+
+            if not self.params.use_x402 and api_key:
                 headers["x-cg-api-key"] = api_key
 
             # Convert chain name to CoinGecko platform ID
@@ -2049,38 +2050,27 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             yield from self.sleep(1)
 
             # Make the API request
-            endpoint = (
-                f"https://api.coingecko.com/api/v3/coins/{platform}/contract/{address}"
+            endpoint = self.coingecko.coin_from_address_endpoint.format(
+                platform=platform, address=address
             )
-            response = yield from self.get_http_response(
-                method="GET", url=endpoint, headers=headers, content=None
+
+            # Only use X402 if explicitly enabled
+            x402_signer = self.eoa_account if self.params.use_x402 else None
+
+            success, response_json = self.coingecko.request(
+                endpoint=endpoint,
+                headers=headers,
+                x402_signer=x402_signer,
             )
 
             # Check if response has status_code attribute (HTTP response object)
-            if hasattr(response, "status_code"):
-                if response.status_code != 200:
-                    self.context.logger.warning(
-                        f"Error getting coin ID for {chain}/{address}: {response.status_code}"
-                    )
-                    return None
-
-                try:
-                    coin_data = json.loads(response.body)
-                    return coin_data.get("id")
-                except json.JSONDecodeError:
-                    self.context.logger.warning(
-                        f"Error parsing response for {chain}/{address}"
-                    )
-                    return None
+            if success:
+                return response_json.get("id")
             else:
-                # Response is already parsed as a dictionary
-                if isinstance(response, dict) and "id" in response:
-                    return response.get("id")
-                else:
-                    self.context.logger.warning(
-                        f"Unexpected response format for {chain}/{address}"
-                    )
-                    return None
+                self.context.logger.warning(
+                    f"Unexpected response format for {chain}/{address}"
+                )
+                return None
 
         except Exception as e:
             self.context.logger.warning(
@@ -2093,18 +2083,24 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get historical market data for a coin from CoinGecko, with robust rate limit handling."""
 
-        endpoint = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
+        endpoint = self.coingecko.historical_market_data_endpoint.format(
+            coin_id=coin_id, days=days
+        )
         yield from self.sleep(2)
 
         try:
-            response = yield from self.get_http_response(
-                method="GET", url=endpoint, headers=headers, content=None
+            x402_signer = self.eoa_account if self.params.use_x402 else None
+
+            success, response_json = self.coingecko.request(
+                endpoint=endpoint,
+                headers=headers,
+                x402_signer=x402_signer,
             )
-            # Try to parse the response body as JSON
-            try:
-                response_json = json.loads(response.body)
-            except Exception:
-                response_json = {}
+            if not success:
+                self.context.logger.warning(
+                    f"Failed to fetch market data for {coin_id}"
+                )
+                return None
 
             # Check for HTTP 429 or JSON error code 429
             is_rate_limited = False

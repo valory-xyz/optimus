@@ -25,8 +25,11 @@ from pathlib import Path
 from time import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import requests
 from aea.skills.base import Model, SkillContext
+from eth_account import Account
 
+from packages.valory.connections.x402.clients.requests import x402_requests
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
@@ -183,10 +186,13 @@ class Coingecko(Model, TypeCheckMixin):
             "token_price_endpoint", kwargs, str
         )
         self.coin_price_endpoint: str = self._ensure("coin_price_endpoint", kwargs, str)
-        self.api_key: Optional[str] = self._ensure("api_key", kwargs, Optional[str])
+        self.api_key: Optional[str] = kwargs.get("api_key", "")
         self.rate_limited_code: int = self._ensure("rate_limited_code", kwargs, int)
         self.historical_price_endpoint: str = self._ensure(
             "historical_price_endpoint", kwargs, str
+        )
+        self.historical_market_data_endpoint: str = self._ensure(
+            "historical_market_data_endpoint", kwargs, str
         )
         self.chain_to_platform_id_mapping: Dict[str, str] = json.loads(
             self._ensure("chain_to_platform_id_mapping", kwargs, str)
@@ -194,6 +200,17 @@ class Coingecko(Model, TypeCheckMixin):
         limit: int = self._ensure("requests_per_minute", kwargs, int)
         credits_: int = self._ensure("credits", kwargs, int)
         self.rate_limiter = CoingeckoRateLimiter(limit, credits_)
+        self.use_x402 = self._ensure("use_x402", kwargs, bool)
+        self.network_selector = self._ensure("network_selector", kwargs, str)
+        self.coingecko_server_base_url = self._ensure(
+            "coingecko_server_base_url", kwargs, str
+        )
+        self.coingecko_x402_server_base_url = self._ensure(
+            "coingecko_x402_server_base_url", kwargs, str
+        ).format(chain=self.network_selector)
+        self.coin_from_address_endpoint: str = self._ensure(
+            "coin_from_address_endpoint", kwargs, str
+        )
         super().__init__(*args, **kwargs)
 
     def rate_limited_status_callback(self) -> None:
@@ -205,6 +222,27 @@ class Coingecko(Model, TypeCheckMixin):
         )
         self.rate_limiter._remaining_limit = 0
         self.rate_limiter._last_request_time = time()
+
+    def request(
+        self,
+        endpoint: str,
+        headers: Dict[str, str],
+        x402_signer: Optional[Account],
+    ) -> Tuple[bool, Dict]:
+        """Make a request to the Coingecko Proxied API if x402."""
+        try:
+            if self.use_x402:
+                session = x402_requests(account=x402_signer)
+                url = self.coingecko_x402_server_base_url + endpoint
+            else:
+                session = requests.Session()
+                url = self.coingecko_server_base_url + endpoint
+
+            response = session.get(url, headers=headers)
+            return True, response.json()
+        except Exception as exc:
+            self.context.logger.error(f"Exception during request to {url}: {exc}")
+            return False, {"exception": str(exc)}
 
 
 class Params(BaseParams):
@@ -387,6 +425,13 @@ class Params(BaseParams):
             "airdrop_contract_address", kwargs, str
         )
         self.use_x402 = self._ensure("use_x402", kwargs, bool)
+        self.x402_payment_requirements = json.loads(
+            self._ensure("x402_payment_requirements", kwargs, str)
+        )
+        self.optimism_ledger_rpc = self._ensure("optimism_ledger_rpc", kwargs, str)
+        self.lifi_quote_to_amount_url = self._ensure(
+            "lifi_quote_to_amount_url", kwargs, str
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

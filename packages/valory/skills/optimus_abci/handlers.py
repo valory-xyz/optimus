@@ -403,7 +403,7 @@ class HttpHandler(BaseHttpHandler):
 
     def _check_usdc_balance(
         self, eoa_address: str, chain: str, usdc_address: str
-    ) -> Optional[float]:
+    ) -> Optional[int]:
         """Check USDC balance using Web3 library."""
         try:
             w3 = self._get_web3_instance(chain)

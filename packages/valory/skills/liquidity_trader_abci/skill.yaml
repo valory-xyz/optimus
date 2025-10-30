@@ -13,7 +13,7 @@ fingerprint:
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeieph7zq3klvu5unbz3zjic7f6kboye5gxfkugc56cmoosxfcrxrjy
-  behaviours/evaluate_strategy.py: bafybeihicfjaz67m6r33jsexsrebmrryiwmwormzkozav3lpsepohyaiv4
+  behaviours/evaluate_strategy.py: bafybeic2p3lp7vgrmya3puf3zkcijf6s6e76zxlqjvxvx6374x5d26sqfq
   behaviours/fetch_strategies.py: bafybeihfw4uans35pgjvpjbkgbfgh44kuq27pjti4otn5aznee5hribgn4
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
@@ -24,7 +24,7 @@ fingerprint:
   handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
-  models.py: bafybeibrqzt7ojuyaejvmihjunkrgc4mqaro6b7c2cs6bnladhzbwiu5aa
+  models.py: bafybeibainxljbl7n53g4rwlpm7htrj3e2bubpr6bgh7avxecjz4wrkcwq
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
   pool_behaviour.py: bafybeigsl7xlfabwlixrjba7e25w567jvinnlv76e4haprv5vx63mqqavm
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
@@ -338,6 +338,8 @@ dependencies:
   requests:
     version: <2.31.2,>=2.28.1
   eth_utils: {}
+  eth_account:
+    version: <1.0.0,>=0.8.0
   pyyaml:
     version: <=6.0.1,>=3.10
   numpy:

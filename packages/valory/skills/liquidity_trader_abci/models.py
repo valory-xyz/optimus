@@ -425,6 +425,13 @@ class Params(BaseParams):
             "airdrop_contract_address", kwargs, str
         )
         self.use_x402 = self._ensure("use_x402", kwargs, bool)
+        self.x402_payment_requirements = json.loads(
+            self._ensure("x402_payment_requirements", kwargs, str)
+        )
+        self.optimism_ledger_rpc = self._ensure("optimism_ledger_rpc", kwargs, str)
+        self.lifi_quote_to_amount_url = self._ensure(
+            "lifi_quote_to_amount_url", kwargs, str
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

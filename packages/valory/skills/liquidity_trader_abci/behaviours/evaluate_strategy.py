@@ -1152,6 +1152,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         if self.positions_eligible_for_exit
                         else []
                     ),
+                    "coingecko_api_key": self.coingecko.api_key,
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
                     "coin_id_mapping": COIN_ID_MAPPING,
@@ -1604,11 +1605,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get and update metrics for the current pool ."""
 
         kwargs: Dict[str, Any] = self.params.strategies_kwargs.get(strategy, {})
+
         kwargs.update(
             {
                 "strategy": strategy,
                 "get_metrics": True,
                 "position": position,
+                "coingecko_api_key": self.coingecko.api_key,
                 "chains": self.params.target_investment_chains,
                 "apr_threshold": self.params.apr_threshold,
                 "protocols": self.params.available_protocols,

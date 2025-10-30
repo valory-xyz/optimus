@@ -391,7 +391,7 @@ def calculate_il_risk_score_multi(token_ids, coingecko_api_key: str, x402_signer
                 if x402_signer is not None and x402_proxy is not None:
                     logger.info("Using x402 signer for CoinGecko API requests")
                     cg.session = x402_requests(account=x402_signer)
-                    cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
+                    cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 else:
                     if not coingecko_api_key:
                         return None
@@ -826,7 +826,7 @@ def get_pool_token_prices(token_symbols: List[str], coingecko_api_key: Optional[
                         if x402_signer is not None and x402_proxy is not None:
                             logger.info("Using x402 signer for CoinGecko API requests")
                             cg.session = x402_requests(account=x402_signer)
-                            cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
+                            cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                         else:
                             if not coingecko_api_key:
                                 return None
@@ -1070,7 +1070,7 @@ def format_pool_data(pools: List[Dict[str, Any]], coingecko_api_key: str, x402_s
     if x402_signer is not None and x402_proxy is not None:
         logger.info("Using x402 signer for CoinGecko API requests")
         cg.session = x402_requests(account=x402_signer)
-        cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
+        cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
 
     # Determine if we're dealing with a single pool
     is_single_pool = len(pools) == 1

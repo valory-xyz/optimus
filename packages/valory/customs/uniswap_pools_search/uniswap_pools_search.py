@@ -445,7 +445,7 @@ def calculate_il_risk_score(
         if x402_signer is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
             cg.session = x402_requests(account=x402_signer)
-            cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3"
+            cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
         else:
             if not coingecko_api_key:
                 return None

@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: valory/optimus:0.1.0:bafybeid2y6nhsd3ujuh2rfk2oxvowlmjg3coy5gpsgvuxh3ycwq3zv5rhm
+agent: valory/optimus:0.1.0:bafybeihn7t77bt6ehhrigggabdiwnaqfg4j3guvhkpb33s4gdemmtnjtry
 number_of_agents: 1
 deployment:
   agent:
@@ -182,6 +182,7 @@ type: connection
 config:
   host: ${HTTP_SERVER_HOST:str:0.0.0.0}
   port: ${HTTP_SERVER_PORT:int:8716}
+  timeout: ${float:30.0}
   ssl_cert: ${SSL_CERT_PATH:str:}
   ssl_key: ${SSL_KEY_PATH:str:}
 ---

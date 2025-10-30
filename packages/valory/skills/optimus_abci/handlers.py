@@ -22,7 +22,6 @@
 import json
 import math
 import re
-import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -396,8 +395,8 @@ class HttpHandler(BaseHttpHandler):
                 self.context.logger.warning(f"No RPC URL for {chain}")
                 return None
 
-            #Note that you should create only one HTTPProvider with the same provider URL per python process, 
-            #as the HTTPProvider recycles underlying TCP/IP network connections, for better performance. Multiple HTTPProviders with different URLs will work as expected.
+            # Note that you should create only one HTTPProvider with the same provider URL per python process,
+            # as the HTTPProvider recycles underlying TCP/IP network connections, for better performance. Multiple HTTPProviders with different URLs will work as expected.
             return Web3(Web3.HTTPProvider(rpc_url))
         except Exception as e:
             self.context.logger.error(f"Error creating Web3 instance: {str(e)}")
@@ -498,16 +497,20 @@ class HttpHandler(BaseHttpHandler):
             if not w3:
                 return False
 
-            self.context.logger.info(f"Waiting for transaction {tx_hash} to be mined...")
-            
+            self.context.logger.info(
+                f"Waiting for transaction {tx_hash} to be mined..."
+            )
+
             # Wait for transaction receipt with timeout
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
-            
+
             if receipt.status == 1:
                 self.context.logger.info(f"Transaction {tx_hash} successful")
                 return True
             else:
-                self.context.logger.error(f"Transaction {tx_hash} failed (status: {receipt.status})")
+                self.context.logger.error(
+                    f"Transaction {tx_hash} failed (status: {receipt.status})"
+                )
                 return False
 
         except Exception as e:
@@ -596,7 +599,9 @@ class HttpHandler(BaseHttpHandler):
             )
             top_up = self.context.params.x402_payment_requirements.get("top_up", 0)
 
-            if usdc_balance >= self.context.params.x402_payment_requirements.get('threshold',0):
+            if usdc_balance >= self.context.params.x402_payment_requirements.get(
+                "threshold", 0
+            ):
                 self.context.logger.info(
                     f"USDC balance sufficient: {usdc_balance} USDC (threshold: {threshold})"
                 )
@@ -606,7 +611,9 @@ class HttpHandler(BaseHttpHandler):
                 f"USDC balance ({usdc_balance}) < {threshold}, swapping ETH to {top_up} USDC..."
             )
 
-            top_up_usdc_amount = str(self.context.params.x402_payment_requirements.get('topup',0))
+            top_up_usdc_amount = str(
+                self.context.params.x402_payment_requirements.get("topup", 0)
+            )
             quote = self._get_lifi_quote_sync(
                 eoa_address, chain, usdc_address, top_up_usdc_amount
             )
@@ -658,15 +665,17 @@ class HttpHandler(BaseHttpHandler):
                 return False
 
             self.context.logger.info(f"ETH to USDC swap submitted: {tx_hash}")
-            
+
             # Check transaction status to ensure it was successful
             tx_successful = self._check_transaction_status(tx_hash, chain)
-            
+
             if not tx_successful:
                 self.context.logger.error(f"Transaction {tx_hash} failed or timed out")
                 return False
 
-            self.context.logger.info(f"ETH to USDC swap completed successfully: {tx_hash}")
+            self.context.logger.info(
+                f"ETH to USDC swap completed successfully: {tx_hash}"
+            )
             return True
 
         except Exception as e:

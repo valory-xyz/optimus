@@ -432,7 +432,6 @@ class Params(BaseParams):
         self.lifi_quote_to_amount_url = self._ensure(
             "lifi_quote_to_amount_url", kwargs, str
         )
-        self.default_gas_limit = self._ensure("default_gas_limit", kwargs, int)
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

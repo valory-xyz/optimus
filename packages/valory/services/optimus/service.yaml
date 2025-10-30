@@ -118,7 +118,6 @@ models:
       x402_payment_requirements: ${X402_PAYMENT_REQUIREMENTS:str:{"threshold":200000,"topup":250000}}
       optimism_ledger_rpc: ${OPTIMISM_LEDGER_RPC:str:https://mainnet.optimism.io}
       lifi_quote_to_amount_url: ${LIFI_QUOTE_TO_AMOUNT_URL:str:https://li.quest/v1/quote/toAmount}
-      default_gas_limit: ${DEFAULT_GAS_LIMIT:int:500000}
   coingecko:
     args:
       token_price_endpoint: ${COINGECKO_TOKEN_PRICE_ENDPOINT:str:/v1/coingecko/{chain}/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd}

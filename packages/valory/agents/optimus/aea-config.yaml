@@ -337,4 +337,3 @@ models:
       x402_payment_requirements: ${str:{"threshold":200000,"topup":250000}}
       optimism_ledger_rpc: ${str:https://mainnet.optimism.io}
       lifi_quote_to_amount_url: ${str:https://li.quest/v1/quote/toAmount}
-      default_gas_limit: ${int:500000}

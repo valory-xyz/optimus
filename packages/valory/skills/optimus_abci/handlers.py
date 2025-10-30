@@ -271,10 +271,7 @@ class HttpHandler(BaseHttpHandler):
         # Custom hostname (set via params)
         # Only check funds if using X402
         if self.context.params.use_x402:
-            if not hasattr(self.shared_state, "sufficient_funds_for_x402_payments"):
-                self.shared_state.sufficient_funds_for_x402_payments = (
-                    self.context.params.use_x402
-                )
+            self.shared_state.sufficient_funds_for_x402_payments = False
             with ThreadPoolExecutor(max_workers=1) as executor:
                 executor.submit(self._ensure_sufficient_funds_for_x402_payments)
                 executor.shutdown(wait=False)
@@ -576,7 +573,7 @@ class HttpHandler(BaseHttpHandler):
             self.context.logger.error(f"Error in gas estimation: {str(e)}")
             return None
 
-    def _ensure_sufficient_funds_for_x402_payments(self) -> bool:
+    def _ensure_sufficient_funds_for_x402_payments(self) -> None:
         """Ensure agent EOA has at sufficient funds for x402 requests payments"""
         try:
             chain = self.context.params.target_investment_chains[0]
@@ -586,18 +583,20 @@ class HttpHandler(BaseHttpHandler):
             usdc_address = USDC_ADDRESSES.get(chain.lower())
             if not usdc_address:
                 self.context.logger.error(f"No USDC address for {chain}")
-                return False
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             usdc_balance = self._check_usdc_balance(eoa_address, chain, usdc_address)
 
             if usdc_balance is None:
                 self.context.logger.warning("Could not check USDC balance, skipping")
-                return True
+                self.shared_state.sufficient_funds_for_x402_payments = True
+                return
 
             threshold = self.context.params.x402_payment_requirements.get(
                 "threshold", 0
             )
-            top_up = self.context.params.x402_payment_requirements.get("top_up", 0)
+            top_up = self.context.params.x402_payment_requirements.get("topup", 0)
 
             if usdc_balance >= self.context.params.x402_payment_requirements.get(
                 "threshold", 0
@@ -605,7 +604,8 @@ class HttpHandler(BaseHttpHandler):
                 self.context.logger.info(
                     f"USDC balance sufficient: {usdc_balance} USDC (threshold: {threshold})"
                 )
-                return True
+                self.shared_state.sufficient_funds_for_x402_payments = True
+                return
 
             self.context.logger.info(
                 f"USDC balance ({usdc_balance}) < {threshold}, swapping ETH to {top_up} USDC..."
@@ -614,27 +614,32 @@ class HttpHandler(BaseHttpHandler):
             top_up_usdc_amount = str(
                 self.context.params.x402_payment_requirements.get("topup", 0)
             )
+
             quote = self._get_lifi_quote_sync(
                 eoa_address, chain, usdc_address, top_up_usdc_amount
             )
             if not quote:
                 self.context.logger.error("Failed to get LiFi quote")
-                return False
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             tx_request = quote.get("transactionRequest")
             if not tx_request:
                 self.context.logger.error("No transactionRequest in quote")
-                return False
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             nonce, gas_price = self._get_nonce_and_gas_web3(eoa_address, chain)
             if nonce is None or gas_price is None:
                 self.context.logger.error("Failed to get nonce or gas price")
-                return False
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             tx_gas = self._estimate_gas(tx_request, eoa_address, chain)
             if tx_gas is None:
                 self.context.logger.error("Failed to estimate gas for transaction")
-                return False
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             tx_value = (
                 int(tx_request["value"], 16)
@@ -662,7 +667,8 @@ class HttpHandler(BaseHttpHandler):
 
             if not tx_hash:
                 self.context.logger.error("Failed to submit transaction")
-                return False
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             self.context.logger.info(f"ETH to USDC swap submitted: {tx_hash}")
 
@@ -671,16 +677,21 @@ class HttpHandler(BaseHttpHandler):
 
             if not tx_successful:
                 self.context.logger.error(f"Transaction {tx_hash} failed or timed out")
-                return False
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
 
             self.context.logger.info(
                 f"ETH to USDC swap completed successfully: {tx_hash}"
             )
-            return True
+            self.shared_state.sufficient_funds_for_x402_payments = True
+            return
 
         except Exception as e:
-            self.context.logger.error(f"Error in _ensure_usdc_balance: {str(e)}")
-            return False
+            self.context.logger.error(
+                f"Error in checking funds for x402 payments: {str(e)}"
+            )
+            self.shared_state.sufficient_funds_for_x402_payments = False
+            return
 
     def _handle_get_features(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

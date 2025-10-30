@@ -192,8 +192,6 @@ autonomy packages sync --update-packages
    - Provide ETH and USDC to your Safe address on Optimsim
    - Provide ETH to your agent on Optimism to cover gas fees
 
-4. **CoinGecko API Key**: Get an API key from https://www.coingecko.com/ under My Account → Developer's Dashboard
-
 **Note**: Transaction simulation via Tenderly has been deprecated. The agent now proceeds with transactions without pre-execution validation.
 
 ### Configure the Service
@@ -206,7 +204,6 @@ export ALL_PARTICIPANTS='["YOUR_AGENT_ADDRESS"]'
 export SAFE_CONTRACT_ADDRESSES='{"optimism":"YOUR_SAFE_ADDRESS_ON_OPTIMISM"}'
 
 export SLIPPAGE_FOR_SWAP=0.09
-export COINGECKO_API_KEY=YOUR_COINGECKO_API_KEY
 ```
 
 **Note**: The default value for `SLIPPAGE_FOR_SWAP` is provided, but feel free to experiment with different values. It indicates the allowed slippage when bridging/swapping assets using LiFi.

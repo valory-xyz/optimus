@@ -1324,10 +1324,10 @@ class HttpHandler(BaseHttpHandler):
                 self.shared_state, "sufficient_funds_for_x402_payments", False
             )
             if not sufficient_funds_for_x402_payments:
-                self._handle_bad_request(
+                self._send_ok_response(
                     http_msg,
                     http_dialogue,
-                    error_msg="System initializing. Please wait for some time.",
+                    {"error": "System initializing. Please wait for some time."}
                 )
                 return
 

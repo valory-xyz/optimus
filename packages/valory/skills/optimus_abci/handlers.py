@@ -576,7 +576,7 @@ class HttpHandler(BaseHttpHandler):
                 or "execution reverted" in error_str
             ):
                 self.context.logger.info(
-                    f"Insufficient ETH for swap, wait for agent EOA to be funded"
+                    "Insufficient ETH for swap, wait for agent EOA to be funded"
                 )
 
             self.context.logger.error(f"{error_str=}")

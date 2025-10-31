@@ -570,7 +570,16 @@ class HttpHandler(BaseHttpHandler):
             return tx_gas
 
         except Exception as e:
-            self.context.logger.error(f"Error in gas estimation: {str(e)}")
+            error_str = str(e)
+            if (
+                "Return amount is not enough" in error_str
+                or "execution reverted" in error_str
+            ):
+                self.context.logger.info(
+                    "Insufficient ETH for swap, wait for agent EOA to be funded"
+                )
+
+            self.context.logger.error(f"{error_str=}")
             return None
 
     def _ensure_sufficient_funds_for_x402_payments(self) -> None:
@@ -1320,10 +1329,10 @@ class HttpHandler(BaseHttpHandler):
                 self.shared_state, "sufficient_funds_for_x402_payments", False
             )
             if not sufficient_funds_for_x402_payments:
-                self._handle_bad_request(
+                self._send_ok_response(
                     http_msg,
                     http_dialogue,
-                    error_msg="System initializing. Please wait for some time.",
+                    {"error": "System initializing. Please wait for some time."},
                 )
                 return
 

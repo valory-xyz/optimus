@@ -188,7 +188,7 @@ type: connection
 config:
   genai_api_key: ${GENAI_API_KEY:str:""}
   use_x402: ${USE_X402:bool:true}
-  genai_x402_server_base_url: ${GENAI_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/gemini/gnosis/v1beta}
+  genai_x402_server_base_url: ${GENAI_X402_SERVER_BASE_URL:str:https://x402.olas.autonolas.tech/v1/gemini/optimism/v1beta}
 ---
 public_id: valory/http_server:0.22.0
 type: connection

@@ -570,7 +570,11 @@ class HttpHandler(BaseHttpHandler):
             return tx_gas
 
         except Exception as e:
-            self.context.logger.error(f"Error in gas estimation: {str(e)}")
+            error_str = str(e)
+            if "Return amount is not enough" in error_str or "execution reverted" in error_str:
+                self.context.logger.info(f"Insufficient ETH for swap, wait for agent EOA to be funded")
+            
+            self.context.logger.error(f"{error_str=}")
             return None
 
     def _ensure_sufficient_funds_for_x402_payments(self) -> None:

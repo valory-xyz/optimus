@@ -1667,16 +1667,23 @@ class LiquidityTraderBaseBehaviour(
         )
 
         if success:
-            token_data = next(iter(response_json.values()), {})
-            price = token_data.get("usd", 0)
-            if price:
-                self.context.logger.info(
-                    f"Successfully fetched {coin_id} price: ${price}"
+            try:
+                token_data = next(iter(response_json.values()), {})
+                price = token_data.get("usd", 0)
+                if price:
+                    self.context.logger.info(
+                        f"Successfully fetched {coin_id} price: ${price}"
+                    )
+                    yield from self._cache_price(coin_id, price, date_str)
+                else:
+                    self.context.logger.warning(f"No price data returned for {coin_id}")
+                return price
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error processing price data for {coin_id}: {str(e)}. "
+                    f"Response data: {response_json}"
                 )
-                yield from self._cache_price(coin_id, price, date_str)
-            else:
-                self.context.logger.warning(f"No price data returned for {coin_id}")
-            return price
+                return None
         else:
             self.context.logger.error(f"Failed to fetch {coin_id} price from CoinGecko")
         return None

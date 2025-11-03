@@ -1298,19 +1298,26 @@ class LiquidityTraderBaseBehaviour(
         )
 
         if success:
-            token_data = response_json.get(token_address.lower(), {})
-            price = token_data.get("usd", 0)
-            # Cache the price
-            if price:
-                self.context.logger.info(
-                    f"Successfully fetched price for token {token_address}: ${price}"
+            try:
+                token_data = response_json.get(token_address.lower(), {})
+                price = token_data.get("usd", 0)
+                # Cache the price
+                if price:
+                    self.context.logger.info(
+                        f"Successfully fetched price for token {token_address}: ${price}"
+                    )
+                    yield from self._cache_price(token_address, price, date_str)
+                else:
+                    self.context.logger.warning(
+                        f"No price data returned for token {token_address}"
+                    )
+                return price
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error processing price data for token {token_address}: {str(e)}. "
+                    f"Response data: {response_json}"
                 )
-                yield from self._cache_price(token_address, price, date_str)
-            else:
-                self.context.logger.warning(
-                    f"No price data returned for token {token_address}"
-                )
-            return price
+                return None
         else:
             self.context.logger.error(
                 f"Failed to fetch price for token {token_address} from CoinGecko"
@@ -1849,19 +1856,28 @@ class LiquidityTraderBaseBehaviour(
         )
 
         if success:
-            price = (
-                response_json.get("market_data", {}).get("current_price", {}).get("usd")
-            )
-            if price:
-                self.context.logger.info(
-                    f"Successfully fetched historical price for {coingecko_id} on {date_str}: ${price}"
+            try:
+                price = (
+                    response_json.get("market_data", {})
+                    .get("current_price", {})
+                    .get("usd")
                 )
-                # Cache the historical price
-                yield from self._cache_price(coingecko_id, price, date_str)
-                return price
-            else:
-                self.context.logger.warning(
-                    f"No price data in response for token {coingecko_id} on {date_str}"
+                if price:
+                    self.context.logger.info(
+                        f"Successfully fetched historical price for {coingecko_id} on {date_str}: ${price}"
+                    )
+                    # Cache the historical price
+                    yield from self._cache_price(coingecko_id, price, date_str)
+                    return price
+                else:
+                    self.context.logger.warning(
+                        f"No price data in response for token {coingecko_id} on {date_str}"
+                    )
+                    return None
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error processing historical price data for {coingecko_id} on {date_str}: {str(e)}. "
+                    f"Response data: {response_json}"
                 )
                 return None
         else:

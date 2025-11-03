@@ -2065,7 +2065,14 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
 
             # Check if response has status_code attribute (HTTP response object)
             if success:
-                return response_json.get("id")
+                try:
+                    return response_json.get("id")
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error processing coin ID response for {chain}/{address}: {str(e)}. "
+                        f"Response data: {response_json}"
+                    )
+                    return None
             else:
                 self.context.logger.warning(
                     f"Unexpected response format for {chain}/{address}"

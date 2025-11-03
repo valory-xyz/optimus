@@ -41,7 +41,7 @@ from packages.valory.skills.abstract_round_abci.models import (
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
 
-
+HTTP_OK = [200, 201]
 MINUTE_UNIX = 60
 
 
@@ -239,7 +239,8 @@ class Coingecko(Model, TypeCheckMixin):
                 url = self.coingecko_server_base_url + endpoint
 
             response = session.get(url, headers=headers)
-            return response.ok, response.json()
+            success = response.status_code in HTTP_OK
+            return success, response.json()
         except Exception as exc:
             self.context.logger.error(f"Exception during request to {url}: {exc}")
             return False, {"exception": str(exc)}

@@ -20,12 +20,15 @@
 """This package contains the implemenatation of the PoolBehaviour interface."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generator
+from pathlib import Path
+from typing import Any, Dict, Generator, cast
 
 from aea.configurations.data_types import PublicId
+from eth_account import Account
 
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.behaviours import BaseBehaviour
+from packages.valory.skills.liquidity_trader_abci.models import Coingecko
 
 
 WaitableConditionType = Generator[None, None, Any]
@@ -52,6 +55,21 @@ class PoolBehaviour(BaseBehaviour, ABC):
     def exit(self, **kwargs: Any) -> None:
         """Exit pool"""
         pass
+
+    @property
+    def eoa_account(self) -> Account:
+        """Get EOA account from private key."""
+        default_ledger = self.context.default_ledger_id
+        eoa_file = Path(self.context.data_dir) / f"{default_ledger}_private_key.txt"
+        with eoa_file.open("r") as f:
+            private_key = f.read().strip()
+
+        return Account.from_key(private_key=private_key)
+
+    @property
+    def coingecko(self) -> Coingecko:
+        """Return the Coingecko."""
+        return cast(Coingecko, self.context.coingecko)
 
     def default_error(
         self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage

@@ -22,20 +22,23 @@
 import json
 import math
 import re
-import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
+import requests
 import yaml
 from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.base import Handler
+from eth_account import Account
+from web3 import Web3
 
 from packages.dvilela.connections.genai.connection import (
     PUBLIC_ID as GENAI_CONNECTION_PUBLIC_ID,
@@ -72,9 +75,12 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
+from packages.valory.skills.funds_manager.behaviours import GET_FUNDS_STATUS_METHOD_NAME
+from packages.valory.skills.funds_manager.models import FundRequirements
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
     THRESHOLDS,
     TradingType,
+    ZERO_ADDRESS,
 )
 from packages.valory.skills.liquidity_trader_abci.handlers import (
     IpfsHandler as BaseIpfsHandler,
@@ -90,7 +96,10 @@ from packages.valory.skills.optimus_abci.dialogues import (
     SrrDialogues,
 )
 from packages.valory.skills.optimus_abci.models import Params, SharedState
-from packages.valory.skills.optimus_abci.prompts import PROMPT
+from packages.valory.skills.optimus_abci.prompts import (
+    STRATEGY_PROMPT,
+    build_strategy_config_schema,
+)
 
 
 ABCIHandler = BaseABCIRoundHandler
@@ -123,6 +132,10 @@ OK_CODE = 200
 NOT_FOUND_CODE = 404
 BAD_REQUEST_CODE = 400
 AVERAGE_PERIOD_SECONDS = 10
+ESTIMATED_GAS_PER_TX = 1000000000000  # 0.000001 ETH in wei
+USDC_ADDRESSES = {
+    "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+}
 
 
 def load_fsm_spec() -> Dict:
@@ -256,6 +269,13 @@ class HttpHandler(BaseHttpHandler):
     def setup(self) -> None:
         """Implement the setup."""
         # Custom hostname (set via params)
+        # Only check funds if using X402
+        if self.context.params.use_x402:
+            self.shared_state.sufficient_funds_for_x402_payments = False
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self._ensure_sufficient_funds_for_x402_payments)
+                executor.shutdown(wait=False)
+
         service_endpoint_base = urlparse(
             self.context.params.service_endpoint_base
         ).hostname
@@ -277,6 +297,7 @@ class HttpHandler(BaseHttpHandler):
         features_url_regex = (
             rf"{hostname_regex}\/features"  # New regex for /features endpoint
         )
+        funds_status_regex = rf"{hostname_regex}\/funds-status"
         # Withdrawal endpoints
         withdrawal_amount_regex = rf"{hostname_regex}\/withdrawal\/amount"
         withdrawal_initiate_regex = rf"{hostname_regex}\/withdrawal\/initiate"
@@ -294,6 +315,7 @@ class HttpHandler(BaseHttpHandler):
                 (health_url_regex, self._handle_get_health),
                 (portfolio_url_regex, self._handle_get_portfolio),
                 (features_url_regex, self._handle_get_features),  # Add new route
+                (funds_status_regex, self._handle_get_funds_status),
                 (withdrawal_amount_regex, self._handle_get_withdrawal_amount),
                 (withdrawal_status_regex, self._handle_get_withdrawal_status),
                 (
@@ -348,6 +370,338 @@ class HttpHandler(BaseHttpHandler):
         """Shortcut to access the parameters."""
         return cast(Params, self.context.params)
 
+    @property
+    def funds_status(self) -> FundRequirements:
+        """Get the fund status."""
+        return self.context.shared_state[GET_FUNDS_STATUS_METHOD_NAME]()
+
+    def _get_eoa_account(self) -> Account:
+        """Get EOA account from private key file."""
+        default_ledger = self.context.default_ledger_id
+        eoa_file = Path(self.context.data_dir) / f"{default_ledger}_private_key.txt"
+        with eoa_file.open("r") as f:
+            private_key = f.read().strip()
+        return Account.from_key(private_key=private_key)
+
+    def _get_web3_instance(self, chain: str) -> Optional[Web3]:
+        """Get Web3 instance for the specified chain."""
+        try:
+            rpc_url = self.context.params.optimism_ledger_rpc
+
+            if not rpc_url:
+                self.context.logger.warning(f"No RPC URL for {chain}")
+                return None
+
+            # Note that you should create only one HTTPProvider with the same provider URL per python process,
+            # as the HTTPProvider recycles underlying TCP/IP network connections, for better performance. Multiple HTTPProviders with different URLs will work as expected.
+            return Web3(Web3.HTTPProvider(rpc_url))
+        except Exception as e:
+            self.context.logger.error(f"Error creating Web3 instance: {str(e)}")
+            return None
+
+    def _check_usdc_balance(
+        self, eoa_address: str, chain: str, usdc_address: str
+    ) -> Optional[int]:
+        """Check USDC balance using Web3 library."""
+        try:
+            w3 = self._get_web3_instance(chain)
+            if not w3:
+                return None
+
+            # ERC20 ABI for balanceOf
+            erc20_abi = [
+                {
+                    "constant": True,
+                    "inputs": [{"name": "_owner", "type": "address"}],
+                    "name": "balanceOf",
+                    "outputs": [{"name": "balance", "type": "uint256"}],
+                    "type": "function",
+                }
+            ]
+
+            usdc_contract = w3.eth.contract(
+                address=Web3.to_checksum_address(usdc_address), abi=erc20_abi
+            )
+            balance = usdc_contract.functions.balanceOf(
+                Web3.to_checksum_address(eoa_address)
+            ).call()
+            return balance
+
+        except Exception as e:
+            self.context.logger.error(f"Error checking USDC balance: {str(e)}")
+            return None
+
+    def _get_lifi_quote_sync(
+        self, eoa_address: str, chain: str, usdc_address: str, to_amount: str
+    ) -> Optional[Dict]:
+        """Get LiFi quote synchronously."""
+        try:
+            chain_id = str(
+                self.context.params.chain_to_chain_id_mapping.get(chain.lower())
+            )
+
+            if not chain_id:
+                return None
+
+            params = {
+                "fromChain": chain_id,
+                "toChain": chain_id,
+                "fromToken": ZERO_ADDRESS,
+                "toToken": usdc_address,
+                "fromAddress": eoa_address,
+                "toAddress": eoa_address,
+                "toAmount": to_amount,
+                "slippage": self.context.params.slippage_for_swap,
+                "integrator": "valory",
+            }
+
+            response = requests.get(
+                self.context.params.lifi_quote_to_amount_url, params=params, timeout=30
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+            return None
+        except Exception as e:
+            self.context.logger.error(f"Error getting LiFi quote: {str(e)}")
+            return None
+
+    def _sign_and_submit_tx_web3(
+        self, tx_data: Dict, chain: str, eoa_account: Account
+    ) -> Optional[str]:
+        """Sign and submit transaction using Web3."""
+        try:
+            w3 = self._get_web3_instance(chain)
+            if not w3:
+                return None
+
+            signed_tx = eoa_account.sign_transaction(tx_data)
+
+            tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            return tx_hash.hex()
+
+        except Exception as e:
+            self.context.logger.error(f"Error submitting transaction: {str(e)}")
+            return None
+
+    def _check_transaction_status(
+        self, tx_hash: str, chain: str, timeout: int = 60
+    ) -> bool:
+        """Check if transaction was successful by waiting for receipt."""
+        try:
+            w3 = self._get_web3_instance(chain)
+            if not w3:
+                return False
+
+            self.context.logger.info(
+                f"Waiting for transaction {tx_hash} to be mined..."
+            )
+
+            # Wait for transaction receipt with timeout
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
+
+            if receipt.status == 1:
+                self.context.logger.info(f"Transaction {tx_hash} successful")
+                return True
+            else:
+                self.context.logger.error(
+                    f"Transaction {tx_hash} failed (status: {receipt.status})"
+                )
+                return False
+
+        except Exception as e:
+            self.context.logger.error(f"Error checking transaction status: {str(e)}")
+            return False
+
+    def _get_nonce_and_gas_web3(
+        self, address: str, chain: str
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """Get nonce and gas price using Web3."""
+        try:
+            w3 = self._get_web3_instance(chain)
+            if not w3:
+                return None, None
+
+            nonce = w3.eth.get_transaction_count(Web3.to_checksum_address(address))
+            gas_price = w3.eth.gas_price
+
+            return nonce, gas_price
+
+        except Exception as e:
+            self.context.logger.error(f"Error getting nonce/gas: {str(e)}")
+            return None, None
+
+    def _estimate_gas(
+        self,
+        tx_request: Dict,
+        eoa_address: str,
+        chain: str,
+    ) -> Optional[int]:
+        """Estimate gas for a transaction"""
+        try:
+            w3 = self._get_web3_instance(chain)
+            if not w3:
+                self.context.logger.error(
+                    "Failed to get Web3 instance for gas estimation"
+                )
+                return False
+
+            tx_value = (
+                int(tx_request["value"], 16)
+                if isinstance(tx_request["value"], str)
+                else tx_request["value"]
+            )
+
+            # Prepare transaction data for gas estimation
+            tx_data_for_estimation = {
+                "to": Web3.to_checksum_address(tx_request["to"]),
+                "data": tx_request["data"],
+                "value": tx_value,
+                "from": Web3.to_checksum_address(eoa_address),
+            }
+            # Try to estimate gas using Web3
+            estimated_gas = w3.eth.estimate_gas(tx_data_for_estimation)
+            # Add 20% buffer to estimated gas
+            tx_gas = int(estimated_gas * 1.2)
+            self.context.logger.info(
+                f"Estimated gas: {estimated_gas}, with 20% buffer: {tx_gas}"
+            )
+            return tx_gas
+
+        except Exception as e:
+            error_str = str(e)
+            if (
+                "Return amount is not enough" in error_str
+                or "execution reverted" in error_str
+            ):
+                self.context.logger.info(
+                    "Insufficient ETH for swap, wait for agent EOA to be funded"
+                )
+
+            self.context.logger.error(f"{error_str=}")
+            return None
+
+    def _ensure_sufficient_funds_for_x402_payments(self) -> None:
+        """Ensure agent EOA has at sufficient funds for x402 requests payments"""
+        try:
+            chain = self.context.params.target_investment_chains[0]
+            eoa_account = self._get_eoa_account()
+            eoa_address = eoa_account.address
+
+            usdc_address = USDC_ADDRESSES.get(chain.lower())
+            if not usdc_address:
+                self.context.logger.error(f"No USDC address for {chain}")
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
+
+            usdc_balance = self._check_usdc_balance(eoa_address, chain, usdc_address)
+
+            if usdc_balance is None:
+                self.context.logger.warning("Could not check USDC balance, skipping")
+                self.shared_state.sufficient_funds_for_x402_payments = True
+                return
+
+            threshold = self.context.params.x402_payment_requirements.get(
+                "threshold", 0
+            )
+            top_up = self.context.params.x402_payment_requirements.get("topup", 0)
+
+            if usdc_balance >= self.context.params.x402_payment_requirements.get(
+                "threshold", 0
+            ):
+                self.context.logger.info(
+                    f"USDC balance sufficient: {usdc_balance} USDC (threshold: {threshold})"
+                )
+                self.shared_state.sufficient_funds_for_x402_payments = True
+                return
+
+            self.context.logger.info(
+                f"USDC balance ({usdc_balance}) < {threshold}, swapping ETH to {top_up} USDC..."
+            )
+
+            top_up_usdc_amount = str(
+                self.context.params.x402_payment_requirements.get("topup", 0)
+            )
+
+            quote = self._get_lifi_quote_sync(
+                eoa_address, chain, usdc_address, top_up_usdc_amount
+            )
+            if not quote:
+                self.context.logger.error("Failed to get LiFi quote")
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
+
+            tx_request = quote.get("transactionRequest")
+            if not tx_request:
+                self.context.logger.error("No transactionRequest in quote")
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
+
+            nonce, gas_price = self._get_nonce_and_gas_web3(eoa_address, chain)
+            if nonce is None or gas_price is None:
+                self.context.logger.error("Failed to get nonce or gas price")
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
+
+            tx_gas = self._estimate_gas(tx_request, eoa_address, chain)
+            if tx_gas is None:
+                self.context.logger.error("Failed to estimate gas for transaction")
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
+
+            tx_value = (
+                int(tx_request["value"], 16)
+                if isinstance(tx_request["value"], str)
+                else tx_request["value"]
+            )
+
+            tx_data = {
+                "to": Web3.to_checksum_address(tx_request["to"]),
+                "data": tx_request["data"],
+                "value": tx_value,
+                "gas": tx_gas,
+                "gasPrice": gas_price,
+                "nonce": nonce,
+                "chainId": self.context.params.chain_to_chain_id_mapping.get(
+                    chain.lower()
+                ),
+            }
+
+            self.context.logger.info(
+                f"Signing and submitting tx: value={tx_data['value']}, gas={tx_data['gas']}"
+            )
+
+            tx_hash = self._sign_and_submit_tx_web3(tx_data, chain, eoa_account)
+
+            if not tx_hash:
+                self.context.logger.error("Failed to submit transaction")
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
+
+            self.context.logger.info(f"ETH to USDC swap submitted: {tx_hash}")
+
+            # Check transaction status to ensure it was successful
+            tx_successful = self._check_transaction_status(tx_hash, chain)
+
+            if not tx_successful:
+                self.context.logger.error(f"Transaction {tx_hash} failed or timed out")
+                self.shared_state.sufficient_funds_for_x402_payments = False
+                return
+
+            self.context.logger.info(
+                f"ETH to USDC swap completed successfully: {tx_hash}"
+            )
+            self.shared_state.sufficient_funds_for_x402_payments = True
+            return
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error in checking funds for x402 payments: {str(e)}"
+            )
+            self.shared_state.sufficient_funds_for_x402_payments = False
+            return
+
     def _handle_get_features(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
@@ -357,20 +711,230 @@ class HttpHandler(BaseHttpHandler):
         :param http_msg: the HTTP message
         :param http_dialogue: the HTTP dialogue
         """
-        # Check if GENAI_API_KEY is set
-        api_key = self.context.params.genai_api_key
+        # Check if using X402 or if GENAI_API_KEY is set
+        use_x402 = getattr(self.context.params, "use_x402", False)
 
-        is_chat_enabled = (
-            api_key is not None
-            and isinstance(api_key, str)
-            and api_key.strip() != ""
-            and api_key != "${str:}"
-            and api_key != '""'
-        )
+        if use_x402:
+            # If using X402, chat is enabled without API key check
+            is_chat_enabled = True
+        else:
+            # Otherwise, check if GENAI_API_KEY is set
+            api_key = self.context.params.genai_api_key
+            is_chat_enabled = (
+                api_key is not None
+                and isinstance(api_key, str)
+                and api_key.strip() != ""
+                and api_key != "${str:}"
+                and api_key != '""'
+            )
 
         data = {"isChatEnabled": is_chat_enabled}
 
         self._send_ok_response(http_msg, http_dialogue, data)
+
+    def _handle_get_funds_status(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a fund status request with withdrawal mode support.
+
+        :param http_msg: the HTTP message
+        :param http_dialogue: the HTTP dialogue
+        """
+        # ensure sufficient funds for x402 payments
+        if self.context.params.use_x402:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self._ensure_sufficient_funds_for_x402_payments)
+                executor.shutdown(wait=False)
+
+        # Get standard deficit from funds_manager
+        standard_deficit = self.funds_status.get_response_body()
+        self.context.logger.info(
+            f"Standard deficit for agent from funds manager: {standard_deficit}"
+        )
+
+        # Check if in withdrawal mode
+        in_withdrawal = self._is_in_withdrawal_mode()
+
+        if not in_withdrawal:
+            # Normal mode: return standard deficit
+            self.context.logger.info(
+                "Funds status: Normal mode - returning standard deficit"
+            )
+            response = standard_deficit
+        else:
+            # Withdrawal mode: check if there's any deficit
+            self.context.logger.info("Funds status: Withdrawal mode detected")
+            has_deficit = self._has_deficit(standard_deficit)
+            self.context.logger.info(f"Funds status: Has deficit = {has_deficit}")
+
+            if has_deficit:
+                # There is a deficit - check if actions are prepared
+                withdrawal_actions = self._get_withdrawal_actions()
+                self.context.logger.info(
+                    f"Funds status: Found {len(withdrawal_actions)} withdrawal actions"
+                )
+
+                if not withdrawal_actions or len(withdrawal_actions) == 0:
+                    # No actions prepared yet, don't request funding
+                    self.context.logger.info(
+                        "Funds status: No withdrawal actions prepared - returning empty response"
+                    )
+                    response = {}
+                else:
+                    # Actions exist - calculate minimal deficit needed
+                    # Read current balance for zero-address from funds manager response
+                    try:
+                        chain = self.context.params.target_investment_chains[0]
+                        funds_status = self.funds_status.get_response_body() or {}
+                        agent_map = funds_status.get(chain, {}).get(
+                            self.context.agent_address, {}
+                        )
+                        zero_addr_entry = agent_map.get(ZERO_ADDRESS, {})
+                        balance_value = zero_addr_entry.get("balance", 0)
+                        self.context.logger.info(
+                            f"Funds status: Current balance value = {balance_value}"
+                        )
+
+                        try:
+                            current_balance = (
+                                int(balance_value) if balance_value is not None else 0
+                            )
+                        except (ValueError, TypeError):
+                            current_balance = 0
+
+                        self.context.logger.info(
+                            f"Funds status: Parsed current balance = {current_balance}"
+                        )
+
+                        # Determine remaining actions based on executed tx hashes
+                        withdrawal_data = self._read_withdrawal_data() or {}
+                        tx_hashes_serialized = withdrawal_data.get(
+                            "withdrawal_transaction_hashes", "[]"
+                        )
+                        executed_hashes = (
+                            json.loads(tx_hashes_serialized)
+                            if tx_hashes_serialized
+                            else []
+                        )
+                        executed_count = len(executed_hashes)
+                        self.context.logger.info(
+                            f"Funds status: Executed transactions count = {executed_count}"
+                        )
+                    except Exception as e:
+                        self.context.logger.error(
+                            f"Funds status: Error reading withdrawal data: {e}"
+                        )
+                        executed_count = 0
+
+                    remaining_actions = (
+                        withdrawal_actions[executed_count:]
+                        if executed_count > 0
+                        else withdrawal_actions
+                    )
+
+                    if not remaining_actions:
+                        # All actions executed; nothing to fund
+                        self.context.logger.info(
+                            "Funds status: All actions executed - returning empty response"
+                        )
+                        response = {}
+                    else:
+                        response = self._calculate_withdrawal_funding_deficit(
+                            remaining_actions,
+                            current_balance,
+                        )
+                        self.context.logger.info(
+                            f"Funds status: Calculated deficit response = {response}"
+                        )
+            else:
+                # Withdrawal mode but no deficit - return empty response
+                self.context.logger.info(
+                    "Funds status: Withdrawal mode but no deficit - returning empty response"
+                )
+                response = {}
+
+        self._send_ok_response(http_msg, http_dialogue, response)
+
+    def _is_in_withdrawal_mode(self) -> bool:
+        """Check if agent is in withdrawal mode."""
+        withdrawal_data = self._read_withdrawal_data()
+        return (
+            withdrawal_data
+            and withdrawal_data.get("investing_paused", "").lower() == "true"
+        )
+
+    def _has_deficit(self, deficit: Dict) -> bool:
+        """Check if there's any funding deficit."""
+        chain = self.context.params.target_investment_chains[0]
+        chain_data = deficit.get(chain, {})
+        agent_deficit = chain_data.get(self.context.agent_address, {})
+        zero_addr_deficit = agent_deficit.get(ZERO_ADDRESS, {})
+        deficit_value = zero_addr_deficit.get("deficit", 0)
+        try:
+            return float(deficit_value) > 0
+        except (ValueError, TypeError):
+            return False
+
+    def _get_withdrawal_actions(self) -> List[Dict]:
+        """Get prepared withdrawal actions from synchronized data."""
+        try:
+            actions_str = self.synchronized_data.db.get("withdrawal_actions", "[]")
+            actions = json.loads(actions_str) if actions_str else []
+            return actions
+        except Exception as e:
+            self.context.logger.error(f"Error reading withdrawal actions: {e}")
+            return []
+
+    def _calculate_withdrawal_funding_deficit(
+        self, withdrawal_actions: List[Dict], current_balance: int
+    ) -> Dict:
+        """
+        Calculate funding deficit for remaining withdrawal actions.
+
+        Estimates gas needed based on action count, checks agent balance,
+        and returns deficit if agent doesn't have enough.
+
+        Returns response in the same format as funds_manager.get_response_body():
+        flattened structure with stringified deficit values.
+        """
+        num_actions = len(withdrawal_actions)
+        chain = self.context.params.target_investment_chains[0]
+
+        # Estimate gas: gas per action * number of actions + 20% buffer
+        gas_per_action = ESTIMATED_GAS_PER_TX
+        total_gas_needed = int(gas_per_action * num_actions * 1.2)
+
+        # Calculate deficit
+        deficit = total_gas_needed - current_balance
+
+        if deficit <= 0:
+            self.context.logger.info(
+                f"Agent has sufficient balance ({current_balance} wei) for "
+                f"{num_actions} withdrawal actions (need {total_gas_needed} wei)"
+            )
+            return {}
+
+        self.context.logger.info(
+            f"Withdrawal funding needed: {deficit} wei for {num_actions} actions "
+            f"(current: {current_balance}, needed: {total_gas_needed})"
+        )
+
+        # Get agent address
+        agent_address = self.context.agent_address
+        native_token = ZERO_ADDRESS
+
+        # Return in funds_manager response format: flattened with stringified values
+        return {
+            chain: {
+                agent_address: {
+                    native_token: {
+                        "balance": str(current_balance),
+                        "deficit": str(deficit),
+                    }
+                }
+            }
+        }
 
     def _handle_get_static_file(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -760,6 +1324,18 @@ class HttpHandler(BaseHttpHandler):
         request_id = http_dialogue.dialogue_label.dialogue_reference[0]
         self.context.state.request_queue.append(request_id)
 
+        if self.context.params.use_x402:
+            sufficient_funds_for_x402_payments = getattr(
+                self.shared_state, "sufficient_funds_for_x402_payments", False
+            )
+            if not sufficient_funds_for_x402_payments:
+                self._send_ok_response(
+                    http_msg,
+                    http_dialogue,
+                    {"error": "System initializing. Please wait for some time."},
+                )
+                return
+
         try:
             # Parse incoming data
             data = json.loads(http_msg.body.decode("utf-8"))
@@ -779,21 +1355,7 @@ class HttpHandler(BaseHttpHandler):
                 else self.context.state.selected_protocols or self.available_strategies
             )
 
-            available_trading_types = [
-                trading_type.value for trading_type in TradingType
-            ]
-            last_selected_threshold = THRESHOLDS.get(previous_trading_type)
-
-            # Convert strategy names to protocol names for LLM
-            available_protocols = [
-                STRATEGY_TO_PROTOCOL.get(strategy, strategy)
-                for strategy in self.available_strategies
-            ]
-
-            available_protocols_definitons = {
-                protocol: PROTOCOL_DEFINITIONS.get(protocol, "")
-                for protocol in available_protocols
-            }
+            last_selected_threshold = THRESHOLDS.get(previous_trading_type, 10)
 
             # Convert previous selected protocols to their protocol names
             previous_protocols_for_llm = [
@@ -801,20 +1363,20 @@ class HttpHandler(BaseHttpHandler):
                 for strategy in previous_selected_protocols
             ]
 
-            # Format the prompt
-            prompt_template = PROMPT.format(
-                USER_PROMPT=user_prompt,
-                PREVIOUS_TRADING_TYPE=previous_trading_type,
-                TRADING_TYPES=available_trading_types,
-                AVAILABLE_PROTOCOLS=available_protocols_definitons,
-                LAST_THRESHOLD=last_selected_threshold,
-                PREVIOUS_SELECTED_PROTOCOLS=previous_protocols_for_llm,
-                THRESHOLDS=THRESHOLDS,
+            # Format the optimized prompt
+            prompt_template = STRATEGY_PROMPT.format(
+                user_prompt=user_prompt,
+                previous_protocols=previous_protocols_for_llm,
+                previous_type=previous_trading_type,
+                previous_threshold=last_selected_threshold,
             )
-            # Prepare payload data
+
+            # Prepare payload data with schema and speed optimizations
             payload_data = {
                 "prompt": prompt_template,
-                "model": self.context.params.genai_model,
+                "schema": build_strategy_config_schema(),
+                "temperature": 0.01,
+                "max_tokens": 120,
             }
 
             # Create LLM request
@@ -822,7 +1384,7 @@ class HttpHandler(BaseHttpHandler):
             request_srr_message, srr_dialogue = srr_dialogues.create(
                 counterparty=str(GENAI_CONNECTION_PUBLIC_ID),
                 performative=SrrMessage.Performative.REQUEST,
-                payload=json.dumps(payload_data, ensure_ascii=True),
+                payload=json.dumps(payload_data),
             )
             # Prepare callback args
             callback_kwargs = {"http_msg": http_msg, "http_dialogue": http_dialogue}
@@ -834,7 +1396,7 @@ class HttpHandler(BaseHttpHandler):
             )
 
         except (json.JSONDecodeError, ValueError) as e:
-            self.context.logger.info(f"Error processing prompt: {str(e)}")
+            self.context.logger.error(f"Error processing prompt: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
 
     def _parse_llm_response(
@@ -1031,16 +1593,58 @@ class HttpHandler(BaseHttpHandler):
         :param dialogue: the Dialogue
         :param http_msg: the original HttpMessage
         :param http_dialogue: the original HttpDialogue
+        :param llm_request_start_time: the time when LLM request was initiated
         """
-        (
-            selected_protocol_names,
-            trading_type,
-            max_loss_percentage,
-            reasoning,
-            previous_trading_type,
-        ) = self._parse_llm_response(llm_response_message)
 
-        # Convert percentage to VaR (negative decimal)
+        try:
+            # Parse the outer payload
+            genai_response: dict = json.loads(llm_response_message.payload)
+            self.context.logger.info(f"Response from GenAI: {genai_response}")
+
+            # Check for errors
+            if "error" in genai_response:
+                error_msg = genai_response["error"]
+                self.context.logger.error(f"GenAI error: {error_msg}")
+                self._send_ok_response(http_msg, http_dialogue, {"error": error_msg})
+                return
+
+            # Extract the response field (it's a JSON string)
+            llm_response = genai_response.get("response", "{}")
+
+            # Parse the JSON string into a dict
+            strategy_data = json.loads(llm_response)
+
+            # Extract fields from the parsed JSON
+            selected_protocol_names = strategy_data.get("selected_protocols", [])
+            trading_type = strategy_data.get("trading_type", "balanced")
+            max_loss_percentage = float(strategy_data.get("max_loss_percentage", 10))
+            reasoning = strategy_data.get("reasoning", "")
+
+            # Get previous trading type from state
+            previous_trading_type = self.context.state.trading_type or "balanced"
+
+            self.context.logger.info(
+                f"Parsed response - Protocols: {selected_protocol_names}, "
+                f"Type: {trading_type}, Loss %: {max_loss_percentage}"
+            )
+
+        except json.JSONDecodeError as e:
+            self.context.logger.error(f"JSON decode error: {e}", exc_info=True)
+            self._send_ok_response(
+                http_msg,
+                http_dialogue,
+                {"error": f"Failed to parse LLM response: {str(e)}"},
+            )
+            return
+        except Exception as e:
+            self.context.logger.error(f"Error parsing LLM response: {e}", exc_info=True)
+            self._send_ok_response(
+                http_msg,
+                http_dialogue,
+                {"error": f"Failed to process LLM response: {str(e)}"},
+            )
+            return
+
         var_value = -max_loss_percentage / 100.0
         # Calculate composite score using the formula
         composite_score = self.calculate_composite_score_from_var(var_value)
@@ -1096,9 +1700,9 @@ class HttpHandler(BaseHttpHandler):
         }
 
         # Offload KV store update to a separate thread
-        threading.Thread(
-            target=self._delayed_write_kv_extended, args=(storage_data,)
-        ).start()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self._delayed_write_kv_extended, storage_data)
+            executor.shutdown(wait=False)
 
     def _fallback_to_previous_strategy(self) -> Tuple[List[str], str, str, str]:
         """Fallback to previous strategy in case of parsing errors."""
@@ -1340,9 +1944,9 @@ class HttpHandler(BaseHttpHandler):
             }
 
             # Store withdrawal data in KV store
-            threading.Thread(
-                target=self._write_withdrawal_data, args=(withdrawal_data,)
-            ).start()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self._write_withdrawal_data, withdrawal_data)
+                executor.shutdown(wait=False)
 
             # Prepare response
             response = {

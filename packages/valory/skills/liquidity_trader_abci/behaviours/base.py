@@ -59,11 +59,7 @@ from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.protocols.srr.dialogues import SrrDialogue, SrrDialogues
 from packages.valory.protocols.srr.message import SrrMessage
 from packages.valory.skills.abstract_round_abci.models import Requests
-from packages.valory.skills.liquidity_trader_abci.models import (
-    Coingecko,
-    Params,
-    SharedState,
-)
+from packages.valory.skills.liquidity_trader_abci.models import Params, SharedState
 from packages.valory.skills.liquidity_trader_abci.pools.balancer import (
     BalancerPoolBehaviour,
 )
@@ -378,11 +374,6 @@ class LiquidityTraderBaseBehaviour(
     def shared_state(self) -> SharedState:
         """Get the parameters."""
         return cast(SharedState, self.context.state)
-
-    @property
-    def coingecko(self) -> Coingecko:
-        """Return the Coingecko."""
-        return cast(Coingecko, self.context.coingecko)
 
     def default_error(
         self, contract_id: str, contract_callable: str, response_msg: ContractApiMessage
@@ -1282,7 +1273,8 @@ class LiquidityTraderBaseBehaviour(
         headers = {
             "Accept": "application/json",
         }
-        if self.coingecko.api_key:
+
+        if not self.params.use_x402 and self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
         platform_id = self.coingecko.chain_to_platform_id_mapping.get(chain)
@@ -1293,31 +1285,39 @@ class LiquidityTraderBaseBehaviour(
         self.context.logger.info(
             f"Fetching price from CoinGecko API for token {token_address} on platform {platform_id}"
         )
+        endpoint = self.coingecko.token_price_endpoint.format(
+            token_address=token_address, asset_platform_id=platform_id
+        )
 
-        success, response_json = yield from self._request_with_retries(
-            endpoint=self.coingecko.token_price_endpoint.format(
-                token_address=token_address, asset_platform_id=platform_id
-            ),
+        x402_signer = self.eoa_account if self.params.use_x402 else None
+
+        success, response_json = self.coingecko.request(
+            endpoint=endpoint,
             headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            x402_signer=x402_signer,
         )
 
         if success:
-            token_data = response_json.get(token_address.lower(), {})
-            price = token_data.get("usd", 0)
-            # Cache the price
-            if price:
-                self.context.logger.info(
-                    f"Successfully fetched price for token {token_address}: ${price}"
+            try:
+                token_data = response_json.get(token_address.lower(), {})
+                price = token_data.get("usd", 0)
+                # Cache the price
+                if price:
+                    self.context.logger.info(
+                        f"Successfully fetched price for token {token_address}: ${price}"
+                    )
+                    yield from self._cache_price(token_address, price, date_str)
+                else:
+                    self.context.logger.warning(
+                        f"No price data returned for token {token_address}"
+                    )
+                return price
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error processing price data for token {token_address}: {str(e)}. "
+                    f"Response data: {response_json}"
                 )
-                yield from self._cache_price(token_address, price, date_str)
-            else:
-                self.context.logger.warning(
-                    f"No price data returned for token {token_address}"
-                )
-            return price
+                return None
         else:
             self.context.logger.error(
                 f"Failed to fetch price for token {token_address} from CoinGecko"
@@ -1655,32 +1655,42 @@ class LiquidityTraderBaseBehaviour(
         headers = {
             "Accept": "application/json",
         }
-        if self.coingecko.api_key:
+
+        if not self.params.use_x402 and self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
         self.context.logger.info(
             f"Fetching {coin_id} price from CoinGecko coin price endpoint"
         )
 
-        success, response_json = yield from self._request_with_retries(
-            endpoint=self.coingecko.coin_price_endpoint.format(coin_id=coin_id),
+        endpoint = self.coingecko.coin_price_endpoint.format(coin_id=coin_id)
+
+        x402_signer = self.eoa_account if self.params.use_x402 else None
+
+        success, response_json = self.coingecko.request(
+            endpoint=endpoint,
             headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            x402_signer=x402_signer,
         )
 
         if success:
-            token_data = next(iter(response_json.values()), {})
-            price = token_data.get("usd", 0)
-            if price:
-                self.context.logger.info(
-                    f"Successfully fetched {coin_id} price: ${price}"
+            try:
+                token_data = next(iter(response_json.values()), {})
+                price = token_data.get("usd", 0)
+                if price:
+                    self.context.logger.info(
+                        f"Successfully fetched {coin_id} price: ${price}"
+                    )
+                    yield from self._cache_price(coin_id, price, date_str)
+                else:
+                    self.context.logger.warning(f"No price data returned for {coin_id}")
+                return price
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error processing price data for {coin_id}: {str(e)}. "
+                    f"Response data: {response_json}"
                 )
-                yield from self._cache_price(coin_id, price, date_str)
-            else:
-                self.context.logger.warning(f"No price data returned for {coin_id}")
-            return price
+                return None
         else:
             self.context.logger.error(f"Failed to fetch {coin_id} price from CoinGecko")
         return None
@@ -1829,35 +1839,45 @@ class LiquidityTraderBaseBehaviour(
         )
 
         headers = {"Accept": "application/json"}
-        if self.coingecko.api_key:
+
+        if not self.params.use_x402 and self.coingecko.api_key:
             headers["x-cg-api-key"] = self.coingecko.api_key
 
         self.context.logger.info(
             f"Fetching historical price from CoinGecko API for {coingecko_id} on {date_str}"
         )
 
-        success, response_json = yield from self._request_with_retries(
+        x402_signer = self.eoa_account if self.params.use_x402 else None
+
+        success, response_json = self.coingecko.request(
             endpoint=endpoint,
             headers=headers,
-            rate_limited_code=self.coingecko.rate_limited_code,
-            rate_limited_callback=self.coingecko.rate_limited_status_callback,
-            retry_wait=self.params.sleep_time,
+            x402_signer=x402_signer,
         )
 
         if success:
-            price = (
-                response_json.get("market_data", {}).get("current_price", {}).get("usd")
-            )
-            if price:
-                self.context.logger.info(
-                    f"Successfully fetched historical price for {coingecko_id} on {date_str}: ${price}"
+            try:
+                price = (
+                    response_json.get("market_data", {})
+                    .get("current_price", {})
+                    .get("usd")
                 )
-                # Cache the historical price
-                yield from self._cache_price(coingecko_id, price, date_str)
-                return price
-            else:
-                self.context.logger.warning(
-                    f"No price data in response for token {coingecko_id} on {date_str}"
+                if price:
+                    self.context.logger.info(
+                        f"Successfully fetched historical price for {coingecko_id} on {date_str}: ${price}"
+                    )
+                    # Cache the historical price
+                    yield from self._cache_price(coingecko_id, price, date_str)
+                    return price
+                else:
+                    self.context.logger.warning(
+                        f"No price data in response for token {coingecko_id} on {date_str}"
+                    )
+                    return None
+            except Exception as e:
+                self.context.logger.error(
+                    f"Error processing historical price data for {coingecko_id} on {date_str}: {str(e)}. "
+                    f"Response data: {response_json}"
                 )
                 return None
         else:

@@ -2197,6 +2197,7 @@ class LiquidityTraderBaseBehaviour(
         pool_type = position.get("pool_type")
         is_stable = position.get("is_stable")
         is_cl_pool = position.get("is_cl_pool")
+        was_staked = self._has_staking_metadata(position)
 
         # Determine action type based on DEX
         action_type = (
@@ -2214,6 +2215,7 @@ class LiquidityTraderBaseBehaviour(
             "pool_type": pool_type,
             "is_stable": is_stable,
             "is_cl_pool": is_cl_pool,
+            "was_staked": was_staked,
         }
 
         # Add assets if provided

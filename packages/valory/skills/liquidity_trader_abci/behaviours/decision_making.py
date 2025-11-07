@@ -1672,6 +1672,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             exit_pool_kwargs["is_stable"] = is_stable
             exit_pool_kwargs["is_cl_pool"] = is_cl_pool
 
+            # Check if positions were staked by looking at position metadata
+            was_staked = action.get("was_staked", False)
+            exit_pool_kwargs["was_staked"] = was_staked
+
             # For Velodrome CL pools, we need to handle multiple positions
             if is_cl_pool:
                 # Extract token IDs from all nested positions

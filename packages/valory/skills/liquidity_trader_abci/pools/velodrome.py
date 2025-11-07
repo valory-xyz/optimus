@@ -1050,6 +1050,26 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
+            # Burn the position NFT to properly close the position
+            burn_tx_hash = yield from self.burn_position_velodrome(
+                token_id=position_token_id,
+                chain=chain,
+            )
+            if not burn_tx_hash:
+                self.context.logger.warning(
+                    f"Failed to burn position for token ID {position_token_id}, skipping"
+                )
+                continue
+
+            multi_send_txs.append(
+                {
+                    "operation": MultiSendOperation.CALL,
+                    "to": position_manager_address,
+                    "value": 0,
+                    "data": burn_tx_hash,
+                }
+            )
+
         # prepare multisend
         multisend_address = self.params.multisend_contract_addresses.get(chain, "")
         if not multisend_address:
@@ -1177,6 +1197,48 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
             amount1_max=amount1_max,
             chain_id=chain,
         )
+
+        return tx_hash
+
+    def burn_position_velodrome(
+        self,
+        token_id: int,
+        chain: str,
+    ) -> Generator[None, None, Optional[str]]:
+        """Burn a position NFT to properly close the position"""
+        position_manager_address = (
+            self.params.velodrome_non_fungible_position_manager_contract_addresses.get(
+                chain, ""
+            )
+        )
+        if not position_manager_address:
+            self.context.logger.error(
+                f"No CLPoolManager contract address found for chain {chain}"
+            )
+            return None
+
+        self.context.logger.info(
+            f"Burning position NFT with token ID {token_id} to properly close position"
+        )
+
+        tx_hash = yield from self.contract_interact(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,
+            contract_address=position_manager_address,
+            contract_public_id=VelodromeNonFungiblePositionManagerContract.contract_id,
+            contract_callable="burn",
+            data_key="tx_hash",
+            token_id=token_id,
+            chain_id=chain,
+        )
+
+        if tx_hash:
+            self.context.logger.info(
+                f"Successfully created burn transaction for token ID {token_id}"
+            )
+        else:
+            self.context.logger.error(
+                f"Failed to create burn transaction for token ID {token_id}"
+            )
 
         return tx_hash
 

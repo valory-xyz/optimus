@@ -248,6 +248,27 @@ class UniswapPoolBehaviour(PoolBehaviour, ABC):
             }
         )
 
+        # Burn the position NFT to properly close the position
+        burn_tx_hash = yield from self.burn_token(token_id=token_id, chain=chain)
+        if not burn_tx_hash:
+            self.context.logger.warning(
+                f"Failed to burn position for token ID {token_id}"
+            )
+            return None, None, None
+
+        multi_send_txs.append(
+            {
+                "operation": MultiSendOperation.CALL,
+                "to": position_manager_address,
+                "value": 0,
+                "data": burn_tx_hash,
+            }
+        )
+
+        self.context.logger.info(
+            f"Successfully prepared exit operations: decrease liquidity, collect fees, and burn NFT for token ID {token_id}"
+        )
+
         # prepare multisend
         multisend_address = self.params.multisend_contract_addresses[chain]
         if not multisend_address:

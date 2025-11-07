@@ -1181,24 +1181,14 @@ def calculate_apr_for_velodrome(pool_data):
     # Calculate staked TVL (exactly as in Velodrome's formula)
     staked_tvl = tvl * staked_pct / 100
     
-    # Adjust emissions for decimals (emissions are in wei)
-    # The emissions value from the contract needs to be converted to a stable currency value
-    adjusted_emissions = emissions / (10 ** 18)
-    
-    # Calculate daily reward (exactly as in Velodrome's formula)
-    # We need a scaling factor to match the UI values since our emissions might be different
-    # from what Velodrome uses internally
-    scaling_factor = 0.048  # Empirically determined to match the Velodrome UI value
-    reward_value = adjusted_emissions * scaling_factor
+    # Use emissions value
+    reward_value = emissions if emissions else 0
     reward = reward_value * day_seconds
     
     # Calculate APR (exactly as in Velodrome's formula)
     if staked_tvl != 0 and reward != 0:
+        #Reference of calculation : https://github.com/velodrome-finance/sugar-sdk/blob/main/sugar/pool.py#L157-L166
         apr = (reward / staked_tvl) * (100 * 365)  # Annualized percentage
-        
-        # Cap APR at reasonable values
-        apr = min(apr, 1000.0)
-        
         return apr
     else:
         return 0

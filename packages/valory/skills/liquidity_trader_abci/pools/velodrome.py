@@ -358,6 +358,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         chain = kwargs.get("chain")
         is_cl_pool = kwargs.get("is_cl_pool", False)
         is_stable = kwargs.get("is_stable")
+        was_staked = kwargs.get("was_staked", False)
         if not all([pool_address, safe_address, chain]):
             self.context.logger.error(
                 f"Missing required parameters for exiting the pool. Here are the kwargs: {kwargs}"
@@ -384,6 +385,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                     token_ids=token_ids,
                     liquidities=liquidities,
                     pool_address=pool_address,
+                    was_staked=was_staked,
                 )
             )
         else:
@@ -951,6 +953,7 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
         token_ids: List[int],
         liquidities: List[int],
         pool_address: str,
+        was_staked: bool = False,
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Exit positions from a Velodrome concentrated liquidity pool."""
         position_manager_address = (
@@ -1027,28 +1030,38 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 }
             )
 
-            # Collect tokens for this position
-            collect_tokens_tx_hash = yield from self.collect_tokens_velodrome(
-                token_id=position_token_id,
-                recipient=safe_address,
-                amount0_max=amount_max,
-                amount1_max=amount_max,
-                chain=chain,
-            )
-            if not collect_tokens_tx_hash:
-                self.context.logger.warning(
-                    f"Failed to collect tokens for token ID {position_token_id}, skipping"
+            # Only collect tokens if the position was not originally staked because
+            # because for staked velodrome positions LP fees goes to Gauge contract
+            if not was_staked:
+                self.context.logger.info(
+                    f"Position {position_token_id} was not staked, collecting fees"
                 )
-                continue
+                # Collect tokens for this position
+                collect_tokens_tx_hash = yield from self.collect_tokens_velodrome(
+                    token_id=position_token_id,
+                    recipient=safe_address,
+                    amount0_max=amount_max,
+                    amount1_max=amount_max,
+                    chain=chain,
+                )
+                if not collect_tokens_tx_hash:
+                    self.context.logger.warning(
+                        f"Failed to collect tokens for token ID {position_token_id}, skipping"
+                    )
+                    continue
 
-            multi_send_txs.append(
-                {
-                    "operation": MultiSendOperation.CALL,
-                    "to": position_manager_address,
-                    "value": 0,
-                    "data": collect_tokens_tx_hash,
-                }
-            )
+                multi_send_txs.append(
+                    {
+                        "operation": MultiSendOperation.CALL,
+                        "to": position_manager_address,
+                        "value": 0,
+                        "data": collect_tokens_tx_hash,
+                    }
+                )
+            else:
+                self.context.logger.info(
+                    f"Position {position_token_id} was originally staked, skipping fee collection"
+                )
 
             # Burn the position NFT to properly close the position
             burn_tx_hash = yield from self.burn_position_velodrome(

@@ -196,6 +196,11 @@ CACHE_METRICS = {
     "hits": {"pools": 0, "tvl": 0, "connections": 0},
     "misses": {"pools": 0, "tvl": 0, "connections": 0}
 }
+# Platform mapping for CoinGecko
+platform_map = {
+    "optimism": "optimistic-ethereum",
+    "mode": "mode",
+}
 
 # Thread-local storage for errors
 _thread_local = threading.local()
@@ -329,6 +334,54 @@ def get_coin_id_from_symbol(
         if symbol in coin_id_mapping.get(chain_name, {}):
             return coin_id_mapping[chain_name][symbol]
 
+        return None
+
+def fetch_token_price(token_address, chain_name, coingecko_api_key=None, x402_signer=None, x402_proxy=None):
+    """
+    Fetch token price from CoinGecko API using pycoingecko.
+    
+    Args:
+        token_address: Token contract address
+        chain_name: Chain name (e.g., 'optimism', 'mode')
+        coingecko_api_key: CoinGecko API key
+        x402_signer: Optional X402 signer
+        x402_proxy: Optional X402 proxy
+        
+    Returns:
+        Float price in USD or 1.0 as fallback
+    """
+    try:
+        platform = platform_map.get(chain_name.lower())
+        if not platform:
+            logger.warning(f"Unsupported chain for price fetching: {chain_name}")
+            return 1.0
+        
+        # Initialize CoinGecko API
+        if x402_signer is not None and x402_proxy is not None:
+            cg = CoinGeckoAPI()
+            cg.session = x402_requests(account=x402_signer)
+            cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
+        else:
+            if not coingecko_api_key:
+                return 1.0
+            is_pro = is_pro_api_key(coingecko_api_key)
+            if is_pro:
+                cg = CoinGeckoAPI(api_key=coingecko_api_key)
+            else:
+                cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+        
+        # Fetch token price
+        response = cg.get_token_price(
+            id=platform,
+            contract_addresses=token_address,
+            vs_currencies='usd'
+        )
+        
+        price = response.get(token_address.lower(), {}).get('usd', 1.0)
+        return float(price) if price else 1.0
+        
+    except Exception as e:
+        logger.warning(f"Error fetching price for token {token_address}: {str(e)}")
         return None
 
 def is_pro_api_key(coingecko_api_key: str) -> bool:
@@ -873,7 +926,7 @@ def analyze_velodrome_pool_liquidity(pool_id: str, chain: str, price_impact: flo
         logger.error(f"Error analyzing pool liquidity for {pool_id}: {str(e)}")
         return float("nan"), float("nan")
 
-def get_velodrome_pools(chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+def get_velodrome_pools(chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, coingecko_api_key=None, x402_signer=None, x402_proxy=None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Get pools from Velodrome.
     
@@ -892,13 +945,13 @@ def get_velodrome_pools(chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledge
         # Use provided RPC or default from RPC_ENDPOINTS
         rpc_url = ledger_api or RPC_ENDPOINTS[chain_id]
         
-        return get_velodrome_pools_via_sugar(sugar_address, rpc_url=rpc_url, chain_id=chain_id)
+        return get_velodrome_pools_via_sugar(sugar_address, rpc_url=rpc_url, chain_id=chain_id, coingecko_api_key=coingecko_api_key, x402_signer=x402_signer, x402_proxy=x402_proxy)
     else:
         error_msg = f"Unsupported chain ID: {chain_id}"
         logger.error(error_msg)
         return {"error": error_msg}
 
-def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_CHAIN_ID) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_CHAIN_ID, coingecko_api_key=None, x402_signer=None, x402_proxy=None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Get pools from Velodrome via Sugar contract (Mode).
     
@@ -1036,6 +1089,7 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                     pool["reserve1"],
                     pool["token0"],
                     pool["token1"],
+                    chain_name=chain_name,
                 ),
                 "inputTokenBalances": [str(pool["reserve0"]), str(pool["reserve1"])],
                 "cumulativeVolumeUSD": "0",  # Not available directly
@@ -1056,7 +1110,7 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
         get_errors().append(error_msg)
         return {"error": error_msg}
 
-def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_address, token_prices=None):
+def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_address, token_prices=None, chain_name=None, coingecko_api_key=None, x402_signer=None, x402_proxy=None):
     """
     Calculate TVL from token reserves and prices.
     
@@ -1106,10 +1160,11 @@ def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_addre
     adjusted_reserve0 = reserve0_float / (10 ** token0_decimals)
     adjusted_reserve1 = reserve1_float / (10 ** token1_decimals)
     
-    # For stablecoin pairs, assume price is close to $1
-    # This is a simplification but works well for stablecoin pairs
-    token0_price = 1.0
-    token1_price = 1.0
+    token0_price = fetch_token_price(token0_address, chain_name, coingecko_api_key, x402_signer, x402_proxy)
+    token1_price = fetch_token_price(token1_address, chain_name, coingecko_api_key, x402_signer, x402_proxy)
+
+    if not token0_price or not token1_price:
+        return 0
     
     # Calculate TVL
     tvl = (adjusted_reserve0 * token0_price) + (adjusted_reserve1 * token1_price)
@@ -1121,12 +1176,16 @@ def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_addre
     set_cached_data("tvl", result, cache_key)
     return result
 
-def calculate_apr_for_velodrome(pool_data):
+def calculate_apr_for_velodrome(pool_data, chain_name=None, coingecko_api_key=None, x402_signer=None, x402_proxy=None):
     """
     Calculate APR for a pool based on the official Velodrome formula.
     
     Args:
         pool_data: Dictionary containing pool data from the Sugar contract
+        chain_name: Chain name for price fetching
+        coingecko_api_key: CoinGecko API key
+        x402_signer: Optional X402 signer
+        x402_proxy: Optional X402 proxy
         
     Returns:
         Float representing the APR percentage
@@ -1169,9 +1228,11 @@ def calculate_apr_for_velodrome(pool_data):
     reserve0 = float(pool_data.get("reserve0", 0)) / (10 ** token0_decimals)
     reserve1 = float(pool_data.get("reserve1", 0)) / (10 ** token1_decimals)
     
-    # For stablecoin pairs, assume price is close to $1
-    token0_price = 1.0
-    token1_price = 1.0
+    token0_price = fetch_token_price(token0_address, chain_name, coingecko_api_key, x402_signer, x402_proxy)
+    token1_price = fetch_token_price(token1_address, chain_name, coingecko_api_key, x402_signer, x402_proxy)
+    
+    if not token0_price or not token1_price:
+        return 0
     
     tvl = (reserve0 * token0_price) + (reserve1 * token1_price)
     
@@ -1267,7 +1328,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
         sugar_data = pool.get("sugar_data", {})
         
         # Calculate APR using the Sugar SDK logic
-        apr = calculate_apr_for_velodrome(sugar_data)
+        apr = calculate_apr_for_velodrome(sugar_data, chain_name, coingecko_api_key, x402_signer, x402_proxy)
             
         # Get the pool type from sugar data
         pool_type = sugar_data.get("type", 0)
@@ -1555,7 +1616,7 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         return cached_result
     
     # Get pools based on chain
-    pools = get_velodrome_pools(chain_id, lp_sugar_address, ledger_api)
+    pools = get_velodrome_pools(chain_id, lp_sugar_address, ledger_api, coingecko_api_key, x402_signer, x402_proxy)
     if isinstance(pools, dict) and "error" in pools:
         error_msg = f"Error in pool discovery: {pools['error']}"
         logger.error(error_msg)

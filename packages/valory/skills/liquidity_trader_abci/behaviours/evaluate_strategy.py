@@ -2960,13 +2960,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         token_value = float(token.get("value", 0))
         swap_value = token_value * relative_funds_percentage
 
-        if swap_value < MIN_SWAP_VALUE_USD:
-            self.context.logger.info(
-                f"Skipping bridge/swap action: {swap_value:.8f} USD from {source_token_symbol} "
-                f"(below minimum threshold of ${MIN_SWAP_VALUE_USD})"
-            )
-            return
-
         # Only add bridge/swap action if:
         # 1. We need to bridge to a different chain, OR
         # 2. We need to swap to a different token on the same chain

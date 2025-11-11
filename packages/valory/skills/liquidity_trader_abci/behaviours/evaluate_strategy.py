@@ -818,7 +818,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def check_funds(self) -> bool:
         """Check if there are any funds available."""
 
-        if not self.current_positions:
+        if not any(
+            p.get("status") == PositionStatus.OPEN.value
+            for p in self.current_positions
+        ):
             has_funds = any(
                 asset.get("balance", 0) > 0
                 for position in self.synchronized_data.positions

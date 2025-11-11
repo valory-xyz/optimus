@@ -1697,11 +1697,25 @@ class HttpHandler(BaseHttpHandler):
 
         self.context.logger.info(f"composite_score: {composite_score}")
 
+        # Get previous protocols from state for grandfathering
+        previous_selected_protocols = (
+            json.loads(self.context.state.selected_protocols)
+            if isinstance(self.context.state.selected_protocols, str)
+            else self.context.state.selected_protocols
+            or []
+        )
+        # Convert previous strategies to protocol names
+        previous_protocol_names = [
+            STRATEGY_TO_PROTOCOL.get(strategy, strategy)
+            for strategy in previous_selected_protocols
+        ]
+
         # Validate and fix protocol names first (before converting to strategies)
         validated_protocol_names = validate_and_fix_protocols(
             selected_protocol_names,
             self.params.target_investment_chains,
             self.params.available_strategies,
+            previous_protocols=previous_protocol_names,
         )
 
         self.context.logger.info(
@@ -1764,10 +1778,12 @@ class HttpHandler(BaseHttpHandler):
         ]
 
         # Validate and fix protocols in fallback using shared utility
+        # Pass previous_protocols to preserve them (they're already the previous ones)
         selected_protocols = validate_and_fix_protocols(
             selected_protocols,
             self.params.target_investment_chains,
             self.params.available_strategies,
+            previous_protocols=selected_protocols,  # These are already the previous protocols
         )
 
         trading_type = self.context.state.trading_type

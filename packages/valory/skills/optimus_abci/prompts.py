@@ -38,4 +38,4 @@ def build_strategy_config_schema() -> dict:
 
 
 # Ultra-minimal prompt for maximum speed (keeping reasoning)
-STRATEGY_PROMPT = """"{user_prompt}" Current: {previous_protocols},{previous_type},{previous_threshold}% Protocols: balancerPool,uniswapV3,velodrome,sturdy Risk: 1-5% conservative,6-10% balanced,11-15% growth,16-30% aggressive JSON: selected_protocols, trading_type, max_loss_percentage, reasoning"""
+STRATEGY_PROMPT = """"{user_prompt}" Current: {previous_protocols},{previous_type},{previous_threshold}% Protocols: balancerPool,velodrome,sturdy Risk: 1-5% conservative,6-10% balanced,11-15% growth,16-30% aggressive JSON: selected_protocols, trading_type, max_loss_percentage, reasoning"""

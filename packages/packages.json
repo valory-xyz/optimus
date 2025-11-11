@@ -26,10 +26,10 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm",
         "contract/valory/balancer_queries/0.1.0": "bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu",
         "connection/valory/mirror_db/0.1.0": "bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeih6sjiosfn5mhemrobd24un7tk5fnw45rg64fd5lksjilzdeikhaa",
-        "skill/valory/optimus_abci/0.1.0": "bafybeibc5nr2f7f4kxwvjpqxndffo4ov2nggzplouaetjg6rm5uodvjxae",
-        "agent/valory/optimus/0.1.0": "bafybeidlwh72bn6qkbqpukkzsakphmvxd7qyp463lwk44n5ez6ph637m3y",
-        "service/valory/optimus/0.1.0": "bafybeicr37ouj4cvw362g447wlcgntf6xf4e2b4nhku4vohavpymkaxy7u"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeie64a4ocfyjiwus3dlh3yyavhofj6grl4mgdmkovgtdmuvfptm33q",
+        "skill/valory/optimus_abci/0.1.0": "bafybeicozfue32sjsqorhpdyqv47i5yiu6jkq4ghino52iah7zyi2kyrgu",
+        "agent/valory/optimus/0.1.0": "bafybeicbnpvtyifkyuajhi4rq222mtclijfjy36jmdtlsa6i2r3s6rl2va",
+        "service/valory/optimus/0.1.0": "bafybeidtdfrkx7d5rvlmdy6zl32soi5exf6tkiaiecdmaoalbacofsthga"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -47,7 +47,7 @@
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
         "contract/valory/gnosis_safe/0.1.0": "bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um",
         "connection/valory/x402/0.1.0": "bafybeif7fjrjtsqdyzxfn3cx4ffcmsnzaz3yhcnylmgbxp5baiy4qgwqwm",
-        "connection/dvilela/genai/0.1.0": "bafybeif42dgcucrs7sv5ajme6n7hoa44hbglj47zhbodyqmrtimw2hf5mu",
+        "connection/dvilela/genai/0.1.0": "bafybeigjsmpmlt5tfdrtnfvqblpexyngl7qryusy6ytkebim5flswivbgu",
         "connection/valory/abci/0.1.0": "bafybeidutel5jdlqyt2tygyvfxrqwgljpxq23bu3eyfndbcwm2t4y7jbee",
         "connection/valory/http_client/0.23.0": "bafybeid5ffvg76ejjoese7brj5ji3lx66cu7p2ixfwflpo6rgofkypfd7y",
         "connection/valory/ipfs/0.1.0": "bafybeiamz23olgtow4wqf7zpsfnfzf7pxiognrxl2mhn5kvqutlwhgukxa",

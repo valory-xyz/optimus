@@ -13,7 +13,7 @@ fingerprint:
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
   behaviours/decision_making.py: bafybeieph7zq3klvu5unbz3zjic7f6kboye5gxfkugc56cmoosxfcrxrjy
-  behaviours/evaluate_strategy.py: bafybeidwn6s2pwynv6ylpxqv6uxxjzqhi7eh4grzx44uveruqwogicecvy
+  behaviours/evaluate_strategy.py: bafybeibnztvftes3idypipn73ynjzvlrfq4rdbbmjrk6qnekays3yusgwm
   behaviours/fetch_strategies.py: bafybeihfw4uans35pgjvpjbkgbfgh44kuq27pjti4otn5aznee5hribgn4
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
@@ -26,7 +26,7 @@ fingerprint:
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
   models.py: bafybeid3ba6spxbgjxdkcspd7lb6w3cze6ke25nivegx4z2z67gyfegolq
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
-  pool_behaviour.py: bafybeigsl7xlfabwlixrjba7e25w567jvinnlv76e4haprv5vx63mqqavm
+  pool_behaviour.py: bafybeihgfq2tnpkrp5ngla6j62mkyathyvvqa3k64swd62n7kfs52yoxra
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeiaayilrkgelfjkwzi5t5b7mwryexadu42cwoipxusjcomv5l2gfoy
   pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
@@ -344,5 +344,7 @@ dependencies:
     version: <=6.0.1,>=3.10
   numpy:
     version: ==2.2.5
+  open-aea-ledger-ethereum:
+    version: '>=1.65.0'
 is_abstract: true
 customs: []

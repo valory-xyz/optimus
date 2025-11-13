@@ -19,7 +19,7 @@
 
 """This package contains the implemenatation of the PoolBehaviour interface."""
 
-
+import json
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -67,16 +67,31 @@ class PoolBehaviour(BaseBehaviour, ABC):
 
         # Get password from command line arguments
         password = self._get_password_from_args()
-        if password is None:
-            self.context.logger.error("No password provided for encrypted private key.")
-            return None
 
+        if password is None:
+            # No password provided, try to read as plain private key
+            try:
+                with eoa_file.open("r") as f:
+                    private_key = f.read().strip()
+
+                account = Account.from_key(private_key=private_key)
+                return account
+
+            except Exception as e:
+                self.context.logger.error(
+                    f"Failed to read as plain private key. Error: {e}"
+                )
+                return None
+
+        # Password provided, try to decrypt encrypted keyfile
         try:
             crypto = EthereumCrypto(private_key_path=str(eoa_file), password=password)
             private_key = crypto.private_key
             return Account.from_key(private_key)
         except Exception as e:
-            self.context.logger.error(f"Failed to decrypt private key: {e}")
+            self.context.logger.error(
+                f"Failed to decrypt private key with password: {e}"
+            )
             return None
 
     def _get_password_from_args(self) -> Optional[str]:

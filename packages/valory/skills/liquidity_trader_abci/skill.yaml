@@ -26,7 +26,7 @@ fingerprint:
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
   models.py: bafybeid3ba6spxbgjxdkcspd7lb6w3cze6ke25nivegx4z2z67gyfegolq
   payloads.py: bafybeibd7qp45txpugjwq7zayqsf7qa4qyo2mkkvarvopmirghopcn7h5a
-  pool_behaviour.py: bafybeic7pbbe67cmzdsby4tsnxvcybgszd3hrm6vnh7iw4th2avcfne3im
+  pool_behaviour.py: bafybeihgfq2tnpkrp5ngla6j62mkyathyvvqa3k64swd62n7kfs52yoxra
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeiaayilrkgelfjkwzi5t5b7mwryexadu42cwoipxusjcomv5l2gfoy
   pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
@@ -344,5 +344,7 @@ dependencies:
     version: <=6.0.1,>=3.10
   numpy:
     version: ==2.2.5
+  open-aea-ledger-ethereum:
+    version: '>=1.65.0'
 is_abstract: true
 customs: []

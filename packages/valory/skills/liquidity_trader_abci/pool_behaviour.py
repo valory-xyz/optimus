@@ -19,7 +19,6 @@
 
 """This package contains the implemenatation of the PoolBehaviour interface."""
 
-import json
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path

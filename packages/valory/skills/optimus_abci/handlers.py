@@ -630,6 +630,9 @@ class HttpHandler(BaseHttpHandler):
         try:
             chain = self.context.params.target_investment_chains[0]
             eoa_account = self._get_eoa_account()
+            if not eoa_account:
+                self.context.logger.error("Failed to get EOA account")
+                return False
             eoa_address = eoa_account.address
 
             usdc_address = USDC_ADDRESSES.get(chain.lower())

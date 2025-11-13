@@ -19,11 +19,14 @@
 
 """This package contains the implemenatation of the PoolBehaviour interface."""
 
+
+import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Generator, cast
+from typing import Any, Dict, Generator, Optional, cast
 
 from aea.configurations.data_types import PublicId
+from aea_ledger_ethereum.ethereum import EthereumCrypto
 from eth_account import Account
 
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -57,14 +60,40 @@ class PoolBehaviour(BaseBehaviour, ABC):
         pass
 
     @property
-    def eoa_account(self) -> Account:
-        """Get EOA account from private key."""
+    def eoa_account(self) -> Optional[Account]:
+        """Get EOA account from encrypted private key using password from command line."""
         default_ledger = self.context.default_ledger_id
         eoa_file = Path(self.context.data_dir) / f"{default_ledger}_private_key.txt"
-        with eoa_file.open("r") as f:
-            private_key = f.read().strip()
 
-        return Account.from_key(private_key=private_key)
+        # Get password from command line arguments
+        password = self._get_password_from_args()
+        if password is None:
+            self.context.logger.error("No password provided for encrypted private key.")
+            return None
+
+        try:
+            crypto = EthereumCrypto(private_key_path=str(eoa_file), password=password)
+            private_key = crypto.private_key
+            return Account.from_key(private_key)
+        except Exception as e:
+            self.context.logger.error(f"Failed to decrypt private key: {e}")
+            return None
+
+    def _get_password_from_args(self) -> Optional[str]:
+        """Extract password from command line arguments."""
+        args = sys.argv
+        try:
+            password_index = args.index("--password")
+            if password_index + 1 < len(args):
+                return args[password_index + 1]
+        except ValueError:
+            pass
+
+        for arg in args:
+            if arg.startswith("--password="):
+                return arg.split("=", 1)[1]
+
+        return None
 
     @property
     def coingecko(self) -> Coingecko:

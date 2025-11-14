@@ -54,6 +54,11 @@ RPC_ENDPOINTS = {
     OPTIMISM_CHAIN_ID: "https://mainnet.optimism.io",
 }
 
+# Configurable filter thresholds
+DEFAULT_MIN_TVL_THRESHOLD = 10000.0  
+DEFAULT_MIN_VOLUME_THRESHOLD = 0.0 
+DEFAULT_MAX_ALLOCATION_PERCENTAGE = 0.02  
+
 # Simplified ABIs with only the functions needed
 LP_SUGAR_ABI = [
     {
@@ -595,9 +600,8 @@ def get_epochs_by_address(pool_id, chain, limit=30, offset=0):
                 # Extract the timestamp, which is the first element
                 timestamp = epoch[0]
                 
-                # Extract the votes (liquidity proxy) and emissions
+                # Extract the votes (liquidity proxy)
                 votes = float(epoch[2])
-                emissions = float(epoch[3])
                 
                 # Calculate total fees from the fees array
                 fees = epoch[5]  # This is an array of (token, amount) tuples
@@ -660,8 +664,8 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         
         for epoch in epochs_data:
             timestamps.append(epoch[0])  # timestamp
-            total_liquidities.append(float(epoch[1]))  # totalLiquidity
-            volumes.append(float(epoch[2]))  # volume (24h)
+            total_liquidities.append(float(epoch[1]))  # totalLiquidity (votes)
+            volumes.append(float(epoch[2]))  # volume (fees)
             # For total_supply, we would need to make a separate call
             # For now, we'll use totalLiquidity as a proxy
             total_supplies.append(float(epoch[1]))
@@ -801,7 +805,7 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         logger.error(f"Error calculating Sharpe ratio for pool {pool_id}: {str(e)}")
         return None
 
-def analyze_velodrome_pool_liquidity(pool_id: str, chain: str, price_impact: float = 0.01):
+def analyze_velodrome_pool_liquidity(pool_id: str, chain: str, price_impact: float = 0.01, max_allocation_percentage: float = DEFAULT_MAX_ALLOCATION_PERCENTAGE):
     """
     Analyze pool liquidity and calculate depth score using historical epoch data from RewardsSugar.
     
@@ -809,6 +813,7 @@ def analyze_velodrome_pool_liquidity(pool_id: str, chain: str, price_impact: flo
         pool_id: Pool ID
         chain: Chain name (uppercase)
         price_impact: Price impact for depth score calculation (default: 0.01)
+        max_allocation_percentage: Maximum allocation as percentage of pool TVL (default: 0.02 for 2%)
         
     Returns:
         Tuple of (depth_score, max_position_size)
@@ -827,8 +832,8 @@ def analyze_velodrome_pool_liquidity(pool_id: str, chain: str, price_impact: flo
         volume_series = []
         
         for epoch in epochs_data:
-            tvl_series.append(float(epoch[1]))  # totalLiquidity
-            volume_series.append(float(epoch[2]))  # volume (24h)
+            tvl_series.append(float(epoch[1]))  # totalLiquidity (votes)
+            volume_series.append(float(epoch[2]))  # volume (fees)
         
         # Calculate average TVL and volume
         avg_tvl = np.mean(tvl_series)
@@ -855,17 +860,15 @@ def analyze_velodrome_pool_liquidity(pool_id: str, chain: str, price_impact: flo
             else 0
         )
         
-        # Calculate maximum position size
-        max_position_size = min(
-            50 * (avg_tvl * liquidity_risk_multiplier) / 100,
-            avg_tvl * 0.1  # Cap at 10% of TVL as a safety measure
-        )
+
+        
+        # Apply hard allocation cap based on max_allocation_percentage
+        hard_max_allocation = avg_tvl * max_allocation_percentage
+        max_position_size = hard_max_allocation
+        logger.info(f"Pool {pool_id}: Applied {max_allocation_percentage*100}% allocation cap: {hard_max_allocation:.2f}")
         
         # Cap max position size to reasonable values
         max_position_size = min(max_position_size, 1e7)
-        
-        # Check if depth score meets threshold
-        meets_threshold = depth_score > 50
         
         return float(depth_score), float(max_position_size)
             
@@ -1263,10 +1266,13 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools
 
-def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None) -> List[Dict[str, Any]]:
+def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None, **kwargs) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
+    
+    # Extract max_allocation_percentage from kwargs
+    max_allocation_percentage = kwargs.get('max_allocation_percentage', DEFAULT_MAX_ALLOCATION_PERCENTAGE)
     
     for pool in pools:
         # Skip pools with less than two tokens
@@ -1325,7 +1331,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             # Calculate depth score
             try:
                 depth_score, max_position_size = analyze_velodrome_pool_liquidity(
-                    pool["id"], chain_name.upper()
+                    pool["id"], chain_name.upper(), max_allocation_percentage=max_allocation_percentage
                 )
                 formatted_pool["depth_score"] = depth_score
                 formatted_pool["max_position_size"] = max_position_size
@@ -1436,7 +1442,7 @@ def standardize_metrics(pools, apr_weight=0.7, tvl_weight=0.3):
     
     return pools
 
-def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, min_tvl_threshold=1000, cl_filter=None):
+def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, min_tvl_threshold=1000, min_volume_threshold=DEFAULT_MIN_VOLUME_THRESHOLD, cl_filter=None):
     """
     Apply composite scoring pre-filter based on standardized APR and TVL.
     
@@ -1446,6 +1452,7 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
         apr_weight: Weight for APR in composite score (default: 0.7)
         tvl_weight: Weight for TVL in composite score (default: 0.3)
         min_tvl_threshold: Minimum TVL threshold for inclusion (default: 1000)
+        min_volume_threshold: Minimum volume threshold for inclusion (default: DEFAULT_MIN_VOLUME_THRESHOLD)
         cl_filter: Filter for concentrated liquidity pools
                    True = only CL pools
                    False = only non-CL pools
@@ -1458,7 +1465,7 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
         return pools
     
     logger.info(f"Starting composite pre-filter with {len(pools)} pools")
-    logger.info(f"Parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}")
+    logger.info(f"Parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}, min_volume_threshold={min_volume_threshold}")
     
     # Step 1: Apply minimum TVL filter with proper type conversion
     tvl_filtered_pools = []
@@ -1476,7 +1483,26 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
         logger.warning("No pools remaining after TVL filtering")
         return []
     
-    # Step 2: Apply CL filter if specified
+    # Step 2: Apply volume filter if threshold is provided
+    if min_volume_threshold is not None and min_volume_threshold > 0:
+        volume_filtered_pools = []
+        for pool in tvl_filtered_pools:
+            try:
+                volume_value = float(pool.get('cumulativeVolumeUSD', 0))
+                if volume_value >= float(min_volume_threshold):
+                    volume_filtered_pools.append(pool)
+            except (ValueError, TypeError):
+                # Skip pools with invalid volume values
+                continue
+        logger.info(f"After volume filter (>= {min_volume_threshold}): {len(volume_filtered_pools)} pools")
+        
+        if not volume_filtered_pools:
+            logger.warning("No pools remaining after volume filtering")
+            return []
+        
+        tvl_filtered_pools = volume_filtered_pools
+    
+    # Step 3: Apply CL filter if specified
     if cl_filter is not None:
         cl_filtered_pools = [pool for pool in tvl_filtered_pools if pool.get("is_cl_pool", False) == cl_filter]
         cl_status = "CL pools only" if cl_filter is True else "non-CL pools only"
@@ -1489,13 +1515,13 @@ def apply_composite_pre_filter(pools, top_n=10, apr_weight=0.7, tvl_weight=0.3, 
         logger.warning("No pools remaining after CL filtering")
         return []
     
-    # Step 3: Standardize metrics and calculate composite scores
+    # Step 4: Standardize metrics and calculate composite scores
     standardized_pools = standardize_metrics(cl_filtered_pools, apr_weight, tvl_weight)
     
-    # Step 4: Sort by composite score in descending order
+    # Step 5: Sort by composite score in descending order
     sorted_pools = sorted(standardized_pools, key=lambda x: x.get('composite_score', 0), reverse=True)
     
-    # Step 5: Return top N pools
+    # Step 6: Return top N pools
     result_pools = sorted_pools[:top_n]
     
     logger.info(f"Final selection: {len(result_pools)} pools")
@@ -1577,13 +1603,15 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         logger.warning("No suitable pools found after filtering")
         return {"error": "No suitable pools found"}
 
+    # Extract filtering parameters from kwargs
+    apr_weight = kwargs.get('apr_weight', 0.7)
+    tvl_weight = kwargs.get('tvl_weight', 0.3)
+    min_tvl_threshold = kwargs.get('min_tvl_threshold', DEFAULT_MIN_TVL_THRESHOLD)
+    min_volume_threshold = kwargs.get('min_volume_threshold', DEFAULT_MIN_VOLUME_THRESHOLD)
+    max_allocation_percentage = kwargs.get('max_allocation_percentage', DEFAULT_MAX_ALLOCATION_PERCENTAGE)
+    
     # Get top N pools using composite scoring (APR + TVL), with optional CL filtering
     if top_n > 0:
-        # Extract filtering parameters from kwargs
-        apr_weight = kwargs.get('apr_weight', 0.7)
-        tvl_weight = kwargs.get('tvl_weight', 0.3)
-        min_tvl_threshold = kwargs.get('min_tvl_threshold', 1000)
-        
         # Use new composite scoring method
         filtered_pools = apply_composite_pre_filter(
             filtered_pools,
@@ -1591,12 +1619,14 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
             apr_weight=apr_weight,
             tvl_weight=tvl_weight,
             min_tvl_threshold=min_tvl_threshold,
+            min_volume_threshold=min_volume_threshold,
         )
         if not filtered_pools:
                 logger.error("No filtered pools available for composite filtering")
                 return {"error": "No filtered pools available"}
             
     # Format pools with basic data (without advanced metrics)
+    
     formatted_pools = format_velodrome_pool_data(
         filtered_pools,
         chain_id,
@@ -1604,6 +1634,7 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         coin_id_mapping,
         x402_signer=x402_signer,
         x402_proxy=x402_proxy,
+        max_allocation_percentage=max_allocation_percentage,
     )
     
     # Check if we have any formatted pools before proceeding
@@ -1830,6 +1861,20 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             continue
         
         # Get opportunities for the chain using Sugar contract
+        # Extract explicitly passed parameters to avoid duplication with **kwargs
+        explicit_params = {
+            "whitelisted_assets": kwargs.get("whitelisted_assets"),
+            "coin_id_mapping": kwargs.get("coin_id_mapping"),
+            "x402_signer": kwargs.get("x402_signer"),
+            "x402_proxy": kwargs.get("x402_proxy"),
+        }
+        
+        # Create a copy of kwargs without the explicitly passed parameters
+        remaining_kwargs = {k: v for k, v in kwargs.items() 
+                           if k not in ["whitelisted_assets", "coin_id_mapping", "x402_signer", "x402_proxy", 
+                                       "current_positions", "coingecko_api_key", "top_n", "lp_sugar_address", "rpc_url"]}
+        
+        # Pass explicit parameters separately and remaining kwargs for filter parameters
         result = get_opportunities_for_velodrome(
             kwargs.get("current_positions", []),
             kwargs["coingecko_api_key"],
@@ -1837,10 +1882,8 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             sugar_address,
             rpc_url,
             kwargs.get("top_n", 10),  # Get top N pools by APR (default: 10)
-            whitelisted_assets=kwargs.get("whitelisted_assets"),
-            coin_id_mapping=kwargs.get("coin_id_mapping"),
-            x402_signer=kwargs.get("x402_signer"),
-            x402_proxy=kwargs.get("x402_proxy")
+            **explicit_params,
+            **remaining_kwargs  # Pass remaining kwargs for filter parameters (min_tvl_threshold, min_volume_threshold, max_allocation_percentage)
         )
         
         # Process results

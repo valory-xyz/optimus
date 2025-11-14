@@ -1052,6 +1052,98 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             return status, sub_status
 
+    def _enforce_pool_allocation_cap(
+        self,
+        max_amounts_in: List[int],
+        max_position_size: Optional[float],
+        chain: str,
+        assets: List[str],
+    ) -> Generator[None, None, List[int]]:
+        """
+        Enforce hard maximum allocation cap (2% of pool TVL) on investment amounts.
+
+        Args:
+            max_amounts_in: Current calculated max investment amounts in token units
+            max_position_size: Maximum position size in USD from pool search (already capped at 2% of TVL)
+            chain: Chain name
+            assets: List of token addresses [token0, token1]
+
+        Returns:
+            List[int]: Capped max_amounts_in that respects the 2% pool allocation limit
+        """
+        # If max_position_size is not provided, return original amounts
+        if max_position_size is None or max_position_size <= 0:
+            return max_amounts_in
+
+        try:
+            # Get token decimals
+            token0_decimals = yield from self._get_token_decimals(chain, assets[0])
+            token1_decimals = yield from self._get_token_decimals(chain, assets[1])
+
+            if token0_decimals is None or token1_decimals is None:
+                self.context.logger.warning(
+                    "Failed to get token decimals for allocation cap enforcement"
+                )
+                return max_amounts_in
+
+            # Get token prices
+            price0 = yield from self._fetch_token_price(assets[0], chain)
+            price1 = yield from self._fetch_token_price(assets[1], chain)
+
+            if price0 is None or price1 is None:
+                self.context.logger.warning(
+                    "Failed to fetch token prices for allocation cap enforcement"
+                )
+                return max_amounts_in
+
+            # Calculate current USD value of max_amounts_in
+            usd0 = (max_amounts_in[0] / (10**token0_decimals)) * float(price0)
+            usd1 = (max_amounts_in[1] / (10**token1_decimals)) * float(price1)
+            current_total_usd = usd0 + usd1
+
+            # If current amount is already below cap, no need to adjust
+            if current_total_usd <= max_position_size:
+                return max_amounts_in
+
+            # Calculate the ratio to scale down
+            scale_factor = max_position_size / current_total_usd
+
+            # Calculate token ratios from current amounts
+            if current_total_usd > 0:
+                token0_ratio = usd0 / current_total_usd
+                token1_ratio = usd1 / current_total_usd
+            else:
+                # Default to 50/50 if we can't determine ratios
+                token0_ratio = 0.5
+                token1_ratio = 0.5
+
+            # Calculate capped USD amounts
+            capped_usd0 = max_position_size * token0_ratio
+            capped_usd1 = max_position_size * token1_ratio
+
+            # Convert back to token units
+            capped_amount0 = int(
+                (capped_usd0 / float(price0)) * (10**token0_decimals)
+            )
+            capped_amount1 = int(
+                (capped_usd1 / float(price1)) * (10**token1_decimals)
+            )
+
+            self.context.logger.info(
+                f"Applied 2% pool allocation cap: Original USD={current_total_usd:.2f}, "
+                f"Capped USD={max_position_size:.2f}, Scale factor={scale_factor:.4f}"
+            )
+            self.context.logger.info(
+                f"Token amounts - Original: [{max_amounts_in[0]}, {max_amounts_in[1]}], "
+                f"Capped: [{capped_amount0}, {capped_amount1}]"
+            )
+
+            return [capped_amount0, capped_amount1]
+
+        except Exception as e:
+            self.context.logger.error(f"Error enforcing pool allocation cap: {str(e)}")
+            return max_amounts_in
+
     def _calculate_investment_amounts_from_dollar_cap(
         self, action, chain, assets
     ) -> Generator[None, None, Optional[List[int]]]:
@@ -1326,6 +1418,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         is_stable = action.get("is_stable")
         is_cl_pool = action.get("is_cl_pool")
         max_investment_amounts = action.get("max_investment_amounts")
+        max_position_size = action.get(
+            "max_position_size"
+        )  # Get max_position_size from action (already capped at 2% of TVL)
 
         # Validate essential parameters
         if not all([dex_type, chain, assets, pool_address, safe_address]):
@@ -1371,6 +1466,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(
                     f"max_amounts_in for velodrome CL pool: {max_amounts_in}"
                 )
+                # Enforce 2% pool allocation cap for Velodrome CL pools
+                if max_position_size is not None:
+                    max_amounts_in = yield from self._enforce_pool_allocation_cap(
+                        max_amounts_in, max_position_size, chain, assets
+                    )
             else:
                 # For stable/volatile pools, use the standard method
                 relative_funds_percentage = action.get("relative_funds_percentage")
@@ -1404,6 +1504,12 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 self.context.logger.info(
                     f"Adjusted max amounts in after comparing with max investment amounts: {max_amounts_in}"
                 )
+
+                # Enforce 2% pool allocation cap for Velodrome non-CL pools
+                if max_position_size is not None:
+                    max_amounts_in = yield from self._enforce_pool_allocation_cap(
+                        max_amounts_in, max_position_size, chain, assets
+                    )
 
                 if any(amount == 0 or amount is None for amount in max_amounts_in):
                     self.context.logger.error(

@@ -9,17 +9,7 @@ def validate_and_fix_protocols(
     available_strategies: dict,
     previous_protocols: Optional[List[str]] = None,
 ) -> List[str]:
-    """Validate selected protocols and fix invalid ones without resetting to defaults.
-    
-    Args:
-        selected_protocols: List of protocol names to validate
-        target_investment_chains: List of chains to check availability on
-        available_strategies: Dictionary mapping chains to available strategies
-        previous_protocols: Optional list of previously selected protocols to preserve (grandfathering)
-    
-    Returns:
-        List of validated protocol names
-    """
+    """Validate selected protocols and fix invalid ones without resetting to defaults."""
     # Valid protocol names
     # Note: uniswapV3 is kept here for grandfathering existing users, but it's removed from
     # available_strategies and chat UI prompts. New users won't get it, but existing users

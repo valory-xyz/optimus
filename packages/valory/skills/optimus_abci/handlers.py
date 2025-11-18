@@ -1701,8 +1701,7 @@ class HttpHandler(BaseHttpHandler):
         previous_selected_protocols = (
             json.loads(self.context.state.selected_protocols)
             if isinstance(self.context.state.selected_protocols, str)
-            else self.context.state.selected_protocols
-            or []
+            else self.context.state.selected_protocols or []
         )
         # Convert previous strategies to protocol names
         previous_protocol_names = [

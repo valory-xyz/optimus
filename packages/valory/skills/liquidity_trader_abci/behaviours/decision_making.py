@@ -1059,18 +1059,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         chain: str,
         assets: List[str],
     ) -> Generator[None, None, List[int]]:
-        """
-        Enforce hard maximum allocation cap (2% of pool TVL) on investment amounts.
-
-        Args:
-            max_amounts_in: Current calculated max investment amounts in token units
-            max_position_size: Maximum position size in USD from pool search (already capped at 2% of TVL)
-            chain: Chain name
-            assets: List of token addresses [token0, token1]
-
-        Returns:
-            List[int]: Capped max_amounts_in that respects the 2% pool allocation limit
-        """
+        """Enforce hard maximum allocation cap (2% of pool TVL) on investment amounts."""
         # If max_position_size is not provided, return original amounts
         if max_position_size is None or max_position_size <= 0:
             return max_amounts_in

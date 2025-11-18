@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
 - valory/funds_manager:0.1.0:bafybeibmp2fhlsfqvxm7u3sgpjyeirhdrvbp6zjspxjbyucfpdrnyq5qai
-- valory/liquidity_trader_abci:0.1.0:bafybeiaojw3cmabrqumcyhfqup6mryiodt5bzs6tvdoie4amuv7gtlapf4
-- valory/optimus_abci:0.1.0:bafybeicaptdzyuaa5pbje4tc7oeamtlnazvpw46lkonrnr5d4nbfwxyxg4
+- valory/liquidity_trader_abci:0.1.0:bafybeiczorci4ynpy3fvimnncir3vcvvwrdvprjmyjzbknnpelghsyiasa
+- valory/optimus_abci:0.1.0:bafybeic7dba4e4uycbkuk4cf7vyg5ytsk2fyb3kixqmv4a7czvem47va4m
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi

@@ -4006,10 +4006,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                     )
 
             if len(reversion_transfers) > 0:
-                historical_reversion_value = (
-                    yield from self._calculate_total_reversion_value(
-                        eth_transfers, reversion_transfers
-                    )
+                historical_reversion_value = self._calculate_total_reversion_value(
+                    eth_transfers, reversion_transfers
                 )
 
             return {
@@ -4030,7 +4028,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
 
     def _calculate_total_reversion_value(
         self, eth_transfers: List[Dict], reversion_transfers: List[Dict]
-    ) -> Generator[None, None, float]:
+    ) -> Optional[float]:
         """Calculate the total reversion value from the reversion transfers."""
         reversion_amount = 0.0
         reversion_date = None

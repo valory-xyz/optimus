@@ -1,21 +1,28 @@
 """Protocol validation utilities for the liquidity trader skill."""
 
-from typing import List
+from typing import List, Optional
 
 
 def validate_and_fix_protocols(
     selected_protocols: List[str],
     target_investment_chains: List[str],
     available_strategies: dict,
+    previous_protocols: Optional[List[str]] = None,
 ) -> List[str]:
     """Validate selected protocols and fix invalid ones without resetting to defaults."""
     # Valid protocol names
+    # Note: uniswapV3 is kept here for grandfathering existing users, but it's removed from
+    # available_strategies and chat UI prompts. New users won't get it, but existing users
+    # who already have it selected will keep it when changing strategies.
     VALID_PROTOCOLS = {
         "balancerPool": "balancer_pools_search",
-        "uniswapV3": "uniswap_pools_search",
+        "uniswapV3": "uniswap_pools_search",  # Deprecated for new users, kept for grandfathering
         "velodrome": "velodrome_pools_search",
         "sturdy": "asset_lending",
     }
+
+    # Normalize previous_protocols to a set for easy lookup
+    previous_protocols_set = set(previous_protocols) if previous_protocols else set()
 
     # Check if any protocol is invalid or not available on selected chains
     invalid_protocols = []
@@ -40,7 +47,11 @@ def validate_and_fix_protocols(
         if protocol_available:
             valid_protocols.append(protocol)
         else:
-            chain_incompatible_protocols.append(protocol)
+            # If protocol is not available but was previously selected, preserve it (grandfathering)
+            if protocol in previous_protocols_set:
+                valid_protocols.append(protocol)
+            else:
+                chain_incompatible_protocols.append(protocol)
 
     # If any invalid or incompatible protocols found, get fallback protocols
     if invalid_protocols or chain_incompatible_protocols:

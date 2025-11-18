@@ -1549,7 +1549,6 @@ class LiquidityTraderBaseBehaviour(
         keys: Tuple[str, ...],
     ) -> Generator[None, None, Optional[Dict]]:
         """Send a request message from the skill context."""
-        self.context.logger.info(f"Reading keys from db: {keys}")
         kv_store_dialogues = cast(KvStoreDialogues, self.context.kv_store_dialogues)
         kv_store_message, srr_dialogue = kv_store_dialogues.create(
             counterparty=str(KV_STORE_CONNECTION_PUBLIC_ID),

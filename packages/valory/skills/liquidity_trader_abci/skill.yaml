@@ -9,10 +9,10 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeic6c77h7amnhdximi2tunqofaw675bglv4g4do7q4oof4mqa7xuuu
   behaviours/apr_population.py: bafybeig7n6d3iwv4g6d24ve6mdwqn4uwxdyufccttszi3ofxpxderqra7q
-  behaviours/base.py: bafybeie3ywtzfhbit5lfexdehguufx4hlgdipkfubrcr4k4hsxznuivawq
+  behaviours/base.py: bafybeifqeev4lbkwphavzhggivxwctyapfmysaric25qhb2nkha2jr6fxq
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeieph7zq3klvu5unbz3zjic7f6kboye5gxfkugc56cmoosxfcrxrjy
+  behaviours/decision_making.py: bafybeicrl2cdjrl6a3m2y6tzgxeuoxzysns7ddvmhrndg62oniboq4srfq
   behaviours/evaluate_strategy.py: bafybeibnztvftes3idypipn73ynjzvlrfq4rdbbmjrk6qnekays3yusgwm
   behaviours/fetch_strategies.py: bafybeie7bqaagls7nr45aeldqkwlc3soei7itaajdqf54dk7tj4teyr5si
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
@@ -21,7 +21,7 @@ fingerprint:
   behaviours/withdraw_funds.py: bafybeie2rtyfizt5wj6v7ff24dpeidhfmftkrras54lt2tuorh4z2vdlgu
   dialogues.py: bafybeiccdis7jupls745wd6c7ykdg437otftgtnlgspdnbglgn6mlmagbu
   fsm_specification.yaml: bafybeib5tu3pmpl5tjf44q4ixjhuzhawujhlw5o226mo66srdy2qsbnqx4
-  handlers.py: bafybeibc43pigktmet7ipzmxwevio4p2cuq5vuzywgty7ure5gk7gohd2m
+  handlers.py: bafybeih62sr2ci5xre52yuzlpdx3524w6cxika7f5qjvisscefvfrk7yui
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/loader.py: bafybeiaoi7rnmpoyreuhwdo3biudqnjnrc25eu54ehyvsnynlkbzk7r6ti
   models.py: bafybeid3ba6spxbgjxdkcspd7lb6w3cze6ke25nivegx4z2z67gyfegolq
@@ -65,7 +65,7 @@ fingerprint:
   tests/test_rounds.py: bafybeigixn37wivdicsrrs43qwpx5efct5jpcoglncjdkuvzaxf4wrq2ru
   utils/__init__.py: bafybeieqhw32nqjekzucx7txi5dk7vi6qh2rebt65jgnhwwoqy2v3hicrq
   utils/balancer_math.py: bafybeielos57pjvke5ks3e6jhy3aiwsvjxrzek7rilystys73mzxbulld4
-  utils/protocol_validation.py: bafybeibf4i767ylmoa4hdzn5adwlrgqz2szlpxrfdwtiukurusm65dqhta
+  utils/protocol_validation.py: bafybeifxdxn6nncuo4wv5r7shzknsaqyuxd5xkk2xoxw7b6cgb7df5quq4
   utils/tick_math.py: bafybeidgd4dxshehz4by7jlvcrjfidqdrpcksn4knzd6oaolwkoc2fxc4y
 fingerprint_ignore_patterns: []
 connections:

@@ -22,6 +22,7 @@
 import json
 import math
 import re
+import sys
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -37,6 +38,7 @@ from aea.configurations.data_types import PublicId
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.base import Handler
+from aea_ledger_ethereum.ethereum import EthereumCrypto
 from eth_account import Account
 from web3 import Web3
 
@@ -375,13 +377,54 @@ class HttpHandler(BaseHttpHandler):
         """Get the fund status."""
         return self.context.shared_state[GET_FUNDS_STATUS_METHOD_NAME]()
 
-    def _get_eoa_account(self) -> Account:
-        """Get EOA account from private key file."""
+    def _get_eoa_account(self) -> Optional[Account]:
+        """Get EOA account from encrypted private key file."""
         default_ledger = self.context.default_ledger_id
         eoa_file = Path(self.context.data_dir) / f"{default_ledger}_private_key.txt"
-        with eoa_file.open("r") as f:
-            private_key = f.read().strip()
-        return Account.from_key(private_key=private_key)
+
+        password = self._get_password_from_args()
+
+        if password is None:
+            # No password provided, try to read as plain private key
+            try:
+                with eoa_file.open("r") as f:
+                    private_key = f.read().strip()
+
+                account = Account.from_key(private_key=private_key)
+                return account
+
+            except Exception as e:
+                self.context.logger.error(
+                    f"Failed to read as plain private key. Error: {e}"
+                )
+                return None
+
+        # Password provided, try to decrypt encrypted keyfile
+        try:
+            crypto = EthereumCrypto(private_key_path=str(eoa_file), password=password)
+            private_key = crypto.private_key
+            return Account.from_key(private_key)
+        except Exception as e:
+            self.context.logger.error(
+                f"Failed to decrypt private key with password: {e}"
+            )
+            return None
+
+    def _get_password_from_args(self) -> Optional[str]:
+        """Extract password from command line arguments."""
+        args = sys.argv
+        try:
+            password_index = args.index("--password")
+            if password_index + 1 < len(args):
+                return args[password_index + 1]
+        except ValueError:
+            pass
+
+        for arg in args:
+            if arg.startswith("--password="):
+                return arg.split("=", 1)[1]
+
+        return None
 
     def _get_web3_instance(self, chain: str) -> Optional[Web3]:
         """Get Web3 instance for the specified chain."""
@@ -587,6 +630,9 @@ class HttpHandler(BaseHttpHandler):
         try:
             chain = self.context.params.target_investment_chains[0]
             eoa_account = self._get_eoa_account()
+            if not eoa_account:
+                self.context.logger.error("Failed to get EOA account")
+                return False
             eoa_address = eoa_account.address
 
             usdc_address = USDC_ADDRESSES.get(chain.lower())

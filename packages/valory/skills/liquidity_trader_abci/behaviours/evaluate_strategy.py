@@ -493,11 +493,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         continue
 
                     # Calculate tick bands and get current price
-                    tick_bands = (
-                        yield from pool._calculate_tick_lower_and_upper_velodrome(
-                            self, **kwargs
-                        )
-                    )
+                    tick_bands = opportunity.get("tick_bands", [])
                     self.context.logger.info(f"tick_bands : {tick_bands}")
                     if not tick_bands:
                         self.context.logger.error(

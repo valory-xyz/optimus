@@ -5,16 +5,13 @@ warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import time
 import threading
-import statistics
-from typing import Any, Dict, List, Optional, Union, Tuple
-import json
+from typing import Any, Dict, List, Optional, Union, Tuple, Callable
+from collections import defaultdict
 from web3 import Web3
 from functools import lru_cache
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
-import pyfolio as pf
-import requests
 from pycoingecko import CoinGeckoAPI
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -58,6 +55,9 @@ RPC_ENDPOINTS = {
 DEFAULT_MIN_TVL_THRESHOLD = 10000.0  
 DEFAULT_MIN_VOLUME_THRESHOLD = 0.0 
 DEFAULT_MAX_ALLOCATION_PERCENTAGE = 0.02  
+MIN_TICK = -887272
+MAX_TICK = 887272
+DEFAULT_DAYS = 30
 
 # Simplified ABIs with only the functions needed
 LP_SUGAR_ABI = [
@@ -180,6 +180,44 @@ REWARDS_SUGAR_ABI = [
                 "name": "",
                 "type": "tuple[]"
             }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
+
+VELODROME_CL_POOL_ABI = [
+    {
+        "inputs": [],
+        "name": "tickSpacing",
+        "outputs": [{"internalType": "int24", "name": "", "type": "int24"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "token0",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "token1",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "slot0",
+        "outputs": [
+            {"internalType": "uint160", "name": "sqrtPriceX96", "type": "uint160"},
+            {"internalType": "int24", "name": "tick", "type": "int24"},
+            {"internalType": "uint16", "name": "observationIndex", "type": "uint16"},
+            {"internalType": "uint16", "name": "observationCardinality", "type": "uint16"},
+            {"internalType": "uint16", "name": "observationCardinalityNext", "type": "uint16"},
+            {"internalType": "bool", "name": "unlocked", "type": "bool"}
         ],
         "stateMutability": "view",
         "type": "function"
@@ -1124,16 +1162,8 @@ def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_addre
     set_cached_data("tvl", result, cache_key)
     return result
 
-def calculate_apr_for_velodrome(pool_data):
-    """
-    Calculate APR for a pool based on the official Velodrome formula.
-    
-    Args:
-        pool_data: Dictionary containing pool data from the Sugar contract
-        
-    Returns:
-        Float representing the APR percentage
-    """
+def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,x402_signer=None,x402_proxy=None):
+    """Calculate APR and other position data for a pool based on the official Velodrome formula"""
     # Extract necessary values from pool data
     day_seconds = 24 * 60 * 60  # Seconds in a day
     
@@ -1197,14 +1227,1193 @@ def calculate_apr_for_velodrome(pool_data):
     
     # Calculate APR (exactly as in Velodrome's formula)
     if staked_tvl != 0 and reward != 0:
-        apr = (reward / staked_tvl) * (100 * 365)  # Annualized percentage
-        
-        # Cap APR at reasonable values
-        apr = min(apr, 1000.0)
-        
-        return apr
+        advertised_apr = (reward / staked_tvl) * (100 * 365)  # Annualized percentage
+        # For CL pools, calculate tick width data
+        pool_type = pool_data.get("type", 0)
+        is_cl_pool = pool_type not in [0, -1]
+       
+        if is_cl_pool:
+            # Get chain ID from pool data or context            
+            try:
+                tick_bands = calculate_tick_lower_and_upper_velodrome(
+                    chain="optimism",  # Should be passed as parameter
+                    pool_address=pool_data.get("id"),
+                    is_stable=(pool_type == 0),
+                    coingecko_api_key=coingecko_api_key,
+                    x402_signer=x402_signer,
+                    x402_proxy=x402_proxy
+                )
+                
+                if tick_bands:
+                    min_tick_lower = min(pos["tick_lower"] for pos in tick_bands)
+                    max_tick_upper = max(pos["tick_upper"] for pos in tick_bands)
+                    effective_width = max_tick_upper - min_tick_lower
+                    
+                    # Calculate adjusted APR
+                    if effective_width > 0:
+                        apr = advertised_apr/effective_width
+                    else:
+                        apr = advertised_apr
+                    
+                    return {
+                        "apr": apr,
+                        "advertised_apr": advertised_apr,
+                        "tick_bands": tick_bands,
+                    }
+            except Exception as e:
+                logger.error(f"Error calculating tick data for CL pool: {str(e)}")
+        else:
+            return {"apr": apr}  # Return basic APR for non-CL pools or if calculation fails
     else:
-        return 0
+        return {"apr": 0}
+    
+def calculate_ema(prices: List[float], period: int) -> np.ndarray:
+    """Calculate Exponential Moving Average (EMA) from a list of price data points."""
+    prices_array = np.array(prices)
+    ema = np.zeros_like(prices_array)
+
+    # Initialize with first price
+    ema[0] = prices_array[0]
+    # Calculate EMA
+    alpha = 2 / (period + 1)
+    for i in range(1, len(prices_array)):
+        ema[i] = prices_array[i] * alpha + ema[i - 1] * (1 - alpha)
+
+    return ema
+
+def calculate_std_dev(prices: List[float], ema: np.ndarray, window: int) -> np.ndarray:
+    """Calculate rolling standard deviation of price deviations from EMA over a window."""
+    prices_array = np.array(prices)
+    length = len(prices_array)
+    std_dev = np.zeros(length)
+
+    # Calculate rolling standard deviation
+    for i in range(window - 1, length):
+        window_prices = prices_array[i - window + 1 : i + 1]
+        window_ema = ema[i - window + 1 : i + 1]
+        deviations = window_prices - window_ema
+        std_dev[i] = np.std(deviations)
+
+    # Fill initial values
+    for i in range(window - 1):
+        if i > 0:
+            window_prices = prices_array[: i + 1]
+            window_ema = ema[: i + 1]
+            deviations = window_prices - window_ema
+            std_dev[i] = np.std(deviations)
+        else:
+            std_dev[i] = 0.001 * prices_array[i]  # Small default value
+
+    return std_dev
+
+def evaluate_band_configuration(
+    prices: np.ndarray,
+    ema: np.ndarray,
+    std_dev: np.ndarray,
+    band_multipliers: List[float],
+    z_scores: List[float],
+    band_allocations: List[float],
+    min_width_pct: float,
+) -> Dict[str, float]:
+    """Evaluate and simulate performance of a specific liquidity band configuration."""
+    # Calculate band regions using Z-scores
+    # Note: R uses 1-indexed arrays, but Python uses 0-indexed arrays
+    # So band_multipliers[0] in Python corresponds to band_multipliers[1] in R
+    band1_mask = z_scores <= band_multipliers[0]
+    band2_mask = (z_scores > band_multipliers[0]) & (
+        z_scores <= band_multipliers[1]
+    )
+    band3_mask = (z_scores > band_multipliers[1]) & (
+        z_scores <= band_multipliers[2]
+    )
+
+    # Calculate price coverage by band
+    band1_count = np.sum(band1_mask)
+    band2_count = np.sum(band2_mask)
+    band3_count = np.sum(band3_mask)
+    total_count = len(z_scores)
+
+    # Calculate percentage in bounds (all bands combined)
+    percent_in_bounds = (
+        (band1_count + band2_count + band3_count) / total_count * 100
+    )
+
+    # Calculate average weighted width based on allocations and band multipliers
+    avg_width_pct = np.mean(
+        std_dev / ema * 100
+    )  # Base width as percentage of price
+
+    # Calculate weighted width based on band allocation and multipliers
+    # This matches the R implementation exactly, accounting for 0-indexing in Python
+    b1_width = 2 * band_multipliers[0] * avg_width_pct * band_allocations[0]
+    b2_width = (
+        2
+        * (band_multipliers[1] - band_multipliers[0])
+        * avg_width_pct
+        * band_allocations[1]
+    )
+    b3_width = (
+        2
+        * (band_multipliers[2] - band_multipliers[1])
+        * avg_width_pct
+        * band_allocations[2]
+    )
+
+    # Ensure minimum width
+    b1_width = max(b1_width, min_width_pct * band_allocations[0])
+    b2_width = max(b2_width, min_width_pct * band_allocations[1])
+    b3_width = max(b3_width, min_width_pct * band_allocations[2])
+
+    # Total weighted width
+    avg_weighted_width = b1_width + b2_width + b3_width
+
+    # Calculate Z-score weighted coverage
+    band1_coverage = band1_count / total_count
+    band2_coverage = band2_count / total_count
+    band3_coverage = band3_count / total_count
+
+    weighted_coverage = (
+        band1_coverage * band_allocations[0]
+        + band2_coverage * band_allocations[1]
+        + band3_coverage * band_allocations[2]
+    )
+
+    # Calculate Z-score economic score
+    zscore_economic_score = weighted_coverage * (1 / avg_weighted_width) * 100
+
+    # Return results
+    return {
+        "percent_in_bounds": percent_in_bounds,
+        "avg_weighted_width": avg_weighted_width,
+        "zscore_economic_score": zscore_economic_score,
+        "band_coverage": [band1_coverage, band2_coverage, band3_coverage],
+    }
+
+def run_monte_carlo_level(
+    prices: np.ndarray,
+    ema: np.ndarray,
+    std_dev: np.ndarray,
+    z_scores: np.ndarray,
+    min_multiplier: float,
+    max_multiplier: float,
+    num_simulations: int,
+    min_width_pct: float,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """Run Monte Carlo simulations to optimize a single liquidity band level."""
+    # Prepare arrays to hold simulation results
+    sim_nums = np.arange(num_simulations)
+    m1_values = np.zeros(num_simulations)
+    m2_values = np.zeros(num_simulations)
+    m3_values = np.zeros(num_simulations)
+    a1_values = np.zeros(num_simulations)
+    a2_values = np.zeros(num_simulations)
+    a3_values = np.zeros(num_simulations)
+    percent_in_bounds_values = np.zeros(num_simulations)
+    avg_weighted_width_values = np.zeros(num_simulations)
+    zscore_economic_score_values = np.zeros(num_simulations)
+
+    # Run simulations
+    for sim_num in range(num_simulations):
+        if verbose and sim_num % 20 == 0:
+            logger.info(
+                f"Level {min_multiplier:.4f}-{max_multiplier:.4f}: "
+                f"Simulation {sim_num+1}/{num_simulations}"
+            )
+
+        # Generate random inner band multiplier within range
+        m1 = np.random.uniform(min_multiplier, max_multiplier)
+
+        # Apply proportional scaling for middle and outer bands
+        m2_min = m1 * 1.5
+        m2_max = m1 * 2.5
+        m2 = np.random.uniform(m2_min, m2_max)
+
+        m3_min = m2 * 1.3
+        m3_max = m2 * 2.0
+        m3 = np.random.uniform(m3_min, m3_max)
+
+        # Random allocation with minimum 0.0001 (0.01%) per band
+        # Higher probability of selecting high inner band allocation
+        if (
+            np.random.random() < 0.7
+        ):  # 70% chance of selecting from high allocation range
+            a1 = np.random.uniform(
+                0.95, 0.998
+            )  # Focus on high inner band allocations
+        else:
+            a1 = np.random.uniform(0.5, 0.95)  # Also test lower allocations
+
+        # Distribute remaining allocation
+        remaining = 1.0 - a1
+        a2_proportion = np.random.uniform(
+            0.6, 0.8
+        )  # Middle gets 60-80% of remainder
+        a2 = max(0.0001, remaining * a2_proportion)
+        a3 = 1.0 - a1 - a2
+
+        # Ensure minimum allocation
+        if a3 < 0.0001:
+            a3 = 0.0001
+            a2 = 1.0 - a1 - a3
+
+        # Double-check allocation sum (floating point errors)
+        total = a1 + a2 + a3
+        if abs(total - 1.0) > 1e-10:
+            a1 = a1 / total  # Normalize to ensure exact sum of 1.0
+            a2 = a2 / total
+            a3 = a3 / total
+
+        # Combine parameters
+        band_multipliers = np.array([m1, m2, m3])
+        band_allocations = np.array([a1, a2, a3])
+
+        # Evaluate band configuration
+        result = evaluate_band_configuration(
+            prices,
+            ema,
+            std_dev,
+            band_multipliers,
+            z_scores,
+            band_allocations,
+            min_width_pct,
+        )
+
+        # Store results
+        m1_values[sim_num] = m1
+        m2_values[sim_num] = m2
+        m3_values[sim_num] = m3
+        a1_values[sim_num] = a1
+        a2_values[sim_num] = a2
+        a3_values[sim_num] = a3
+        percent_in_bounds_values[sim_num] = result["percent_in_bounds"]
+        avg_weighted_width_values[sim_num] = result["avg_weighted_width"]
+        zscore_economic_score_values[sim_num] = result["zscore_economic_score"]
+
+    # Find the best configuration (highest Z-score economic score)
+    best_idx = np.argmax(zscore_economic_score_values)
+
+    # Extract the top configuration
+    top_config = {
+        "band_multipliers": np.array(
+            [m1_values[best_idx], m2_values[best_idx], m3_values[best_idx]]
+        ),
+        "band_allocations": np.array(
+            [a1_values[best_idx], a2_values[best_idx], a3_values[best_idx]]
+        ),
+        "zscore_economic_score": zscore_economic_score_values[best_idx],
+        "percent_in_bounds": percent_in_bounds_values[best_idx],
+        "avg_weighted_width": avg_weighted_width_values[best_idx],
+    }
+
+    if verbose:
+        logger.info(
+            f"Best configuration for level {min_multiplier:.4f}-{max_multiplier:.4f}:"
+        )
+        logger.info(
+            f"  Inner Band: {top_config['band_multipliers'][0]:.4f}σ "
+            f"({top_config['band_allocations'][0]*100:.1f}% allocation)"
+        )
+        logger.info(
+            f"  Middle Band: {top_config['band_multipliers'][1]:.4f}σ "
+            f"({top_config['band_allocations'][1]*100:.1f}% allocation)"
+        )
+        logger.info(
+            f"  Outer Band: {top_config['band_multipliers'][2]:.4f}σ "
+            f"({top_config['band_allocations'][2]*100:.1f}% allocation)"
+        )
+        logger.info(
+            f"  Performance: {top_config['percent_in_bounds']:.2f}% in bounds, "
+            f"{top_config['avg_weighted_width']:.4f}% weighted width"
+        )
+        logger.info(
+            f"  Z-Score Economic Score: {top_config['zscore_economic_score']:.4f}"
+        )
+
+    # Return the best configuration and all results
+    return {
+        "best_config": top_config,
+        "all_results": {
+            "sim_nums": sim_nums,
+            "m1_values": m1_values,
+            "m2_values": m2_values,
+            "m3_values": m3_values,
+            "a1_values": a1_values,
+            "a2_values": a2_values,
+            "a3_values": a3_values,
+            "percent_in_bounds_values": percent_in_bounds_values,
+            "avg_weighted_width_values": avg_weighted_width_values,
+            "zscore_economic_score_values": zscore_economic_score_values,
+        },
+    }
+
+def optimize_stablecoin_bands(
+    prices: List[float],
+    min_width_pct: float = 0.0001,  # Updated from 0.01 to 0.0001
+    ema_period: int = 18,  # Updated from 14 to 18
+    std_dev_window: int = 14,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """Optimize liquidity band allocation for stablecoin pools based on historical price data."""
+    # Calculate EMA and standard deviation
+    prices_array = np.array(prices)
+    ema = calculate_ema(prices_array, ema_period)
+    std_dev = calculate_std_dev(prices_array, ema, std_dev_window)
+
+    # Calculate Z-scores
+    z_scores = np.abs(prices_array - ema) / np.maximum(
+        std_dev, 1e-6
+    )  # Avoid division by zero
+
+    # Define the three recursion levels similar to the R model
+    recursion_levels = [
+        {
+            "name": "Level 1 (Initial)",
+            "min_multiplier": 0.1,
+            "max_multiplier": 1.5,
+            "num_simulations": 250,
+            "trigger_threshold": 0.95,  # >95% in inner band
+            "trigger_multiplier": 0.15,  # if multiplier < 0.15
+        },
+        {
+            "name": "Level 2 (Narrow)",
+            "min_multiplier": 0.01,
+            "max_multiplier": 0.2,
+            "num_simulations": 300,
+            "trigger_threshold": 0.95,  # >95% in inner band
+            "trigger_multiplier": 0.02,  # if multiplier < 0.02
+        },
+        {
+            "name": "Level 3 (Ultra-Narrow)",
+            "min_multiplier": 0.001,
+            "max_multiplier": 0.03,
+            "num_simulations": 350,
+            "trigger_threshold": None,  # Final level, no trigger
+            "trigger_multiplier": None,
+        },
+    ]
+
+    # Initialize results storage
+    results_by_level = []
+    best_overall = None
+    current_level = 0
+
+    # Run through recursion levels
+    while current_level < len(recursion_levels):
+        level_config = recursion_levels[current_level]
+
+        if verbose:
+            logger.info(
+                f"Running {level_config['name']} optimization "
+                f"({level_config['min_multiplier']}σ to {level_config['max_multiplier']}σ)"
+            )
+
+        # Run Monte Carlo optimization for this level
+        level_results = run_monte_carlo_level(
+            prices_array,
+            ema,
+            std_dev,
+            z_scores,
+            level_config["min_multiplier"],
+            level_config["max_multiplier"],
+            level_config["num_simulations"],
+            min_width_pct,
+            verbose,
+        )
+
+        # Store this level's results
+        results_by_level.append(level_results)
+
+        # Update best overall if needed
+        if (
+            best_overall is None
+            or level_results["best_config"]["zscore_economic_score"]
+            > best_overall["best_config"]["zscore_economic_score"]
+        ):
+            best_overall = {
+                "best_config": level_results["best_config"],
+                "level": current_level,
+                "level_name": level_config["name"],
+            }
+
+        # Check if we should move to the next recursion level
+        if (
+            level_config["trigger_threshold"] is not None
+            and level_config["trigger_multiplier"] is not None
+        ):
+            best_config = level_results["best_config"]
+
+            # Check if inner band allocation exceeds threshold and multiplier is below trigger
+            if (
+                best_config["band_allocations"][0]
+                > level_config["trigger_threshold"]
+                and best_config["band_multipliers"][0]
+                < level_config["trigger_multiplier"]
+            ):
+                if verbose:
+                    logger.info(
+                        ">> Triggering next recursion level <<"
+                    )
+                    logger.info(
+                        f"Inner band allocation: {best_config['band_allocations'][0]*100:.1f}% "
+                        f"(threshold: {level_config['trigger_threshold']*100:.1f}%)"
+                    )
+                    logger.info(
+                        f"Inner band multiplier: {best_config['band_multipliers'][0]:.4f}σ "
+                        f"(trigger: {level_config['trigger_multiplier']:.4f}σ)"
+                    )
+                current_level += 1
+            else:
+                if verbose:
+                    logger.info(
+                        "Optimal configuration found, no further recursion needed"
+                    )
+                break  # Exit the recursion if trigger conditions not met
+        else:
+            # This is the final level, so we're done
+            break
+
+    # After all recursion levels, return the best overall result
+    if verbose:
+        logger.info("BEST OVERALL CONFIGURATION:")
+        logger.info(f"From {best_overall['level_name']}")
+        logger.info(
+            f"Band Multipliers: {best_overall['best_config']['band_multipliers'][0]:.4f}, "
+            f"{best_overall['best_config']['band_multipliers'][1]:.4f}, "
+            f"{best_overall['best_config']['band_multipliers'][2]:.4f}"
+        )
+        logger.info(
+            f"Band Allocations: {best_overall['best_config']['band_allocations'][0]*100:.1f}%, "
+            f"{best_overall['best_config']['band_allocations'][1]*100:.1f}%, "
+            f"{best_overall['best_config']['band_allocations'][2]*100:.1f}%"
+        )
+        logger.info(
+            f"Z-Score Economic Score: {best_overall['best_config']['zscore_economic_score']:.4f}"
+        )
+
+    # Return the best configuration
+    return {
+        "band_multipliers": best_overall["best_config"]["band_multipliers"],
+        "band_allocations": best_overall["best_config"]["band_allocations"],
+        "zscore_economic_score": best_overall["best_config"][
+            "zscore_economic_score"
+        ],
+        "percent_in_bounds": best_overall["best_config"]["percent_in_bounds"],
+        "avg_weighted_width": best_overall["best_config"]["avg_weighted_width"],
+        "from_level": best_overall["level"],
+        "from_level_name": best_overall["level_name"],
+    }
+
+def calculate_tick_range_from_bands_wrapper(
+    band_multipliers: List[float],
+    standard_deviation: float,
+    ema: float,
+    tick_spacing: int,
+    price_to_tick_function: Callable,
+    min_tick: int = MIN_TICK,
+    max_tick: int = MAX_TICK,
+) -> Dict[str, Any]:
+    """Convert band multipliers to tick ranges for Velodrome liquidity provision."""
+    # Convert band multipliers to price ranges using the formula:
+    # Upper bound = EMA + (sigma*multiplier)
+    # Lower bound = EMA - (sigma*multiplier)
+
+    # Calculate band price ranges
+    band1_lower = ema - (band_multipliers[0] * standard_deviation)
+    band1_upper = ema + (band_multipliers[0] * standard_deviation)
+    logger.info(
+        f"Band 1 price range: lower={band1_lower}, upper={band1_upper}"
+    )
+
+    band2_lower = ema - (band_multipliers[1] * standard_deviation)
+    band2_upper = ema + (band_multipliers[1] * standard_deviation)
+    logger.info(
+        f"Band 2 price range: lower={band2_lower}, upper={band2_upper}"
+    )
+
+    band3_lower = ema - (band_multipliers[2] * standard_deviation)
+    band3_upper = ema + (band_multipliers[2] * standard_deviation)
+    logger.info(
+        f"Band 3 price range: lower={band3_lower}, upper={band3_upper}"
+    )
+
+    # Convert to ticks and round to tick spacing
+    def round_to_spacing(tick):
+        return int(tick // tick_spacing) * tick_spacing
+
+    # Convert prices to ticks
+    band1_tick_lower = round_to_spacing(price_to_tick_function(band1_lower))
+    band1_tick_upper = round_to_spacing(price_to_tick_function(band1_upper))
+    logger.info(
+        f"Band 1 ticks: lower={band1_tick_lower}, upper={band1_tick_upper}"
+    )
+
+    band2_tick_lower = round_to_spacing(price_to_tick_function(band2_lower))
+    band2_tick_upper = round_to_spacing(price_to_tick_function(band2_upper))
+    logger.info(
+        f"Band 2 ticks: lower={band2_tick_lower}, upper={band2_tick_upper}"
+    )
+
+    band3_tick_lower = round_to_spacing(price_to_tick_function(band3_lower))
+    band3_tick_upper = round_to_spacing(price_to_tick_function(band3_upper))
+    logger.info(
+        f"Band 3 ticks: lower={band3_tick_lower}, upper={band3_tick_upper}"
+    )
+
+    # Ensure ticks are within allowed range
+    band1_tick_lower = max(min_tick, min(max_tick, band1_tick_lower))
+    band1_tick_upper = max(min_tick, min(max_tick, band1_tick_upper))
+    logger.info(
+        f"Band 1 ticks adjusted: lower={band1_tick_lower}, upper={band1_tick_upper}"
+    )
+
+    band2_tick_lower = max(min_tick, min(max_tick, band2_tick_lower))
+    band2_tick_upper = max(min_tick, min(max_tick, band2_tick_upper))
+    logger.info(
+        f"Band 2 ticks adjusted: lower={band2_tick_lower}, upper={band2_tick_upper}"
+    )
+
+    band3_tick_lower = max(min_tick, min(max_tick, band3_tick_lower))
+    band3_tick_upper = max(min_tick, min(max_tick, band3_tick_upper))
+    logger.info(
+        f"Band 3 ticks adjusted: lower={band3_tick_lower}, upper={band3_tick_upper}"
+    )
+
+    # Build result dictionary
+    return {
+        "band1": {
+            "tick_lower": band1_tick_lower,
+            "tick_upper": band1_tick_upper,
+        },
+        "band2": {
+            "tick_lower": band2_tick_lower,
+            "tick_upper": band2_tick_upper,
+        },
+        "band3": {
+            "tick_lower": band3_tick_lower,
+            "tick_upper": band3_tick_upper,
+        },
+        "inner_ticks": (band1_tick_lower, band1_tick_upper),
+        "middle_ticks": (band2_tick_lower, band2_tick_upper),
+        "outer_ticks": (band3_tick_lower, band3_tick_upper),
+    }
+
+def get_tick_spacing_velodrome(pool_address: str, chain_id: int) -> Optional[int]:
+    """Get velodrome pool tick spacing using VelodromeCLPoolContract"""
+    try:
+        rpc_url = RPC_ENDPOINTS.get(chain_id)
+        if not rpc_url:
+            logger.error(f"No RPC URL found for chain {chain_id}")
+            return None
+            
+        web3 = get_web3_connection(rpc_url)
+        if not web3.is_connected():
+            logger.error(f"Failed to connect to RPC endpoint: {rpc_url}")
+            return None
+
+        # Create contract instance using VelodromeCLPool ABI
+        contract = web3.eth.contract(
+            address=Web3.to_checksum_address(pool_address),
+            abi=VELODROME_CL_POOL_ABI
+        )
+
+        # Call tickSpacing function
+        tick_spacing = contract.functions.tickSpacing().call()
+
+        if not tick_spacing:
+            logger.error(f"Could not fetch tick spacing for velodrome pool {pool_address}")
+            return None
+
+        logger.info(f"Tick spacing for velodrome pool {pool_address}: {tick_spacing}")
+        return tick_spacing
+        
+    except Exception as e:
+        logger.error(f"Error fetching tick spacing for pool {pool_address}: {str(e)}")
+        return None
+
+def get_pool_tokens(pool_address: str, chain_id: int) -> Optional[Tuple[str, str]]:
+    """
+    STEP 2: Get the token addresses from a Velodrome pool using VelodromeCLPoolContract
+    Exact implementation from velodrome.py adapted for standalone use
+    """
+    try:
+        rpc_url = RPC_ENDPOINTS.get(chain_id)
+        if not rpc_url:
+            logger.error(f"No RPC URL found for chain {chain_id}")
+            return None
+            
+        web3 = get_web3_connection(rpc_url)
+        if not web3.is_connected():
+            logger.error(f"Failed to connect to RPC endpoint: {rpc_url}")
+            return None
+
+        # Create contract instance using VelodromeCLPool ABI
+        contract = web3.eth.contract(
+            address=Web3.to_checksum_address(pool_address),
+            abi=VELODROME_CL_POOL_ABI
+        )
+
+        # Call token0 and token1 functions
+        token0 = contract.functions.token0().call()
+        token1 = contract.functions.token1().call()
+
+        if not token0 or not token1:
+            logger.error(f"Could not get token addresses for pool {pool_address}")
+            return None
+
+        logger.info(f"Retrieved tokens for pool {pool_address}: {token0}, {token1}")
+        return token0, token1
+
+    except Exception as e:
+        logger.error(f"Error getting pool tokens: {str(e)}")
+        return None
+
+def get_current_pool_price(pool_address: str, chain_id: int) -> Optional[float]:
+    """Get the current price from a Velodrome concentrated liquidity pool"""
+    try:
+        rpc_url = RPC_ENDPOINTS.get(chain_id)
+        if not rpc_url:
+            logger.error(f"No RPC URL found for chain {chain_id}")
+            return None
+            
+        web3 = get_web3_connection(rpc_url)
+        if not web3.is_connected():
+            logger.error(f"Failed to connect to RPC endpoint: {rpc_url}")
+            return None
+
+        # Create contract instance using VelodromeCLPool ABI
+        contract = web3.eth.contract(
+            address=Web3.to_checksum_address(pool_address),
+            abi=VELODROME_CL_POOL_ABI
+        )
+
+        # Use the slot0 function to get pool state including sqrt_price_x96
+        slot0_data = contract.functions.slot0().call()
+
+        if slot0_data is None:
+            logger.error(f"Could not get slot0 data for pool {pool_address}")
+            return None
+
+        # Extract sqrt_price_x96 from slot0 result (first element)
+        sqrt_price_x96 = slot0_data[0]
+        
+        if sqrt_price_x96 == 0:
+            logger.error(f"Invalid sqrt_price_x96 for pool {pool_address}")
+            return None
+
+        # Convert sqrt_price_x96 to price
+        # The formula is: price = (sqrt_price_x96 / 2^96)^2
+        price = (sqrt_price_x96 / (2**96)) ** 2
+        logger.info(f"Current pool price: {price}")
+        return price
+        
+    except Exception as e:
+        logger.error(f"Error getting current pool price: {str(e)}")
+        return None
+
+def get_coin_id_from_address(
+    chain: str, 
+    address: str, 
+    platform: str,
+    coingecko_api_key: Optional[str] = None,
+    x402_signer=None,
+    x402_proxy=None
+) -> Optional[str]:
+    """Retrieve CoinGecko coin ID"""
+    try:
+        # Check stablecoin mappings first
+        stablecoin_mappings = {
+            "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "usd-coin",
+            "0xcb8fa9a76b8e203d8c3797bf438d8fb81ea3326a": "alchemix-usd",
+            "0x01bff41798a0bcf287b996046ca68b395dbc1071": "usdt0",
+            "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "bridged-usdt",
+            "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0": None,
+            "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "bridged-usd-coin-optimism",
+            "0xbfd291da8a403daaf7e5e9dc1ec0aceacd4848b9": "token-dforce-usd",
+            "0x8ae125e8653821e851f12a49f7765db9a9ce7384": "dola-usd",
+            "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "liquity-usd",
+            "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "makerdao-optimism-bridged-dai-optimism",
+            "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "liquity-bold",
+            "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "frax",
+            "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "savings-dai",
+            "0x73cb180bf0521828d8849bc8cf2b920918e23032": "overnight-fi-usd-optimism",
+            "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
+            "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "glo-dollar",
+            "0xd988097fb8612cc24eec14542bc03424c656005f": "mode-bridged-usdc-mode",
+            "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": None,
+            "0xf0f161fda2712db8b566946122a5af183995e2ed": "mode-bridged-usdt-mode",
+            "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
+        }
+
+        if address.lower() in stablecoin_mappings:
+            coin_id = stablecoin_mappings[address.lower()]
+            logger.info(f"Using stablecoin mapping for {address}: {coin_id}")
+            return coin_id
+
+        # Rate limiting
+        time.sleep(1)
+
+        # Use x402 requests if available
+        if x402_signer is not None and x402_proxy is not None:
+            logger.info("Using x402 signer for CoinGecko API requests")
+            try:
+                
+                # Create CoinGecko instance with x402
+                cg = CoinGeckoAPI()
+                cg.session = x402_requests(account=x402_signer)
+                cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
+                
+                # Make the request using x402
+                endpoint = f"coins/{platform}/contract/{address}"
+                response = cg.session.get(f"{cg.api_base_url}{endpoint}")
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("id")
+                else:
+                    logger.warning(f"Failed to get coin ID via x402 for {chain}/{address}: {response.status_code}")
+                    return None
+                    
+            except Exception as e:
+                logger.error(f"Error using x402 for coin ID lookup: {str(e)}")
+                return None
+        else:
+            # Fallback to regular API
+            if not coingecko_api_key:
+                logger.warning("No CoinGecko API key provided and no x402 available")
+                return None
+                
+            try:
+                # Determine if it's a pro key
+                is_pro = is_pro_api_key(coingecko_api_key)
+                if is_pro:
+                    cg = CoinGeckoAPI(api_key=coingecko_api_key)
+                else:
+                    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+                
+                # Make the request
+                response = cg.get_coin_info_from_contract_address_by_id(platform, address)
+                return response.get("id") if response else None
+                
+            except Exception as e:
+                logger.error(f"Error getting coin ID via regular API: {str(e)}")
+                return None
+
+    except Exception as e:
+        logger.warning(f"Error getting coin ID for {chain}/{address}: {str(e)}")
+        return None
+
+def get_historical_market_data(
+    coin_id: str, 
+    days: int,
+    coingecko_api_key: Optional[str] = None,
+    x402_signer=None,
+    x402_proxy=None
+) -> Optional[Dict[str, Any]]:
+    """Get historical market data using x402 requests when available"""
+    try:
+        # Rate limiting
+        time.sleep(2)
+
+        # Use x402 requests if available
+        if x402_signer is not None and x402_proxy is not None:
+            logger.info("Using x402 signer for CoinGecko API requests")
+            try:                
+                # Create CoinGecko instance with x402
+                cg = CoinGeckoAPI()
+                cg.session = x402_requests(account=x402_signer)
+                cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
+                
+                # Make the request using x402
+                response = cg.get_coin_market_chart_by_id(
+                    id=coin_id,
+                    vs_currency="usd",
+                    days=days
+                )
+                
+                if response:
+                    prices_data = response.get("prices", [])
+                    timestamps = [entry[0] / 1000 for entry in prices_data]  # ms to seconds
+                    prices = [entry[1] for entry in prices_data]
+                    return {
+                        "coin_id": coin_id,
+                        "timestamps": timestamps,
+                        "prices": prices,
+                        "days": days,
+                        "last_updated": time.time(),
+                    }
+                else:
+                    logger.warning(f"Failed to fetch market data via x402 for {coin_id}")
+                    return None
+                    
+            except Exception as e:
+                logger.error(f"Error using x402 for market data: {str(e)}")
+                return None
+        else:
+            # Fallback to regular API
+            if not coingecko_api_key:
+                logger.warning("No CoinGecko API key provided and no x402 available")
+                return None
+                
+            try:
+                # Determine if it's a pro key
+                is_pro = is_pro_api_key(coingecko_api_key)
+                if is_pro:
+                    cg = CoinGeckoAPI(api_key=coingecko_api_key)
+                else:
+                    cg = CoinGeckoAPI(demo_api_key=coingecko_api_key)
+                
+                # Make the request
+                response = cg.get_coin_market_chart_by_id(
+                    id=coin_id,
+                    vs_currency="usd", 
+                    days=days
+                )
+                
+                if response:
+                    prices_data = response.get("prices", [])
+                    timestamps = [entry[0] / 1000 for entry in prices_data]  # ms to seconds
+                    prices = [entry[1] for entry in prices_data]
+                    return {
+                        "coin_id": coin_id,
+                        "timestamps": timestamps,
+                        "prices": prices,
+                        "days": days,
+                        "last_updated": time.time(),
+                    }
+                else:
+                    logger.warning(f"Failed to fetch market data for {coin_id}")
+                    return None
+                    
+            except Exception as e:
+                logger.error(f"Error getting market data via regular API: {str(e)}")
+                return None
+
+    except Exception as e:
+        logger.warning(f"Error getting market data for {coin_id}: {str(e)}")
+        return None
+
+def get_pool_token_history(
+    chain: str,
+    token0_address: str,
+    token1_address: str,
+    days: int = 30,
+    coingecko_api_key: Optional[str] = None,
+    x402_signer=None,
+    x402_proxy=None
+) -> Optional[Dict[str, Any]]:
+    """Fetch historical price data for a token pair"""
+    logger.info(f"Fetching historical price data for tokens: {token0_address} and {token1_address}")
+
+    try:
+        # Convert chain name to CoinGecko platform ID
+        platform_map = {
+            "ethereum": "ethereum",
+            "optimism": "optimistic-ethereum",
+            "arbitrum": "arbitrum-one",
+            "polygon": "polygon-pos",
+            "base": "base",
+            "mode": "mode",
+        }
+
+        platform = platform_map.get(chain.lower())
+        if not platform:
+            logger.warning(f"Unsupported chain: {chain}")
+            return None
+
+        # Get coin IDs for both tokens
+        token0_id = get_coin_id_from_address(
+            chain, token0_address, platform, coingecko_api_key, x402_signer, x402_proxy
+        )
+        token1_id = get_coin_id_from_address(
+            chain, token1_address, platform, coingecko_api_key, x402_signer, x402_proxy
+        )
+
+        if not token0_id or not token1_id:
+            logger.warning(f"Could not find coin IDs for tokens: {token0_address}, {token1_address}")
+            return None
+
+        # Get price history for both tokens
+        token0_data = get_historical_market_data(
+            token0_id, days, coingecko_api_key, x402_signer, x402_proxy
+        )
+        token1_data = get_historical_market_data(
+            token1_id, days, coingecko_api_key, x402_signer, x402_proxy
+        )
+
+        # Check if we have valid price data
+        if (
+            not token0_data
+            or not token1_data
+            or not token0_data.get("prices")
+            or not token1_data.get("prices")
+        ):
+            logger.warning("Missing price data for one or both tokens")
+            return None
+
+        # Combine data and calculate price ratios
+        token0_prices = token0_data.get("prices", [])
+        token1_prices = token1_data.get("prices", [])
+
+        # Ensure price lists are the same length by taking the shorter one
+        min_length = min(len(token0_prices), len(token1_prices))
+        token0_prices = token0_prices[:min_length]
+        token1_prices = token1_prices[:min_length]
+
+        # Calculate ratio prices (token1/token0) - exact formula from velodrome.py
+        ratio_prices = []
+        for i in range(min_length):
+            if token0_prices[i] and token0_prices[i] > 0:
+                ratio_prices.append(token1_prices[i] / token0_prices[i])
+
+        # Get current price (latest)
+        current_price = ratio_prices[-1] if ratio_prices else 1.0
+
+        return {
+            "ratio_prices": ratio_prices,
+            "current_price": current_price,
+            "days": days,
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting pool token history: {str(e)}")
+        return None
+
+def calculate_tick_lower_and_upper_velodrome(
+    chain: str, 
+    pool_address: str, 
+    is_stable: bool,
+    coingecko_api_key=None, 
+    x402_signer=None, 
+    x402_proxy=None,
+) -> Optional[List[Dict[str, Any]]]:
+    """Calculate optimal tick ranges for a Velodrome Concentrated position based on pool features."""
+    logger.info(
+        f"Calculating tick ranges using stablecoin model for pool {pool_address}"
+    )
+
+       # Map chain name to chain ID
+    chain_id = None
+    for cid, cname in CHAIN_NAMES.items():
+        if cname.lower() == chain.lower():
+            chain_id = cid
+            break
+    
+    if chain_id is None:
+        logger.error(f"Unsupported chain: {chain}")
+        return None
+
+    try:
+        # 1. Fetch tick spacing from velodrome cl pool
+        tick_spacing = get_tick_spacing_velodrome(pool_address, chain_id)
+        if not tick_spacing:
+            logger.error(f"Failed to get tick spacing for pool {pool_address}")
+            return None
+
+        # 2. Get the token addresses from the pool
+        token0, token1 = get_pool_tokens(pool_address, chain_id)
+        if not token0 or not token1:
+            logger.error(f"Failed to get tokens for pool {pool_address}")
+            return None
+
+        # 3. Get current price
+        current_price = get_current_pool_price(pool_address, chain_id)
+        if current_price is None:
+            logger.error(f"Failed to get current price for pool {pool_address}")
+            return None
+
+        # 4. Get historical price data for both tokens and calculate price ratio history
+        logger.info(f"Fetching historical price data for tokens: {token0} and {token1}")
+        try:
+            pool_data = get_pool_token_history(
+                chain=chain, 
+                token0_address=token0, 
+                token1_address=token1,
+                coingecko_api_key=coingecko_api_key,
+                x402_signer=x402_signer,
+                x402_proxy=x402_proxy
+            )
+
+            # Check if we have valid pool data
+            if pool_data is None:
+                logger.error(f"Could not get pool token history for {token0} and {token1}. Aborting operation.")
+                return None
+
+            # Check if we have price data
+            ratio_prices = pool_data.get("ratio_prices", [])
+
+            if not ratio_prices:
+                logger.error(f"Could not get price ratio history for pool {pool_address}. Aborting operation.")
+                return None
+        except Exception as e:
+            logger.error(f"Error fetching historical price data: {str(e)}")
+            return None
+
+        # 4. Use stablecoin model to optimize bands
+        # For stablecoin pools, we want narrow ranges
+        # For volatile pools, we might adjust parameters
+        model_params = {
+            "ema_period": 18,  # Updated from 10 to 18
+            "std_dev_window": 100,  # Default from the model
+            "verbose": True,
+        }
+
+        # For stablecoin pools, we can use more aggressive settings
+        if is_stable:
+            model_params["min_width_pct"] = 0.0001  # Updated from 0.00001 to 0.0001
+
+        # Run the optimization
+        result = optimize_stablecoin_bands(prices=ratio_prices, **model_params)
+        logger.info(f"Result from models: {result}")
+
+        if not result:
+            logger.error("Error in stablecoin model calculation")
+            return None
+
+        # 7. Calculate standard deviation for current window
+        ema = calculate_ema(ratio_prices[-100:], model_params["ema_period"])
+        std_dev = calculate_std_dev(
+            ratio_prices[-100:], ema, model_params["std_dev_window"]
+        )
+        current_std_dev = std_dev[-1]  # Use the most recent standard deviation
+
+        logger.info(f"EMA: {ema} Current_Std_Dev: {current_std_dev}")
+
+        # 8. Calculate tick range using model band multipliers
+        band_multipliers = result["band_multipliers"]
+
+        # Get the most recent EMA value (human price space, ~1.0 for stables)
+        current_ema = ema[-1]
+
+        # Derive current tick from the pool's raw price (already decimals-adjusted by the AMM)
+        # This anchors band ticks around the actual pool price instead of near zero
+        tick_current = int(np.log(current_price) / np.log(1.0001))
+
+        # Define a converter that maps a human price to a tick relative to tick_current
+        def price_to_tick(price: float) -> int:
+            ratio = price / current_ema if current_ema > 0 else 1.0
+            delta = np.log(ratio) / np.log(1.0001)
+            return int(np.rint(delta) + tick_current)
+
+        # Calculate tick range using the exact formula: Upper bound = EMA + (sigma*multiplier)
+        tick_range_results = calculate_tick_range_from_bands_wrapper(
+            band_multipliers=band_multipliers,
+            standard_deviation=current_std_dev,
+            ema=current_ema,  # Use EMA as the center in human price space
+            tick_spacing=tick_spacing,
+            price_to_tick_function=price_to_tick,
+            min_tick=MIN_TICK,
+            max_tick=MAX_TICK,
+        )
+
+        # Prepare positions data for all three bands
+        positions = []
+        band_allocations = result["band_allocations"]
+
+        for i, _band_name in enumerate(["inner", "middle", "outer"]):
+            band_data = tick_range_results[f"band{i+1}"]
+            tick_lower = band_data["tick_lower"]
+            tick_upper = band_data["tick_upper"]
+
+            positions.append(
+                {
+                    "tick_lower": tick_lower,
+                    "tick_upper": tick_upper,
+                    "allocation": band_allocations[i],
+                }
+            )
+
+        for p in positions:
+            if p["tick_lower"] == p["tick_upper"]:
+                logger.info(
+                    f"Adjusting position with equal ticks: tick_lower={p['tick_lower']}, tick_upper={p['tick_upper']}. "
+                    f"Setting tick_upper to {p['tick_lower'] + tick_spacing}."
+                )
+                p["tick_upper"] = p["tick_lower"] + tick_spacing
+                logger.info(
+                    f"Adjusted position: tick_lower={p['tick_lower']}, tick_upper={p['tick_upper']}."
+                )
+
+        tick_to_band = defaultdict(
+            lambda: {"tick_lower": None, "tick_upper": None, "allocation": 0.0}
+        )
+
+        for p in positions:
+            key = (p["tick_lower"], p["tick_upper"])
+            if tick_to_band[key]["tick_lower"] is None:
+                tick_to_band[key]["tick_lower"] = p["tick_lower"]
+                tick_to_band[key]["tick_upper"] = p["tick_upper"]
+            tick_to_band[key]["allocation"] += p["allocation"]
+
+        collapsed_positions = [
+            {
+                "tick_lower": v["tick_lower"],
+                "tick_upper": v["tick_upper"],
+                "allocation": v["allocation"],
+            }
+            for v in tick_to_band.values()
+        ]
+
+        logger.info(
+            f"Collapsed positions before normalization: {collapsed_positions}"
+        )
+        total_alloc = sum(p["allocation"] for p in collapsed_positions)
+        logger.info(
+            f"Total allocation before normalization: {total_alloc}"
+        )
+
+        if total_alloc > 0:
+            for p in collapsed_positions:
+                p["allocation"] /= total_alloc
+                logger.info(
+                    f"Normalized allocation for position with ticks ({p['tick_lower']}, {p['tick_upper']}): {p['allocation']:.1%}"
+                )
+
+        positions = collapsed_positions
+        logger.info(
+            f"Final positions after normalization: {positions}"
+        )
+        logger.info("Band details (inner, middle, outer):")
+
+        for i, position in enumerate(positions):
+            band_name = ["inner", "middle", "outer"][i] if i < 3 else f"band_{i}"
+            logger.info(
+                f"  {band_name.upper()}: ticks=({position['tick_lower']}, {position['tick_upper']}), "
+                f"allocation={position['allocation']:.1%}"
+            )
+
+        logger.info(
+            f"Model band multipliers: {band_multipliers[0]:.4f}, "
+            f"{band_multipliers[1]:.4f}, {band_multipliers[2]:.4f}"
+        )
+
+        # Extract percent_in_bounds from the optimization result
+        percent_in_bounds = result.get("percent_in_bounds", 1.0)
+        logger.info(f"Percent in bounds: {percent_in_bounds:.2f}%")
+
+        # Add percent_in_bounds to each position
+        for position in positions:
+            position["percent_in_bounds"] = percent_in_bounds
+            # Also store EMA and std_dev metadata for caching
+            position["ema"] = ema.tolist() if hasattr(ema, "tolist") else list(ema)
+            position["std_dev"] = (
+                std_dev.tolist() if hasattr(std_dev, "tolist") else list(std_dev)
+            )
+            position["current_ema"] = float(current_ema)
+            position["current_std_dev"] = float(current_std_dev)
+            position["band_multipliers"] = (
+                band_multipliers.tolist()
+                if hasattr(band_multipliers, "tolist")
+                else list(band_multipliers)
+            )
+
+        return positions
+
+    except Exception as e:
+        logger.error(
+            f"Error in stablecoin model calculation: {str(e)}"
+        )
+        return None
 
 def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_assets):
     """Filter pools based on criteria and exclude current positions."""
@@ -1282,9 +2491,6 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
         # Get the original sugar data
         sugar_data = pool.get("sugar_data", {})
         
-        # Calculate APR using the Sugar SDK logic
-        apr = calculate_apr_for_velodrome(sugar_data)
-            
         # Get the pool type from sugar data
         pool_type = sugar_data.get("type", 0)
         
@@ -1301,11 +2507,13 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "token_count": pool.get("token_count", 0),
             "volume": float(pool.get("cumulativeVolumeUSD", 0)),
             "chain": chain_name,
-            "apr": apr,  # Add APR to the formatted pool data
             "is_cl_pool": is_cl_pool,  # Add flag for concentrated liquidity pool
             "is_stable": pool.get("is_stable")
         }
-        
+
+        position_data = calculate_position_details_for_velodrome(sugar_data)  
+        formatted_pool.append(position_data)
+
         # Add tokens (should be at least 2 tokens)
         tokens = pool.get("inputTokens", [])
         if len(tokens) >= 1:

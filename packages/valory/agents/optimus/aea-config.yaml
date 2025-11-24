@@ -52,19 +52,19 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
 - valory/funds_manager:0.1.0:bafybeibmp2fhlsfqvxm7u3sgpjyeirhdrvbp6zjspxjbyucfpdrnyq5qai
-- valory/liquidity_trader_abci:0.1.0:bafybeiczorci4ynpy3fvimnncir3vcvvwrdvprjmyjzbknnpelghsyiasa
-- valory/optimus_abci:0.1.0:bafybeic7dba4e4uycbkuk4cf7vyg5ytsk2fyb3kixqmv4a7czvem47va4m
+- valory/liquidity_trader_abci:0.1.0:bafybeig4vjbmha4bjiaya6fc7rxwjqdmwwlg7ns32o5ugex4djslfzjuvq
+- valory/optimus_abci:0.1.0:bafybeihlkwe2d4rvhgzpro7l7vyyz4iwth3bmbhavsxowyhfqzdh76cfoi
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
 - valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeihg3shkrvx7yzrqenjow23ebcl5xskrzrqkj47er2z47xhhs2z6ma
-- valory/max_apr_selection:0.1.0:bafybeibcse7vxc7gpfpb4bpoixnzpovzm7uyhtezc5ul2h6z6yuc2ffnce
+- valory/max_apr_selection:0.1.0:bafybeihveo2ln6dumffvkdji365smwj455sgkzybfpejwxmbrth5r6z44m
 - valory/balancer_pools_search:0.1.0:bafybeid3gmn6zphrd35ec63legdloqgip2kvc674vp2trazkmv3iqy6rna
 - valory/uniswap_pools_search:0.1.0:bafybeifhof3ptah44wtb5vzi3ldpmkz2a2uwu23nsgvvwhbrqxpj6khsai
 - valory/asset_lending:0.1.0:bafybeih7zpjiq6gnddms6slr737shourl6makltwgzxsimjtjxs6d5wqse
-- valory/velodrome_pools_search:0.1.0:bafybeice37npkx6cjtohvv6qxrnwnqn4dwstpykllidep5w5722momqmum
+- valory/velodrome_pools_search:0.1.0:bafybeifukx3n3iygs6qoeugapzumzirhog4vvsrpiv5nek3zjvf6pmsczq
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -320,7 +320,7 @@ models:
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["optimism"]}
       staking_chain: ${str:optimism}
-      file_hash_to_strategies: ${str:{"bafybeibcse7vxc7gpfpb4bpoixnzpovzm7uyhtezc5ul2h6z6yuc2ffnce":"max_apr_selection","bafybeid3gmn6zphrd35ec63legdloqgip2kvc674vp2trazkmv3iqy6rna":"balancer_pools_search","bafybeifhof3ptah44wtb5vzi3ldpmkz2a2uwu23nsgvvwhbrqxpj6khsai":"uniswap_pools_search","bafybeih7zpjiq6gnddms6slr737shourl6makltwgzxsimjtjxs6d5wqse":"asset_lending","bafybeice37npkx6cjtohvv6qxrnwnqn4dwstpykllidep5w5722momqmum":"velodrome_pools_search"}}
+      file_hash_to_strategies: ${str:{"bafybeihveo2ln6dumffvkdji365smwj455sgkzybfpejwxmbrth5r6z44m":"max_apr_selection","bafybeid3gmn6zphrd35ec63legdloqgip2kvc674vp2trazkmv3iqy6rna":"balancer_pools_search","bafybeifhof3ptah44wtb5vzi3ldpmkz2a2uwu23nsgvvwhbrqxpj6khsai":"uniswap_pools_search","bafybeih7zpjiq6gnddms6slr737shourl6makltwgzxsimjtjxs6d5wqse":"asset_lending","bafybeifukx3n3iygs6qoeugapzumzirhog4vvsrpiv5nek3zjvf6pmsczq":"velodrome_pools_search"}}
       strategies_kwargs: ${str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"velodrome_pools_search":{"graphql_endpoint":"https://gateway.thegraph.com/api/b8e4cf1b314c67d2a0109325046a7464/subgraphs/id/7tA4PY1VmbycJeoVtn2mjQK4NbozgwTuZgrxDTxzEDL1"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       available_protocols: ${list:["VELODROME"]}
       selected_hyper_strategy: ${str:max_apr_selection}

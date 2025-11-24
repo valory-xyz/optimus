@@ -1181,7 +1181,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Get VELO token address for the chain
                 velo_token_address = self._get_velo_token_address(chain)
                 if velo_token_address:
-                    user_balances[velo_token_address] = velo_rewards // 10**18
+                    # velo_rewards is already decimal-adjusted (divided by 10**18 in _get_velodrome_pending_rewards)
+                    user_balances[velo_token_address] = velo_rewards
                     self.context.logger.info(
                         f"Added VELO rewards to position: {velo_rewards}"
                     )

@@ -434,6 +434,9 @@ class Params(BaseParams):
         self.lifi_quote_to_amount_url = self._ensure(
             "lifi_quote_to_amount_url", kwargs, str
         )
+        self.stoploss_threshold_multiplier = kwargs.get(
+            "stoploss_threshold_multiplier", 0.6
+        )
         super().__init__(*args, **kwargs)
 
     def get_store_path(self, kwargs: Dict) -> Path:

@@ -1245,9 +1245,10 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
                 )
                 
                 if tick_bands:
-                    min_tick_lower = min(pos["tick_lower"] for pos in tick_bands)
-                    max_tick_upper = max(pos["tick_upper"] for pos in tick_bands)
-                    effective_width = max_tick_upper - min_tick_lower
+                    effective_width = 0
+                    for tick_band in tick_bands:
+                        if tick_band.get('band_type') == "inner":
+                            effective_width = tick_band.get("effective_width")
                     
                     # Calculate adjusted APR
                     if effective_width > 0:
@@ -1263,7 +1264,7 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
             except Exception as e:
                 logger.error(f"Error calculating tick data for CL pool: {str(e)}")
         else:
-            return {"apr": apr}  # Return basic APR for non-CL pools or if calculation fails
+            return {"apr": advertised_apr}  # Return basic APR for non-CL pools or if calculation fails
     else:
         return {"apr": 0}
     
@@ -2309,17 +2310,21 @@ def calculate_tick_lower_and_upper_velodrome(
         # Prepare positions data for all three bands
         positions = []
         band_allocations = result["band_allocations"]
-
+        effective_width = 0
         for i, _band_name in enumerate(["inner", "middle", "outer"]):
             band_data = tick_range_results[f"band{i+1}"]
             tick_lower = band_data["tick_lower"]
             tick_upper = band_data["tick_upper"]
+            effective_width = abs(tick_upper - tick_lower)
+
 
             positions.append(
                 {
                     "tick_lower": tick_lower,
                     "tick_upper": tick_upper,
                     "allocation": band_allocations[i],
+                    "effective_width": effective_width,
+                    "band_type": _band_name
                 }
             )
 
@@ -2511,8 +2516,8 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "is_stable": pool.get("is_stable")
         }
 
-        position_data = calculate_position_details_for_velodrome(sugar_data)  
-        formatted_pool.append(position_data)
+        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_signer, x402_proxy)  
+        formatted_pool.update(position_data)
 
         # Add tokens (should be at least 2 tokens)
         tokens = pool.get("inputTokens", [])

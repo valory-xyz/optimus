@@ -1000,9 +1000,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info(f"Agent Reasoning: {reasoning}")
 
         if self.selected_opportunities is not None:
-            self.context.logger.info(
-                f"Selected opportunities: {self.selected_opportunities}"
-            )
             for selected_opportunity in self.selected_opportunities:
                 # Convert token addresses to checksum addresses if they are present
                 # Dynamically handle multiple tokens
@@ -1017,6 +1014,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     selected_opportunity[token_key] = to_checksum_address(
                         selected_opportunity[token_key]
                     )
+
+                self.context.logger.info(
+                    f"Evaluating opportunity- Dex:{selected_opportunity.get('dex_type')} Pool:{selected_opportunity.get('pool_address')} Concentrated Liquidity:{selected_opportunity.get('is_cl_pool')}"
+                )
 
             # Track final selected opportunities
             yield from self._track_opportunities(

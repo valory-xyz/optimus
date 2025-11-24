@@ -1245,10 +1245,9 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
                 )
                 
                 if tick_bands:
-                    effective_width = 0
-                    for tick_band in tick_bands:
-                        if tick_band.get('band_type') == "inner":
-                            effective_width = tick_band.get("effective_width")
+                    min_tick_lower = min(pos["tick_lower"] for pos in tick_bands)
+                    max_tick_upper = max(pos["tick_upper"] for pos in tick_bands)
+                    effective_width = max_tick_upper - min_tick_lower
                     
                     # Calculate adjusted APR
                     if effective_width > 0:
@@ -2310,21 +2309,15 @@ def calculate_tick_lower_and_upper_velodrome(
         # Prepare positions data for all three bands
         positions = []
         band_allocations = result["band_allocations"]
-        effective_width = 0
         for i, _band_name in enumerate(["inner", "middle", "outer"]):
             band_data = tick_range_results[f"band{i+1}"]
             tick_lower = band_data["tick_lower"]
             tick_upper = band_data["tick_upper"]
-            effective_width = abs(tick_upper - tick_lower)
-
-
             positions.append(
                 {
                     "tick_lower": tick_lower,
                     "tick_upper": tick_upper,
                     "allocation": band_allocations[i],
-                    "effective_width": effective_width,
-                    "band_type": _band_name
                 }
             )
 

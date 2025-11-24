@@ -150,9 +150,6 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 # Fetch trading opportunities
                 yield from self.fetch_all_trading_opportunities()
 
-                # Update metrics for open positions
-                self.update_position_metrics()
-
                 # Execute strategy and prepare actions
                 actions = yield from self.prepare_strategy_actions()
 

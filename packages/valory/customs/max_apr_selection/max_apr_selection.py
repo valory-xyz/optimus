@@ -199,13 +199,11 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         least_performing_score = current_composite_scores[least_performing_index]
         position_to_exit = current_positions[least_performing_index]
 
-        # Compare each opportunity with the least performing current pool
+        # Select opportunities that meet the composite score threshold
         better_opportunities = [
             opportunity
             for opportunity in filtered_opportunities
-            if opportunity["composite_score"]
-            > least_performing_score * (1 + improvement_threshold)
-            and opportunity["composite_score"] >= composite_score_threshold
+            if opportunity["composite_score"] >= composite_score_threshold
         ]
 
         if better_opportunities:

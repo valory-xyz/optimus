@@ -396,6 +396,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "pool_id",
             "is_stable",
             "is_cl_pool",
+            "advertised_apr"
         ]
 
         # Create the current_position dictionary with only the desired information

@@ -140,8 +140,10 @@ def apply_risk_thresholds_and_select_optimal_strategy(
         sharpe_ratio = opportunity.get("sharpe_ratio", 0)
         depth_score = opportunity.get("depth_score", 0)
         il_risk_score = opportunity.get("il_risk_score", float("inf"))
-
-        logs.append(f"Evaluating opportunity- Dex:{opportunity.get('dex_type')} Pool:{opportunity.get('pool_address')} Concentrated Liquidity:{opportunity.get('is_cl_pool')}")
+        logs.append(f"Evaluating Opportunity- Dex:{opportunity.get('dex_type')} Pool:{opportunity.get('pool_address')}"
+                    f"Tokens:{opportunity.get('token0_symbol')}/{opportunity.get('token1_symbol')} "
+                    f"Advertised APR:{opportunity.get('advertised_apr')}% Adjusted APR:{opportunity.get('apr')}% "
+                    f"Sharpe:{sharpe_ratio} Depth:{depth_score} IL Risk:{il_risk_score}")
         if (
             not isinstance(sharpe_ratio, (int, float))
             or not isinstance(depth_score, (int, float))

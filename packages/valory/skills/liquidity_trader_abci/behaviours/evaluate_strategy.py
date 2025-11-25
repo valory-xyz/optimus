@@ -736,7 +736,33 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Legacy position must hold {remaining_days:.1f} more days",
                 )
 
-            # Check trailing stop-loss condition: Position Yield < SVy
+            # Calculate days elapsed for all checks
+            days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
+            min_hold_days = position.get("min_hold_days", 0)
+
+            # 1. Check 21-day global temporal cap first (hard limit - applies regardless)
+            if days_elapsed >= MIN_TIME_IN_POSITION:
+                return (
+                    True,
+                    f"21-day global temporal cap met: {days_elapsed:.1f} >= {MIN_TIME_IN_POSITION} days",
+                )
+
+            # 2. Check minimum time requirement (12 days) - must be met before new conditions apply
+            minimum_time_met = self._check_minimum_time_met(position)
+
+            if not minimum_time_met:
+                remaining_days = min_hold_days - days_elapsed
+                return (
+                    False,
+                    f"Minimum time not met: {remaining_days:.1f} more days needed (must hold for {min_hold_days:.1f} days before trailing stop-loss applies)",
+                )
+
+            # 3. After 12 days, check new TiP conditions in order:
+            #    a. Trailing stop-loss
+            #    b. Position value check
+            #    c. Opportunity cost check
+            #    d. Cost recovery (traditional)
+
             # Get entry APR with backward compatibility
             entry_apr = position.get("entry_apr")
             if entry_apr is None:
@@ -767,16 +793,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Get stoploss threshold multiplier (S)
             S = self.params.stoploss_threshold_multiplier
 
-            # Check trailing stop-loss: Position Yield < SVy
+            # 3a. Check trailing stop-loss: Position Yield < SVy (only after min time)
             if current_yield_per_day < (S * entry_yield_per_day):
                 return (
                     True,
                     f"Trailing stop-loss triggered: current yield {current_yield_per_day:.6f} < {S} * entry yield {entry_yield_per_day:.6f}",
                 )
 
-            # Check position value condition: CurrentValueRatio < MinReqPositionValue
+            # 3b. Check position value condition: CurrentValueRatio < MinReqPositionValue
             # This check is for mean-reverting assets to prevent false exits during volatility
-            # Exit if current value is below minimum required
+            # Exit if current value is below minimum required (only after min time)
             min_req_value = self._calculate_min_req_position_value(position, S)
             if min_req_value is not None:
                 current_value_ratio = yield from self._calculate_current_value_ratio(
@@ -789,7 +815,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                             f"Position value check: CurrentValueRatio {current_value_ratio:.6f} < MinReqPositionValue {min_req_value:.6f}",
                         )
 
-            # Check opportunity cost: Position Yield < SVby
+            # 3c. Check opportunity cost: Position Yield < SVby (only after min time)
             vby = self._get_best_available_opportunity_yield()
             if vby is not None:
                 if current_yield_per_day < (S * vby):
@@ -798,45 +824,24 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                         f"Opportunity cost check: current yield {current_yield_per_day:.6f} < {S} * best opportunity yield {vby:.6f}",
                     )
 
-            # For new positions, check traditional conditions:
-            # 1. Minimum time requirement
-            # 2. Cost recovery through yield
-
+            # 3d. Check traditional cost recovery condition (only after min time)
             cost_recovered = position.get("cost_recovered", False)
-            minimum_time_met = self._check_minimum_time_met(position)
-
-            days_elapsed = self._calculate_days_since_entry(position["enter_timestamp"])
-            min_hold_days = position.get("min_hold_days", 0)
-
-            # Check if both conditions are satisfied
-            if cost_recovered and minimum_time_met:
+            if cost_recovered:
                 return (
                     True,
-                    f"Both conditions met: costs recovered AND minimum time ({days_elapsed:.1f} >= {min_hold_days:.1f} days)",
+                    f"Costs recovered: minimum time ({days_elapsed:.1f} >= {min_hold_days:.1f} days) met AND costs recovered",
                 )
 
-            # Check 21-day global temporal cap
-            if days_elapsed >= MIN_TIME_IN_POSITION:
-                return (
-                    True,
-                    f"21-day global temporal cap met: {days_elapsed:.1f} >= {MIN_TIME_IN_POSITION} days",
-                )
-
-            # Determine what's still needed
-            missing_conditions = []
+            # If minimum time is met but no exit conditions are triggered, check what's missing
             if not cost_recovered:
                 yield_usd = position.get("yield_usd", 0)
-                missing_conditions.append(
-                    f"costs not recovered (${yield_usd:.2f}/${entry_cost:.2f})"
+                return (
+                    False,
+                    f"Minimum time met but costs not recovered (${yield_usd:.2f}/${entry_cost:.2f})",
                 )
 
-            if not minimum_time_met:
-                remaining_days = min_hold_days - days_elapsed
-                missing_conditions.append(
-                    f"minimum time not met ({remaining_days:.1f} more days needed)"
-                )
-
-            return False, f"Cannot exit: {' AND '.join(missing_conditions)}"
+            # Should not reach here, but return False as fallback
+            return False, "Minimum time met but no exit conditions satisfied"
 
         except Exception as e:
             self.context.logger.error(f"Error checking TiP exit conditions: {e}")
@@ -867,9 +872,41 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get current token balances for a position.
 
         This is a helper method to get token balances for CurrentValueRatio calculation.
-        It tries to use _get_current_token_balances if available, otherwise falls back
-        to getting balances directly from the safe.
+        For CL pools, it uses get_user_share_value_velodrome to get balances from NFT position.
+        For non-CL pools, it tries to use _get_current_token_balances or falls back to safe balances.
         """
+        # For Velodrome CL pools, use get_user_share_value_velodrome to get balances from NFT
+        if position.get("dex_type") == "velodrome" and position.get("is_cl_pool", False):
+            user_address = self.params.safe_contract_addresses.get(chain)
+            pool_address = position.get("pool_address")
+            token_id = position.get("token_id")
+            
+            if user_address and pool_address and token_id:
+                # Try to use get_user_share_value_velodrome if available (from FetchStrategiesBehaviour)
+                if hasattr(self, "get_user_share_value_velodrome"):
+                    user_balances = yield from self.get_user_share_value_velodrome(
+                        user_address, pool_address, token_id, chain, position
+                    )
+                    if user_balances:
+                        # Convert Decimal to float
+                        result = {k: float(v) for k, v in user_balances.items()}
+                        
+                        # Add VELO rewards if position is staked
+                        if position.get("staked", False):
+                            if hasattr(self, "_get_velodrome_pending_rewards"):
+                                velo_rewards = yield from self._get_velodrome_pending_rewards(
+                                    position, chain, user_address
+                                )
+                                if velo_rewards > 0:
+                                    if hasattr(self, "_get_velo_token_address"):
+                                        velo_token_address = self._get_velo_token_address(chain)
+                                        if velo_token_address:
+                                            result[velo_token_address] = float(velo_rewards)
+                                            self.context.logger.info(
+                                                f"Added VELO rewards to position balances: {velo_rewards:.6f}"
+                                            )
+                        return result
+
         # Try to use _get_current_token_balances if available (from FetchStrategiesBehaviour)
         if hasattr(self, "_get_current_token_balances"):
             balances = yield from self._get_current_token_balances(position, chain)
@@ -916,11 +953,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Optional[float]]:
         """Calculate CurrentValueRatio using SMA prices
 
-        Formula: CurrentValueRatio = (Q1*SMA1 + Q0*SMA0 + Qr*SMAr) / (Q1*SMA1 + Q0*SMA0)
+        Formula: CurrentValueRatio = (Q1_current*SMA1 + Q0_current*SMA0 + Qr*SMAr) / (Q1_entry*SMA1 + Q0_entry*SMA0)
         Where:
-        - Qn = quantity of token n (decimal-adjusted)
-        - SMAn = SMA price of token n
-        - Qr, SMAr = reserve token (if applicable, currently not used)
+        - Qn_current = current quantity of token n (decimal-adjusted)
+        - Qn_entry = entry quantity of token n (decimal-adjusted)
+        - SMAn = SMA price of token n (in USD)
+        - Qr, SMAr = VELO rewards (for staked Velodrome positions)
+
+        Both numerator and denominator are in USD value.
 
         Args:
             position: Position dictionary
@@ -940,7 +980,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-            # Get current token balances (quantities)
+            # Get current token balances (quantities) - this now handles CL pools correctly
             user_balances = yield from self._get_position_token_balances(
                 position, chain
             )
@@ -951,17 +991,41 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-            # Get quantities (decimal-adjusted)
-            Q0 = user_balances.get(token0_address, 0)
-            Q1 = user_balances.get(token1_address, 0)
+            # Get current quantities (decimal-adjusted)
+            Q0_current = user_balances.get(token0_address, 0)
+            Q1_current = user_balances.get(token1_address, 0)
 
-            if Q0 == 0 and Q1 == 0:
+            # Get entry quantities from position data
+            amount0_raw = position.get("amount0", 0)  # Raw amount (with decimals)
+            amount1_raw = position.get("amount1", 0)  # Raw amount (with decimals)
+
+            if amount0_raw == 0 and amount1_raw == 0:
                 self.context.logger.warning(
-                    "Both token quantities are zero for CurrentValueRatio"
+                    "Both entry amounts are zero for CurrentValueRatio - cannot calculate entry value"
                 )
                 return None
 
-            # Fetch SMA prices
+            # Get token decimals for entry amounts
+            token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+            token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+
+            if token0_decimals is None or token1_decimals is None:
+                self.context.logger.error(
+                    "Could not get token decimals for CurrentValueRatio"
+                )
+                return None
+
+            # Convert entry amounts to decimal-adjusted
+            Q0_entry = amount0_raw / (10**token0_decimals) if amount0_raw > 0 else 0
+            Q1_entry = amount1_raw / (10**token1_decimals) if amount1_raw > 0 else 0
+
+            if Q0_entry == 0 and Q1_entry == 0:
+                self.context.logger.warning(
+                    "Both entry quantities are zero for CurrentValueRatio"
+                )
+                return None
+
+            # Fetch SMA prices (in USD)
             SMA0 = yield from self._fetch_token_prices_sma(token0_address, chain)
             SMA1 = yield from self._fetch_token_prices_sma(token1_address, chain)
 
@@ -971,12 +1035,25 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-            # Calculate numerator: Q1*SMA1 + Q0*SMA0 + Qr*SMAr
-            # For now, Qr*SMAr = 0 (reserve token not implemented)
-            numerator = (Q1 * SMA1) + (Q0 * SMA0)
+            # Calculate numerator: Current USD value = Q1_current*SMA1 + Q0_current*SMA0 + Qr*SMAr (VELO rewards)
+            numerator = (Q1_current * SMA1) + (Q0_current * SMA0)
+            
+            # Add VELO rewards if present (for staked Velodrome positions)
+            velo_token_address = None
+            if hasattr(self, "_get_velo_token_address"):
+                velo_token_address = self._get_velo_token_address(chain)
+            
+            if velo_token_address and velo_token_address in user_balances:
+                Qr = user_balances[velo_token_address]
+                SMAr = yield from self._fetch_token_prices_sma(velo_token_address, chain)
+                if SMAr is not None:
+                    numerator += Qr * SMAr
+                    self.context.logger.info(
+                        f"Added VELO rewards to numerator: {Qr:.6f} * ${SMAr:.6f} = ${Qr * SMAr:.6f}"
+                    )
 
-            # Calculate denominator: Q1*SMA1 + Q0*SMA0
-            denominator = (Q1 * SMA1) + (Q0 * SMA0)
+            # Calculate denominator: Entry USD value = Q1_entry*SMA1 + Q0_entry*SMA0
+            denominator = (Q1_entry * SMA1) + (Q0_entry * SMA0)
 
             if denominator == 0:
                 self.context.logger.warning(
@@ -989,7 +1066,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             self.context.logger.info(
                 f"CurrentValueRatio: {current_value_ratio:.6f} "
-                f"(Q0={Q0:.6f}, Q1={Q1:.6f}, SMA0=${SMA0:.6f}, SMA1=${SMA1:.6f})"
+                f"(Current USD: ${numerator:.6f}, Entry USD: ${denominator:.6f}, "
+                f"Current: Q0={Q0_current:.6f}, Q1={Q1_current:.6f}, "
+                f"Entry: Q0={Q0_entry:.6f}, Q1={Q1_entry:.6f}, "
+                f"SMA0=${SMA0:.6f}, SMA1=${SMA1:.6f})"
             )
 
             return current_value_ratio
@@ -1368,7 +1448,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.context.logger.info(
                     f"Evaluating opportunity- Dex:{selected_opportunity.get('dex_type')} Pool:{selected_opportunity.get('pool_address')} Concentrated Liquidity:{selected_opportunity.get('is_cl_pool')}"
-                )
+                    )
 
             # Track final selected opportunities
             yield from self._track_opportunities(

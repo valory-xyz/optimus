@@ -120,7 +120,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             (
                 should_proceed,
                 positions_eligible_for_exit,
-            ) = self._apply_tip_filters_to_exit_decisions()
+            ) = yield from self._apply_tip_filters_to_exit_decisions()
             if not should_proceed:
                 yield from self.send_actions()
                 return
@@ -709,7 +709,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info("Velodrome position analysis complete")
         return results
 
-    def _check_tip_exit_conditions(self, position: Dict) -> Tuple[bool, str]:
+    def _check_tip_exit_conditions(self, position: Dict) -> Generator[None, None, Tuple[bool, str]]:
         """Check if position can be exited based on TiP conditions
         
         New conditions:
@@ -1107,7 +1107,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             return None
 
-    def _apply_tip_filters_to_exit_decisions(self) -> Tuple[bool, Optional[List[Dict]]]:
+    def _apply_tip_filters_to_exit_decisions(self) -> Generator[None, None, Tuple[bool, Optional[List[Dict]]]]:
         """Filter positions that can be exited based on TiP"""
         try:
             eligible_for_exit = []
@@ -1119,7 +1119,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             for position in self.current_positions:
                 if position.get("status") == PositionStatus.OPEN.value:
-                    can_exit, reason = self._check_tip_exit_conditions(position)
+                    can_exit, reason = yield from self._check_tip_exit_conditions(position)
 
                     if can_exit:
                         eligible_for_exit.append(position)
@@ -1360,7 +1360,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.context.logger.info(
                     f"Evaluating opportunity- Dex:{selected_opportunity.get('dex_type')} Pool:{selected_opportunity.get('pool_address')} Concentrated Liquidity:{selected_opportunity.get('is_cl_pool')}"
-                )
+                    )
 
             # Track final selected opportunities
             yield from self._track_opportunities(

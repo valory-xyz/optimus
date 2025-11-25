@@ -1123,6 +1123,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                     if can_exit:
                         eligible_for_exit.append(position)
+                        # Log exit conditions (trailing stop-loss, opportunity cost, etc.)
+                        self.context.logger.info(
+                            f"Position {position.get('pool_address', 'unknown')} eligible for exit: {reason}"
+                        )
                     else:
                         blocked_by_tip.append((position, reason))
                         self.context.logger.info(f"TiP blocking exit: {reason}")

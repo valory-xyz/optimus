@@ -435,7 +435,7 @@ class Params(BaseParams):
             "lifi_quote_to_amount_url", kwargs, str
         )
         self.stoploss_threshold_multiplier = kwargs.get(
-            "stoploss_threshold_multiplier", 0.6
+            "stoploss_threshold_multiplier", 0.43
         )
         super().__init__(*args, **kwargs)
 

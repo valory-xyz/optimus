@@ -396,7 +396,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             "pool_id",
             "is_stable",
             "is_cl_pool",
-            "advertised_apr"
+            "advertised_apr",
         ]
 
         # Create the current_position dictionary with only the desired information
@@ -3441,10 +3441,10 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 total_entry_cost = 0.0
 
             # 3. Calculate minimum hold days using TiP formula with correct pool type logic
-            opportunity_apr_percent = action.get("opportunity_apr", 0.0)  # APR as percentage
-            opportunity_apr = (
-                opportunity_apr_percent / 100
-            )  # Convert % to decimal
+            opportunity_apr_percent = action.get(
+                "opportunity_apr", 0.0
+            )  # APR as percentage
+            opportunity_apr = opportunity_apr_percent / 100  # Convert % to decimal
             percent_in_bounds = action.get("percent_in_bounds", 0.0)
             is_cl_pool = action.get("is_cl_pool", False)
 
@@ -3541,7 +3541,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         percent_in_bounds: float = 1.0,
     ) -> float:
         """Calculate minimum days using revised TiP formula
-        
+
         Formula: MPT = CT / Vy * td
         Where:
         - CT = 2*ri + 2*gi (as percentage of allocation value)
@@ -3549,7 +3549,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         - gi = gas cost (as % of principal)
         - Vy = APR / 365 (yield per day as decimal)
         - td = time in days (1 for daily yield)
-        
+
         Note: apr is passed as decimal (e.g., 0.20 for 20%)
         """
         try:
@@ -3583,9 +3583,20 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
             # Apply 21-day global temporal cap
             result = min(mpt_days, MIN_TIME_IN_POSITION)
-            
-            # Ensure minimum of 8 days
-            result = max(8.0, result)
+
+            # Log calculated MPT before applying minimum
+            self.context.logger.info(
+                f"Calculated MPT: {mpt_days:.6f} days (before minimum cap)"
+            )
+
+            # Ensure minimum of 12 days
+            result = max(12.0, result)
+
+            # Log if minimum was applied
+            if mpt_days < 12.0:
+                self.context.logger.info(
+                    f"MPT {mpt_days:.6f} days < 12.0 days minimum, applying minimum: {result:.1f} days"
+                )
 
             # Enhanced logging
             self.context.logger.info(f"TiP Calculation ({pool_type_str}):")
@@ -3593,7 +3604,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 f"APR: {effective_apr*100:.2f}%, Principal: ${principal:.6f}, Entry Cost: ${entry_cost:.6f}"
             )
             self.context.logger.info(
-                f"CT: {CT:.4f}%, Vy: {Vy:.6f} (daily), MPT: {mpt_days:.1f} days, Final: {result:.1f} days"
+                f"CT: {CT:.4f}%, Vy: {Vy:.6f} (daily), MPT: {mpt_days:.6f} days, Final: {result:.1f} days"
             )
 
             return result

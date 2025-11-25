@@ -1888,12 +1888,12 @@ class LiquidityTraderBaseBehaviour(
         self, token_address: str, chain: str, num_hours: int = 24
     ) -> Generator[None, None, Optional[float]]:
         """Fetch token prices from CoinGecko and calculate SMA over specified hours.
-        
+
         Args:
             token_address: Token contract address
             chain: Chain name
             num_hours: Number of hourly measurements (default 24)
-            
+
         Returns:
             SMA price as float, or None if unable to fetch
         """
@@ -1905,39 +1905,39 @@ class LiquidityTraderBaseBehaviour(
                     f"Could not get token symbol for {token_address} on {chain}"
                 )
                 return None
-            
+
             coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
             if not coingecko_id:
                 self.context.logger.error(
                     f"Could not get CoinGecko ID for {token_symbol} on {chain}"
                 )
                 return None
-            
+
             # Fetch market chart data - use days=1 to get hourly data (approximately 24 points)
             endpoint = self.coingecko.historical_market_data_endpoint.format(
                 coin_id=coingecko_id, days=1
             )
-            
+
             headers = {"Accept": "application/json"}
             if not self.params.use_x402 and self.coingecko.api_key:
                 headers["x-cg-api-key"] = self.coingecko.api_key
-            
+
             x402_signer = self.eoa_account if self.params.use_x402 else None
-            
+
             yield from self.sleep(2)  # Rate limiting
-            
+
             success, response_json = self.coingecko.request(
                 endpoint=endpoint,
                 headers=headers,
                 x402_signer=x402_signer,
             )
-            
+
             if not success:
                 self.context.logger.warning(
                     f"Failed to fetch market data for {coingecko_id}"
                 )
                 return None
-            
+
             # Check for rate limiting
             if isinstance(response_json, dict):
                 status = response_json.get("status", {})
@@ -1945,34 +1945,36 @@ class LiquidityTraderBaseBehaviour(
                     self.context.logger.error("Rate limit reached on CoinGecko API")
                     yield from self.sleep(10)
                     return None
-            
+
             # Extract prices from response
             prices_data = response_json.get("prices", [])
             if not prices_data:
-                self.context.logger.warning(f"No price data returned for {coingecko_id}")
+                self.context.logger.warning(
+                    f"No price data returned for {coingecko_id}"
+                )
                 return None
-            
+
             # Get prices (second element of each [timestamp, price] pair)
             prices = [entry[1] for entry in prices_data if len(entry) >= 2]
-            
+
             # Take last num_hours prices (most recent)
             if len(prices) > num_hours:
                 prices = prices[-num_hours:]
-            
+
             if not prices:
                 self.context.logger.warning(f"No valid prices found for {coingecko_id}")
                 return None
-            
+
             # Calculate SMA (Simple Moving Average)
             sma = sum(prices) / len(prices)
-            
+
             self.context.logger.info(
                 f"Calculated SMA for {token_symbol} ({coingecko_id}): "
                 f"${sma:.6f} from {len(prices)} hourly data points"
             )
-            
+
             return sma
-            
+
         except Exception as e:
             self.context.logger.error(
                 f"Error fetching SMA prices for {token_address} on {chain}: {e}"

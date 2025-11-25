@@ -179,7 +179,7 @@ type: skill
 models:
   params:
     args:
-      fund_requirements: ${dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":100000000000000,"threshold":80000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0}}}}}
+      fund_requirements: ${dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":200000000000000,"threshold":100000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0}}}}}
       rpc_urls: ${dict:{"optimism":"https://mainnet.optimism.io"}}
       setup:
         safe_contract_address: ${str:0x0000000000000000000000000000000000000000}

@@ -3440,8 +3440,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 total_entry_cost = 0.0
 
             # 3. Calculate minimum hold days using TiP formula with correct pool type logic
+            opportunity_apr_percent = action.get("opportunity_apr", 0.0)  # APR as percentage
             opportunity_apr = (
-                action.get("opportunity_apr", 0.0) / 100
+                opportunity_apr_percent / 100
             )  # Convert % to decimal
             percent_in_bounds = action.get("percent_in_bounds", 0.0)
             is_cl_pool = action.get("is_cl_pool", False)
@@ -3461,6 +3462,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     "min_hold_days": min_hold_days,
                     "principal_usd": principal_usd,
                     "cost_recovered": False,
+                    "entry_apr": opportunity_apr_percent,  # Store entry APR as percentage for trailing stop-loss
                 }
             )
 
@@ -3537,7 +3539,18 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         is_cl_pool: bool,
         percent_in_bounds: float = 1.0,
     ) -> float:
-        """Calculate minimum days using TiP formula with correct APR logic"""
+        """Calculate minimum days using revised TiP formula
+        
+        Formula: MPT = CT / Vy * td
+        Where:
+        - CT = 2*ri + 2*gi (as percentage of allocation value)
+        - ri = slippage (as % of principal)
+        - gi = gas cost (as % of principal)
+        - Vy = APR / 365 (yield per day as decimal)
+        - td = time in days (1 for daily yield)
+        
+        Note: apr is passed as decimal (e.g., 0.20 for 20%)
+        """
         try:
             if apr <= 0.0 or principal <= 0.0 or entry_cost <= 0.0:
                 return MIN_TIME_IN_POSITION  # Default 3 weeks for edge cases
@@ -3550,16 +3563,36 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 effective_apr = apr  # Non-CL pools: use base APR directly
                 pool_type_str = "Regular AMM"
 
-            # TiP formula: entry_cost / ((effective_apr/365) * principal)
-            min_days = entry_cost / ((effective_apr / 365) * principal)
-            min_days = min_days * 9
+            # Calculate Vy (yield per day as decimal)
+            # effective_apr is already a decimal (e.g., 0.20 for 20%), so divide by 365 for daily
+            Vy = effective_apr / 365
 
-            result = max(8.0, min_days)  # At least 8 days
+            # Calculate CT (total cost as percentage of allocation value)
+            # entry_cost is already 2x (round-trip), so CT = entry_cost / principal * 100
+            # This gives us CT as a percentage
+            CT = (entry_cost / principal) * 100 if principal > 0 else 0.0
+
+            # Calculate MPT (Minimum Position Time) using new formula: MPT = CT / Vy * td
+            # td = 1 (for daily yield)
+            # CT is in percentage, so convert to decimal: CT / 100
+            if Vy > 0:
+                mpt_days = (CT / 100) / Vy
+            else:
+                mpt_days = MIN_TIME_IN_POSITION
+
+            # Apply 21-day global temporal cap
+            result = min(mpt_days, MIN_TIME_IN_POSITION)
+            
+            # Ensure minimum of 8 days
+            result = max(8.0, result)
 
             # Enhanced logging
             self.context.logger.info(f"TiP Calculation ({pool_type_str}):")
             self.context.logger.info(
-                f"Calculated days: {min_days:.1f}, Final result: {result:.1f} (min of calculated and 8 days)"
+                f"APR: {effective_apr*100:.2f}%, Principal: ${principal:.6f}, Entry Cost: ${entry_cost:.6f}"
+            )
+            self.context.logger.info(
+                f"CT: {CT:.4f}%, Vy: {Vy:.6f} (daily), MPT: {mpt_days:.1f} days, Final: {result:.1f} days"
             )
 
             return result

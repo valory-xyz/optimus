@@ -120,7 +120,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             (
                 should_proceed,
                 positions_eligible_for_exit,
-            ) = self._apply_tip_filters_to_exit_decisions()
+            ) = yield from self._apply_tip_filters_to_exit_decisions()
             if not should_proceed:
                 yield from self.send_actions()
                 return
@@ -709,8 +709,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         self.context.logger.info("Velodrome position analysis complete")
         return results
 
-    def _check_tip_exit_conditions(self, position: Dict) -> Tuple[bool, str]:
-        """Check if position can be exited based on TiP conditions"""
+    def _check_tip_exit_conditions(self, position: Dict) -> Generator[None, None, Tuple[bool, str]]:
+        """Check if position can be exited based on TiP conditions
+        
+        New conditions:
+        - TiP = min(MPT, Position Yield < SVy, 21 days)
+        - Trailing stop-loss: Position Yield < SVy
+        Where:
+        - Position Yield = current yield per day (from position APR)
+        - S = stoploss threshold multiplier (configurable, default 0.6)
+        - Vy = yield per day at entry (from entry APR)
+        """
         try:
             entry_cost = position.get("entry_cost", 0)
 
@@ -731,7 +740,65 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     f"Legacy position must hold {remaining_days:.1f} more days",
                 )
 
-            # For new positions, BOTH conditions must be met:
+            # Check trailing stop-loss condition: Position Yield < SVy
+            # Get entry APR with backward compatibility
+            entry_apr = position.get("entry_apr")
+            if entry_apr is None:
+                entry_apr = position.get("apr")  # Fallback for legacy positions
+            
+            # Get current APR
+            current_apr = position.get("apr")
+            
+            # If both entry_apr and apr are missing, mark as open to exit
+            if entry_apr is None and current_apr is None:
+                return True, "No APR data - marking as open to exit"
+            
+            # If current APR is missing, mark as open to exit
+            if current_apr is None:
+                return True, "No current APR - marking as open to exit"
+            
+            # Calculate yields per day
+            if entry_apr is not None:
+                entry_yield_per_day = (entry_apr / 100) / 365  # Convert % to decimal, then to daily
+            else:
+                # Fallback: use current APR as entry APR (for very old positions)
+                entry_yield_per_day = (current_apr / 100) / 365
+            
+            current_yield_per_day = (current_apr / 100) / 365
+            
+            # Get stoploss threshold multiplier (S)
+            S = self.params.stoploss_threshold_multiplier
+            
+            # Check trailing stop-loss: Position Yield < SVy
+            if current_yield_per_day < (S * entry_yield_per_day):
+                return (
+                    True,
+                    f"Trailing stop-loss triggered: current yield {current_yield_per_day:.6f} < {S} * entry yield {entry_yield_per_day:.6f}",
+                )
+
+            # Check position value condition: CurrentValueRatio < MinReqPositionValue
+            # This check is for mean-reverting assets to prevent false exits during volatility
+            # Exit if current value is below minimum required
+            min_req_value = self._calculate_min_req_position_value(position, S)
+            if min_req_value is not None:
+                current_value_ratio = yield from self._calculate_current_value_ratio(position, position.get("chain"))
+                if current_value_ratio is not None:
+                    if current_value_ratio < min_req_value:
+                        return (
+                            True,
+                            f"Position value check: CurrentValueRatio {current_value_ratio:.6f} < MinReqPositionValue {min_req_value:.6f}",
+                        )
+
+            # Check opportunity cost: Position Yield < SVby
+            vby = self._get_best_available_opportunity_yield()
+            if vby is not None:
+                if current_yield_per_day < (S * vby):
+                    return (
+                        True,
+                        f"Opportunity cost check: current yield {current_yield_per_day:.6f} < {S} * best opportunity yield {vby:.6f}",
+                    )
+
+            # For new positions, check traditional conditions:
             # 1. Minimum time requirement
             # 2. Cost recovery through yield
 
@@ -746,6 +813,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 return (
                     True,
                     f"Both conditions met: costs recovered AND minimum time ({days_elapsed:.1f} >= {min_hold_days:.1f} days)",
+                )
+
+            # Check 21-day global temporal cap
+            if days_elapsed >= MIN_TIME_IN_POSITION:
+                return (
+                    True,
+                    f"21-day global temporal cap met: {days_elapsed:.1f} >= {MIN_TIME_IN_POSITION} days",
                 )
 
             # Determine what's still needed
@@ -768,7 +842,272 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error checking TiP exit conditions: {e}")
             return True, "Error in TiP check - allowing exit"
 
-    def _apply_tip_filters_to_exit_decisions(self) -> Tuple[bool, Optional[List[Dict]]]:
+    def _calculate_position_yield_per_day(self, position: Dict) -> Optional[float]:
+        """Calculate position yield per day from position APR
+        
+        Args:
+            position: Position dictionary containing APR data
+            
+        Returns:
+            Yield per day as decimal (e.g., 0.000548 for 20% APR), or None if APR missing
+        """
+        apr = position.get("apr")
+        if apr is None:
+            return None
+        
+        # APR is stored as percentage (e.g., 20.0 for 20%)
+        # Convert to decimal and divide by 365 to get daily yield
+        apr_decimal = apr / 100
+        yield_per_day = apr_decimal / 365
+        return yield_per_day
+
+    def _get_position_token_balances(
+        self, position: Dict, chain: str
+    ) -> Generator[None, None, Dict[str, float]]:
+        """Get current token balances for a position.
+        
+        This is a helper method to get token balances for CurrentValueRatio calculation.
+        It tries to use _get_current_token_balances if available, otherwise falls back
+        to getting balances directly from the safe.
+        """
+        # Try to use _get_current_token_balances if available (from FetchStrategiesBehaviour)
+        if hasattr(self, "_get_current_token_balances"):
+            balances = yield from self._get_current_token_balances(position, chain)
+            if balances:
+                # Convert Decimal to float
+                return {k: float(v) for k, v in balances.items()}
+        
+        # Fallback: get balances directly from safe
+        token0_address = position.get("token0")
+        token1_address = position.get("token1")
+        safe_address = self.params.safe_contract_addresses.get(chain)
+        
+        if not safe_address:
+            self.context.logger.error(f"No safe address for chain {chain}")
+            return {}
+        
+        balances = {}
+        if token0_address:
+            balance0 = yield from self._get_token_balance(chain, safe_address, token0_address)
+            if balance0 is not None:
+                token0_decimals = yield from self._get_token_decimals(chain, token0_address)
+                if token0_decimals:
+                    balances[token0_address] = balance0 / (10**token0_decimals)
+        
+        if token1_address:
+            balance1 = yield from self._get_token_balance(chain, safe_address, token1_address)
+            if balance1 is not None:
+                token1_decimals = yield from self._get_token_decimals(chain, token1_address)
+                if token1_decimals:
+                    balances[token1_address] = balance1 / (10**token1_decimals)
+        
+        return balances
+
+    def _calculate_current_value_ratio(
+        self, position: Dict, chain: str
+    ) -> Generator[None, None, Optional[float]]:
+        """Calculate CurrentValueRatio using SMA prices
+        
+        Formula: CurrentValueRatio = (Q1*SMA1 + Q0*SMA0 + Qr*SMAr) / (Q1*SMA1 + Q0*SMA0)
+        Where:
+        - Qn = quantity of token n (decimal-adjusted)
+        - SMAn = SMA price of token n
+        - Qr, SMAr = reserve token (if applicable, currently not used)
+        
+        Args:
+            position: Position dictionary
+            chain: Chain name
+            
+        Returns:
+            CurrentValueRatio as float, or None if unable to calculate
+        """
+        try:
+            # Get token addresses
+            token0_address = position.get("token0")
+            token1_address = position.get("token1")
+            
+            if not token0_address or not token1_address:
+                self.context.logger.error(
+                    "Missing token addresses for CurrentValueRatio calculation"
+                )
+                return None
+            
+            # Get current token balances (quantities)
+            user_balances = yield from self._get_position_token_balances(position, chain)
+            
+            if not user_balances:
+                self.context.logger.error(
+                    "Could not get current token balances for CurrentValueRatio"
+                )
+                return None
+            
+            # Get quantities (decimal-adjusted)
+            Q0 = user_balances.get(token0_address, 0)
+            Q1 = user_balances.get(token1_address, 0)
+            
+            if Q0 == 0 and Q1 == 0:
+                self.context.logger.warning(
+                    "Both token quantities are zero for CurrentValueRatio"
+                )
+                return None
+            
+            # Fetch SMA prices
+            SMA0 = yield from self._fetch_token_prices_sma(token0_address, chain)
+            SMA1 = yield from self._fetch_token_prices_sma(token1_address, chain)
+            
+            if SMA0 is None or SMA1 is None:
+                self.context.logger.warning(
+                    "Could not fetch SMA prices for CurrentValueRatio calculation"
+                )
+                return None
+            
+            # Calculate numerator: Q1*SMA1 + Q0*SMA0 + Qr*SMAr
+            # For now, Qr*SMAr = 0 (reserve token not implemented)
+            numerator = (Q1 * SMA1) + (Q0 * SMA0)
+            
+            # Calculate denominator: Q1*SMA1 + Q0*SMA0
+            denominator = (Q1 * SMA1) + (Q0 * SMA0)
+            
+            if denominator == 0:
+                self.context.logger.warning(
+                    "Denominator is zero for CurrentValueRatio calculation"
+                )
+                return None
+            
+            # Calculate ratio
+            current_value_ratio = numerator / denominator
+            
+            self.context.logger.info(
+                f"CurrentValueRatio: {current_value_ratio:.6f} "
+                f"(Q0={Q0:.6f}, Q1={Q1:.6f}, SMA0=${SMA0:.6f}, SMA1=${SMA1:.6f})"
+            )
+            
+            return current_value_ratio
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating CurrentValueRatio: {e}"
+            )
+            return None
+
+    def _calculate_min_req_position_value(
+        self, position: Dict, S: float
+    ) -> Optional[float]:
+        """Calculate MinReqPositionValue
+        
+        Formula: MinReqPositionValue = S * Vy * t/T + 1
+        Where:
+        - S = stoploss multiplier
+        - Vy = yield per day (decimal)
+        - t = time position held (in minutes)
+        - T = time in year (in minutes: 365 * 24 * 60)
+        
+        Args:
+            position: Position dictionary
+            S: Stoploss threshold multiplier
+            
+        Returns:
+            MinReqPositionValue as float, or None if unable to calculate
+        """
+        try:
+            # Get entry APR with backward compatibility
+            entry_apr = position.get("entry_apr")
+            if entry_apr is None:
+                entry_apr = position.get("apr")  # Fallback for legacy positions
+            
+            if entry_apr is None:
+                self.context.logger.warning(
+                    "No entry APR available for MinReqPositionValue calculation"
+                )
+                return None
+            
+            # Calculate Vy (yield per day as decimal)
+            Vy = (entry_apr / 100) / 365
+            
+            # Get time position held (in minutes)
+            enter_timestamp = position.get("enter_timestamp")
+            if not enter_timestamp:
+                self.context.logger.warning(
+                    "No enter_timestamp for MinReqPositionValue calculation"
+                )
+                return None
+            
+            current_timestamp = int(self._get_current_timestamp())
+            time_held_seconds = current_timestamp - enter_timestamp
+            time_held_minutes = time_held_seconds / 60
+            
+            # T = time in year (in minutes)
+            T_minutes = 365 * 24 * 60
+            
+            # Calculate MinReqPositionValue = S * Vy * t/T + 1
+            min_req_value = (S * Vy * time_held_minutes / T_minutes) + 1
+            
+            self.context.logger.info(
+                f"MinReqPositionValue: {min_req_value:.6f} "
+                f"(S={S}, Vy={Vy:.6f}, t={time_held_minutes:.1f} min, T={T_minutes} min)"
+            )
+            
+            return min_req_value
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating MinReqPositionValue: {e}"
+            )
+            return None
+
+    def _get_best_available_opportunity_yield(self) -> Optional[float]:
+        """Get effective yield of the best available opportunity (Vby) with SMA
+        
+        Applies short look-back SMA to advertised yields to dampen transient spikes.
+        This implements the opportunity cost check.
+        
+        Returns:
+            Effective yield per day (as decimal) of best opportunity, or None if no opportunities
+        """
+        try:
+            if not self.trading_opportunities:
+                return None
+            
+            # Sort opportunities by APR (highest first)
+            sorted_opportunities = sorted(
+                self.trading_opportunities,
+                key=lambda x: x.get("apr", 0),
+                reverse=True
+            )
+            
+            if not sorted_opportunities:
+                return None
+            
+            # Get the best opportunity's APR
+            best_apr = sorted_opportunities[0].get("apr")
+            if best_apr is None or best_apr <= 0:
+                return None
+            
+            # For now, we use the advertised APR directly
+            # TODO: Implement SMA for advertised yields (requires storing historical APR values)
+            # This would involve:
+            # 1. Storing historical APR values for each opportunity
+            # 2. Calculating SMA over a short look-back period (e.g., 3-7 days)
+            # 3. Using SMA-adjusted APR instead of raw APR
+            
+            # Convert APR percentage to daily yield (decimal)
+            apr_decimal = best_apr / 100
+            vby = apr_decimal / 365
+            
+            self.context.logger.info(
+                f"Best available opportunity yield (Vby): {vby:.6f} "
+                f"(from APR: {best_apr:.2f}%)"
+            )
+            
+            return vby
+            
+        except Exception as e:
+            self.context.logger.error(
+                f"Error getting best available opportunity yield: {e}"
+            )
+            return None
+
+    def _apply_tip_filters_to_exit_decisions(self) -> Generator[None, None, Tuple[bool, Optional[List[Dict]]]]:
         """Filter positions that can be exited based on TiP"""
         try:
             eligible_for_exit = []
@@ -780,10 +1119,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             for position in self.current_positions:
                 if position.get("status") == PositionStatus.OPEN.value:
-                    can_exit, reason = self._check_tip_exit_conditions(position)
+                    can_exit, reason = yield from self._check_tip_exit_conditions(position)
 
                     if can_exit:
                         eligible_for_exit.append(position)
+                        # Log exit conditions (trailing stop-loss, opportunity cost, etc.)
+                        self.context.logger.info(
+                            f"Position {position.get('pool_address', 'unknown')} eligible for exit: {reason}"
+                        )
                     else:
                         blocked_by_tip.append((position, reason))
                         self.context.logger.info(f"TiP blocking exit: {reason}")
@@ -1017,7 +1360,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.context.logger.info(
                     f"Evaluating opportunity- Dex:{selected_opportunity.get('dex_type')} Pool:{selected_opportunity.get('pool_address')} Concentrated Liquidity:{selected_opportunity.get('is_cl_pool')}"
-                )
+                    )
 
             # Track final selected opportunities
             yield from self._track_opportunities(

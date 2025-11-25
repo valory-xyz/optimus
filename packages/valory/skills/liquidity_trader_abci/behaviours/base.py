@@ -274,6 +274,7 @@ COIN_ID_MAPPING = {
         "usdc": "usd-coin",
         "alusd": "alchemix-usd",
         "usdt0": "usdt0",
+        "usd₮0": "usdt0",  # USD₮0 variant with special character
         "usdt": "bridged-usdt",
         "msusd": None,
         "usdc.e": "bridged-usd-coin-optimism",

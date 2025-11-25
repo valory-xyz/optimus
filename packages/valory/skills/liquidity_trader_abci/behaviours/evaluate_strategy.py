@@ -809,10 +809,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     position, position.get("chain")
                 )
                 if current_value_ratio is not None:
-                    if current_value_ratio < min_req_value:
+                    # Use epsilon for floating-point comparison to handle precision issues
+                    # Subtract epsilon from threshold so equal values don't trigger
+                    EPSILON = 1e-6
+                    if current_value_ratio < (min_req_value - EPSILON):
                         return (
                             True,
-                            f"Position value check: CurrentValueRatio {current_value_ratio:.6f} < MinReqPositionValue {min_req_value:.6f}",
+                            f"Position value check: CurrentValueRatio {current_value_ratio:.6f} < MinReqPositionValue {min_req_value:.6f} (epsilon: {EPSILON})",
                         )
 
             # 3c. Check opportunity cost: Position Yield < SVby (only after min time)
@@ -872,47 +875,37 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         """Get current token balances for a position.
 
         This is a helper method to get token balances for CurrentValueRatio calculation.
-        For CL pools, it uses get_user_share_value_velodrome to get balances from NFT position.
-        For non-CL pools, it tries to use _get_current_token_balances or falls back to safe balances.
+        First tries to use stored balances from FetchStrategiesBehaviour, then falls back
+        to recalculating if needed.
         """
-        # For Velodrome CL pools, use get_user_share_value_velodrome to get balances from NFT
-        if position.get("dex_type") == "velodrome" and position.get("is_cl_pool", False):
-            user_address = self.params.safe_contract_addresses.get(chain)
-            pool_address = position.get("pool_address")
-            token_id = position.get("token_id")
-            
-            if user_address and pool_address and token_id:
-                # Try to use get_user_share_value_velodrome if available (from FetchStrategiesBehaviour)
-                if hasattr(self, "get_user_share_value_velodrome"):
-                    user_balances = yield from self.get_user_share_value_velodrome(
-                        user_address, pool_address, token_id, chain, position
+        # First, try to use stored balances from FetchStrategiesBehaviour (most efficient)
+        stored_balances = position.get("current_token_balances")
+        if stored_balances:
+            self.context.logger.info(
+                f"Using stored current_token_balances for position {position.get('pool_address')}: {list(stored_balances.keys())}"
+            )
+            # Add VELO rewards if position is staked (for Velodrome positions)
+            result = stored_balances.copy()
+            if position.get("staked", False) and position.get("dex_type") == "velodrome":
+                if hasattr(self, "_get_velodrome_pending_rewards"):
+                    user_address = self.params.safe_contract_addresses.get(chain)
+                    velo_rewards = yield from self._get_velodrome_pending_rewards(
+                        position, chain, user_address
                     )
-                    if user_balances:
-                        # Convert Decimal to float
-                        result = {k: float(v) for k, v in user_balances.items()}
-                        
-                        # Add VELO rewards if position is staked
-                        if position.get("staked", False):
-                            if hasattr(self, "_get_velodrome_pending_rewards"):
-                                velo_rewards = yield from self._get_velodrome_pending_rewards(
-                                    position, chain, user_address
+                    if velo_rewards > 0:
+                        if hasattr(self, "_get_velo_token_address"):
+                            velo_token_address = self._get_velo_token_address(chain)
+                            if velo_token_address:
+                                result[velo_token_address] = float(velo_rewards)
+                                self.context.logger.info(
+                                    f"Added VELO rewards to stored balances: {velo_rewards:.6f}"
                                 )
-                                if velo_rewards > 0:
-                                    if hasattr(self, "_get_velo_token_address"):
-                                        velo_token_address = self._get_velo_token_address(chain)
-                                        if velo_token_address:
-                                            result[velo_token_address] = float(velo_rewards)
-                                            self.context.logger.info(
-                                                f"Added VELO rewards to position balances: {velo_rewards:.6f}"
-                                            )
-                        return result
-
-        # Try to use _get_current_token_balances if available (from FetchStrategiesBehaviour)
-        if hasattr(self, "_get_current_token_balances"):
-            balances = yield from self._get_current_token_balances(position, chain)
-            if balances:
-                # Convert Decimal to float
-                return {k: float(v) for k, v in balances.items()}
+            return result
+        else:
+            self.context.logger.warning(
+                f"No stored current_token_balances found for position {position.get('pool_address')}. "
+                f"Position keys: {list(position.keys())}"
+            )
 
         # Fallback: get balances directly from safe
         token0_address = position.get("token0")
@@ -1035,25 +1028,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 )
                 return None
 
-            # Calculate numerator: Current USD value = Q1_current*SMA1 + Q0_current*SMA0 + Qr*SMAr (VELO rewards)
-            numerator = (Q1_current * SMA1) + (Q0_current * SMA0)
-            
-            # Add VELO rewards if present (for staked Velodrome positions)
-            velo_token_address = None
-            if hasattr(self, "_get_velo_token_address"):
-                velo_token_address = self._get_velo_token_address(chain)
-            
-            if velo_token_address and velo_token_address in user_balances:
-                Qr = user_balances[velo_token_address]
-                SMAr = yield from self._fetch_token_prices_sma(velo_token_address, chain)
-                if SMAr is not None:
-                    numerator += Qr * SMAr
-                    self.context.logger.info(
-                        f"Added VELO rewards to numerator: {Qr:.6f} * ${SMAr:.6f} = ${Qr * SMAr:.6f}"
-                    )
-
             # Calculate denominator: Entry USD value = Q1_entry*SMA1 + Q0_entry*SMA0
             denominator = (Q1_entry * SMA1) + (Q0_entry * SMA0)
+
+            # Calculate numerator: Current USD value = Entry USD value + yield_usd
+            # yield_usd already includes both base yield (token increases) and VELO rewards
+            # So: Current Value = Entry Value + Yield = Entry Value + yield_usd
+            yield_usd = position.get("yield_usd", 0.0)
+            numerator = denominator + yield_usd
+            
+            self.context.logger.info(
+                f"CurrentValueRatio numerator: Entry value ${denominator:.6f} + Yield ${yield_usd:.6f} = ${numerator:.6f}"
+            )
 
             if denominator == 0:
                 self.context.logger.warning(

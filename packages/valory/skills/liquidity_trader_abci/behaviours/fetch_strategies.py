@@ -1259,7 +1259,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
         # Update position with current value and corrected yield calculation
-        self._update_position_with_current_value(
+        yield from self._update_position_with_current_value(
             position, user_share, chain, user_balances, token_info, token_prices
         )
 
@@ -1288,6 +1288,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if user_balances is None:
                 user_balances = yield from self._get_current_token_balances(
                     position, chain
+                )
+            
+            # Store current balances in position for use by EvaluateStrategyBehaviour
+            # Convert Decimal to float for JSON serialization
+            if user_balances:
+                position["current_token_balances"] = {
+                    k: float(v) for k, v in user_balances.items()
+                }
+                self.context.logger.info(
+                    f"Stored current_token_balances for position {position.get('pool_address')}: {list(user_balances.keys())}"
                 )
 
             if (

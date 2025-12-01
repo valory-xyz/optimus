@@ -35,8 +35,8 @@ CHAIN_NAMES = {
 
 # Sugar contract addresses
 SUGAR_CONTRACT_ADDRESSES = {
-    MODE_CHAIN_ID: "0x9ECd2f44f72E969fa3F3C4e4F63bc61E0C08F31F",  # Mode Sugar contract address
-    OPTIMISM_CHAIN_ID: "0xA64db2D254f07977609def75c3A7db3eDc72EE1D",  # Optimism Sugar contract address
+    MODE_CHAIN_ID: "0x280AC155a06e2aDB0718179C2f916BA90C32FEAB",  # Mode Sugar contract address
+    OPTIMISM_CHAIN_ID: "0x1d5E1893fCfb62CAaCE48eB2BAF7a6E134a8a27c",  # Optimism Sugar contract address
 }
 
 # RewardsSugar contract addresses
@@ -63,91 +63,155 @@ DEFAULT_DAYS = 30
 LP_SUGAR_ABI = [
     {
         "inputs": [
-            {"internalType": "uint256", "name": "limit", "type": "uint256"},
-            {"internalType": "uint256", "name": "offset", "type": "uint256"}
+        {
+            "name": "_limit",
+            "type": "uint256"
+        },
+        {
+            "name": "_offset",
+            "type": "uint256"
+        },
+        {
+            "name": "_filter",
+            "type": "uint256"
+        }
         ],
         "name": "all",
         "outputs": [
+        {
+            "components": [
             {
-                "components": [
-                    {"internalType": "address", "name": "id", "type": "address"},
-                    {"internalType": "string", "name": "symbol", "type": "string"},
-                    {"internalType": "uint8", "name": "decimals", "type": "uint8"},
-                    {"internalType": "uint256", "name": "liquidity", "type": "uint256"},
-                    {"internalType": "int24", "name": "type", "type": "int24"},
-                    {"internalType": "int24", "name": "tick", "type": "int24"},
-                    {"internalType": "uint160", "name": "sqrt_ratio", "type": "uint160"},
-                    {"internalType": "address", "name": "token0", "type": "address"},
-                    {"internalType": "uint256", "name": "reserve0", "type": "uint256"},
-                    {"internalType": "uint256", "name": "staked0", "type": "uint256"},
-                    {"internalType": "address", "name": "token1", "type": "address"},
-                    {"internalType": "uint256", "name": "reserve1", "type": "uint256"},
-                    {"internalType": "uint256", "name": "staked1", "type": "uint256"},
-                    {"internalType": "address", "name": "gauge", "type": "address"},
-                    {"internalType": "uint256", "name": "gauge_liquidity", "type": "uint256"},
-                    {"internalType": "bool", "name": "gauge_alive", "type": "bool"},
-                    {"internalType": "address", "name": "fee", "type": "address"},
-                    {"internalType": "address", "name": "bribe", "type": "address"},
-                    {"internalType": "address", "name": "factory", "type": "address"},
-                    {"internalType": "uint256", "name": "emissions", "type": "uint256"},
-                    {"internalType": "address", "name": "emissions_token", "type": "address"},
-                    {"internalType": "uint256", "name": "pool_fee", "type": "uint256"},
-                    {"internalType": "uint256", "name": "unstaked_fee", "type": "uint256"},
-                    {"internalType": "uint256", "name": "token0_fees", "type": "uint256"},
-                    {"internalType": "uint256", "name": "token1_fees", "type": "uint256"},
-                    {"internalType": "address", "name": "nfpm", "type": "address"},
-                    {"internalType": "address", "name": "alm", "type": "address"},
-                    {"internalType": "address", "name": "root", "type": "address"}
-                ],
-                "internalType": "struct LpSugar.Pool[]",
-                "name": "",
-                "type": "tuple[]"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "address", "name": "lp", "type": "address"}
-        ],
-        "name": "byAddress",
-        "outputs": [
+                "name": "lp",
+                "type": "address"
+            },
             {
-                "components": [
-                    {"internalType": "address", "name": "id", "type": "address"},
-                    {"internalType": "string", "name": "symbol", "type": "string"},
-                    {"internalType": "uint8", "name": "decimals", "type": "uint8"},
-                    {"internalType": "uint256", "name": "liquidity", "type": "uint256"},
-                    {"internalType": "int24", "name": "type", "type": "int24"},
-                    {"internalType": "int24", "name": "tick", "type": "int24"},
-                    {"internalType": "uint160", "name": "sqrt_ratio", "type": "uint160"},
-                    {"internalType": "address", "name": "token0", "type": "address"},
-                    {"internalType": "uint256", "name": "reserve0", "type": "uint256"},
-                    {"internalType": "uint256", "name": "staked0", "type": "uint256"},
-                    {"internalType": "address", "name": "token1", "type": "address"},
-                    {"internalType": "uint256", "name": "reserve1", "type": "uint256"},
-                    {"internalType": "uint256", "name": "staked1", "type": "uint256"},
-                    {"internalType": "address", "name": "gauge", "type": "address"},
-                    {"internalType": "uint256", "name": "gauge_liquidity", "type": "uint256"},
-                    {"internalType": "bool", "name": "gauge_alive", "type": "bool"},
-                    {"internalType": "address", "name": "fee", "type": "address"},
-                    {"internalType": "address", "name": "bribe", "type": "address"},
-                    {"internalType": "address", "name": "factory", "type": "address"},
-                    {"internalType": "uint256", "name": "emissions", "type": "uint256"},
-                    {"internalType": "address", "name": "emissions_token", "type": "address"},
-                    {"internalType": "uint256", "name": "pool_fee", "type": "uint256"},
-                    {"internalType": "uint256", "name": "unstaked_fee", "type": "uint256"},
-                    {"internalType": "uint256", "name": "token0_fees", "type": "uint256"},
-                    {"internalType": "uint256", "name": "token1_fees", "type": "uint256"},
-                    {"internalType": "address", "name": "nfpm", "type": "address"},
-                    {"internalType": "address", "name": "alm", "type": "address"},
-                    {"internalType": "address", "name": "root", "type": "address"}
-                ],
-                "internalType": "struct LpSugar.Pool",
-                "name": "",
-                "type": "tuple"
+                "name": "symbol",
+                "type": "string"
+            },
+            {
+                "name": "decimals",
+                "type": "uint8"
+            },
+            {
+                "name": "liquidity",
+                "type": "uint256"
+            },
+            {
+                "name": "type",
+                "type": "int24"
+            },
+            {
+                "name": "tick",
+                "type": "int24"
+            },
+            {
+                "name": "sqrt_ratio",
+                "type": "uint160"
+            },
+            {
+                "name": "token0",
+                "type": "address"
+            },
+            {
+                "name": "reserve0",
+                "type": "uint256"
+            },
+            {
+                "name": "staked0",
+                "type": "uint256"
+            },
+            {
+                "name": "token1",
+                "type": "address"
+            },
+            {
+                "name": "reserve1",
+                "type": "uint256"
+            },
+            {
+                "name": "staked1",
+                "type": "uint256"
+            },
+            {
+                "name": "gauge",
+                "type": "address"
+            },
+            {
+                "name": "gauge_liquidity",
+                "type": "uint256"
+            },
+            {
+                "name": "gauge_alive",
+                "type": "bool"
+            },
+            {
+                "name": "fee",
+                "type": "address"
+            },
+            {
+                "name": "bribe",
+                "type": "address"
+            },
+            {
+                "name": "factory",
+                "type": "address"
+            },
+            {
+                "name": "emissions",
+                "type": "uint256"
+            },
+            {
+                "name": "emissions_token",
+                "type": "address"
+            },
+            {
+                "name": "emissions_cap",
+                "type": "uint256"
+            },
+            {
+                "name": "pool_fee",
+                "type": "uint256"
+            },
+            {
+                "name": "unstaked_fee",
+                "type": "uint256"
+            },
+            {
+                "name": "token0_fees",
+                "type": "uint256"
+            },
+            {
+                "name": "token1_fees",
+                "type": "uint256"
+            },
+            {
+                "name": "locked",
+                "type": "uint256"
+            },
+            {
+                "name": "emerging",
+                "type": "uint256"
+            },
+            {
+                "name": "created_at",
+                "type": "uint32"
+            },
+            {
+                "name": "nfpm",
+                "type": "address"
+            },
+            {
+                "name": "alm",
+                "type": "address"
+            },
+            {
+                "name": "root",
+                "type": "address"
             }
+            ],
+            "name": "",
+            "type": "tuple[]"
+        }
         ],
         "stateMutability": "view",
         "type": "function"
@@ -670,7 +734,7 @@ def get_epochs_by_address(pool_id, chain, limit=30, offset=0):
         logger.error(f"Error fetching epochs for pool {pool_id}: {str(e)}")
         return None
 
-def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", days=365, risk_free_rate=0.03):
+def get_velodrome_pool_sharpe_ratio(pool_id, chain, pool_fee, timerange="NINETY_DAYS", days=365, risk_free_rate=0.03):
     """
     Calculate Sharpe ratio for a Velodrome pool using historical epoch data from RewardsSugar.
     
@@ -715,15 +779,6 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
                 chain_id = cid
                 break
         
-        sugar_address = SUGAR_CONTRACT_ADDRESSES.get(chain_id)
-        rpc_url = RPC_ENDPOINTS.get(chain_id)
-        w3 = get_web3_connection(rpc_url)
-        
-        # Use the LP_SUGAR_ABI constant
-        abi = LP_SUGAR_ABI        
-        contract_instance = w3.eth.contract(address=sugar_address, abi=abi)
-        pool_data = contract_instance.functions.byAddress(pool_id).call()
-        pool_fee_rate = float(pool_data[21]) / 1e6  # Pool fee rate
         
         # Use actual liquidity values as a proxy for share price
         # This avoids using synthetic share prices
@@ -732,7 +787,7 @@ def get_velodrome_pool_sharpe_ratio(pool_id, chain, timerange="NINETY_DAYS", day
         # Estimate fee returns
         fee_returns = []
         for i in range(len(timestamps)):
-            fee_return = volumes[i] * pool_fee_rate / total_liquidities[i] if total_liquidities[i] > 0 else 0
+            fee_return = volumes[i] * pool_fee / total_liquidities[i] if total_liquidities[i] > 0 else 0
             fee_returns.append(fee_return)
         
         # Convert to pandas Series for easier calculation
@@ -986,8 +1041,8 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
         # Continue fetching until no more pools are found
         while True:
             try:
-                # Call the contract directly
-                raw_pools = contract_instance.functions.all(limit, offset).call()
+                # Call the contract directly with filter parameter (0 = no filter)
+                raw_pools = contract_instance.functions.all(limit, offset, 0).call()
                 
                 if not raw_pools:
                     break
@@ -1018,13 +1073,17 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                         "factory": pool_data[18],
                         "emissions": pool_data[19],
                         "emissions_token": pool_data[20],
-                        "pool_fee": pool_data[21],
-                        "unstaked_fee": pool_data[22],
-                        "token0_fees": pool_data[23],
-                        "token1_fees": pool_data[24],
-                        "nfpm": pool_data[25],
-                        "alm": pool_data[26],
-                        "root": pool_data[27],
+                        "emissions_cap": pool_data[21],
+                        "pool_fee": pool_data[22],
+                        "unstaked_fee": pool_data[23],
+                        "token0_fees": pool_data[24],
+                        "token1_fees": pool_data[25],
+                        "locked": pool_data[26],
+                        "emerging": pool_data[27],
+                        "created_at": pool_data[28],
+                        "nfpm": pool_data[29],
+                        "alm": pool_data[30],
+                        "root": pool_data[31],
                     }
                     # Only log if type is not 0 or -1 and tick is not 0
                     if pool['type'] not in [0, -1] and pool['tick'] != 0:
@@ -1080,7 +1139,8 @@ def get_velodrome_pools_via_sugar(lp_sugar_address, rpc_url=None, chain_id=MODE_
                 ),
                 "inputTokenBalances": [str(pool["reserve0"]), str(pool["reserve1"])],
                 "cumulativeVolumeUSD": "0",  # Not available directly
-                "sugar_data": pool,  # Store the original data
+                "sugar_data": pool,  # Store the original data,
+                "pool_fee": pool["pool_fee"]
             }
             
             formatted_pools.append(formatted_pool)
@@ -2506,7 +2566,8 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "volume": float(pool.get("cumulativeVolumeUSD", 0)),
             "chain": chain_name,
             "is_cl_pool": is_cl_pool,  # Add flag for concentrated liquidity pool
-            "is_stable": pool.get("is_stable")
+            "is_stable": pool.get("is_stable"),
+            "pool_fee": pool.get("pool_fee")
         }
 
         position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_signer, x402_proxy)  
@@ -2527,7 +2588,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             # Calculate Sharpe ratio
             try:
                 sharpe_ratio = get_velodrome_pool_sharpe_ratio(
-                    pool["id"], chain_name.upper()
+                    pool["id"], chain_name.upper(), pool["pool_fee"]
                 )
                 formatted_pool["sharpe_ratio"] = sharpe_ratio
             except Exception as e:
@@ -2891,7 +2952,7 @@ def calculate_metrics(
         token1_address = position.get("token1", "")
         token0_symbol = position.get("token0_symbol", "")
         token1_symbol = position.get("token1_symbol", "")
-        
+        pool_fee = position.get("pool_fee", 0)
         if not pool_id or not chain:
             logger.error("Missing required position details: pool_address or chain")
             return None
@@ -2932,7 +2993,7 @@ def calculate_metrics(
             
         # Calculate Sharpe ratio
         sharpe_ratio = get_velodrome_pool_sharpe_ratio(
-            pool_id, chain.upper()
+            pool_id, chain.upper(), pool_fee
         )
         
         # Calculate depth score and max position size

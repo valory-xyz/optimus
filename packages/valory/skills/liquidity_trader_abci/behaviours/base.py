@@ -1890,13 +1890,16 @@ class LiquidityTraderBaseBehaviour(
     ) -> Generator[None, None, Optional[float]]:
         """Fetch token prices from CoinGecko and calculate SMA over specified hours.
 
-        Args:
-            token_address: Token contract address
-            chain: Chain name
-            num_hours: Number of hourly measurements (default 24)
+        :param token_address: Token contract address.
+        :type token_address: str
+        :param chain: Chain name.
+        :type chain: str
+        :param num_hours: Number of hourly measurements.
+        :type num_hours: int
 
-        Returns:
-            SMA price as float, or None if unable to fetch
+        :yields: None, for async-style generator progression.
+        :return: Final SMA price produced by the generator.
+        :rtype: Optional[float]
         """
         try:
             # Get CoinGecko ID from token address

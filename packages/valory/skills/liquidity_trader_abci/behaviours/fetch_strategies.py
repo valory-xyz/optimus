@@ -1289,7 +1289,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 user_balances = yield from self._get_current_token_balances(
                     position, chain
                 )
-            
+
             # Store current balances in position for use by EvaluateStrategyBehaviour
             # Convert Decimal to float for JSON serialization
             if user_balances:
@@ -2288,16 +2288,20 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
             return withdrawal_value
         elif chain == "optimism":
-            all_erc20_transfers_optimism = yield from self._track_erc20_transfers_optimism(
-                self.params.safe_contract_addresses.get(chain),
-                int(datetime.now().timestamp()),
+            all_erc20_transfers_optimism = (
+                yield from self._track_erc20_transfers_optimism(
+                    self.params.safe_contract_addresses.get(chain),
+                    int(datetime.now().timestamp()),
+                )
             )
             if not all_erc20_transfers_optimism:
                 self.context.logger.warning(
                     "Failed to fetch ERC20 transfers, returning zero withdrawal value"
                 )
                 return Decimal(0)
-            outgoing_erc20_transfers_optimism = all_erc20_transfers_optimism.get("outgoing", {})
+            outgoing_erc20_transfers_optimism = all_erc20_transfers_optimism.get(
+                "outgoing", {}
+            )
             self.context.logger.info(
                 f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_optimism}"
             )
@@ -2387,8 +2391,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             for transfer in usdc_transfers:
                 to_address = transfer.get("to_address")
                 if to_address:
-                    is_not_other_contract = yield from self._is_not_other_contract_optimism(
-                        to_address
+                    is_not_other_contract = (
+                        yield from self._is_not_other_contract_optimism(to_address)
                     )
                     if is_not_other_contract:
                         withdrawal_transfers.append(transfer)

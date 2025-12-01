@@ -706,15 +706,23 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _check_tip_exit_conditions(
         self, position: Dict
     ) -> Generator[None, None, Tuple[bool, str]]:
-        """Check if position can be exited based on TiP conditions
+        """Check if a position can be exited based on TiP conditions.
 
         New conditions:
-        - TiP = min(MPT, Position Yield < SVy, 21 days)
-        - Trailing stop-loss: Position Yield < SVy
+            - TiP = min(MPT, Position Yield < SVy, 21 days)
+            - Trailing stop-loss: Position Yield < SVy
+
         Where:
-        - Position Yield = current yield per day (from position APR)
-        - S = stoploss threshold multiplier (configurable, default 0.6)
-        - Vy = yield per day at entry (from entry APR)
+            - Position Yield = current yield per day (derived from position APR)
+            - S = stoploss threshold multiplier (default 0.6)
+            - Vy = yield per day at entry
+
+        :param position: Dictionary containing position data.
+        :type position: Dict
+
+        :yields: None for async-style operation.
+        :return: Tuple of (can_exit, reason).
+        :rtype: Tuple[bool, str]
         """
         try:
             entry_cost = position.get("entry_cost", 0)
@@ -851,13 +859,13 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return True, "Error in TiP check - allowing exit"
 
     def _calculate_position_yield_per_day(self, position: Dict) -> Optional[float]:
-        """Calculate position yield per day from position APR
+        """Calculate the position's yield per day from its APR.
 
-        Args:
-            position: Position dictionary containing APR data
+        :param position: Position dictionary containing APR data.
+        :type position: Dict
 
-        Returns:
-            Yield per day as decimal (e.g., 0.000548 for 20% APR), or None if APR missing
+        :return: Daily yield as a decimal, or None if APR is missing.
+        :rtype: Optional[float]
         """
         apr = position.get("apr")
         if apr is None:
@@ -874,9 +882,17 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     ) -> Generator[None, None, Dict[str, float]]:
         """Get current token balances for a position.
 
-        This is a helper method to get token balances for CurrentValueRatio calculation.
-        First tries to use stored balances from FetchStrategiesBehaviour, then falls back
-        to recalculating if needed.
+        First uses cached balances from FetchStrategiesBehaviour; falls back to
+        recomputing if unavailable.
+
+        :param position: Position dictionary containing token data.
+        :type position: Dict
+        :param chain: Name of the blockchain.
+        :type chain: str
+
+        :yields: None for async-style operation.
+        :return: Mapping of token addresses to balances.
+        :rtype: Dict[str, float]
         """
         # First, try to use stored balances from FetchStrategiesBehaviour (most efficient)
         stored_balances = position.get("current_token_balances")
@@ -886,7 +902,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             )
             # Add VELO rewards if position is staked (for Velodrome positions)
             result = stored_balances.copy()
-            if position.get("staked", False) and position.get("dex_type") == "velodrome":
+            if (
+                position.get("staked", False)
+                and position.get("dex_type") == "velodrome"
+            ):
                 if hasattr(self, "_get_velodrome_pending_rewards"):
                     user_address = self.params.safe_contract_addresses.get(chain)
                     velo_rewards = yield from self._get_velodrome_pending_rewards(
@@ -944,23 +963,22 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _calculate_current_value_ratio(
         self, position: Dict, chain: str
     ) -> Generator[None, None, Optional[float]]:
-        """Calculate CurrentValueRatio using SMA prices
+        """Calculate the CurrentValueRatio using SMA prices.
 
-        Formula: CurrentValueRatio = (Q1_current*SMA1 + Q0_current*SMA0 + Qr*SMAr) / (Q1_entry*SMA1 + Q0_entry*SMA0)
-        Where:
-        - Qn_current = current quantity of token n (decimal-adjusted)
-        - Qn_entry = entry quantity of token n (decimal-adjusted)
-        - SMAn = SMA price of token n (in USD)
-        - Qr, SMAr = VELO rewards (for staked Velodrome positions)
+        Formula:
+            CurrentValueRatio =
+            (Q1_current*SMA1 + Q0_current*SMA0 + Qr*SMAr)
+            /
+            (Q1_entry*SMA1 + Q0_entry*SMA0)
 
-        Both numerator and denominator are in USD value.
+        :param position: Position dictionary.
+        :type position: Dict
+        :param chain: Name of the blockchain.
+        :type chain: str
 
-        Args:
-            position: Position dictionary
-            chain: Chain name
-
-        Returns:
-            CurrentValueRatio as float, or None if unable to calculate
+        :yields: None for async-style operation.
+        :return: CurrentValueRatio or None if computation fails.
+        :rtype: Optional[float]
         """
         try:
             # Get token addresses
@@ -1036,7 +1054,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # So: Current Value = Entry Value + Yield = Entry Value + yield_usd
             yield_usd = position.get("yield_usd", 0.0)
             numerator = denominator + yield_usd
-            
+
             self.context.logger.info(
                 f"CurrentValueRatio numerator: Entry value ${denominator:.6f} + Yield ${yield_usd:.6f} = ${numerator:.6f}"
             )
@@ -1067,21 +1085,18 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
     def _calculate_min_req_position_value(
         self, position: Dict, S: float
     ) -> Optional[float]:
-        """Calculate MinReqPositionValue
+        """Calculate the MinReqPositionValue.
 
-        Formula: MinReqPositionValue = S * Vy * t/T + 1
-        Where:
-        - S = stoploss multiplier
-        - Vy = yield per day (decimal)
-        - t = time position held (in minutes)
-        - T = time in year (in minutes: 365 * 24 * 60)
+        Formula:
+            MinReqPositionValue = S * Vy * t/T + 1
 
-        Args:
-            position: Position dictionary
-            S: Stoploss threshold multiplier
+        :param position: Dictionary containing position data.
+        :type position: Dict
+        :param S: Stoploss threshold multiplier.
+        :type S: float
 
-        Returns:
-            MinReqPositionValue as float, or None if unable to calculate
+        :return: Minimum required position value, or None.
+        :rtype: Optional[float]
         """
         try:
             # Get entry APR with backward compatibility
@@ -1133,8 +1148,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
         Applies short look-back SMA to advertised yields to dampen transient spikes.
         This implements the opportunity cost check.
 
-        Returns:
-            Effective yield per day (as decimal) of best opportunity, or None if no opportunities
+        :return: Effective daily yield as decimal, or None if unavailable.
+        :rtype: Optional[float]
         """
         try:
             if not self.trading_opportunities:
@@ -1434,7 +1449,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
                 self.context.logger.info(
                     f"Evaluating opportunity- Dex:{selected_opportunity.get('dex_type')} Pool:{selected_opportunity.get('pool_address')} Concentrated Liquidity:{selected_opportunity.get('is_cl_pool')}"
-                    )
+                )
 
             # Track final selected opportunities
             yield from self._track_opportunities(

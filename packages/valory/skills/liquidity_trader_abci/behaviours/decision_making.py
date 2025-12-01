@@ -3540,17 +3540,31 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
         is_cl_pool: bool,
         percent_in_bounds: float = 1.0,
     ) -> float:
-        """Calculate minimum days using revised TiP formula
+        """Calculate minimum hold days using the revised TiP formula.
 
-        Formula: MPT = CT / Vy * td
+        Formula:
+            MPT = CT / Vy * td
+
         Where:
-        - CT = 2*ri + 2*gi (as percentage of allocation value)
-        - ri = slippage (as % of principal)
-        - gi = gas cost (as % of principal)
-        - Vy = APR / 365 (yield per day as decimal)
-        - td = time in days (1 for daily yield)
+            - CT = 2*ri + 2*gi (as percentage of allocation value)
+            - ri = slippage (as % of principal)
+            - gi = gas cost (as % of principal)
+            - Vy = APR / 365 (yield per day as decimal)
+            - td = time in days (1 for daily yield)
 
-        Note: apr is passed as decimal (e.g., 0.20 for 20%)
+        :param apr: Annual percentage rate as a decimal (e.g., 0.20 for 20%).
+        :type apr: float
+        :param principal: Principal investment amount in USD.
+        :type principal: float
+        :param entry_cost: Entry cost in USD (including gas and slippage).
+        :type entry_cost: float
+        :param is_cl_pool: Whether this is a concentrated-liquidity pool.
+        :type is_cl_pool: bool
+        :param percent_in_bounds: Percentage of time price is expected to remain in bounds.
+        :type percent_in_bounds: float
+
+        :return: Minimum hold days calculated using the TiP formula.
+        :rtype: float
         """
         try:
             if apr <= 0.0 or principal <= 0.0 or entry_cost <= 0.0:

@@ -148,7 +148,7 @@ handlers:
   signing:
     args: {}
     class_name: SigningHandler
-  srr_handler:
+  srr:
     args: {}
     class_name: SrrHandler
   tendermint:

@@ -56,8 +56,8 @@ ROUNDS_INFO = {
         "transitions": {},
     },
     "CheckStakingKPIMetRound": {
-        "name": "Checking staking kpi",
-        "description": "Checks if the KPI for earning staking rewards is met; if not, ensures compliance by performing vanity transactions.",
+        "name": "Checking staking requirements",
+        "description": "Checks if the requirements for earning staking rewards are met; if not, ensures compliance by performing additional transactions.",
         "transitions": {},
     },
     "CheckTransactionHistoryRound": {
@@ -81,18 +81,18 @@ ROUNDS_INFO = {
         "transitions": {},
     },
     "FetchStrategiesRound": {
-        "name": "Fetching the selected protocols and params",
-        "description": "Fetches the selected protocols/strategies and the relevant configurations",
+        "name": "Loading trading strategies",
+        "description": "Retrieves the selected trading protocols/strategies and their configurations",
         "transitions": {},
     },
     "FinalizationRound": {
-        "name": "Sending a transaction",
-        "description": "Sends a transaction for mining",
+        "name": "Submitting transaction",
+        "description": "Submits a transaction to the blockchain for processing",
         "transitions": {},
     },
     "GetPositionsRound": {
         "name": "Checking the balances",
-        "description": "Identifies the service's positions and checks the balance of its assets.",
+        "description": "Identifies the agent's positions and checks the balance of its assets.",
         "transitions": {},
     },
     "PostTxSettlementRound": {
@@ -101,12 +101,12 @@ ROUNDS_INFO = {
         "transitions": {},
     },
     "RandomnessTransactionSubmissionRound": {
-        "name": "Getting some randomness",
-        "description": "Gets randomness from a decentralized randomness source",
+        "name": "Generating randomness",
+        "description": "Obtains randomness from a decentralized randomness source for secure decision making",
         "transitions": {},
     },
     "RegistrationRound": {
-        "name": "Registering agents ",
+        "name": "Registering agents",
         "description": "Initializes the agent registration process",
         "transitions": {},
     },
@@ -116,8 +116,8 @@ ROUNDS_INFO = {
         "transitions": {},
     },
     "ResetAndPauseRound": {
-        "name": "Cleaning up and sleeping for some time",
-        "description": "Cleans up and sleeps for some time before running again",
+        "name": "Preparing for next cycle",
+        "description": "Cleans up and takes a break before starting the next trading cycle",
         "transitions": {},
     },
     "ResetRound": {
@@ -152,7 +152,7 @@ ROUNDS_INFO = {
     },
     "ValidateTransactionRound": {
         "name": "Validating the transaction",
-        "description": "Checks that the transaction was succesful",
+        "description": "Checks that the transaction was successful",
         "transitions": {},
     },
     "WithdrawFundsRound": {

@@ -1181,7 +1181,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 # Get VELO token address for the chain
                 velo_token_address = self._get_velo_token_address(chain)
                 if velo_token_address:
-                    user_balances[velo_token_address] = velo_rewards // 10**18
+                    # velo_rewards is already decimal-adjusted (divided by 10**18 in _get_velodrome_pending_rewards)
+                    user_balances[velo_token_address] = velo_rewards
                     self.context.logger.info(
                         f"Added VELO rewards to position: {velo_rewards}"
                     )
@@ -1258,7 +1259,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 )
 
         # Update position with current value and corrected yield calculation
-        self._update_position_with_current_value(
+        yield from self._update_position_with_current_value(
             position, user_share, chain, user_balances, token_info, token_prices
         )
 
@@ -1287,6 +1288,16 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             if user_balances is None:
                 user_balances = yield from self._get_current_token_balances(
                     position, chain
+                )
+            
+            # Store current balances in position for use by EvaluateStrategyBehaviour
+            # Convert Decimal to float for JSON serialization
+            if user_balances:
+                position["current_token_balances"] = {
+                    k: float(v) for k, v in user_balances.items()
+                }
+                self.context.logger.info(
+                    f"Stored current_token_balances for position {position.get('pool_address')}: {list(user_balances.keys())}"
                 )
 
             if (
@@ -2276,6 +2287,27 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
             return withdrawal_value
+        elif chain == "optimism":
+            all_erc20_transfers_optimism = yield from self._track_erc20_transfers_optimism(
+                self.params.safe_contract_addresses.get(chain),
+                int(datetime.now().timestamp()),
+            )
+            if not all_erc20_transfers_optimism:
+                self.context.logger.warning(
+                    "Failed to fetch ERC20 transfers, returning zero withdrawal value"
+                )
+                return Decimal(0)
+            outgoing_erc20_transfers_optimism = all_erc20_transfers_optimism.get("outgoing", {})
+            self.context.logger.info(
+                f"Outgoing ERC20 transfers: {outgoing_erc20_transfers_optimism}"
+            )
+            withdrawal_value = (
+                yield from self._track_and_calculate_withdrawal_value_optimism(
+                    outgoing_erc20_transfers_optimism,
+                )
+            )
+            self.context.logger.info(f"Withdrawal value: ${withdrawal_value}")
+            return withdrawal_value
         else:
             return Decimal(0)
 
@@ -2312,7 +2344,59 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.info(f"USDC transfers: {usdc_transfers}")
             self.context.logger.info(f"Withdrawal transfers: {withdrawal_transfers}")
             withdrawal_value = yield from self._calculate_total_withdrawal_value(
-                withdrawal_transfers
+                withdrawal_transfers, chain="mode"
+            )
+            return withdrawal_value
+        except Exception as e:
+            self.context.logger.error(
+                f"Error calculating total withdrawal value: {str(e)}"
+            )
+            return Decimal(0)
+
+    def _track_and_calculate_withdrawal_value_optimism(
+        self,
+        outgoing_erc20_transfers: Dict,
+    ) -> Generator[None, None, Decimal]:
+        """Track USDC transfers from safe address and handle withdrawal logic for Optimism."""
+        try:
+            if not outgoing_erc20_transfers:
+                self.context.logger.warning(
+                    "No outgoing transfers found for Optimism chain"
+                )
+                return Decimal(0)
+
+            # Track USDC transfers
+            usdc_transfers = []
+            withdrawal_transfers = []
+            withdrawal_value = Decimal(0)
+
+            # Sort transfers by timestamp
+            sorted_outgoing_transfers = []
+            for _, transfers in outgoing_erc20_transfers.items():
+                for transfer in transfers:
+                    if isinstance(transfer, dict) and "timestamp" in transfer:
+                        sorted_outgoing_transfers.append(transfer)
+
+            sorted_outgoing_transfers.sort(key=lambda x: x["timestamp"])
+
+            for transfer in sorted_outgoing_transfers:
+                if transfer.get("symbol") == "USDC":
+                    usdc_transfers.append(transfer)
+
+            # Filter out transfers where to_address is "OtherContract"
+            for transfer in usdc_transfers:
+                to_address = transfer.get("to_address")
+                if to_address:
+                    is_not_other_contract = yield from self._is_not_other_contract_optimism(
+                        to_address
+                    )
+                    if is_not_other_contract:
+                        withdrawal_transfers.append(transfer)
+
+            self.context.logger.info(f"USDC transfers: {usdc_transfers}")
+            self.context.logger.info(f"Withdrawal transfers: {withdrawal_transfers}")
+            withdrawal_value = yield from self._calculate_total_withdrawal_value(
+                withdrawal_transfers, chain="optimism"
             )
             return withdrawal_value
         except Exception as e:
@@ -2324,6 +2408,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
     def _calculate_total_withdrawal_value(
         self,
         withdrawal_transfers: List[Dict],
+        chain: str = "mode",
     ) -> Generator[None, None, Decimal]:
         """Calculate the total withdrawal value."""
         withdrawal_value = Decimal(0)
@@ -2346,10 +2431,12 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             else:
                 self.context.logger.warning("No timestamp found in transfer")
                 continue
-            # Get USDC coin ID for Mode chain
-            usdc_coin_id = self.get_coin_id_from_symbol("USDC", "mode")
+            # Get USDC coin ID for the specified chain
+            usdc_coin_id = self.get_coin_id_from_symbol("USDC", chain)
             if not usdc_coin_id:
-                self.context.logger.warning("No coin ID found for USDC on Mode chain")
+                self.context.logger.warning(
+                    f"No coin ID found for USDC on {chain} chain"
+                )
                 continue
 
             usdc_price = yield from self._fetch_historical_token_price(
@@ -3821,6 +3908,85 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Error checking address {from_address}: {e}")
             return False
 
+    def _is_not_other_contract_optimism(
+        self, to_address: str
+    ) -> Generator[None, None, bool]:
+        """Check if to_address is EOA or GnosisSafe (i.e., NOT OtherContract)."""
+        if not to_address:
+            return False
+
+        # Exclude zero address
+        if to_address.lower() in [
+            "0x0000000000000000000000000000000000000000",
+            "0x0",
+            "",
+        ]:
+            return False
+
+        # Check cache first
+        cache_key = f"{CONTRACT_CHECK_CACHE_PREFIX}optimism_{to_address.lower()}"
+        cached_result = yield from self._read_kv((cache_key,))
+
+        if cached_result and cached_result.get(cache_key):
+            try:
+                cached_data = json.loads(cached_result[cache_key])
+                return cached_data.get("is_eoa", False)
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        try:
+            # Use Optimism RPC to check if address is a contract
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "eth_getCode",
+                "params": [to_address, "latest"],
+                "id": 1,
+            }
+
+            success, result = yield from self._request_with_retries(
+                endpoint="https://mainnet.optimism.io",
+                method="POST",
+                body=payload,
+                rate_limited_code=429,
+                rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                retry_wait=self.params.sleep_time,
+            )
+
+            if not success:
+                self.context.logger.error("Failed to check contract code")
+                return False
+
+            code = result.get("result", "0x")
+
+            # If code is '0x', it's an EOA
+            if code == "0x":
+                is_eoa = True
+            else:
+                # If it has code, check if it's a GnosisSafe
+                safe_check_url = f"https://safe-transaction-optimism.safe.global/api/v1/safes/{to_address}/"
+                success, _ = yield from self._request_with_retries(
+                    endpoint=safe_check_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
+                is_eoa = success
+
+            # Cache the result permanently (no TTL)
+            cache_data = {"is_eoa": is_eoa}
+            yield from self._write_kv({cache_key: json.dumps(cache_data)})
+
+            if not is_eoa:
+                self.context.logger.info(
+                    f"Excluding transfer to contract: {to_address}"
+                )
+            return is_eoa
+
+        except Exception as e:
+            self.context.logger.error(f"Error checking address {to_address}: {e}")
+            return False
+
     def _save_transfer_data_optimism(self, data: Dict) -> Generator[None, None, None]:
         """Save Optimism transfer data to kv_store."""
         yield from self._write_kv({"optimism_transfer_data": json.dumps(data)})
@@ -4180,6 +4346,143 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 f"Error fetching Optimism outgoing transfers: {e}"
             )
             return {}
+
+    def _track_erc20_transfers_optimism(
+        self,
+        safe_address: str,
+        final_timestamp: int,
+    ) -> Generator[None, None, Dict[str, Dict[str, List[Dict]]]]:
+        """Fetch and organize ERC20 token transfers for Optimism chain using Safe API."""
+        try:
+            all_transfers = {"outgoing": {}}
+
+            if not safe_address:
+                self.context.logger.warning(
+                    "No address provided for fetching Optimism ERC20 transfers"
+                )
+                return all_transfers
+
+            # Use SafeGlobal API for Optimism transfers
+            base_url = "https://safe-transaction-optimism.safe.global/api/v1"
+            transfers_url = f"{base_url}/safes/{safe_address}/transfers/"
+
+            processed_count = 0
+            seen_tx_ids = set()
+            current_date = datetime.fromtimestamp(final_timestamp).strftime("%Y-%m-%d")
+
+            while True:
+                success, response_json = yield from self._request_with_retries(
+                    endpoint=transfers_url,
+                    headers={"Accept": "application/json"},
+                    rate_limited_code=429,
+                    rate_limited_callback=self.coingecko.rate_limited_status_callback,
+                    retry_wait=self.params.sleep_time,
+                )
+
+                if not success:
+                    self.context.logger.error("Failed to fetch Optimism transfers")
+                    break
+
+                transfers = response_json.get("results", [])
+
+                if not transfers:
+                    break
+
+                for transfer in transfers:
+                    # Parse timestamp
+                    timestamp = transfer.get("executionDate")
+                    if not timestamp:
+                        continue
+
+                    # Handle ISO format timestamp
+                    try:
+                        tx_datetime = datetime.fromisoformat(
+                            timestamp.replace("Z", "+00:00")
+                        )
+                        tx_date = tx_datetime.strftime("%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        self.context.logger.warning(
+                            f"Invalid timestamp format: {timestamp}"
+                        )
+                        continue
+
+                    if tx_date > current_date:
+                        continue
+
+                    # Only process outgoing transfers (where from address is equal to our safe address)
+                    if transfer.get("from").lower() != safe_address.lower():
+                        continue
+
+                    transfer_type = transfer.get("type", "")
+
+                    # Only process ERC20 transfers
+                    if transfer_type != "ERC20_TRANSFER":
+                        continue
+
+                    # Deduplicate per tx hash + type
+                    unique_id = f"{transfer.get('transactionHash', '')}:{transfer_type}:{transfer.get('value', '')}"
+                    if unique_id in seen_tx_ids:
+                        continue
+                    seen_tx_ids.add(unique_id)
+
+                    # Token transfer
+                    token_info = transfer.get("tokenInfo", {})
+                    token_address = transfer.get("tokenAddress", "")
+                    if not token_info:
+                        if token_address:
+                            decimals = yield from self._get_token_decimals(
+                                "optimism", token_address
+                            )
+                            symbol = yield from self._get_token_symbol(
+                                "optimism", token_address
+                            )
+                        else:
+                            continue
+                    else:
+                        symbol = token_info.get("symbol", "Unknown")
+                        decimals = int(token_info.get("decimals", 18) or 18)
+
+                    # Only process USDC transfers
+                    if symbol.upper() != "USDC":
+                        continue
+
+                    value_raw = int(transfer.get("value", "0") or "0")
+                    amount = value_raw / (10**decimals)
+
+                    if amount <= 0:
+                        continue
+
+                    transfer_data = {
+                        "from_address": safe_address,
+                        "to_address": transfer.get("to"),
+                        "amount": amount,
+                        "token_address": token_address,
+                        "symbol": symbol,
+                        "timestamp": timestamp,
+                        "tx_hash": transfer.get("transactionHash", ""),
+                        "type": "token",
+                    }
+
+                    if tx_date not in all_transfers["outgoing"]:
+                        all_transfers["outgoing"][tx_date] = []
+                    all_transfers["outgoing"][tx_date].append(transfer_data)
+                    processed_count += 1
+
+                self.context.logger.info(
+                    f"Completed Optimism ERC20 transfers: {processed_count} outgoing transfers found"
+                )
+
+                # Advance pagination if available
+                cursor = response_json.get("next")
+                if not cursor:
+                    break
+                transfers_url = cursor
+
+            return all_transfers
+
+        except Exception as e:
+            self.context.logger.error(f"Error tracking Optimism ERC20 transfers: {e}")
+            return {"outgoing": {}}
 
     def _track_eth_transfers_mode(
         self,

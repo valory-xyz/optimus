@@ -260,8 +260,9 @@ def get_filtered_pools_for_uniswap(pools, current_positions, whitelisted_assets,
     apr_weight = kwargs.get('apr_weight', 0.7)
     tvl_weight = kwargs.get('tvl_weight', 0.3)
     min_tvl_threshold = kwargs.get('min_tvl_threshold', 1000)
+    max_apr_threshold = kwargs.get('max_apr_threshold', 0)
     
-    logger.info(f"Filtering parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}")
+    logger.info(f"Filtering parameters: top_n={top_n}, apr_weight={apr_weight}, tvl_weight={tvl_weight}, min_tvl_threshold={min_tvl_threshold}, max_apr_threshold={max_apr_threshold}")
 
     qualifying_pools = []
     for pool in pools:
@@ -271,6 +272,11 @@ def get_filtered_pools_for_uniswap(pools, current_positions, whitelisted_assets,
         apr = calculate_apr(daily_volume, tvl, fee_rate)
         pool["apr"] = apr
         pool["tvl"] = tvl
+        
+        # Filter out pools with APR >= max_apr_threshold
+        if apr >= max_apr_threshold:
+            logger.info(f"Filtered out pool {pool['id']} with APR: {apr:.2f}% (>= threshold: {max_apr_threshold:.2f}%)")
+            continue
         
         chain = pool["chain"].lower()
         whitelisted_tokens = list(whitelisted_assets.get(chain, {}).keys())

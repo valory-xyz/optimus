@@ -246,12 +246,8 @@ WHITELISTED_ASSETS = {
         "0x01bff41798a0bcf287b996046ca68b395dbc1071": "USDT0",
         "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",
         "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",
-        "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819": "LUSD",
-        "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b": "BOLD",
-        "0x2e3d870790dc77a83dd1d18184acc7439a53f475": "FRAX",
         "0x2218a117083f5b482b0bb821d27056ba9c04b1d3": "sDAI",
         "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "oUSDT",
-        "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3": "USDGLO",
     },
 }
 
@@ -278,6 +274,7 @@ COIN_ID_MAPPING = {
         "usdc": "usd-coin",
         "alusd": "alchemix-usd",
         "usdt0": "usdt0",
+        "usd₮0": "usdt0",  # USD₮0 variant with special character
         "usdt": "bridged-usdt",
         "msusd": None,
         "usdc.e": "bridged-usd-coin-optimism",
@@ -895,6 +892,10 @@ class LiquidityTraderBaseBehaviour(
                     position["cost_recovered"] = False
                 if "principal_usd" not in position:
                     position["principal_usd"] = 0.0
+                # For backward compatibility: if entry_apr is missing but apr exists, use apr as entry_apr
+                # This allows legacy positions to participate in trailing stop-loss logic
+                if "entry_apr" not in position and "apr" in position:
+                    position["entry_apr"] = position["apr"]
 
                 adjusted_positions.append(position)
 
@@ -1881,6 +1882,103 @@ class LiquidityTraderBaseBehaviour(
         else:
             self.context.logger.error(
                 f"Failed to fetch historical price for {coingecko_id} on {date_str} from CoinGecko"
+            )
+            return None
+
+    def _fetch_token_prices_sma(
+        self, token_address: str, chain: str, num_hours: int = 24
+    ) -> Generator[None, None, Optional[float]]:
+        """Fetch token prices from CoinGecko and calculate SMA over specified hours.
+
+        Args:
+            token_address: Token contract address
+            chain: Chain name
+            num_hours: Number of hourly measurements (default 24)
+
+        Returns:
+            SMA price as float, or None if unable to fetch
+        """
+        try:
+            # Get CoinGecko ID from token address
+            token_symbol = yield from self._get_token_symbol(chain, token_address)
+            if not token_symbol:
+                self.context.logger.error(
+                    f"Could not get token symbol for {token_address} on {chain}"
+                )
+                return None
+
+            coingecko_id = self.get_coin_id_from_symbol(token_symbol, chain)
+            if not coingecko_id:
+                self.context.logger.error(
+                    f"Could not get CoinGecko ID for {token_symbol} on {chain}"
+                )
+                return None
+
+            # Fetch market chart data - use days=1 to get hourly data (approximately 24 points)
+            endpoint = self.coingecko.historical_market_data_endpoint.format(
+                coin_id=coingecko_id, days=1
+            )
+
+            headers = {"Accept": "application/json"}
+            if not self.params.use_x402 and self.coingecko.api_key:
+                headers["x-cg-api-key"] = self.coingecko.api_key
+
+            x402_signer = self.eoa_account if self.params.use_x402 else None
+
+            yield from self.sleep(2)  # Rate limiting
+
+            success, response_json = self.coingecko.request(
+                endpoint=endpoint,
+                headers=headers,
+                x402_signer=x402_signer,
+            )
+
+            if not success:
+                self.context.logger.warning(
+                    f"Failed to fetch market data for {coingecko_id}"
+                )
+                return None
+
+            # Check for rate limiting
+            if isinstance(response_json, dict):
+                status = response_json.get("status", {})
+                if status.get("error_code") == 429:
+                    self.context.logger.error("Rate limit reached on CoinGecko API")
+                    yield from self.sleep(10)
+                    return None
+
+            # Extract prices from response
+            prices_data = response_json.get("prices", [])
+            if not prices_data:
+                self.context.logger.warning(
+                    f"No price data returned for {coingecko_id}"
+                )
+                return None
+
+            # Get prices (second element of each [timestamp, price] pair)
+            prices = [entry[1] for entry in prices_data if len(entry) >= 2]
+
+            # Take last num_hours prices (most recent)
+            if len(prices) > num_hours:
+                prices = prices[-num_hours:]
+
+            if not prices:
+                self.context.logger.warning(f"No valid prices found for {coingecko_id}")
+                return None
+
+            # Calculate SMA (Simple Moving Average)
+            sma = sum(prices) / len(prices)
+
+            self.context.logger.info(
+                f"Calculated SMA for {token_symbol} ({coingecko_id}): "
+                f"${sma:.6f} from {len(prices)} hourly data points"
+            )
+
+            return sma
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error fetching SMA prices for {token_address} on {chain}: {e}"
             )
             return None
 

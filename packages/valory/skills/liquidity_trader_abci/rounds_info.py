@@ -23,22 +23,6 @@ import json
 import os
 
 
-def get_latest_agent_reasoning() -> str:
-    """Read the latest agent reasoning from JSON file."""
-    try:
-        reasoning_file_path = os.path.join(
-            os.path.dirname(__file__), "agent_reasoning.json"
-        )
-        with open(reasoning_file_path, "r") as f:
-            reasoning_data = json.load(f)
-            return reasoning_data.get(
-                "latest_reasoning",
-                "Evaluates all strategies and decides the best course of action for the agent.",
-            )
-    except (FileNotFoundError, json.JSONDecodeError):
-        return "Evaluates all strategies and decides the best course of action for the agent."
-
-
 ROUNDS_INFO = {
     "APRPopulationRound": {
         "name": "Calculating APR",
@@ -47,112 +31,107 @@ ROUNDS_INFO = {
     },
     "CallCheckpointRound": {
         "name": "Checking checkpoint",
-        "description": "Decides if a checkpoint transaction should be made in the staking contract.",
+        "description": "Decides if the staking contract should be signaled for rewards.",
         "transitions": {},
     },
     "CheckLateTxHashesRound": {
         "name": "Checking late transaction hashes",
-        "description": "Checks late transaction hashes",
+        "description": "Determining if ok to proceed.",
         "transitions": {},
     },
     "CheckStakingKPIMetRound": {
-        "name": "Checking staking kpi",
-        "description": "Checks if the KPI for earning staking rewards is met; if not, ensures compliance by performing vanity transactions.",
+        "name": "Checking staking requirements",
+        "description": "Checks if the agent is on track to earn staking rewards.",
         "transitions": {},
     },
     "CheckTransactionHistoryRound": {
         "name": "Checking the transaction history",
-        "description": "Checks the transaction history",
+        "description": "Checks the transaction history to see if any previous transaction has been validated",
         "transitions": {},
     },
     "CollectSignatureRound": {
         "name": "Collecting agent signatures",
-        "description": "Collects agent signatures for a transaction",
+        "description": "Agent signs the transaction.",
         "transitions": {},
     },
     "DecisionMakingRound": {
         "name": "Executing the actions",
-        "description": "Executes all actions required by the agent.",
+        "description": "Executes trades on-chain.",
         "transitions": {},
     },
     "EvaluateStrategyRound": {
         "name": "Evaluating the strategies",
-        "description": get_latest_agent_reasoning(),
+        "description": "Evaluates strategies and decides the best course of action for the agent.",
         "transitions": {},
     },
     "FetchStrategiesRound": {
-        "name": "Fetching the selected protocols and params",
-        "description": "Fetches the selected protocols/strategies and the relevant configurations",
+        "name": "Loading trading strategies",
+        "description": "Curates the agent portfolio.",
         "transitions": {},
     },
     "FinalizationRound": {
-        "name": "Sending a transaction",
-        "description": "Sends a transaction for mining",
+        "name": "Submitting transaction",
+        "description": "Submits a transaction to the blockchain.",
         "transitions": {},
     },
     "GetPositionsRound": {
-        "name": "Checking the balances",
-        "description": "Identifies the service's positions and checks the balance of its assets.",
+        "name": "Checking balances",
+        "description": "Identifies the agent's positions and checks the balance of its assets.",
         "transitions": {},
     },
     "PostTxSettlementRound": {
         "name": "Deciding the next round",
-        "description": "Transitions to the correct round after a transaction is settled via the transaction_settlement_abci, based on the previous round and event.",
+        "description": "Reviews activity and prepares hand-off for next round.",
         "transitions": {},
     },
     "RandomnessTransactionSubmissionRound": {
-        "name": "Getting some randomness",
-        "description": "Gets randomness from a decentralized randomness source",
+        "name": "Generating randomness",
+        "description": "Prepares the agent to sign the transaction.",
         "transitions": {},
     },
     "RegistrationRound": {
-        "name": "Registering agents ",
-        "description": "Initializes the agent registration process",
+        "name": "Registering agents",
+        "description": "Organises agent components.",
         "transitions": {},
     },
     "RegistrationStartupRound": {
         "name": "Registering agents at startup",
-        "description": "Initializes the agent registration process",
+        "description": "Prepares for startup.",
         "transitions": {},
     },
     "ResetAndPauseRound": {
-        "name": "Cleaning up and sleeping for some time",
-        "description": "Cleans up and sleeps for some time before running again",
+        "name": "Preparing for next cycle",
+        "description": "Cleans up and takes a break before starting the next trading cycle",
         "transitions": {},
     },
     "ResetRound": {
         "name": "Cleaning up and resetting",
-        "description": "Cleans up and resets the agent",
+        "description": "Clean ups and prepares the next round.",
         "transitions": {},
     },
     "SelectKeeperTransactionSubmissionARound": {
         "name": "Selecting an agent to send the transaction",
-        "description": "Selects an agent to send the transaction",
+        "description": "Agent is selected for transaction submission",
         "transitions": {},
     },
     "SelectKeeperTransactionSubmissionBAfterTimeoutRound": {
         "name": "Selecting an agent to send the transaction",
-        "description": "Selects an agent to send the transaction",
+        "description": "Agent is selected for transaction submission",
         "transitions": {},
     },
     "SelectKeeperTransactionSubmissionBRound": {
         "name": "Selecting an agent to send the transaction",
-        "description": "Selects an agent to send the transaction",
+        "description": "Agent is selected for transaction submission",
         "transitions": {},
     },
     "SynchronizeLateMessagesRound": {
         "name": "Synchronizing late messages",
-        "description": "Synchronizes late messages",
-        "transitions": {},
-    },
-    "TransactionMultiplexerRound": {
-        "name": "Selecting next round",
-        "description": "Decides where to transition next based on the state previous to the transaction",
+        "description": "Checks that the submitted transaction was successful.",
         "transitions": {},
     },
     "ValidateTransactionRound": {
         "name": "Validating the transaction",
-        "description": "Checks that the transaction was succesful",
+        "description": "Checks that the submitted transaction was successful.",
         "transitions": {},
     },
     "WithdrawFundsRound": {

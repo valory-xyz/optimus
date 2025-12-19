@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieteucm3rudnnbesnu53wbv3ojnhrwqbvfrsqwvhg6ksgriqyl67i
 - valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
 - valory/funds_manager:0.1.0:bafybeibmp2fhlsfqvxm7u3sgpjyeirhdrvbp6zjspxjbyucfpdrnyq5qai
-- valory/liquidity_trader_abci:0.1.0:bafybeid4ddpfhot5w43inubrsi3moqihcdtj4lycwgikg3l42v7norpkde
-- valory/optimus_abci:0.1.0:bafybeib3bzyoovdorjg4d3o2xkprzhfmebdqmrvlzomw7eqpydv3nsacf4
+- valory/liquidity_trader_abci:0.1.0:bafybeiht6e5ndm5rrxrjlbeihd5rjpqbc442ortzo4ilbkhksp2p7jjjei
+- valory/optimus_abci:0.1.0:bafybeia55g7ve6447le7yxrowmtfeis7ih62dhpcwe3ikjic7mrxw3fwby
 - valory/registration_abci:0.1.0:bafybeie6rd7zlws4rxzkwka5mzhk56mn6clj3ocxbkbgeaiawv2c6b6jtm
 - valory/reset_pause_abci:0.1.0:bafybeian7gymp6x6rn55uaf4u3dgirbzr43xvnsj2ev27stkadikjqz4du
 - valory/termination_abci:0.1.0:bafybeiht4uj5j3qqf2hewtzah7vcabb7okkjgi65jb76ddfltvjpk6bzxi
@@ -64,7 +64,7 @@ customs:
 - valory/balancer_pools_search:0.1.0:bafybeid3gmn6zphrd35ec63legdloqgip2kvc674vp2trazkmv3iqy6rna
 - valory/uniswap_pools_search:0.1.0:bafybeic4ryojqhosapuuuzlsl7jpcvoeu5hostsbwc7ee4cniwc54rvseq
 - valory/asset_lending:0.1.0:bafybeih7zpjiq6gnddms6slr737shourl6makltwgzxsimjtjxs6d5wqse
-- valory/velodrome_pools_search:0.1.0:bafybeibcmhn3ye4bdixp3awtnn4kuoyygypw623yavarz2wlmtad27noze
+- valory/velodrome_pools_search:0.1.0:bafybeieb4hgakmrl7ijbuv7cqhjxmbqizirqkmvkq75qru7f7ib5322kfa
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -320,7 +320,7 @@ models:
       balancer_graphql_endpoints: ${str:{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"}}
       target_investment_chains: ${list:["optimism"]}
       staking_chain: ${str:optimism}
-      file_hash_to_strategies: ${str:{"bafybeiaq3g5nxqd43inm6byclyrhjlfrrq65wufkl2fnnporvdx3lbcrvi":"max_apr_selection","bafybeid3gmn6zphrd35ec63legdloqgip2kvc674vp2trazkmv3iqy6rna":"balancer_pools_search","bafybeic4ryojqhosapuuuzlsl7jpcvoeu5hostsbwc7ee4cniwc54rvseq":"uniswap_pools_search","bafybeih7zpjiq6gnddms6slr737shourl6makltwgzxsimjtjxs6d5wqse":"asset_lending","bafybeibcmhn3ye4bdixp3awtnn4kuoyygypw623yavarz2wlmtad27noze":"velodrome_pools_search"}}
+      file_hash_to_strategies: ${str:{"bafybeiaq3g5nxqd43inm6byclyrhjlfrrq65wufkl2fnnporvdx3lbcrvi":"max_apr_selection","bafybeid3gmn6zphrd35ec63legdloqgip2kvc674vp2trazkmv3iqy6rna":"balancer_pools_search","bafybeic4ryojqhosapuuuzlsl7jpcvoeu5hostsbwc7ee4cniwc54rvseq":"uniswap_pools_search","bafybeih7zpjiq6gnddms6slr737shourl6makltwgzxsimjtjxs6d5wqse":"asset_lending","bafybeieb4hgakmrl7ijbuv7cqhjxmbqizirqkmvkq75qru7f7ib5322kfa":"velodrome_pools_search"}}
       strategies_kwargs: ${str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"velodrome_pools_search":{"graphql_endpoint":"https://gateway.thegraph.com/api/b8e4cf1b314c67d2a0109325046a7464/subgraphs/id/7tA4PY1VmbycJeoVtn2mjQK4NbozgwTuZgrxDTxzEDL1"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       available_protocols: ${list:["VELODROME"]}
       selected_hyper_strategy: ${str:max_apr_selection}

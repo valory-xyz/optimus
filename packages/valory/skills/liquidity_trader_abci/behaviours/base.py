@@ -123,16 +123,6 @@ OLAS_ADDRESSES = {
 AIRDROP_REWARDS_KEY_PREFIX = "airdrop_rewards_"
 AIRDROP_TOTAL_KEY = "total_airdrop_rewards"
 
-# Reward tokens that should be excluded from investment consideration
-REWARD_TOKEN_ADDRESSES = {
-    "mode": {
-        "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
-    },
-    "optimism": {
-        "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
-    },
-}
-
 # Round timeout constants for health check
 # These timeouts define how long specific rounds can run before being considered unhealthy
 # Used to prevent false restarts when the agent is performing legitimate long-running operations
@@ -302,7 +292,7 @@ REWARD_TOKEN_ADDRESSES = {
     },
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
-        "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "XVELO",  # VELO on Optimism
+        "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "VELO",  # VELO on Optimism
     },
 }
 

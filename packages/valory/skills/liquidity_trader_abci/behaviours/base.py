@@ -1328,6 +1328,14 @@ class LiquidityTraderBaseBehaviour(
                 f"Failed to fetch price for token {token_address} from CoinGecko"
             )
 
+        # If CoinGecko fetch failed, try to get last known price from cache
+        last_known_price = yield from self._get_last_known_price(token_address)
+        if last_known_price is not None:
+            self.context.logger.info(
+                f"Using last known cached price for token {token_address}: ${last_known_price}"
+            )
+            return last_known_price
+
         return None
 
     def _get_price_cache_key(
@@ -3239,6 +3247,65 @@ class LiquidityTraderBaseBehaviour(
                 f"Error fetching reward balances for {chain}: {str(e)}"
             )
             return reward_balances
+
+    def _get_last_known_price(
+        self, token_address: str
+    ) -> Generator[None, None, Optional[float]]:
+        """Get the most recent cached price for a token, regardless of date."""
+        try:
+            # We'll need to check multiple possible cache keys to find the most recent price
+            # First, try to get a list of recent dates to check
+            recent_dates = []
+            current_time = self._get_current_timestamp()
+
+            # Check last 30 days for any cached prices
+            for days_back in range(30):
+                check_timestamp = current_time - (days_back * 24 * 3600)
+                check_date = datetime.utcfromtimestamp(check_timestamp).strftime(
+                    "%d-%m-%Y"
+                )
+                recent_dates.append(check_date)
+
+            # Check each date for cached price data
+            for date_str in recent_dates:
+                cache_key = self._get_price_cache_key(token_address, date_str)
+                result = yield from self._read_kv((cache_key,))
+
+                if result and result.get(cache_key):
+                    try:
+                        price_data = json.loads(result[cache_key])
+
+                        # Check for current price first (most recent)
+                        current_data = price_data.get("current")
+                        if current_data and len(current_data) >= 2:
+                            price, timestamp = current_data
+                            self.context.logger.info(
+                                f"Found last known current price for {token_address}: ${price} from {datetime.fromtimestamp(timestamp)}"
+                            )
+                            return price
+
+                        # Check for historical price on this date
+                        historical_price = price_data.get(date_str)
+                        if historical_price:
+                            self.context.logger.info(
+                                f"Found last known historical price for {token_address}: ${historical_price} from {date_str}"
+                            )
+                            return historical_price
+
+                    except (json.JSONDecodeError, TypeError, ValueError) as e:
+                        self.context.logger.warning(
+                            f"Invalid cache data for token {token_address} on {date_str}: {e}"
+                        )
+                        continue
+
+            self.context.logger.info(f"No cached price found for token {token_address}")
+            return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error getting last known price for token {token_address}: {str(e)}"
+            )
+            return None
 
 
 def execute_strategy(

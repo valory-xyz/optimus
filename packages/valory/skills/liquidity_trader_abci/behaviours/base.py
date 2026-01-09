@@ -123,16 +123,6 @@ OLAS_ADDRESSES = {
 AIRDROP_REWARDS_KEY_PREFIX = "airdrop_rewards_"
 AIRDROP_TOTAL_KEY = "total_airdrop_rewards"
 
-# Reward tokens that should be excluded from investment consideration
-REWARD_TOKEN_ADDRESSES = {
-    "mode": {
-        "0xcfD1D50ce23C46D3Cf6407487B2F8934e96DC8f9": "OLAS",  # OLAS on Mode
-    },
-    "optimism": {
-        "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
-    },
-}
-
 # Round timeout constants for health check
 # These timeouts define how long specific rounds can run before being considered unhealthy
 # Used to prevent false restarts when the agent is performing legitimate long-running operations
@@ -302,7 +292,7 @@ REWARD_TOKEN_ADDRESSES = {
     },
     "optimism": {
         "0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527": "OLAS",  # OLAS on Optimism
-        "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "XVELO",  # VELO on Optimism
+        "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db": "VELO",  # VELO on Optimism
     },
 }
 
@@ -507,6 +497,11 @@ class LiquidityTraderBaseBehaviour(
                         }
                     )
 
+        # Add separate reward token balance fetch for Optimism
+        reward_balances = yield from self._fetch_reward_balances("optimism")
+        if reward_balances:
+            balances.extend(reward_balances)
+
         self.context.logger.info(
             f"Retrieved {len(balances)} token balances from SafeApi"
         )
@@ -522,7 +517,7 @@ class LiquidityTraderBaseBehaviour(
 
         while True:
             url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
-            params = f"?exclude_spam=true&limit={limit}&offset={offset}"
+            params = f"?exclude_spam=true&trusted=true&limit={limit}&offset={offset}"
             endpoint = url + params
 
             self.context.logger.info(
@@ -1322,6 +1317,14 @@ class LiquidityTraderBaseBehaviour(
             self.context.logger.error(
                 f"Failed to fetch price for token {token_address} from CoinGecko"
             )
+
+        # If CoinGecko fetch failed, try to get last known price from cache
+        last_known_price = yield from self._get_last_known_price(token_address)
+        if last_known_price is not None:
+            self.context.logger.info(
+                f"Using last known cached price for token {token_address}: ${last_known_price}"
+            )
+            return last_known_price
 
         return None
 
@@ -3169,6 +3172,130 @@ class LiquidityTraderBaseBehaviour(
             and symbol.upper() == "OLAS"
             and token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
         )
+
+    def _fetch_reward_balances(
+        self, chain: str
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Fetch reward token balances separately."""
+        reward_balances = []
+
+        try:
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address found for chain {chain}")
+                return reward_balances
+
+            # Get all reward token addresses for the chain
+            chain_reward_tokens = REWARD_TOKEN_ADDRESSES.get(chain, {})
+
+            if not chain_reward_tokens:
+                self.context.logger.info(f"No reward tokens configured for {chain}")
+                return reward_balances
+
+            self.context.logger.info(
+                f"Fetching {len(chain_reward_tokens)} reward token balances separately for {chain}"
+            )
+
+            # Fetch balance for each reward token
+            for token_address, token_symbol in chain_reward_tokens.items():
+                try:
+                    # Get token balance using direct contract call
+                    token_balance = yield from self._get_token_balance(
+                        chain, safe_address, token_address
+                    )
+
+                    if token_balance and token_balance > 0:
+                        self.context.logger.info(
+                            f"Found {token_symbol} balance: {token_balance} for {chain}"
+                        )
+                        reward_balances.append(
+                            {
+                                "asset_symbol": token_symbol,
+                                "asset_type": "erc_20",
+                                "address": to_checksum_address(token_address),
+                                "balance": token_balance,
+                            }
+                        )
+                    else:
+                        self.context.logger.info(
+                            f"No {token_symbol} balance found for {chain}"
+                        )
+
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error fetching {token_symbol} balance for {chain}: {str(e)}"
+                    )
+                    continue
+
+            self.context.logger.info(
+                f"Successfully fetched {len(reward_balances)} reward token balances for {chain}"
+            )
+            return reward_balances
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error fetching reward balances for {chain}: {str(e)}"
+            )
+            return reward_balances
+
+    def _get_last_known_price(
+        self, token_address: str
+    ) -> Generator[None, None, Optional[float]]:
+        """Get the most recent cached price for a token, regardless of date."""
+        try:
+            # We'll need to check multiple possible cache keys to find the most recent price
+            # First, try to get a list of recent dates to check
+            recent_dates = []
+            current_time = self._get_current_timestamp()
+
+            # Check last 30 days for any cached prices
+            for days_back in range(30):
+                check_timestamp = current_time - (days_back * 24 * 3600)
+                check_date = datetime.utcfromtimestamp(check_timestamp).strftime(
+                    "%d-%m-%Y"
+                )
+                recent_dates.append(check_date)
+
+            # Check each date for cached price data
+            for date_str in recent_dates:
+                cache_key = self._get_price_cache_key(token_address, date_str)
+                result = yield from self._read_kv((cache_key,))
+
+                if result and result.get(cache_key):
+                    try:
+                        price_data = json.loads(result[cache_key])
+
+                        # Check for current price first (most recent)
+                        current_data = price_data.get("current")
+                        if current_data and len(current_data) >= 2:
+                            price, timestamp = current_data
+                            self.context.logger.info(
+                                f"Found last known current price for {token_address}: ${price} from {datetime.fromtimestamp(timestamp)}"
+                            )
+                            return price
+
+                        # Check for historical price on this date
+                        historical_price = price_data.get(date_str)
+                        if historical_price:
+                            self.context.logger.info(
+                                f"Found last known historical price for {token_address}: ${historical_price} from {date_str}"
+                            )
+                            return historical_price
+
+                    except (json.JSONDecodeError, TypeError, ValueError) as e:
+                        self.context.logger.warning(
+                            f"Invalid cache data for token {token_address} on {date_str}: {e}"
+                        )
+                        continue
+
+            self.context.logger.info(f"No cached price found for token {token_address}")
+            return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error getting last known price for token {token_address}: {str(e)}"
+            )
+            return None
 
 
 def execute_strategy(

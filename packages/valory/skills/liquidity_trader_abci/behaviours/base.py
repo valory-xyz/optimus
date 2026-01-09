@@ -507,6 +507,11 @@ class LiquidityTraderBaseBehaviour(
                         }
                     )
 
+        # Add separate reward token balance fetch for Optimism
+        reward_balances = yield from self._fetch_reward_balances("optimism")
+        if reward_balances:
+            balances.extend(reward_balances)
+
         self.context.logger.info(
             f"Retrieved {len(balances)} token balances from SafeApi"
         )
@@ -522,7 +527,7 @@ class LiquidityTraderBaseBehaviour(
 
         while True:
             url = f"{self.params.safe_api_base_url}/{safe_address}/balances/"
-            params = f"?exclude_spam=true&limit={limit}&offset={offset}"
+            params = f"?exclude_spam=true&trusted=true&limit={limit}&offset={offset}"
             endpoint = url + params
 
             self.context.logger.info(
@@ -3169,6 +3174,71 @@ class LiquidityTraderBaseBehaviour(
             and symbol.upper() == "OLAS"
             and token_address.lower() == OLAS_ADDRESSES.get("mode", "").lower()
         )
+
+    def _fetch_reward_balances(
+        self, chain: str
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
+        """Fetch reward token balances separately."""
+        reward_balances = []
+
+        try:
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address found for chain {chain}")
+                return reward_balances
+
+            # Get all reward token addresses for the chain
+            chain_reward_tokens = REWARD_TOKEN_ADDRESSES.get(chain, {})
+
+            if not chain_reward_tokens:
+                self.context.logger.info(f"No reward tokens configured for {chain}")
+                return reward_balances
+
+            self.context.logger.info(
+                f"Fetching {len(chain_reward_tokens)} reward token balances separately for {chain}"
+            )
+
+            # Fetch balance for each reward token
+            for token_address, token_symbol in chain_reward_tokens.items():
+                try:
+                    # Get token balance using direct contract call
+                    token_balance = yield from self._get_token_balance(
+                        chain, safe_address, token_address
+                    )
+
+                    if token_balance and token_balance > 0:
+                        self.context.logger.info(
+                            f"Found {token_symbol} balance: {token_balance} for {chain}"
+                        )
+                        reward_balances.append(
+                            {
+                                "asset_symbol": token_symbol,
+                                "asset_type": "erc_20",
+                                "address": to_checksum_address(token_address),
+                                "balance": token_balance,
+                            }
+                        )
+                    else:
+                        self.context.logger.info(
+                            f"No {token_symbol} balance found for {chain}"
+                        )
+
+                except Exception as e:
+                    self.context.logger.error(
+                        f"Error fetching {token_symbol} balance for {chain}: {str(e)}"
+                    )
+                    continue
+
+            self.context.logger.info(
+                f"Successfully fetched {len(reward_balances)} reward token balances for {chain}"
+            )
+            return reward_balances
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error fetching reward balances for {chain}: {str(e)}"
+            )
+            return reward_balances
 
 
 def execute_strategy(

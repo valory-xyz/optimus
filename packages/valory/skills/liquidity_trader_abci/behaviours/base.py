@@ -502,6 +502,11 @@ class LiquidityTraderBaseBehaviour(
         if reward_balances:
             balances.extend(reward_balances)
 
+        # Add separate OUSDT balance fetch for Optimism (not included in trusted API)
+        ousdt_balance = yield from self._fetch_ousdt_balance("optimism")
+        if ousdt_balance:
+            balances.append(ousdt_balance)
+
         self.context.logger.info(
             f"Retrieved {len(balances)} token balances from SafeApi"
         )
@@ -3294,6 +3299,50 @@ class LiquidityTraderBaseBehaviour(
         except Exception as e:
             self.context.logger.error(
                 f"Error getting last known price for token {token_address}: {str(e)}"
+            )
+            return None
+
+    def _fetch_ousdt_balance(
+        self, chain: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Fetch OUSDT token balance separately using direct contract call."""
+        try:
+            safe_address = self.params.safe_contract_addresses.get(chain)
+            if not safe_address:
+                self.context.logger.error(f"No safe address found for chain {chain}")
+                return None
+
+            # OUSDT token address (same on both chains)
+            ousdt_token_address = (
+                "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189"  # nosec B105
+            )
+
+            self.context.logger.info(
+                f"Fetching OUSDT balance separately for {chain} at address {ousdt_token_address}"
+            )
+
+            # Get OUSDT balance using direct contract call
+            ousdt_balance = yield from self._get_token_balance(
+                chain, safe_address, ousdt_token_address
+            )
+
+            if ousdt_balance and ousdt_balance > 0:
+                self.context.logger.info(
+                    f"Found OUSDT balance: {ousdt_balance} for {chain}"
+                )
+                return {
+                    "asset_symbol": "oUSDT",
+                    "asset_type": "erc_20",
+                    "address": to_checksum_address(ousdt_token_address),
+                    "balance": ousdt_balance,
+                }
+            else:
+                self.context.logger.info(f"No OUSDT balance found for {chain}")
+                return None
+
+        except Exception as e:
+            self.context.logger.error(
+                f"Error fetching OUSDT balance separately for {chain}: {str(e)}"
             )
             return None
 

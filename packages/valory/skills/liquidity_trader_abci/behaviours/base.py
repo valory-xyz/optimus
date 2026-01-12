@@ -3313,7 +3313,9 @@ class LiquidityTraderBaseBehaviour(
                 return None
 
             # OUSDT token address (same on both chains)
-            ousdt_token_address = "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189"  # nosec B105
+            ousdt_token_address = (
+                "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189"  # nosec B105
+            )
 
             self.context.logger.info(
                 f"Fetching OUSDT balance separately for {chain} at address {ousdt_token_address}"

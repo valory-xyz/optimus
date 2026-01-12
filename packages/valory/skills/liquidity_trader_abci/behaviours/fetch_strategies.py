@@ -2619,7 +2619,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 all_positions_zero = True
                 for pos in position.get("positions", []):
                     if pos.get("token_id") is None:
-                        #if the tx failed, and it is still stored in current positions, but with token id none, we set it as closed
+                        # if the tx failed, and it is still stored in current positions, but with token id none, we set it as closed
                         position["status"] = PositionStatus.CLOSED.value
                         break
                     if (

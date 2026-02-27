@@ -1078,9 +1078,11 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                 "value_in_pools": float(total_pools_value),
                 "value_in_safe": float(total_safe_value),
                 "value_in_withdrawals": float(withdrawals_value),
-                "initial_investment": float(initial_investment)
-                if initial_investment is not None
-                else None,
+                "initial_investment": (
+                    float(initial_investment)
+                    if initial_investment is not None
+                    else None
+                ),
                 "airdropped_rewards": float(airdrop_rewards_value),
                 "volume": float(volume) if volume is not None else None,
                 "total_roi": total_roi,
@@ -1373,12 +1375,8 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             return Decimal(0)
 
         # Convert initial amounts to decimal-adjusted values
-        initial_token0_decimal = Decimal(initial_amount0) / Decimal(
-            10**token0_decimals
-        )
-        initial_token1_decimal = Decimal(initial_amount1) / Decimal(
-            10**token1_decimals
-        )
+        initial_token0_decimal = Decimal(initial_amount0) / Decimal(10**token0_decimals)
+        initial_token1_decimal = Decimal(initial_amount1) / Decimal(10**token1_decimals)
 
         # Get current balances (already decimal-adjusted)
         current_token0_balance = current_balances.get(token0_address, Decimal(0))
@@ -2239,9 +2237,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             )
             if accumulated_olas_rewards > 0:
                 # Convert from wei to OLAS (18 decimals)
-                olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(
-                    10**18
-                )
+                olas_balance = Decimal(str(accumulated_olas_rewards)) / Decimal(10**18)
 
                 # Get OLAS price
                 olas_price = yield from self._fetch_token_price(olas_address, chain)

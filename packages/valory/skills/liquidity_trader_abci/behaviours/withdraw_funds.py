@@ -342,9 +342,9 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
                 action = self._build_exit_pool_action_base(position)
                 if action:
                     # Add description for withdrawal context
-                    action[
-                        "description"
-                    ] = f"Exit {position.get('token0_symbol')}/{position.get('token1_symbol')} pool for withdrawal"
+                    action["description"] = (
+                        f"Exit {position.get('token0_symbol')}/{position.get('token1_symbol')} pool for withdrawal"
+                    )
 
                     # Add required assets field
                     action["assets"] = [

@@ -11800,7 +11800,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             (
                 {
                     "pool_address": "0x1234567890123456789012345678901234567890",
-                    "is_cl_pool": True
+                    "is_cl_pool": True,
                     # Missing positions key
                 },
                 "optimism",
@@ -13069,9 +13069,9 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
             # Test non-airdrop transfer inclusion
             normal_transfer = transfer.copy()
-            normal_transfer[
-                "from_address"
-            ] = "0xnormal123456789012345678901234567890123456"
+            normal_transfer["from_address"] = (
+                "0xnormal123456789012345678901234567890123456"
+            )
             result = mock_process_transfer(normal_transfer)
             assert result is not None, "Normal transfer should be included"
 
@@ -13951,7 +13951,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         mock_withdrawal_transfers = [
             {
                 "amount": 29.663353,
-                "symbol": "USDC"
+                "symbol": "USDC",
                 # No timestamp
             }
         ]
@@ -14117,7 +14117,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         mock_withdrawal_transfers = [
             {
                 "symbol": "USDC",
-                "timestamp": "2025-09-01T16:20:53.000000Z"
+                "timestamp": "2025-09-01T16:20:53.000000Z",
                 # No amount
             }
         ]
@@ -14273,7 +14273,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     },
                     "from": {"hash": "0x1234567890123456789012345678901234567890"},
                     "to": {"hash": "0x7c21f16D1844539725A33FAA246038821d5BbfDe"},
-                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158"
+                    "transaction_hash": "0x42678a4644abda99cd6fe4d865a93c44f452d85de566c689d17bee67a9aff158",
                     # No timestamp
                 }
             ]

@@ -131,7 +131,7 @@ Handles all post-transaction processing and state updates to ensure the system a
 
 ## Architecture
 
-The Optimus service is an [agent service](https://docs.autonolas.network/open-autonomy/get_started/what_is_an_agent_service/) (or autonomous service) based on the [Open Autonomy framework](https://docs.autonolas.network/open-autonomy/).
+The Optimus service is an [agent service](https://stack.olas.network/open-autonomy/get_started/what_is_an_agent_service/) (or autonomous service) based on the [Open Autonomy framework](https://stack.olas.network/open-autonomy/).
 
 ## Setup Instructions
 

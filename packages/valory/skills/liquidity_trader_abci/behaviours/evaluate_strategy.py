@@ -1368,8 +1368,8 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             return []
 
         yield from self.execute_hyper_strategy()
-        actions = (
-            yield from self.get_order_of_transactions()
+        actions = yield from (
+            self.get_order_of_transactions()
             if self.selected_opportunities is not None
             else []
         )
@@ -1584,12 +1584,14 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
                     "coin_id_mapping": COIN_ID_MAPPING,
-                    "x402_signer": self.eoa_account
-                    if self.coingecko.use_x402
-                    else None,
-                    "x402_proxy": self.coingecko.coingecko_x402_server_base_url
-                    if self.coingecko.use_x402
-                    else None,
+                    "x402_signer": (
+                        self.eoa_account if self.coingecko.use_x402 else None
+                    ),
+                    "x402_proxy": (
+                        self.coingecko.coingecko_x402_server_base_url
+                        if self.coingecko.use_x402
+                        else None
+                    ),
                 }
             )
             strategy_kwargs_list.append((next_strategy, kwargs))
@@ -1771,21 +1773,21 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
 
             # Add filtering criteria for each stage
             if stage == "raw_with_metrics":
-                stage_metadata[
-                    "filtering_criteria"
-                ] = "All pools with calculated metrics"
+                stage_metadata["filtering_criteria"] = (
+                    "All pools with calculated metrics"
+                )
             elif stage == "basic_filtered":
-                stage_metadata[
-                    "filtering_criteria"
-                ] = "Token count >= 2, TVL > 0, not current position"
+                stage_metadata["filtering_criteria"] = (
+                    "Token count >= 2, TVL > 0, not current position"
+                )
             elif stage == "composite_filtered":
-                stage_metadata[
-                    "filtering_criteria"
-                ] = "Token count >= 2, TVL >= 1000, APR > 0, top 10 by composite score"
+                stage_metadata["filtering_criteria"] = (
+                    "Token count >= 2, TVL >= 1000, APR > 0, top 10 by composite score"
+                )
             elif stage == "final_selection":
-                stage_metadata[
-                    "filtering_criteria"
-                ] = "Selected by hyper-strategy after risk assessment"
+                stage_metadata["filtering_criteria"] = (
+                    "Selected by hyper-strategy after risk assessment"
+                )
 
             tracking_data[round_key][stage] = stage_metadata
 
@@ -1922,9 +1924,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
             # Prepare comprehensive opportunity data for MirrorDB
             opportunity_metrics = {
                 # Agent Information
-                "agent_hash": os.environ.get("AEA_AGENT", "").split(":")[-1]
-                if os.environ.get("AEA_AGENT")
-                else "unknown",
+                "agent_hash": (
+                    os.environ.get("AEA_AGENT", "").split(":")[-1]
+                    if os.environ.get("AEA_AGENT")
+                    else "unknown"
+                ),
                 "agent_name": agent_registry.get("agent_name", "unknown"),
                 "agent_address": agent_registry.get("agent_address", "unknown"),
                 "agent_type": agent_type.get("type_name", "unknown"),
@@ -1938,14 +1942,16 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "target_chains": self.params.target_investment_chains,
                 # Current State
                 "current_positions_count": len(self.current_positions),
-                "portfolio_value": self.portfolio_data.get("portfolio_value", 0)
-                if hasattr(self, "portfolio_data")
-                else 0,
+                "portfolio_value": (
+                    self.portfolio_data.get("portfolio_value", 0)
+                    if hasattr(self, "portfolio_data")
+                    else 0
+                ),
                 # Opportunity Data
                 "opportunity_data": tracking_data,
-                "final_selection": self.selected_opportunities
-                if self.selected_opportunities
-                else [],
+                "final_selection": (
+                    self.selected_opportunities if self.selected_opportunities else []
+                ),
                 # Performance Context
                 "composite_score_threshold": getattr(
                     self.params, "composite_score_threshold", None
@@ -2048,9 +2054,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
                 "x402_signer": self.eoa_account if self.coingecko.use_x402 else None,
-                "x402_proxy": self.coingecko.coingecko_x402_server_base_url
-                if self.coingecko.use_x402
-                else None,
+                "x402_proxy": (
+                    self.coingecko.coingecko_x402_server_base_url
+                    if self.coingecko.use_x402
+                    else None
+                ),
             }
         )
 
@@ -2734,9 +2742,7 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 decimals = 18
             else:
                 decimals = yield from self._get_token_decimals(chain, token_address)
-            token_data["value"] = (
-                token_data["balance"] / (10**decimals)
-            ) * token_price
+            token_data["value"] = (token_data["balance"] / (10**decimals)) * token_price
 
         # Sort tokens by value in descending order and add the highest ones
         token_balances.sort(key=lambda x: x["value"], reverse=True)

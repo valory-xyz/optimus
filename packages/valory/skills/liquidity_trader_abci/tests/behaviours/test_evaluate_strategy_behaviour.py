@@ -2319,11 +2319,13 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
                         "balance": 2000,  # Should be skipped (OLAS token)
                     },
                     {
-                        "address": list(WHITELISTED_ASSETS.get("optimism", {}).keys())[
-                            0
-                        ].lower()
-                        if WHITELISTED_ASSETS.get("optimism")
-                        else "0xwhitelisted",
+                        "address": (
+                            list(WHITELISTED_ASSETS.get("optimism", {}).keys())[
+                                0
+                            ].lower()
+                            if WHITELISTED_ASSETS.get("optimism")
+                            else "0xwhitelisted"
+                        ),
                         "asset_symbol": "WETH",
                         "balance": 3000,  # Should be skipped (whitelisted)
                     },
@@ -6486,11 +6488,11 @@ def dynamic_test_method(*args, **kwargs):
                         "balance": 1000000,
                     },
                     {
-                        "address": list(
-                            REWARD_TOKEN_ADDRESSES.get("optimism", {}).keys()
-                        )[0]
-                        if REWARD_TOKEN_ADDRESSES.get("optimism")
-                        else "0xreward",
+                        "address": (
+                            list(REWARD_TOKEN_ADDRESSES.get("optimism", {}).keys())[0]
+                            if REWARD_TOKEN_ADDRESSES.get("optimism")
+                            else "0xreward"
+                        ),
                         "asset_symbol": "REWARD",
                         "balance": 500000,
                     },
@@ -10130,7 +10132,7 @@ def dynamic_test_method(*args, **kwargs):
         position_without_staking = {
             "pool_id": "test_pool",
             "chain": "ethereum",
-            "dex_type": "uniswap_v3"
+            "dex_type": "uniswap_v3",
             # No staking_metadata
         }
         self.behaviour.current_behaviour.position_to_exit = position_without_staking
@@ -12568,12 +12570,9 @@ def dynamic_test_method(*args, **kwargs):
                 token for token in result if token["token"] == ZERO_ADDRESS
             )
             assert (
-                zero_address_token["value"]
-                == (1000000000000000000 / (10**18)) * 2000.0
+                zero_address_token["value"] == (1000000000000000000 / (10**18)) * 2000.0
             )  # 1 ETH * $2000
 
             # Should have called _get_token_decimals for non-ZERO_ADDRESS token
             other_token = next(token for token in result if token["token"] == "0x123")
-            assert (
-                other_token["value"] == (2000000 / (10**6)) * 1.5
-            )  # 2 tokens * $1.5
+            assert other_token["value"] == (2000000 / (10**6)) * 1.5  # 2 tokens * $1.5

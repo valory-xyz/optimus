@@ -116,9 +116,11 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
             "timestamp": timestamp,
             "portfolio_snapshot": portfolio_snapshot,
             "calculation_metrics": self._get_apr_calculation_metrics(),
-            "first_investment_timestamp": self.current_positions[0].get("timestamp")
-            if self.current_positions
-            else None,
+            "first_investment_timestamp": (
+                self.current_positions[0].get("timestamp")
+                if self.current_positions
+                else None
+            ),
             "agent_hash": agent_hash,
             "volume": self.portfolio_data.get("volume"),
             "trading_type": self.shared_state.trading_type,
@@ -216,9 +218,9 @@ class APRPopulationBehaviour(LiquidityTraderBaseBehaviour):
         final_decimal = self._to_decimal(self._final_value)
 
         metrics = {
-            "initial_value": float(initial_decimal)
-            if initial_decimal is not None
-            else None,
+            "initial_value": (
+                float(initial_decimal) if initial_decimal is not None else None
+            ),
             "final_value": float(final_decimal) if final_decimal is not None else None,
             "f_i_ratio": None,
             "first_investment_timestamp": None,

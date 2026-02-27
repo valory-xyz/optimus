@@ -4,11 +4,11 @@ version: 0.1.0
 type: contract
 description: The contract package for the Sturdy's YearnV3Vault interface.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeibax3vb3clg7vq3ldlxzbj5byecpkwkiyi3ipphb2zed5v5mofzma
   build/YearnV3Vault.json: bafybeifk34657pbpihpoxkelea2pf6ho2z56lum7bxegunclmakvypuc3m
-  contract.py: bafybeigyakhpllyh3ardyuhqrq7jjjs2dwtbu6vnmoclhpdrzye347sify
+  contract.py: bafybeialgs5fwnixjmgnwkfo3xay7w2ukbae3kt77kwygifxsexmtlyhlu
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: YearnV3VaultContract
@@ -16,8 +16,8 @@ contract_interface_paths:
   ethereum: build/YearnV3Vault.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.65.0
+    version: ==2.0.8
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
   eth_abi:
     version: ==4.0.0

@@ -4,11 +4,11 @@ version: 0.1.0
 type: contract
 description: The contract package for the Uniswap V3 NonfungiblePositionManager interface.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiefxsx4zo3eefe6iyxflho4l3gx2ge7hjm7c62eiyw7zaag4ifbty
   build/NonfungiblePositionManager.json: bafybeihspdbkcgw2mo245bpblhgu3srl3ywynp7eeipzoczqlzcslu7t6y
-  contract.py: bafybeiemks6s5gee546fl66sgkn6dt342paybwvh563ubezdlnyfhuls2i
+  contract.py: bafybeiekj6n7o2ejp4nqpfupmntkr3ct4lo575kgwbgpgc774hlmmlb7wy
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: UniswapV3NonfungiblePositionManagerContract
@@ -16,6 +16,6 @@ contract_interface_paths:
   ethereum: build/NonfungiblePositionManager.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.65.0
+    version: ==2.0.8
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0

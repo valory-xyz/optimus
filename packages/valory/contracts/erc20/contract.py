@@ -115,7 +115,7 @@ class ERC20(Contract):
     ) -> Dict[str, bytes]:
         """Build a deposit transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI("deposit")
+        data = contract_instance.encode_abi("deposit")
         return {"data": bytes.fromhex(data[2:])}
 
     @classmethod
@@ -127,7 +127,7 @@ class ERC20(Contract):
     ) -> Dict[str, bytes]:
         """Build a deposit transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI("withdraw", args=(amount,))
+        data = contract_instance.encode_abi("withdraw", args=(amount,))
         return {"data": bytes.fromhex(data[2:])}
 
     @classmethod
@@ -141,7 +141,7 @@ class ERC20(Contract):
         """Build an ERC20 approval."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         checksumed_spender = ledger_api.api.to_checksum_address(spender)
-        data = contract_instance.encodeABI("approve", args=(checksumed_spender, amount))
+        data = contract_instance.encode_abi("approve", args=(checksumed_spender, amount))
         return {"data": bytes.fromhex(data[2:])}
 
     @classmethod
@@ -155,5 +155,5 @@ class ERC20(Contract):
         """Build an ERC20 transfer transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         checksumed_to_address = ledger_api.api.to_checksum_address(to_address)
-        data = contract_instance.encodeABI("transfer", args=(checksumed_to_address, amount))
+        data = contract_instance.encode_abi("transfer", args=(checksumed_to_address, amount))
         return {"data": bytes.fromhex(data[2:])}

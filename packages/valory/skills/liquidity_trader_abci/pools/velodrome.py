@@ -2034,7 +2034,6 @@ class VelodromePoolBehaviour(PoolBehaviour, ABC):
                 "0xd988097fb8612cc24eec14542bc03424c656005f": "mode-bridged-usdc-mode",
                 "0x3f51c6c5927b88cdec4b61e2787f9bd0f5249138": None,
                 "0xf0f161fda2712db8b566946122a5af183995e2ed": "mode-bridged-usdt-mode",
-                "0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189": "openusdt",
             }
 
             # Check if the address is in the stablecoin mappings

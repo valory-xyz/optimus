@@ -52,7 +52,7 @@ class DistributorContract(Contract):
             [bytes.fromhex(proof[2:]) for proof in proof_list] for proof_list in proofs
         ]
 
-        data = contract_instance.encodeABI(
+        data = contract_instance.encode_abi(
             "claim", args=(users, tokens, amounts, proofs_converted)
         )
         return {"tx_hash": bytes.fromhex(data[2:])}

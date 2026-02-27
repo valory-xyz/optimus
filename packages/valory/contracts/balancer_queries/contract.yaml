@@ -4,7 +4,7 @@ version: 0.1.0
 type: contract
 description: The contract package for the balancer queries interface.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigudv5apwsne7eg2lskro7vei7lbi5wbb3atrw7texli7wj6x7gpy
   build/BalancerQueries.json: bafybeig7jr63urawg7xct3q2xpydruk4ysusi4g6qyygd2f5oiwhbrzxae
@@ -16,8 +16,8 @@ contract_interface_paths:
   ethereum: build/BalancerQueries.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.65.0
+    version: ==2.0.8
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
   eth_abi:
     version: ==4.0.0

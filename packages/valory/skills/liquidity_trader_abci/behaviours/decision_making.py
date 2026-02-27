@@ -436,9 +436,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     # We have multiple positions for the same pool
                     # Create a single entry with nested positions
                     current_position["status"] = PositionStatus.OPEN.value
-                    current_position[
-                        "enter_tx_hash"
-                    ] = self.synchronized_data.final_tx_hash
+                    current_position["enter_tx_hash"] = (
+                        self.synchronized_data.final_tx_hash
+                    )
                     current_position["enter_timestamp"] = positions_data[0][
                         4
                     ]  # Use timestamp from first position
@@ -494,9 +494,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     )
                     current_position["enter_timestamp"] = timestamp
                     current_position["status"] = PositionStatus.OPEN.value
-                    current_position[
-                        "enter_tx_hash"
-                    ] = self.synchronized_data.final_tx_hash
+                    current_position["enter_tx_hash"] = (
+                        self.synchronized_data.final_tx_hash
+                    )
 
                     # For consistency, also add a positions list with a single entry
                     current_position["positions"] = [
@@ -1112,12 +1112,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             capped_usd1 = max_position_size * token1_ratio
 
             # Convert back to token units
-            capped_amount0 = int(
-                (capped_usd0 / float(price0)) * (10**token0_decimals)
-            )
-            capped_amount1 = int(
-                (capped_usd1 / float(price1)) * (10**token1_decimals)
-            )
+            capped_amount0 = int((capped_usd0 / float(price0)) * (10**token0_decimals))
+            capped_amount1 = int((capped_usd1 / float(price1)) * (10**token1_decimals))
 
             self.context.logger.info(
                 f"Applied 2% pool allocation cap: Original USD={current_total_usd:.2f}, "
@@ -2854,9 +2850,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
 
         return positions_data
 
-    def _get_data_from_mint_tx_receipt(
-        self, tx_hash: str, chain: str
-    ) -> Generator[
+    def _get_data_from_mint_tx_receipt(self, tx_hash: str, chain: str) -> Generator[
         None,
         None,
         Tuple[
@@ -4356,9 +4350,9 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 and position.get("chain") == chain
             ):
                 # Add reward claiming metadata
-                position[
-                    "last_reward_claim_tx_hash"
-                ] = self.synchronized_data.final_tx_hash
+                position["last_reward_claim_tx_hash"] = (
+                    self.synchronized_data.final_tx_hash
+                )
                 position["last_reward_claim_timestamp"] = int(
                     self._get_current_timestamp()
                 )

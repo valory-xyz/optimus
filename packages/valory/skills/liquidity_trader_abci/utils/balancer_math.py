@@ -1,4 +1,5 @@
 """Balancer Math"""
+
 from decimal import Decimal, getcontext
 from typing import List, Union
 

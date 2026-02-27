@@ -80,7 +80,7 @@ class VaultContract(Contract):
         )
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
+        data = contract_instance.encode_abi(
             "joinPool",
             args=(bytes.fromhex(pool_id[2:]), sender, recipient, join_pool_request),
         )
@@ -112,7 +112,7 @@ class VaultContract(Contract):
         )
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
+        data = contract_instance.encode_abi(
             "exitPool",
             args=(bytes.fromhex(pool_id[2:]), sender, recipient, exit_pool_request),
         )

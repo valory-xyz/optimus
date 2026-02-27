@@ -1265,7 +1265,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                     "pool_address": "0xPool123",
                     "dex_type": "velodrome",
                     "is_cl_pool": True,
-                    "gauge_address": "0xGauge123"
+                    "gauge_address": "0xGauge123",
                     # No positions or token_id
                 },
                 {"optimism": "0xSafe123"},
@@ -8562,7 +8562,11 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 b"",
                 None,
             ),  # get_signature returns empty signature (falsy)
-            ("unicode message 🚀", None, None),  # get_signature returns None for unicode
+            (
+                "unicode message 🚀",
+                None,
+                None,
+            ),  # get_signature returns None for unicode
             ("simple text", b"", None),  # get_signature returns empty signature (falsy)
         ],
     )

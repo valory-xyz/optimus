@@ -5074,7 +5074,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "dex_type": "velodrome",
             "chain": "optimism",
             "pool_address": "0x1234567890123456789012345678901234567890",
-            "is_cl_pool": True
+            "is_cl_pool": True,
             # Missing token_ids and gauge_address
         }
 
@@ -5855,7 +5855,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "dex_type": "velodrome",
             "chain": "optimism",
             "pool_address": "0x1234567890123456789012345678901234567890",
-            "is_cl_pool": True
+            "is_cl_pool": True,
             # Missing token_ids and gauge_address
         }
 
@@ -6986,7 +6986,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "token0": "0x123",
             "token1": "0x456",
             "pool_address": "0xabcdef1234567890abcdef1234567890abcdef12",
-            "max_investment_amounts": None  # This will trigger the else branch
+            "max_investment_amounts": None,  # This will trigger the else branch
             # Missing relative_funds_percentage
         }
 
@@ -15148,7 +15148,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
         # Mock synchronized_data with enter pool action missing pool_address
         mock_enter_pool_action = {
             "action": "EnterPool",
-            "chain": "ethereum"
+            "chain": "ethereum",
             # Missing pool_address
         }
         self.behaviour.current_behaviour.synchronized_data.actions = [
@@ -15190,7 +15190,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
         # Mock synchronized_data with enter pool action missing chain
         mock_enter_pool_action = {
             "action": "EnterPool",
-            "pool_address": "0xpool123"
+            "pool_address": "0xpool123",
             # Missing chain
         }
         self.behaviour.current_behaviour.synchronized_data.actions = [
@@ -20791,7 +20791,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "pool_address": "0x1234567890abcdef",
             "chain": "ethereum",
             "is_cl_pool": True,
-            "gauge_address": "0xgauge123"
+            "gauge_address": "0xgauge123",
             # token_ids not provided
         }
 
@@ -20896,7 +20896,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "dex_type": "velodrome",
             "pool_address": "0x1234567890abcdef",
             "chain": "ethereum",
-            "is_cl_pool": True
+            "is_cl_pool": True,
             # token_ids and gauge_address not provided
         }
 
@@ -20937,7 +20937,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "dex_type": "velodrome",
             "pool_address": "0x1234567890abcdef",
             "chain": "ethereum",
-            "is_cl_pool": True
+            "is_cl_pool": True,
             # token_ids and gauge_address not provided
         }
 
@@ -20946,7 +20946,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             {
                 "pool_address": "0x1234567890abcdef",
                 "chain": "ethereum",
-                "status": "open"
+                "status": "open",
                 # No positions data
             }
         ]

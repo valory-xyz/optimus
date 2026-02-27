@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigovlecwwk2fgo2rmzhldxgbfdfelraz7mfswakorwkswlpgdqy7a
   build/contract_interface.json: bafybeihmu27srsqj7tmsdrjrgnn657lyaupd6pzbyasytdxdfp3ui5u3nu
-  contract.py: bafybeia2lcaus6m3gfatwgjuxvc3ibl4xlzl43vlx2arpcrdrneeggbbwu
+  contract.py: bafybeicohyvq65vqvblxpg4ls73345ejsh6mthnbtcdxqn5fggn4zm3cfq
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeRouterContract

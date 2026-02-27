@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeievq5hnl35mckaakbome2kggd6txe5eiiheg3l3c4qpb3s5yylv5q
   build/Vault.json: bafybeifbvxyx43jmtchbzerapzqeblmmsppfbvfkwrag4nsfydad6bqwje
-  contract.py: bafybeifevtk6o7nv4iaymqwopamskmx6qmr4b42g2u77e3jkktvsa4mmqq
+  contract.py: bafybeidu5s34gjtnr5mxz3ifvurlrsx7e5vfqzxlfesi2sum33z65smogq
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VaultContract

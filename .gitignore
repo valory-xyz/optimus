@@ -25,6 +25,7 @@ packages/valory/contracts/gnosis_safe_proxy_factory
 packages/valory/contracts/multisend
 packages/valory/contracts/service_registry
 packages/valory/contracts/staking_activity_checker
+packages/valory/contracts/staking_token
 packages/valory/services/*
 packages/valory/protocols/*
 packages/valory/skills/*

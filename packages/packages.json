@@ -23,10 +23,10 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeiccpmlstlqebz7ii5yj5xisx5shnq5ihnr5fiw2g65dz3e5ioyg6q",
         "contract/valory/balancer_queries/0.1.0": "bafybeiddu2octu2u7pfj7xli3v2fz2apfny3wp42wr3fnjw6p553zoue2i",
         "connection/valory/mirror_db/0.1.0": "bafybeihxepu6pg4wacfkegunued73a3qcstwdlya54ncijnh6f7kkrtj7i",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeifcs6jaa44th3gp77rqd2qmx4r4bxvg3yn74zk7bkowmegbs6r63y",
-        "skill/valory/optimus_abci/0.1.0": "bafybeidkaz3ztkdjrvcnouxeijsecyoywv6uplv35jsklly7u5jbpeodyu",
-        "agent/valory/optimus/0.1.0": "bafybeigjslpicd36ehadigah42nabuu4mutbjakgiztrsg7ekjcl72vegy",
-        "service/valory/optimus/0.1.0": "bafybeieg6pmakewi6v4hwodxy7qjzhvmrenl5xvsz4mu5sv3guvivc2pzq"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeihxswwz5gq3aij4zrmjsnifpfox7fmvpuot2gjzre53wn4fw76ofa",
+        "skill/valory/optimus_abci/0.1.0": "bafybeibiwct2hcc2k4kkvkn26iplbbm4irbzjzq5ndufe3jefm56ipwvoq",
+        "agent/valory/optimus/0.1.0": "bafybeiawhmw3tya25wlubdasz7iplc672egzjnebfo3htkkw3s3r6g4bdy",
+        "service/valory/optimus/0.1.0": "bafybeidklxy6ctv26mckscujcuhwhn476vkerp3kw3luhxa6ltkuqdfzk4"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeiei6h5suazzfta7n3uyq7bsz26zkmdiiylptu5i44p7s2wiygxt24",
@@ -43,9 +43,9 @@
         "contract/valory/service_registry/0.1.0": "bafybeibzuktplryzlfhdyahcbldfh5dz6pnvukigzbejeuvlvv24774lpi",
         "contract/valory/gnosis_safe/0.1.0": "bafybeia3ictpeosrza3tkxa7ad2io5txutcs44jgrqoqgdxhrjdu2fy4qy",
         "contract/valory/multisend/0.1.0": "bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4",
-        "contract/valory/staking_activity_checker/0.1.0": "bafybeicohiotb47664mt3wtlbncdfbwi3biqu2tqqrvgu6irxfaxvyj7zy",
-        "contract/valory/staking_token/0.1.0": "bafybeicez5fpntiohukjv6rherou5vwkq66d6yk6zhyfac2c7rq7m27hmm",
-        "contract/valory/erc20/0.1.0": "bafybeieiqrhzaziniamxmldytitnuwou3ixt65wef5ikasrnch35rg7rbu",
+        "contract/valory/erc20/0.1.0": "bafybeig3avtl5ffku556ipvuviiat5p2psfw46fa2ieofcc4eculxe3vde",
+        "contract/valory/staking_activity_checker/0.1.0": "bafybeihlqgargycz5ffirrn6ji6isarvq7d5lwqaxikfpblcyp6frlmidq",
+        "contract/valory/staking_token/0.1.0": "bafybeicmpo7ycspixqofh6uesxsrzi6hla77vgjpxp2v2nxysr5hnm4x7q",
         "connection/valory/http_client/0.23.0": "bafybeigwzn4hkry3wy7nf2myk3h3pl5xrqkvvxp2ppdbwwffa4c2s2bkwy",
         "connection/valory/ledger/0.19.0": "bafybeigiipjmtjdivz2wd54c7bmbqxbayk5b5st7wcrsvsnqkfc2f2rbaa",
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeigg3kzkywemiswrgjhb7hei5qsysxcsx36c6weyewtirctbmleowm",

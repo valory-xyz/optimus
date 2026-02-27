@@ -20,6 +20,7 @@ packages/valory/connections/*
 packages/dvilela/*
 packages/dvilela/connections/*
 packages/dvilela/protocols/*
+packages/valory/contracts/erc20
 packages/valory/contracts/gnosis_safe
 packages/valory/contracts/gnosis_safe_proxy_factory
 packages/valory/contracts/multisend

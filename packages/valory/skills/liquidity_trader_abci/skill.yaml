@@ -9,12 +9,12 @@ fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeic6c77h7amnhdximi2tunqofaw675bglv4g4do7q4oof4mqa7xuuu
   behaviours/apr_population.py: bafybeia5bll72ee7oroi6t4wotbkrtfk673mspom7edyw6dbsqyfofrdxu
-  behaviours/base.py: bafybeibfuqmko5cyxgzqxa2kao2rh23rwvxfqefdnzhco6jf4q56r2upwq
+  behaviours/base.py: bafybeic2px442sntcps5up42h5n4zglawb5gtoicexjml4n55vmi3olume
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeib6igm2itai3blnrxhyy277yabxwluifabzm43fkmp4fdxiw5q2eu
-  behaviours/decision_making.py: bafybeiagvh4q2srpx3tmg3puraskume6ut2e6e6fd2kgfz26rtwdz5ihqe
+  behaviours/decision_making.py: bafybeib6bu3nonrd7wxexsvoupfvwjthv3rxpoenzio6hcjbszl74fxbnm
   behaviours/evaluate_strategy.py: bafybeie7ei6fd2syv2csfodzx6wfkx52sdaefg2abfkbfi6pfqtuhx33y4
-  behaviours/fetch_strategies.py: bafybeieykt4oypgjdcvr2yx6qugyuiyqcb5lj4ld3zvqams7fegevzbfb4
+  behaviours/fetch_strategies.py: bafybeigrtoxtnsqq3rnnxzwnjzqt3hj4jdtos3fnc5ylnxyl7ej3zs7bmi
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -30,7 +30,7 @@ fingerprint:
   pools/__init__.py: bafybeifixnr24zx3be3atdq75byfv3vuc4w7x7n3rwbr6cfvclgfn3zl74
   pools/balancer.py: bafybeiaayilrkgelfjkwzi5t5b7mwryexadu42cwoipxusjcomv5l2gfoy
   pools/uniswap.py: bafybeicvgsaduc5msqriwrwhhdll2wx7n6xnvdrighoz2fqwrdedgausam
-  pools/velodrome.py: bafybeicahxyuslegnbmgmfyzoaty7pbynww2cq5bi76x6ssf3stkyspl34
+  pools/velodrome.py: bafybeie552usktiobnqdcz2ebovdnzb3d3nvysrx2osvr5rrisouqtdsdi
   rounds.py: bafybeihsstee7burcnrc75bjisbswxrc5h6lvi3e2l6ciiiy4nqepw2zfy
   rounds_info.py: bafybeieis5cfvqmz72oxjif4cqpm53caex4hp7dsaomt45z52ak3voagzm
   states/__init__.py: bafybeigzgpxgx6g4ioalm7fdalcckk5lmw6z4k4sb5d4a4cdespv2umogi
@@ -77,7 +77,7 @@ contracts:
 - valory/balancer_weighted_pool:0.1.0:bafybeibpje5kerpgjl3tlqkgggfhunqmwlbnwseokmuptbwrrqzrbygqea
 - valory/balancer_vault:0.1.0:bafybeib4vjwschslgfpzihe2mmcvoqw7j5fd6njuxkothhookjwohfxmhy
 - valory/balancer_queries:0.1.0:bafybeieyb4w3ybodsnjbswei32uros2eoworruhx3yjm5ovgsrh7dwthym
-- valory/erc20:0.1.0:bafybeicawdtgs4et4slxanrt3kzwxsm4h7behgnnbbjv5gd7b5z7i4rxcu
+- valory/erc20:0.1.0:bafybeieiqrhzaziniamxmldytitnuwou3ixt65wef5ikasrnch35rg7rbu
 - valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeih4lt3sp2pno7zceeavsqrepjffttao4kejruqm2unhjep63qis2i
 - valory/uniswap_v3_pool:0.1.0:bafybeigpyjeszb4vyf3paevawiphccowqpmqjbtlkz24mq3wyzoanpmv4e

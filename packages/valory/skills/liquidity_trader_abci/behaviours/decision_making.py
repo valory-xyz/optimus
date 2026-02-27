@@ -27,7 +27,7 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Type, cast
 from eth_abi import decode
 from eth_utils import keccak, to_bytes, to_hex
 
-from packages.valory.contracts.erc20.contract import ERC20
+from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,

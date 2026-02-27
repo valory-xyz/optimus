@@ -74,7 +74,7 @@ connections:
 - valory/x402:0.1.0:bafybeihnu3yxblyqey7wm5cwwimz5qnznjfhyh5xk5h5v6rk673l5q63le
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeia3ictpeosrza3tkxa7ad2io5txutcs44jgrqoqgdxhrjdu2fy4qy
-- valory/balancer_weighted_pool:0.1.0:bafybeigphc3qariaqwkviss7ueafbcovavc5guigv64pzeqejudc3fz7ke
+- valory/balancer_weighted_pool:0.1.0:bafybeibpje5kerpgjl3tlqkgggfhunqmwlbnwseokmuptbwrrqzrbygqea
 - valory/balancer_vault:0.1.0:bafybeib4vjwschslgfpzihe2mmcvoqw7j5fd6njuxkothhookjwohfxmhy
 - valory/balancer_queries:0.1.0:bafybeieyb4w3ybodsnjbswei32uros2eoworruhx3yjm5ovgsrh7dwthym
 - valory/erc20:0.1.0:bafybeicawdtgs4et4slxanrt3kzwxsm4h7behgnnbbjv5gd7b5z7i4rxcu

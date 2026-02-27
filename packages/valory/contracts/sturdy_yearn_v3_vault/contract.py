@@ -48,7 +48,7 @@ class YearnV3VaultContract(Contract):
     ) -> JSONLike:
         """Prepare a deposit transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI("deposit", args=(assets, receiver))
+        data = contract_instance.encode_abi("deposit", args=(assets, receiver))
         return {"tx_hash": bytes.fromhex(data[2:])}
 
     @classmethod
@@ -62,7 +62,7 @@ class YearnV3VaultContract(Contract):
     ) -> JSONLike:
         """Prepare a withdraw transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI("withdraw", args=(assets, receiver, owner))
+        data = contract_instance.encode_abi("withdraw", args=(assets, receiver, owner))
         return {"tx_hash": bytes.fromhex(data[2:])}
 
     @classmethod
@@ -76,7 +76,7 @@ class YearnV3VaultContract(Contract):
     ) -> JSONLike:
         """Prepare a redeem transaction."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI("redeem", args=(shares, receiver, owner))
+        data = contract_instance.encode_abi("redeem", args=(shares, receiver, owner))
         return {"tx_hash": bytes.fromhex(data[2:])}
 
     @classmethod

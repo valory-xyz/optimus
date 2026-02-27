@@ -66,7 +66,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         )
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_hash = contract_instance.encodeABI("mint", args=(mint_params,))
+        tx_hash = contract_instance.encode_abi("mint", args=(mint_params,))
 
         return dict(tx_hash=tx_hash)
 
@@ -91,7 +91,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         )
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_hash = contract_instance.encodeABI(
+        tx_hash = contract_instance.encode_abi(
             "decreaseLiquidity", args=(decrease_liquidity_params,)
         )
 
@@ -106,7 +106,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
     ) -> JSONLike:
         """Prepare burn position transaction"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_hash = contract_instance.encodeABI("burn", args=(token_id,))
+        tx_hash = contract_instance.encode_abi("burn", args=(token_id,))
         return dict(tx_hash=tx_hash)
 
     @classmethod
@@ -123,7 +123,7 @@ class UniswapV3NonfungiblePositionManagerContract(Contract):
         collect_params = (token_id, recipient, amount0_max, amount1_max)
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_hash = contract_instance.encodeABI("collect", args=(collect_params,))
+        tx_hash = contract_instance.encode_abi("collect", args=(collect_params,))
 
         return dict(tx_hash=tx_hash)
 

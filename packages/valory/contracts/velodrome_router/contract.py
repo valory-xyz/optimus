@@ -43,7 +43,7 @@ class VelodromeRouterContract(Contract):
     ) -> JSONLike:
         """Return the ABI encoded tx bytes for a contract method call."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(method_name, args=args)
+        data = contract_instance.encode_abi(method_name, args=args)
         return dict(tx_hash=data)
 
     # ---------------------------- main methods --------------------------

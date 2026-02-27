@@ -3,7 +3,7 @@ author: valory
 version: 0.1.0
 license: Apache-2.0
 description: An optimism liquidity trader agent.
-aea_version: '>=1.19.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
 fingerprint_ignore_patterns: []
@@ -15,28 +15,28 @@ connections:
 - valory/ledger:0.19.0:bafybeigiipjmtjdivz2wd54c7bmbqxbayk5b5st7wcrsvsnqkfc2f2rbaa
 - valory/p2p_libp2p_client:0.1.0:bafybeigg3kzkywemiswrgjhb7hei5qsysxcsx36c6weyewtirctbmleowm
 - dvilela/genai:0.1.0:bafybeibopgvwqvqvyru7n2o2ddryujl6jhknjg5na4675of2eui5i3xube
-- dvilela/kv_store:0.1.0:bafybeieufzdojxahh3ejagdbzroqredi5uvkfgjiwsfod7l7whn2octmmi
-- valory/mirror_db:0.1.0:bafybeifng7srdcv3rwxtjwlieseoyqn7hbj42sa7puiyjhfcug35bxefui
+- dvilela/kv_store:0.1.0:bafybeihhxngfz4vdc7nwmto74b3scgitdhk4ncmw7jpjj7n2vm2u65wxie
+- valory/mirror_db:0.1.0:bafybeihxepu6pg4wacfkegunued73a3qcstwdlya54ncijnh6f7kkrtj7i
 - valory/x402:0.1.0:bafybeihnu3yxblyqey7wm5cwwimz5qnznjfhyh5xk5h5v6rk673l5q63le
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeia3ictpeosrza3tkxa7ad2io5txutcs44jgrqoqgdxhrjdu2fy4qy
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeicnwvklc4dkstzf4jex7cgwmanf2wdnhwmw4hhi4fgtcrg5dt2itu
 - valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
 - valory/service_registry:0.1.0:bafybeibzuktplryzlfhdyahcbldfh5dz6pnvukigzbejeuvlvv24774lpi
-- valory/balancer_weighted_pool:0.1.0:bafybeibpje5kerpgjl3tlqkgggfhunqmwlbnwseokmuptbwrrqzrbygqea
-- valory/balancer_vault:0.1.0:bafybeib4vjwschslgfpzihe2mmcvoqw7j5fd6njuxkothhookjwohfxmhy
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeih4lt3sp2pno7zceeavsqrepjffttao4kejruqm2unhjep63qis2i
-- valory/uniswap_v3_pool:0.1.0:bafybeigpyjeszb4vyf3paevawiphccowqpmqjbtlkz24mq3wyzoanpmv4e
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeicta4sas5cy4uqf3ty7fb3522yyp6ryvqrayk2k26v5ai642xisq4
-- valory/velodrome_router:0.1.0:bafybeiatudzwv7vbyh5emmarifazxe3spgi5sl6h7suef3akev2ltsjjgu
-- valory/velodrome_cl_pool:0.1.0:bafybeibvwsvmj5g7b3sf6y6efucm6njycxn35o7z4v3mvmelg5ufgths2u
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeifsgud24rgelhcobagtfi6zjfy3u4y2d22ouefq7x4epe53zlfoki
-- valory/velodrome_pool:0.1.0:bafybeiefjms2xwfyihgjowqqmmw6oqs26vyeejxrwesfssniduml4ccchu
-- valory/velodrome_sugar:0.1.0:bafybeiejldychtxdvu4bokxspfzuwg53bfyjfnpvgylgxjel7dr2ufolhe
-- valory/velodrome_gauge:0.1.0:bafybeica7iqmbjsn22jtpw3w47erkbm6ako4vhico7v3kg6ow4xhodpesq
-- valory/velodrome_voter:0.1.0:bafybeicsyfbiitc3dkrjataubu7itv2hg3qwosyt6g3hka5bha3es5kljq
-- valory/velodrome_cl_gauge:0.1.0:bafybeidagboihltkkx7vrvynha2ai72uqmmq5bn2zluoiy4jryixtml7qi
-- valory/balancer_queries:0.1.0:bafybeieyb4w3ybodsnjbswei32uros2eoworruhx3yjm5ovgsrh7dwthym
+- valory/balancer_weighted_pool:0.1.0:bafybeigu7czom5tcye7xjhxxqeobqb2y5fcimcugnire7z2rlbedjmns2a
+- valory/balancer_vault:0.1.0:bafybeifawdyr3jz7rykzpka4e5y5gf7gm4uydpnel2b6e3ulyoa6rkq2b4
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeia6yoa665thh2oc3lm3xwdy2w6dll75gz5kgttmimfpih6o4zc2vm
+- valory/uniswap_v3_pool:0.1.0:bafybeicmst7gupb5qmio7mhf7uvtjcl5qvqpo7l3isfljxbm5ltga7j354
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeidpn6jcin3acfwc5euicm2wh62uepdcudahm77ovjvfhcnclsrzn4
+- valory/velodrome_router:0.1.0:bafybeiae6u743iacdpzwykehmdv4exnsvn4bmk6tkit3uac6zdhio34y6a
+- valory/velodrome_cl_pool:0.1.0:bafybeiejqnsd22mnkcvxjo5yw6ocg4kfcbz7aproe4aeizxqv42m2xl6ny
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeihxklv2ozg6tq54ziyg3tq2vuxxhycizxknfvs4y5ongiid72sbu4
+- valory/velodrome_pool:0.1.0:bafybeig2fxc56kwd3krubba4f72aqtcndjc2g2zczsswowcfnic7vmlsai
+- valory/velodrome_sugar:0.1.0:bafybeiaeylsglaptomxlnfu4ebz7d22mtvvsofhgmg6nryweethyxqjktm
+- valory/velodrome_gauge:0.1.0:bafybeieyvfeyk4r7eufyyipsva4q4whw3gvqxy4emz32i6x454smtk3oji
+- valory/velodrome_voter:0.1.0:bafybeigayomaqjkf3a5wfsquqcvkzg2l4vdkozpvt4y5ww7dlxvwkufmhi
+- valory/velodrome_cl_gauge:0.1.0:bafybeiccpmlstlqebz7ii5yj5xisx5shnq5ihnr5fiw2g65dz3e5ioyg6q
+- valory/balancer_queries:0.1.0:bafybeiddu2octu2u7pfj7xli3v2fz2apfny3wp42wr3fnjw6p553zoue2i
 protocols:
 - open_aea/signing:1.0.0:bafybeiei6h5suazzfta7n3uyq7bsz26zkmdiiylptu5i44p7s2wiygxt24
 - valory/abci:0.1.0:bafybeicjjeintlqgg53zrreflmoafeiynt3gvdnovy5ocea7doddos3e5a
@@ -46,25 +46,25 @@ protocols:
 - valory/ipfs:0.1.0:bafybeidqfs3njcishcwv4ymf4srxibw44u7qrnryxiwrg5ulk2h7myvt6q
 - valory/ledger_api:1.0.0:bafybeig7yk77pmebqcb33jbavodcslmltitz2uolq6s5arklvsvu5bvp7y
 - valory/tendermint:0.1.0:bafybeie4jqosqiicefnlnxsvrymqj6tycv7x5qeitsdew6abhdcxlu23r4
-- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
+- dvilela/kv_store:0.1.0:bafybeianryj5powscuj6eupseja7xjzo5ecsd6sr7ketfw667nvxkvi7fa
 - valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
 skills:
 - valory/abstract_abci:0.1.0:bafybeic5wohfvzro366vaxvm6q7qx6ck5dx2rycfu2bve2pkbwf7o263sq
 - valory/abstract_round_abci:0.1.0:bafybeihhadgaitdltynzaq4w7jhgwbdnizsobbaa2riqtqwbml3li2tieq
 - valory/funds_manager:0.1.0:bafybeidtprwtynln7kig2ymxmgiohinofq5jf4n5g2wkbxa4bw3nm2pn4y
-- valory/liquidity_trader_abci:0.1.0:bafybeickgugjzsgvtt7x4m4wexvgcvbnv5vgu67u52nmkpwbqoudnijjhm
-- valory/optimus_abci:0.1.0:bafybeigf7ee3hd3lfccvs53ewnvrhvcrdm7sj7bgp7vlldvltfftsixy4y
+- valory/liquidity_trader_abci:0.1.0:bafybeihyfrnp3dlb75gi23im7vrnnfwruk6b22rneyu72fyyy2rnmbp4xq
+- valory/optimus_abci:0.1.0:bafybeicffnrt6x26kepde7v3yzrydqgwprw5nwmukarlitlcdevxkdmeqa
 - valory/registration_abci:0.1.0:bafybeie3dfore53bxvbokqiarzuwulzlyt4vz5mifb4t3gxl6drwkblfha
 - valory/reset_pause_abci:0.1.0:bafybeicffwijiecbqc6z22nowir2fgwwqzwu6vokzuwgd5wa3zxromxevm
 - valory/termination_abci:0.1.0:bafybeiaylk6haefa2xex55krizafzwo2v5tpkcoflw5hiwaqm3qxice23m
 - valory/transaction_settlement_abci:0.1.0:bafybeifbumqyemwzffxtn3kwucxx55ja57mhmfalo7fqlkq2hnjwqhfp74
 customs:
-- valory/merkl_pools_search:0.1.0:bafybeibnhagwb6i5vxnflzpl46sh3l5ldu4pwfcc4kkvynt5ht2uzcmevu
-- valory/max_apr_selection:0.1.0:bafybeiaq3g5nxqd43inm6byclyrhjlfrrq65wufkl2fnnporvdx3lbcrvi
-- valory/balancer_pools_search:0.1.0:bafybeidyehnwsgpx47wdgng5rcfxs3zxdv3nb3spszgtyhusjsx65flrhi
-- valory/uniswap_pools_search:0.1.0:bafybeihzwqsunzdnb6appaltiqokfdcn6wrpve3b6c4j66w5o7t6hyzwie
-- valory/asset_lending:0.1.0:bafybeiect2xoz3v2dfbpitfno6sftq7hesk2qkipwqkfjrk4ptluh7kybi
-- valory/velodrome_pools_search:0.1.0:bafybeigb22jkie26632ixoocmlzz4br3iivhmf7b4gtp47hbtmyszz7ivy
+- valory/merkl_pools_search:0.1.0:bafybeiazmd7varajmgg7wr4zxixdnntjaw5h2i65v4slmnsqxzqhxda4la
+- valory/max_apr_selection:0.1.0:bafybeigysojuwijawwlk5gpdxxskwfxld7kbqhvk7bpqiq3ub6mow4np5i
+- valory/balancer_pools_search:0.1.0:bafybeidzqh5po2fksvjeqwrcjxpymsyogo2cxsbrod3talx77wvxrj2a5e
+- valory/uniswap_pools_search:0.1.0:bafybeiec4v6hqclqrqgkda735e36o4fjuxozyw6iiydnmaxswrrj4ahuka
+- valory/asset_lending:0.1.0:bafybeiavkxaghqoj73rek5bfxe7hvmzmd566xvlcyb32dmtnvjxfkohj2e
+- valory/velodrome_pools_search:0.1.0:bafybeigg5mv4whvavfw3hbw4pzfkjglje7ddyfgzwl4zh6yo5xhn65fdxy
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -181,8 +181,7 @@ models:
     args:
       fund_requirements: ${dict:{"optimism":{"agent":{"0x0000000000000000000000000000000000000000":{"topup":200000000000000,"threshold":100000000000000}},"safe":{"0x0000000000000000000000000000000000000000":{"topup":0,"threshold":0}}}}}
       rpc_urls: ${dict:{"optimism":"https://mainnet.optimism.io"}}
-      setup:
-        safe_contract_address: ${str:0x0000000000000000000000000000000000000000}
+      safe_contract_addresses: ${dict:{"optimism":"0x0000000000000000000000000000000000000000"}}
 ---
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection

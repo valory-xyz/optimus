@@ -4,7 +4,7 @@ version: 0.1.0
 type: skill
 description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiechr3zr5bc4xl3vvs2p2gti54ily7ao2gu4ff5lys6cixehzkdea
   behaviours.py: bafybeiawcqmu5kn6kmbndvivfyyaokva4v44oygwpdgl3hhtbr4slzgll4
@@ -108,18 +108,18 @@ fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeigyjwg6nfwmdkwzt7i56n4zv3oj6hii2mkkgstuaztyunscjifdee
 - dvilela/genai:0.1.0:bafybeibopgvwqvqvyru7n2o2ddryujl6jhknjg5na4675of2eui5i3xube
-- dvilela/kv_store:0.1.0:bafybeieufzdojxahh3ejagdbzroqredi5uvkfgjiwsfod7l7whn2octmmi
+- dvilela/kv_store:0.1.0:bafybeihhxngfz4vdc7nwmto74b3scgitdhk4ncmw7jpjj7n2vm2u65wxie
 contracts: []
 protocols:
 - valory/http:1.0.0:bafybeia4tq7ycivm3dnekelrnlzdwb4qnrjdykk6gf5tizq6djr66adotm
 - valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
-- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
+- dvilela/kv_store:0.1.0:bafybeianryj5powscuj6eupseja7xjzo5ecsd6sr7ketfw667nvxkvi7fa
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeihhadgaitdltynzaq4w7jhgwbdnizsobbaa2riqtqwbml3li2tieq
 - valory/registration_abci:0.1.0:bafybeie3dfore53bxvbokqiarzuwulzlyt4vz5mifb4t3gxl6drwkblfha
 - valory/reset_pause_abci:0.1.0:bafybeicffwijiecbqc6z22nowir2fgwwqzwu6vokzuwgd5wa3zxromxevm
 - valory/termination_abci:0.1.0:bafybeiaylk6haefa2xex55krizafzwo2v5tpkcoflw5hiwaqm3qxice23m
-- valory/liquidity_trader_abci:0.1.0:bafybeickgugjzsgvtt7x4m4wexvgcvbnv5vgu67u52nmkpwbqoudnijjhm
+- valory/liquidity_trader_abci:0.1.0:bafybeihyfrnp3dlb75gi23im7vrnnfwruk6b22rneyu72fyyy2rnmbp4xq
 - valory/transaction_settlement_abci:0.1.0:bafybeifbumqyemwzffxtn3kwucxx55ja57mhmfalo7fqlkq2hnjwqhfp74
 - valory/funds_manager:0.1.0:bafybeidtprwtynln7kig2ymxmgiohinofq5jf4n5g2wkbxa4bw3nm2pn4y
 behaviours:

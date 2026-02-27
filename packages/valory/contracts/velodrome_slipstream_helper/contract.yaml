@@ -4,7 +4,7 @@ version: 0.1.0
 type: contract
 description: A wrapper for Velodrome's Slipstream Helper calls.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeifok6lmgiqjb4d2s3tmxtk46pjvpc3xfwu3bylzr3xtzrhguqnhdq
   build/contract_interface.json: bafybeiejabouynogilagtlora6rxoqwdji4sp246rcjhuzky2ekmejz5sq

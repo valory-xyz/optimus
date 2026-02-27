@@ -4,7 +4,7 @@ version: 0.1.0
 type: contract
 description: The contract package for the Merkl Distributor interface.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiaxzeof7zaamcnmc325hfuylj4ezmxsgop2fkhqt4tmzhaslrldfu
   build/Distributor.json: bafybeihtbkqhzavgficpiikharncvtysmoyacmqbkntsilrvwph44fkm3a

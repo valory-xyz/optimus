@@ -4,7 +4,7 @@ version: 0.1.0
 type: contract
 description: ERC20 token contract
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   README.md: bafybeifmfma6rglvpa22odtozyosnp5mwljum64utxip2wgmezuhnjjjyi
   __init__.py: bafybeif5vpc3dfrlxlch7brbhmdwksabyzddpfqgm56vdbbkek3t3br6ke

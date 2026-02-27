@@ -16,8 +16,8 @@ contract_interface_paths:
   ethereum: build/Distributor.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.65.0
+    version: ==2.0.8
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
   eth_abi:
     version: ==4.0.0

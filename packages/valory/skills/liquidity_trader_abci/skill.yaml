@@ -4,7 +4,7 @@ version: 0.1.0
 type: skill
 description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeia7bn2ahqqwkf63ptje6rfnftuwrsp33sswgpcbh5osbesxxr6g4m
   behaviours/__init__.py: bafybeic6c77h7amnhdximi2tunqofaw675bglv4g4do7q4oof4mqa7xuuu
@@ -69,8 +69,8 @@ fingerprint:
   utils/tick_math.py: bafybeidgd4dxshehz4by7jlvcrjfidqdrpcksn4knzd6oaolwkoc2fxc4y
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeifng7srdcv3rwxtjwlieseoyqn7hbj42sa7puiyjhfcug35bxefui
-- dvilela/kv_store:0.1.0:bafybeieufzdojxahh3ejagdbzroqredi5uvkfgjiwsfod7l7whn2octmmi
+- valory/mirror_db:0.1.0:bafybeihxepu6pg4wacfkegunued73a3qcstwdlya54ncijnh6f7kkrtj7i
+- dvilela/kv_store:0.1.0:bafybeihhxngfz4vdc7nwmto74b3scgitdhk4ncmw7jpjj7n2vm2u65wxie
 - valory/x402:0.1.0:bafybeihnu3yxblyqey7wm5cwwimz5qnznjfhyh5xk5h5v6rk673l5q63le
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeia3ictpeosrza3tkxa7ad2io5txutcs44jgrqoqgdxhrjdu2fy4qy
@@ -90,16 +90,16 @@ contracts:
 - valory/velodrome_non_fungible_position_manager:0.1.0:bafybeifsgud24rgelhcobagtfi6zjfy3u4y2d22ouefq7x4epe53zlfoki
 - valory/velodrome_pool:0.1.0:bafybeiefjms2xwfyihgjowqqmmw6oqs26vyeejxrwesfssniduml4ccchu
 - valory/service_registry:0.1.0:bafybeibzuktplryzlfhdyahcbldfh5dz6pnvukigzbejeuvlvv24774lpi
-- valory/velodrome_gauge:0.1.0:bafybeica7iqmbjsn22jtpw3w47erkbm6ako4vhico7v3kg6ow4xhodpesq
-- valory/velodrome_voter:0.1.0:bafybeicsyfbiitc3dkrjataubu7itv2hg3qwosyt6g3hka5bha3es5kljq
-- valory/velodrome_cl_gauge:0.1.0:bafybeidagboihltkkx7vrvynha2ai72uqmmq5bn2zluoiy4jryixtml7qi
-- valory/velodrome_slipstream_helper:0.1.0:bafybeihwlnes55cekjmzgtpdik34jcenlm7wupphyb3tdz6l7qowlpyseu
+- valory/velodrome_gauge:0.1.0:bafybeieyvfeyk4r7eufyyipsva4q4whw3gvqxy4emz32i6x454smtk3oji
+- valory/velodrome_voter:0.1.0:bafybeigayomaqjkf3a5wfsquqcvkzg2l4vdkozpvt4y5ww7dlxvwkufmhi
+- valory/velodrome_cl_gauge:0.1.0:bafybeiccpmlstlqebz7ii5yj5xisx5shnq5ihnr5fiw2g65dz3e5ioyg6q
+- valory/velodrome_slipstream_helper:0.1.0:bafybeibvllr4sa4oqxrexb7k6dnfe7o5n7pqqdrcycymbfq4nndobxocpu
 protocols:
 - valory/contract_api:1.0.0:bafybeigl7mxuyxngk4gztgygeccbgdfrllx73kwbvvkjvtkfw6ionyd56q
 - valory/ledger_api:1.0.0:bafybeig7yk77pmebqcb33jbavodcslmltitz2uolq6s5arklvsvu5bvp7y
 - valory/ipfs:0.1.0:bafybeidqfs3njcishcwv4ymf4srxibw44u7qrnryxiwrg5ulk2h7myvt6q
 - valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
-- dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
+- dvilela/kv_store:0.1.0:bafybeianryj5powscuj6eupseja7xjzo5ecsd6sr7ketfw667nvxkvi7fa
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeihhadgaitdltynzaq4w7jhgwbdnizsobbaa2riqtqwbml3li2tieq
 - valory/transaction_settlement_abci:0.1.0:bafybeifbumqyemwzffxtn3kwucxx55ja57mhmfalo7fqlkq2hnjwqhfp74

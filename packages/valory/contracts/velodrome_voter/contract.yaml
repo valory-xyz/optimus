@@ -4,7 +4,7 @@ version: 0.1.0
 type: contract
 description: The contract package for the Velodrome Voter interface.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeida5z2rs3bfsa4el27clwhno4nc2mgrobfhj6o423rv7baazrdsfm
   build/contract_interface.json: bafybeibb2l3m53tz7uigyz6wv25rkohvfixvdbtrk4ubirklg6mylp77wq

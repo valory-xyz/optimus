@@ -29,7 +29,6 @@
         "service/valory/optimus/0.1.0": "bafybeiadexj3pttj3rsyvau7s4ffc7rukxkv2ckvzlu6733dti2zemy2ha"
     },
     "third_party": {
-        "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
         "protocol/open_aea/signing/1.0.0": "bafybeiei6h5suazzfta7n3uyq7bsz26zkmdiiylptu5i44p7s2wiygxt24",
         "protocol/valory/acn/1.1.0": "bafybeih6o2ts4thjluddizqesxbrcqkaciz3zlbolq6e77dgblqdnht2rm",
         "protocol/valory/http/1.0.0": "bafybeia4tq7ycivm3dnekelrnlzdwb4qnrjdykk6gf5tizq6djr66adotm",
@@ -39,6 +38,7 @@
         "protocol/valory/tendermint/0.1.0": "bafybeie4jqosqiicefnlnxsvrymqj6tycv7x5qeitsdew6abhdcxlu23r4",
         "protocol/valory/ipfs/0.1.0": "bafybeidqfs3njcishcwv4ymf4srxibw44u7qrnryxiwrg5ulk2h7myvt6q",
         "protocol/valory/srr/0.1.0": "bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4",
+        "protocol/dvilela/kv_store/0.1.0": "bafybeianryj5powscuj6eupseja7xjzo5ecsd6sr7ketfw667nvxkvi7fa",
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeicnwvklc4dkstzf4jex7cgwmanf2wdnhwmw4hhi4fgtcrg5dt2itu",
         "contract/valory/service_registry/0.1.0": "bafybeibzuktplryzlfhdyahcbldfh5dz6pnvukigzbejeuvlvv24774lpi",
         "contract/valory/gnosis_safe/0.1.0": "bafybeia3ictpeosrza3tkxa7ad2io5txutcs44jgrqoqgdxhrjdu2fy4qy",
@@ -54,7 +54,7 @@
         "connection/valory/http_server/0.22.0": "bafybeigyjwg6nfwmdkwzt7i56n4zv3oj6hii2mkkgstuaztyunscjifdee",
         "connection/valory/x402/0.1.0": "bafybeihnu3yxblyqey7wm5cwwimz5qnznjfhyh5xk5h5v6rk673l5q63le",
         "connection/dvilela/genai/0.1.0": "bafybeibopgvwqvqvyru7n2o2ddryujl6jhknjg5na4675of2eui5i3xube",
-        "connection/dvilela/kv_store/0.1.0": "bafybeieufzdojxahh3ejagdbzroqredi5uvkfgjiwsfod7l7whn2octmmi",
+        "connection/dvilela/kv_store/0.1.0": "bafybeihhxngfz4vdc7nwmto74b3scgitdhk4ncmw7jpjj7n2vm2u65wxie",
         "skill/valory/abstract_abci/0.1.0": "bafybeic5wohfvzro366vaxvm6q7qx6ck5dx2rycfu2bve2pkbwf7o263sq",
         "skill/valory/abstract_round_abci/0.1.0": "bafybeihhadgaitdltynzaq4w7jhgwbdnizsobbaa2riqtqwbml3li2tieq",
         "skill/valory/transaction_settlement_abci/0.1.0": "bafybeifbumqyemwzffxtn3kwucxx55ja57mhmfalo7fqlkq2hnjwqhfp74",

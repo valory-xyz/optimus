@@ -69,40 +69,40 @@ fingerprint:
   utils/tick_math.py: bafybeidgd4dxshehz4by7jlvcrjfidqdrpcksn4knzd6oaolwkoc2fxc4y
 fingerprint_ignore_patterns: []
 connections:
-- valory/mirror_db:0.1.0:bafybeig46y7nbyo7uldl5xlkbbgv65kpvhqf4abmca7auw24ja6lnvcwdy
-- dvilela/kv_store:0.1.0:bafybeiecnl7yc5qx6x4q7467i66ehmfw4qydnnry7tjs7plqeytb6ueyvu
-- valory/x402:0.1.0:bafybeif7fjrjtsqdyzxfn3cx4ffcmsnzaz3yhcnylmgbxp5baiy4qgwqwm
+- valory/mirror_db:0.1.0:bafybeifng7srdcv3rwxtjwlieseoyqn7hbj42sa7puiyjhfcug35bxefui
+- dvilela/kv_store:0.1.0:bafybeieufzdojxahh3ejagdbzroqredi5uvkfgjiwsfod7l7whn2octmmi
+- valory/x402:0.1.0:bafybeihnu3yxblyqey7wm5cwwimz5qnznjfhyh5xk5h5v6rk673l5q63le
 contracts:
-- valory/gnosis_safe:0.1.0:bafybeihqefvhxbdocjphrcz33txmbgembl35qtcc7nusdvymrh4o3sp5um
-- valory/balancer_weighted_pool:0.1.0:bafybeif62wmflaurowogrirtfakxod3ddyjsyubu6f2tpiai4wukpsxtke
-- valory/balancer_vault:0.1.0:bafybeigb3dd34py2jhixmuhy7o52ex572y4d7yhrauywzn4kwzlipscxai
-- valory/balancer_queries:0.1.0:bafybeifvnzj6glrktvk7ffjeawha2e76at7sxeyznokcb4zize2t6xcffu
-- valory/erc20:0.1.0:bafybeigg5xv3bbvv6zfdjykncirh2wi7t7xpf4b4rebao77r2wwjg7uhjy
-- valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeift466wsnbo2qpgax7moarlfftquzis6r4lynfl7bdcieuwldot7m
-- valory/uniswap_v3_pool:0.1.0:bafybeigipe5aznisrlbbxmbeoyan5ayughp7z57cjxwbx5qigsjgrzqav4
-- valory/merkl_distributor:0.1.0:bafybeieai7iixi6y647yrxrlkusxy3hyjkq3ai2pakudkk7hph4dmshpo4
-- valory/staking_token:0.1.0:bafybeiclu2xkt6yzgm2d336wcjid7zrgdnvjnxinksxxw5yvfwvwiqd6ii
-- valory/staking_activity_checker:0.1.0:bafybeibh6fasgz3a6tgr7j4svsbrgzxryhkh6gsf7vf4kpvirs77djxzti
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeidoru4ktkfyf4x5f5xugxxknhhi3ccz6widd4ecbzqkbcqyrltr3e
-- valory/velodrome_router:0.1.0:bafybeid47lcaxzqg4wraucdwtkntoeru3jfeld2drlwytji37ccxjxre54
-- valory/velodrome_cl_pool:0.1.0:bafybeiaqs2hbjgckwmys6gqwct2izqf575jbr7xkkkq4hzplmv2qgxe5vm
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeib6etbmecnjelpfrv443stpzihnvogneu6xldy3cct5j737wjn6cq
-- valory/velodrome_pool:0.1.0:bafybeihe4772icn47dk2ddfgfkcbd5z66ihhrulgydl6gmc6ffdjrcrakm
-- valory/service_registry:0.1.0:bafybeidiyohupppaunqtwhxzt3kbp4k4hcryp4xgda36t3sy43brxs3vci
-- valory/velodrome_gauge:0.1.0:bafybeicbrtp2burhnthqmeme2nihfg6jrhx622edt4bxhtgoxqamjcicdu
-- valory/velodrome_voter:0.1.0:bafybeid2nvctd25mcthgokt7m47f35pofff7gov3qai5aj4jdeo2uojhr4
-- valory/velodrome_cl_gauge:0.1.0:bafybeiahnbdig3cex2lb2gz5mjoakkbyxurpu73akouhua4yg2pespzozm
-- valory/velodrome_slipstream_helper:0.1.0:bafybeiapaeltu46cu6f3byxqzkz47fyibcijxc7245mnemi6efhwujfn6e
+- valory/gnosis_safe:0.1.0:bafybeia3ictpeosrza3tkxa7ad2io5txutcs44jgrqoqgdxhrjdu2fy4qy
+- valory/balancer_weighted_pool:0.1.0:bafybeibpje5kerpgjl3tlqkgggfhunqmwlbnwseokmuptbwrrqzrbygqea
+- valory/balancer_vault:0.1.0:bafybeigc3gyravahxn6zksm3i2wla6wiycbdwdwb2icytjhwvrcxux3jsy
+- valory/balancer_queries:0.1.0:bafybeieyb4w3ybodsnjbswei32uros2eoworruhx3yjm5ovgsrh7dwthym
+- valory/erc20:0.1.0:bafybeihfcxzlgjlzzytwge3xdxewvb67vjj7frttukqjxqnj3cs7dlvwma
+- valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeicqfxvtsdn72niehlo25b6nayqibcxj6ae4i4e33mopphfprwildq
+- valory/uniswap_v3_pool:0.1.0:bafybeigpyjeszb4vyf3paevawiphccowqpmqjbtlkz24mq3wyzoanpmv4e
+- valory/merkl_distributor:0.1.0:bafybeiardk4j7k3svimdd2wnfp5p2kirqnk3npwfn6anrifjzjodub6qwq
+- valory/staking_token:0.1.0:bafybeih2fdqiliqfyglkqyrjqe2f7metl53l5u5aelaatdixpjgvjtalja
+- valory/staking_activity_checker:0.1.0:bafybeigji7itwtbufe54xkkmqnuxeouldmale6astblemmlkhthz5mg54u
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeieyxjqkg5kqfmgugg2quktqmmy5myhm7dvnlgxmokgwu4b4ag6zta
+- valory/velodrome_router:0.1.0:bafybeif7p5mgzpw4tckrty2xvchremwx33hunqdqc6dchgflhnoy33r6ie
+- valory/velodrome_cl_pool:0.1.0:bafybeicugmyrmqvdtrqu3se63pdbrnewc3wevsi2dwwullvsx3pj5wohvy
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeih4ly5c5ycghhtysmg2iisv6ngpslxqu232dh4p7wjbmyxub3v7vq
+- valory/velodrome_pool:0.1.0:bafybeiavdvhicz6f3mzdoodb6iz6z4y5todc7wb6qhqymkeeqcas4o6jii
+- valory/service_registry:0.1.0:bafybeibzuktplryzlfhdyahcbldfh5dz6pnvukigzbejeuvlvv24774lpi
+- valory/velodrome_gauge:0.1.0:bafybeibmrnyk3rmtjxjad5b4gdvevhqynyvgumbks2qkuzfluqiaqg6xku
+- valory/velodrome_voter:0.1.0:bafybeicsyfbiitc3dkrjataubu7itv2hg3qwosyt6g3hka5bha3es5kljq
+- valory/velodrome_cl_gauge:0.1.0:bafybeigxrtgov4vuvmkfyeju2u2vn7zmrg5ltlb6igflbvby4brzi34yya
+- valory/velodrome_slipstream_helper:0.1.0:bafybeihwlnes55cekjmzgtpdik34jcenlm7wupphyb3tdz6l7qowlpyseu
 protocols:
-- valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
-- valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
-- valory/ipfs:0.1.0:bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq
-- valory/srr:0.1.0:bafybeihrixgptxuqpf2s4nujypwlv5aed2nboozq5kl4c26cxw6r7si2x4
+- valory/contract_api:1.0.0:bafybeigl7mxuyxngk4gztgygeccbgdfrllx73kwbvvkjvtkfw6ionyd56q
+- valory/ledger_api:1.0.0:bafybeig7yk77pmebqcb33jbavodcslmltitz2uolq6s5arklvsvu5bvp7y
+- valory/ipfs:0.1.0:bafybeidqfs3njcishcwv4ymf4srxibw44u7qrnryxiwrg5ulk2h7myvt6q
+- valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
 - dvilela/kv_store:0.1.0:bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeifsuf7sh5vlugnqinbqe2f7vnssuqyxcrzqgotohhwqewyjeibneu
-- valory/transaction_settlement_abci:0.1.0:bafybeiem4qoc2pdpxoingjqp3qnrdjwho67pd6amy7o3xjr5mpdrepctve
+- valory/abstract_round_abci:0.1.0:bafybeihhadgaitdltynzaq4w7jhgwbdnizsobbaa2riqtqwbml3li2tieq
+- valory/transaction_settlement_abci:0.1.0:bafybeifbumqyemwzffxtn3kwucxx55ja57mhmfalo7fqlkq2hnjwqhfp74
 behaviours:
   main:
     args: {}
@@ -333,11 +333,11 @@ models:
     class_name: TendermintDialogues
 dependencies:
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
   eth_abi:
     version: ==4.0.0
   requests:
-    version: <2.31.2,>=2.28.1
+    version: <2.32.5,>=2.28.1
   eth_utils: {}
   eth_account:
     version: <1.0.0,>=0.8.0
@@ -346,6 +346,6 @@ dependencies:
   numpy:
     version: ==2.2.5
   open-aea-ledger-ethereum:
-    version: '>=1.65.0'
+    version: '>=2.0.8'
 is_abstract: true
 customs: []

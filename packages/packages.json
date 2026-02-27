@@ -17,7 +17,6 @@
         "contract/valory/uniswap_v3_pool/0.1.0": "bafybeigpyjeszb4vyf3paevawiphccowqpmqjbtlkz24mq3wyzoanpmv4e",
         "contract/valory/merkl_distributor/0.1.0": "bafybeieiah562azip242opwjozcgrpy3amyslhmrqp6u6llaavs2t7ldia",
         "contract/valory/staking_token/0.1.0": "bafybeiar47a3gzzpo5comb35eo7qg2dnwe4bnv65anymkfhmh52lll3uki",
-        "contract/valory/staking_activity_checker/0.1.0": "bafybeigji7itwtbufe54xkkmqnuxeouldmale6astblemmlkhthz5mg54u",
         "contract/valory/sturdy_yearn_v3_vault/0.1.0": "bafybeicta4sas5cy4uqf3ty7fb3522yyp6ryvqrayk2k26v5ai642xisq4",
         "contract/valory/velodrome_slipstream_helper/0.1.0": "bafybeihwlnes55cekjmzgtpdik34jcenlm7wupphyb3tdz6l7qowlpyseu",
         "contract/valory/velodrome_sugar/0.1.0": "bafybeiejldychtxdvu4bokxspfzuwg53bfyjfnpvgylgxjel7dr2ufolhe",
@@ -26,10 +25,10 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeidagboihltkkx7vrvynha2ai72uqmmq5bn2zluoiy4jryixtml7qi",
         "contract/valory/balancer_queries/0.1.0": "bafybeieyb4w3ybodsnjbswei32uros2eoworruhx3yjm5ovgsrh7dwthym",
         "connection/valory/mirror_db/0.1.0": "bafybeifng7srdcv3rwxtjwlieseoyqn7hbj42sa7puiyjhfcug35bxefui",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeickgugjzsgvtt7x4m4wexvgcvbnv5vgu67u52nmkpwbqoudnijjhm",
-        "skill/valory/optimus_abci/0.1.0": "bafybeigf7ee3hd3lfccvs53ewnvrhvcrdm7sj7bgp7vlldvltfftsixy4y",
-        "agent/valory/optimus/0.1.0": "bafybeibyoi4i2oyy5syflrff7wj2r4npdjseux23y6aelyazgrwiuzqa2y",
-        "service/valory/optimus/0.1.0": "bafybeifhppfjrxziovlkmi5led4pu7kpg4xz27hfqi4lvzmx6ztlm57gpe"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeihd5vs57rrkzyke5llthfqga7bjgxq5g4cnnotd5vjgdzc7o2rflu",
+        "skill/valory/optimus_abci/0.1.0": "bafybeicamyjyfdrarapromvhazhgkb66jkbsulc2skourlietxjd5v73zi",
+        "agent/valory/optimus/0.1.0": "bafybeieft4rmdk7nb73wg6mjf6qjdfshlsvifcihbolyw3kxo37ukvnlmy",
+        "service/valory/optimus/0.1.0": "bafybeibk76mgynteby5p4g245n4afbhenxqgtuca7rnhrd63pymew4qz2a"
     },
     "third_party": {
         "protocol/dvilela/kv_store/0.1.0": "bafybeihimf5f37uupxmugvagmaxworgmz7cxuqpikkyzlgldtbq46jbvci",
@@ -46,6 +45,7 @@
         "contract/valory/service_registry/0.1.0": "bafybeibzuktplryzlfhdyahcbldfh5dz6pnvukigzbejeuvlvv24774lpi",
         "contract/valory/gnosis_safe/0.1.0": "bafybeia3ictpeosrza3tkxa7ad2io5txutcs44jgrqoqgdxhrjdu2fy4qy",
         "contract/valory/multisend/0.1.0": "bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4",
+        "contract/valory/staking_activity_checker/0.1.0": "bafybeicohiotb47664mt3wtlbncdfbwi3biqu2tqqrvgu6irxfaxvyj7zy",
         "connection/valory/http_client/0.23.0": "bafybeigwzn4hkry3wy7nf2myk3h3pl5xrqkvvxp2ppdbwwffa4c2s2bkwy",
         "connection/valory/ledger/0.19.0": "bafybeigiipjmtjdivz2wd54c7bmbqxbayk5b5st7wcrsvsnqkfc2f2rbaa",
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeigg3kzkywemiswrgjhb7hei5qsysxcsx36c6weyewtirctbmleowm",

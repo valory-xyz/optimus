@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeic5wohfvzro366vaxvm6q7qx6ck5dx2rycfu2bve2pkbwf7o263sq
 - valory/abstract_round_abci:0.1.0:bafybeihhadgaitdltynzaq4w7jhgwbdnizsobbaa2riqtqwbml3li2tieq
 - valory/funds_manager:0.1.0:bafybeidtprwtynln7kig2ymxmgiohinofq5jf4n5g2wkbxa4bw3nm2pn4y
-- valory/liquidity_trader_abci:0.1.0:bafybeickgugjzsgvtt7x4m4wexvgcvbnv5vgu67u52nmkpwbqoudnijjhm
-- valory/optimus_abci:0.1.0:bafybeigf7ee3hd3lfccvs53ewnvrhvcrdm7sj7bgp7vlldvltfftsixy4y
+- valory/liquidity_trader_abci:0.1.0:bafybeihd5vs57rrkzyke5llthfqga7bjgxq5g4cnnotd5vjgdzc7o2rflu
+- valory/optimus_abci:0.1.0:bafybeicamyjyfdrarapromvhazhgkb66jkbsulc2skourlietxjd5v73zi
 - valory/registration_abci:0.1.0:bafybeie3dfore53bxvbokqiarzuwulzlyt4vz5mifb4t3gxl6drwkblfha
 - valory/reset_pause_abci:0.1.0:bafybeicffwijiecbqc6z22nowir2fgwwqzwu6vokzuwgd5wa3zxromxevm
 - valory/termination_abci:0.1.0:bafybeiaylk6haefa2xex55krizafzwo2v5tpkcoflw5hiwaqm3qxice23m

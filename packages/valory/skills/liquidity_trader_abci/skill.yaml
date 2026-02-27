@@ -83,7 +83,7 @@ contracts:
 - valory/uniswap_v3_pool:0.1.0:bafybeigpyjeszb4vyf3paevawiphccowqpmqjbtlkz24mq3wyzoanpmv4e
 - valory/merkl_distributor:0.1.0:bafybeieiah562azip242opwjozcgrpy3amyslhmrqp6u6llaavs2t7ldia
 - valory/staking_token:0.1.0:bafybeiar47a3gzzpo5comb35eo7qg2dnwe4bnv65anymkfhmh52lll3uki
-- valory/staking_activity_checker:0.1.0:bafybeigji7itwtbufe54xkkmqnuxeouldmale6astblemmlkhthz5mg54u
+- valory/staking_activity_checker:0.1.0:bafybeicohiotb47664mt3wtlbncdfbwi3biqu2tqqrvgu6irxfaxvyj7zy
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeicta4sas5cy4uqf3ty7fb3522yyp6ryvqrayk2k26v5ai642xisq4
 - valory/velodrome_router:0.1.0:bafybeiatudzwv7vbyh5emmarifazxe3spgi5sl6h7suef3akev2ltsjjgu
 - valory/velodrome_cl_pool:0.1.0:bafybeibvwsvmj5g7b3sf6y6efucm6njycxn35o7z4v3mvmelg5ufgths2u

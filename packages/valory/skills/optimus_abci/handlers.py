@@ -1052,8 +1052,6 @@ class HttpHandler(BaseHttpHandler):
         Examples:
             localhost:8000/0
             127.0.0.1:8000/100
-            https://pfp.staging.autonolas.tech/45
-            http://pfp.staging.autonolas.tech/120
 
         :param url: the url to check
         :param method: the http method

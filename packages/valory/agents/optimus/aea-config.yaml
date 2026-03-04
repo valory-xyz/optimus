@@ -53,7 +53,7 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeihhadgaitdltynzaq4w7jhgwbdnizsobbaa2riqtqwbml3li2tieq
 - valory/funds_manager:0.1.0:bafybeidtprwtynln7kig2ymxmgiohinofq5jf4n5g2wkbxa4bw3nm2pn4y
 - valory/liquidity_trader_abci:0.1.0:bafybeihyfrnp3dlb75gi23im7vrnnfwruk6b22rneyu72fyyy2rnmbp4xq
-- valory/optimus_abci:0.1.0:bafybeicffnrt6x26kepde7v3yzrydqgwprw5nwmukarlitlcdevxkdmeqa
+- valory/optimus_abci:0.1.0:bafybeibinjeh7lepooqeslsi36f7uxe6ah4nr4774yobbavr5wigw4ahl4
 - valory/registration_abci:0.1.0:bafybeie3dfore53bxvbokqiarzuwulzlyt4vz5mifb4t3gxl6drwkblfha
 - valory/reset_pause_abci:0.1.0:bafybeicffwijiecbqc6z22nowir2fgwwqzwu6vokzuwgd5wa3zxromxevm
 - valory/termination_abci:0.1.0:bafybeiaylk6haefa2xex55krizafzwo2v5tpkcoflw5hiwaqm3qxice23m
@@ -156,7 +156,7 @@ public_id: valory/p2p_libp2p_client:0.1.0
 type: connection
 config:
   nodes:
-  - uri: ${str:acn.staging.autonolas.tech:9005}
+  - uri: ${str:acn.autonolas.tech:9005}
     public_key: ${str:02d3a830c9d6ea1ae91936951430dee11f4662f33118b02190693be835359a9d77}
 cert_requests:
 - identifier: acn
@@ -323,7 +323,7 @@ models:
       strategies_kwargs: ${str:{"merkl_pools_search":{"balancer_graphql_endpoints":{"optimism":"https://api.studio.thegraph.com/query/75376/balancer-optimism-v2/version/latest","base":"https://api.studio.thegraph.com/query/24660/balancer-base-v2/version/latest","mode":"https://api.studio.thegraph.com/query/75376/balancer-mode-v2/version/latest"},"merkl_fetch_campaign_args":{"url":"https://api.merkl.xyz/v3/campaigns","creator":"","live":"false"}},"uniswap_pools_search":{"graphql_endpoints":{"optimism":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/7SVwgBfXoWmiK6x1NF1VEo1szkeWLniqWN1oYsX3UMb5","base":"https://gateway.thegraph.com/api/575c6d9779719bc1ced85444c98441be/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz"}},"balancer_pools_search":{"graphql_endpoint":"https://api-v3.balancer.fi/"},"velodrome_pools_search":{"graphql_endpoint":"https://gateway.thegraph.com/api/b8e4cf1b314c67d2a0109325046a7464/subgraphs/id/7tA4PY1VmbycJeoVtn2mjQK4NbozgwTuZgrxDTxzEDL1"},"asset_lending":{"endpoint":"https://us-central1-stu-dashboard-a0ba2.cloudfunctions.net/v2Aggregators","lending_asset":"0x4200000000000000000000000000000000000006"}}}
       available_protocols: ${list:["VELODROME"]}
       selected_hyper_strategy: ${str:max_apr_selection}
-      service_endpoint_base: ${str:https://optimus.staging.autonolas.tech/}
+      service_endpoint_base: ${str:https://optimism.autonolas.tech/}
       max_pools: ${int:1}
       available_strategies: ${str:{"mode":["balancer_pools_search","asset_lending","velodrome_pools_search"],"optimism":["balancer_pools_search","uniswap_pools_search","velodrome_pools_search"]}}
       default_acceptance_time: ${int:5}

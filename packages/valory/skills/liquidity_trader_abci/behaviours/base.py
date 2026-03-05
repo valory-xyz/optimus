@@ -2405,7 +2405,7 @@ class LiquidityTraderBaseBehaviour(
                 "from_token": from_token_address,
                 "from_token_symbol": from_token_symbol,
                 "to_token": usdc_address,
-                "to_token_symbol": "USDC",
+                "to_token_symbol": "USDC",  # nosec B105
                 "funds_percentage": funds_percentage,
             }
 

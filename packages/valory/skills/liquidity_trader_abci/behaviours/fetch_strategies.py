@@ -3795,7 +3795,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         transfer_data = {
                             "from_address": from_address,
                             "amount": amount_eth,
-                            "token_address": "",
+                            "token_address": "",  # nosec B105
                             "symbol": "ETH",
                             "timestamp": timestamp,
                             "tx_hash": transfer.get("transactionHash", ""),

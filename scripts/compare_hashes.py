@@ -1,4 +1,22 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2026 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
 """Compare package hashes between source-of-truth repos and target repo."""
 
 import json
@@ -29,14 +47,14 @@ def main() -> None:
         if not source_path.exists():
             print(f"WARNING: Source not found: {source_path}")
             continue
-        with open(source_path) as f:
+        with open(source_path, encoding="utf-8") as f:
             source = json.load(f)
         source_dev = source.get("dev", {})
         source_third = source.get("third_party", {})
         source_all.update(source_third)
         source_all.update(source_dev)
 
-    with open(TARGET_PACKAGES_JSON) as f:
+    with open(TARGET_PACKAGES_JSON, encoding="utf-8") as f:
         target = json.load(f)
 
     target_third = target.get("third_party", {})

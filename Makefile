@@ -68,7 +68,7 @@ security:
 # update copyright headers
 .PHONY: generators
 generators:
-	tox -e abci-docstrings
+	tox -qq -e abci-docstrings
 	tomte format-copyright --author author_name
 	autonomy packages lock
 
@@ -76,25 +76,25 @@ generators:
 common-checks-1:
 	tomte check-copyright --author author_name
 	tomte check-doc-links
-	tox -p -e check-hash -e check-packages -e check-doc-hashes
+	tox -qq -p -e check-hash -e check-packages -e check-doc-hashes
 
 .PHONY: all-linters
 all-linters:
 	gitleaks detect --report-format json --report-path leak_report
-	tox -e spell-check
-	tox -e check-doc-hashes
-	tox -e bandit
-	tox -e safety
-	tox -e liccheck
-	tox -e check-packages
-	tox -e check-abciapp-specs
-	tox -e check-hash
-	tox -e black-check
-	tox -e isort-check
-	tox -e flake8
-	tox -e darglint
-	tox -e pylint
-	tox -e mypy
+	tox -qq -e spell-check
+	tox -qq -e check-doc-hashes
+	tox -qq -e bandit
+	tox -qq -e safety
+	tox -qq -e liccheck
+	tox -qq -e check-packages
+	tox -qq -e check-abciapp-specs
+	tox -qq -e check-hash
+	tox -qq -e black-check
+	tox -qq -e isort-check
+	tox -qq -e flake8
+	tox -qq -e darglint
+	tox -qq -e pylint
+	tox -qq -e mypy
 
 .PHONY: fix-abci-app-specs
 fix-abci-app-specs:

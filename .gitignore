@@ -5,6 +5,7 @@
 coverage.xml
 .tox
 .coverage
+.claude
 htmlcov
 *.egg-info
 packages/open_aea

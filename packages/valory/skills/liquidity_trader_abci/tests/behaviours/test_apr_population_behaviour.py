@@ -45,7 +45,6 @@ from packages.valory.skills.liquidity_trader_abci.states.apr_population import (
     APRPopulationRound,
 )
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 

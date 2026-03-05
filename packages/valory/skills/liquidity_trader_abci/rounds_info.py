@@ -19,7 +19,6 @@
 
 """This module contains the information about the rounds that is used by the Http handler."""
 
-
 ROUNDS_INFO = {
     "APRPopulationRound": {
         "name": "Updating performance",

@@ -25,7 +25,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.decision_making imp
 )
 from packages.valory.skills.liquidity_trader_abci.rounds import Event, SynchronizedData
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 

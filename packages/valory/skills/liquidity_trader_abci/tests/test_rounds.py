@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the test for rounds of  liquidity trader"""
+
 import logging  # noqa: F401
 from unittest.mock import MagicMock
 

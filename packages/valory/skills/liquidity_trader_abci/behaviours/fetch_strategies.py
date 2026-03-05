@@ -81,7 +81,6 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
 
-
 # Add these constants to the class or base file
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
 TRANSFER_EVENT_SIGNATURE = (

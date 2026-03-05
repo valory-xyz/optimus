@@ -24,7 +24,6 @@ import os
 
 from flask import Flask, jsonify
 
-
 app = Flask(__name__)
 
 script_path = os.path.dirname(os.path.realpath(__file__))

@@ -111,7 +111,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                     return
 
             sender = self.context.agent_address
-            (next_event, updates) = yield from self.get_next_event()
+            next_event, updates = yield from self.get_next_event()
 
             payload = DecisionMakingPayload(
                 sender=sender,

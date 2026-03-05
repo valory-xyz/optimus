@@ -36,7 +36,6 @@ from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy impor
     EvaluateStrategyRound,
 )
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 

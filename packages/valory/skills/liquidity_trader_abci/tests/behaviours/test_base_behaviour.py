@@ -61,7 +61,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 

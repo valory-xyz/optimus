@@ -103,7 +103,6 @@ from packages.valory.skills.optimus_abci.prompts import (
     build_strategy_config_schema,
 )
 
-
 ABCIHandler = BaseABCIRoundHandler
 SigningHandler = BaseSigningHandler
 LedgerApiHandler = BaseLedgerApiHandler

@@ -4,5 +4,4 @@ from packages.valory.skills.liquidity_trader_abci.utils.protocol_validation impo
     validate_and_fix_protocols,
 )
 
-
 __all__ = ["validate_and_fix_protocols"]

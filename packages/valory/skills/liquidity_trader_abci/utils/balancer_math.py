@@ -3,7 +3,6 @@
 from decimal import Decimal, getcontext
 from typing import List, Union
 
-
 getcontext().prec = 50
 
 

@@ -74,7 +74,6 @@ from packages.valory.skills.liquidity_trader_abci.states.base import (
     SynchronizedData,
 )
 
-
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 SAFE_TX_GAS = 0
 ETHER_VALUE = 0
@@ -2118,8 +2117,7 @@ class LiquidityTraderBaseBehaviour(
         endpoint = self.params.staking_subgraph_endpoints.get(chain)
         service_id = self.params.on_chain_service_id
 
-        query = {
-            "query": f"""
+        query = {"query": f"""
             {{
             service(id: {service_id!r}) {{
                 blockNumber
@@ -2129,8 +2127,7 @@ class LiquidityTraderBaseBehaviour(
                 olasRewardsEarned
             }}
             }}
-            """
-        }
+            """}
 
         self.context.logger.info(
             f"Querying subgraph for service {service_id} on {chain}"

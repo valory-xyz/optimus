@@ -33,7 +33,6 @@ from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
     WithdrawFundsRound,
 )
 
-
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 

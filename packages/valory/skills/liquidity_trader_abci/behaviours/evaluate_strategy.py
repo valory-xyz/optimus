@@ -73,7 +73,6 @@ from packages.valory.skills.liquidity_trader_abci.states.evaluate_strategy impor
     EvaluateStrategyRound,
 )
 
-
 MIN_SWAP_VALUE_USD = 0.5
 
 

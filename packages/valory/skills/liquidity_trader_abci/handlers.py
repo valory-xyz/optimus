@@ -46,7 +46,6 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 )
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 
-
 ABCIHandler = BaseABCIRoundHandler
 HttpHandler = BaseHttpHandler
 SigningHandler = BaseSigningHandler

@@ -20,6 +20,7 @@
 
 
 """Updates fetched agent with correct config"""
+
 import os
 from pathlib import Path
 

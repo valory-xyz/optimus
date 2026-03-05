@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of LiquidityTraderAbciApp."""
+
 import json
 import os
 from datetime import datetime
@@ -40,7 +41,6 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.liquidity_trader_abci.rounds import LiquidityTraderAbciApp
-
 
 HTTP_OK = [200, 201]
 MINUTE_UNIX = 60

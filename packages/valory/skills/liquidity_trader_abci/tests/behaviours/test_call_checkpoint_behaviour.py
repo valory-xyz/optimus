@@ -38,7 +38,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint imp
 from packages.valory.skills.liquidity_trader_abci.payloads import CallCheckpointPayload
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

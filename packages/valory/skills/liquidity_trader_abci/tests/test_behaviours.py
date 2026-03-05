@@ -57,7 +57,6 @@ from packages.valory.skills.liquidity_trader_abci.rounds import (
     SynchronizedData,
 )
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

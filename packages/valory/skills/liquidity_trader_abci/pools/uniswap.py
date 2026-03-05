@@ -42,7 +42,6 @@ from packages.valory.skills.liquidity_trader_abci.utils.tick_math import (
     get_sqrt_ratio_at_tick,
 )
 
-
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 MIN_TICK = -887272
 MAX_TICK = 887272

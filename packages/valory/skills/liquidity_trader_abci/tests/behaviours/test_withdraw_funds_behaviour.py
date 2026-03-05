@@ -41,7 +41,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.withdraw_funds impo
 from packages.valory.skills.liquidity_trader_abci.payloads import WithdrawFundsPayload
 from packages.valory.skills.liquidity_trader_abci.rounds import Event, SynchronizedData
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

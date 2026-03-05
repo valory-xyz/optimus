@@ -19,7 +19,6 @@ from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
     GetPositionsRound,
 )
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 

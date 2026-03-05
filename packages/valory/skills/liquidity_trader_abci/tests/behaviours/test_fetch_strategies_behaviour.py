@@ -43,7 +43,6 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
     PostTxSettlementRound,
 )
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 

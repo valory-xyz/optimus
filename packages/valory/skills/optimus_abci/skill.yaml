@@ -119,7 +119,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeihjgfzqvuymqgku6mwqih7hlvqwr2tmdjrip3m6unt5l4e55bshkm
 - valory/reset_pause_abci:0.1.0:bafybeih6bjalcohxytg6hj3doy5dhkxonrxpqgcnclyf6tnmuyfbom2usy
 - valory/termination_abci:0.1.0:bafybeiarjw4hhu2vf56yxqb4jh3kmk4hfxvqahygn6scc3rfnlogjkwwpe
-- valory/liquidity_trader_abci:0.1.0:bafybeicfcfaj4olbiqfhkdtvbbiymtyzwrsiposiismqhb2ryvpd5gnzaa
+- valory/liquidity_trader_abci:0.1.0:bafybeidjbjia7nwpwcvjrgsip2pmppl44tiubwkbewf3hd6yx3yync6bvi
 - valory/transaction_settlement_abci:0.1.0:bafybeigivknq755rbnelrdemaz3vm4x7jkofvaskm34uh36pbbg6uiquo4
 - valory/funds_manager:0.1.0:bafybeih5k7v6zx7mtkdg4hkgmsyngkz66bbwmrpqqxccnhif666v2hzi6y
 behaviours:
@@ -385,7 +385,7 @@ dependencies:
   eth_account:
     version: <1.0.0,>=0.8.0
   open-aea-ledger-ethereum:
-    version: '>=2.0.8'
+    version: '>=2.1.0rc6'
   eth_utils: {}
 is_abstract: false
 customs: []

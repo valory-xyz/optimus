@@ -113,6 +113,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         # Create mock coingecko API
         self.mock_coingecko = MagicMock()
         self.mock_coingecko.api_key = "test_api_key"
+        self.mock_coingecko.use_x402 = False
 
         # Patch the coingecko property for all tests
         self.coingecko_patcher = patch.object(

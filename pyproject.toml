@@ -38,12 +38,12 @@ pyinstaller = "==6.19.0"
 pycoingecko = "==3.2.0"
 numpy = "==2.2.5"
 pandas = ">=2.2.3"
-pyfolio = "==0.9.2"
+pyfolio = {version = "==0.9.2", optional = true}
 peewee = "==3.17.5"
 google-generativeai = "==0.8.2"
 scipy = ">=1.10.0"
 w3multicall = ">=0.3.1"
-pydantic = "<3,>=2.11.9"
+pydantic = ">=2.12.0"
 multiaddr = "==0.0.9"
 protobuf = "<6,>=5"
 pycryptodome = "==3.20.0"
@@ -51,3 +51,4 @@ certifi = ">=2025.1.31"
 hexbytes = "*"
 
 [tool.poetry.extras]
+pyfolio = ["pyfolio"]

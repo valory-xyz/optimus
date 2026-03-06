@@ -75,13 +75,13 @@ class TestCheckStakingKPIMetBehaviour(FSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
         self.check_staking_kpi_behaviour = self._create_check_staking_kpi_behaviour()
         self.setup_default_test_data()
 
     def teardown_method(self, **kwargs: Any) -> None:
         """Teardown the test method."""
-        super().teardown(**kwargs)
+        super().teardown_method(**kwargs)
 
     def _create_check_staking_kpi_behaviour(self):
         """Create a CheckStakingKPIMetBehaviour instance for testing."""

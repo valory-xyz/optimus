@@ -139,7 +139,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
 
         # Create temporary directory for test files
         self.temp_dir = tempfile.mkdtemp()
@@ -156,7 +156,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
         if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
-        super().teardown(**kwargs)
+        super().teardown_method(**kwargs)
 
     def _create_base_behaviour(self) -> LiquidityTraderBaseBehaviour:
         """Create a base behaviour instance for testing."""

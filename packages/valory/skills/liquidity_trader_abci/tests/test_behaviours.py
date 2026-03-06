@@ -2022,9 +2022,9 @@ class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):
     behaviour_class = PostTxSettlementBehaviour
     next_behaviour_class = PostTxSettlementBehaviour
 
-    def setup(self) -> None:
+    def setup_method(self) -> None:
         """Set up the test."""
-        super().setup()
+        super().setup_method()
         self.behaviour.context.params.__dict__["_frozen"] = False
         self.behaviour.context.params.store_path = Path(".")
         self.behaviour.context.params.gas_cost_info_filename = "test_gas_costs.json"

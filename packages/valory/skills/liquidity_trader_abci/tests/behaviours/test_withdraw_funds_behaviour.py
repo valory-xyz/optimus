@@ -117,7 +117,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
 
         # Create individual behaviour instance for testing
         self.withdraw_behaviour = WithdrawFundsBehaviour(
@@ -129,7 +129,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
     def teardown_method(self, **kwargs: Any) -> None:
         """Teardown the test method."""
-        super().teardown(**kwargs)
+        super().teardown_method(**kwargs)
 
     def _create_withdraw_behaviour(self):
         """Create a WithdrawFundsBehaviour instance for testing."""

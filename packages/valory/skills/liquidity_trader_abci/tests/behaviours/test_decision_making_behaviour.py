@@ -36,7 +36,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
 
     def setup_method(self, **kwargs: Any) -> None:
         """Set up the test method with selective mocking."""
-        super().setup(**kwargs)
+        super().setup_method(**kwargs)
 
         # Fast forward to the DecisionMakingBehaviour
         synchronized_data = SynchronizedData(AbciAppDB(setup_data=dict()))
@@ -172,7 +172,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
                 except Exception:
                     pass
 
-        super().teardown()
+        super().teardown_method()
 
     # ==================== HELPER METHODS ====================
 

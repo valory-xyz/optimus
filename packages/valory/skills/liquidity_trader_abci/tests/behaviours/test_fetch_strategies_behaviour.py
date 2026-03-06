@@ -135,7 +135,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
 
         # Create a fresh behaviour instance for each test
         self.fetch_strategies_behaviour = FetchStrategiesBehaviour(
@@ -151,7 +151,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         """Teardown the test method."""
         # Reset any shared state that might persist between tests
         self._reset_mock_state()
-        super().teardown(**kwargs)
+        super().teardown_method(**kwargs)
 
     def _reset_mock_state(self):
         """Reset mock state to prevent test interference."""

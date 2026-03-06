@@ -7591,8 +7591,9 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             apr, principal, entry_cost, is_cl_pool, percent_in_bounds
         )
 
-        # Expected: 10 / ((0.15/365) * 1000) * 9 = ~24.3 days
-        assert result > 219 and result < 220
+        # MPT = (CT/100) / Vy = (1.0/100) / (0.15/365) = 24.33 days
+        # Capped at MIN_TIME_IN_POSITION (21 days)
+        assert result == 21.0
 
     def test_calculate_min_hold_days_cl_pool(self) -> None:
         """Test _calculate_min_hold_days with concentrated liquidity pool."""
@@ -7606,8 +7607,9 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             apr, principal, entry_cost, is_cl_pool, percent_in_bounds
         )
 
-        # Expected: 15 / ((0.20 * 0.8 / 365) * 1000) * 9 = ~307.8 days
-        assert result > 307 and result < 308
+        # MPT = (CT/100) / Vy = (1.5/100) / (0.16/365) = 34.22 days
+        # Capped at MIN_TIME_IN_POSITION (21 days)
+        assert result == 21.0
 
     def test_calculate_min_hold_days_zero_values(self) -> None:
         """Test _calculate_min_hold_days with zero values."""
@@ -7636,8 +7638,9 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             apr, principal, entry_cost, is_cl_pool, percent_in_bounds
         )
 
-        # Should be a very high number of days due to low APR and high relative cost
-        assert result > 100
+        # MPT = (50/100) / (0.01/365) = 18250 days
+        # Capped at MIN_TIME_IN_POSITION (21 days)
+        assert result == 21.0
 
     # ==================== ENTRY COSTS TRACKING TESTS ====================
 
@@ -9997,20 +10000,27 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "source_token_symbol": "USDC",
             "target_token_symbol": "WETH",
             "tool": "lifi",
+            "gas_cost": 5.0,
+            "fee": 2.0,
         }
 
         def mock_build_multisend_tx(positions, tx_info):
             yield
             return "1234567890123456789012345678901234567890123456789012345678901234"  # 64-char hex string
 
-        # Transaction simulation is deprecated - always returns True
+        def mock_build_safe_tx(from_chain, multisend_tx_hash, multisend_address):
+            yield
+            return None  # Simulate safe tx build failure
 
         with patch.object(
             self.behaviour.current_behaviour,
             "_build_multisend_tx",
             side_effect=mock_build_multisend_tx,
+        ), patch.object(
+            self.behaviour.current_behaviour,
+            "_build_safe_tx",
+            side_effect=mock_build_safe_tx,
         ):
-            # Transaction simulation is deprecated - no patching needed
             generator = self.behaviour.current_behaviour.prepare_bridge_swap_action(
                 positions, tx_info, 100.0, 50.0
             )
@@ -10021,9 +10031,8 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             except StopIteration as e:
                 result = e.value
 
-            # Since simulation is always successful now, this test verifies the new behavior
-            # The method should proceed since simulation always succeeds
-            assert True  # Simulation is always skipped now
+            # _build_safe_tx returned None, so result should be None
+            assert result is None
 
     def test_get_step_transaction_success(self) -> None:
         """Test _get_step_transaction with valid step data."""
@@ -12109,6 +12118,8 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
         ) as mock_tip_data, patch.object(
             self.behaviour.current_behaviour, "store_current_positions"
         ) as mock_store, patch.object(
+            self.behaviour.current_behaviour, "_invalidate_cl_pool_cache"
+        ) as mock_invalidate_cache, patch.object(
             self.behaviour.current_behaviour.context.logger, "info"
         ) as mock_info_logger:
             # Mock generator returns - multiple positions scenario
@@ -12138,10 +12149,17 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
                 yield
                 return None
 
+            def mock_invalidate_cache_generator(chain):
+                yield
+                return None
+
             mock_get_all_positions.return_value = mock_get_all_positions_generator()
             mock_accumulate.return_value = mock_accumulate_generator()
             mock_rename.return_value = mock_rename_generator()
             mock_tip_data.return_value = mock_tip_data_generator()
+            mock_invalidate_cache.return_value = mock_invalidate_cache_generator(
+                "optimism"
+            )
 
             generator = self.behaviour.current_behaviour._post_execute_enter_pool(
                 actions, last_executed_action_index
@@ -12181,6 +12199,9 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             # Verify multiple positions log (should be called twice: specific + general)
             expected_calls = [
                 call("Added Velodrome CL pool with 3 positions to pool 0x789"),
+                call(
+                    "Invalidated Velodrome CL pool cache for chain optimism after successful entry"
+                ),
                 call(
                     "Enter pool was successful! Updated current positions for pool 0x789"
                 ),

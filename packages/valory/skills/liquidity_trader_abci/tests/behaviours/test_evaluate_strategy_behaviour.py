@@ -1937,7 +1937,10 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         accumulated_rewards = 200
 
         # Mock as both reward and whitelisted token
-        with patch("eth_utils.to_checksum_address", return_value=token_address.upper()):
+        with patch(
+            "packages.valory.skills.liquidity_trader_abci.behaviours.evaluate_strategy.to_checksum_address",
+            return_value=token_address.upper(),
+        ):
             with patch.dict(
                 "packages.valory.skills.liquidity_trader_abci.behaviours.base.REWARD_TOKEN_ADDRESSES",
                 {chain: {token_address.upper(): "REWARD"}},

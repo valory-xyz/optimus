@@ -87,6 +87,9 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
         self.mock_shared_state.in_flight_req = False
         self.mock_shared_state.agent_reasoning = ""
 
+        # Track all patchers for robust teardown
+        self._active_patchers = []
+
         # Patch the shared_state property for all tests
         self.shared_state_patcher = patch.object(
             type(self.behaviour.current_behaviour),
@@ -94,6 +97,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             new_callable=lambda: self.mock_shared_state,
         )
         self.shared_state_patcher.start()
+        self._active_patchers.append(self.shared_state_patcher)
 
         # Create mock synchronized data
         self.mock_synchronized_data = MagicMock()
@@ -109,6 +113,7 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             new_callable=lambda: self.mock_synchronized_data,
         )
         self.synchronized_data_patcher.start()
+        self._active_patchers.append(self.synchronized_data_patcher)
 
         # Create mock coingecko API
         self.mock_coingecko = MagicMock()
@@ -122,21 +127,25 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
             new_callable=lambda: self.mock_coingecko,
         )
         self.coingecko_patcher.start()
+        self._active_patchers.append(self.coingecko_patcher)
 
         # Mock all KV store operations to prevent actual database calls
+        # Patch at instance level since these are methods, not properties
         self.kv_read_patcher = patch.object(
-            type(self.behaviour.current_behaviour),
+            self.behaviour.current_behaviour,
             "_read_kv",
             side_effect=self._mock_read_kv,
         )
         self.kv_read_patcher.start()
+        self._active_patchers.append(self.kv_read_patcher)
 
         self.kv_write_patcher = patch.object(
-            type(self.behaviour.current_behaviour),
+            self.behaviour.current_behaviour,
             "_write_kv",
             side_effect=self._mock_write_kv,
         )
         self.kv_write_patcher.start()
+        self._active_patchers.append(self.kv_write_patcher)
 
         # Initialize behavior attributes
         self.behaviour.current_behaviour.selected_opportunities = None
@@ -193,16 +202,12 @@ class TestEvaluateStrategyBehaviour(FSMBehaviourBaseCase):
 
     def teardown_method(self) -> None:
         """Clean up after tests."""
-        if hasattr(self, "shared_state_patcher"):
-            self.shared_state_patcher.stop()
-        if hasattr(self, "synchronized_data_patcher"):
-            self.synchronized_data_patcher.stop()
-        if hasattr(self, "coingecko_patcher"):
-            self.coingecko_patcher.stop()
-        if hasattr(self, "kv_read_patcher"):
-            self.kv_read_patcher.stop()
-        if hasattr(self, "kv_write_patcher"):
-            self.kv_write_patcher.stop()
+        for patcher in reversed(getattr(self, "_active_patchers", [])):
+            try:
+                patcher.stop()
+            except RuntimeError:
+                pass
+        self._active_patchers = []
         super().teardown_method()
 
     def _mock_read_kv(self, keys):

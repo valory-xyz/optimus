@@ -8,14 +8,14 @@ on:
 jobs:
   publish-packages:
     name: Push Packages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-24.04]
         python-version: ["3.10"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-versions }}
       - uses: addnab/docker-run-action@v3
@@ -35,7 +35,7 @@ jobs:
       - "publish-packages"
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-24.04]
         python-version: ["3.10"]
     env:
         DOCKER_USER: ${{secrets.DOCKER_USER}}
@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
             fetch-depth: 0
       - name: Set up tag and vars
@@ -95,14 +95,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-14, macos-14-large, ubuntu-latest]
+        os: [windows-2025, macos-15, macos-15-large, ubuntu-24.04]
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       # Set up Python with setup-python action and add it to PATH
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         id: setup-python
         with:
           python-version: "3.10"
@@ -226,33 +226,33 @@ jobs:
           make check-agent-runner
 
       - name: Upload Release Assets Windows
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{env.FILENAME}}
           path: dist/${{env.FILENAME}}
 
       - name: Upload Release Assets 
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hash_id
           path: hash_id
           overwrite: true
       - name: Upload Release Assets 
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agent_id
           path: agent_id
           overwrite: true
 
       - name: Upload Release Assets 
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agent.tar.gz
           path: agent.tar.gz
           overwrite: true
 
       - name: Upload Release Assets 
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agent.zip
           path: agent.zip
@@ -260,31 +260,31 @@ jobs:
 
   upload-assets:
       needs: build-agent-runner
-      runs-on: ubuntu-latest
+      runs-on: ubuntu-24.04
       steps:
         # MAC OS
         - name: Download artifacts
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
           with:
             name: agent_runner_macos_x64
             path: ./dist/
 
         - name: Download artifacts
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
           with:
             name: agent_runner_macos_arm64
             path: ./dist/
 
         # LINUX
         - name: Download artifacts
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
           with:
             name: agent_runner_linux_x64
             path: ./dist/
 
         # WINDOWS
         - name: Download artifacts
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
           with:
             name: agent_runner_windows_x64.exe
             path: ./dist/
@@ -292,22 +292,22 @@ jobs:
 
             
         - name: Download artifacts
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
           with:
             name: agent_id
             path: ./dist/
         - name: Download artifacts
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
           with:
             name: hash_id
             path: ./dist/
         - name: Download artifacts
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
           with:
             name: agent.zip
             path: ./dist/
         - name: Download artifacts
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
           with:
             name: agent.tar.gz
             path: ./dist/

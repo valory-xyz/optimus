@@ -117,7 +117,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
 
         # Create individual behaviour instance for testing
         self.withdraw_behaviour = WithdrawFundsBehaviour(
@@ -129,7 +129,7 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
     def teardown_method(self, **kwargs: Any) -> None:
         """Teardown the test method."""
-        super().teardown(**kwargs)
+        super().teardown_method(**kwargs)
 
     def _create_withdraw_behaviour(self):
         """Create a WithdrawFundsBehaviour instance for testing."""
@@ -1215,24 +1215,25 @@ class TestWithdrawFundsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         """Property-based test for prepare_exit_pool_actions."""
         withdraw_behaviour = self._create_withdraw_behaviour()
 
-        # Add required fields to positions
-        for position in positions:
-            position.update(
-                {
-                    "status": "OPEN",
-                    "token0_symbol": "ETH",
-                    "token1_symbol": "USDC",
-                    "token0": "0xToken0",
-                    "token1": "0xToken1",
-                }
-            )
+        # Create new dicts with required fields to avoid mutating Hypothesis inputs
+        enriched_positions = [
+            {
+                **position,
+                "status": "OPEN",
+                "token0_symbol": "ETH",
+                "token1_symbol": "USDC",
+                "token0": "0xToken0",
+                "token1": "0xToken1",
+            }
+            for position in positions
+        ]
 
         with patch.object(
             withdraw_behaviour,
             "_build_exit_pool_action_base",
             return_value={"action": "exit"},
         ):
-            result = withdraw_behaviour._prepare_exit_pool_actions(positions)
+            result = withdraw_behaviour._prepare_exit_pool_actions(enriched_positions)
 
             # Result should be a list
             assert isinstance(result, list)

@@ -67,7 +67,7 @@ class TestAPRPopulationBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
 
         # Fast forward to the APRPopulationBehaviour
         synchronized_data = SynchronizedData(AbciAppDB(setup_data=dict()))

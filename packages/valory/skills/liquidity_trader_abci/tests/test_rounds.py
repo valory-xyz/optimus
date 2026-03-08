@@ -25,12 +25,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from packages.valory.skills.liquidity_trader_abci.rounds import (
+    APRPopulationRound,
     CallCheckpointRound,
     CheckStakingKPIMetRound,
     DecisionMakingRound,
     EvaluateStrategyRound,
     Event,
     FailedMultiplexerRound,
+    FetchStrategiesRound,
     FinishedCallCheckpointRound,
     FinishedCheckStakingKPIMetRound,
     FinishedDecisionMakingRound,
@@ -58,8 +60,8 @@ def setup_app() -> LiquidityTraderAbciApp:
 def test_initial_state(setup_app: LiquidityTraderAbciApp) -> None:
     """Test the initial round of the application."""
     app = setup_app
-    assert app.initial_round_cls == CallCheckpointRound
-    assert CallCheckpointRound in app.initial_states
+    assert app.initial_round_cls == FetchStrategiesRound
+    assert FetchStrategiesRound in app.initial_states
 
 
 def test_call_check_point_round_transition(setup_app: LiquidityTraderAbciApp) -> None:
@@ -108,7 +110,7 @@ def test_get_positions_round_transition(setup_app: LiquidityTraderAbciApp) -> No
     transition_function = app.transition_function[GetPositionsRound]
 
     # Transition on done
-    assert transition_function[Event.DONE] == EvaluateStrategyRound
+    assert transition_function[Event.DONE] == APRPopulationRound
 
     # Test no majority
     assert transition_function[Event.NO_MAJORITY] == GetPositionsRound

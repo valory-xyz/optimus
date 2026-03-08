@@ -1022,12 +1022,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             filtered_portfolio_breakdown = []
 
             # Always show all portfolio breakdown entries to display complete portfolio
+            olas_address = OLAS_ADDRESSES.get(self.params.target_investment_chains[0])
             for entry in portfolio_breakdown:
                 try:
-                    chain = self.params.target_investment_chains[0]
+                    entry_address = entry.get("address")
                     if (
-                        entry.get("address").lower()
-                        == OLAS_ADDRESSES.get(chain).lower()
+                        olas_address
+                        and entry_address
+                        and entry_address.lower() == olas_address.lower()
                     ):
                         continue
 

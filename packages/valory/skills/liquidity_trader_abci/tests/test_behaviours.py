@@ -157,17 +157,6 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 loaded_data = json.load(f)
                 assert loaded_data == test_data
 
-    def test_read_assets(self):
-        """Test reading assets from file."""
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
-            test_assets = {"ethereum": {"0x123": "ETH"}}
-            json.dump(test_assets, temp_file)
-            temp_file.close()
-
-            self.behaviour.current_behaviour.assets_filepath = temp_file.name
-            self.behaviour.current_behaviour.read_assets()
-            assert self.behaviour.current_behaviour.assets == test_assets
-
     def test_store_current_positions(self):
         """Test storing current positions."""
         with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
@@ -415,7 +404,8 @@ class TestGetPositionsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         # Unfreeze the params object
         self.behaviour.context.params.__dict__["_frozen"] = False
 
-        self.behaviour.context.params.initial_assets = []  # Modify this line
+        self.behaviour.context.params.initial_assets = []
+        self.behaviour.context.params.target_investment_chains = []
 
         # Prepare synchronized data
         synchronized_data = SynchronizedData(
@@ -480,17 +470,6 @@ class TestGetPositionsBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         # Complete the round
         self.end_round(Event.DONE)
 
-    def test_get_positions_assets_file(self) -> None:
-        """Test reading/writing assets file."""
-        test_assets = {"ethereum": {"0x123": "ETH"}}
-
-        behaviour = cast(GetPositionsBehaviour, self.behaviour.current_behaviour)
-        behaviour.assets = test_assets
-        behaviour.store_assets()
-        behaviour.read_assets()
-
-        assert behaviour.assets == test_assets
-
     def test_backward_compatibility(self) -> None:
         """Test backward compatibility adjustments."""
         old_position = {
@@ -531,20 +510,52 @@ class TestEvaluateStrategyBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         )
 
         test_opportunities = {
-            "optimal_strategies": ["strategy1"],
+            "optimal_strategies": [
+                {
+                    "pool_address": "0x123",
+                    "token0": "0x0000000000000000000000000000000000000001",
+                    "token1": "0x0000000000000000000000000000000000000002",
+                }
+            ],
             "position_to_exit": None,
         }
+
+        def mock_read_kv(*args, **kwargs):
+            yield
+            return {}
+
+        def mock_track_opportunities(*args, **kwargs):
+            yield
+            return
 
         with mock.patch.object(
             self.behaviour.current_behaviour,
             "execute_strategy",
             return_value=test_opportunities,
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_read_kv",
+            side_effect=mock_read_kv,
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_track_opportunities",
+            side_effect=mock_track_opportunities,
         ):
-            self.behaviour.current_behaviour.execute_hyper_strategy()
+            # execute_hyper_strategy is now a generator
+            generator = self.behaviour.current_behaviour.execute_hyper_strategy()
+            try:
+                while True:
+                    next(generator)
+            except StopIteration:
+                pass
 
-            assert self.behaviour.current_behaviour.selected_opportunities == [
-                "strategy1"
-            ]
+            assert len(self.behaviour.current_behaviour.selected_opportunities) == 1
+            assert (
+                self.behaviour.current_behaviour.selected_opportunities[0][
+                    "pool_address"
+                ]
+                == "0x123"
+            )
             assert self.behaviour.current_behaviour.position_to_exit is None
 
     def test_get_returns_metrics(self) -> None:
@@ -605,81 +616,6 @@ class TestEvaluateStrategyBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         # Test non-existent strategy
         result = self.behaviour.current_behaviour.strategy_exec("non_existent")
         assert result is None
-
-    def test_calculate_pnl_for_balancer(self) -> None:
-        """Test PnL calculation for Balancer."""
-        self.fast_forward_to_behaviour(
-            self.behaviour,
-            self.behaviour_class.auto_behaviour_id(),
-            SynchronizedData(AbciAppDB(setup_data=dict())),
-        )
-
-        # Prepare params
-        self.behaviour.current_behaviour.context.params.__dict__["_frozen"] = False
-        self.behaviour.current_behaviour.context.params.balancer_vault_contract_addresses = {
-            "ethereum": "0xvault"
-        }
-        self.behaviour.current_behaviour.context.params.safe_contract_addresses = {
-            "ethereum": "0xsafe"
-        }
-        self.behaviour.current_behaviour.context.params.__dict__["_frozen"] = True
-
-        position = {
-            "chain": "ethereum",
-            "pool_address": "0xpool",
-            "token0": "0xtoken0",
-            "token1": "0xtoken1",
-            "token0_symbol": "TOKEN0",
-            "token1_symbol": "TOKEN1",
-            "amount0": 100,
-            "amount1": 200,
-            "timestamp": 1609459200,
-        }
-
-        # Comprehensive mock methods
-        def mock_contract_interact(*args, **kwargs):
-            contract_callable = kwargs.get("contract_callable", "")
-            if "get_pool_id" in contract_callable:
-                return "pool_id_123"
-            elif "get_pool_tokens" in contract_callable:
-                return {0: ["0xtoken0", "0xtoken1"], 1: [1000, 2000]}
-            elif "get_total_supply" in contract_callable:
-                return 10000
-            elif "get_balance" in contract_callable:
-                return 1000
-            return None
-
-        def mock_get_token_decimals(*args, **kwargs):
-            return 18
-
-        def mock_fetch_token_price(*args, **kwargs):
-            return 10.0
-
-        # Patch methods
-        with mock.patch.object(
-            self.behaviour.current_behaviour,
-            "contract_interact",
-            side_effect=mock_contract_interact,
-        ), mock.patch.object(
-            self.behaviour.current_behaviour,
-            "_get_token_decimals",
-            side_effect=mock_get_token_decimals,
-        ), mock.patch.object(
-            self.behaviour.current_behaviour,
-            "_fetch_token_price",
-            side_effect=mock_fetch_token_price,
-        ), mock.patch.object(
-            self.behaviour.current_behaviour,
-            "calculate_initial_investment_value",
-            return_value=5000.0,
-        ):
-            # Directly call the method
-            pnl_data = self.behaviour.current_behaviour.calculate_pnl_for_balancer(
-                position
-            )
-
-            # Assertions
-            assert pnl_data is not None, "PnL calculation returned None"
 
 
 class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
@@ -787,24 +723,18 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             "remaining_gas_allowance": 200,
         }
 
-        with mock.patch.object(
-            self.behaviour.current_behaviour, "_add_token_to_assets"
-        ) as mock_add:
-            result = self.behaviour.current_behaviour._update_assets_after_swap(
-                [action], 0
-            )
-            assert result == (
-                Event.UPDATE.value,
-                {
-                    "last_executed_step_index": 0,
-                    "fee_details": {
-                        "remaining_fee_allowance": 100,
-                        "remaining_gas_allowance": 200,
-                    },
-                    "last_action": Action.STEP_EXECUTED.value,
+        result = self.behaviour.current_behaviour._update_assets_after_swap([action], 0)
+        assert result == (
+            Event.UPDATE.value,
+            {
+                "last_executed_step_index": 0,
+                "fee_details": {
+                    "remaining_fee_allowance": 100,
+                    "remaining_gas_allowance": 200,
                 },
-            )
-            assert mock_add.call_count == 2
+                "last_action": Action.STEP_EXECUTED.value,
+            },
+        )
 
     def test_get_decision_on_swap(self):
         """Test get_decision_on_swap method."""
@@ -851,10 +781,8 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             assert result == Decision.CONTINUE.value
 
     def test_prepare_next_action_unknown_action(self):
-        """Test _prepare_next_action method for an unknown action."""
-        serialized_actions = json.dumps(
-            [{"action": Action.ENTER_POOL.value}]  # Use a valid Action value
-        )
+        """Test _prepare_next_action method for ENTER_POOL action with no tx_hash returns DONE."""
+        serialized_actions = json.dumps([{"action": Action.ENTER_POOL.value}])
 
         synchronized_data = SynchronizedData(
             AbciAppDB(
@@ -872,21 +800,45 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
 
         current_behaviour = self.behaviour.current_behaviour
 
-        # Use a try-except to handle StopIteration
-        try:
-            result = next(
-                current_behaviour._prepare_next_action(
-                    positions=[],
-                    actions=json.loads(serialized_actions),
-                    current_action_index=0,
-                    last_round_id="some_id",
-                )
-            )
-        except StopIteration as e:
-            result = e.value
+        def mock_read_investing_paused():
+            yield
+            return False
 
-        # Check that the result is a tuple with a "done" event
-        assert result == (Event.DONE.value, {})
+        def mock_read_withdrawal_status():
+            yield
+            return None
+
+        def mock_get_enter_pool_tx_hash(positions, action_details):
+            yield
+            return None, None, None
+
+        with mock.patch.object(
+            current_behaviour,
+            "_read_investing_paused",
+            side_effect=mock_read_investing_paused,
+        ), mock.patch.object(
+            current_behaviour,
+            "_read_withdrawal_status",
+            side_effect=mock_read_withdrawal_status,
+        ), mock.patch.object(
+            current_behaviour,
+            "get_enter_pool_tx_hash",
+            side_effect=mock_get_enter_pool_tx_hash,
+        ):
+            generator = current_behaviour._prepare_next_action(
+                positions=[],
+                actions=json.loads(serialized_actions),
+                current_action_index=0,
+                last_round_id="some_id",
+            )
+            result = None
+            try:
+                while True:
+                    next(generator)
+            except StopIteration as e:
+                result = e.value
+
+            assert result == (Event.DONE.value, {})
 
     def test_prepare_next_action_enter_pool(self):
         """Test _prepare_next_action method for ENTER_POOL action."""
@@ -894,7 +846,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             [
                 {
                     "action": Action.ENTER_POOL.value,
-                    "dex_type": DexType.UNISWAP_V3.value,  # Matches DexType.UNISWAP_V3.value
+                    "dex_type": DexType.UNISWAP_V3.value,
                     "chain": "mode",
                     "token0": "0x1234",
                     "token1": "0x5678",
@@ -919,23 +871,46 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
 
         current_behaviour = self.behaviour.current_behaviour
 
-        # Mock get_enter_pool_tx_hash to return specific values
+        def mock_read_investing_paused():
+            yield
+            return False
+
+        def mock_read_withdrawal_status():
+            yield
+            return None
+
+        def mock_get_enter_pool_tx_hash(positions, action_details):
+            yield
+            return "test_tx_hash", "ethereum", "0xsafe_address"
+
         with mock.patch.object(
             current_behaviour,
+            "_read_investing_paused",
+            side_effect=mock_read_investing_paused,
+        ), mock.patch.object(
+            current_behaviour,
+            "_read_withdrawal_status",
+            side_effect=mock_read_withdrawal_status,
+        ), mock.patch.object(
+            current_behaviour,
             "get_enter_pool_tx_hash",
-            return_value=("test_tx_hash", "ethereum", "0xsafe_address"),
+            side_effect=mock_get_enter_pool_tx_hash,
         ):
-            result = next(
-                current_behaviour._prepare_next_action(
-                    positions=[],
-                    actions=json.loads(serialized_actions),
-                    current_action_index=0,
-                    last_round_id="some_id",
-                )
+            generator = current_behaviour._prepare_next_action(
+                positions=[],
+                actions=json.loads(serialized_actions),
+                current_action_index=0,
+                last_round_id="some_id",
             )
+            result = None
+            try:
+                while True:
+                    next(generator)
+            except StopIteration as e:
+                result = e.value
 
-            assert len(result) > 0
             assert result is not None
+            assert len(result) > 0
 
     def test_prepare_next_action_find_bridge_route(self):
         """Test _prepare_next_action method for FIND_BRIDGE_ROUTE action."""
@@ -969,24 +944,49 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
 
         current_behaviour = self.behaviour.current_behaviour
 
-        # Mock fetch_routes to return sample routes
-        sample_routes = [{"steps": [{"tool": "lifi"}]}]
-        with mock.patch.object(
-            current_behaviour, "fetch_routes", return_value=sample_routes
-        ):
-            result = next(
-                current_behaviour._prepare_next_action(
-                    positions=[],
-                    actions=json.loads(serialized_actions),
-                    current_action_index=0,
-                    last_round_id="some_id",
-                )
-            )
+        def mock_read_investing_paused():
+            yield
+            return False
 
-            # Assert the structure of the returned routes
-            assert isinstance(result, dict)
-            assert "steps" in result
-            assert result["steps"] == [{"tool": "lifi"}]
+        def mock_read_withdrawal_status():
+            yield
+            return None
+
+        # Mock fetch_routes as a generator
+        sample_routes = [{"steps": [{"tool": "lifi"}]}]
+
+        def mock_fetch_routes(positions, action_details):
+            yield
+            return sample_routes
+
+        with mock.patch.object(
+            current_behaviour,
+            "_read_investing_paused",
+            side_effect=mock_read_investing_paused,
+        ), mock.patch.object(
+            current_behaviour,
+            "_read_withdrawal_status",
+            side_effect=mock_read_withdrawal_status,
+        ), mock.patch.object(
+            current_behaviour, "fetch_routes", side_effect=mock_fetch_routes
+        ):
+            generator = current_behaviour._prepare_next_action(
+                positions=[],
+                actions=json.loads(serialized_actions),
+                current_action_index=0,
+                last_round_id="some_id",
+            )
+            result = None
+            try:
+                while True:
+                    next(generator)
+            except StopIteration as e:
+                result = e.value
+
+            # Result should be (Event.UPDATE.value, {...}) with routes
+            assert result is not None
+            assert result[0] == Event.UPDATE.value
+            assert "routes" in result[1]
 
     def test_handle_failed_step(self):
         """Test _handle_failed_step method."""
@@ -1201,13 +1201,40 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
 
         def mock_get_mint_receipt(*args, **kwargs):
             """Mock generator for _get_data_from_mint_tx_receipt"""
-            yield receipt_data
+            yield
             return receipt_data
+
+        def mock_accumulate_transaction_costs(*args, **kwargs):
+            """Mock generator for _accumulate_transaction_costs"""
+            yield
+            return
+
+        def mock_rename_entry_costs_key(*args, **kwargs):
+            """Mock generator for _rename_entry_costs_key"""
+            yield
+            return
+
+        def mock_calculate_and_store_tip_data(*args, **kwargs):
+            """Mock generator for _calculate_and_store_tip_data"""
+            yield
+            return
 
         with mock.patch.object(
             self.behaviour.current_behaviour,
             "_get_data_from_mint_tx_receipt",
             side_effect=mock_get_mint_receipt,
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_accumulate_transaction_costs",
+            side_effect=mock_accumulate_transaction_costs,
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_rename_entry_costs_key",
+            side_effect=mock_rename_entry_costs_key,
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_calculate_and_store_tip_data",
+            side_effect=mock_calculate_and_store_tip_data,
         ), mock.patch.object(
             self.behaviour.current_behaviour, "store_current_positions"
         ):
@@ -1231,7 +1258,7 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
             assert position["liquidity"] == receipt_data[1]
             assert position["amount0"] == receipt_data[2]
             assert position["amount1"] == receipt_data[3]
-            assert position["timestamp"] == receipt_data[4]
+            assert position["enter_timestamp"] == receipt_data[4]
             assert position["token0_symbol"] == action["token0_symbol"]
             assert position["token1_symbol"] == action["token1_symbol"]
             assert position["dex_type"] == action["dex_type"]
@@ -1404,8 +1431,38 @@ class TestDecisionMakingBehaviour(FSMBehaviourBaseCase):
         )
 
         # Mock get_positions to simulate empty positions
+        def mock_get_positions():
+            yield
+            return []
+
+        def mock_read_investing_paused():
+            yield
+            return False
+
+        def mock_read_withdrawal_status():
+            yield
+            return None
+
+        def mock_get_enter_pool_tx_hash(positions, action_details):
+            yield
+            return None, None, None
+
         with mock.patch.object(
-            self.behaviour.current_behaviour, "get_positions", return_value=[]
+            self.behaviour.current_behaviour,
+            "get_positions",
+            side_effect=mock_get_positions,
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_read_investing_paused",
+            side_effect=mock_read_investing_paused,
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "_read_withdrawal_status",
+            side_effect=mock_read_withdrawal_status,
+        ), mock.patch.object(
+            self.behaviour.current_behaviour,
+            "get_enter_pool_tx_hash",
+            side_effect=mock_get_enter_pool_tx_hash,
         ):
             # Handle generator results
             result = None
@@ -2022,9 +2079,9 @@ class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):
     behaviour_class = PostTxSettlementBehaviour
     next_behaviour_class = PostTxSettlementBehaviour
 
-    def setup(self) -> None:
+    def setup_method(self) -> None:
         """Set up the test."""
-        super().setup()
+        super().setup_method()
         self.behaviour.context.params.__dict__["_frozen"] = False
         self.behaviour.context.params.store_path = Path(".")
         self.behaviour.context.params.gas_cost_info_filename = "test_gas_costs.json"

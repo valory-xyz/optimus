@@ -14,15 +14,15 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        os: [ ubuntu-24.04, macos-15, windows-2025 ]
         python-version: [ "3.10" ]
         poetry-version: ["1.3.2"]
 
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install and configure Poetry
@@ -40,16 +40,16 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-24.04 ]
         python-version: [ "3.10" ]
 
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -76,14 +76,14 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-24.04 ]
         python-version: [ "3.10.6" ]
 
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -124,14 +124,14 @@ jobs:
 
   scan:
     name: gitleaks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
         with:
-          go-version: "1.17.7"
+          go-version: "1.21"
       - run: |
           wget https://github.com/zricethezav/gitleaks/releases/download/v8.10.1/gitleaks_8.10.1_linux_x64.tar.gz && \
           tar -xzf gitleaks_8.10.1_linux_x64.tar.gz && \
@@ -148,7 +148,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        os: [ ubuntu-24.04, macos-15, windows-2025 ]
         python-version: [ "3.10", "3.11", "3.12", "3.13", "3.14" ]
       max-parallel: 3
       fail-fast: false
@@ -156,16 +156,15 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          submodules: recursive
           python-version: ${{ matrix.python-version }}
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
         with:
-          go-version: "1.17.7"
-      - if: matrix.os == 'ubuntu-latest'
-        name: Install dependencies (ubuntu-latest)
+          go-version: "1.21"
+      - if: matrix.os == 'ubuntu-24.04'
+        name: Install dependencies (ubuntu-24.04)
         timeout-minutes: 20
         continue-on-error: true
         run: |
@@ -203,8 +202,8 @@ jobs:
           docker pull trufflesuite/ganache:beta || echo "Docker pull failed, continuing..."
           docker pull valory/autonolas-registries:latest || echo "Docker pull failed, continuing..."
 
-      - if: matrix.os == 'ubuntu-latest'
-        name: Unit tests (ubuntu-latest)
+      - if: matrix.os == 'ubuntu-24.04'
+        name: Unit tests (ubuntu-24.04)
         timeout-minutes: 30
         env:
           ACTIONS_STEP_DEBUG: true
@@ -214,8 +213,8 @@ jobs:
           mkdir -p packages/valory/skills/liquidity_trader_abci/data
           tox -e py${{ matrix.python-version }}-linux
 
-      - if: matrix.os == 'macos-latest'
-        name: Install dependencies (macos-latest)
+      - if: matrix.os == 'macos-15'
+        name: Install dependencies (macos-15)
         timeout-minutes: 20
         continue-on-error: true
         run: |
@@ -242,8 +241,8 @@ jobs:
             ipfs init || echo "IPFS init failed, continuing..."
           fi
 
-      - if: matrix.os == 'macos-latest'
-        name: Unit tests macos-latest
+      - if: matrix.os == 'macos-15'
+        name: Unit tests macos-15
         timeout-minutes: 30
         env:
           ACTIONS_STEP_DEBUG: true
@@ -253,8 +252,8 @@ jobs:
           mkdir -p packages/valory/skills/liquidity_trader_abci/data
           tox -e py${{ matrix.python-version }}-darwin
 
-      - if: matrix.os == 'windows-latest'
-        name: Install dependencies (windows-latest)
+      - if: matrix.os == 'windows-2025'
+        name: Install dependencies (windows-2025)
         timeout-minutes: 20
         continue-on-error: true
         env:
@@ -283,8 +282,8 @@ jobs:
             ipfs init || echo "IPFS init failed, continuing..."
           }
 
-      - if: matrix.os == 'windows-latest'
-        name: Unit tests windows-latest
+      - if: matrix.os == 'windows-2025'
+        name: Unit tests windows-2025
         timeout-minutes: 30
         env:
           ACTIONS_STEP_DEBUG: true
@@ -294,9 +293,9 @@ jobs:
           mkdir packages\valory\skills\liquidity_trader_abci\data
           tox -e py${{ matrix.python-version }}-win
 
-      - if: matrix.os == 'ubuntu-latest'
+      - if: matrix.os == 'ubuntu-24.04'
         name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.xml
@@ -312,17 +311,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-24.04 ]
         python-version: [ "3.10" ]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          submodules: recursive
           python-version: ${{ matrix.python-version }}
-      - if: matrix.os == 'ubuntu-latest'
-        name: Install dependencies (ubuntu-latest)
+      - if: matrix.os == 'ubuntu-24.04'
+        name: Install dependencies (ubuntu-24.04)
         run: |
           sudo apt-get update --fix-missing
           sudo apt-get autoremove

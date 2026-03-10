@@ -43,7 +43,6 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
     PostTxSettlementRound,
 )
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
@@ -136,7 +135,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
 
         # Create a fresh behaviour instance for each test
         self.fetch_strategies_behaviour = FetchStrategiesBehaviour(
@@ -152,7 +151,7 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         """Teardown the test method."""
         # Reset any shared state that might persist between tests
         self._reset_mock_state()
-        super().teardown(**kwargs)
+        super().teardown_method(**kwargs)
 
     def _reset_mock_state(self):
         """Reset mock state to prevent test interference."""
@@ -232,6 +231,15 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         self.mock_load_chain_total_investment = self._create_fresh_mock_generator(100.0)
         self.mock_update_portfolio_metrics = self._create_fresh_mock_generator(None)
         self.mock_save_chain_total_investment = self._create_fresh_mock_generator(None)
+        self.mock_calculate_stakig_rewards_value = self._create_fresh_mock_generator(
+            Decimal("0")
+        )
+        self.mock_calculate_airdrop_rewards_value = self._create_fresh_mock_generator(
+            Decimal("0")
+        )
+        self.mock_calculate_withdrawals_value = self._create_fresh_mock_generator(
+            Decimal("0")
+        )
 
         # Function mocks (methods that just return without yielding)
         self.mock_store_whitelisted_assets = self._create_fresh_mock_function(None)
@@ -626,7 +634,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         fetch_behaviour = self._create_fetch_strategies_behaviour()
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return 2500.0
 
         with patch.object(
@@ -736,18 +743,11 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         """Test _fetch_historical_eth_price method with various API responses."""
         fetch_behaviour = self._create_fetch_strategies_behaviour()
 
-        def mock_request_with_retries(
-            endpoint, headers, rate_limited_code, rate_limited_callback, retry_wait
-        ):
-            yield
+        def mock_coingecko_request(endpoint, headers, x402_signer=None):
             return api_response
 
-        with patch.object(
-            fetch_behaviour, "_request_with_retries", mock_request_with_retries
-        ):
-            result = self._consume_generator(
-                fetch_behaviour._fetch_historical_eth_price("01-01-2024")
-            )
+        with patch.object(fetch_behaviour.coingecko, "request", mock_coingecko_request):
+            result = fetch_behaviour._fetch_historical_eth_price("01-01-2024")
             assert result == expected_result, f"Failed for {test_description}"
 
     @pytest.mark.parametrize(
@@ -1002,12 +1002,14 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             _calculate_safe_balances_value=mock_calculate_safe_balances_value,
             _update_portfolio_metrics=self.mock_update_portfolio_metrics,
             calculate_initial_investment_value_from_funding_events=mock_calculate_initial_investment_value_from_funding_events,
+            calculate_stakig_rewards_value=self.mock_calculate_stakig_rewards_value,
+            calculate_airdrop_rewards_value=self.mock_calculate_airdrop_rewards_value,
+            calculate_withdrawals_value=self.mock_calculate_withdrawals_value,
             _calculate_total_volume=mock_calculate_total_volume,
             _create_portfolio_data=mock_create_portfolio_data,
             store_current_positions=self.mock_store_current_positions,
             _read_kv=self.mock_read_kv_empty,
             _write_kv=self.mock_write_kv,
-            get_http_response=mock_get_http_response,
         ):
             list(fetch_behaviour.calculate_user_share_values())
 
@@ -1076,12 +1078,14 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             _calculate_safe_balances_value=mock_calculate_safe_balances_value,
             _update_portfolio_metrics=self.mock_update_portfolio_metrics,
             calculate_initial_investment_value_from_funding_events=mock_calculate_initial_investment_value_from_funding_events,
+            calculate_stakig_rewards_value=self.mock_calculate_stakig_rewards_value,
+            calculate_airdrop_rewards_value=self.mock_calculate_airdrop_rewards_value,
+            calculate_withdrawals_value=self.mock_calculate_withdrawals_value,
             _calculate_total_volume=mock_calculate_total_volume,
             _create_portfolio_data=mock_create_portfolio_data,
             store_current_positions=self.mock_store_current_positions,
             _read_kv=self.mock_read_kv_empty,
             _write_kv=self.mock_write_kv,
-            get_http_response=mock_get_http_response,
         ):
             list(fetch_behaviour.calculate_user_share_values())
 
@@ -1192,12 +1196,14 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             _calculate_safe_balances_value=mock_calculate_safe_balances_value,
             _update_portfolio_metrics=self.mock_update_portfolio_metrics,
             calculate_initial_investment_value_from_funding_events=mock_calculate_initial_investment_value_from_funding_events,
+            calculate_stakig_rewards_value=self.mock_calculate_stakig_rewards_value,
+            calculate_airdrop_rewards_value=self.mock_calculate_airdrop_rewards_value,
+            calculate_withdrawals_value=self.mock_calculate_withdrawals_value,
             _calculate_total_volume=mock_calculate_total_volume,
             _create_portfolio_data=mock_create_portfolio_data,
             store_current_positions=self.mock_store_current_positions,
             _read_kv=self.mock_read_kv_empty,
             _write_kv=self.mock_write_kv,
-            get_http_response=mock_get_http_response,
         ):
             list(fetch_behaviour.calculate_user_share_values())
 
@@ -1304,7 +1310,9 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             store_current_positions=self.mock_store_current_positions,
             _read_kv=self.mock_read_kv_empty,
             _write_kv=self.mock_write_kv,
-            get_http_response=mock_get_http_response,
+            calculate_stakig_rewards_value=self.mock_calculate_stakig_rewards_value,
+            calculate_airdrop_rewards_value=self.mock_calculate_airdrop_rewards_value,
+            calculate_withdrawals_value=self.mock_calculate_withdrawals_value,
         ):
             # Execute the method
             list(fetch_behaviour.calculate_user_share_values())
@@ -1400,7 +1408,9 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             store_current_positions=self.mock_store_current_positions,
             _read_kv=self.mock_read_kv_empty,
             _write_kv=self.mock_write_kv,
-            get_http_response=mock_get_http_response,
+            calculate_stakig_rewards_value=self.mock_calculate_stakig_rewards_value,
+            calculate_airdrop_rewards_value=self.mock_calculate_airdrop_rewards_value,
+            calculate_withdrawals_value=self.mock_calculate_withdrawals_value,
         ):
             # Execute the method
             list(fetch_behaviour.calculate_user_share_values())
@@ -1513,7 +1523,9 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             store_current_positions=self.mock_store_current_positions,
             _read_kv=self.mock_read_kv_empty,
             _write_kv=self.mock_write_kv,
-            get_http_response=mock_get_http_response,
+            calculate_stakig_rewards_value=self.mock_calculate_stakig_rewards_value,
+            calculate_airdrop_rewards_value=self.mock_calculate_airdrop_rewards_value,
+            calculate_withdrawals_value=self.mock_calculate_withdrawals_value,
         ):
             list(fetch_behaviour.calculate_user_share_values())
 
@@ -1590,27 +1602,17 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 "portfolio_breakdown": [],
             }
 
-        def mock_get_http_response(*args, **kwargs):
-            import json
-            from unittest.mock import MagicMock
-
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.body = json.dumps(
-                {
-                    "data": {
-                        "service": {
-                            "blockNumber": "12345",
-                            "blockTimestamp": "1234567890",
-                            "currentOlasStaked": "1000",
-                            "id": "test",
-                            "olasRewardsEarned": "100",
-                        }
-                    }
-                }
-            ).encode("utf-8")
+        def mock_calculate_stakig_rewards_value():
             yield
-            return mock_response
+            return Decimal("0")
+
+        def mock_calculate_airdrop_rewards_value():
+            yield
+            return Decimal("0")
+
+        def mock_calculate_withdrawals_value():
+            yield
+            return Decimal("0")
 
         with patch.multiple(
             fetch_behaviour,
@@ -1620,12 +1622,14 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             _update_portfolio_metrics=self.mock_update_portfolio_metrics,
             calculate_initial_investment_value_from_funding_events=mock_calculate_initial_investment_value_from_funding_events,
             _load_chain_total_investment=mock_load_chain_total_investment,
+            calculate_stakig_rewards_value=mock_calculate_stakig_rewards_value,
+            calculate_airdrop_rewards_value=mock_calculate_airdrop_rewards_value,
+            calculate_withdrawals_value=mock_calculate_withdrawals_value,
             _calculate_total_volume=mock_calculate_total_volume,
             _create_portfolio_data=mock_create_portfolio_data,
             store_current_positions=self.mock_store_current_positions,
             _read_kv=self.mock_read_kv_empty,
             _write_kv=self.mock_write_kv,
-            get_http_response=mock_get_http_response,
         ):
             # Execute the method
             list(fetch_behaviour.calculate_user_share_values())
@@ -1690,27 +1694,21 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         def mock_create_portfolio_data(*args, **kwargs):
             return None  # Return None
 
-        def mock_get_http_response(*args, **kwargs):
-            import json
-            from unittest.mock import MagicMock
-
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.body = json.dumps(
-                {
-                    "data": {
-                        "service": {
-                            "blockNumber": "12345",
-                            "blockTimestamp": "1234567890",
-                            "currentOlasStaked": "1000",
-                            "id": "test",
-                            "olasRewardsEarned": "100",
-                        }
-                    }
-                }
-            ).encode("utf-8")
+        def mock_calculate_stakig_rewards_value():
             yield
-            return mock_response
+            return Decimal("0")
+
+        def mock_calculate_airdrop_rewards_value():
+            yield
+            return Decimal("0")
+
+        def mock_calculate_withdrawals_value():
+            yield
+            return Decimal("0")
+
+        def mock_load_chain_total_investment(chain):
+            yield
+            return 0.0
 
         with patch.multiple(
             fetch_behaviour,
@@ -1719,12 +1717,15 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             _calculate_safe_balances_value=mock_calculate_safe_balances_value,
             _update_portfolio_metrics=self.mock_update_portfolio_metrics,
             calculate_initial_investment_value_from_funding_events=mock_calculate_initial_investment_value_from_funding_events,
+            calculate_stakig_rewards_value=mock_calculate_stakig_rewards_value,
+            calculate_airdrop_rewards_value=mock_calculate_airdrop_rewards_value,
+            calculate_withdrawals_value=mock_calculate_withdrawals_value,
+            _load_chain_total_investment=mock_load_chain_total_investment,
             _calculate_total_volume=mock_calculate_total_volume,
             _create_portfolio_data=mock_create_portfolio_data,
             store_current_positions=self.mock_store_current_positions,
             _read_kv=self.mock_read_kv_empty,
             _write_kv=self.mock_write_kv,
-            get_http_response=mock_get_http_response,
         ):
             list(fetch_behaviour.calculate_user_share_values())
 
@@ -2236,8 +2237,23 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             yield
             return mock_price_responses.get(token_address)
 
+        def mock_update_position_with_current_value(
+            position,
+            current_value_usd,
+            chain,
+            user_balances=None,
+            token_info=None,
+            token_prices=None,
+        ):
+            yield
+            return
+
         with patch.object(
             fetch_behaviour, "_fetch_token_price", mock_fetch_token_price
+        ), patch.object(
+            fetch_behaviour,
+            "_update_position_with_current_value",
+            mock_update_position_with_current_value,
         ):
             # Execute the method
             generator = fetch_behaviour._calculate_position_value(
@@ -3086,7 +3102,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         fetch_behaviour = self._create_fetch_strategies_behaviour()
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return mock_price_response
 
         with patch.object(
@@ -3097,16 +3112,12 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             if not eth_transfers and test_description == "no eth transfers":
                 # This case should raise an IndexError
                 with pytest.raises(IndexError):
-                    self._consume_generator(
-                        fetch_behaviour._calculate_total_reversion_value(
-                            eth_transfers, reversion_transfers
-                        )
-                    )
-            else:
-                result = self._consume_generator(
                     fetch_behaviour._calculate_total_reversion_value(
                         eth_transfers, reversion_transfers
                     )
+            else:
+                result = fetch_behaviour._calculate_total_reversion_value(
+                    eth_transfers, reversion_transfers
                 )
 
                 assert (
@@ -3130,7 +3141,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         }
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return 2000.0  # $2000 per ETH
 
         def mock_is_gnosis_safe(address_info):
@@ -3217,7 +3227,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         }
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return None  # Price fetch failure
 
         def mock_is_gnosis_safe(address_info):
@@ -4216,7 +4225,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             return mock_native_balance
 
         def mock_calculate_total_reversion_value(eth_transfers, reversion_transfers):
-            yield
             return mock_reversion_value
 
         # Mock datetime for the invalid timestamp test case
@@ -4292,7 +4300,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         ]
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return 2000.0
 
         with patch.object(
@@ -4300,10 +4307,8 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "_fetch_historical_eth_price",
             mock_fetch_historical_eth_price,
         ):
-            result = self._consume_generator(
-                fetch_behaviour._calculate_total_reversion_value(
-                    eth_transfers, reversion_transfers
-                )
+            result = fetch_behaviour._calculate_total_reversion_value(
+                eth_transfers, reversion_transfers
             )
 
             # Should still calculate value even with invalid timestamp (uses current date as fallback)
@@ -4530,7 +4535,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 yield {}
 
             def mock_fetch_historical_eth_price(date_str):
-                yield
                 return 2000.0  # $2000 per ETH
 
             def mock_get_current_timestamp():
@@ -4586,7 +4590,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             yield {}  # No transfers
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return 2000.0  # $2000 per ETH
 
         def mock_get_current_timestamp():
@@ -4654,7 +4657,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             }
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return 2000.0  # $2000 per ETH
 
         with patch.object(
@@ -4712,7 +4714,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             }
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return 2000.0  # $2000 per ETH
 
         with patch.object(
@@ -4762,7 +4763,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         }
 
         def mock_fetch_historical_eth_price(date_str):
-            yield
             return None  # Price fetch fails
 
         def mock_fetch_historical_token_price(coingecko_id, date_str):
@@ -4913,7 +4913,6 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 yield {}  # No transfers for unsupported chain
 
             def mock_fetch_historical_eth_price(date_str):
-                yield
                 return 2000.0  # $2000 per ETH
 
             def mock_get_current_timestamp():
@@ -8837,7 +8836,10 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 "velodrome",
                 True,
                 None,  # Not used for CL pools
-                [{"current_liquidity": 0}, {"current_liquidity": 0}],
+                [
+                    {"current_liquidity": 0, "token_id": 1},
+                    {"current_liquidity": 0, "token_id": 2},
+                ],
                 "closed",
                 "velodrome CL with zero liquidity in all positions",
             ),
@@ -8846,7 +8848,10 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 "velodrome",
                 True,
                 None,  # Not used for CL pools
-                [{"current_liquidity": 0}, {"current_liquidity": 100}],
+                [
+                    {"current_liquidity": 0, "token_id": 1},
+                    {"current_liquidity": 100, "token_id": 2},
+                ],
                 "open",
                 "velodrome CL with partial liquidity",
             ),
@@ -13760,12 +13765,12 @@ class TestFetchStrategiesBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
         assert result == expected_value, f"Expected {expected_value}, got {result}"
 
     def test_calculate_withdrawals_value_non_mode_chain(self):
-        """Test calculate_withdrawals_value method for non-Mode chain."""
+        """Test calculate_withdrawals_value method for non-Mode/non-Optimism chain."""
         fetch_behaviour = self._create_fetch_strategies_behaviour()
 
-        # Mock the chain parameter to be non-mode - unfreeze params first
+        # Mock the chain parameter to be a chain with no withdrawal logic
         fetch_behaviour.params.__dict__["_frozen"] = False
-        fetch_behaviour.params.target_investment_chains = ["optimism"]
+        fetch_behaviour.params.target_investment_chains = ["base"]
         fetch_behaviour.params.__dict__["_frozen"] = True
 
         # Test the method

@@ -19,7 +19,6 @@ from packages.valory.skills.liquidity_trader_abci.states.get_positions import (
     GetPositionsRound,
 )
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
@@ -31,7 +30,7 @@ class TestGetPositionsBehaviour(FSMBehaviourBaseCase):
 
     def setup_method(self, **kwargs: Any) -> None:
         """Set up the test method."""
-        super().setup(**kwargs)
+        super().setup_method(**kwargs)
 
         # Fast forward to the GetPositionsBehaviour
         synchronized_data = SynchronizedData(AbciAppDB(setup_data=dict()))

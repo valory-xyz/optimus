@@ -55,7 +55,6 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.liquidity_trader_abci.models import SharedState
 from packages.valory.skills.liquidity_trader_abci.pool_behaviour import PoolBehaviour
 
-
 # Constants for price history functions
 PRICE_VOLATILITY_THRESHOLD = 0.02  # 2% threshold for stablecoin detection
 DEFAULT_DAYS = 30

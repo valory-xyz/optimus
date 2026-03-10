@@ -38,7 +38,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.call_checkpoint imp
 from packages.valory.skills.liquidity_trader_abci.payloads import CallCheckpointPayload
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -137,7 +136,7 @@ class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
 
         # Create individual behaviour instance for testing
         self.checkpoint_behaviour = CallCheckpointBehaviour(
@@ -149,7 +148,7 @@ class TestCallCheckpointBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
     def teardown_method(self, **kwargs: Any) -> None:
         """Teardown the test method."""
-        super().teardown(**kwargs)
+        super().teardown_method(**kwargs)
 
     def _create_checkpoint_behaviour(self):
         """Create a CallCheckpointBehaviour instance for testing."""

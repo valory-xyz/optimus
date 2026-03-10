@@ -81,7 +81,6 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
 
-
 # Add these constants to the class or base file
 CONTRACT_CHECK_CACHE_PREFIX = "contract_check_"
 TRANSFER_EVENT_SIGNATURE = (
@@ -1023,12 +1022,14 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
             filtered_portfolio_breakdown = []
 
             # Always show all portfolio breakdown entries to display complete portfolio
+            olas_address = OLAS_ADDRESSES.get(self.params.target_investment_chains[0])
             for entry in portfolio_breakdown:
                 try:
-                    chain = self.params.target_investment_chains[0]
+                    entry_address = entry.get("address")
                     if (
-                        entry.get("address").lower()
-                        == OLAS_ADDRESSES.get(chain).lower()
+                        olas_address
+                        and entry_address
+                        and entry_address.lower() == olas_address.lower()
                     ):
                         continue
 
@@ -3796,7 +3797,7 @@ class FetchStrategiesBehaviour(LiquidityTraderBaseBehaviour):
                         transfer_data = {
                             "from_address": from_address,
                             "amount": amount_eth,
-                            "token_address": "",
+                            "token_address": "",  # nosec B105
                             "symbol": "ETH",
                             "timestamp": timestamp,
                             "tx_hash": transfer.get("transactionHash", ""),

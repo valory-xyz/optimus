@@ -21,7 +21,6 @@
 
 import packages.valory.skills.liquidity_trader_abci.handlers  # noqa
 
-
 # pylint: skip-file
 
 

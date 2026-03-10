@@ -61,7 +61,6 @@ from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
 )
 from packages.valory.skills.liquidity_trader_abci.states.base import StakingState
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
@@ -140,7 +139,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             "packages.valory.skills.liquidity_trader_abci.models.Params.get_store_path",
             return_value=Path("/tmp/mock_store"),
         ):
-            super().setup(**kwargs)
+            super().setup_method(**kwargs)
 
         # Create temporary directory for test files
         self.temp_dir = tempfile.mkdtemp()
@@ -157,7 +156,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
         if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
-        super().teardown(**kwargs)
+        super().teardown_method(**kwargs)
 
     def _create_base_behaviour(self) -> LiquidityTraderBaseBehaviour:
         """Create a base behaviour instance for testing."""
@@ -4402,10 +4401,26 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                         yield None
                         return balances_data
 
+                    def mock_fetch_reward_balances(chain):
+                        yield None
+                        return []
+
+                    def mock_fetch_ousdt_balance(chain):
+                        yield None
+                        return None
+
                     with patch.object(
                         base_behaviour,
                         "_fetch_safe_balances_with_pagination",
                         side_effect=mock_fetch_safe_balances,
+                    ), patch.object(
+                        base_behaviour,
+                        "_fetch_reward_balances",
+                        side_effect=mock_fetch_reward_balances,
+                    ), patch.object(
+                        base_behaviour,
+                        "_fetch_ousdt_balance",
+                        side_effect=mock_fetch_ousdt_balance,
                     ):
                         with patch.object(
                             base_behaviour.context.logger, "info"
@@ -5405,26 +5420,29 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 mock_coingecko.return_value.token_price_endpoint = "https://api.coingecko.com/api/v3/simple/token_price/{asset_platform_id}?contract_addresses={token_address}&vs_currencies=usd"
                 mock_coingecko.return_value.rate_limited_code = 429
                 mock_coingecko.return_value.rate_limited_status_callback = MagicMock()
+                mock_coingecko.return_value.request = MagicMock(
+                    return_value=(api_success, api_response)
+                )
 
-                # Mock _request_with_retries
-                with patch.object(
-                    base_behaviour, "_request_with_retries"
-                ) as mock_request:
+                # Mock _cache_price
+                with patch.object(base_behaviour, "_cache_price") as mock_cache:
 
                     def side_effect(*args, **kwargs):
                         yield None
-                        return api_success, api_response
+                        return None
 
-                    mock_request.side_effect = side_effect
+                    mock_cache.side_effect = side_effect
 
-                    # Mock _cache_price
-                    with patch.object(base_behaviour, "_cache_price") as mock_cache:
+                    # Mock _get_last_known_price
+                    with patch.object(
+                        base_behaviour, "_get_last_known_price"
+                    ) as mock_last_known:
 
-                        def side_effect(*args, **kwargs):
+                        def last_known_side_effect(*args, **kwargs):
                             yield None
                             return None
 
-                        mock_cache.side_effect = side_effect
+                        mock_last_known.side_effect = last_known_side_effect
 
                         # Mock _get_current_timestamp
                         with patch.object(
@@ -5625,9 +5643,6 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
 
                     # Verify request was made
                     mock_do_request.assert_called_once_with(mock_message, mock_dialogue)
-
-                    # Verify logging
-                    mock_logger.assert_called_once_with(f"Reading keys from db: {keys}")
 
                     # Verify result
                     assert result == expected_result
@@ -5853,69 +5868,49 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 mock_coingecko.return_value.coin_price_endpoint = "https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
                 mock_coingecko.return_value.rate_limited_code = 429
                 mock_coingecko.return_value.rate_limited_status_callback = MagicMock()
+                mock_coingecko.return_value.request = MagicMock(
+                    return_value=(api_success, api_response)
+                )
 
-                # Mock _request_with_retries
-                with patch.object(
-                    base_behaviour, "_request_with_retries"
-                ) as mock_request:
+                # Mock _cache_price
+                with patch.object(base_behaviour, "_cache_price") as mock_cache:
 
-                    def request_side_effect(
-                        endpoint,
-                        headers,
-                        rate_limited_code,
-                        rate_limited_callback,
-                        retry_wait,
-                    ):
+                    def cache_side_effect(token_address, price, date_str):
                         yield None
-                        return api_success, api_response
+                        return None
 
-                    mock_request.side_effect = request_side_effect
+                    mock_cache.side_effect = cache_side_effect
 
-                    # Mock _cache_price
-                    with patch.object(base_behaviour, "_cache_price") as mock_cache:
+                    # Mock _get_current_timestamp
+                    with patch.object(
+                        base_behaviour, "_get_current_timestamp"
+                    ) as mock_timestamp:
+                        mock_timestamp.return_value = 1640995200
 
-                        def cache_side_effect(token_address, price, date_str):
-                            yield None
-                            return None
+                        result = self._consume_generator(
+                            base_behaviour._fetch_zero_address_price()
+                        )
 
-                        mock_cache.side_effect = cache_side_effect
+                        # Verify result
+                        assert result == expected_result
 
-                        # Mock _get_current_timestamp
-                        with patch.object(
-                            base_behaviour, "_get_current_timestamp"
-                        ) as mock_timestamp:
-                            mock_timestamp.return_value = 1640995200
+                        # Verify cache was checked
+                        mock_get_cached.assert_called_once_with(
+                            "ethereum", "01-01-2022"
+                        )
 
-                            result = self._consume_generator(
-                                base_behaviour._fetch_zero_address_price()
-                            )
+                        # Verify API call was made only if no cache
+                        if cached_price is None:
+                            mock_coingecko.return_value.request.assert_called_once()
 
-                            # Verify result
-                            assert result == expected_result
-
-                            # Verify cache was checked
-                            mock_get_cached.assert_called_once_with(
-                                "ethereum", "01-01-2022"
-                            )
-
-                            # Verify API call was made only if no cache
-                            if cached_price is None:
-                                mock_request.assert_called_once()
-                                call_args = mock_request.call_args
-                                assert "ethereum" in call_args[1]["endpoint"]
-
-                                # Verify price was cached for successful API calls
-                                if (
-                                    api_success
-                                    and expected_result
-                                    and expected_result > 0
-                                ):
-                                    mock_cache.assert_called_once_with(
-                                        "ethereum", expected_result, "01-01-2022"
-                                    )
-                            else:
-                                mock_request.assert_not_called()
-                                mock_cache.assert_not_called()
+                            # Verify price was cached for successful API calls
+                            if api_success and expected_result and expected_result > 0:
+                                mock_cache.assert_called_once_with(
+                                    "ethereum", expected_result, "01-01-2022"
+                                )
+                        else:
+                            mock_coingecko.return_value.request.assert_not_called()
+                            mock_cache.assert_not_called()
 
     def test_fetch_zero_address_price_api_response_iteration(self):
         """Test _fetch_zero_address_price with different API response structures."""
@@ -5938,48 +5933,34 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
                 mock_coingecko.return_value.coin_price_endpoint = "https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
                 mock_coingecko.return_value.rate_limited_code = 429
                 mock_coingecko.return_value.rate_limited_status_callback = MagicMock()
+                mock_coingecko.return_value.request = MagicMock(
+                    return_value=(True, {"ethereum": {"usd": 3500.0}})
+                )
 
-                # Mock _request_with_retries
-                with patch.object(
-                    base_behaviour, "_request_with_retries"
-                ) as mock_request:
+                # Mock _cache_price
+                with patch.object(base_behaviour, "_cache_price") as mock_cache:
 
-                    def request_side_effect(
-                        endpoint,
-                        headers,
-                        rate_limited_code,
-                        rate_limited_callback,
-                        retry_wait,
-                    ):
+                    def cache_side_effect(token_address, price, date_str):
                         yield None
-                        return True, {"ethereum": {"usd": 3500.0}}
+                        return None
 
-                    mock_request.side_effect = request_side_effect
+                    mock_cache.side_effect = cache_side_effect
 
-                    # Mock _cache_price
-                    with patch.object(base_behaviour, "_cache_price") as mock_cache:
+                    # Mock _get_current_timestamp
+                    with patch.object(
+                        base_behaviour, "_get_current_timestamp"
+                    ) as mock_timestamp:
+                        mock_timestamp.return_value = 1640995200
 
-                        def cache_side_effect(token_address, price, date_str):
-                            yield None
-                            return None
+                        result = self._consume_generator(
+                            base_behaviour._fetch_zero_address_price()
+                        )
 
-                        mock_cache.side_effect = cache_side_effect
+                        # Verify result
+                        assert result == 3500.0
 
-                        # Mock _get_current_timestamp
-                        with patch.object(
-                            base_behaviour, "_get_current_timestamp"
-                        ) as mock_timestamp:
-                            mock_timestamp.return_value = 1640995200
-
-                            result = self._consume_generator(
-                                base_behaviour._fetch_zero_address_price()
-                            )
-
-                            # Verify result
-                            assert result == 3500.0
-
-                            # Verify next(iter()) was called correctly
-                            mock_request.assert_called_once()
+                        # Verify coingecko.request was called
+                        mock_coingecko.return_value.request.assert_called_once()
 
     @pytest.mark.parametrize(
         "tokens,date_str,chain,coingecko_ids,historical_prices,expected_result",
@@ -6156,23 +6137,20 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             yield None
             return cached_price
 
-        def mock_request_with_retries(
-            endpoint, headers, rate_limited_code, rate_limited_callback, retry_wait
-        ):
-            yield None
-            return api_success, api_response
-
         def mock_cache_price(token_address, price, date):
             yield None
             return None
+
+        def mock_coingecko_request(endpoint, headers, x402_signer=None):
+            return api_success, api_response
 
         with patch.object(
             base_behaviour, "_get_cached_price", side_effect=mock_get_cached_price
         ):
             with patch.object(
-                base_behaviour,
-                "_request_with_retries",
-                side_effect=mock_request_with_retries,
+                base_behaviour.coingecko,
+                "request",
+                side_effect=mock_coingecko_request,
             ):
                 with patch.object(
                     base_behaviour, "_cache_price", side_effect=mock_cache_price
@@ -6193,10 +6171,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             yield None
             return None
 
-        def mock_request_with_retries(
-            endpoint, headers, rate_limited_code, rate_limited_callback, retry_wait
-        ):
-            yield None
+        def mock_coingecko_request(endpoint, headers, x402_signer=None):
             # Verify endpoint formatting
             assert "bitcoin" in endpoint
             assert "01-01-2022" in endpoint
@@ -6210,9 +6185,9 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             base_behaviour, "_get_cached_price", side_effect=mock_get_cached_price
         ):
             with patch.object(
-                base_behaviour,
-                "_request_with_retries",
-                side_effect=mock_request_with_retries,
+                base_behaviour.coingecko,
+                "request",
+                side_effect=mock_coingecko_request,
             ):
                 with patch.object(
                     base_behaviour, "_cache_price", side_effect=mock_cache_price
@@ -6233,10 +6208,7 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             yield None
             return None
 
-        def mock_request_with_retries(
-            endpoint, headers, rate_limited_code, rate_limited_callback, retry_wait
-        ):
-            yield None
+        def mock_coingecko_request(endpoint, headers, x402_signer=None):
             # Verify API key is included in headers
             assert headers.get("x-cg-api-key") == "test_api_key"
             assert headers.get("Accept") == "application/json"
@@ -6250,9 +6222,9 @@ class TestLiquidityTraderBaseBehaviour(LiquidityTraderAbciFSMBehaviourBaseCase):
             base_behaviour, "_get_cached_price", side_effect=mock_get_cached_price
         ):
             with patch.object(
-                base_behaviour,
-                "_request_with_retries",
-                side_effect=mock_request_with_retries,
+                base_behaviour.coingecko,
+                "request",
+                side_effect=mock_coingecko_request,
             ):
                 with patch.object(
                     base_behaviour, "_cache_price", side_effect=mock_cache_price

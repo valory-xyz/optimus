@@ -45,7 +45,6 @@ from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,
 )
 
-
 EventType = Union[
     Type[LiquidityTraderEvent],
     Type[TransactionSettlementEvent],

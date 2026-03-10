@@ -32,7 +32,6 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.behaviours import BaseBehaviour
 from packages.valory.skills.liquidity_trader_abci.models import Coingecko
 
-
 WaitableConditionType = Generator[None, None, Any]
 
 

@@ -21,7 +21,6 @@
 
 from typing import Tuple
 
-
 # Constants from the Uniswap V3 TickMath library
 MIN_TICK = -887272
 MAX_TICK = 887272

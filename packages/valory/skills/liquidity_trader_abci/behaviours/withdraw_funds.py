@@ -33,7 +33,6 @@ from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
     WithdrawFundsRound,
 )
 
-
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
@@ -483,7 +482,7 @@ class WithdrawFundsBehaviour(LiquidityTraderBaseBehaviour):
             ),
             "to_address": target_address,
             "token_address": usdc_address,
-            "token_symbol": "USDC",
+            "token_symbol": "USDC",  # nosec B105
             "funds_percentage": 1.0,  # Use 100% of available USDC balance
             "description": f"Transfer USDC to {target_address}",
         }

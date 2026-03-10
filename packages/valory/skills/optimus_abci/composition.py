@@ -34,7 +34,6 @@ from packages.valory.skills.termination_abci.rounds import (
     TerminationAbciApp,
 )
 
-
 abci_app_transition_mapping: AbciAppTransitionMapping = {
     RegistrationAbci.FinishedRegistrationRound: LiquidityTraderAbci.FetchStrategiesRound,
     LiquidityTraderAbci.FinishedCallCheckpointRound: TxSettlementAbci.RandomnessTransactionSubmissionRound,

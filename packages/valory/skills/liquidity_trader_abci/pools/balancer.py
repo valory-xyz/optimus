@@ -36,7 +36,6 @@ from packages.valory.skills.liquidity_trader_abci.utils.balancer_math import (
     BalancerProportionalMath,
 )
 
-
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 

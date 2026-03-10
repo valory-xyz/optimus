@@ -21,7 +21,6 @@ from packages.valory.skills.liquidity_trader_abci.states.post_tx_settlement impo
     PostTxSettlementRound,
 )
 
-
 PACKAGE_DIR = Path(__file__).parent.parent.parent
 
 
@@ -33,7 +32,7 @@ class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):
 
     def setup_method(self, **kwargs: Any) -> None:
         """Set up the test method."""
-        super().setup(**kwargs)
+        super().setup_method(**kwargs)
 
         # Fast forward to the PostTxSettlementBehaviour
         synchronized_data = SynchronizedData(AbciAppDB(setup_data=dict()))
@@ -79,7 +78,7 @@ class TestPostTxSettlementBehaviour(FSMBehaviourBaseCase):
             self.synchronized_data_patcher.stop()
         if hasattr(self, "params_patcher"):
             self.params_patcher.stop()
-        super().teardown()
+        super().teardown_method()
 
     def test_async_act_successful_with_gas_tracking(self) -> None:
         """Test async_act with successful execution and gas tracking."""

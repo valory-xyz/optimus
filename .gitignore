@@ -37,6 +37,10 @@ packages/valory/skills/funds_manager/
 !packages/valory/skills/liquidity_trader_abci
 !packages/valory/skills/optimus_abci
 
+packages/valory/contracts/erc20/
+packages/valory/contracts/staking_activity_checker/
+packages/valory/contracts/staking_token/
+
 
 leak_report
 /Pipfile.lock

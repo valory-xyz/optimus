@@ -239,9 +239,10 @@ class Coingecko(Model, TypeCheckMixin):
                 session = requests.Session()
                 url = self.coingecko_server_base_url + endpoint
 
-            response = session.get(url, headers=headers)
-            success = response.status_code in HTTP_OK
-            return success, response.json()
+            with session:
+                response = session.get(url, headers=headers)
+                success = response.status_code in HTTP_OK
+                return success, response.json()
         except Exception as exc:
             self.context.logger.error(f"Exception during request to {url}: {exc}")
             return False, {"exception": str(exc)}

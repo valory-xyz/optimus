@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie7omzycvazfg6edexn2k3fteuey3alopfmlwye6e44exfcxv5apa
 - valory/abstract_round_abci:0.1.0:bafybeicehi2yqab3lldm7qzoqev3tmqrdk275sbtcabneyorhmzft76z7m
 - valory/funds_manager:0.1.0:bafybeih5k7v6zx7mtkdg4hkgmsyngkz66bbwmrpqqxccnhif666v2hzi6y
-- valory/liquidity_trader_abci:0.1.0:bafybeidl7pdhv7eokbmqbypibmdq7oz6zlfei52tqaqvctwhar64ehqana
-- valory/optimus_abci:0.1.0:bafybeif5ec6ycosaohvd6baq4omxbcooxugqtxviqkygrs3u5cq6jiv43i
+- valory/liquidity_trader_abci:0.1.0:bafybeiclk7uw4paq5ykibh3vgslqevjibfzxdwzpxufbqeq4dnhqigpfei
+- valory/optimus_abci:0.1.0:bafybeidxqp7wm5sgmdr7hygdggnzrf2k6tktasflyq6iqeqyg7yhofcoea
 - valory/registration_abci:0.1.0:bafybeihjgfzqvuymqgku6mwqih7hlvqwr2tmdjrip3m6unt5l4e55bshkm
 - valory/reset_pause_abci:0.1.0:bafybeih6bjalcohxytg6hj3doy5dhkxonrxpqgcnclyf6tnmuyfbom2usy
 - valory/termination_abci:0.1.0:bafybeiarjw4hhu2vf56yxqb4jh3kmk4hfxvqahygn6scc3rfnlogjkwwpe
@@ -61,10 +61,10 @@ skills:
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeiazmd7varajmgg7wr4zxixdnntjaw5h2i65v4slmnsqxzqhxda4la
 - valory/max_apr_selection:0.1.0:bafybeigysojuwijawwlk5gpdxxskwfxld7kbqhvk7bpqiq3ub6mow4np5i
-- valory/balancer_pools_search:0.1.0:bafybeidzqh5po2fksvjeqwrcjxpymsyogo2cxsbrod3talx77wvxrj2a5e
-- valory/uniswap_pools_search:0.1.0:bafybeiec4v6hqclqrqgkda735e36o4fjuxozyw6iiydnmaxswrrj4ahuka
+- valory/balancer_pools_search:0.1.0:bafybeifiu3zedyl2zgr2v3ronzpxo7w57ivanyysiqsb5gnpppq2qatrze
+- valory/uniswap_pools_search:0.1.0:bafybeifthgjd4l4t7dstry74pf3a6n66rsehfbd3co2raoow4i6wdtueiu
 - valory/asset_lending:0.1.0:bafybeiavkxaghqoj73rek5bfxe7hvmzmd566xvlcyb32dmtnvjxfkohj2e
-- valory/velodrome_pools_search:0.1.0:bafybeigg5mv4whvavfw3hbw4pzfkjglje7ddyfgzwl4zh6yo5xhn65fdxy
+- valory/velodrome_pools_search:0.1.0:bafybeicoawbkv7ugoda23y342d4w7342oe7gv2alu3obuggi5wy2iujlke
 default_ledger: ethereum
 required_ledgers:
 - ethereum

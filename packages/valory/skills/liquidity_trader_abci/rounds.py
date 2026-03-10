@@ -69,7 +69,98 @@ from packages.valory.skills.liquidity_trader_abci.states.withdraw_funds import (
 
 
 class LiquidityTraderAbciApp(AbciApp[Event]):
-    """LiquidityTraderAbciApp"""
+    """LiquidityTraderAbciApp
+
+    Initial round: FetchStrategiesRound
+
+    Initial states: {CallCheckpointRound, CheckStakingKPIMetRound, DecisionMakingRound, FetchStrategiesRound, GetPositionsRound, PostTxSettlementRound, WithdrawFundsRound}
+
+    Transition states:
+        0. APRPopulationRound
+            - done: 4.
+            - no majority: 0.
+            - round timeout: 0.
+            - none: 0.
+            - withdrawal initiated: 8.
+        1. CallCheckpointRound
+            - done: 2.
+            - next checkpoint not reached yet: 2.
+            - settle: 12.
+            - service not staked: 3.
+            - service evicted: 3.
+            - round timeout: 1.
+            - no majority: 1.
+            - none: 1.
+            - withdrawal initiated: 8.
+        2. CheckStakingKPIMetRound
+            - done: 3.
+            - staking kpi met: 3.
+            - settle: 13.
+            - round timeout: 2.
+            - no majority: 2.
+            - staking kpi not met: 3.
+            - error: 3.
+            - none: 2.
+            - withdrawal initiated: 8.
+        3. GetPositionsRound
+            - done: 0.
+            - no majority: 3.
+            - round timeout: 3.
+            - none: 3.
+            - withdrawal initiated: 8.
+        4. EvaluateStrategyRound
+            - done: 5.
+            - no majority: 4.
+            - round timeout: 4.
+            - wait: 9.
+            - none: 4.
+            - withdrawal initiated: 8.
+        5. DecisionMakingRound
+            - done: 11.
+            - error: 11.
+            - no majority: 5.
+            - round timeout: 5.
+            - settle: 10.
+            - update: 5.
+            - none: 5.
+            - withdrawal initiated: 8.
+        6. PostTxSettlementRound
+            - action executed: 5.
+            - checkpoint tx executed: 1.
+            - vanity tx executed: 2.
+            - transfer completed: 7.
+            - withdrawal completed: 7.
+            - round timeout: 6.
+            - unrecognized: 14.
+            - done: 6.
+            - none: 6.
+            - no majority: 6.
+            - withdrawal initiated: 8.
+        7. FetchStrategiesRound
+            - done: 1.
+            - wait: 7.
+            - no majority: 7.
+            - round timeout: 7.
+            - settle: 10.
+            - none: 7.
+            - withdrawal initiated: 8.
+        8. WithdrawFundsRound
+            - done: 5.
+            - no majority: 8.
+            - round timeout: 8.
+            - none: 8.
+        9. FinishedEvaluateStrategyRound
+        10. FinishedTxPreparationRound
+        11. FinishedDecisionMakingRound
+        12. FinishedCallCheckpointRound
+        13. FinishedCheckStakingKPIMetRound
+        14. FailedMultiplexerRound
+
+    Final states: {FailedMultiplexerRound, FinishedCallCheckpointRound, FinishedCheckStakingKPIMetRound, FinishedDecisionMakingRound, FinishedEvaluateStrategyRound, FinishedTxPreparationRound}
+
+    Timeouts:
+        round timeout: 30.0
+    """
 
     initial_round_cls: AppState = FetchStrategiesRound
     initial_states: Set[AppState] = {
@@ -163,7 +254,6 @@ class LiquidityTraderAbciApp(AbciApp[Event]):
             Event.NO_MAJORITY: WithdrawFundsRound,
             Event.ROUND_TIMEOUT: WithdrawFundsRound,
             Event.NONE: WithdrawFundsRound,
-            Event.WITHDRAWAL_COMPLETED: FetchStrategiesRound,
         },
         FinishedEvaluateStrategyRound: {},
         FinishedTxPreparationRound: {},

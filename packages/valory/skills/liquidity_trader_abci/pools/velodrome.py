@@ -32,7 +32,7 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union,
 import numpy as np
 from web3 import Web3
 
-from packages.valory.contracts.erc20.contract import ERC20
+from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,

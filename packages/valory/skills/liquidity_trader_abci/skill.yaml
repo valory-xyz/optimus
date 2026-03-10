@@ -77,13 +77,13 @@ contracts:
 - valory/balancer_weighted_pool:0.1.0:bafybeictflx7gjjrbb7m5cvh7sw3b25at4cfhjxntxwpkceoirqli6r5oy
 - valory/balancer_vault:0.1.0:bafybeiasckel6kcci54xhxbj53upgootuhmcc2pcvwl3g4hsmf6priodfy
 - valory/balancer_queries:0.1.0:bafybeicmky2kip547dyk2pnbtrc4sqzfvep5jpej7ioreeh5qomi4dgeku
-- valory/erc20:0.1.0:bafybeie76oslqdqdqdgx77awzvusgn4add4th2nz7mjczhcqrr6zjpom2e
+- valory/erc20:0.1.0:bafybeif37n2xmh6xkn3vzybty7q37fq4f5rsey5ep33vvobh2yofeao5ae
 - valory/multisend:0.1.0:bafybeiaf3hapi3prgpjeugwhq64k7lqelo6kibhol5rkajt7id3knomp5q
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeifs2ayvxtvkve26hfqrx3djoa77rbsw6jfwmiqvtmmjk6sdl3jclq
 - valory/uniswap_v3_pool:0.1.0:bafybeihmnjq7xsvezburzpyvdipiz7zdww2csjws2zl26scd5y2jv5jlqq
 - valory/merkl_distributor:0.1.0:bafybeihpfc2yrnwhjgbxlgjhrnvpduwgdlwexr2qkipqh5z3ggajn24w6u
-- valory/staking_token:0.1.0:bafybeid2m5hy5yzukgglmr3prwl4f3dpxauj5cxh2g6g7lodh6hxfaongq
-- valory/staking_activity_checker:0.1.0:bafybeic4m7m2ia7bjfccc6qkp3sxpqqlmwi4mpposi37kxk6ijsidnu6vi
+- valory/staking_token:0.1.0:bafybeiat655krp6joe7rvt4ycuxpynzl5oraib7jkeo6tennevugxf7x7m
+- valory/staking_activity_checker:0.1.0:bafybeibvpytrnz4qwj3sebaphc5zfymnembfziniyaywl7gvuvswukhibm
 - valory/sturdy_yearn_v3_vault:0.1.0:bafybeiay34tsyzoxfgtp4rio2dcknmjt5kg44gw5bu23cgrlwnmb6wk7da
 - valory/velodrome_router:0.1.0:bafybeigy42dm2n2qri77etwbkzerzhk3d55h62voysndhtfs4jgi4yzvxa
 - valory/velodrome_cl_pool:0.1.0:bafybeigq3tlzqr7c5bodfkaudsqsh77mwm6j3dnzicjtpx6gwxrwo4wate

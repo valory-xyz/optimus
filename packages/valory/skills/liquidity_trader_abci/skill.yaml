@@ -77,7 +77,7 @@ contracts:
 - valory/balancer_weighted_pool:0.1.0:bafybeictflx7gjjrbb7m5cvh7sw3b25at4cfhjxntxwpkceoirqli6r5oy
 - valory/balancer_vault:0.1.0:bafybeiasckel6kcci54xhxbj53upgootuhmcc2pcvwl3g4hsmf6priodfy
 - valory/balancer_queries:0.1.0:bafybeicmky2kip547dyk2pnbtrc4sqzfvep5jpej7ioreeh5qomi4dgeku
-- valory/erc20:0.1.0:bafybeifagvo4u4sfjltszlbk7krrdwtyu6zhzshue4qkx4s36d73at3tfy
+- valory/erc20:0.1.0:bafybeie76oslqdqdqdgx77awzvusgn4add4th2nz7mjczhcqrr6zjpom2e
 - valory/multisend:0.1.0:bafybeiaf3hapi3prgpjeugwhq64k7lqelo6kibhol5rkajt7id3knomp5q
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeifs2ayvxtvkve26hfqrx3djoa77rbsw6jfwmiqvtmmjk6sdl3jclq
 - valory/uniswap_v3_pool:0.1.0:bafybeihmnjq7xsvezburzpyvdipiz7zdww2csjws2zl26scd5y2jv5jlqq
@@ -347,7 +347,7 @@ dependencies:
   eth_abi:
     version: ==4.0.0
   requests:
-    version: <2.32.5,>=2.28.1
+    version: <2.33.0,>=2.28.1
   eth_utils: {}
   eth_account:
     version: <1.0.0,>=0.8.0

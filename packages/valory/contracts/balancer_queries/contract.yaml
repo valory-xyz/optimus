@@ -20,4 +20,4 @@ dependencies:
   web3:
     version: <8,>=7.0.0
   eth_abi:
-    version: ==4.0.0
+    version: ==5.2.0

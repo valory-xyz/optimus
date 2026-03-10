@@ -24,7 +24,7 @@ open-aea-ledger-cosmos = "==2.1.0rc6"
 typing_extensions = "<=4.15.0,>=3.10.0.2"
 toml = "==0.10.2"
 gql = "==3.5.0"
-tomte = {version = "==0.6.1", extras = ["cli", "tests"]}
+tomte = {version = "==0.6.2", extras = ["cli", "tests"]}
 grpcio = "==1.78.0"
 asn1crypto = "<1.5.0,>=1.4.0"
 py-ecc = "==8.0.0"

@@ -24,19 +24,19 @@ contracts:
 - valory/multisend:0.1.0:bafybeiaf3hapi3prgpjeugwhq64k7lqelo6kibhol5rkajt7id3knomp5q
 - valory/service_registry:0.1.0:bafybeifc4gpaz6vlpgvghsm64tkbukt744rpeoqpxijglxrv46gb7sbda4
 - valory/balancer_weighted_pool:0.1.0:bafybeictflx7gjjrbb7m5cvh7sw3b25at4cfhjxntxwpkceoirqli6r5oy
-- valory/balancer_vault:0.1.0:bafybeiasckel6kcci54xhxbj53upgootuhmcc2pcvwl3g4hsmf6priodfy
+- valory/balancer_vault:0.1.0:bafybeidispp772dm3fpcagq6jmfntybgnpt645og6xbjlqojhrztfqe3wm
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeifs2ayvxtvkve26hfqrx3djoa77rbsw6jfwmiqvtmmjk6sdl3jclq
 - valory/uniswap_v3_pool:0.1.0:bafybeihmnjq7xsvezburzpyvdipiz7zdww2csjws2zl26scd5y2jv5jlqq
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeiay34tsyzoxfgtp4rio2dcknmjt5kg44gw5bu23cgrlwnmb6wk7da
-- valory/velodrome_router:0.1.0:bafybeigy42dm2n2qri77etwbkzerzhk3d55h62voysndhtfs4jgi4yzvxa
-- valory/velodrome_cl_pool:0.1.0:bafybeigq3tlzqr7c5bodfkaudsqsh77mwm6j3dnzicjtpx6gwxrwo4wate
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeib5ac6a2rk2zfjck7wsem2ruuojrpzdajs765cjelxqera3vsl74m
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeig4ply6gbniirptxyp7nvyq7m36qvp4pd4h4i2ioqrmm2bxt3pq4i
+- valory/velodrome_router:0.1.0:bafybeig5l56r4flnwsnzgus2w5yctmgvxtazwh2xcmelzsghpiwi2sui5m
+- valory/velodrome_cl_pool:0.1.0:bafybeid4scvvy6xfncdtqlx6u2vnopsdwydayqwjlfajk4ugqmsdy4byrm
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeiewyqg2ohpskv5fthy4q4jbaiwxofzlq3wvrquckpp6nekdxra2jy
 - valory/velodrome_pool:0.1.0:bafybeifch3b7krhrxtmus5rzxy4b3qdtt372xqauoxyoug2mqnk64dq7eq
-- valory/velodrome_sugar:0.1.0:bafybeiapnhv2sjll2vdtnvlo7umub6vkg5w2mbac3kbdvmwftqzc6al77e
+- valory/velodrome_sugar:0.1.0:bafybeihhowwecqqznso25niy5p6s5vkpyobpwijdgld36kf6mcnzojadki
 - valory/velodrome_gauge:0.1.0:bafybeidlz4znru4idbegamk2p7p7oz7fcjlkdzylsw7pgxfyxgcocguhg4
 - valory/velodrome_voter:0.1.0:bafybeicxjdumoh3vwma5qtcq3il5rvcewvemdxt32axjvoyprju4i32nwy
 - valory/velodrome_cl_gauge:0.1.0:bafybeibx3mz2pjo4r6eqk2jqti2hhlc2nlakbft7jvzqjvra7xl75pxosm
-- valory/balancer_queries:0.1.0:bafybeicmky2kip547dyk2pnbtrc4sqzfvep5jpej7ioreeh5qomi4dgeku
+- valory/balancer_queries:0.1.0:bafybeigbktams2qwxsucm7xuvvzclsb725hictuzdnazxqz2x6hfcakvly
 protocols:
 - open_aea/signing:1.0.0:bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye
 - valory/abci:0.1.0:bafybeiak4pwac3pwjtd7weskxdhkrcopckr32vtazfbuteu6yqjkwarpte
@@ -52,8 +52,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeia36n7ci7b6pi2bpa4r4ty6dcb3r4vs46vjftolsdxfl4y5iieyyy
 - valory/abstract_round_abci:0.1.0:bafybeiaalla55aprhvoumv4u7qt4v6l53fjmgln6wgyjr5e5tw7u4kscja
 - valory/funds_manager:0.1.0:bafybeibid2nm7qoysj44foptkisf5ajguvacxsuoaix4og4ehotal47mcy
-- valory/liquidity_trader_abci:0.1.0:bafybeiajpjhrrs2zgv2w3r3aiafqr7aunzrfy7gyr544ad2c2z3lk2zy6u
-- valory/optimus_abci:0.1.0:bafybeicqsthb4zu5cl7eagiznvxdwz4gbh3jmbla6fjabh6sfgi3njcidy
+- valory/liquidity_trader_abci:0.1.0:bafybeigarvdntkzk22k5swquyscrd76pjztkih7z3f2ifq7sjpctedtrcq
+- valory/optimus_abci:0.1.0:bafybeidcndbjw7sbsghsbtt5bp42wm24u66op3rkpq4mmjjiukdvo5jlqe
 - valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
 - valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a

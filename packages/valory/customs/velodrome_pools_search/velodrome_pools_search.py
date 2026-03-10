@@ -1,6 +1,5 @@
 import warnings
 
-from packages.valory.connections.x402.clients.requests import x402_requests
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
 import time
@@ -502,7 +501,7 @@ def calculate_il_impact_multi(initial_prices, final_prices, weights=None):
     return il
 
 
-def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None, x402_signer=None, x402_proxy=None) -> float:
+def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, time_period: int = 90, pool_id=None, chain=None, x402_session=None, x402_proxy=None) -> float:
     """Calculate IL risk score for multiple tokens."""
 
     # Create a debug data structure
@@ -536,9 +535,9 @@ def calculate_velodrome_il_risk_score_multi(token_ids, coingecko_api_key: str, t
         for token_id in valid_token_ids:
             try:
                 cg = CoinGeckoAPI()
-                if x402_signer is not None and x402_proxy is not None:
+                if x402_session is not None and x402_proxy is not None:
                     logger.info("Using x402 signer for CoinGecko API requests")
-                    cg.session = x402_requests(account=x402_signer)
+                    cg.session = x402_session
                     cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 else:
                     if not coingecko_api_key:
@@ -1222,7 +1221,7 @@ def calculate_tvl_from_reserves(reserve0, reserve1, token0_address, token1_addre
     set_cached_data("tvl", result, cache_key)
     return result
 
-def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,x402_signer=None,x402_proxy=None):
+def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,x402_session=None,x402_proxy=None):
     """Calculate APR and other position data for a pool based on the official Velodrome formula"""
     # Extract necessary values from pool data
     day_seconds = 24 * 60 * 60  # Seconds in a day
@@ -1300,7 +1299,7 @@ def calculate_position_details_for_velodrome(pool_data, coingecko_api_key: None,
                     pool_address=pool_data.get("id"),
                     is_stable=(pool_type == 0),
                     coingecko_api_key=coingecko_api_key,
-                    x402_signer=x402_signer,
+                    x402_session=x402_session,
                     x402_proxy=x402_proxy
                 )
                 
@@ -1976,7 +1975,7 @@ def get_coin_id_from_address(
     address: str, 
     platform: str,
     coingecko_api_key: Optional[str] = None,
-    x402_signer=None,
+    x402_session=None,
     x402_proxy=None
 ) -> Optional[str]:
     """Retrieve CoinGecko coin ID"""
@@ -2014,13 +2013,13 @@ def get_coin_id_from_address(
         time.sleep(1)
 
         # Use x402 requests if available
-        if x402_signer is not None and x402_proxy is not None:
+        if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
             try:
                 
                 # Create CoinGecko instance with x402
                 cg = CoinGeckoAPI()
-                cg.session = x402_requests(account=x402_signer)
+                cg.session = x402_session
                 cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 
                 # Make the request using x402
@@ -2067,7 +2066,7 @@ def get_historical_market_data(
     coin_id: str, 
     days: int,
     coingecko_api_key: Optional[str] = None,
-    x402_signer=None,
+    x402_session=None,
     x402_proxy=None
 ) -> Optional[Dict[str, Any]]:
     """Get historical market data using x402 requests when available"""
@@ -2076,12 +2075,12 @@ def get_historical_market_data(
         time.sleep(2)
 
         # Use x402 requests if available
-        if x402_signer is not None and x402_proxy is not None:
+        if x402_session is not None and x402_proxy is not None:
             logger.info("Using x402 signer for CoinGecko API requests")
             try:                
                 # Create CoinGecko instance with x402
                 cg = CoinGeckoAPI()
-                cg.session = x402_requests(account=x402_signer)
+                cg.session = x402_session
                 cg.api_base_url = x402_proxy.rstrip("/") + "/api/v3/"
                 
                 # Make the request using x402
@@ -2159,7 +2158,7 @@ def get_pool_token_history(
     token1_address: str,
     days: int = 30,
     coingecko_api_key: Optional[str] = None,
-    x402_signer=None,
+    x402_session=None,
     x402_proxy=None
 ) -> Optional[Dict[str, Any]]:
     """Fetch historical price data for a token pair"""
@@ -2183,10 +2182,10 @@ def get_pool_token_history(
 
         # Get coin IDs for both tokens
         token0_id = get_coin_id_from_address(
-            chain, token0_address, platform, coingecko_api_key, x402_signer, x402_proxy
+            chain, token0_address, platform, coingecko_api_key, x402_session, x402_proxy
         )
         token1_id = get_coin_id_from_address(
-            chain, token1_address, platform, coingecko_api_key, x402_signer, x402_proxy
+            chain, token1_address, platform, coingecko_api_key, x402_session, x402_proxy
         )
 
         if not token0_id or not token1_id:
@@ -2195,10 +2194,10 @@ def get_pool_token_history(
 
         # Get price history for both tokens
         token0_data = get_historical_market_data(
-            token0_id, days, coingecko_api_key, x402_signer, x402_proxy
+            token0_id, days, coingecko_api_key, x402_session, x402_proxy
         )
         token1_data = get_historical_market_data(
-            token1_id, days, coingecko_api_key, x402_signer, x402_proxy
+            token1_id, days, coingecko_api_key, x402_session, x402_proxy
         )
 
         # Check if we have valid price data
@@ -2244,7 +2243,7 @@ def calculate_tick_lower_and_upper_velodrome(
     pool_address: str, 
     is_stable: bool,
     coingecko_api_key=None, 
-    x402_signer=None, 
+    x402_session=None, 
     x402_proxy=None,
 ) -> Optional[List[Dict[str, Any]]]:
     """Calculate optimal tick ranges for a Velodrome Concentrated position based on pool features."""
@@ -2290,7 +2289,7 @@ def calculate_tick_lower_and_upper_velodrome(
                 token0_address=token0, 
                 token1_address=token1,
                 coingecko_api_key=coingecko_api_key,
-                x402_signer=x402_signer,
+                x402_session=x402_session,
                 x402_proxy=x402_proxy
             )
 
@@ -2533,7 +2532,7 @@ def get_filtered_pools_for_velodrome(pools, current_positions, whitelisted_asset
     logger.info(f"Found {len(qualifying_pools)} qualifying pools after initial filtering")
     return qualifying_pools
 
-def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None, **kwargs) -> List[Dict[str, Any]]:
+def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CHAIN_ID, coingecko_api_key=None, coin_id_mapping=None, x402_session=None, x402_proxy=None, **kwargs) -> List[Dict[str, Any]]:
     """Format pool data for output according to required schema."""
     formatted_pools = []
     chain_name = CHAIN_NAMES.get(chain_id, "unknown")
@@ -2570,7 +2569,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             "pool_fee": pool.get("pool_fee")
         }
 
-        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_signer, x402_proxy)  
+        position_data = calculate_position_details_for_velodrome(sugar_data, coingecko_api_key, x402_session, x402_proxy)  
         formatted_pool.update(position_data)
 
         # Add tokens (should be at least 2 tokens)
@@ -2584,7 +2583,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
             formatted_pool["token1_symbol"] = tokens[1]["symbol"]
         
         # Calculate advanced metrics if we have the necessary data
-        if coingecko_api_key or (x402_signer and x402_proxy) and len(tokens) >= 2:
+        if coingecko_api_key or (x402_session and x402_proxy) and len(tokens) >= 2:
             # Calculate Sharpe ratio
             try:
                 sharpe_ratio = get_velodrome_pool_sharpe_ratio(
@@ -2634,7 +2633,7 @@ def format_velodrome_pool_data(pools: List[Dict[str, Any]], chain_id=OPTIMISM_CH
                         coingecko_api_key,
                         pool_id=pool["id"],
                         chain=chain_name,
-                        x402_signer=x402_signer,
+                        x402_session=x402_session,
                         x402_proxy=x402_proxy
                     )
                     formatted_pool["il_risk_score"] = il_risk_score
@@ -2829,7 +2828,7 @@ def get_top_n_pools_by_apr(pools, n=10, cl_filter=None):
     # Return the top N pools (or all if fewer than N)
     return sorted_pools[:n]
 
-def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, x402_signer=None, x402_proxy=None, **kwargs):
+def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_id=OPTIMISM_CHAIN_ID, lp_sugar_address=None, ledger_api=None, top_n=10, whitelisted_assets=None, coin_id_mapping=None, x402_session=None, x402_proxy=None, **kwargs):
     """
     Get and format pool opportunities with optimized caching and performance.
     
@@ -2842,7 +2841,7 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         top_n: Number of top pools by APR to return (default: 10)
         whitelisted_assets: List of whitelisted assets
         coin_id_mapping: Coin ID mapping
-        x402_signer: Optional signer for X402
+        x402_session: Optional signer for X402
         x402_proxy: Optional proxy for X402
         **kwargs: Additional arguments
     
@@ -2899,7 +2898,7 @@ def get_opportunities_for_velodrome(current_positions, coingecko_api_key, chain_
         chain_id,
         coingecko_api_key,
         coin_id_mapping,
-        x402_signer=x402_signer,
+        x402_session=x402_session,
         x402_proxy=x402_proxy,
         max_allocation_percentage=max_allocation_percentage,
     )
@@ -2929,7 +2928,7 @@ def calculate_metrics(
     position: Dict[str, Any],
     coingecko_api_key: str,
     coin_id_mapping: List[Any],
-    x402_signer: Optional[Any] = None,
+    x402_session: Optional[Any] = None,
     x402_proxy: Optional[Any] = None,
     **kwargs,
 ) -> Optional[Dict[str, Any]]:
@@ -2987,7 +2986,7 @@ def calculate_metrics(
                 coingecko_api_key,
                 pool_id=pool_id,
                 chain=chain,
-                x402_signer=x402_signer,
+                x402_session=x402_session,
                 x402_proxy=x402_proxy
             )
             
@@ -3069,7 +3068,7 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
             position=kwargs["position"],
             coingecko_api_key=kwargs["coingecko_api_key"],
             coin_id_mapping=kwargs["coin_id_mapping"],
-            x402_signer=kwargs.get("x402_signer"),
+            x402_session=kwargs.get("x402_session"),
             x402_proxy=kwargs.get("x402_proxy"),
         )
         
@@ -3132,13 +3131,13 @@ def run(force_refresh=False, **kwargs) -> Dict[str, Union[bool, str, List[Dict[s
         explicit_params = {
             "whitelisted_assets": kwargs.get("whitelisted_assets"),
             "coin_id_mapping": kwargs.get("coin_id_mapping"),
-            "x402_signer": kwargs.get("x402_signer"),
+            "x402_session": kwargs.get("x402_session"),
             "x402_proxy": kwargs.get("x402_proxy"),
         }
         
         # Create a copy of kwargs without the explicitly passed parameters
         remaining_kwargs = {k: v for k, v in kwargs.items() 
-                           if k not in ["whitelisted_assets", "coin_id_mapping", "x402_signer", "x402_proxy", 
+                           if k not in ["whitelisted_assets", "coin_id_mapping", "x402_session", "x402_proxy", 
                                        "current_positions", "coingecko_api_key", "top_n", "lp_sugar_address", "rpc_url"]}
         
         # Pass explicit parameters separately and remaining kwargs for filter parameters

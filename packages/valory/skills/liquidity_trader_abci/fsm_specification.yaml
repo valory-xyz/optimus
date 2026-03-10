@@ -117,4 +117,4 @@ transition_func:
     (WithdrawFundsRound, NONE): WithdrawFundsRound
     (WithdrawFundsRound, NO_MAJORITY): WithdrawFundsRound
     (WithdrawFundsRound, ROUND_TIMEOUT): WithdrawFundsRound
-    (WithdrawFundsRound, WITHDRAWAL_COMPLETED): FetchStrategiesRound
+

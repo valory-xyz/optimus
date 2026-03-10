@@ -46,7 +46,7 @@ from packages.dvilela.protocols.kv_store.message import KvStoreMessage
 from packages.valory.connections.mirror_db.connection import (
     PUBLIC_ID as MIRRORDB_CONNECTION_PUBLIC_ID,
 )
-from packages.valory.contracts.erc20.contract import ERC20
+from packages.valory.contracts.erc20.contract import ERC20TokenContract as ERC20
 from packages.valory.contracts.staking_activity_checker.contract import (
     StakingActivityCheckerContract,
 )

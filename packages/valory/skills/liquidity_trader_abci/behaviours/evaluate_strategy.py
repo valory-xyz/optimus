@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from eth_utils import to_checksum_address
 
+from packages.valory.connections.x402.clients.requests import x402_requests
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.liquidity_trader_abci.behaviours.base import (
@@ -1583,8 +1584,10 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                     "whitelisted_assets": WHITELISTED_ASSETS,
                     "get_metrics": False,
                     "coin_id_mapping": COIN_ID_MAPPING,
-                    "x402_signer": (
-                        self.eoa_account if self.coingecko.use_x402 else None
+                    "x402_session": (
+                        x402_requests(account=self.eoa_account)
+                        if self.coingecko.use_x402
+                        else None
                     ),
                     "x402_proxy": (
                         self.coingecko.coingecko_x402_server_base_url
@@ -2052,7 +2055,11 @@ class EvaluateStrategyBehaviour(LiquidityTraderBaseBehaviour):
                 "current_positions": self.positions_eligible_for_exit,
                 "whitelisted_assets": WHITELISTED_ASSETS,
                 "coin_id_mapping": COIN_ID_MAPPING,
-                "x402_signer": self.eoa_account if self.coingecko.use_x402 else None,
+                "x402_session": (
+                    x402_requests(account=self.eoa_account)
+                    if self.coingecko.use_x402
+                    else None
+                ),
                 "x402_proxy": (
                     self.coingecko.coingecko_x402_server_base_url
                     if self.coingecko.use_x402

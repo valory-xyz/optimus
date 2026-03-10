@@ -8,35 +8,35 @@ fingerprint:
   __init__.py: bafybeigx5mdvnamsqfum5ut7htok2y5vsnu7lrvms5gfvqi7hmv7sfbo3a
 fingerprint_ignore_patterns: []
 connections:
-- valory/abci:0.1.0:bafybeibgawlwyrdcghcrq5lbgmwmyyx2o7hn4lffyp5thxm3q3u5haybm4
+- valory/abci:0.1.0:bafybeigme5ttg5o6us66dk7c67szstrybesqcew4uhmdqnki3k4b7cn4mu
 - valory/http_client:0.23.0:bafybeihel6sg2yayxu7lqygaswdgciaxpqrgsbl5rwx74c6znu5qz2edd4
 - valory/http_server:0.22.0:bafybeid4oqsfkqo36lryoecymjnq4whme3tgupqfq6m4l7lbr5r4yxtswu
-- valory/ipfs:0.1.0:bafybeihpmn5ur4m6sxbgh4whcp33earzbcn2yd4q4eo6cwdkfkznvdpcqe
-- valory/ledger:0.19.0:bafybeidxzeygks5zcky4u2ztcdufzptssgf6uqytxofnn6yta7qq6jsim4
+- valory/ipfs:0.1.0:bafybeifcwxo3l56mlcucpdaoqhiczzkbyemrgtffoxzsqx67g567jcfeya
+- valory/ledger:0.19.0:bafybeid5uwx4uqxkiibw6kazr7my5mk5kcqg2dx2owtcf7kcpbs2jrns2e
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
-- dvilela/genai:0.1.0:bafybeic3ydvjmb33addd5ye3et3xl4enhmoug4n4agmutz6xgan7rvpqiq
+- dvilela/genai:0.1.0:bafybeieuwwoww4scfzs7ljzlmotldu5jp24o4h235qy54ovliwxf6zjxai
 - dvilela/kv_store:0.1.0:bafybeihmppbeo5gh3w7gnr3vff6u4qlurt3dhxd4cn4mnrzyhnrxdr336u
 - valory/mirror_db:0.1.0:bafybeihxepu6pg4wacfkegunued73a3qcstwdlya54ncijnh6f7kkrtj7i
-- valory/x402:0.1.0:bafybeihnu3yxblyqey7wm5cwwimz5qnznjfhyh5xk5h5v6rk673l5q63le
+- valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:
-- valory/gnosis_safe:0.1.0:bafybeiamcgebbdbm3kzcvpeio4pjobzduz2cdlxrs7ufe4ere2zuompgwe
-- valory/gnosis_safe_proxy_factory:0.1.0:bafybeiha6fjcg4oyn557yrr5pv3e2rntdbt4rglkmjsjqdtzrqusl2cu4q
+- valory/gnosis_safe:0.1.0:bafybeico3uzjdwumf2jg2e627ut4rwzwmedjavenw6e2hshi2m6yw642bq
+- valory/gnosis_safe_proxy_factory:0.1.0:bafybeibp5vuocmwxl4jvw4sp3vmybsklvhnxhv3ohi5fi6ta5owqxig3im
 - valory/multisend:0.1.0:bafybeiaf3hapi3prgpjeugwhq64k7lqelo6kibhol5rkajt7id3knomp5q
-- valory/service_registry:0.1.0:bafybeia66yhd3iyvuzojalivuj7yzyh4vi4cxnfoz22saax5257kmjcr6e
-- valory/balancer_weighted_pool:0.1.0:bafybeihu3gne2q6y3mzzfkzmijdx4vri7akwj7ijfvbpmvxzgtky37iidy
-- valory/balancer_vault:0.1.0:bafybeigtpjjtim77nvtxq2ixgwvemmispczbujslo7vwljbtz5falbuyn4
-- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeihlqqlcodfakk5u3u3s4tvpz7fiodf3a4et5atquxuzkw6dmjjvfi
-- valory/uniswap_v3_pool:0.1.0:bafybeibmfnvmuxiruxdn4eoptgry4lvh5i4gzqtui4qsvpcnvhpeex4zam
-- valory/sturdy_yearn_v3_vault:0.1.0:bafybeig3uadnxtk6wq5a2pqzs2cfvte2dkgd4twovejix2kncqz6jxy4nq
-- valory/velodrome_router:0.1.0:bafybeie5ujg2azyf7xaj5yjiajdzldw2w2s6rknflrgzwrtitao7giggcq
-- valory/velodrome_cl_pool:0.1.0:bafybeidqzckbmny2yq5pogufn3eh3vpcw5r4vu6o2uwbwocege36q3zqhe
-- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeicdplhbi37vnovzmpylk77gpimqnpzdyyrta7iq4xmnufcngvx63a
-- valory/velodrome_pool:0.1.0:bafybeig3ygpd5h55jtutz7i63opznhs5scrw55wcqymfp2ivf3dstpc7jy
-- valory/velodrome_sugar:0.1.0:bafybeih3gm47x52lqytylsgf34lhtd5jl7t4jqxcfhx5ql4cbrpyx22p4u
-- valory/velodrome_gauge:0.1.0:bafybeick6ucu35p5t5m6cscntdj6tjgwh6ndujlrxvrghku5mmvaur6oqm
-- valory/velodrome_voter:0.1.0:bafybeidlj4n3mbuj5xjpcruqyzeq5zeyr5nraa37dtpzy3yfbvjpwcorlu
-- valory/velodrome_cl_gauge:0.1.0:bafybeigv22rgde47khwg2gsmfp6azkbwbsxgld7h2k52xjjajugvp3egbq
-- valory/balancer_queries:0.1.0:bafybeifcs2buanoluyhidvzfkytuz5bybczehbu7te6bkm7hbfxqqohy7m
+- valory/service_registry:0.1.0:bafybeifc4gpaz6vlpgvghsm64tkbukt744rpeoqpxijglxrv46gb7sbda4
+- valory/balancer_weighted_pool:0.1.0:bafybeictflx7gjjrbb7m5cvh7sw3b25at4cfhjxntxwpkceoirqli6r5oy
+- valory/balancer_vault:0.1.0:bafybeiasckel6kcci54xhxbj53upgootuhmcc2pcvwl3g4hsmf6priodfy
+- valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeifs2ayvxtvkve26hfqrx3djoa77rbsw6jfwmiqvtmmjk6sdl3jclq
+- valory/uniswap_v3_pool:0.1.0:bafybeihmnjq7xsvezburzpyvdipiz7zdww2csjws2zl26scd5y2jv5jlqq
+- valory/sturdy_yearn_v3_vault:0.1.0:bafybeiay34tsyzoxfgtp4rio2dcknmjt5kg44gw5bu23cgrlwnmb6wk7da
+- valory/velodrome_router:0.1.0:bafybeigy42dm2n2qri77etwbkzerzhk3d55h62voysndhtfs4jgi4yzvxa
+- valory/velodrome_cl_pool:0.1.0:bafybeigq3tlzqr7c5bodfkaudsqsh77mwm6j3dnzicjtpx6gwxrwo4wate
+- valory/velodrome_non_fungible_position_manager:0.1.0:bafybeib5ac6a2rk2zfjck7wsem2ruuojrpzdajs765cjelxqera3vsl74m
+- valory/velodrome_pool:0.1.0:bafybeifch3b7krhrxtmus5rzxy4b3qdtt372xqauoxyoug2mqnk64dq7eq
+- valory/velodrome_sugar:0.1.0:bafybeiapnhv2sjll2vdtnvlo7umub6vkg5w2mbac3kbdvmwftqzc6al77e
+- valory/velodrome_gauge:0.1.0:bafybeidlz4znru4idbegamk2p7p7oz7fcjlkdzylsw7pgxfyxgcocguhg4
+- valory/velodrome_voter:0.1.0:bafybeicxjdumoh3vwma5qtcq3il5rvcewvemdxt32axjvoyprju4i32nwy
+- valory/velodrome_cl_gauge:0.1.0:bafybeibx3mz2pjo4r6eqk2jqti2hhlc2nlakbft7jvzqjvra7xl75pxosm
+- valory/balancer_queries:0.1.0:bafybeicmky2kip547dyk2pnbtrc4sqzfvep5jpej7ioreeh5qomi4dgeku
 protocols:
 - open_aea/signing:1.0.0:bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye
 - valory/abci:0.1.0:bafybeiak4pwac3pwjtd7weskxdhkrcopckr32vtazfbuteu6yqjkwarpte
@@ -49,22 +49,22 @@ protocols:
 - dvilela/kv_store:0.1.0:bafybeib3hyj6om7bdsqqhsc4ro3xdxijp2mk5da7ks4ipfgxiovtc3aqfm
 - valory/srr:0.1.0:bafybeiee2dgy6r2z5x6vu2ug5vcxvfgg4v3liq2x7v3hxchtp45mwnchg4
 skills:
-- valory/abstract_abci:0.1.0:bafybeie7omzycvazfg6edexn2k3fteuey3alopfmlwye6e44exfcxv5apa
-- valory/abstract_round_abci:0.1.0:bafybeicehi2yqab3lldm7qzoqev3tmqrdk275sbtcabneyorhmzft76z7m
-- valory/funds_manager:0.1.0:bafybeih5k7v6zx7mtkdg4hkgmsyngkz66bbwmrpqqxccnhif666v2hzi6y
-- valory/liquidity_trader_abci:0.1.0:bafybeidl7pdhv7eokbmqbypibmdq7oz6zlfei52tqaqvctwhar64ehqana
-- valory/optimus_abci:0.1.0:bafybeif5ec6ycosaohvd6baq4omxbcooxugqtxviqkygrs3u5cq6jiv43i
-- valory/registration_abci:0.1.0:bafybeihjgfzqvuymqgku6mwqih7hlvqwr2tmdjrip3m6unt5l4e55bshkm
-- valory/reset_pause_abci:0.1.0:bafybeih6bjalcohxytg6hj3doy5dhkxonrxpqgcnclyf6tnmuyfbom2usy
-- valory/termination_abci:0.1.0:bafybeiarjw4hhu2vf56yxqb4jh3kmk4hfxvqahygn6scc3rfnlogjkwwpe
-- valory/transaction_settlement_abci:0.1.0:bafybeigivknq755rbnelrdemaz3vm4x7jkofvaskm34uh36pbbg6uiquo4
+- valory/abstract_abci:0.1.0:bafybeia36n7ci7b6pi2bpa4r4ty6dcb3r4vs46vjftolsdxfl4y5iieyyy
+- valory/abstract_round_abci:0.1.0:bafybeiaalla55aprhvoumv4u7qt4v6l53fjmgln6wgyjr5e5tw7u4kscja
+- valory/funds_manager:0.1.0:bafybeibid2nm7qoysj44foptkisf5ajguvacxsuoaix4og4ehotal47mcy
+- valory/liquidity_trader_abci:0.1.0:bafybeiajpjhrrs2zgv2w3r3aiafqr7aunzrfy7gyr544ad2c2z3lk2zy6u
+- valory/optimus_abci:0.1.0:bafybeicqsthb4zu5cl7eagiznvxdwz4gbh3jmbla6fjabh6sfgi3njcidy
+- valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
+- valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
+- valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
+- valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 customs:
-- valory/merkl_pools_search:0.1.0:bafybeiazmd7varajmgg7wr4zxixdnntjaw5h2i65v4slmnsqxzqhxda4la
+- valory/merkl_pools_search:0.1.0:bafybeiat7dbpiusdmpdksey5xpakpkwejiaix4rcsmtboj755muxrgbhjq
 - valory/max_apr_selection:0.1.0:bafybeigysojuwijawwlk5gpdxxskwfxld7kbqhvk7bpqiq3ub6mow4np5i
-- valory/balancer_pools_search:0.1.0:bafybeidzqh5po2fksvjeqwrcjxpymsyogo2cxsbrod3talx77wvxrj2a5e
-- valory/uniswap_pools_search:0.1.0:bafybeiec4v6hqclqrqgkda735e36o4fjuxozyw6iiydnmaxswrrj4ahuka
-- valory/asset_lending:0.1.0:bafybeiavkxaghqoj73rek5bfxe7hvmzmd566xvlcyb32dmtnvjxfkohj2e
-- valory/velodrome_pools_search:0.1.0:bafybeigg5mv4whvavfw3hbw4pzfkjglje7ddyfgzwl4zh6yo5xhn65fdxy
+- valory/balancer_pools_search:0.1.0:bafybeigmaqefqaytglypphkzegu7usskrekb2t3swvkfxldcmn5tzfp3ri
+- valory/uniswap_pools_search:0.1.0:bafybeigvybqswwybwoquhm45ev55br2fybt3qmzlco6r7ivxzrrmet2mrq
+- valory/asset_lending:0.1.0:bafybeifn4ulkzdqi5fkg6uokxwijqcdx6bditvk5liwznjafq64lhdthka
+- valory/velodrome_pools_search:0.1.0:bafybeibo35jwy53e4lnf74s2cnowa23dc7xmkdzk5tglplpovmbyr6ezsm
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -98,7 +98,7 @@ logging_config:
 skill_exception_policy: stop_and_exit
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.1.0rc6
+    version: ==2.1.0
 default_connection: null
 ---
 public_id: dvilela/kv_store:0.1.0

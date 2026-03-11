@@ -22,10 +22,9 @@
 
 import asyncio
 import json
-import re
 import ssl
 from functools import wraps
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, Optional, Union, cast
 
 import aiohttp
 import certifi
@@ -51,22 +50,20 @@ def retry_with_exponential_backoff(max_retries=5, initial_delay=1, backoff_facto
         @wraps(func)
         async def wrapper(*args, **kwargs):  # type: ignore
             delay = initial_delay
+            last_exception: Optional[Exception] = None
             for attempt in range(max_retries):
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
-                    if "rate limit exceeded" in str(e).lower():
-                        if attempt < max_retries - 1:
-                            print(f"Retrying in {delay} seconds due to rate limit...")
-                            await asyncio.sleep(delay)
-                            delay *= backoff_factor
-                        else:
-                            print(
-                                "Max retries reached. Could not complete the request."
-                            )
-                            raise
-                    else:
+                    last_exception = e
+                    if "rate limit exceeded" not in str(e).lower():
                         raise
+                    if attempt < max_retries - 1:
+                        print(f"Retrying in {delay} seconds due to rate limit...")
+                        await asyncio.sleep(delay)
+                        delay *= backoff_factor
+            print("Max retries reached. Could not complete the request.")
+            raise last_exception  # type: ignore
 
         return wrapper
 
@@ -305,15 +302,13 @@ class GenericMirrorDBConnection(Connection):
                 f"Method {method_name} is not available.",
             )
 
-        # Add endpoint validation when applicable
-        if method_name in {"create_", "read_", "update_", "delete_"}:
-            endpoint = payload.get("kwargs", {}).get("endpoint")
-            # Safe print that handles Unicode characters
-            try:
-                print(f"endpoint,payload : {endpoint,payload}")
-            except UnicodeEncodeError:
-                safe_payload = str(payload).encode('ascii', 'replace').decode('ascii')
-                print(f"endpoint,payload : {endpoint},{safe_payload}")
+        # Log endpoint and payload (safe print that handles Unicode characters)
+        endpoint = payload.get("kwargs", {}).get("endpoint")
+        try:
+            print(f"endpoint,payload : {endpoint,payload}")
+        except UnicodeEncodeError:
+            safe_payload = str(payload).encode('ascii', 'replace').decode('ascii')
+            print(f"endpoint,payload : {endpoint},{safe_payload}")
 
         try:
             response = await method(**payload.get("kwargs", {}))

@@ -101,8 +101,6 @@ class TickMath:
             ratio = (2**256 - 1) // ratio
         
         # Ensure the ratio is within valid bounds
-        if ratio < TickMath.MIN_SQRT_RATIO:
-            return TickMath.MIN_SQRT_RATIO
         if ratio > TickMath.MAX_SQRT_RATIO:
             return TickMath.MAX_SQRT_RATIO
             

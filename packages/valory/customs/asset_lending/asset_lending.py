@@ -170,17 +170,16 @@ def get_sharpe_ratio_for_address(historical_data, address: str) -> float:
         if address not in mapping:
             continue
         address_key = mapping[address]
-        if address_key in entry["doc"]:
-            data = entry["doc"][address_key]
-            base_apy = data.get("baseAPY", 0)
-            rewards_apy = data.get("rewardsAPY", 0)
-            records.append(
-                {
-                    "timestamp": timestamp,
-                    "base_apy": base_apy,
-                    "rewards_apy": rewards_apy,
-                }
-            )
+        data = entry["doc"][address_key]
+        base_apy = data.get("baseAPY", 0)
+        rewards_apy = data.get("rewardsAPY", 0)
+        records.append(
+            {
+                "timestamp": timestamp,
+                "base_apy": base_apy,
+                "rewards_apy": rewards_apy,
+            }
+        )
 
     if not records:
         logger.warning(f"No historical records found for address: {address}")

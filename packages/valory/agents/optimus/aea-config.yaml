@@ -61,10 +61,10 @@ skills:
 customs:
 - valory/merkl_pools_search:0.1.0:bafybeiat7dbpiusdmpdksey5xpakpkwejiaix4rcsmtboj755muxrgbhjq
 - valory/max_apr_selection:0.1.0:bafybeigysojuwijawwlk5gpdxxskwfxld7kbqhvk7bpqiq3ub6mow4np5i
-- valory/balancer_pools_search:0.1.0:bafybeigmaqefqaytglypphkzegu7usskrekb2t3swvkfxldcmn5tzfp3ri
-- valory/uniswap_pools_search:0.1.0:bafybeigvybqswwybwoquhm45ev55br2fybt3qmzlco6r7ivxzrrmet2mrq
-- valory/asset_lending:0.1.0:bafybeifn4ulkzdqi5fkg6uokxwijqcdx6bditvk5liwznjafq64lhdthka
-- valory/velodrome_pools_search:0.1.0:bafybeibo35jwy53e4lnf74s2cnowa23dc7xmkdzk5tglplpovmbyr6ezsm
+- valory/balancer_pools_search:0.1.0:bafybeibzv2empr5kpsiwcjf3vu4ek6adp46pyfbg6cnphwsh7zazkwbz5y
+- valory/uniswap_pools_search:0.1.0:bafybeicmcwsl23nibta7vbpm4piw5yx7s7hqfi2ai5kr74wtwu2wt425hu
+- valory/asset_lending:0.1.0:bafybeic3gkbdv7nm3ahduxts7hz3edboqkn5gaoyignkr4sowi52ukfiva
+- valory/velodrome_pools_search:0.1.0:bafybeifoepaz5h4gqacljw3oxbsbxqymw32jh6dep6aumlvqbam7ds7owi
 default_ledger: ethereum
 required_ledgers:
 - ethereum

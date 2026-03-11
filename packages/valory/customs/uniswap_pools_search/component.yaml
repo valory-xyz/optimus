@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiej6rb7f54w4epuyvwj3fays7lo6rqqxetjdrzc52k3q5qcbckv4a
-  uniswap_pools_search.py: bafybeiel3b4xq2mcf6o3bmd6kq42mzbrtvftmzru74s2pvqj3swoairgki
+  uniswap_pools_search.py: bafybeibfqxt7gdpbtgqacze6bmqi6jth6546mdr2a7o2qwc75tf62kpfya
 fingerprint_ignore_patterns: []
 entry_point: uniswap_pools_search.py
 callable: run
@@ -19,8 +19,6 @@ dependencies:
     version: <2.33.0,>=2.28.1
   pycoingecko:
     version: ==3.2.0
-  pyfolio:
-    version: ==0.9.2
   web3:
     version: <7.0.0,>=6.0.0
   numpy:

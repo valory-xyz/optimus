@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional, Union, Tuple
 import json
 import numpy as np
 import pandas as pd
-import pyfolio as pf
 import requests
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
@@ -732,7 +731,7 @@ def get_balancer_pool_sharpe_ratio(pool_id, chain, timerange="ONE_YEAR"):
                 
             # Calculate Sharpe ratio with error handling
             logger.info(f"Pool {pool_id} - Computing Sharpe ratio with {len(total_returns)} returns")
-            sharpe_ratio = pf.timeseries.sharpe_ratio(total_returns)
+            sharpe_ratio = total_returns.mean() / total_returns.std(ddof=1) * np.sqrt(252)
             
             logger.info(f"Pool {pool_id} - Raw Sharpe ratio: {sharpe_ratio}")
             

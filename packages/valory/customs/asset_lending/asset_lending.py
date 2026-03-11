@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import pyfolio as pf
 import requests
 from aea.helpers.logging import setup_logger
 from pycoingecko import CoinGeckoAPI
@@ -147,7 +146,7 @@ def calculate_daily_returns(base_apy, reward_apy=0):
 
 def calculate_sharpe_ratio(returns, risk_free_rate=0.0003):
     """
-    Calculate the Sharpe Ratio without pyfolio.
+    Calculate the Sharpe Ratio.
     Sharpe = (mean(returns) - risk_free_rate) / std(returns)
     """
     if len(returns) < 2:

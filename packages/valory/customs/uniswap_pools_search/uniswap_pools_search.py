@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-import pyfolio as pf
 import requests
 from aea.helpers.logging import setup_logger
 from pycoingecko import CoinGeckoAPI
@@ -410,7 +409,7 @@ def get_uniswap_pool_sharpe_ratio(
         .dropna()
     )
 
-    return float(pf.timeseries.sharpe_ratio(returns))
+    return float(returns.mean() / returns.std(ddof=1) * np.sqrt(252))
 
 
 def calculate_il_impact(P0, P1):

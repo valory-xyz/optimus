@@ -8,7 +8,6 @@ import time
 import threading
 import statistics
 from datetime import datetime, timedelta
-from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -58,18 +57,6 @@ def get_errors():
         _thread_local.errors = []
     return _thread_local.errors
 
-ERC20_ABI = [
-    {
-        "constant": True,
-        "inputs": [],
-        "name": "name",
-        "outputs": [{"name": "", "type": "string"}],
-        "payable": False,
-        "stateMutability": "view",
-        "type": "function",
-    }
-]
-
 
 def check_missing_fields(kwargs: Dict[str, Any]) -> List[str]:
     missing = [field for field in REQUIRED_FIELDS if kwargs.get(field) is None]
@@ -82,28 +69,6 @@ def remove_irrelevant_fields(
     kwargs: Dict[str, Any], required_fields: Tuple
 ) -> Dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in required_fields}
-
-@lru_cache(None)
-def create_web3_connection(chain_name: str):
-    chain_url = CHAIN_URLS.get(chain_name)
-    if not chain_url:
-        return None
-    web3 = Web3(Web3.HTTPProvider(chain_url))
-    return web3 if web3.is_connected() else None
-
-
-@lru_cache(None)
-def fetch_token_name_from_contract(chain_name, token_address):
-    web3 = create_web3_connection(chain_name)
-    if not web3:
-        return None
-    contract = web3.eth.contract(
-        address=Web3.to_checksum_address(token_address), abi=ERC20_ABI
-    )
-    try:
-        return contract.functions.name().call()
-    except Exception:
-        return None
 
 def get_coin_id_from_symbol(
         coin_id_mapping, symbol, chain_name

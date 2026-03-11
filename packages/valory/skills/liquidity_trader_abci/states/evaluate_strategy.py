@@ -56,15 +56,12 @@ class EvaluateStrategyRound(CollectSameUntilThresholdRound):
 
         # Check if this is a withdrawal initiation event by examining the payload content
         if synced_data.actions:
-            try:
-                actions_data = synced_data.actions
-                if (
-                    isinstance(actions_data, dict)
-                    and actions_data.get("event") == Event.WITHDRAWAL_INITIATED.value
-                ):
-                    return synced_data, Event.WITHDRAWAL_INITIATED
-            except AttributeError:
-                pass
+            actions_data = synced_data.actions
+            if (
+                isinstance(actions_data, dict)
+                and actions_data.get("event") == Event.WITHDRAWAL_INITIATED.value
+            ):
+                return synced_data, Event.WITHDRAWAL_INITIATED
 
         if event != Event.DONE:
             return res

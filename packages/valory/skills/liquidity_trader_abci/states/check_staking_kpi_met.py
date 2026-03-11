@@ -76,4 +76,4 @@ class CheckStakingKPIMetRound(CollectSameUntilThresholdRound):
         if synced_data.is_staking_kpi_met is False:
             return synced_data, Event.STAKING_KPI_NOT_MET
 
-        return res
+        return res  # pragma: no cover

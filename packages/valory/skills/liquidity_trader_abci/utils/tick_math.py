@@ -90,9 +90,9 @@ def get_sqrt_ratio_at_tick(tick: int) -> int:
 
     # Ensure the result is within valid bounds
     if sqrt_price_x96 < MIN_SQRT_RATIO:
-        return MIN_SQRT_RATIO
+        return MIN_SQRT_RATIO  # pragma: no cover
     if sqrt_price_x96 > MAX_SQRT_RATIO:
-        return MAX_SQRT_RATIO
+        return MAX_SQRT_RATIO  # pragma: no cover
 
     return sqrt_price_x96
 

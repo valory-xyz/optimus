@@ -477,12 +477,14 @@ class HttpHandler(BaseHttpHandler):
     ) -> Optional[Dict]:
         """Get LiFi quote synchronously."""
         try:
-            chain_id = str(
-                self.context.params.chain_to_chain_id_mapping.get(chain.lower())
+            raw_chain_id = self.context.params.chain_to_chain_id_mapping.get(
+                chain.lower()
             )
 
-            if not chain_id:
+            if not raw_chain_id:
                 return None
+
+            chain_id = str(raw_chain_id)
 
             params = {
                 "fromChain": chain_id,

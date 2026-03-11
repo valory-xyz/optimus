@@ -156,12 +156,10 @@ def highest_apr_opportunity(
             # Check the number of tokens for the highest APR pool if it's a Balancer pool
             if dex_type == DexTypes.BALANCER.value:
                 pool_id = highest_apr_pool.get("pool_id")
-                if highest_apr_pool.get("pool_type") is None:
-                    continue
                 tokensList = fetch_balancer_pool_info(
                     pool_id, chain, detail="tokensList"
                 )
-                if "error" in tokensList or len(tokensList) != 2:
+                if "error" in tokensList or len(tokensList.get("tokensList", [])) != 2:
                     continue
 
             return highest_apr_pool
@@ -171,9 +169,6 @@ def highest_apr_opportunity(
     def extract_pool_info(dex_type, chain, apr, campaign) -> Dict[str, Any]:
         """Extract pool info from campaign data."""
         pool_address = campaign.get("mainParameter")
-        if not pool_address:
-            return {"error": "Pool address not found in campaign."}
-
         pool_token_dict = {}
         pool_id = None
         pool_type = None
@@ -199,7 +194,7 @@ def highest_apr_opportunity(
                 "token1_symbol": pool_token_items[1][1].get("symbol"),
             }
 
-        elif dex_type == DexTypes.UNISWAP_V3.value:
+        else:
             pool_info = campaign.get("campaignParameters", {})
             if not pool_info:
                 return {"error": "No pool tokens info present in campaign."}

@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiccxktek4ostfagk4x5gmi65muiuqmr2d4k7fvs22akqr7yiha2hq
-  behaviours.py: bafybeihssqa7r3vnvdqkbid45ns4v7iim7k33d6kr4i2ec5ohqawdy2hnm
+  behaviours.py: bafybeib3kst4zp2btwplfwps3rptdknh7zjx2dndjcejzov4ldqmwcnzxu
   composition.py: bafybeieckodsy26diezvgefabzp5xpwtu3wua5o4z5wlfn2hhxefrhorku
   dialogues.py: bafybeieuibrkf5jnhzfdrhr2li3momxbwzilftrcmo7xo36blbwussug2e
   fsm_specification.yaml: bafybeiclrv7v4i2dvig7uea3fjxqfwwfqp3vsnumy5647dulgfhha6mlea
@@ -103,7 +103,7 @@ fingerprint:
   optimus-ui-build/logos/tokens/usx.png: bafybeifiztzjo72yfz3vnjniqjjgq3zobqoiiofeq7assblejcartmxd2y
   optimus-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
-  prompts.py: bafybeiabw4vxg52zpqgmu4wrqxhlqbtwnk3ijd3p6tmkm5o2rykxiliqta
+  prompts.py: bafybeib64hnbhkt4bvdetufk3v2kmts2hs5o5h6p7otb6efkmbve33sgwi
   tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/test_behaviours.py: bafybeiby4sxvg7bh5cz3kx65kvtikztcauigxufquarbylt7y5lecrswem
   tests/test_composition.py: bafybeibnkbjf4zgsqclofbcouz3n6r34qhlgyi5zsptslezg2omgl3ce2a
@@ -126,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
 - valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
-- valory/liquidity_trader_abci:0.1.0:bafybeieynmztka6ziadsr4qaw2zhvr7f6rsk2c5j7sz6hru4gg66i3m2bu
+- valory/liquidity_trader_abci:0.1.0:bafybeibb75nsjhp4ruayvdhmxz2im3toadsqwh2zpbqxwns3ogacghgi3i
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 - valory/funds_manager:0.1.0:bafybeibid2nm7qoysj44foptkisf5ajguvacxsuoaix4og4ehotal47mcy
 behaviours:

@@ -6,7 +6,7 @@ description: The contract package for the balancer VelodromePool interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeibgtv6ysuvft2lpsrekuhnyfrkh2gjkjmlzlqbftricatnebutvrq
+  __init__.py: bafybeibc2emcl2u4bzvefcdpnuljyii6yxnoh4sxfxpenzleebrufqhpmy
   build/VelodromePool.json: bafybeidgimpxtkds5kaha5mvojvr7e5pjefyvw362teh65vn44qqvfcvza
   contract.py: bafybeiagm6zoi4btjg6lxr4bpot23u4app4exrdfv3t326t452xz5hugeq
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu

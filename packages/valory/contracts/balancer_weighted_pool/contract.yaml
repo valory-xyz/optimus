@@ -6,9 +6,9 @@ description: The contract package for the balancer WeightedPool interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeigck6xsyoug6y4nsjgnqmzsgjywcb6lqitkrtcs3qxwti3wfc5ohe
+  __init__.py: bafybeiarfgmu6xzscmr3osodgjw33uziwt3lslpsp7rtihe46mydyacm5y
   build/WeightedPool.json: bafybeiclbkl3snzwo36nnbvjpge2jfcyo3a7lzzhfsfr4piv3n6djrs3le
-  contract.py: bafybeigbqry3h27akbvmuwvvvbmokvlzuaqipskd5uztr3hopu7fr3frpu
+  contract.py: bafybeigreyuaemkjdvpp3xayrgtfwnu7hhefstpxbw7rxru64edkf3go4u
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
   tests/test_contract.py: bafybeihbgbpqos4qjwemo6knraajso2wzjngiea4idtnjhtktigj7w7sl4
 fingerprint_ignore_patterns: []

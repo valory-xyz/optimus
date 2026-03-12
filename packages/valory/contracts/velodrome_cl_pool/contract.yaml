@@ -6,7 +6,7 @@ description: A wrapper for Velodrome's CLPool calls.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeihzj4esylb3gebbdfrh552jrplh4yhgorcsqnbp6wrtuhpyeyfp5e
+  __init__.py: bafybeifgiomsvwkahifuheasgczwwi7jp5cwhzm3yzgrlbulcacib2iqsi
   build/contract_interface.json: bafybeih264ikmebscydw6nsv5ldpwugatldqnflrxkij2gvirkcvkm3tpi
   contract.py: bafybeicunxlzl6acknxqdpoqcclgc26xrk4vtuagdeblc3ja6uq66cyxdy
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu

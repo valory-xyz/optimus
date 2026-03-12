@@ -6,7 +6,7 @@ description: The contract package for the balancer Vault interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeiapmgw7qfk7dsdqkflzlcpm7zdzoleykagv544ek7xjfpopqaoylq
+  __init__.py: bafybeig4xtia4msrbnpbzb4opqezx3aetgebrxmrfvzedqxtdhlbgdcqiu
   build/Vault.json: bafybeifbvxyx43jmtchbzerapzqeblmmsppfbvfkwrag4nsfydad6bqwje
   contract.py: bafybeiha7qfah4kxrqjxsmomprhg43jgo2akc4h7ssm5xyu7cptdqe2ivq
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu

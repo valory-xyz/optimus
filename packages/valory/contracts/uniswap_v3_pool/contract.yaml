@@ -6,7 +6,7 @@ description: The contract package for the Uniswap V3 Pool interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeiavphsx5vbku6wv5i26gp6t64xlbv63gctuopf42huv52bqv5bste
+  __init__.py: bafybeibccrt3jgspjiuzst3g6cu6i6t2jkainrcnq6ppggxkoj3fl6uskq
   build/UniswapV3Pool.json: bafybeids5lo3axsd6aplyywwi43xwdxj3njnrke5m7gsp3mg74svcodr4i
   contract.py: bafybeidgqffnbghlfg4timmlbcshxsjxpumtbmox23yedqwclxkwmbgz5i
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu

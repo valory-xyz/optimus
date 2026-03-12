@@ -6,7 +6,7 @@ description: The contract package for the Velodrome Gauge interface.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeicukkay2istpshg2lxarxrwj3fi4hrehh7qrckm63bxdgla33xhuq
+  __init__.py: bafybeig7yybsi673jarcf4px5miycwhnp3pjt6mxlx6r6kenoonbv25gy4
   build/contract_interface.json: bafybeiexbbxt4mizvtmvnepnsscrnvuqcwrzl2vu3k4dpeminjpq3saig4
   contract.py: bafybeifchuyhqeuemyjesvrn7ubpjvrg4hauhpiaath4fcmo6b2sqsfikq
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu

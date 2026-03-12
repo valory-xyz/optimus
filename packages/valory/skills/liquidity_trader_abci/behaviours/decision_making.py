@@ -1099,13 +1099,11 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             scale_factor = max_position_size / current_total_usd
 
             # Calculate token ratios from current amounts
-            if current_total_usd > 0:
-                token0_ratio = usd0 / current_total_usd
-                token1_ratio = usd1 / current_total_usd
-            else:
-                # Default to 50/50 if we can't determine ratios
-                token0_ratio = 0.5
-                token1_ratio = 0.5
+            # NOTE: current_total_usd is guaranteed > 0 here because we already
+            # returned early at line above when current_total_usd <= max_position_size,
+            # and max_position_size > 0 (checked at function entry).
+            token0_ratio = usd0 / current_total_usd
+            token1_ratio = usd1 / current_total_usd
 
             # Calculate capped USD amounts
             capped_usd0 = max_position_size * token0_ratio
@@ -1413,9 +1411,8 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
             self.context.logger.error(f"Missing required parameters: {action}")
             return None, None, None
 
-        if len(assets) < 2:
-            self.context.logger.error(f"2 assets required, provided: {assets}")
-            return None, None, None
+        # NOTE: assets is always [action.get("token0"), action.get("token1")] so len >= 2.
+        # The None-element case is caught by the `not all(...)` check above.
 
         # Get corresponding pool handler
         pool = self.pools.get(dex_type)
@@ -2652,10 +2649,7 @@ class DecisionMakingBehaviour(LiquidityTraderBaseBehaviour):
                 )
             except (ValueError, TypeError):
                 error_msg = f"API returned status code {routes_response.status_code} with non-JSON response. "
-                if hasattr(routes_response, "body"):
-                    error_msg += f"Response body: {routes_response.body}"
-                else:
-                    error_msg += "Response body is missing"
+                error_msg += f"Response body: {routes_response.body}"
                 self.context.logger.error(error_msg)
             return None
 

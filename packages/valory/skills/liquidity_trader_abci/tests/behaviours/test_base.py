@@ -623,16 +623,13 @@ class TestStoreReadData:
 
     def test_read_data_file_not_found(self) -> None:
         b = _make_behaviour()
-        filepath = "/tmp/nonexistent_test_file_abc123.json"
-        # Remove if somehow exists
-        if os.path.exists(filepath):
-            os.unlink(filepath)
-        b._read_data("current_positions", filepath)
-        # Should create the file with []
-        assert os.path.exists(filepath)
-        with open(filepath) as f:
-            assert json.load(f) == []
-        os.unlink(filepath)
+        with tempfile.TemporaryDirectory() as td:
+            filepath = os.path.join(td, "nonexistent_test_file_abc123.json")
+            b._read_data("current_positions", filepath)
+            # Should create the file with []
+            assert os.path.exists(filepath)
+            with open(filepath) as f:
+                assert json.load(f) == []
 
     def test_read_data_json_decode_error(self) -> None:
         b = _make_behaviour()

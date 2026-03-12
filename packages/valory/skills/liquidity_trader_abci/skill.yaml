@@ -49,7 +49,7 @@ fingerprint:
   tests/behaviours/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
   tests/behaviours/test___init__.py: bafybeihikbbl7r3jwq3np7nx4wz4eeymk3egvst2obu5hrq3l3s4ucp42e
   tests/behaviours/test_apr_population.py: bafybeib3slsbzkh2gqbt52hoa3fx2zvu2ojzfntwhz477p3ziclapyo4ma
-  tests/behaviours/test_base.py: bafybeifrn5axzvah6rbmyzgyrvu5x2xiasoo6snr3girkrgbtvtgyufela
+  tests/behaviours/test_base.py: bafybeihu5d7355kijuablb5ghuklywo2g5guyxnuqwx2x3tebgbzv5qoqe
   tests/behaviours/test_call_checkpoint.py: bafybeichc7rmi55lg5jo657x32zb443r3lstivhj4ijc534lgi2u33pkke
   tests/behaviours/test_check_staking_kpi_met.py: bafybeib2nmk66boi42cpotgnpxlbpdtov3oiua77wprb3x63qjve5zb4vq
   tests/behaviours/test_decision_making.py: bafybeif6kujtavptqxms43gugvki3hm2qsp5nfpn33kjr2cxvjs5colkge

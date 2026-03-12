@@ -100,9 +100,9 @@ connections:
 - valory/x402:0.1.0:bafybeibg4a4drxliwba6ortn5xvqpgnhf6e5e5ji35gufaeg5jx55yrrci
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeico3uzjdwumf2jg2e627ut4rwzwmedjavenw6e2hshi2m6yw642bq
-- valory/balancer_weighted_pool:0.1.0:bafybeictflx7gjjrbb7m5cvh7sw3b25at4cfhjxntxwpkceoirqli6r5oy
-- valory/balancer_vault:0.1.0:bafybeidispp772dm3fpcagq6jmfntybgnpt645og6xbjlqojhrztfqe3wm
-- valory/balancer_queries:0.1.0:bafybeigbktams2qwxsucm7xuvvzclsb725hictuzdnazxqz2x6hfcakvly
+- valory/balancer_weighted_pool:0.1.0:bafybeicfodad2vb6jkuctsrzg4n6q6ghj2gwj5b3lkzssyjpiis5yot7ly
+- valory/balancer_vault:0.1.0:bafybeiglroxjcm6xbzwccp7r5rhci6fhmmyckgj5mbhf6xlc2ekf6ftqoq
+- valory/balancer_queries:0.1.0:bafybeichrah3mxxa6354pl6g5ujpofnrggyzoelbq3suul6emwxq5sg6tq
 - valory/erc20:0.1.0:bafybeic7pgqam66mpkr3lgauwuxntl5wtmzx53f74jaligihyvavsws4au
 - valory/multisend:0.1.0:bafybeiaf3hapi3prgpjeugwhq64k7lqelo6kibhol5rkajt7id3knomp5q
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeidim7zej4uwmt6kjfj7g3mw57lz7jsh5gjq7buukocexqxmlrbijy

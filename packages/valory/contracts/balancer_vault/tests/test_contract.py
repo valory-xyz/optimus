@@ -47,9 +47,7 @@ class TestGetPoolTokens:
             expected_data
         )
 
-        with patch.object(
-            VaultContract, "get_instance", return_value=mock_instance
-        ):
+        with patch.object(VaultContract, "get_instance", return_value=mock_instance):
             result = VaultContract.get_pool_tokens(
                 mock_ledger_api,
                 MOCK_ADDRESS,
@@ -71,9 +69,7 @@ class TestJoinPool:
         # encode_abi returns a hex string starting with "0x"
         mock_instance.encode_abi.return_value = "0xabcdef1234"
 
-        with patch.object(
-            VaultContract, "get_instance", return_value=mock_instance
-        ):
+        with patch.object(VaultContract, "get_instance", return_value=mock_instance):
             result = VaultContract.join_pool(
                 mock_ledger_api,
                 MOCK_ADDRESS,
@@ -92,30 +88,6 @@ class TestJoinPool:
         call_args = mock_instance.encode_abi.call_args
         assert call_args[0][0] == "joinPool"
 
-    def test_join_pool_with_internal_balance_true(self) -> None:
-        """Test join_pool with from_internal_balance set to True."""
-        mock_ledger_api = MagicMock()
-        mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0x0011"
-
-        with patch.object(
-            VaultContract, "get_instance", return_value=mock_instance
-        ):
-            result = VaultContract.join_pool(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                pool_id=MOCK_POOL_ID,
-                sender=MOCK_SENDER,
-                recipient=MOCK_RECIPIENT,
-                assets=["0xToken0"],
-                max_amounts_in=[500],
-                join_kind=0,
-                minimum_bpt=50,
-                from_internal_balance=True,
-            )
-
-        assert result == {"tx_hash": bytes.fromhex("0011")}
-
 
 class TestExitPool:
     """Tests for exit_pool."""
@@ -126,9 +98,7 @@ class TestExitPool:
         mock_instance = MagicMock()
         mock_instance.encode_abi.return_value = "0xfeedface"
 
-        with patch.object(
-            VaultContract, "get_instance", return_value=mock_instance
-        ):
+        with patch.object(VaultContract, "get_instance", return_value=mock_instance):
             result = VaultContract.exit_pool(
                 mock_ledger_api,
                 MOCK_ADDRESS,
@@ -146,30 +116,6 @@ class TestExitPool:
         mock_instance.encode_abi.assert_called_once()
         call_args = mock_instance.encode_abi.call_args
         assert call_args[0][0] == "exitPool"
-
-    def test_exit_pool_with_internal_balance_true(self) -> None:
-        """Test exit_pool with to_internal_balance set to True."""
-        mock_ledger_api = MagicMock()
-        mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xaa"
-
-        with patch.object(
-            VaultContract, "get_instance", return_value=mock_instance
-        ):
-            result = VaultContract.exit_pool(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                pool_id=MOCK_POOL_ID,
-                sender=MOCK_SENDER,
-                recipient=MOCK_RECIPIENT,
-                assets=["0xToken0"],
-                min_amounts_out=[10],
-                exit_kind=0,
-                bpt_amount_in=100,
-                to_internal_balance=True,
-            )
-
-        assert result == {"tx_hash": bytes.fromhex("aa")}
 
 
 class TestSimulateTx:

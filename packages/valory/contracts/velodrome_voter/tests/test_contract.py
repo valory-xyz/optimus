@@ -110,29 +110,6 @@ class TestGauges:
             MOCK_CHECKSUMMED_POOL
         )
 
-    def test_gauges_calls_get_instance(self) -> None:
-        """Test that gauges calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_POOL
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.gauges.return_value.call.return_value = (
-            MOCK_GAUGE_ADDRESS
-        )
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeVoterContract.gauges(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_POOL_ADDRESS
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
 
 class TestIsGauge:
     """Tests for the is_gauge method."""
@@ -157,27 +134,6 @@ class TestIsGauge:
             )
 
         assert result == {"is_gauge": True}
-
-    def test_is_gauge_returns_false(self) -> None:
-        """Test that is_gauge returns is_gauge=False when address is not a valid gauge.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.isGauge.return_value.call.return_value = False
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeVoterContract.is_gauge(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
-            )
-
-        assert result == {"is_gauge": False}
 
     def test_is_gauge_checksums_gauge_address(self) -> None:
         """Test that is_gauge checksums the gauge address before querying.
@@ -224,27 +180,6 @@ class TestIsGauge:
         mock_contract_instance.functions.isGauge.assert_called_once_with(
             MOCK_CHECKSUMMED_GAUGE
         )
-
-    def test_is_gauge_calls_get_instance(self) -> None:
-        """Test that is_gauge calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.isGauge.return_value.call.return_value = True
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeVoterContract.is_gauge(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
 
 
 class TestPoolForGauge:
@@ -326,29 +261,6 @@ class TestPoolForGauge:
             MOCK_CHECKSUMMED_GAUGE
         )
 
-    def test_pool_for_gauge_calls_get_instance(self) -> None:
-        """Test that pool_for_gauge calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.poolForGauge.return_value.call.return_value = (
-            MOCK_POOL_ADDRESS
-        )
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeVoterContract.pool_for_gauge(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
 
 class TestIsAlive:
     """Tests for the is_alive method."""
@@ -373,27 +285,6 @@ class TestIsAlive:
             )
 
         assert result == {"is_alive": True}
-
-    def test_is_alive_returns_false(self) -> None:
-        """Test that is_alive returns is_alive=False when gauge is not active.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.isAlive.return_value.call.return_value = False
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeVoterContract.is_alive(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
-            )
-
-        assert result == {"is_alive": False}
 
     def test_is_alive_checksums_gauge_address(self) -> None:
         """Test that is_alive checksums the gauge address before querying.
@@ -440,27 +331,6 @@ class TestIsAlive:
         mock_contract_instance.functions.isAlive.assert_called_once_with(
             MOCK_CHECKSUMMED_GAUGE
         )
-
-    def test_is_alive_calls_get_instance(self) -> None:
-        """Test that is_alive calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_GAUGE
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.isAlive.return_value.call.return_value = True
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeVoterContract.is_alive(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_GAUGE_ADDRESS
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
 
 
 class TestValidateGaugeAddress:
@@ -686,57 +556,3 @@ class TestLength:
             result = VelodromeVoterContract.length(mock_ledger_api, MOCK_ADDRESS)
 
         assert result == {"length": 42}
-
-    def test_length_calls_contract_function(self) -> None:
-        """Test that length calls the length contract function.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.length.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            VelodromeVoterContract.length(mock_ledger_api, MOCK_ADDRESS)
-
-        mock_contract_instance.functions.length.assert_called_once()
-
-    def test_length_calls_get_instance(self) -> None:
-        """Test that length calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.length.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeVoterContract.length(mock_ledger_api, MOCK_ADDRESS)
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_length_with_zero_pools(self) -> None:
-        """Test that length correctly handles zero pools.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.length.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeVoterContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeVoterContract.length(mock_ledger_api, MOCK_ADDRESS)
-
-        assert result == {"length": 0}

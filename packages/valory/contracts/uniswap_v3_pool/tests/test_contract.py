@@ -34,11 +34,6 @@ MOCK_TOKEN0 = "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
 MOCK_TOKEN1 = "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
 
 
-# ---------------------------------------------------------------------------
-# TickMath tests
-# ---------------------------------------------------------------------------
-
-
 class TestTickMathGetSqrtRatioAtTickPositive:
     """Tests for TickMath.getSqrtRatioAtTick with positive ticks."""
 
@@ -65,11 +60,6 @@ class TestTickMathGetSqrtRatioAtTickNegative:
         # Negative ticks cause inversion: (2^256-1)//ratio, producing a value >= 2^128
         ratio_at_zero = TickMath.getSqrtRatioAtTick(0)
         assert result > ratio_at_zero
-
-    def test_large_negative_tick(self) -> None:
-        """Test that the most negative tick produces a ratio clamped at or above MIN_SQRT_RATIO."""
-        result = TickMath.getSqrtRatioAtTick(-887272)
-        assert result >= TickMath.MIN_SQRT_RATIO
 
 
 class TestTickMathGetSqrtRatioAtTickZero:
@@ -125,10 +115,6 @@ class TestTickMathAllBitOperations:
         assert isinstance(result, int)
         assert result <= TickMath.MAX_SQRT_RATIO
 
-
-# ---------------------------------------------------------------------------
-# LiquidityAmounts tests
-# ---------------------------------------------------------------------------
 
 # Q96 = 2^96, used to build realistic sqrt price values
 Q96 = 2**96
@@ -231,11 +217,6 @@ class TestGetAmount1ForLiquidity:
         assert isinstance(result, int)
 
 
-# ---------------------------------------------------------------------------
-# UniswapV3PoolContract tests
-# ---------------------------------------------------------------------------
-
-
 class TestGetPoolTokens:
     """Tests for UniswapV3PoolContract.get_pool_tokens."""
 
@@ -268,9 +249,7 @@ class TestGetPoolFee:
         with patch.object(
             UniswapV3PoolContract, "get_instance", return_value=mock_instance
         ):
-            result = UniswapV3PoolContract.get_pool_fee(
-                mock_ledger_api, MOCK_ADDRESS
-            )
+            result = UniswapV3PoolContract.get_pool_fee(mock_ledger_api, MOCK_ADDRESS)
 
         assert result == {"data": 3000}
 

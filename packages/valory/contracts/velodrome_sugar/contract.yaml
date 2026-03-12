@@ -10,7 +10,7 @@ fingerprint:
   build/contract_interface.json: bafybeialdjftyvkh3zxroxoevuuumjbmqhkzwea57pk2fmqf7qra7gieku
   contract.py: bafybeiaunb443dwgfvcpwre5pmj44ho4wus5oitf37vvvczsvsfunwbwgq
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeidnyx3ru3reka7esgncsbbuzo7ckuxdas3j7fi6q72mf57sv4ywau
+  tests/test_contract.py: bafybeibsinzik4xnnzqmn24mksgv273vezjvgx2l7jmepljkrv4p4xzmmm
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeSugarContract

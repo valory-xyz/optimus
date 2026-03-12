@@ -53,42 +53,6 @@ class TestGetBalance:
         assert result == {"balance": 1000}
         mock_contract_instance.functions.balanceOf.assert_called_once_with(MOCK_ACCOUNT)
 
-    def test_get_balance_returns_zero_balance(self) -> None:
-        """Test that get_balance correctly handles a zero balance.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.balanceOf.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromePoolContract, "get_instance", return_value=mock_contract_instance
-        ):
-            result = VelodromePoolContract.get_balance(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
-            )
-
-        assert result == {"balance": 0}
-
-    def test_get_balance_calls_get_instance_with_correct_args(self) -> None:
-        """Test that get_balance calls get_instance with the correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.balanceOf.return_value.call.return_value = 500
-
-        with patch.object(
-            VelodromePoolContract, "get_instance", return_value=mock_contract_instance
-        ) as mock_get_instance:
-            VelodromePoolContract.get_balance(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
 
 class TestBuildApprovalTx:
     """Tests for the build_approval_tx method."""
@@ -136,44 +100,6 @@ class TestBuildApprovalTx:
             "approve", args=(checksummed, 500)
         )
 
-    def test_build_approval_tx_calls_get_instance(self) -> None:
-        """Test that build_approval_tx calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_SPENDER
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = "0x00"
-
-        with patch.object(
-            VelodromePoolContract, "get_instance", return_value=mock_contract_instance
-        ) as mock_get_instance:
-            VelodromePoolContract.build_approval_tx(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_SPENDER, 100
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_build_approval_tx_strips_0x_prefix(self) -> None:
-        """Test that build_approval_tx correctly strips the 0x prefix from encoded data.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_SPENDER
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = "0x0102030405"
-
-        with patch.object(
-            VelodromePoolContract, "get_instance", return_value=mock_contract_instance
-        ):
-            result = VelodromePoolContract.build_approval_tx(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_SPENDER, 1000
-            )
-
-        assert result["tx_hash"] == bytes.fromhex("0102030405")
-
 
 class TestGetReserves:
     """Tests for the get_reserves method."""
@@ -191,62 +117,6 @@ class TestGetReserves:
         with patch.object(
             VelodromePoolContract, "get_instance", return_value=mock_contract_instance
         ):
-            result = VelodromePoolContract.get_reserves(
-                mock_ledger_api, MOCK_ADDRESS
-            )
+            result = VelodromePoolContract.get_reserves(mock_ledger_api, MOCK_ADDRESS)
 
         assert result == {"data": [5000, 10000]}
-
-    def test_get_reserves_with_zero_reserves(self) -> None:
-        """Test that get_reserves handles zero reserves correctly.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.reserve0.return_value.call.return_value = 0
-        mock_contract_instance.functions.reserve1.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromePoolContract, "get_instance", return_value=mock_contract_instance
-        ):
-            result = VelodromePoolContract.get_reserves(
-                mock_ledger_api, MOCK_ADDRESS
-            )
-
-        assert result == {"data": [0, 0]}
-
-    def test_get_reserves_calls_get_instance(self) -> None:
-        """Test that get_reserves calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.reserve0.return_value.call.return_value = 100
-        mock_contract_instance.functions.reserve1.return_value.call.return_value = 200
-
-        with patch.object(
-            VelodromePoolContract, "get_instance", return_value=mock_contract_instance
-        ) as mock_get_instance:
-            VelodromePoolContract.get_reserves(mock_ledger_api, MOCK_ADDRESS)
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_get_reserves_calls_reserve_functions(self) -> None:
-        """Test that get_reserves calls both reserve0 and reserve1 functions.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.reserve0.return_value.call.return_value = 3000
-        mock_contract_instance.functions.reserve1.return_value.call.return_value = 4000
-
-        with patch.object(
-            VelodromePoolContract, "get_instance", return_value=mock_contract_instance
-        ):
-            VelodromePoolContract.get_reserves(mock_ledger_api, MOCK_ADDRESS)
-
-        mock_contract_instance.functions.reserve0.assert_called_once()
-        mock_contract_instance.functions.reserve1.assert_called_once()

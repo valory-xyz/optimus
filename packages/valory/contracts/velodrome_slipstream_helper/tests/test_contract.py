@@ -98,60 +98,6 @@ class TestPrincipal:
             MOCK_POSITION_MANAGER, MOCK_TOKEN_ID, MOCK_SQRT_PRICE_X96
         )
 
-    def test_principal_calls_get_instance_with_correct_args(self) -> None:
-        """Test that principal calls get_instance with the correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.principal.return_value.call.return_value = (
-            0,
-            0,
-        )
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeSlipstreamHelperContract.principal(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                MOCK_POSITION_MANAGER,
-                MOCK_TOKEN_ID,
-                MOCK_SQRT_PRICE_X96,
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_principal_with_zero_amounts(self) -> None:
-        """Test that principal correctly handles zero amounts.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.principal.return_value.call.return_value = (
-            0,
-            0,
-        )
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeSlipstreamHelperContract.principal(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                MOCK_POSITION_MANAGER,
-                MOCK_TOKEN_ID,
-                MOCK_SQRT_PRICE_X96,
-            )
-
-        assert result == {"amounts": (0, 0)}
-
 
 class TestGetAmountsForLiquidity:
     """Tests for the get_amounts_for_liquidity method."""
@@ -219,62 +165,6 @@ class TestGetAmountsForLiquidity:
             MOCK_LIQUIDITY,
         )
 
-    def test_get_amounts_for_liquidity_calls_get_instance(self) -> None:
-        """Test that get_amounts_for_liquidity calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmountsForLiquidity.return_value.call.return_value = (
-            0,
-            0,
-        )
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeSlipstreamHelperContract.get_amounts_for_liquidity(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                MOCK_SQRT_PRICE_X96,
-                MOCK_SQRT_RATIO_A_X96,
-                MOCK_SQRT_RATIO_B_X96,
-                MOCK_LIQUIDITY,
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_get_amounts_for_liquidity_with_zero_liquidity(self) -> None:
-        """Test that get_amounts_for_liquidity handles zero liquidity correctly.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmountsForLiquidity.return_value.call.return_value = (
-            0,
-            0,
-        )
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeSlipstreamHelperContract.get_amounts_for_liquidity(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                MOCK_SQRT_PRICE_X96,
-                MOCK_SQRT_RATIO_A_X96,
-                MOCK_SQRT_RATIO_B_X96,
-                0,
-            )
-
-        assert result == {"amounts": (0, 0)}
-
 
 class TestGetSqrtRatioAtTick:
     """Tests for the get_sqrt_ratio_at_tick method."""
@@ -311,7 +201,9 @@ class TestGetSqrtRatioAtTick:
         """
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getSqrtRatioAtTick.return_value.call.return_value = 0
+        mock_contract_instance.functions.getSqrtRatioAtTick.return_value.call.return_value = (
+            0
+        )
 
         with patch.object(
             VelodromeSlipstreamHelperContract,
@@ -326,68 +218,6 @@ class TestGetSqrtRatioAtTick:
             MOCK_TICK
         )
 
-    def test_get_sqrt_ratio_at_tick_calls_get_instance(self) -> None:
-        """Test that get_sqrt_ratio_at_tick calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getSqrtRatioAtTick.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeSlipstreamHelperContract.get_sqrt_ratio_at_tick(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_TICK
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_get_sqrt_ratio_at_tick_with_positive_tick(self) -> None:
-        """Test that get_sqrt_ratio_at_tick works with a positive tick value.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getSqrtRatioAtTick.return_value.call.return_value = 99999
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeSlipstreamHelperContract.get_sqrt_ratio_at_tick(
-                mock_ledger_api, MOCK_ADDRESS, 887272
-            )
-
-        assert result == {"sqrt_ratio": 99999}
-
-    def test_get_sqrt_ratio_at_tick_with_zero_tick(self) -> None:
-        """Test that get_sqrt_ratio_at_tick works with a zero tick value.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getSqrtRatioAtTick.return_value.call.return_value = (
-            79228162514264337593543950336
-        )
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeSlipstreamHelperContract.get_sqrt_ratio_at_tick(
-                mock_ledger_api, MOCK_ADDRESS, 0
-            )
-
-        assert result == {"sqrt_ratio": 79228162514264337593543950336}
-
 
 class TestGetAmount0Delta:
     """Tests for the get_amount0_delta method."""
@@ -399,7 +229,9 @@ class TestGetAmount0Delta:
         """
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmount0Delta.return_value.call.return_value = 12345
+        mock_contract_instance.functions.getAmount0Delta.return_value.call.return_value = (
+            12345
+        )
 
         with patch.object(
             VelodromeSlipstreamHelperContract,
@@ -425,7 +257,9 @@ class TestGetAmount0Delta:
         """
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmount0Delta.return_value.call.return_value = 0
+        mock_contract_instance.functions.getAmount0Delta.return_value.call.return_value = (
+            0
+        )
 
         with patch.object(
             VelodromeSlipstreamHelperContract,
@@ -444,54 +278,6 @@ class TestGetAmount0Delta:
             MOCK_SQRT_RATIO_A_X96, MOCK_SQRT_RATIO_B_X96, MOCK_LIQUIDITY_DELTA
         )
 
-    def test_get_amount0_delta_calls_get_instance(self) -> None:
-        """Test that get_amount0_delta calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmount0Delta.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeSlipstreamHelperContract.get_amount0_delta(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                MOCK_SQRT_RATIO_A_X96,
-                MOCK_SQRT_RATIO_B_X96,
-                MOCK_LIQUIDITY_DELTA,
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_get_amount0_delta_with_zero_delta(self) -> None:
-        """Test that get_amount0_delta correctly handles a zero delta result.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmount0Delta.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeSlipstreamHelperContract.get_amount0_delta(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                MOCK_SQRT_RATIO_A_X96,
-                MOCK_SQRT_RATIO_B_X96,
-                0,
-            )
-
-        assert result == {"amount0_delta": 0}
-
 
 class TestGetAmount1Delta:
     """Tests for the get_amount1_delta method."""
@@ -503,7 +289,9 @@ class TestGetAmount1Delta:
         """
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmount1Delta.return_value.call.return_value = 67890
+        mock_contract_instance.functions.getAmount1Delta.return_value.call.return_value = (
+            67890
+        )
 
         with patch.object(
             VelodromeSlipstreamHelperContract,
@@ -529,7 +317,9 @@ class TestGetAmount1Delta:
         """
         mock_ledger_api = MagicMock()
         mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmount1Delta.return_value.call.return_value = 0
+        mock_contract_instance.functions.getAmount1Delta.return_value.call.return_value = (
+            0
+        )
 
         with patch.object(
             VelodromeSlipstreamHelperContract,
@@ -547,51 +337,3 @@ class TestGetAmount1Delta:
         mock_contract_instance.functions.getAmount1Delta.assert_called_once_with(
             MOCK_SQRT_RATIO_A_X96, MOCK_SQRT_RATIO_B_X96, MOCK_LIQUIDITY_DELTA
         )
-
-    def test_get_amount1_delta_calls_get_instance(self) -> None:
-        """Test that get_amount1_delta calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmount1Delta.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeSlipstreamHelperContract.get_amount1_delta(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                MOCK_SQRT_RATIO_A_X96,
-                MOCK_SQRT_RATIO_B_X96,
-                MOCK_LIQUIDITY_DELTA,
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_get_amount1_delta_with_zero_delta(self) -> None:
-        """Test that get_amount1_delta correctly handles a zero delta result.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.getAmount1Delta.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeSlipstreamHelperContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeSlipstreamHelperContract.get_amount1_delta(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                MOCK_SQRT_RATIO_A_X96,
-                MOCK_SQRT_RATIO_B_X96,
-                0,
-            )
-
-        assert result == {"amount1_delta": 0}

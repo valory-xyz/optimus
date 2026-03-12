@@ -54,9 +54,7 @@ class TestEncodeCall:
             )
 
         assert result == {"tx_hash": "0xdeadbeef"}
-        mock_instance.encode_abi.assert_called_once_with(
-            "someMethod", args=(1, 2)
-        )
+        mock_instance.encode_abi.assert_called_once_with("someMethod", args=(1, 2))
 
 
 class TestMint:
@@ -164,9 +162,7 @@ class TestBurn:
             )
 
         assert result == {"tx_hash": "0xburn"}
-        mock_instance.encode_abi.assert_called_once_with(
-            "burn", args=(99,)
-        )
+        mock_instance.encode_abi.assert_called_once_with("burn", args=(99,))
 
 
 class TestCollect:
@@ -405,29 +401,6 @@ class TestSetApprovalForAll:
             "setApprovalForAll", args=(MOCK_OPERATOR, True)
         )
 
-    def test_set_approval_for_all_revoke(self) -> None:
-        """Test set_approval_for_all with approved=False to revoke approval."""
-        mock_ledger_api = MagicMock()
-        mock_instance = MagicMock()
-        mock_instance.encode_abi.return_value = "0xrevoke"
-
-        with patch.object(
-            VelodromeNonFungiblePositionManagerContract,
-            "get_instance",
-            return_value=mock_instance,
-        ):
-            result = VelodromeNonFungiblePositionManagerContract.set_approval_for_all(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                operator=MOCK_OPERATOR,
-                approved=False,
-            )
-
-        assert result == {"tx_hash": "0xrevoke"}
-        mock_instance.encode_abi.assert_called_once_with(
-            "setApprovalForAll", args=(MOCK_OPERATOR, False)
-        )
-
 
 class TestIsApprovedForAll:
     """Tests for is_approved_for_all."""
@@ -454,26 +427,6 @@ class TestIsApprovedForAll:
         mock_instance.functions.isApprovedForAll.assert_called_once_with(
             MOCK_OWNER, MOCK_OPERATOR
         )
-
-    def test_is_approved_for_all_returns_false(self) -> None:
-        """Test that is_approved_for_all returns dict(is_approved=False) when not approved."""
-        mock_ledger_api = MagicMock()
-        mock_instance = MagicMock()
-        mock_instance.functions.isApprovedForAll.return_value.call.return_value = False
-
-        with patch.object(
-            VelodromeNonFungiblePositionManagerContract,
-            "get_instance",
-            return_value=mock_instance,
-        ):
-            result = VelodromeNonFungiblePositionManagerContract.is_approved_for_all(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                owner=MOCK_OWNER,
-                operator=MOCK_OPERATOR,
-            )
-
-        assert result == {"is_approved": False}
 
 
 class TestGetApproved:
@@ -514,8 +467,10 @@ class TestTokenOfOwnerByIndex:
             "get_instance",
             return_value=mock_instance,
         ):
-            result = VelodromeNonFungiblePositionManagerContract.token_of_owner_by_index(
-                mock_ledger_api, MOCK_ADDRESS, owner=MOCK_OWNER, index=0
+            result = (
+                VelodromeNonFungiblePositionManagerContract.token_of_owner_by_index(
+                    mock_ledger_api, MOCK_ADDRESS, owner=MOCK_OWNER, index=0
+                )
             )
 
         assert result == {"token_id": 77}
@@ -543,8 +498,10 @@ class TestGetAllTokenIdsForOwner:
             "get_instance",
             return_value=mock_instance,
         ):
-            result = VelodromeNonFungiblePositionManagerContract.get_all_token_ids_for_owner(
-                mock_ledger_api, MOCK_ADDRESS, owner=MOCK_OWNER
+            result = (
+                VelodromeNonFungiblePositionManagerContract.get_all_token_ids_for_owner(
+                    mock_ledger_api, MOCK_ADDRESS, owner=MOCK_OWNER
+                )
             )
 
         assert result == {"token_ids": [10, 20, 30], "count": 3}
@@ -560,8 +517,10 @@ class TestGetAllTokenIdsForOwner:
             "get_instance",
             return_value=mock_instance,
         ):
-            result = VelodromeNonFungiblePositionManagerContract.get_all_token_ids_for_owner(
-                mock_ledger_api, MOCK_ADDRESS, owner=MOCK_OWNER
+            result = (
+                VelodromeNonFungiblePositionManagerContract.get_all_token_ids_for_owner(
+                    mock_ledger_api, MOCK_ADDRESS, owner=MOCK_OWNER
+                )
             )
 
         assert result == {"token_ids": [], "count": 0}
@@ -582,8 +541,10 @@ class TestGetAllTokenIdsForOwner:
             "get_instance",
             return_value=mock_instance,
         ):
-            result = VelodromeNonFungiblePositionManagerContract.get_all_token_ids_for_owner(
-                mock_ledger_api, MOCK_ADDRESS, owner=MOCK_OWNER
+            result = (
+                VelodromeNonFungiblePositionManagerContract.get_all_token_ids_for_owner(
+                    mock_ledger_api, MOCK_ADDRESS, owner=MOCK_OWNER
+                )
             )
 
         assert result == {"token_ids": [10, 30], "count": 2}

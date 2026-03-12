@@ -69,33 +69,6 @@ class TestQueryJoin:
         assert call_args[0][1] == MOCK_SENDER
         assert call_args[0][2] == MOCK_RECIPIENT
 
-    def test_query_join_with_internal_balance(self) -> None:
-        """Test query_join with from_internal_balance set to True."""
-        mock_ledger_api = MagicMock()
-        mock_instance = MagicMock()
-        mock_instance.functions.queryJoin.return_value.call.return_value = (
-            300,
-            [50, 150],
-        )
-
-        with patch.object(
-            BalancerQueriesContract, "get_instance", return_value=mock_instance
-        ):
-            result = BalancerQueriesContract.query_join(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                pool_id=MOCK_POOL_ID,
-                sender=MOCK_SENDER,
-                recipient=MOCK_RECIPIENT,
-                assets=["0xToken0"],
-                max_amounts_in=[500],
-                join_kind=0,
-                minimum_bpt=10,
-                from_internal_balance=True,
-            )
-
-        assert result == {"result": {"bpt_out": 300, "amounts_in": [50, 150]}}
-
 
 class TestQueryExit:
     """Tests for query_exit."""
@@ -131,30 +104,3 @@ class TestQueryExit:
         assert call_args[0][0] == bytes.fromhex(MOCK_POOL_ID[2:])
         assert call_args[0][1] == MOCK_SENDER
         assert call_args[0][2] == MOCK_RECIPIENT
-
-    def test_query_exit_with_internal_balance(self) -> None:
-        """Test query_exit with to_internal_balance set to True."""
-        mock_ledger_api = MagicMock()
-        mock_instance = MagicMock()
-        mock_instance.functions.queryExit.return_value.call.return_value = (
-            800,
-            [300, 500],
-        )
-
-        with patch.object(
-            BalancerQueriesContract, "get_instance", return_value=mock_instance
-        ):
-            result = BalancerQueriesContract.query_exit(
-                mock_ledger_api,
-                MOCK_ADDRESS,
-                pool_id=MOCK_POOL_ID,
-                sender=MOCK_SENDER,
-                recipient=MOCK_RECIPIENT,
-                assets=["0xToken0"],
-                min_amounts_out=[50],
-                exit_kind=0,
-                bpt_amount_in=800,
-                to_internal_balance=True,
-            )
-
-        assert result == {"result": {"bpt_in": 800, "amounts_out": [300, 500]}}

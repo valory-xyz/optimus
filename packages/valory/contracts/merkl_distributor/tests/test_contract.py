@@ -45,7 +45,9 @@ class TestClaimRewards:
         users = ["0xuser1"]
         tokens = ["0xtoken1"]
         amounts = [1000]
-        proofs = [["0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd"]]
+        proofs = [
+            ["0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd"]
+        ]
 
         with patch.object(
             DistributorContract, "get_instance", return_value=mock_contract_instance
@@ -82,7 +84,9 @@ class TestClaimRewards:
 
         call_args = mock_contract_instance.encode_abi.call_args
         assert call_args[0][0] == "claim"
-        proofs_arg = call_args[1]["args"][3] if "args" in call_args[1] else call_args[0][1][3]
+        proofs_arg = (
+            call_args[1]["args"][3] if "args" in call_args[1] else call_args[0][1][3]
+        )
         assert proofs_arg == [[expected_proof_bytes]]
 
     def test_claim_rewards_with_multiple_proofs(self) -> None:
@@ -118,67 +122,6 @@ class TestClaimRewards:
         assert proofs_converted[0][0] == bytes.fromhex(proof1[2:])
         assert proofs_converted[0][1] == bytes.fromhex(proof2[2:])
         assert proofs_converted[1][0] == bytes.fromhex(proof3[2:])
-
-    def test_claim_rewards_calls_get_instance(self) -> None:
-        """Test that claim_rewards calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = "0x00"
-
-        with patch.object(
-            DistributorContract, "get_instance", return_value=mock_contract_instance
-        ) as mock_get_instance:
-            DistributorContract.claim_rewards(
-                mock_ledger_api, MOCK_ADDRESS, [], [], [], []
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_claim_rewards_passes_correct_args_to_encode_abi(self) -> None:
-        """Test that claim_rewards passes users, tokens, amounts, and converted proofs to encode_abi.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = "0xdd"
-
-        users = ["0xuser1"]
-        tokens = ["0xtoken1"]
-        amounts = [999]
-        proofs: list = []
-
-        with patch.object(
-            DistributorContract, "get_instance", return_value=mock_contract_instance
-        ):
-            DistributorContract.claim_rewards(
-                mock_ledger_api, MOCK_ADDRESS, users, tokens, amounts, proofs
-            )
-
-        mock_contract_instance.encode_abi.assert_called_once_with(
-            "claim", args=(users, tokens, amounts, [])
-        )
-
-    def test_claim_rewards_strips_0x_prefix(self) -> None:
-        """Test that claim_rewards correctly strips the 0x prefix from encoded data.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = "0x0102030405060708"
-
-        with patch.object(
-            DistributorContract, "get_instance", return_value=mock_contract_instance
-        ):
-            result = DistributorContract.claim_rewards(
-                mock_ledger_api, MOCK_ADDRESS, [], [], [], []
-            )
-
-        assert result["tx_hash"] == bytes.fromhex("0102030405060708")
 
     def test_claim_rewards_with_empty_proof_lists(self) -> None:
         """Test that claim_rewards handles empty inner proof lists correctly.

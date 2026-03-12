@@ -10,7 +10,7 @@ fingerprint:
   build/BalancerQueries.json: bafybeig7jr63urawg7xct3q2xpydruk4ysusi4g6qyygd2f5oiwhbrzxae
   contract.py: bafybeiextx3x3kgmpiods7tnqjcslnizghya2wudks5qts6cvetj3gz5xe
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeiakstswu7mzqufoelqxik3yiv6xyk5scjoao4eoynadgmphpwjddu
+  tests/test_contract.py: bafybeifbxlm7f7kqwn4zdly4zo3js5tj5n7mtfq2qy4jnebyveew5hzgjm
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: BalancerQueriesContract

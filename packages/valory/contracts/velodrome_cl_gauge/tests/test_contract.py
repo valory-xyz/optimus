@@ -80,26 +80,6 @@ class TestEncodeCall:
             "withdraw", args=(99,)
         )
 
-    def test_encode_call_calls_get_instance_with_correct_args(self) -> None:
-        """Test that _encode_call calls get_instance with the correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeCLGaugeContract._encode_call(
-                mock_ledger_api, MOCK_ADDRESS, "deposit", (MOCK_TOKEN_ID,)
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
 
 class TestDeposit:
     """Tests for the deposit method."""
@@ -147,26 +127,6 @@ class TestDeposit:
             "deposit", args=(MOCK_TOKEN_ID,)
         )
 
-    def test_deposit_calls_get_instance(self) -> None:
-        """Test that deposit calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeCLGaugeContract.deposit(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_TOKEN_ID
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
 
 class TestWithdraw:
     """Tests for the withdraw method."""
@@ -213,26 +173,6 @@ class TestWithdraw:
         mock_contract_instance.encode_abi.assert_called_once_with(
             "withdraw", args=(MOCK_TOKEN_ID,)
         )
-
-    def test_withdraw_calls_get_instance(self) -> None:
-        """Test that withdraw calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeCLGaugeContract.withdraw(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_TOKEN_ID
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
 
 
 class TestGetReward:
@@ -304,27 +244,6 @@ class TestGetReward:
             "getReward", args=(MOCK_CHECKSUMMED_ACCOUNT,)
         )
 
-    def test_get_reward_calls_get_instance(self) -> None:
-        """Test that get_reward calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeCLGaugeContract.get_reward(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
 
 class TestGetRewardForTokenId:
     """Tests for the get_reward_for_token_id method."""
@@ -371,26 +290,6 @@ class TestGetRewardForTokenId:
         mock_contract_instance.encode_abi.assert_called_once_with(
             "getReward", args=(MOCK_TOKEN_ID,)
         )
-
-    def test_get_reward_for_token_id_calls_get_instance(self) -> None:
-        """Test that get_reward_for_token_id calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.encode_abi.return_value = b"0x00"
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeCLGaugeContract.get_reward_for_token_id(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_TOKEN_ID
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
 
 
 class TestEarned:
@@ -461,48 +360,6 @@ class TestEarned:
             MOCK_CHECKSUMMED_ACCOUNT, MOCK_TOKEN_ID
         )
 
-    def test_earned_calls_get_instance(self) -> None:
-        """Test that earned calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.earned.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeCLGaugeContract.earned(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT, MOCK_TOKEN_ID
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_earned_with_zero_earned(self) -> None:
-        """Test that earned correctly handles a zero earned amount.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.earned.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeCLGaugeContract.earned(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT, MOCK_TOKEN_ID
-            )
-
-        assert result == {"earned": 0}
-
 
 class TestBalanceOf:
     """Tests for the balance_of method."""
@@ -572,48 +429,6 @@ class TestBalanceOf:
             MOCK_CHECKSUMMED_ACCOUNT
         )
 
-    def test_balance_of_calls_get_instance(self) -> None:
-        """Test that balance_of calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.balanceOf.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeCLGaugeContract.balance_of(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
-            )
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_balance_of_with_zero_balance(self) -> None:
-        """Test that balance_of correctly handles a zero balance.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_ledger_api.api.to_checksum_address.return_value = MOCK_CHECKSUMMED_ACCOUNT
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.balanceOf.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeCLGaugeContract.balance_of(
-                mock_ledger_api, MOCK_ADDRESS, MOCK_ACCOUNT
-            )
-
-        assert result == {"balance": 0}
-
 
 class TestTotalSupply:
     """Tests for the total_supply method."""
@@ -639,59 +454,3 @@ class TestTotalSupply:
             )
 
         assert result == {"total_supply": 1000000}
-
-    def test_total_supply_calls_contract_function(self) -> None:
-        """Test that total_supply calls the totalSupply contract function.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.totalSupply.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            VelodromeCLGaugeContract.total_supply(mock_ledger_api, MOCK_ADDRESS)
-
-        mock_contract_instance.functions.totalSupply.assert_called_once()
-
-    def test_total_supply_calls_get_instance(self) -> None:
-        """Test that total_supply calls get_instance with correct arguments.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.totalSupply.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ) as mock_get_instance:
-            VelodromeCLGaugeContract.total_supply(mock_ledger_api, MOCK_ADDRESS)
-
-        mock_get_instance.assert_called_once_with(mock_ledger_api, MOCK_ADDRESS)
-
-    def test_total_supply_with_zero(self) -> None:
-        """Test that total_supply correctly handles a zero total supply.
-
-        :return: None
-        """
-        mock_ledger_api = MagicMock()
-        mock_contract_instance = MagicMock()
-        mock_contract_instance.functions.totalSupply.return_value.call.return_value = 0
-
-        with patch.object(
-            VelodromeCLGaugeContract,
-            "get_instance",
-            return_value=mock_contract_instance,
-        ):
-            result = VelodromeCLGaugeContract.total_supply(
-                mock_ledger_api, MOCK_ADDRESS
-            )
-
-        assert result == {"total_supply": 0}

@@ -152,11 +152,6 @@ class TestRetryWithExponentialBackoff:
 class TestSrrDialogues:
     """Tests for the SrrDialogues class."""
 
-    def test_role_from_first_message(self) -> None:
-        """Test that role_from_first_message returns CONNECTION role."""
-        dialogues = SrrDialogues(connection_id=PUBLIC_ID)
-        assert dialogues._self_address == str(PUBLIC_ID)
-
     def test_role_from_first_message_returns_connection_role(self) -> None:
         """Test the role_from_first_message callable returns CONNECTION."""
         dialogues = SrrDialogues(connection_id=PUBLIC_ID)

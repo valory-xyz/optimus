@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeihykxiz5tg76kzo2pdra7expgnwvyp7ns34ticqtorb2mbb6oirvq
   dialogues.py: bafybeicfnsvlpj6hdxcenfojxdp7szznpptwqylot4ee7bqn7tam6svvau
   fsm_specification.yaml: bafybeiclrv7v4i2dvig7uea3fjxqfwwfqp3vsnumy5647dulgfhha6mlea
-  handlers.py: bafybeib6cywatpcd36e7kinfo2dej23cbucbu3ojbz255v7jl3phlz3lim
+  handlers.py: bafybeih56veklvu3tvzmr6jln2sj4zgjsrzwkoxy5bsu7npktxxenxb6zy
   models.py: bafybeie6nbxfgivitlea22aj2r276m2ktveycx5gs7gvjuutamcgclvaui
   modius-ui-build/README.md: bafybeie62j2zjin57jc3npbxbpomfs6p4n7jkafpu2bniyyx2m3saq7b5a
   modius-ui-build/assets/agentsfun-chat-CQO2MvlO.png: bafybeibm5nhmhfa54gimrsjt7pupvw3bkg2ayr6nul5o5krlj67ivh26oy
@@ -104,6 +104,13 @@ fingerprint:
   optimus-ui-build/logos/tokens/velo.png: bafybeibkwnpm6au5rpdleeanncussizzy5q3p7wz52wljuzlr3n7kbiewq
   optimus-ui-build/logos/tokens/weth.png: bafybeie6swfujvdlkgjtg3vbjejhkiv6brb3zpjxqrvquzdkci375fpjde
   prompts.py: bafybeicdudfobq4tdxu2pyyxsheu2p5kmmxsz3bi2nsfev5klfz2gy6j5u
+  tests/__init__.py: bafybeid4v4exhnsqpccfjqrrhxcpg3w72vrwdp6o54edbyjjy7duti3ydm
+  tests/test_behaviours.py: bafybeie4j2tnfbu5zoybk7cc444vzkk5rcgn2xsp63r4s6b2y5jkrx6kfi
+  tests/test_composition.py: bafybeig4g7t6mzzl6uesz724s6rq6sko254ucqcqfx7cg2e627g5e25b2u
+  tests/test_dialogues.py: bafybeigqgtk3n2wo64lfjkk4u3c4zjb3u5n4lsjkyjflkaj3bf64f4ec4u
+  tests/test_handlers.py: bafybeiayojoflvlfbgvbb7iofavfqnbnvqvruiwcmgb7ib3lqqtiurpsim
+  tests/test_models.py: bafybeicurnqgr3kaj5g5dg5z6wj764pttdtofhpehsvph5gzrwepwd73fq
+  tests/test_prompts.py: bafybeidkucgsoulfojxdsfu4febuvir4gsxjan6srsp4ckinbl62lr6luy
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeid4oqsfkqo36lryoecymjnq4whme3tgupqfq6m4l7lbr5r4yxtswu
@@ -119,7 +126,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
 - valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
-- valory/liquidity_trader_abci:0.1.0:bafybeigarvdntkzk22k5swquyscrd76pjztkih7z3f2ifq7sjpctedtrcq
+- valory/liquidity_trader_abci:0.1.0:bafybeih2fzk2i3bnqwd4zi3zxwuq6er7je2nisa632yilcc46vmkniipde
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 - valory/funds_manager:0.1.0:bafybeibid2nm7qoysj44foptkisf5ajguvacxsuoaix4og4ehotal47mcy
 behaviours:

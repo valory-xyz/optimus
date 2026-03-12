@@ -9,6 +9,8 @@ fingerprint:
   __init__.py: bafybeievq5hnl35mckaakbome2kggd6txe5eiiheg3l3c4qpb3s5yylv5q
   build/Vault.json: bafybeifbvxyx43jmtchbzerapzqeblmmsppfbvfkwrag4nsfydad6bqwje
   contract.py: bafybeidu5s34gjtnr5mxz3ifvurlrsx7e5vfqzxlfesi2sum33z65smogq
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_contract.py: bafybeies5qptuztcu37mpsht3733fefzdjyo653lqzizmred6dxiprimau
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VaultContract

@@ -9,6 +9,8 @@ fingerprint:
   __init__.py: bafybeiecpcrowgly4p3d4ddg2nvmsgx4kds734harcmrf7d53vduu5x3my
   build/contract_interface.json: bafybeidwrrji5sb7ks66vncpfv3vtf7rqu7urg4jhlz2dh6nid7t65puwa
   contract.py: bafybeiby64i6655hlqvzliuxamnz74pjer5nlffv2herqtakroyzlzo74y
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_contract.py: bafybeibxbt2n26lp3jtznghgr3oeukrpxzcgizrf4oquegm6srks3zaeha
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeCLGaugeContract

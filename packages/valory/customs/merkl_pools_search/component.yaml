@@ -8,7 +8,9 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeie7iwdt5re7i7lxal5wrzy4yxxi4v3te6tgp7j7aantyyihib7fpi
-  merkl_pools_search.py: bafybeidyooyd65grgrctobknzb4y6dgsp73mfa3lqfo6si2ppbow65ddw4
+  merkl_pools_search.py: bafybeibdgstf5fmretwkbxpvtfuwww2hzb2yheihwvgy35eegevahgil3i
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_merkl_pools_search.py: bafybeihjoptfd7plk7jw42tj3mbr36fezw54j2ehm5gg76hmd5ukxv47yq
 fingerprint_ignore_patterns: []
 entry_point: merkl_pools_search.py
 callable: run

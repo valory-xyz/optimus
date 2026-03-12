@@ -8,8 +8,10 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeig54kazemffrqk7h5ufvfm7n3fzg5pekpx75uxytjs3o7mnhywox4
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_velodrome_pools_search.py: bafybeidirvo3ynxx3vs2ep5tvcofsydkmxcnzutnbeedcsjvn2onytilpe
   velodrome_lp_sugar.json: bafybeiamf3gev3vfeikh2mjmrhaqmyrsuzl6bt34gcilgz375z4o4uap2q
-  velodrome_pools_search.py: bafybeicpr3iaost4f2cy2b52amvrggadobpfiuzqwa7l4ddbtb6j5e2qcy
+  velodrome_pools_search.py: bafybeiesx2k7ub33puy5fzzmuedv63mhf3wqfneyslfeeu37x7saakeezi
 fingerprint_ignore_patterns: []
 entry_point: velodrome_pools_search.py
 callable: run

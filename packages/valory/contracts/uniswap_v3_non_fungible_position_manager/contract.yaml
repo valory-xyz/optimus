@@ -9,6 +9,8 @@ fingerprint:
   __init__.py: bafybeiefxsx4zo3eefe6iyxflho4l3gx2ge7hjm7c62eiyw7zaag4ifbty
   build/NonfungiblePositionManager.json: bafybeihspdbkcgw2mo245bpblhgu3srl3ywynp7eeipzoczqlzcslu7t6y
   contract.py: bafybeiekj6n7o2ejp4nqpfupmntkr3ct4lo575kgwbgpgc774hlmmlb7wy
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_contract.py: bafybeifwwbda3b5ulaxy3j3f3cwch6jrioevuj3i6vj7xit3bka6bklckm
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: UniswapV3NonfungiblePositionManagerContract

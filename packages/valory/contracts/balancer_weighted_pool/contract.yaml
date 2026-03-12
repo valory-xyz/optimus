@@ -9,6 +9,8 @@ fingerprint:
   __init__.py: bafybeigdfk3th36mcaoew2of5zo2rrgyc2oqntzznjkii6a3zuafyvriou
   build/WeightedPool.json: bafybeiclbkl3snzwo36nnbvjpge2jfcyo3a7lzzhfsfr4piv3n6djrs3le
   contract.py: bafybeie7rmmrvk7oz6gnhtycljmy2rspi335sj3moh3p5cflm6r3gmxvuq
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_contract.py: bafybeigwxid6s72ct656ykqpv3ezzl4qbda5ioadtiulwdrzyez33rwbfe
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: WeightedPoolContract

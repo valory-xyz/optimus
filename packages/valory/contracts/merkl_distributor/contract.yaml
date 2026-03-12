@@ -9,6 +9,8 @@ fingerprint:
   __init__.py: bafybeiaxzeof7zaamcnmc325hfuylj4ezmxsgop2fkhqt4tmzhaslrldfu
   build/Distributor.json: bafybeihtbkqhzavgficpiikharncvtysmoyacmqbkntsilrvwph44fkm3a
   contract.py: bafybeigaswkmkaqnlyafapsypxxitwsj5ci4un7frktkshrqfo45fl57au
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_contract.py: bafybeihzzpwoxlfb6pg6qtsjgil7kkdb4aey2cq3uiogoi4vppdbvgtlym
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: DistributorContract

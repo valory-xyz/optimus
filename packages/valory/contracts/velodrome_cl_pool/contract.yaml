@@ -9,6 +9,8 @@ fingerprint:
   __init__.py: bafybeihit4bpbbls4akikswjozkpp3h46o3odwrhljnkrv5h72wsutaduq
   build/contract_interface.json: bafybeih264ikmebscydw6nsv5ldpwugatldqnflrxkij2gvirkcvkm3tpi
   contract.py: bafybeiepqc6qtt4fvlud2q3l2diru3uxq4fljs32jem5n5q6jbheiqwrmi
+  tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
+  tests/test_contract.py: bafybeigd5j7ukg22gb65rnbi5m5e7kikbzzqktk3fwr647ylzsn3xv2kbu
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeCLPoolContract

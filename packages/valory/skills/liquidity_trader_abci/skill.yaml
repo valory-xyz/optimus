@@ -13,8 +13,8 @@ fingerprint:
   behaviours/call_checkpoint.py: bafybeiefvotuqgw5f3opyageabqluz2dlrgthfygj32ovpm6xv5m7b5vqa
   behaviours/check_staking_kpi_met.py: bafybeihwznp6y4zpwljczv6jplocccjpsa4alizcerstlfw6gukyui4zc4
   behaviours/decision_making.py: bafybeidsdhbabneof6s3btobls6bqvsrwqtzinailpvz6znmmqd7632cim
-  behaviours/evaluate_strategy.py: bafybeiaboxz6i7assi2lscdn4to6moe2gwwgppq4rtdc3aihdmiumfissu
-  behaviours/fetch_strategies.py: bafybeicn7zfr5bdqfm6fva4mplwxsmlig5uydkzynekag3agjxd7bksnea
+  behaviours/evaluate_strategy.py: bafybeibryrcmjilpbatejlxq27sak2bm3ahmzpvmlgfx5dsn3342u7ro3q
+  behaviours/fetch_strategies.py: bafybeiever4i2astrxjreheor5rycfth57he3lcebolsrgq54r7ixz6fpu
   behaviours/get_positions.py: bafybeibsmhiqcwucmmsshsevqeejhjzbb65sspgc3qjk3l77qw6ar6ntx4
   behaviours/post_tx_settlement.py: bafybeif5hd7h5s6zn4aorvjtakwuzc6yxxuj2prrtcpwlyzdllhbymdnp4
   behaviours/round_behaviour.py: bafybeib6x5spfui6heiglscxdzzwgqciuofpzvkov6ynvzcbudrydugppm
@@ -53,7 +53,8 @@ fingerprint:
   tests/behaviours/test_call_checkpoint.py: bafybeibed5ewxkcjwdgsoro37urbnnhvfjhf7qukwpiqm6dgj43cdv2iza
   tests/behaviours/test_check_staking_kpi_met.py: bafybeicfdvguufrna2h6wbipvjflxd4wc7notoip5svuahvu35ujf7rume
   tests/behaviours/test_decision_making.py: bafybeigaef6lsuqk4c5jjqmwnfzwzlbag3jhyddhpzroohtn23d2qzr2ie
-  tests/behaviours/test_fetch_strategies.py: bafybeifajnp4k3jhw47ch2okn23detzo4kvr7fuhfpiefvlmzwh77v5dni
+  tests/behaviours/test_evaluate_strategy.py: bafybeicytdmppyfu5nd4l7hgsjjdpwvxhp5536w2svspaeuywqjw2dgbia
+  tests/behaviours/test_fetch_strategies.py: bafybeid2ogjgninvgmbfjcazp5a7yd74q2kv7oajhj5acdz4fvmvs6syua
   tests/behaviours/test_get_positions.py: bafybeihvzzj7z3eavzicapnpnpeysafcfjefjihhpzrjulpfmqxyatz7ku
   tests/behaviours/test_post_tx_settlement.py: bafybeiacmc3fhtlzz4e3gsgrhhnceluhqhkufjx3cwblgu7ekh6dur7pjy
   tests/behaviours/test_round_behaviour.py: bafybeiacrdvngqorfvnpjs3emgtyuzjzshsjku53jcnbzgovjrsijyst3u
@@ -102,7 +103,7 @@ contracts:
 - valory/balancer_weighted_pool:0.1.0:bafybeifsnwx7puihf4wv2dcj7qs3n4dagbgstg3ixrnaknffbdowbg2cey
 - valory/balancer_vault:0.1.0:bafybeif6pqj23b3wqiluhx7m4hfnr4yyafzjge6ylahswb4ulrkltlvyaq
 - valory/balancer_queries:0.1.0:bafybeicxydgndopqipm4jqi46x6nx74g5ok4vnpnyf3spcbjxvfvtv6nhu
-- valory/erc20:0.1.0:bafybeif37n2xmh6xkn3vzybty7q37fq4f5rsey5ep33vvobh2yofeao5ae
+- valory/erc20:0.1.0:bafybeic7pgqam66mpkr3lgauwuxntl5wtmzx53f74jaligihyvavsws4au
 - valory/multisend:0.1.0:bafybeiaf3hapi3prgpjeugwhq64k7lqelo6kibhol5rkajt7id3knomp5q
 - valory/uniswap_v3_non_fungible_position_manager:0.1.0:bafybeib2aqz2vj4x35cvb2h34xisbqmnqiik3swb7ehvmliflc7u35teu4
 - valory/uniswap_v3_pool:0.1.0:bafybeifww75k76vkggembpxbq44njse3uora3pay2hcqaukrme73xr6v4a

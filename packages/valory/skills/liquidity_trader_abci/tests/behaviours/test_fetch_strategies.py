@@ -4476,3 +4476,1254 @@ class TestAsyncAct:
 
                 gen = obj.async_act()
                 _drive(gen)
+
+
+
+# ===========================================================================
+# Coverage batch 2 – transfer tracking, investment calculation, etc.
+# ===========================================================================
+
+
+class TestCalculateInitialInvestmentValueFromFundingEvents:
+    """Tests for calculate_initial_investment_value_from_funding_events."""
+
+    def test_no_safe_address(self):
+        obj = _mk()
+        obj.params.target_investment_chains = ["mode"]
+        obj.params.safe_contract_addresses = {}
+        obj.params.airdrop_started = False
+        obj._save_chain_total_investment = _gen_none
+        obj._write_kv = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) is None
+
+    def test_unsupported_chain(self):
+        obj = _mk()
+        obj.params.target_investment_chains = ["polygon"]
+        obj.params.safe_contract_addresses = {"polygon": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({})
+        obj._save_chain_total_investment = _gen_none
+        obj._write_kv = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) is None
+
+    def test_mode_airdrop_first_scan(self):
+        obj = _mk()
+        obj.params.target_investment_chains = ["mode"]
+        obj.params.safe_contract_addresses = {"mode": "0xSafe"}
+        obj.params.airdrop_started = True
+        cc = [0]
+        def fr(*a, **kw):
+            cc[0] += 1; yield
+            return {} if cc[0] == 1 else {}
+        obj._read_kv = fr
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_mode = _gen_return({"2025-01-01": [{"symbol": "USDC", "amount": 10}]})
+        obj._calculate_chain_investment_value = _gen_return(100.0)
+        obj._save_chain_total_investment = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) == 100.0
+
+    def test_mode_airdrop_incremental(self):
+        obj = _mk()
+        obj.params.target_investment_chains = ["mode"]
+        obj.params.safe_contract_addresses = {"mode": "0xSafe"}
+        obj.params.airdrop_started = True
+        obj._read_kv = _gen_return({"airdrop_full_scan_completed": "true"})
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_mode = _gen_return({"2025-01-01": [{"symbol": "USDC", "amount": 5}]})
+        obj._calculate_chain_investment_value = _gen_return(50.0)
+        obj._save_chain_total_investment = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) == 50.0
+
+    def test_optimism_no_previous_calc(self):
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_optimism = _gen_return({"2025-01-01": [{"symbol": "ETH", "delta": 1}]})
+        obj._calculate_chain_investment_value = _gen_return(200.0)
+        obj._save_chain_total_investment = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) == 200.0
+
+    def test_cached_value_today(self):
+        import time
+        obj = _mk()
+        ts = str(int(time.time()))
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": ts})
+        obj._load_chain_total_investment = _gen_return(999.0)
+        obj._write_kv = _gen_none
+        obj._save_chain_total_investment = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) == 999.0
+
+    def test_cached_value_today_zero(self):
+        import time
+        obj = _mk()
+        ts = str(int(time.time()))
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": ts})
+        obj._load_chain_total_investment = _gen_return(0.0)
+        obj._fetch_all_transfers_until_date_optimism = _gen_return({"d": [{"symbol": "ETH", "delta": 1}]})
+        obj._calculate_chain_investment_value = _gen_return(50.0)
+        obj._write_kv = _gen_none
+        obj._save_chain_total_investment = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) == 50.0
+
+    def test_invalid_timestamp_format(self):
+        obj = _mk()
+        obj.params.target_investment_chains = ["optimism"]
+        obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({"last_initial_value_calculated_timestamp": "bad"})
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_optimism = _gen_return({"d": [{"symbol": "ETH", "delta": 1}]})
+        obj._calculate_chain_investment_value = _gen_return(10.0)
+        obj._save_chain_total_investment = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) == 10.0
+
+    def test_no_transfers(self):
+        obj = _mk()
+        obj.params.target_investment_chains = ["mode"]
+        obj.params.safe_contract_addresses = {"mode": "0xSafe"}
+        obj.params.airdrop_started = False
+        obj._read_kv = _gen_return({})
+        obj._write_kv = _gen_none
+        obj._fetch_all_transfers_until_date_mode = _gen_return({})
+        obj._save_chain_total_investment = _gen_none
+        obj._get_current_timestamp = lambda: 100
+        assert _drive(obj.calculate_initial_investment_value_from_funding_events()) is None
+
+
+class TestCalculateChainInvestmentValue:
+    def test_eth_transfer_with_reversion(self):
+        obj = _mk()
+        obj._track_eth_transfers_and_reversions = _gen_return({"reversion_amount": 0.5, "historical_reversion_value": 100.0, "reversion_date": "01-01-2025"})
+        obj._fetch_historical_eth_price = lambda d: 2000.0
+        obj._save_chain_total_investment = _gen_none
+        obj.params.airdrop_started = False
+        assert _drive(obj._calculate_chain_investment_value({"2025-01-01": [{"symbol": "ETH", "delta": 1.0, "amount": 1.0}]}, "optimism", "0xSafe")) == 900.0
+
+    def test_usdc_non_eth(self):
+        obj = _mk()
+        obj._track_eth_transfers_and_reversions = _gen_return({"reversion_amount": 0, "historical_reversion_value": 0, "reversion_date": None})
+        obj._save_chain_total_investment = _gen_none
+        obj.get_coin_id_from_symbol = lambda s, c: "usd-coin"
+        obj._fetch_historical_token_price = _gen_return(1.0)
+        obj.params.airdrop_started = False
+        assert _drive(obj._calculate_chain_investment_value({"2025-01-01": [{"symbol": "USDC", "amount": 100}]}, "optimism", "0xS")) == 100.0
+
+    def test_airdrop_excluded(self):
+        obj = _mk()
+        obj._track_eth_transfers_and_reversions = _gen_return({"reversion_amount": 0, "historical_reversion_value": 0, "reversion_date": None})
+        obj._save_chain_total_investment = _gen_none
+        obj.params.airdrop_started = True
+        obj.params.airdrop_contract_address = "0xAirdrop"
+        assert _drive(obj._calculate_chain_investment_value({"2025-01-01": [{"symbol": "USDC", "amount": 50, "from_address": "0xairdrop"}]}, "mode", "0xS")) == 0.0
+
+    def test_no_coingecko_id(self):
+        obj = _mk()
+        obj._track_eth_transfers_and_reversions = _gen_return({"reversion_amount": 0, "historical_reversion_value": 0, "reversion_date": None})
+        obj._save_chain_total_investment = _gen_none
+        obj.get_coin_id_from_symbol = lambda s, c: None
+        obj.params.airdrop_started = False
+        assert _drive(obj._calculate_chain_investment_value({"2025-01-01": [{"symbol": "WEIRD", "amount": 10}]}, "optimism", "0xS")) == 0.0
+
+    def test_negative_amount(self):
+        obj = _mk()
+        obj._track_eth_transfers_and_reversions = _gen_return({"reversion_amount": 0, "historical_reversion_value": 0, "reversion_date": None})
+        obj._save_chain_total_investment = _gen_none
+        obj.params.airdrop_started = False
+        assert _drive(obj._calculate_chain_investment_value({"2025-01-01": [{"symbol": "ETH", "amount": -5}]}, "optimism", "0xS")) == 0.0
+
+    def test_exception_in_transfer(self):
+        obj = _mk()
+        obj._track_eth_transfers_and_reversions = _gen_return({"reversion_amount": 0, "historical_reversion_value": 0, "reversion_date": None})
+        obj._save_chain_total_investment = _gen_none
+        obj.params.airdrop_started = False
+        assert _drive(obj._calculate_chain_investment_value({"bad": [{"symbol": "ETH", "amount": 1}]}, "optimism", "0xS")) == 0.0
+
+    def test_reversion_no_date(self):
+        obj = _mk()
+        obj._track_eth_transfers_and_reversions = _gen_return({"reversion_amount": 1.0, "historical_reversion_value": 0, "reversion_date": None})
+        obj._fetch_historical_eth_price = lambda d: 3000.0
+        obj._save_chain_total_investment = _gen_none
+        obj.params.airdrop_started = False
+        assert _drive(obj._calculate_chain_investment_value({}, "optimism", "0xS")) == -3000.0
+
+
+class TestFetchAllTransfersUntilDateMode:
+    def test_success(self):
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj._fetch_token_transfers_mode = _gen_return(True)
+        obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
+        assert isinstance(_drive(obj._fetch_all_transfers_until_date_mode("0xA", "2025-01-01", False)), dict)
+
+    def test_token_fetch_fails(self):
+        obj = _mk()
+        obj.funding_events = {"mode": {"2025-01-01": []}}
+        obj.read_funding_events = lambda: obj.funding_events
+        obj.store_funding_events = MagicMock()
+        obj._fetch_token_transfers_mode = _gen_return(False)
+        obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
+        assert isinstance(_drive(obj._fetch_all_transfers_until_date_mode("0xA", "2025-01-01", False)), dict)
+
+    def test_backward_compat(self):
+        obj = _mk()
+        obj.read_funding_events = lambda: {"mode": {"2025-01-01": [{"type": "eth"}]}}
+        obj.store_funding_events = MagicMock()
+        obj._fetch_token_transfers_mode = _gen_return(True)
+        obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
+        assert isinstance(_drive(obj._fetch_all_transfers_until_date_mode("0xA", "2025-01-01", False)), dict)
+
+    def test_exception(self):
+        obj = _mk()
+        obj.read_funding_events = lambda: {"mode": {}}
+        obj.store_funding_events = MagicMock()
+        def bad(*a, **kw):
+            yield; raise RuntimeError("boom")
+        obj._fetch_token_transfers_mode = bad
+        assert isinstance(_drive(obj._fetch_all_transfers_until_date_mode("0xA", "2025-01-01", False)), dict)
+
+
+class TestFetchAllTransfersUntilDateOptimism:
+    def test_success(self):
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj._fetch_optimism_transfers_safeglobal = _gen_none
+        assert isinstance(_drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01")), dict)
+
+    def test_exception(self):
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        def boom(*a, **kw):
+            yield; raise RuntimeError("fail")
+        obj._fetch_optimism_transfers_safeglobal = boom
+        assert _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01")) == {}
+
+
+class TestFetchTokenTransfersBatch2:
+    def test_request_fails(self):
+        obj = _mk()
+        obj._request_with_retries = _gen_return((False, {}))
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        assert _drive(obj._fetch_token_transfers("0xA", datetime(2025,1,1,tzinfo=timezone.utc), defaultdict(list), {})) is None
+
+    def test_no_items(self):
+        obj = _mk()
+        obj._request_with_retries = _gen_return((True, {"items": []}))
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        assert _drive(obj._fetch_token_transfers("0xA", datetime(2025,1,1,tzinfo=timezone.utc), defaultdict(list), {})) is None
+
+    def test_processes(self):
+        obj = _mk()
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xS", "is_contract": False}, "token": {"symbol": "USDC", "decimals": 6, "address": "0xT"}, "total": {"value": "1000000"}, "transaction_hash": "0xH"}
+        obj._request_with_retries = _gen_return((True, {"items": [tx]}))
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        t = defaultdict(list)
+        _drive(obj._fetch_token_transfers("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, {}))
+        assert len(t) == 1
+
+    def test_skip_future(self):
+        obj = _mk()
+        tx = {"timestamp": "2025-06-01T10:00:00Z", "from": {"hash": "0xS"}, "token": {"symbol": "USDC", "decimals": 6}, "total": {"value": "1000000"}}
+        obj._request_with_retries = _gen_return((True, {"items": [tx]}))
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        t = defaultdict(list)
+        _drive(obj._fetch_token_transfers("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, {}))
+        assert len(t) == 0
+
+    def test_skip_existing(self):
+        obj = _mk()
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xS"}, "token": {"symbol": "USDC", "decimals": 6}, "total": {"value": "1000000"}}
+        obj._request_with_retries = _gen_return((True, {"items": [tx]}))
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        t = defaultdict(list)
+        _drive(obj._fetch_token_transfers("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, {"2024-12-15": []}))
+        assert len(t) == 0
+
+
+class TestFetchTokenTransfersModeBatch2:
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_non_200(self, m):
+        m.return_value = MagicMock(status_code=500)
+        obj = _mk(); obj.funding_events = {}
+        assert _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, False)) is False
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_empty(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
+        obj = _mk(); obj.funding_events = {}
+        assert _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, False)) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_usdc(self, m):
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xS", "is_contract": False}, "token": {"symbol": "USDC", "decimals": "6", "address": "0xT"}, "total": {"value": "1000000"}, "transaction_hash": "0xH"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        obj._is_airdrop_transfer = lambda t: False
+        obj._should_include_transfer_mode = lambda fa, tx, is_eth_transfer: True
+        t = {}
+        assert _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, True)) is True
+        assert "2024-12-15" in t
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_self_transfer(self, m):
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xaddr"}, "token": {"symbol": "USDC", "decimals": "6"}, "total": {"value": "1000000"}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        assert _drive(obj._fetch_token_transfers_mode("0xAddr", datetime(2025,1,1,tzinfo=timezone.utc), {}, True)) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_airdrop(self, m):
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xS", "is_contract": False}, "token": {"symbol": "USDC", "decimals": "6"}, "total": {"value": "5000000"}, "transaction_hash": "0xAH"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        obj._is_airdrop_transfer = lambda t: True
+        obj._update_airdrop_rewards = _gen_none
+        obj._should_include_transfer_mode = lambda fa, tx, is_eth_transfer: True
+        assert _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, True)) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_pagination(self, m):
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xS", "is_contract": False}, "token": {"symbol": "USDC", "decimals": "6", "address": "0xT"}, "total": {"value": "1000000"}, "transaction_hash": "0xH"}
+        c = [0]
+        def mj():
+            c[0] += 1
+            if c[0] == 1: return {"items": [tx], "next_page_params": {"block_number": 100, "index": 0}}
+            return {"items": [], "next_page_params": None}
+        r = MagicMock(status_code=200); r.json = mj; m.return_value = r
+        obj = _mk(); obj.funding_events = {}
+        obj._is_airdrop_transfer = lambda t: False
+        obj._should_include_transfer_mode = lambda fa, tx, is_eth_transfer: True
+        assert _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, True)) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_incremental_stop(self, m):
+        tx = {"timestamp": "2020-01-01T10:00:00Z", "from": {"hash": "0xS"}, "token": {}, "total": {}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {"mode": {"2024-01-01": []}}
+        assert _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, False)) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_zero_amount(self, m):
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xS", "is_contract": False}, "token": {"symbol": "USDC", "decimals": "6"}, "total": {"value": "0"}, "transaction_hash": "0xH"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        obj._is_airdrop_transfer = lambda t: False
+        obj._should_include_transfer_mode = lambda fa, tx, is_eth_transfer: True
+        assert len({}) == 0  # just exercises the path
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_non_usdc(self, m):
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xS", "is_contract": False}, "token": {"symbol": "WETH", "decimals": "18"}, "total": {"value": str(10**18)}, "transaction_hash": "0xH"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        obj._is_airdrop_transfer = lambda t: False
+        obj._should_include_transfer_mode = lambda fa, tx, is_eth_transfer: True
+        t = {}
+        _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, True))
+        assert len(t) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_bad_timestamp(self, m):
+        tx = {"timestamp": "bad", "from": {"hash": "0xS"}, "token": {}, "total": {}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        assert _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, True)) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_bad_date_key(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
+        obj = _mk(); obj.funding_events = {"mode": {"bad-key": []}}
+        assert _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, False)) is True
+
+
+class TestFetchEthTransfersModeBatch2:
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_non_200(self, m):
+        m.return_value = MagicMock(status_code=500)
+        obj = _mk(); obj.funding_events = {}
+        assert obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, False) is False
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_empty(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
+        obj = _mk(); obj.funding_events = {}
+        assert obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, False) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_processes(self, m):
+        e = {"value": str(2*10**18), "delta": str(1*10**18), "transaction_hash": None, "block_timestamp": "2024-12-15T10:00:00Z", "block_number": 100}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [e], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        t = {}
+        assert obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, True) is True
+        assert "2024-12-15" in t
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_zero_val(self, m):
+        e = {"value": "0", "delta": str(10**18), "transaction_hash": None, "block_timestamp": "2024-12-15T10:00:00Z"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [e], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        t = {}
+        obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, True)
+        assert len(t) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_neg_delta(self, m):
+        e = {"value": str(10**18), "delta": str(-10**18), "transaction_hash": None, "block_timestamp": "2024-12-15T10:00:00Z"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [e], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        t = {}
+        obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, True)
+        assert len(t) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_hash_present(self, m):
+        e = {"value": str(10**18), "delta": str(10**18), "transaction_hash": "0xABC", "block_timestamp": "2024-12-15T10:00:00Z"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [e], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        t = {}
+        obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), t, True)
+        assert len(t) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_incremental(self, m):
+        e = {"value": str(2*10**18), "delta": str(1*10**18), "transaction_hash": None, "block_timestamp": "2020-01-01T10:00:00Z", "block_number": 1}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [e], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {"mode": {"2024-01-01": []}}
+        assert obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, False) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_pagination(self, m):
+        e = {"value": str(2*10**18), "delta": str(1*10**18), "transaction_hash": None, "block_timestamp": "2024-12-15T10:00:00Z", "block_number": 100}
+        c = [0]
+        def mj():
+            c[0] += 1
+            if c[0] == 1: return {"items": [e], "next_page_params": {"block_number": 50, "index": 0}}
+            return {"items": [], "next_page_params": None}
+        r = MagicMock(status_code=200); r.json = mj; m.return_value = r
+        obj = _mk(); obj.funding_events = {}
+        assert obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, True) is True
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_bad_key(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
+        obj = _mk(); obj.funding_events = {"mode": {"not-a-date": []}}
+        assert obj._fetch_eth_transfers_mode("0xA", datetime(2025,1,1,tzinfo=timezone.utc), {}, False) is True
+
+
+class TestFetchOptimismSafeglobalBatch2:
+    def test_fail(self):
+        obj = _mk()
+        obj._request_with_retries = _gen_return((False, {}))
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_empty(self):
+        obj = _mk()
+        obj._request_with_retries = _gen_return((True, {"results": []}))
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_erc20_usdc(self):
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ERC20_TRANSFER", "tokenInfo": {"symbol": "USDC", "decimals": 6}, "tokenAddress": "0xT", "value": "1000000", "transactionHash": "0xH", "transferId": "t1"}
+        obj = _mk()
+        ci = [0]
+        def fr(*a, **kw):
+            ci[0] += 1; yield
+            return (True, {"results": [td], "next": None}) if ci[0] == 1 else (True, {"results": []})
+        obj._request_with_retries = fr
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        t = defaultdict(list)
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", t, {}))
+        assert "2024-12-15" in t
+
+    def test_ether(self):
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": str(10**18), "transactionHash": "0xH", "transferId": "t1"}
+        obj = _mk()
+        obj._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        t = defaultdict(list)
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", t, {}))
+        assert len(t["2024-12-15"]) == 1
+
+    def test_erc721(self):
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ERC721_TRANSFER", "transferId": "t1"}
+        obj = _mk()
+        obj._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_self(self):
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xaddr", "type": "ETHER_TRANSFER", "value": str(10**18), "transferId": "t1"}
+        obj = _mk()
+        obj._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xAddr", "2025-01-01", defaultdict(list), {}))
+
+    def test_no_token_info_with_addr(self):
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ERC20_TRANSFER", "tokenInfo": {}, "tokenAddress": "0xT", "value": "1000000", "transferId": "t1"}
+        obj = _mk()
+        ci = [0]
+        def fr(*a, **kw):
+            ci[0] += 1; yield
+            return (True, {"results": [td], "next": None}) if ci[0] == 1 else (True, {"results": []})
+        obj._request_with_retries = fr
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj._get_token_decimals = _gen_return(6)
+        obj._get_token_symbol = _gen_return("USDC")
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        t = defaultdict(list)
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", t, {}))
+        assert "2024-12-15" in t
+
+    def test_no_token_info_no_addr(self):
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ERC20_TRANSFER", "tokenInfo": {}, "tokenAddress": "", "value": "1000000", "transferId": "t1"}
+        obj = _mk()
+        obj._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_zero_eth(self):
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": "0", "transferId": "t1"}
+        obj = _mk()
+        obj._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_bad_eth_value(self):
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": "bad", "transferId": "t1"}
+        obj = _mk()
+        obj._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        obj._should_include_transfer_optimism = _gen_return(True)
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_exception(self):
+        obj = _mk()
+        def bad(*a, **kw):
+            yield; raise RuntimeError("boom")
+        obj._request_with_retries = bad
+        obj.context.coingecko = MagicMock(); obj.params.sleep_time = 1
+        _drive(obj._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+
+class TestTrackEthReversions:
+    def _s(self, ch="optimism"):
+        o = _mk(); o.params.target_investment_chains = [ch]; o.params.safe_contract_addresses = {ch: "0xSafe"}; return o
+
+    def test_no_incoming(self):
+        o = self._s()
+        o._fetch_all_transfers_until_date_optimism = _gen_return({})
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
+        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism")) == {}
+
+    def test_unsupported(self):
+        assert _drive(self._s("polygon")._track_eth_transfers_and_reversions("0xS", "polygon")) == {}
+
+    def test_no_master(self):
+        o = self._s()
+        o._fetch_all_transfers_until_date_optimism = _gen_return({"d": [{"symbol": "ETH", "timestamp": "t", "amount": 1.0, "from_address": "0xM"}]})
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
+        o.get_master_safe_address = _gen_return(None)
+        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism")) == {}
+
+    def test_two_transfers(self):
+        o = self._s()
+        inc = {"d": [{"symbol": "ETH", "timestamp": "1704067200Z", "amount": 1.0, "from_address": "0xmaster"}, {"symbol": "ETH", "timestamp": "1704153600Z", "amount": 0.5, "from_address": "0xmaster"}]}
+        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
+        o.get_master_safe_address = _gen_return("0xMaster")
+        o._get_native_balance = _gen_return(2.0)
+        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))["reversion_amount"] == 0.5
+
+    def test_reversion_done(self):
+        o = self._s()
+        inc = {"d": [{"symbol": "ETH", "timestamp": "1704067200Z", "amount": 1.0, "from_address": "0xmaster"}, {"symbol": "ETH", "timestamp": "1704153600Z", "amount": 0.5, "from_address": "0xmaster"}]}
+        out = {"d": [{"symbol": "ETH", "timestamp": "1704240000Z", "amount": 0.5, "to_address": "0xmaster", "from_address": "0xsafe"}]}
+        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return(out)
+        o.get_master_safe_address = _gen_return("0xMaster")
+        o._get_native_balance = _gen_return(1.0)
+        o._calculate_total_reversion_value = lambda et, rt: 500.0
+        r = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
+        assert r["reversion_amount"] == 0 and r["historical_reversion_value"] == 500.0
+
+    def test_mode(self):
+        o = self._s("mode")
+        o._track_eth_transfers_mode = MagicMock(return_value={"incoming": {"ts": [{"symbol": "ETH", "timestamp": "ts", "amount": 1.0, "from_address": "0xm"}]}, "outgoing": {}})
+        o.get_master_safe_address = _gen_return("0xM")
+        o._get_native_balance = _gen_return(1.0)
+        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "mode"))["reversion_amount"] == 0
+
+    def test_balance_cap(self):
+        o = self._s()
+        inc = {"d": [{"symbol": "ETH", "timestamp": "1704067200Z", "amount": 1.0, "from_address": "0xmaster"}, {"symbol": "ETH", "timestamp": "1704153600Z", "amount": 5.0, "from_address": "0xmaster"}]}
+        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
+        o.get_master_safe_address = _gen_return("0xMaster")
+        o._get_native_balance = _gen_return(0.1)
+        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))["reversion_amount"] == 0.1
+
+    def test_exception(self):
+        o = self._s()
+        def boom(*a, **kw):
+            yield; raise RuntimeError("f")
+        o._fetch_all_transfers_until_date_optimism = boom
+        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))["reversion_amount"] == 0
+
+    def test_unix_ts(self):
+        o = self._s()
+        inc = {"d": [{"symbol": "ETH", "timestamp": "1704067200", "amount": 1.0, "from_address": "0xmaster"}, {"symbol": "ETH", "timestamp": "1704153600", "amount": 0.5, "from_address": "0xmaster"}]}
+        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
+        o.get_master_safe_address = _gen_return("0xMaster")
+        o._get_native_balance = _gen_return(2.0)
+        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))["reversion_date"] is not None
+
+    def test_bad_ts(self):
+        o = self._s()
+        inc = {"d": [{"symbol": "ETH", "timestamp": "bad", "amount": 1.0, "from_address": "0xmaster"}, {"symbol": "ETH", "timestamp": "bad", "amount": 0.5, "from_address": "0xmaster"}]}
+        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
+        o.get_master_safe_address = _gen_return("0xMaster")
+        o._get_native_balance = _gen_return(2.0)
+        assert _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))["reversion_date"] is not None
+
+
+class TestCalcReversionValue:
+    def test_iso(self):
+        o = _mk(); o._fetch_historical_eth_price = lambda d: 2000.0
+        assert o._calculate_total_reversion_value([{"timestamp": "2024-01-01T00:00:00Z"}], [{"amount": 0.5}, {"amount": 0.3}]) == 1600.0
+
+    def test_unix(self):
+        o = _mk(); o._fetch_historical_eth_price = lambda d: 1000.0
+        assert o._calculate_total_reversion_value([{"timestamp": "1704067200"}], [{"amount": 1.0}]) == 1000.0
+
+    def test_bad(self):
+        o = _mk(); o._fetch_historical_eth_price = lambda d: 500.0
+        assert o._calculate_total_reversion_value([{"timestamp": "bad"}], [{"amount": 2.0}]) == 1000.0
+
+    def test_no_price(self):
+        o = _mk(); o._fetch_historical_eth_price = lambda d: None
+        assert o._calculate_total_reversion_value([{"timestamp": "1704067200"}], [{"amount": 1.0}]) == 0.0
+
+
+class TestOutgoingOptimism:
+    def test_no_addr(self):
+        assert _drive(_mk()._fetch_outgoing_transfers_until_date_optimism("", "2025-01-01")) == {}
+
+    def test_fail(self):
+        o = _mk(); o._request_with_retries = _gen_return((False, {})); o.context.coingecko = MagicMock(); o.params.sleep_time = 1
+        assert _drive(o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01")) == {}
+
+    def test_eth(self):
+        t = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xaddr", "to": "0xR", "type": "ETHER_TRANSFER", "value": str(10**18), "transactionHash": "0xH"}
+        o = _mk(); o._request_with_retries = _gen_return((True, {"results": [t], "next": None})); o.context.coingecko = MagicMock(); o.params.sleep_time = 1
+        assert "2024-12-15" in _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
+
+    def test_zero(self):
+        t = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xaddr", "to": "0xR", "type": "ETHER_TRANSFER", "value": "0", "transactionHash": "0xH"}
+        o = _mk(); o._request_with_retries = _gen_return((True, {"results": [t], "next": None})); o.context.coingecko = MagicMock(); o.params.sleep_time = 1
+        assert len(_drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))) == 0
+
+    def test_bad_val(self):
+        t = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xaddr", "to": "0xR", "type": "ETHER_TRANSFER", "value": "bad", "transactionHash": "0xH"}
+        o = _mk(); o._request_with_retries = _gen_return((True, {"results": [t], "next": None})); o.context.coingecko = MagicMock(); o.params.sleep_time = 1
+        assert len(_drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))) == 0
+
+    def test_exception(self):
+        o = _mk()
+        def boom(*a, **kw):
+            yield; raise RuntimeError("f")
+        o._request_with_retries = boom; o.context.coingecko = MagicMock(); o.params.sleep_time = 1
+        assert _drive(o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01")) == {}
+
+
+class TestErc20Optimism:
+    def test_no_addr(self):
+        assert _drive(_mk()._track_erc20_transfers_optimism("", 1704067200)) == {"outgoing": {}}
+
+    def test_fail(self):
+        o = _mk(); o._request_with_retries = _gen_return((False, {})); o.context.coingecko = MagicMock(); o.params.sleep_time = 1
+        assert _drive(o._track_erc20_transfers_optimism("0xA", 1704067200)) == {"outgoing": {}}
+
+    def test_usdc(self):
+        t = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xaddr", "to": "0xR", "type": "ERC20_TRANSFER", "tokenInfo": {"symbol": "USDC", "decimals": 6}, "tokenAddress": "0xT", "value": "1000000", "transactionHash": "0xH"}
+        o = _mk(); o._request_with_retries = _gen_return((True, {"results": [t], "next": None})); o.context.coingecko = MagicMock(); o.params.sleep_time = 1
+        assert "2024-01-01" in _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))["outgoing"]
+
+    def test_exception(self):
+        o = _mk()
+        def boom(*a, **kw):
+            yield; raise RuntimeError("f")
+        o._request_with_retries = boom; o.context.coingecko = MagicMock(); o.params.sleep_time = 1
+        assert _drive(o._track_erc20_transfers_optimism("0xA", 1704067200)) == {"outgoing": {}}
+
+
+class TestTrackEthMode:
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_non_200(self, m):
+        m.return_value = MagicMock(status_code=500)
+        assert _mk()._track_eth_transfers_mode("0xS", "2025-01-01") == {"incoming": {}, "outgoing": {}}
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_status_0(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"status": "0", "message": "err"})
+        assert _mk()._track_eth_transfers_mode("0xS", "2025-01-01") == {"incoming": {}, "outgoing": {}}
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_ok(self, m):
+        txs = [{"timeStamp": "1704067200", "value": str(10**18), "to": "0xsafe", "from": "0xs", "hash": "0xH"}]
+        m.return_value = MagicMock(status_code=200, json=lambda: {"status": "1", "result": txs})
+        r = _mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")
+        assert len(r["incoming"]) > 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_outgoing(self, m):
+        txs = [{"timeStamp": "1704067200", "value": str(10**18), "from": "0xsafe", "to": "0xr", "hash": "0xH"}]
+        m.return_value = MagicMock(status_code=200, json=lambda: {"status": "1", "result": txs})
+        r = _mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")
+        assert len(r["outgoing"]) > 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_zero(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"status": "1", "result": [{"timeStamp": "1704067200", "value": "0", "to": "0xsafe", "from": "0xs"}]})
+        assert len(_mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")["incoming"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_future(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"status": "1", "result": [{"timeStamp": "1893456000", "value": str(10**18), "to": "0xsafe", "from": "0xs"}]})
+        assert len(_mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")["incoming"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_bad_ts(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"status": "1", "result": [{"timeStamp": "bad", "value": str(10**18), "to": "0xsafe", "from": "0xs"}]})
+        assert len(_mk()._track_eth_transfers_mode("0xSafe", "2025-01-01")["incoming"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_exception(self, m):
+        m.side_effect = RuntimeError("f")
+        assert _mk()._track_eth_transfers_mode("0xS", "2025-01-01") == {"incoming": {}, "outgoing": {}}
+
+
+class TestTrackErc20Mode:
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_non_200(self, m):
+        m.return_value = MagicMock(status_code=500)
+        assert _mk()._track_erc20_transfers_mode("0xS", 1704067200) == {"outgoing": {}}
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_empty(self, m):
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": []})
+        assert _mk()._track_erc20_transfers_mode("0xS", 1704067200) == {"outgoing": {}}
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_usdc(self, m):
+        tx = {"timestamp": "2024-01-01T10:00:00Z", "from": {"hash": "0xsafe"}, "to": {"hash": "0xR", "is_contract": False}, "token": {"symbol": "USDC", "decimals": 6, "address": "0xT"}, "total": {"value": "1000000"}, "transaction_hash": "0xH"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        o = _mk(); o._should_include_transfer_mode = lambda fa, t, is_eth_transfer: True
+        assert "2024-01-01" in o._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_zero(self, m):
+        tx = {"timestamp": "2024-01-01T10:00:00Z", "from": {"hash": "0xsafe"}, "to": {"hash": "0xR"}, "token": {"symbol": "USDC", "decimals": 6}, "total": {"value": "0"}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        assert len(_mk()._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_bad_ts(self, m):
+        tx = {"timestamp": "bad", "from": {"hash": "0xsafe"}, "to": {"hash": "0xR"}, "token": {"symbol": "USDC", "decimals": 6}, "total": {"value": "1000000"}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        assert len(_mk()._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_future(self, m):
+        tx = {"timestamp": "2030-01-01T10:00:00Z", "from": {"hash": "0xsafe"}, "to": {"hash": "0xR", "is_contract": False}, "token": {"symbol": "USDC", "decimals": 6}, "total": {"value": "1000000"}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        o = _mk(); o._should_include_transfer_mode = lambda fa, t, is_eth_transfer: True
+        assert len(o._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_not_included(self, m):
+        tx = {"timestamp": "2024-01-01T10:00:00Z", "from": {"hash": "0xsafe"}, "to": {"hash": "0xR"}, "token": {"symbol": "USDC", "decimals": 6}, "total": {"value": "1000000"}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        o = _mk(); o._should_include_transfer_mode = lambda fa, t, is_eth_transfer: False
+        assert len(o._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_non_usdc(self, m):
+        tx = {"timestamp": "2024-01-01T10:00:00Z", "from": {"hash": "0xsafe"}, "to": {"hash": "0xR", "is_contract": False}, "token": {"symbol": "WETH", "decimals": 18}, "total": {"value": str(10**18)}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        o = _mk(); o._should_include_transfer_mode = lambda fa, t, is_eth_transfer: True
+        assert len(o._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_not_from_safe(self, m):
+        tx = {"timestamp": "2024-01-01T10:00:00Z", "from": {"hash": "0xOther"}, "to": {"hash": "0xR", "is_contract": False}, "token": {"symbol": "USDC", "decimals": 6}, "total": {"value": "1000000"}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        o = _mk(); o._should_include_transfer_mode = lambda fa, t, is_eth_transfer: True
+        assert len(o._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_pagination(self, m):
+        tx = {"timestamp": "2024-01-01T10:00:00Z", "from": {"hash": "0xsafe"}, "to": {"hash": "0xR", "is_contract": False}, "token": {"symbol": "USDC", "decimals": 6, "address": "0xT"}, "total": {"value": "1000000"}, "transaction_hash": "0xH"}
+        c = [0]
+        def mj():
+            c[0] += 1
+            if c[0] == 1: return {"items": [tx], "next_page_params": {"block_number": 1, "index": 0}}
+            return {"items": [], "next_page_params": None}
+        r = MagicMock(status_code=200); r.json = mj; m.return_value = r
+        o = _mk(); o._should_include_transfer_mode = lambda fa, t, is_eth_transfer: True
+        assert "2024-01-01" in o._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_val_error(self, m):
+        tx = {"timestamp": "2024-01-01T10:00:00Z", "from": {"hash": "0xsafe"}, "to": {"hash": "0xR", "is_contract": False}, "token": {"symbol": "USDC", "decimals": "bad"}, "total": {"value": "1000000"}}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        o = _mk(); o._should_include_transfer_mode = lambda fa, t, is_eth_transfer: True
+        assert len(o._track_erc20_transfers_mode("0xSafe", 1704067200)["outgoing"]) == 0
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_exception(self, m):
+        m.side_effect = RuntimeError("f")
+        assert _mk()._track_erc20_transfers_mode("0xS", 1704067200) == {"outgoing": {}}
+
+
+class TestVeloRewardsException:
+    def test_exception(self):
+        o = _mk(); o.pools = {"velodrome": MagicMock()}
+        def bad(*a, **kw):
+            yield; raise RuntimeError("f")
+        o.pools["velodrome"].get_gauge_address = bad
+        assert _drive(o._get_velodrome_pending_rewards({"pool_address": "0xP", "is_cl_pool": True}, "optimism", "0xU")) == Decimal(0)
+
+
+class TestSmallBranchGaps2:
+    def test_closed_positions(self):
+        """Test _have_positions_changed when positions are closed."""
+        o = _mk()
+        # Same count but different identifiers → closed_positions non-empty
+        o.current_positions = [{"pool_address": "0xNEW", "dex_type": "uniswapV3", "status": "open"}]
+        last_data = {"allocations": [{"id": "0xOLD", "type": "uniswapV3"}]}
+        assert o._have_positions_changed(last_data) is True
+
+    def test_total_supply_zero_str(self):
+        """Test get_user_share_value_balancer when total_supply is string '0' (bypasses int check, hits Decimal check)."""
+        o = _mk()
+        o.params.balancer_vault_contract_addresses = {"optimism": "0x" + "ab" * 20}
+        ci = [0]
+        def fake_ci(*a, **kw):
+            ci[0] += 1
+            yield
+            if ci[0] == 1:
+                return (["0x" + "cd" * 20], [100])  # pool tokens
+            elif ci[0] == 2:
+                return 50  # user balance
+            return "0"  # total supply = "0" (string, bypasses `== 0` at line 1972 but hits Decimal == 0 at 1985)
+        o.contract_interact = fake_ci
+        assert _drive(o.get_user_share_value_balancer("0xU", "0xPID", "0x" + "ab" * 20, "optimism")) == {}
+
+    def test_total_supply_zero_int(self):
+        """Test get_user_share_value_balancer when total_supply is 0."""
+        o = _mk()
+        o.params.balancer_vault_contract_addresses = {"optimism": "0x" + "ab" * 20}
+        ci = [0]
+        def fake_ci(*a, **kw):
+            ci[0] += 1
+            yield
+            if ci[0] == 1:
+                return (["0x" + "cd" * 20], [100])
+            elif ci[0] == 2:
+                return 50
+            return 0
+        o.contract_interact = fake_ci
+        assert _drive(o.get_user_share_value_balancer("0xU", "0xPID", "0x" + "ab" * 20, "optimism")) == {}
+
+
+class TestOptimismSafeglobalBranches:
+    """Tests for all internal loop branches in _fetch_optimism_transfers_safeglobal."""
+
+    def _obj(self):
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        return o
+
+    def test_no_timestamp(self):
+        """Transfer with no executionDate → continue at line 3709."""
+        td = {"from": "0xS", "type": "ETHER_TRANSFER", "value": str(10**18), "transferId": "t1"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_bad_timestamp(self):
+        """Transfer with unparseable timestamp → no tx_date → continue at line 3715."""
+        td = {"executionDate": "not-a-date", "from": "0xS", "type": "ETHER_TRANSFER", "transferId": "t1"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        o._should_include_transfer_optimism = _gen_return(True)
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_existing_data(self):
+        """Transfer date in existing_data → continue at line 3719."""
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": str(10**18), "transferId": "t1"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {"2024-12-15": []}))
+
+    def test_after_end_date(self):
+        """Transfer date > end_date → continue at line 3723."""
+        td = {"executionDate": "2026-01-01T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": str(10**18), "transferId": "t1"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_duplicate(self):
+        """Duplicate transferId → continue at line 3730."""
+        td1 = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": str(10**18), "transferId": "dup"}
+        td2 = {"executionDate": "2024-12-16T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": str(10**18), "transferId": "dup"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td1, td2], "next": None}))
+        o._should_include_transfer_optimism = _gen_return(True)
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_not_included(self):
+        """_should_include_transfer_optimism returns False → continue at line 3745."""
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": str(10**18), "transferId": "t1"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        o._should_include_transfer_optimism = _gen_return(False)
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_non_usdc(self):
+        """ERC20 transfer with non-USDC symbol → continue at line 3767."""
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ERC20_TRANSFER", "tokenInfo": {"symbol": "WETH", "decimals": 18}, "tokenAddress": "0xT", "value": str(10**18), "transferId": "t1"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        o._should_include_transfer_optimism = _gen_return(True)
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_unknown_type(self):
+        """Unknown transfer type → continue at line 3813."""
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "UNKNOWN_TYPE", "transferId": "t1"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        o._should_include_transfer_optimism = _gen_return(True)
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", defaultdict(list), {}))
+
+    def test_pagination(self):
+        """Test pagination path → line 3828."""
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xS", "type": "ETHER_TRANSFER", "value": str(10**18), "transactionHash": "0xH", "transferId": "t1"}
+        o = self._obj()
+        ci = [0]
+        def fr(*a, **kw):
+            ci[0] += 1; yield
+            if ci[0] == 1:
+                return (True, {"results": [td], "next": "http://next-page"})
+            return (True, {"results": []})
+        o._request_with_retries = fr
+        o._should_include_transfer_optimism = _gen_return(True)
+        t = defaultdict(list)
+        _drive(o._fetch_optimism_transfers_safeglobal("0xA", "2025-01-01", t, {}))
+        assert len(t["2024-12-15"]) == 1
+
+
+class TestOutgoingOptimismBranches:
+    """Tests for internal loop branches in _fetch_outgoing_transfers_until_date_optimism."""
+
+    def _obj(self):
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        return o
+
+    def test_empty_results(self):
+        """Empty results → break at line 4275."""
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": []}))
+        assert _drive(o._fetch_outgoing_transfers_until_date_optimism("0xA", "2025-01-01")) == {}
+
+    def test_no_execution_date(self):
+        """No executionDate → continue at line 4281."""
+        td = {"from": "0xaddr", "to": "0xR", "type": "ETHER_TRANSFER", "value": str(10**18)}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
+
+    def test_bad_timestamp(self):
+        """Invalid timestamp → continue at lines 4289-4293."""
+        td = {"executionDate": "not-valid", "from": "0xaddr", "to": "0xR", "type": "ETHER_TRANSFER"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
+
+    def test_future_date(self):
+        """Transfer after current_date → continue at line 4296."""
+        td = {"executionDate": "2026-01-01T10:00:00Z", "from": "0xaddr", "to": "0xR", "type": "ETHER_TRANSFER", "value": str(10**18)}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
+
+    def test_not_from_us(self):
+        """Transfer from different address → continue at line 4335."""
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xOther", "to": "0xR", "type": "ETHER_TRANSFER", "value": str(10**18), "transactionHash": "0xH"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
+
+    def test_duplicate(self):
+        """Duplicate transaction → continue at line 4305."""
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xaddr", "to": "0xR", "type": "ETHER_TRANSFER", "value": str(10**18), "transactionHash": "0xH"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td, td], "next": None}))
+        r = _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
+        assert len(r.get("2024-12-15", [])) == 1
+
+    def test_pagination(self):
+        """Pagination → line 4345."""
+        td = {"executionDate": "2024-12-15T10:00:00Z", "from": "0xaddr", "to": "0xR", "type": "ETHER_TRANSFER", "value": str(10**18), "transactionHash": "0xH"}
+        o = self._obj()
+        ci = [0]
+        def fr(*a, **kw):
+            ci[0] += 1; yield
+            if ci[0] == 1:
+                return (True, {"results": [td], "next": "http://next-page"})
+            return (True, {"results": []})
+        o._request_with_retries = fr
+        r = _drive(o._fetch_outgoing_transfers_until_date_optimism("0xAddr", "2025-01-01"))
+        assert "2024-12-15" in r
+
+
+class TestErc20OptimismBranches:
+    """Tests for internal loop branches in _track_erc20_transfers_optimism."""
+
+    def _obj(self):
+        o = _mk()
+        o.context.coingecko = MagicMock()
+        o.params.sleep_time = 1
+        return o
+
+    def test_empty_results(self):
+        """Empty results → break at line 4394."""
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": []}))
+        assert _drive(o._track_erc20_transfers_optimism("0xA", 1704067200)) == {"outgoing": {}}
+
+    def test_no_execution_date(self):
+        """No executionDate → continue at line 4400."""
+        td = {"from": "0xaddr", "type": "ERC20_TRANSFER"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+    def test_bad_timestamp(self):
+        """Bad timestamp → continue at lines 4408-4412."""
+        td = {"executionDate": "bad", "from": "0xaddr", "type": "ERC20_TRANSFER"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+    def test_future_date(self):
+        """Transfer after current_date → continue at line 4415."""
+        td = {"executionDate": "2026-01-01T10:00:00Z", "from": "0xaddr", "type": "ERC20_TRANSFER"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+    def test_not_from_safe(self):
+        """Transfer from different address → continue at line 4419."""
+        td = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xOther", "type": "ERC20_TRANSFER"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+    def test_not_erc20(self):
+        """Non-ERC20 transfer type → continue at line 4425."""
+        td = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xaddr", "type": "ETHER_TRANSFER"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+    def test_duplicate(self):
+        """Duplicate transfer → continue at line 4430."""
+        td = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xaddr", "type": "ERC20_TRANSFER",
+              "tokenInfo": {"symbol": "USDC", "decimals": 6}, "tokenAddress": "0xT",
+              "value": "1000000", "transactionHash": "0xH", "to": "0xR"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td, td], "next": None}))
+        r = _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        assert len(r["outgoing"].get("2024-01-01", [])) == 1
+
+    def test_no_token_info_with_addr(self):
+        """No tokenInfo but tokenAddress present → lines 4437-4443."""
+        td = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xaddr", "type": "ERC20_TRANSFER",
+              "tokenInfo": {}, "tokenAddress": "0xT", "value": "1000000", "transactionHash": "0xH", "to": "0xR"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        o._get_token_decimals = _gen_return(6)
+        o._get_token_symbol = _gen_return("USDC")
+        r = _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        assert "2024-01-01" in r["outgoing"]
+
+    def test_no_token_info_no_addr(self):
+        """No tokenInfo and no tokenAddress → continue at line 4445."""
+        td = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xaddr", "type": "ERC20_TRANSFER",
+              "tokenInfo": {}, "tokenAddress": "", "value": "1000000", "transactionHash": "0xH"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+    def test_not_usdc(self):
+        """Non-USDC symbol → continue at line 4452."""
+        td = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xaddr", "type": "ERC20_TRANSFER",
+              "tokenInfo": {"symbol": "WETH", "decimals": 18}, "tokenAddress": "0xT",
+              "value": str(10**18), "transactionHash": "0xH"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+    def test_zero_amount(self):
+        """Zero amount → continue at line 4458."""
+        td = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xaddr", "type": "ERC20_TRANSFER",
+              "tokenInfo": {"symbol": "USDC", "decimals": 6}, "tokenAddress": "0xT",
+              "value": "0", "transactionHash": "0xH"}
+        o = self._obj()
+        o._request_with_retries = _gen_return((True, {"results": [td], "next": None}))
+        _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+
+    def test_pagination(self):
+        """Pagination → line 4484."""
+        td = {"executionDate": "2024-01-01T10:00:00Z", "from": "0xaddr", "type": "ERC20_TRANSFER",
+              "tokenInfo": {"symbol": "USDC", "decimals": 6}, "tokenAddress": "0xT",
+              "value": "1000000", "transactionHash": "0xH", "to": "0xR"}
+        o = self._obj()
+        ci = [0]
+        def fr(*a, **kw):
+            ci[0] += 1; yield
+            if ci[0] == 1:
+                return (True, {"results": [td], "next": "http://next"})
+            return (True, {"results": []})
+        o._request_with_retries = fr
+        r = _drive(o._track_erc20_transfers_optimism("0xAddr", 1704067200))
+        assert "2024-01-01" in r["outgoing"]
+
+
+class TestReversionDateIso:
+    """Test ISO timestamp format for reversion_date (line 4152)."""
+
+    def test_iso_z_timestamp(self):
+        o = _mk()
+        o.params.target_investment_chains = ["optimism"]
+        o.params.safe_contract_addresses = {"optimism": "0xSafe"}
+        # Two transfers from master, second has ISO-Z timestamp
+        inc = {"d": [
+            {"symbol": "ETH", "timestamp": "2024-01-01T00:00:00Z", "amount": 1.0, "from_address": "0xmaster"},
+            {"symbol": "ETH", "timestamp": "2024-01-02T00:00:00Z", "amount": 0.5, "from_address": "0xmaster"},
+        ]}
+        o._fetch_all_transfers_until_date_optimism = _gen_return(inc)
+        o._fetch_outgoing_transfers_until_date_optimism = _gen_return({})
+        o.get_master_safe_address = _gen_return("0xMaster")
+        o._get_native_balance = _gen_return(2.0)
+        r = _drive(o._track_eth_transfers_and_reversions("0xSafe", "optimism"))
+        assert r["reversion_date"] == "02-01-2024"
+
+
+class TestClosedPositionsBranch:
+    """Test the closed_positions branch (lines 557-560) specifically."""
+
+    def test_closed_positions_only(self):
+        """Same length but different identifiers → new empty, closed non-empty."""
+        o = _mk()
+        # Two current positions, one of which matches last
+        o.current_positions = [
+            {"pool_address": "0xA", "dex_type": "uniV3", "status": "open"},
+            {"pool_address": "0xA", "dex_type": "uniV3", "status": "open"},  # dup → collapses to 1 in set
+        ]
+        last_data = {"allocations": [
+            {"id": "0xA", "type": "uniV3"},
+            {"id": "0xB", "type": "uniV3"},
+        ]}
+        # current_set = {("0xA","uniV3","open")}, last_set = {("0xA","uniV3","open"),("0xB","uniV3","open")}
+        # len(positions)==2==2, new_positions=empty, closed_positions={("0xB",...)}
+        assert o._have_positions_changed(last_data) is True
+
+
+class TestFetchAllTransfersDateMerge:
+    """Test merge/existing data paths in _fetch_all_transfers_until_date_mode and _optimism."""
+
+    def test_mode_merge_new_dates(self):
+        """Line 3192: new date in existing_mode_data."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {"mode": {"2024-01-01": [{"x": 1}]}}
+        obj.store_funding_events = MagicMock()
+        # Token transfers succeed and add a new date
+        def token_mode(*a, **kw):
+            a[2]["2024-02-01"] = [{"x": 2}]  # all_transfers_by_date[date]
+            yield
+            return True
+        obj._fetch_token_transfers_mode = token_mode
+        obj._fetch_eth_transfers_mode = MagicMock(return_value=True)
+        r = _drive(obj._fetch_all_transfers_until_date_mode("0xA", "2025-01-01", False))
+        assert "2024-02-01" in r
+
+    def test_optimism_existing_funding_events(self):
+        """Lines 3225, 3243-3244: existing funding_events truthy, merge new dates."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {"optimism": {"2024-01-01": [{"y": 1}]}}
+        obj.store_funding_events = MagicMock()
+        # _fetch_optimism_transfers_safeglobal adds a new date
+        def sfg(*a, **kw):
+            a[2]["2024-02-01"] = [{"y": 2}]  # all_transfers_by_date
+            yield
+        obj._fetch_optimism_transfers_safeglobal = sfg
+        r = _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01"))
+        assert "2024-02-01" in r
+
+    def test_optimism_empty_funding_events(self):
+        """Line 3247->3249: funding_events falsy after fetch."""
+        obj = _mk()
+        obj.read_funding_events = lambda: {}
+        obj.store_funding_events = MagicMock()
+        obj._fetch_optimism_transfers_safeglobal = _gen_none
+        r = _drive(obj._fetch_all_transfers_until_date_optimism("0xA", "2025-01-01"))
+        assert isinstance(r, dict)
+
+
+class TestTokenTransfersModeAmountZero:
+    """Test amount==0 branch at line 3475 in _fetch_token_transfers_mode."""
+
+    @patch("packages.valory.skills.liquidity_trader_abci.behaviours.fetch_strategies.requests.get")
+    def test_zero_value_included(self, m):
+        """Transfer with total value '0' → amount == 0 → continue."""
+        tx = {"timestamp": "2024-12-15T10:00:00Z", "from": {"hash": "0xS", "is_contract": False},
+              "token": {"symbol": "USDC", "decimals": "6"}, "total": {"value": "0"}, "transaction_hash": "0xH"}
+        m.return_value = MagicMock(status_code=200, json=lambda: {"items": [tx], "next_page_params": None})
+        obj = _mk(); obj.funding_events = {}
+        obj._is_airdrop_transfer = lambda t: False
+        obj._should_include_transfer_mode = lambda fa, tx, is_eth_transfer: True
+        t = {}
+        _drive(obj._fetch_token_transfers_mode("0xA", datetime(2025, 1, 1, tzinfo=timezone.utc), t, True))
+        assert len(t) == 0

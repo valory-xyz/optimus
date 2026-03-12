@@ -23,10 +23,10 @@
         "contract/valory/velodrome_cl_gauge/0.1.0": "bafybeibre7opknivqa7nbn6pfxnbsubiusqjd37xqqs7lsvbfhnpda5aja",
         "contract/valory/balancer_queries/0.1.0": "bafybeicxydgndopqipm4jqi46x6nx74g5ok4vnpnyf3spcbjxvfvtv6nhu",
         "connection/valory/mirror_db/0.1.0": "bafybeif33pfidiqfbzmp6ang7oofjyupwrbb57jrnam4n2n3fk4tspcxwi",
-        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeih2fzk2i3bnqwd4zi3zxwuq6er7je2nisa632yilcc46vmkniipde",
-        "skill/valory/optimus_abci/0.1.0": "bafybeicfyy7glutcxk3yat3samtjxcevcq2henlvmt3qof6zwubizwthjy",
-        "agent/valory/optimus/0.1.0": "bafybeihlpxt4nubziicgoyl22nba5nwtei7sulgeao2a7hegkzchhzyfwm",
-        "service/valory/optimus/0.1.0": "bafybeigmzsw6cmrd4ig5ef7larnr2qmbgcloiwzwejq3jpvdulyrxdg5zq"
+        "skill/valory/liquidity_trader_abci/0.1.0": "bafybeifv7lzxozgjsu6iamthkzeu7sti5mndch7eqyqytatu77doajmfca",
+        "skill/valory/optimus_abci/0.1.0": "bafybeiesdddptqgpbvcvglsqbtdhzkfpqrqeofvqno4gmsgci6nlk6wbhe",
+        "agent/valory/optimus/0.1.0": "bafybeigfotiwbfx2qz5d7pwyhsp4lxjqb3vks7spsxone463bzoulmc34e",
+        "service/valory/optimus/0.1.0": "bafybeibwjqx2tmn5dhz3f4ryld5iqd76t64rr5hmntyo4bfyam3yekslcy"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
@@ -43,7 +43,7 @@
         "contract/valory/service_registry/0.1.0": "bafybeifc4gpaz6vlpgvghsm64tkbukt744rpeoqpxijglxrv46gb7sbda4",
         "contract/valory/gnosis_safe/0.1.0": "bafybeico3uzjdwumf2jg2e627ut4rwzwmedjavenw6e2hshi2m6yw642bq",
         "contract/valory/multisend/0.1.0": "bafybeiaf3hapi3prgpjeugwhq64k7lqelo6kibhol5rkajt7id3knomp5q",
-        "contract/valory/erc20/0.1.0": "bafybeif37n2xmh6xkn3vzybty7q37fq4f5rsey5ep33vvobh2yofeao5ae",
+        "contract/valory/erc20/0.1.0": "bafybeic7pgqam66mpkr3lgauwuxntl5wtmzx53f74jaligihyvavsws4au",
         "contract/valory/staking_activity_checker/0.1.0": "bafybeibvpytrnz4qwj3sebaphc5zfymnembfziniyaywl7gvuvswukhibm",
         "contract/valory/staking_token/0.1.0": "bafybeiat655krp6joe7rvt4ycuxpynzl5oraib7jkeo6tennevugxf7x7m",
         "connection/valory/http_client/0.23.0": "bafybeihel6sg2yayxu7lqygaswdgciaxpqrgsbl5rwx74c6znu5qz2edd4",

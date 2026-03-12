@@ -10,7 +10,7 @@ fingerprint:
   build/YearnV3Vault.json: bafybeifk34657pbpihpoxkelea2pf6ho2z56lum7bxegunclmakvypuc3m
   contract.py: bafybeialgs5fwnixjmgnwkfo3xay7w2ukbae3kt77kwygifxsexmtlyhlu
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeifgdztit3ccfoclfdw5o5tn5k2f5w7iq5xhcsjocatn4xwn7gxda4
+  tests/test_contract.py: bafybeibcvln2j5272jdqvkb6amtmhjkdh3uvpvrc7mnffqees4f7fnyvjm
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: YearnV3VaultContract

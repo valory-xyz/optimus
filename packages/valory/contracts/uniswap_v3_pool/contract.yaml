@@ -10,7 +10,7 @@ fingerprint:
   build/UniswapV3Pool.json: bafybeids5lo3axsd6aplyywwi43xwdxj3njnrke5m7gsp3mg74svcodr4i
   contract.py: bafybeigfblsy4uis77nqzv3xmingmbcskkys4ocpfxlmwkmxyejwyjwici
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeihhxienquzbpuuvotcwjxngaboub4qqnwbhrqhlj3k25g3gibpzcq
+  tests/test_contract.py: bafybeida6l2os7pogvv6eva5ycwpku6b4wewrvdplcl3lzma55u3tarn2q
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: UniswapV3PoolContract

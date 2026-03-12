@@ -10,7 +10,7 @@ fingerprint:
   build/contract_interface.json: bafybeihmu27srsqj7tmsdrjrgnn657lyaupd6pzbyasytdxdfp3ui5u3nu
   contract.py: bafybeicohyvq65vqvblxpg4ls73345ejsh6mthnbtcdxqn5fggn4zm3cfq
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeia7jd3f3h66fpczjsrfrb6hgdecuodropusdibh7vs3u7ojwaqrjq
+  tests/test_contract.py: bafybeicc76wf7x5zic4oezyy2fwen4pnrenr4x2slsz3irmttma2h6rza4
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeRouterContract

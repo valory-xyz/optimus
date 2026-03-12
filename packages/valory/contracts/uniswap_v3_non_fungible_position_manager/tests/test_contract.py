@@ -19,6 +19,8 @@
 
 """Tests for the UniswapV3NonfungiblePositionManagerContract."""
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -302,3 +304,34 @@ class TestGetPosition:
             )
 
         assert result == {"data": {}}
+
+
+class TestAbiIntegrity:
+    """Verify that every function used in contract.py exists in the ABI."""
+
+    ABI_FILE = "NonfungiblePositionManager.json"
+    EXPECTED_FUNCTIONS = [
+        "balanceOf",
+        "burn",
+        "collect",
+        "decreaseLiquidity",
+        "mint",
+        "ownerOf",
+        "positions",
+        "token0",
+        "token1",
+    ]
+
+    @classmethod
+    def _load_abi_function_names(cls) -> set:
+        abi_path = Path(__file__).parents[1] / "build" / cls.ABI_FILE
+        with open(abi_path) as f:
+            data = json.load(f)
+        abi = data.get("abi", data) if isinstance(data, dict) else data
+        return {e["name"] for e in abi if e.get("type") == "function"}
+
+    def test_all_functions_present(self) -> None:
+        """Test that all functions used in contract.py exist in the ABI."""
+        abi_funcs = self._load_abi_function_names()
+        missing = [f for f in self.EXPECTED_FUNCTIONS if f not in abi_funcs]
+        assert not missing, f"Functions missing from ABI: {missing}"

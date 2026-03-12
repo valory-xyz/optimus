@@ -10,7 +10,7 @@ fingerprint:
   build/contract_interface.json: bafybeibsh5efqfgttzkbnvyipffdtn6fjwyv5veg3ihindd3rhslfmovb4
   contract.py: bafybeicppunyndvmvduk6dtqzatxfffr3mqwbgbjoteo7c5hfhk57eph5e
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeie4k4hukxqf5p6vzv5ei2g6cvnojppab4hzy347lydlq4uxtjmyzi
+  tests/test_contract.py: bafybeihv4xyml3jnke4e4dasa3hgl6gxoqjt4krp2mjiuqvdhs2cvnfvmu
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeNonFungiblePositionManagerContract

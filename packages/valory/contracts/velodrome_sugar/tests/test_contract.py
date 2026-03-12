@@ -19,6 +19,8 @@
 
 """Tests for the VelodromeSugarContract contract."""
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -170,3 +172,24 @@ class TestPositions:
         mock_contract_instance.functions.positions.assert_called_once_with(
             50, 5, CHECKSUMMED_ACCOUNT
         )
+
+
+class TestAbiIntegrity:
+    """Verify that every function used in contract.py exists in the ABI."""
+
+    ABI_FILE = "contract_interface.json"
+    EXPECTED_FUNCTIONS = ["positions"]
+
+    @classmethod
+    def _load_abi_function_names(cls) -> set:
+        abi_path = Path(__file__).parents[1] / "build" / cls.ABI_FILE
+        with open(abi_path) as f:
+            data = json.load(f)
+        abi = data.get("abi", data) if isinstance(data, dict) else data
+        return {e["name"] for e in abi if e.get("type") == "function"}
+
+    def test_all_functions_present(self) -> None:
+        """Test that all functions used in contract.py exist in the ABI."""
+        abi_funcs = self._load_abi_function_names()
+        missing = [f for f in self.EXPECTED_FUNCTIONS if f not in abi_funcs]
+        assert not missing, f"Functions missing from ABI: {missing}"

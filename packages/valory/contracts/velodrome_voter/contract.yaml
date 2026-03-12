@@ -10,7 +10,7 @@ fingerprint:
   build/contract_interface.json: bafybeibb2l3m53tz7uigyz6wv25rkohvfixvdbtrk4ubirklg6mylp77wq
   contract.py: bafybeidlbwhhgvo2py2ulhidlrkhgqzlm47znc3y2leykkiqguxuuz2sba
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeibvxgvtxzesslmburump2xscfedjguypsovz4fxn2bvev7sp337v4
+  tests/test_contract.py: bafybeibq35v5qk4aeokk3an72d3b5cobctwspjbtdlmbdkmh6ecugcplfa
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeVoterContract

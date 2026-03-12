@@ -10,7 +10,7 @@ fingerprint:
   build/contract_interface.json: bafybeiejabouynogilagtlora6rxoqwdji4sp246rcjhuzky2ekmejz5sq
   contract.py: bafybeifu4nfoojradx6mdas6x6vfeo5aq4vvpsadgufkurv7ikl6dyvppe
   tests/__init__.py: bafybeif2uykvte644u53lfaznrsnqvntbn4mb7spjxz4frowobgtlmoppu
-  tests/test_contract.py: bafybeic4apfh6etwy335gwvayqczuytto4mwahbzben5e7uz7ugefb3vqi
+  tests/test_contract.py: bafybeicxlqyibtiruxotzisel54ovh4wp2jb2egagvy6psx4c7medqxep4
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: VelodromeSlipstreamHelperContract

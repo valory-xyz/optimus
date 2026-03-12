@@ -19,6 +19,8 @@
 
 """Tests for the YearnV3VaultContract (Sturdy)."""
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -198,9 +200,7 @@ class TestTotalSupply:
         with patch.object(
             YearnV3VaultContract, "get_instance", return_value=mock_instance
         ):
-            result = YearnV3VaultContract.total_supply(
-                mock_ledger_api, MOCK_ADDRESS
-            )
+            result = YearnV3VaultContract.total_supply(mock_ledger_api, MOCK_ADDRESS)
 
         assert result == {"total_supply": 1000000}
 
@@ -217,9 +217,7 @@ class TestTotalAssets:
         with patch.object(
             YearnV3VaultContract, "get_instance", return_value=mock_instance
         ):
-            result = YearnV3VaultContract.total_assets(
-                mock_ledger_api, MOCK_ADDRESS
-            )
+            result = YearnV3VaultContract.total_assets(mock_ledger_api, MOCK_ADDRESS)
 
         assert result == {"total_assets": 2000000}
 
@@ -236,8 +234,38 @@ class TestDecimals:
         with patch.object(
             YearnV3VaultContract, "get_instance", return_value=mock_instance
         ):
-            result = YearnV3VaultContract.decimals(
-                mock_ledger_api, MOCK_ADDRESS
-            )
+            result = YearnV3VaultContract.decimals(mock_ledger_api, MOCK_ADDRESS)
 
         assert result == {"decimals": 18}
+
+
+class TestAbiIntegrity:
+    """Verify that every function used in contract.py exists in the ABI."""
+
+    ABI_FILE = "YearnV3Vault.json"
+    EXPECTED_FUNCTIONS = [
+        "balanceOf",
+        "decimals",
+        "deposit",
+        "maxRedeem",
+        "maxWithdraw",
+        "name",
+        "redeem",
+        "totalAssets",
+        "totalSupply",
+        "withdraw",
+    ]
+
+    @classmethod
+    def _load_abi_function_names(cls) -> set:
+        abi_path = Path(__file__).parents[1] / "build" / cls.ABI_FILE
+        with open(abi_path) as f:
+            data = json.load(f)
+        abi = data.get("abi", data) if isinstance(data, dict) else data
+        return {e["name"] for e in abi if e.get("type") == "function"}
+
+    def test_all_functions_present(self) -> None:
+        """Test that all functions used in contract.py exist in the ABI."""
+        abi_funcs = self._load_abi_function_names()
+        missing = [f for f in self.EXPECTED_FUNCTIONS if f not in abi_funcs]
+        assert not missing, f"Functions missing from ABI: {missing}"

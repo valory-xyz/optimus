@@ -1,28 +1,22 @@
 [run]
-source = packages/valory/skills/liquidity_trader_abci
-omit = 
+branch = True
+source =
+    packages/valory
+omit =
     */tests/*
-    */test_*
     */__pycache__/*
-    */.*/*
-    */venv/*
-    */.tox/*
-    */build/*
-    */dist/*
+    */*_pb2.py
+    */*_pb2_grpc.py
 
 [report]
+fail_under = 100
+show_missing = True
 exclude_lines =
     pragma: no cover
-    def __repr__
-    if self.debug:
-    if settings.DEBUG
-    raise AssertionError
     raise NotImplementedError
-    if 0:
-    if __name__ == .__main__.:
-    class .*\bProtocol\):
-    @(abc\.)?abstractmethod
-    def __hash__
+    if TYPE_CHECKING:
+    @abstractmethod
+    pass
 
 [html]
-directory = coverage_html 
+directory = htmlcov

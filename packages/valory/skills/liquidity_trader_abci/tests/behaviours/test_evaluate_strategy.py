@@ -6184,7 +6184,17 @@ class TestReconstructActionsStakingBranch:
 class TestExecuteStrategyGlobals:
     """Test for execute_strategy globals cleanup."""
 
-    pass
+    def test_del_existing_callable_in_globals(self):
+        """Test that callable already in globals gets deleted before re-exec."""
+        b = _mk()
+        exec_code = "def my_test_func(*a, **kw): return 42"
+        b.strategy_exec = MagicMock(return_value=(exec_code, "my_test_func"))
+        # First call defines my_test_func in evaluate_strategy module globals
+        result1 = b.execute_strategy(strategy="test")
+        assert result1 == 42
+        # Second call finds my_test_func already in globals, triggers del on line 2107
+        result2 = b.execute_strategy(strategy="test")
+        assert result2 == 42
 
 
 class TestPositionTokenBalancesVeloNoAddress:

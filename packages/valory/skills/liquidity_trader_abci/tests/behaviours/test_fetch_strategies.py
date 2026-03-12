@@ -4981,10 +4981,14 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_cached_value_today(self):
-        import time
+        import calendar
+        from datetime import datetime
 
         obj = _mk()
-        ts = str(int(time.time()))
+        # Build a UTC timestamp whose utcfromtimestamp date matches datetime.now() date
+        now = datetime.now()
+        noon = datetime(now.year, now.month, now.day, 12, 0, 0)
+        ts = str(calendar.timegm(noon.timetuple()))
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False
@@ -4999,10 +5003,14 @@ class TestCalculateInitialInvestmentValueFromFundingEvents:
         )
 
     def test_cached_value_today_zero(self):
-        import time
+        import calendar
+        from datetime import datetime
 
         obj = _mk()
-        ts = str(int(time.time()))
+        # Build a UTC timestamp whose utcfromtimestamp date matches datetime.now() date
+        now = datetime.now()
+        noon = datetime(now.year, now.month, now.day, 12, 0, 0)
+        ts = str(calendar.timegm(noon.timetuple()))
         obj.params.target_investment_chains = ["optimism"]
         obj.params.safe_contract_addresses = {"optimism": "0xSafe"}
         obj.params.airdrop_started = False

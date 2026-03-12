@@ -335,6 +335,10 @@ class TestFetchAggregators:
 class TestStandardizeMetrics:
     """Tests for standardize_metrics function."""
 
+    def test_empty_pools(self):
+        """Test with empty pools returns early."""
+        assert standardize_metrics([]) == []
+
     def test_single_pool(self):
         """Test with single pool (std dev = 0)."""
         pools = [{"total_apr": 10, "tvl": 1000}]
